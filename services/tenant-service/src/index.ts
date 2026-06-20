@@ -1,0 +1,13 @@
+/**
+ * tenant-service HTTP entrypoint.
+ * Domain owner: tenant lifecycle, org hierarchy, settings (modules: tenant, orgunit, settings).
+ * Writes via @civitasone/queue; reads via @civitasone/cache; DB civitas_tenant only (L1).
+ *
+ * Run the consumer/relay separately: `pnpm worker` (src/worker.ts).
+ */
+import { buildApp } from "./app.js";
+
+const port = Number(process.env.PORT ?? 3002);
+const app = await buildApp();
+await app.listen({ port, host: "0.0.0.0" });
+app.log.info(`tenant-service (API) listening on :${port}`);

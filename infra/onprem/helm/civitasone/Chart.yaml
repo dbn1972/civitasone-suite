@@ -1,0 +1,13 @@
+apiVersion: v2
+name: civitasone
+description: CivitasOne Suite — Helm chart for on-premises Kubernetes deployment
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - civitasone
+  - erp
+  - government
+  - psu
+maintainers:
+  - name: CivitasOne Team

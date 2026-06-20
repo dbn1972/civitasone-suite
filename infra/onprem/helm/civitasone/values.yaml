@@ -1,0 +1,48 @@
+# Default values for CivitasOne Suite on-prem Helm deployment
+# Override per environment with values.staging.yaml / values.production.yaml
+
+global:
+  imageRegistry: ""          # e.g. harbor.example.com
+  imagePullSecrets: []
+  storageClass: "standard"
+
+replicaCount: 1
+
+services:
+  identity: { port: 3001, replicas: 2 }
+  tenant:   { port: 3002, replicas: 2 }
+  policy:   { port: 3003, replicas: 2 }
+  audit:    { port: 3004, replicas: 2 }
+  install:  { port: 3005, replicas: 1 }
+  queue:    { port: 3000, replicas: 2 }
+  notification: { port: 3006, replicas: 2 }
+  finance:  { port: 3007, replicas: 2 }
+  procurement: { port: 3008, replicas: 2 }
+  inventory: { port: 3009, replicas: 2 }
+  asset:    { port: 3010, replicas: 1 }
+  project:  { port: 3011, replicas: 1 }
+  hrms:     { port: 3012, replicas: 2 }
+  crm:      { port: 3013, replicas: 2 }
+  helpdesk: { port: 3014, replicas: 2 }
+  telephony: { port: 3015, replicas: 1 }
+  report:   { port: 3016, replicas: 2 }
+  plugin:   { port: 3017, replicas: 1 }
+  theme:    { port: 3018, replicas: 1 }
+
+postgresql:
+  enabled: true
+  auth:
+    username: civitasone
+    database: civitasone
+
+redis:
+  enabled: true
+  architecture: sentinel
+
+meilisearch:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""   # Set per environment

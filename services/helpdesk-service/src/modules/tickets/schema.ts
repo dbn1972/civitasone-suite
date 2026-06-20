@@ -1,0 +1,25 @@
+import type { HelpdeskTicketSummary } from "@civitasone/types";
+import { pgSchema, uuid, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+
+export const helpdeskSchema = pgSchema("helpdesk");
+
+export const tickets = helpdeskSchema.table("tickets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  subject: text("subject").notNull(),
+  description: text("description"),
+  priority: varchar("priority", { length: 24 }).notNull().default("Medium"),
+  status: varchar("status", { length: 24 }).notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export type TicketRow = typeof tickets.$inferSelect;
+export type TicketInsert = typeof tickets.$inferInsert;
+
+export type TicketView = HelpdeskTicketSummary;
+
+export const schema = { tickets };

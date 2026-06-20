@@ -1,0 +1,31 @@
+{
+  "name": "@civitasone/schemas",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./common": "./dist/common.js",
+    "./web": "./dist/web.js",
+    "./identity": "./dist/identity.js",
+    "./http": "./dist/http.js",
+    "./validate": "./dist/validate.js",
+    "./plugin": "./dist/plugin.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*",
+    "vitest": "^2.0.0"
+  }
+}

@@ -1,0 +1,260 @@
+/**
+ * Accessibility Enhancements
+ * WCAG 2.2 Level AA Compliance
+ */
+
+/* Skip to main content link */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only:focus,
+.sr-only:active {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* High contrast focus indicators */
+*:focus-visible {
+  outline: 2px solid var(--color-intent-primary, #3b82f6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-intent-primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Ensure sufficient color contrast */
+::selection {
+  background-color: var(--color-intent-primary, #3b82f6);
+  color: white;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  * {
+    border-color: currentColor !important;
+  }
+
+  button,
+  a {
+    text-decoration: underline;
+  }
+}
+
+/* Dark mode preference */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+  }
+}
+
+/* Light mode preference */
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) {
+    color-scheme: light;
+  }
+}
+
+/* Touch target sizing */
+@media (pointer: coarse) {
+  button,
+  a,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Improved text readability */
+p,
+li,
+td {
+  max-width: 80ch;
+}
+
+/* Focus-within for form groups */
+.form-group:focus-within {
+  outline: 2px solid var(--color-intent-primary, #3b82f6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Smooth scrolling with reduced motion support */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Print styles */
+@media print {
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  a,
+  a:visited {
+    text-decoration: underline;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+  }
+
+  abbr[title]::after {
+    content: " (" attr(title) ")";
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  img {
+    page-break-inside: avoid;
+  }
+
+  p,
+  h2,
+  h3 {
+    orphans: 3;
+    widows: 3;
+  }
+
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+}
+
+/* Improved link accessibility */
+a:not([class]) {
+  text-decoration-skip-ink: auto;
+}
+
+/* Improved table accessibility */
+table {
+  border-collapse: collapse;
+  caption-side: top;
+}
+
+caption {
+  font-weight: bold;
+  text-align: left;
+  padding: 0.5rem;
+}
+
+/* Improved form accessibility */
+label {
+  cursor: pointer;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
+}
+
+/* Error and success states */
+[aria-invalid="true"] {
+  border-color: var(--color-intent-danger, #ef4444);
+}
+
+[aria-invalid="false"] {
+  border-color: var(--color-intent-success, #22c55e);
+}
+
+/* Required field indicator */
+[required] + label::after,
+label[required]::after,
+.required::after {
+  content: " *";
+  color: var(--color-intent-danger, #ef4444);
+  aria-label: "required";
+}
+
+/* Tooltip accessibility */
+[aria-describedby] {
+  position: relative;
+}
+
+/* Loading states */
+[aria-busy="true"] {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* Disabled states */
+[aria-disabled="true"],
+[disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Hidden content that should be announced */
+[aria-live="polite"],
+[aria-live="assertive"] {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Keyboard navigation helpers */
+.keyboard-nav-active *:focus {
+  outline: 2px solid var(--color-intent-primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+.mouse-nav-active *:focus {
+  outline: none;
+}

@@ -1,0 +1,12 @@
+# Global owners
+* @civitasone/core-team
+
+# Architecture decisions require platform team review
+CLAUDE.md @civitasone/platform
+docs/ARCHITECTURE.md @civitasone/platform
+infra/ @civitasone/platform
+
+# Service changes require service owner
+services/finance-service/ @civitasone/finance-team
+services/hrms-service/ @civitasone/hr-team
+services/procurement-service/ @civitasone/procurement-team

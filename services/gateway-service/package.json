@@ -1,0 +1,28 @@
+{
+  "name": "@civitasone/gateway-service",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@civitasone/auth": "workspace:*",
+    "@civitasone/types": "workspace:*",
+    "@fastify/cors": "^9.0.0",
+    "fastify": "^4.27.0",
+    "pino": "^8.21.0",
+    "@civitasone/schemas": "workspace:*",
+    "@civitasone/observability": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.4.0"
+  }
+}

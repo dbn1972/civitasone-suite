@@ -1,0 +1,28 @@
+name: civitasone_mobile
+description: CivitasOne Suite — Mobile App (Flutter) with Gmail-style offline sync
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: ^9.2.2
+  flutter_appauth: ^7.0.0
+  dio: ^5.4.3
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.0.0
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  connectivity_plus: ^6.0.3
+  uuid: ^4.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

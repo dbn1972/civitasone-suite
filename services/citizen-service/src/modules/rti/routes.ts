@@ -1,0 +1,60 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import type { FastifyInstance } from "fastify";
+import { ZodError } from "zod";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { idParam, fileRtiBody, respondRtiBody, appealRtiBody } from "./validators.js";
+import * as commands from "./commands.js";
+import * as queries from "./queries.js";
+
+const CITIZEN_ROLES  = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
+const OFFICER_ROLES  = ["citizen_officer", "citizen_admin", "super_admin"];
+
+export async function rtiRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/v1/citizen/rti", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const body = fileRtiBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.fileRti(ctx, body));
+  });
+
+  app.post("/v1/citizen/rti/:id/respond", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = respondRtiBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.respondRti(ctx, id, body));
+  });
+
+  app.patch("/v1/citizen/rti/:id/appeal", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = appealRtiBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.appealRti(ctx, id, body));
+  });
+
+  app.get("/v1/citizen/rti/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const rti = await queries.getRti(ctx.tenantId, id);
+    if (!rti) throw new HttpError(404, "NOT_FOUND", "rti request not found");
+    return reply.send(rti);
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({
+        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
+        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
+  });
+}

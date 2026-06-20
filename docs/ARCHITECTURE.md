@@ -1,0 +1,1 @@
+../../erpnext-develop/ARCHITECTURE.md

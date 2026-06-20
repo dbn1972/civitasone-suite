@@ -1,0 +1,18 @@
+import { eq } from "drizzle-orm";
+import { db } from "../../shared/db.js";
+import { assetPolicies, assetClaims, type PolicyInsert, type ClaimInsert, type PolicyRow } from "./schema.js";
+
+export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+export async function insertPolicy(tx: Writer, row: PolicyInsert): Promise<void> {
+  await tx.insert(assetPolicies).values(row);
+}
+
+export async function insertClaim(tx: Writer, row: ClaimInsert): Promise<void> {
+  await tx.insert(assetClaims).values(row);
+}
+
+export async function findPolicyById(id: string): Promise<PolicyRow | null> {
+  const rows = await db.select().from(assetPolicies).where(eq(assetPolicies.id, id)).limit(1);
+  return rows[0] ?? null;
+}

@@ -1,0 +1,14 @@
+{
+  "_comment": "Source of truth for DB-per-service bootstrap. One database + one login per service (L1). One schema per bounded-context module inside each service DB (L2). Passwords are NOT here — they come from Vault/Secrets Manager as env vars named {ROLE}_PASSWORD at generate time.",
+  "clusterAdminRole": "civitas_admin",
+  "services": [
+    { "service": "tenant",        "db": "civitas_tenant",        "role": "tenant_svc",        "modules": ["tenant", "orgunit", "settings"] },
+    { "service": "identity",      "db": "civitas_identity",      "role": "identity_svc",      "modules": ["users", "sessions", "mfa", "service_accounts"] },
+    { "service": "policy",        "db": "civitas_policy",        "role": "policy_svc",        "modules": ["roles", "bindings", "abac"] },
+    { "service": "audit",         "db": "civitas_audit",         "role": "audit_svc",         "modules": ["events", "exports"] },
+    { "service": "finance",       "db": "civitas_finance",       "role": "finance_svc",       "modules": ["budget", "gl", "treasury", "payments"] },
+    { "service": "procurement",   "db": "civitas_procurement",   "role": "procurement_svc",   "modules": ["pr", "rfq", "po", "grn", "contract"] },
+    { "service": "notification",  "db": "civitas_notification",  "role": "notification_svc",  "modules": ["templates", "deliveries"] },
+    { "service": "billing",       "db": "civitas_billing",       "role": "billing_svc",       "modules": ["subscriptions", "invoices", "metering"] }
+  ]
+}

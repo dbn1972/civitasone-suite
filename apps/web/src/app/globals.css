@@ -1,0 +1,23 @@
+@import "@civitasone/ui-kit/components.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: var(--civitas-font-sans);
+  color: var(--civitas-color-text);
+}
+
+.civitas-shell__nav a {
+  border-radius: var(--civitas-radius-md);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  color: var(--civitas-color-text-muted);
+  text-decoration: none;
+}
+.civitas-shell__nav a:hover {
+  background: var(--civitas-color-surface-muted);
+  color: var(--civitas-color-text);
+}

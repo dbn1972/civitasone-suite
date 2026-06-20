@@ -1,0 +1,62 @@
+/** Service registry — prefix → upstream (env override per service). */
+export type ServiceRoute = {
+  name: string;
+  prefix: string;
+  upstream: string;
+  /** Path on upstream service (defaults to same as prefix without /api) */
+  upstreamPath?: string;
+};
+
+function upstream(name: string, port: number): string {
+  const envKey = `GATEWAY_${name.toUpperCase().replace(/-/g, "_")}_URL`;
+  return process.env[envKey] ?? `http://127.0.0.1:${port}`;
+}
+
+export const SERVICE_ROUTES: ServiceRoute[] = [
+  { name: "identity",     prefix: "/api/identity",     upstream: upstream("identity", 3001) },
+  { name: "policy",       prefix: "/api/policy",       upstream: upstream("policy", 3003) },
+  { name: "audit-events", prefix: "/api/audit",        upstream: upstream("audit", 3004) },
+  { name: "audit",        prefix: "/api/v1/audit",     upstream: upstream("audit", 3004) },
+  { name: "notification", prefix: "/api/notification", upstream: upstream("notification", 3006), upstreamPath: "/notifications" },
+  { name: "finance",      prefix: "/api/v1/finance",   upstream: upstream("finance", 3007) },
+  { name: "procurement",  prefix: "/api/v1/procurement", upstream: upstream("procurement", 3008) },
+  { name: "contract",     prefix: "/api/v1/contract",  upstream: upstream("contract", 3009) },
+  { name: "estab",        prefix: "/api/v1/estab",     upstream: upstream("estab", 3010) },
+  { name: "stock",        prefix: "/api/v1/stock",     upstream: upstream("stock", 3011) },
+  { name: "hrms",         prefix: "/api/v1/hrms",      upstream: upstream("hrms", 3012) },
+  { name: "payroll",      prefix: "/api/v1/payroll",   upstream: upstream("payroll", 3013) },
+  { name: "project",      prefix: "/api/v1/project", upstream: upstream("project", 3014), upstreamPath: "/v1/projects" },
+  { name: "asset",        prefix: "/api/v1/asset",     upstream: upstream("asset", 3015), upstreamPath: "/v1/assets" },
+  { name: "grant",        prefix: "/api/v1/grants",    upstream: upstream("grant", 3019) },
+  { name: "citizen",      prefix: "/api/v1/citizen",   upstream: upstream("citizen", 3020) },
+  { name: "legal",        prefix: "/api/v1/legal",     upstream: upstream("legal", 3021) },
+  { name: "admin",        prefix: "/api/v1/admin",     upstream: upstream("admin", 3022) },
+  { name: "billing",      prefix: "/api/v1/billing",   upstream: upstream("billing", 3023) },
+  { name: "crm",          prefix: "/api/v1/crm",       upstream: upstream("crm", 3024) },
+  { name: "install",      prefix: "/api/v1/install",   upstream: upstream("install", 3005) },
+  { name: "plugin",       prefix: "/api/v1/plugins",   upstream: upstream("plugin", 3017) },
+  { name: "theme",        prefix: "/api/v1/themes",    upstream: upstream("theme", 3018) },
+  { name: "reports",      prefix: "/api/v1/reports",   upstream: upstream("report", 3016) },
+  { name: "inventory",    prefix: "/api/v1/inventory", upstream: upstream("inventory", 3025) },
+  { name: "telephony",    prefix: "/api/v1/telephony", upstream: upstream("telephony", 3026) },
+  { name: "helpdesk",     prefix: "/api/v1/helpdesk",  upstream: upstream("helpdesk", 3027) },
+  { name: "knowledge",    prefix: "/api/v1/knowledge", upstream: upstream("knowledge", 3028) },
+  { name: "workflow",     prefix: "/api/v1/workflow",  upstream: upstream("workflow", 3029) },
+  { name: "analytics",    prefix: "/api/v1/analytics", upstream: upstream("analytics", 3031) },
+  { name: "locations",    prefix: "/api/v1/locations", upstream: upstream("location", 4012) },
+  { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
+  { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
+  { name: "devices",      prefix: "/api/v1/devices",   upstream: upstream("identity", 3001), upstreamPath: "/v1/devices" },
+  { name: "queue",        prefix: "/api/v1/queue",     upstream: upstream("queue", 3030), upstreamPath: "/v1/queue" },
+];
+
+export function resolveRoute(pathname: string): { route: ServiceRoute; remainder: string } | null {
+  const sorted = [...SERVICE_ROUTES].sort((a, b) => b.prefix.length - a.prefix.length);
+  for (const route of sorted) {
+    if (pathname === route.prefix || pathname.startsWith(`${route.prefix}/`)) {
+      const remainder = pathname.slice(route.prefix.length) || "/";
+      return { route, remainder };
+    }
+  }
+  return null;
+}

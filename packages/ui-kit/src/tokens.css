@@ -1,0 +1,14 @@
+:root {
+  --civitas-color-primary: #4338ca;
+  --civitas-color-primary-hover: #4f46e5;
+  --civitas-color-surface: #ffffff;
+  --civitas-color-surface-muted: #f8fafc;
+  --civitas-color-border: #e2e8f0;
+  --civitas-color-text: #0f172a;
+  --civitas-color-text-muted: #64748b;
+  --civitas-color-danger: #e11d48;
+  --civitas-radius-md: 0.5rem;
+  --civitas-radius-lg: 1rem;
+  --civitas-shadow-md: 0 10px 25px -12px rgb(15 23 42 / 0.25);
+  --civitas-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}

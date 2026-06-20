@@ -1,0 +1,35 @@
+{
+  "name": "@civitasone/auth",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./plugin": "./dist/plugin.js",
+    "./context": "./dist/context.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@civitasone/types": "workspace:*",
+    "fastify-plugin": "^4.5.1",
+    "jsonwebtoken": "^9.0.0",
+    "jwks-rsa": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/node": "*",
+    "fastify": "^4.28.0",
+    "typescript": "*",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "fastify": "^4.0.0"
+  }
+}

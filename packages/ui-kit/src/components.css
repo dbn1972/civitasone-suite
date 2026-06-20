@@ -1,0 +1,39 @@
+.civitas-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--civitas-radius-md);
+  font-family: var(--civitas-font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.625rem 1rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.civitas-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.civitas-btn--primary {
+  background: var(--civitas-color-primary);
+  color: #fff;
+}
+.civitas-btn--primary:hover:not(:disabled) { background: var(--civitas-color-primary-hover); }
+.civitas-btn--secondary {
+  background: var(--civitas-color-surface);
+  border-color: var(--civitas-color-border);
+  color: var(--civitas-color-text);
+}
+.civitas-btn--ghost {
+  background: transparent;
+  color: var(--civitas-color-primary);
+}
+.civitas-shell { min-height: 100vh; background: var(--civitas-color-surface-muted); font-family: var(--civitas-font-sans); }
+.civitas-shell__header {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: 0.75rem 1.5rem; background: var(--civitas-color-surface);
+  border-bottom: 1px solid var(--civitas-color-border);
+  position: sticky; top: 0; z-index: 20;
+}
+.civitas-shell__brand { font-weight: 700; color: var(--civitas-color-text); }
+.civitas-shell__nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.civitas-shell__actions { margin-left: auto; }
+.civitas-shell__main { max-width: 80rem; margin: 0 auto; padding: 1.5rem; }

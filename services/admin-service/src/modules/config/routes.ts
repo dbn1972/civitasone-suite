@@ -1,0 +1,70 @@
+import type { FastifyInstance } from "fastify";
+import { ZodError } from "zod";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { tenantModulesResponseSchema } from "@civitasone/schemas/web";
+import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
+import { tenantIdParam, moduleParam, toggleBody, createFlagBody, overrideFlagBody, flagKeyParam } from "./validators.js";
+import * as commands from "./commands.js";
+import * as queries from "./queries.js";
+
+const TENANT_ADMIN = ["tenant_admin", "super_admin", "platform_admin"];
+
+export async function configRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/admin/tenant/modules", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, TENANT_ADMIN);
+    sendValidated(reply, tenantModulesResponseSchema, { data: await queries.listTenantModules(ctx.tenantId) });
+  });
+
+  app.get("/v1/admin/tenants/:id/config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const { id } = tenantIdParam.parse(req.params);
+    const config = await queries.getConfig(id);
+    if (!config) throw new HttpError(404, "NOT_FOUND", "tenant config not found");
+    return reply.send(config);
+  });
+
+  app.patch("/v1/admin/tenants/:id/modules/:module/toggle", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const { id, module } = moduleParam.parse(req.params);
+    const body = toggleBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, id, module, body.enabled));
+  });
+
+  app.post("/v1/admin/feature-flags", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const body = createFlagBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createFeatureFlag(ctx, body.flagKey, body.enabled));
+  });
+
+  app.patch("/v1/admin/feature-flags/:key/override", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const { key } = flagKeyParam.parse(req.params);
+    const body = overrideFlagBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.overrideFeatureFlag(ctx, key, body.tenantId, body.enabled));
+  });
+
+  app.get("/v1/admin/feature-flags", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    return reply.send(await queries.listFeatureFlags());
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
+        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
+  });
+}

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --filter @civitasone/tenant-service install)",
+      "Bash(pnpm typecheck *)",
+      "Bash(node *)",
+      "Bash(pnpm test *)",
+      "Bash(PGPASSWORD=civitas_dev_pw psql *)"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+import { z } from "zod";
+
+export const createSchemeBody = z.object({
+  code:            z.string().min(1).max(32),
+  name:            z.string().min(3).max(256),
+  sanctionRef:     z.string().optional(),
+  budgetMinor:     z.number().int().nonnegative(),
+  minAmountMinor:  z.number().int().nonnegative().default(0),
+  maxAmountMinor:  z.number().int().nonnegative(),
+  currency:        z.string().length(3).default("INR"),
+  openAt:          z.string().datetime().optional(),
+  closeAt:         z.string().datetime().optional(),
+});
+export type CreateSchemeBody = z.infer<typeof createSchemeBody>;
+
+export const createCriterionBody = z.object({
+  criterionKey:  z.enum(["age", "income", "category", "geography"]),
+  minValue:      z.string().optional(),
+  maxValue:      z.string().optional(),
+  allowedValues: z.array(z.string()).optional(),
+  description:   z.string().optional(),
+});
+export type CreateCriterionBody = z.infer<typeof createCriterionBody>;
+
+export const idParam = z.object({ id: z.string().uuid() });

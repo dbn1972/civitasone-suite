@@ -1,0 +1,253 @@
+/* CivitasOne Suite Design Tokens v0.1.0 */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* ==================== COLOR — SEMANTIC ==================== */
+
+  /* Surface */
+  --surface-canvas: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f8f9fa;
+
+  /* Text */
+  --text-primary: #1a1a1a;
+  --text-secondary: #525252;
+  --text-muted: #a3a3a3;
+  --text-inverse: #ffffff;
+
+  /* Border */
+  --border-subtle: #e5e5e5;
+  --border-default: #d4d4d4;
+  --border-strong: #a3a3a3;
+
+  /* Intent Colors */
+  --intent-success: #16a34a;
+  --intent-success-bg: #dcfce7;
+  --intent-success-border: #86efac;
+
+  --intent-warning: #ea580c;
+  --intent-warning-bg: #ffedd5;
+  --intent-warning-border: #fed7aa;
+
+  --intent-danger: #dc2626;
+  --intent-danger-bg: #fee2e2;
+  --intent-danger-border: #fca5a5;
+
+  --intent-info: #0284c7;
+  --intent-info-bg: #e0f2fe;
+  --intent-info-border: #7dd3fc;
+
+  --intent-primary: #4f46e5;
+  --intent-primary-bg: #eef2ff;
+  --intent-primary-border: #c7d2fe;
+
+  /* ==================== COLOR — BRAND (tenant-overridable) ==================== */
+  --brand-primary: #4f46e5;
+  --brand-secondary: #7c3aed;
+  --brand-accent: #ec4899;
+
+  /* ==================== TYPOGRAPHY ==================== */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
+  /* Font Sizes & Line Heights */
+  --text-display: 2.5rem;      /* 40px */
+  --text-display-lh: 3rem;     /* 48px */
+
+  --text-h1: 2rem;             /* 32px */
+  --text-h1-lh: 2.5rem;        /* 40px */
+
+  --text-h2: 1.5rem;           /* 24px */
+  --text-h2-lh: 2rem;          /* 32px */
+
+  --text-h3: 1.25rem;          /* 20px */
+  --text-h3-lh: 1.75rem;       /* 28px */
+
+  --text-h4: 1.125rem;         /* 18px */
+  --text-h4-lh: 1.5rem;        /* 24px */
+
+  --text-base: 1rem;           /* 16px */
+  --text-base-lh: 1.5rem;      /* 24px */
+
+  --text-body-sm: 0.875rem;    /* 14px */
+  --text-body-sm-lh: 1.25rem;  /* 20px */
+
+  --text-caption: 0.75rem;     /* 12px */
+  --text-caption-lh: 1rem;     /* 16px */
+
+  --text-code: 0.875rem;       /* 14px */
+  --text-code-lh: 1.25rem;     /* 20px */
+
+  /* Font Weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ==================== SPACING (4px scale) ==================== */
+  --space-1: 0.25rem;    /* 4px */
+  --space-2: 0.5rem;     /* 8px */
+  --space-3: 0.75rem;    /* 12px */
+  --space-4: 1rem;       /* 16px */
+  --space-5: 1.25rem;    /* 20px */
+  --space-6: 1.5rem;     /* 24px */
+  --space-8: 2rem;       /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+  --space-16: 4rem;      /* 64px */
+
+  /* ==================== RADIUS ==================== */
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-pill: 9999px;
+
+  /* ==================== SHADOW (elevation) ==================== */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-focus: 0 0 0 3px var(--intent-primary-border);
+
+  /* ==================== MOTION ==================== */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ==================== DENSITY ==================== */
+  --density-comfortable: 1rem;   /* 16px row padding */
+  --density-compact: 0.5rem;     /* 8px row padding */
+}
+
+/* ==================== DARK MODE ==================== */
+.dark {
+  /* Surface */
+  --surface-canvas: #0a0a0a;
+  --surface-raised: #171717;
+  --surface-sunken: #000000;
+
+  /* Text */
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d4;
+  --text-muted: #737373;
+  --text-inverse: #0a0a0a;
+
+  /* Border */
+  --border-subtle: #262626;
+  --border-default: #404040;
+  --border-strong: #737373;
+
+  /* Intent Colors (adjusted for dark mode) */
+  --intent-success: #22c55e;
+  --intent-success-bg: #14532d;
+  --intent-success-border: #166534;
+
+  --intent-warning: #f97316;
+  --intent-warning-bg: #431407;
+  --intent-warning-border: #7c2d12;
+
+  --intent-danger: #ef4444;
+  --intent-danger-bg: #450a0a;
+  --intent-danger-border: #991b1b;
+
+  --intent-info: #06b6d4;
+  --intent-info-bg: #083344;
+  --intent-info-border: #155e75;
+
+  --intent-primary: #6366f1;
+  --intent-primary-bg: #1e1b4b;
+  --intent-primary-border: #3730a3;
+
+  /* Brand (same or tenant-adjusted) */
+  --brand-primary: #6366f1;
+  --brand-secondary: #8b5cf6;
+  --brand-accent: #f472b6;
+
+  /* Shadows (lighter for dark mode) */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+  --shadow-focus: 0 0 0 3px var(--intent-primary-border);
+}
+
+/* ==================== TAILWIND THEME INTEGRATION ==================== */
+@theme inline {
+  /* Colors */
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+
+  --color-intent-success: var(--intent-success);
+  --color-intent-warning: var(--intent-warning);
+  --color-intent-danger: var(--intent-danger);
+  --color-intent-info: var(--intent-info);
+  --color-intent-primary: var(--intent-primary);
+
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-accent: var(--brand-accent);
+}
+
+/* ==================== BASE STYLES ==================== */
+@layer base {
+  * {
+    @apply border-border-default;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    background-color: var(--surface-canvas);
+  }
+
+  h1 {
+    font-size: var(--text-h1);
+    line-height: var(--text-h1-lh);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  h2 {
+    font-size: var(--text-h2);
+    line-height: var(--text-h2-lh);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  h3 {
+    font-size: var(--text-h3);
+    line-height: var(--text-h3-lh);
+    font-weight: var(--font-weight-medium);
+  }
+
+  h4 {
+    font-size: var(--text-h4);
+    line-height: var(--text-h4-lh);
+    font-weight: var(--font-weight-medium);
+  }
+
+  p {
+    font-size: var(--text-base);
+    line-height: var(--text-base-lh);
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+    line-height: var(--text-code-lh);
+  }
+
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}

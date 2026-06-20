@@ -1,0 +1,10 @@
+import { drizzle } from "drizzle-orm/postgres-js";
+import { createSqlClient } from "@civitasone/db";
+import { schema as dashboardsModule } from "../modules/dashboards/schema.js";
+import { schema as queriesModule } from "../modules/queries/schema.js";
+import { outboxSchema } from "./outbox.js";
+const url = process.env.DATABASE_URL;
+if (!url) throw new Error("DATABASE_URL is required (postgres://analytics_svc:***@host/civitas_analytics)");
+export const sqlClient = createSqlClient(url);
+export const db = drizzle(sqlClient, { schema: { ...dashboardsModule, ...queriesModule, ...outboxSchema } });
+export type Db = typeof db;

@@ -1,0 +1,151 @@
+# CivitasOne — unified dev environment.
+# One command starts everything: LocalStack + Postgres 16 + Redis 7 + Keycloak 24.
+# LocalStack init auto-creates all SQS queues on startup.
+# Keycloak auto-imports the civitasone realm on first boot.
+# All containers share civitasone-net; services address each other by container name.
+#
+# Start:    docker compose -p civitasone --env-file infra/.env -f infra/docker-compose.yml up -d
+# Stop:     docker compose -p civitasone -f infra/docker-compose.yml down
+# Logs:     docker compose -p civitasone -f infra/docker-compose.yml logs -f
+#
+# Endpoints (from host):
+#   LocalStack (SQS/S3/SecretsManager)  http://localhost:4566
+#   Postgres 16                          localhost:5435
+#   PgBouncer (transaction pool)         localhost:6432
+#   Redis 7                              localhost:6381
+#   Keycloak 24 admin UI                 http://localhost:8180  (admin / civitas_kc_dev_pw)
+#   Keycloak OIDC issuer                 http://localhost:8180/realms/civitasone
+#   JWKS endpoint                        http://localhost:8180/realms/civitasone/protocol/openid-connect/certs
+#
+# Endpoints (container-to-container on civitasone-net):
+#   LocalStack   civitasone-localstack:4566
+#   Postgres     civitasone-postgres:5432
+#   PgBouncer    civitasone-pgbouncer:6432
+#   Redis        civitasone-redis:6379
+#   Keycloak     civitasone-keycloak:8080
+
+name: civitasone
+
+services:
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: civitasone-localstack
+    restart: unless-stopped
+    environment:
+      SERVICES: sqs,s3,secretsmanager
+      DEBUG: 0
+      PERSISTENCE: 1
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-south-1}
+    ports:
+      - "${LOCALSTACK_HOST_PORT:-4566}:4566"
+    volumes:
+      - localstackdata:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./localstack-init:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [civitasone]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: civitasone-postgres
+    restart: unless-stopped
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "effective_cache_size=768MB", "-c", "work_mem=8MB", "-c", "max_connections=200", "-c", "log_min_duration_statement=200"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-civitas_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-civitas_dev_pw}
+      POSTGRES_DB: postgres
+    ports:
+      - "${POSTGRES_HOST_PORT:-5435}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER:-civitas_admin} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [civitasone]
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.23.1-p2
+    container_name: civitasone-pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_ADMIN_USER:-civitas_admin}:${POSTGRES_ADMIN_PASSWORD:-civitas_dev_pw}@civitasone-postgres:5432/postgres
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 20
+      AUTH_TYPE: trust
+    ports:
+      - "${PGBOUNCER_HOST_PORT:-6432}:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [civitasone]
+
+  redis:
+    image: redis:7-alpine
+    container_name: civitasone-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6381}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [civitasone]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: civitasone-keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://civitasone-postgres:5432/keycloak
+      KC_DB_USERNAME: ${KC_DB_USER:-keycloak_svc}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-keycloak_dev_pw}
+      KEYCLOAK_ADMIN: ${KC_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-civitas_kc_dev_pw}
+      KC_HTTP_PORT: 8080
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KC_LOG_LEVEL: warn
+    ports:
+      - "${KEYCLOAK_HOST_PORT:-8180}:8080"
+    volumes:
+      - ./keycloak/civitasone-realm.json:/opt/keycloak/data/import/civitasone-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/ready > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    networks: [civitasone]
+
+volumes:
+  localstackdata:
+  pgdata:
+  redisdata:
+
+networks:
+  civitasone:
+    name: civitasone-net

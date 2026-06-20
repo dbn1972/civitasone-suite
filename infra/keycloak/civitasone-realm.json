@@ -1,0 +1,207 @@
+{
+  "realm": "civitasone",
+  "enabled": true,
+  "displayName": "CivitasOne Suite",
+  "displayNameHtml": "<strong>CivitasOne</strong> Suite",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionIdleTimeout": 7200,
+  "accessTokenLifespan": 3600,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "refreshTokenMaxReuse": 0,
+  "revokeRefreshToken": true,
+  "accessCodeLifespan": 60,
+  "roles": {
+    "realm": [
+      { "name": "super_admin",  "description": "Platform super-administrator (control plane)" },
+      { "name": "tenant_admin", "description": "Tenant administrator — manages users and config" },
+      { "name": "dept_head",    "description": "Department head — approves, audits within dept" },
+      { "name": "officer",      "description": "Government officer — creates and processes records" },
+      { "name": "auditor",      "description": "Internal/external auditor — read-only + audit ops" },
+      { "name": "citizen",      "description": "Citizen — portal access only" },
+      { "name": "service_account", "description": "Service-to-service machine identity" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "civitasone-web",
+      "name": "CivitasOne Web App",
+      "description": "Next.js web application (public PKCE client)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://*.civitasone.gov.in/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "https://*.civitasone.gov.in"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant-id-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tenantId",
+            "claim.name": "tid",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "civitasone-mobile",
+      "name": "CivitasOne Mobile App",
+      "description": "Flutter mobile application (public PKCE client)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "civitasone://auth/callback",
+        "http://localhost:*"
+      ],
+      "webOrigins": ["*"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant-id-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tenantId",
+            "claim.name": "tid",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "civitasone-services",
+      "name": "CivitasOne Service Accounts",
+      "description": "Confidential client for service-to-service M2M calls",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "civitas_svc_secret_dev",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "civitasone-admin-cli",
+      "name": "CivitasOne Admin CLI",
+      "description": "Admin CLI for realm management scripts",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "civitas_admin_cli_secret_dev",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "identityProviders": [],
+  "userFederationProviders": [],
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en", "hi"],
+  "defaultLocale": "en",
+  "browserSecurityHeaders": {
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+  "users": [
+    {
+      "username": "dev-superadmin",
+      "email": "superadmin@civitasone.dev",
+      "firstName": "Dev",
+      "lastName": "SuperAdmin",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Admin@1234", "temporary": false }],
+      "realmRoles": ["super_admin"],
+      "attributes": { "tenantId": ["00000000-0000-0000-0000-000000000001"] }
+    },
+    {
+      "username": "dev-officer",
+      "email": "officer@civitasone.dev",
+      "firstName": "Dev",
+      "lastName": "Officer",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Officer@1234", "temporary": false }],
+      "realmRoles": ["officer"],
+      "attributes": { "tenantId": ["00000000-0000-0000-0000-000000000001"] }
+    }
+  ]
+}

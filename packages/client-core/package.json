@@ -1,0 +1,29 @@
+{
+  "name": "@civitasone/client-core",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./pkce": "./dist/pkce.js",
+    "./device": "./dist/device.js",
+    "./session": "./dist/session.js",
+    "./sync": "./dist/sync/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@civitasone/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*",
+    "vitest": "^2.0.0"
+  }
+}

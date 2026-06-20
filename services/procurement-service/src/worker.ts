@@ -1,0 +1,37 @@
+import { pino } from "pino";
+import { db, sqlClient } from "./shared/db.js";
+import { queue } from "./shared/infra.js";
+import { startRelay } from "./shared/outbox.js";
+import { registerIndentConsumers }   from "./modules/indent/consumer.js";
+import { registerVendorConsumers }   from "./modules/vendor/consumer.js";
+import { registerPoConsumers }       from "./modules/po/consumer.js";
+import { registerGrnConsumers }      from "./modules/grn/consumer.js";
+import { registerAuctionConsumers }  from "./modules/auction/consumer.js";
+import { registerPaymentsConsumers } from "./modules/payments/consumer.js";
+import { registerClearanceConsumers } from "./modules/clearance/consumer.js";
+
+const log = pino({ name: "procurement-worker" });
+
+registerIndentConsumers(queue);
+registerVendorConsumers(queue);
+registerPoConsumers(queue);
+registerGrnConsumers(queue);
+registerAuctionConsumers(queue);
+registerPaymentsConsumers(queue);
+registerClearanceConsumers(queue);
+
+await queue.start();
+const relay = startRelay(db, queue);
+log.info("procurement-service worker: consumers + outbox relay running");
+
+async function shutdown(signal: string): Promise<void> {
+  log.info({ signal }, "shutting down");
+  clearInterval(relay);
+  await queue.stop();
+  await sqlClient.end();
+  log.info("shutdown complete");
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT",  () => void shutdown("SIGINT"));

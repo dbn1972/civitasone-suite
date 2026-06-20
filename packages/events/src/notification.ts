@@ -1,0 +1,66 @@
+/**
+ * Canonical notification.send payload contract (notification-service deliveries consumer).
+ * System template UUIDs are seeded in notification-service/migrations/0003_system_templates.sql
+ */
+
+export const NOTIFICATION_SEND = "notification.send" as const;
+
+/** Fixed template IDs — must match 0003_system_templates.sql */
+export const SYSTEM_TEMPLATE_IDS = {
+  default:                  "00000000-0000-4000-8001-000000000000",
+  auditParaIssued:          "00000000-0000-4000-8001-000000000001",
+  legalCaseDateSet:         "00000000-0000-4000-8001-000000000002",
+  citizenRtiFiled:          "00000000-0000-4000-8001-000000000003",
+  citizenApplicationApproved: "00000000-0000-4000-8001-000000000004",
+  citizenApplicationSlaBreached: "00000000-0000-4000-8001-000000000005",
+  citizenGrievanceResolved: "00000000-0000-4000-8001-000000000006",
+  citizenGrievanceEscalated: "00000000-0000-4000-8001-000000000007",
+  grantApplicationApproved: "00000000-0000-4000-8001-000000000008",
+  grantDisbursementCompleted: "00000000-0000-4000-8001-000000000009",
+  grantDisbursementFailed:  "00000000-0000-4000-8001-00000000000a",
+  vendorBlacklisted:        "00000000-0000-4000-8001-00000000000b",
+  estabRtiCpioAlert:        "00000000-0000-4000-8001-00000000000c",
+} as const;
+
+const EVENT_TEMPLATE_MAP: Record<string, string> = {
+  "audit.para.issued":              SYSTEM_TEMPLATE_IDS.auditParaIssued,
+  "legal.case.date_set":            SYSTEM_TEMPLATE_IDS.legalCaseDateSet,
+  "citizen.rti.filed":              SYSTEM_TEMPLATE_IDS.citizenRtiFiled,
+  "citizen.application.approved":   SYSTEM_TEMPLATE_IDS.citizenApplicationApproved,
+  "citizen.application.sla_breached": SYSTEM_TEMPLATE_IDS.citizenApplicationSlaBreached,
+  "citizen.grievance.resolved":     SYSTEM_TEMPLATE_IDS.citizenGrievanceResolved,
+  "citizen.grievance.escalated":    SYSTEM_TEMPLATE_IDS.citizenGrievanceEscalated,
+  "grant.application.approved":     SYSTEM_TEMPLATE_IDS.grantApplicationApproved,
+  "grant.disbursement.completed":   SYSTEM_TEMPLATE_IDS.grantDisbursementCompleted,
+  "grant.disbursement.failed":      SYSTEM_TEMPLATE_IDS.grantDisbursementFailed,
+  "procurement.vendor.blacklisted": SYSTEM_TEMPLATE_IDS.vendorBlacklisted,
+  "estab.rti.created":              SYSTEM_TEMPLATE_IDS.estabRtiCpioAlert,
+};
+
+export type NotificationSendPayload = {
+  templateId: string;
+  recipient: string;
+  recipientId?: string;
+  channel?: "email" | "sms" | "push" | "in_app" | "whatsapp";
+  eventType: string;
+  variables?: Record<string, string>;
+};
+
+export function buildNotificationPayload(opts: {
+  eventType: string;
+  recipient: string;
+  recipientId?: string;
+  channel?: NotificationSendPayload["channel"];
+  variables?: Record<string, string>;
+}): NotificationSendPayload {
+  const templateId = EVENT_TEMPLATE_MAP[opts.eventType] ?? SYSTEM_TEMPLATE_IDS.default;
+  const payload: NotificationSendPayload = {
+    templateId,
+    recipient: opts.recipient,
+    eventType: opts.eventType,
+  };
+  if (opts.recipientId) payload.recipientId = opts.recipientId;
+  if (opts.channel) payload.channel = opts.channel;
+  if (opts.variables) payload.variables = opts.variables;
+  return payload;
+}

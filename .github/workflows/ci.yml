@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 1: Type-check + Lint (fastest gate)
+  # ─────────────────────────────────────────────
+  typecheck-lint:
+    name: Typecheck & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo typecheck --parallel
+      - run: pnpm turbo lint --parallel
+
+  # ─────────────────────────────────────────────
+  # Job 2: Unit + integration tests (vitest)
+  # ─────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: civitas
+          POSTGRES_PASSWORD: civitas_test
+          POSTGRES_DB: civitas_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+    env:
+      DATABASE_URL: postgres://civitas:civitas_test@localhost:5432/civitas_test
+      REDIS_URL: redis://localhost:6379
+      QUEUE_DRIVER: memory
+      JWT_SECRET: ci-test-secret-min-32-chars-long
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='./packages/*'
+      - name: Run all service tests
+        run: pnpm turbo test --parallel
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/coverage/'
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Job 3: Architecture guard (no cross-service SQL)
+  # ─────────────────────────────────────────────
+  arch-guard:
+    name: Architecture Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check no cross-service DB joins
+        run: |
+          # L1 rule: no service may import another service's schema
+          if grep -r "from.*services/" services/*/src --include="*.ts" | grep -v "node_modules" | grep -v ".test.ts"; then
+            echo "❌ Cross-service import detected"
+            exit 1
+          fi
+          echo "✅ No cross-service imports"
+      - name: Check no console.log in service src
+        run: |
+          if grep -r "console\.log" services/*/src --include="*.ts" | grep -v ".test.ts" | grep -v "node_modules"; then
+            echo "❌ console.log found in service source"
+            exit 1
+          fi
+          echo "✅ No console.log in service source"
+      - name: Check no raw 'any' type
+        run: |
+          if grep -rn ": any" services/*/src --include="*.ts" | grep -v ".test.ts" | grep -v "node_modules" | grep -v "eslint-disable"; then
+            echo "❌ Raw 'any' type found"
+            exit 1
+          fi
+          echo "✅ No raw any types"
+
+  # ─────────────────────────────────────────────
+  # Job 4: Web build check
+  # ─────────────────────────────────────────────
+  web-build:
+    name: Web Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Build packages first
+        run: pnpm turbo build --filter='./packages/*'
+      - name: Build web app
+        run: pnpm --filter @civitasone/web build
+        env:
+          NEXT_PUBLIC_API_BASE: http://localhost:8080
+          SKIP_ENV_VALIDATION: true
+
+  # ─────────────────────────────────────────────
+  # Job 5: Contract tests (gateway routing)
+  # ─────────────────────────────────────────────
+  contract-tests:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    needs: [typecheck-lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='./packages/*' --filter='./services/gateway-service'
+      - name: Run contract tests
+        run: pnpm --filter @civitasone/web test -- --testPathPattern=contract
+        env:
+          QUEUE_DRIVER: memory
+          JWT_SECRET: ci-test-secret-min-32-chars-long

@@ -1,0 +1,1 @@
+../../erpnext-develop/MASTER_BUILD_BRIEF.md
