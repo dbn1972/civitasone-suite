@@ -53,17 +53,17 @@ export default async function GeneralLedgerPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-left text-sm" aria-label="General ledger entries">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Voucher No</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Account Code</th>
-                <th className="px-4 py-3">Account Name</th>
-                <th className="px-4 py-3 text-right">Debit (₹)</th>
-                <th className="px-4 py-3 text-right">Credit (₹)</th>
-                <th className="px-4 py-3">Narration</th>
-                <th className="px-4 py-3">Reference</th>
+                <th scope="col" className="px-4 py-3">Voucher No</th>
+                <th scope="col" className="px-4 py-3">Date</th>
+                <th scope="col" className="px-4 py-3">Account Code</th>
+                <th scope="col" className="px-4 py-3">Account Name</th>
+                <th scope="col" className="px-4 py-3 text-right">Debit (₹)</th>
+                <th scope="col" className="px-4 py-3 text-right">Credit (₹)</th>
+                <th scope="col" className="px-4 py-3">Narration</th>
+                <th scope="col" className="px-4 py-3">Reference</th>
               </tr>
             </thead>
             <tbody>

@@ -36,16 +36,16 @@ export default async function AuditExportsPage() {
         </header>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Export jobs" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Job Type</th>
-                <th className="px-4 py-3">Requested By</th>
-                <th className="px-4 py-3">Requested At</th>
-                <th className="px-4 py-3">Completed At</th>
-                <th className="px-4 py-3">Format</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Download</th>
+                <th scope="col" className="px-4 py-3">Job Type</th>
+                <th scope="col" className="px-4 py-3">Requested By</th>
+                <th scope="col" className="px-4 py-3">Requested At</th>
+                <th scope="col" className="px-4 py-3">Completed At</th>
+                <th scope="col" className="px-4 py-3">Format</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Download</th>
               </tr>
             </thead>
             <tbody>
@@ -76,9 +76,12 @@ export default async function AuditExportsPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {items.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">No export jobs found.</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No export jobs</span>
+                    <span className="mt-1 block text-slate-400">Scheduled export jobs will appear here.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

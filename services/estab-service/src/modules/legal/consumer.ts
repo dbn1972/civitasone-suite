@@ -87,6 +87,11 @@ export function registerLegalConsumers(queue: Queue): void {
         responseUrl: p.responseUrl, respondedAt: new Date(),
         status: "responded", updatedBy: msg.actorId,
       });
+      await enqueue(tx, {
+        topic: EVENTS.rtiResponded, eventType: EVENTS.rtiResponded,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { rtiId: p.rtiId, tenantId: p.tenantId, responseUrl: p.responseUrl },
+      });
       await audit(tx, msg, "respond", "rti", p.rtiId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));

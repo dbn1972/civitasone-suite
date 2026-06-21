@@ -65,15 +65,15 @@ export default async function Page() {
           <section key={module}>
             <h2 className="text-base font-semibold text-slate-900 capitalize">{module.replace(/_/g, " ")}</h2>
             <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-              <table className="min-w-full text-left text-sm">
+              <table aria-label={`${module.replace(/_/g, " ")} notification preferences`} className="min-w-full text-left text-sm">
                 <thead className="bg-slate-100 text-slate-700">
                   <tr>
-                    <th className="px-4 py-3">Event Type</th>
-                    <th className="px-4 py-3">Label</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">SMS</th>
-                    <th className="px-4 py-3">In-App</th>
-                    <th className="px-4 py-3">Webhook</th>
+                    <th scope="col" className="px-4 py-3">Event Type</th>
+                    <th scope="col" className="px-4 py-3">Label</th>
+                    <th scope="col" className="px-4 py-3">Email</th>
+                    <th scope="col" className="px-4 py-3">SMS</th>
+                    <th scope="col" className="px-4 py-3">In-App</th>
+                    <th scope="col" className="px-4 py-3">Webhook</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -93,9 +93,10 @@ export default async function Page() {
           </section>
         ))}
 
-        {prefs.length === 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <p className="text-sm text-slate-400">No notification preferences configured.</p>
+        {prefs.length === 0 && source !== "error" && (
+          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+            <p className="text-sm font-medium text-slate-700">No notification preferences configured</p>
+            <p className="mt-1 text-sm text-slate-400">Event channel settings will appear here once modules are enabled.</p>
           </div>
         )}
       </section>

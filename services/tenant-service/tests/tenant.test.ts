@@ -3,10 +3,11 @@
  * 1) domain transition rules (pure).
  * 2) write-via-queue + read-via-cache flow, using the real MemoryQueue + MemoryCache
  *    adapters (no Postgres/Redis required) — proves the CQRS pattern wiring.
+ * 3) BUG-4 regression: authPlugin was missing; unauthenticated requests reached handlers.
  *
  * Integration tests against a real Fastify app + DB run in CI (supertest + testcontainers).
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { canTransition, assertTransition } from "../src/modules/tenant/domain.js";
 import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";
@@ -71,5 +72,37 @@ describe("write-via-queue + read-via-cache", () => {
     await queue.publish("tenant.tenant.touch", opts);
     await new Promise((r) => setTimeout(r, 20));
     expect(count).toBe(1);
+  });
+});
+
+// ── BUG-4 regression: tenant-service was missing authPlugin ────────────────
+
+describe("tenant-service authPlugin — unauthenticated requests rejected (BUG-4)", () => {
+  it("GET /v1/tenants without Bearer token returns 401", async () => {
+    // buildApp now registers authPlugin — the onRequest hook fires before any handler.
+    // No DB queries are executed for a 401 rejection, so no live DB is needed.
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+
+    const res = await app.inject({ method: "GET", url: "/v1/tenants" });
+
+    expect(res.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it("POST /v1/tenants without Bearer token returns 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/tenants",
+      payload: { name: "Test" },
+    });
+
+    expect(res.statusCode).toBe(401);
+
+    await app.close();
   });
 });

@@ -1,5 +1,7 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { GuesthouseBookingSummaryListSchema } from "@civitasone/schemas/web";
+import * as queries from "./queries.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -7,6 +9,7 @@ import { idParam, createGuesthouseBody, bookRoomBody, checkoutBody, addBookBody,
 import * as commands from "./commands.js";
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "super_admin"];
+const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
 
 export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/guesthouses", async (req, reply) => {
@@ -50,6 +53,21 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const body = issueBookBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.issueBook(ctx, body));
+  });
+
+  app.get("/v1/estab/guesthouse-bookings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GuesthouseBookingSummaryListSchema, await queries.listGuesthouseBookingSummaries(ctx.tenantId, q.limit));
+  });
+
+  // Alias: some callers use /room-bookings — respond identically
+  app.get("/v1/estab/room-bookings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GuesthouseBookingSummaryListSchema, await queries.listGuesthouseBookingSummaries(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler((err, req, reply) => {

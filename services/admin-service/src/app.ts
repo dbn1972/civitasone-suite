@@ -12,6 +12,7 @@ import { configRoutes } from "./modules/config/routes.js";
 import { healthRoutes } from "./modules/health/routes.js";
 import { backupRoutes } from "./modules/backup/routes.js";
 import { supportRoutes } from "./modules/support/routes.js";
+import { apiKeyRoutes } from "./modules/api-keys/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -31,6 +32,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(healthRoutes);
   await app.register(backupRoutes);
   await app.register(supportRoutes);
+  await app.register(apiKeyRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

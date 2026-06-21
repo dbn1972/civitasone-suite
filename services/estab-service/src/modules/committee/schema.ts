@@ -2,6 +2,7 @@ import {
   pgSchema, uuid, text, varchar, integer, boolean, timestamp, date,
 } from "drizzle-orm/pg-core";
 
+
 export const committeeSchema = pgSchema("committee");
 
 export const estabCommittees = committeeSchema.table("estab_committees", {
@@ -73,4 +74,26 @@ export type ResolutionInsert = typeof estabResolutions.$inferInsert;
 export type AttendeeRow     = typeof estabAttendees.$inferSelect;
 export type AttendeeInsert  = typeof estabAttendees.$inferInsert;
 
-export const schema = { estabCommittees, estabMeetings, estabResolutions, estabAttendees };
+export const estabCompliance = committeeSchema.table("estab_compliance", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  complianceCode:  text("compliance_code").notNull(),
+  title:           text("title").notNull(),
+  category:        text("category").notNull(),
+  frequency:       varchar("frequency", { length: 24 }).notNull().default("monthly"),
+  dueDate:         date("due_date").notNull(),
+  assignedTo:      uuid("assigned_to"),
+  status:          varchar("status", { length: 24 }).notNull().default("pending"),
+  lastCompliedDate: date("last_complied_date"),
+  remarks:         text("remarks"),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+  updatedBy:       uuid("updated_by").notNull(),
+  version:         integer("version").notNull().default(1),
+});
+
+export type ComplianceRow    = typeof estabCompliance.$inferSelect;
+export type ComplianceInsert = typeof estabCompliance.$inferInsert;
+
+export const schema = { estabCommittees, estabMeetings, estabResolutions, estabAttendees, estabCompliance };

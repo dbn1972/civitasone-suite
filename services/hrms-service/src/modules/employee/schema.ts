@@ -53,6 +53,7 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   basicMinor:       bigint("basic_minor", { mode: "bigint" }).notNull().default(0n),
   currency:         char("currency", { length: 3 }).notNull().default("INR"),
   payStructureId:   uuid("pay_structure_id"),
+  managerId:        uuid("manager_id"),
   userRef:          text("user_ref"),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

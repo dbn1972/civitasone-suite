@@ -25,3 +25,10 @@ export async function completeWorkOrder(tx: Writer, id: string, completedDate: s
     .set({ status: "completed", completedDate, costMinor, updatedAt: new Date(), updatedBy: actorId })
     .where(eq(assetWorkOrders.id, id));
 }
+
+export async function listMaintenanceByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {
+  return db.select().from(assetWorkOrders)
+    .where(eq(assetWorkOrders.tenantId, tenantId))
+    .limit(opts?.limit ?? 50)
+    .offset(opts?.offset ?? 0);
+}

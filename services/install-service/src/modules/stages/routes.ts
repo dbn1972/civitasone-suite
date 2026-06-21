@@ -4,6 +4,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createStageBody, idParam, stagesListSchema } from "./validators.js";
+import { InstallStepSummaryListSchema } from "@civitasone/schemas/web";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -22,6 +23,21 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, stagesListSchema, await queries.listStages(ctx.tenantId, q.limit, q.offset));
+  });
+
+  app.get("/v1/install/steps", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const result = await queries.listStages(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, InstallStepSummaryListSchema, result.data.map((stage) => ({
+      id: stage.id,
+      stepNo: stage.stepNumber,
+      title: stage.name,
+      description: stage.description ?? undefined,
+      status: (stage.status === "completed" ? "completed" : stage.status === "skipped" ? "skipped" : stage.status === "in_progress" ? "in_progress" : "pending") as "pending" | "in_progress" | "completed" | "skipped",
+      completedAt: undefined,
+    })));
   });
 
   app.get("/v1/install/stages/:id", async (req, reply) => {

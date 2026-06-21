@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageShell } from "../../../_components/PageShell";
 import { getInternalHelpdeskTickets } from "../../../_data/loaders";
@@ -39,7 +40,17 @@ export default async function Page() {
   ];
 
   return (
-    <PageShell title="Internal Helpdesk Tickets" description="Staff operations queue via helpdesk-service.">
+    <PageShell
+      title="Internal Helpdesk Tickets"
+      description="Staff operations queue via helpdesk-service."
+      breadcrumb={
+        <>
+          <Link href="/helpdesk" className="hover:text-slate-900">Helpdesk</Link>
+          <span className="mx-2">/</span>
+          <span className="text-slate-900">Internal</span>
+        </>
+      }
+    >
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -52,23 +63,26 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="tbl min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Internal helpdesk tickets">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">Ticket</th>
-              <th className="px-4 py-3 text-left">Subject</th>
-              <th className="px-4 py-3 text-left">Priority</th>
-              <th className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Ticket</th>
+              <th scope="col" className="px-4 py-3 text-left">Subject</th>
+              <th scope="col" className="px-4 py-3 text-left">Priority</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>
             {tickets.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">No tickets</td>
+                <td colSpan={4} className="px-4 py-12 text-center">
+                  <p className="text-slate-500 font-medium">No internal tickets</p>
+                  <p className="mt-1 text-sm text-slate-400">Staff tickets will appear here once submitted.</p>
+                </td>
               </tr>
             ) : (
               tickets.map((t) => (
-                <tr key={t.id} className="border-t border-slate-200 hover:bg-slate-50">
+                <tr key={t.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-slate-700">{t.id}</td>
                   <td className="px-4 py-3 text-slate-800">{t.subject}</td>
                   <td className="px-4 py-3">{pill(t.priority, priorityColors)}</td>

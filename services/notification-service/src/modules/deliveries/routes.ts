@@ -1,5 +1,6 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { NotificationDeliveryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, HttpError } from "../../shared/context.js";
@@ -21,7 +22,18 @@ export async function deliveryRoutes(app: FastifyInstance): Promise<void> {
       limit:  z.coerce.number().int().min(1).max(200).default(50),
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
-    return reply.send(await queries.listDeliveries(ctx.tenantId, q.limit, q.offset));
+    const rows = await queries.listDeliveries(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, NotificationDeliveryListSchema, rows.map((d) => ({
+      id: d.id,
+      notificationId: d.id,
+      notificationTitle: d.templateId,
+      recipient: d.recipient,
+      channel: (d.channel === "email" ? "email" : d.channel === "sms" ? "sms" : d.channel === "webhook" ? "webhook" : "in_app") as "email" | "sms" | "in_app" | "webhook",
+      attemptCount: d.retryCount ?? 1,
+      deliveredAt: d.sentAt?.toISOString(),
+      failureReason: d.error ?? undefined,
+      status: (d.status === "delivered" || d.status === "sent" ? "delivered" : d.status === "failed" ? "failed" : d.status === "bounced" ? "bounced" : "pending") as "pending" | "delivered" | "failed" | "bounced",
+    })));
   });
 
   app.get("/notifications/deliveries/:id", async (req, reply) => {

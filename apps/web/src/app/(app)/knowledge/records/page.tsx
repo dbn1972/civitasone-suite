@@ -69,17 +69,17 @@ export default async function KnowledgeRecordsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Records retention schedules" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Record No</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Created Date</th>
-                <th className="px-4 py-3">Retention Period</th>
-                <th className="px-4 py-3">Disposal Due</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Record No</th>
+                <th scope="col" className="px-4 py-3">Title</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Department</th>
+                <th scope="col" className="px-4 py-3">Created Date</th>
+                <th scope="col" className="px-4 py-3">Retention Period</th>
+                <th scope="col" className="px-4 py-3">Disposal Due</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

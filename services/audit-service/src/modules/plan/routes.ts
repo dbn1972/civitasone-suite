@@ -1,5 +1,6 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { AuditPlanListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -40,6 +41,13 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
     const plan = await queries.getPlan(id, ctx.tenantId);
     if (!plan) throw new HttpError(404, "NOT_FOUND", "plan not found");
     return reply.send(plan);
+  });
+
+  app.get("/v1/audit/plan", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, AuditPlanListSchema, await queries.listPlanItems(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler(errorHandler);

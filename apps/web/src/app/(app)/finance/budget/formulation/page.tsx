@@ -60,17 +60,17 @@ export default async function BudgetFormulationPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-left text-sm" aria-label="Budget formulation records">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Major Head</th>
-                <th className="px-4 py-3">Sub Head</th>
-                <th className="px-4 py-3 text-right">Sanctioned (₹)</th>
-                <th className="px-4 py-3 text-right">Released (₹)</th>
-                <th className="px-4 py-3 text-right">Expenditure (₹)</th>
-                <th className="px-4 py-3 text-right">Balance (₹)</th>
-                <th className="px-4 py-3">FY</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Major Head</th>
+                <th scope="col" className="px-4 py-3">Sub Head</th>
+                <th scope="col" className="px-4 py-3 text-right">Sanctioned (₹)</th>
+                <th scope="col" className="px-4 py-3 text-right">Released (₹)</th>
+                <th scope="col" className="px-4 py-3 text-right">Expenditure (₹)</th>
+                <th scope="col" className="px-4 py-3 text-right">Balance (₹)</th>
+                <th scope="col" className="px-4 py-3">FY</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

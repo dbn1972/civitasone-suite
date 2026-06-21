@@ -38,3 +38,10 @@ export async function insertGrnItems(tx: Writer, items: GrnItemInsert[]): Promis
 export async function insertInspection(tx: Writer, row: typeof procurementInspections.$inferInsert): Promise<void> {
   await tx.insert(procurementInspections).values(row);
 }
+
+export async function listGrnsByTenant(tenantId: string, limit: number, offset: number): Promise<GrnRow[]> {
+  return db.select().from(procurementGrns)
+    .where(eq(procurementGrns.tenantId, tenantId))
+    .limit(limit)
+    .offset(offset);
+}

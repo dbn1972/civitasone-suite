@@ -67,12 +67,12 @@ export default async function Page({ params }: { params: { id: string } }) {
             {rfq.lineItems.length > 0 && (
               <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">Line Items</div>
-                <table className="min-w-full text-left text-sm">
+                <table className="min-w-full text-left text-sm" aria-label="RFQ line items">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
-                      <th className="px-4 py-3">Item Name</th>
-                      <th className="px-4 py-3 text-right">Quantity</th>
-                      <th className="px-4 py-3">Unit</th>
+                      <th scope="col" className="px-4 py-3">Item Name</th>
+                      <th scope="col" className="px-4 py-3 text-right">Quantity</th>
+                      <th scope="col" className="px-4 py-3">Unit</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -91,13 +91,13 @@ export default async function Page({ params }: { params: { id: string } }) {
             {rfq.responses.length > 0 && (
               <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">Vendor Responses</div>
-                <table className="min-w-full text-left text-sm">
+                <table className="min-w-full text-left text-sm" aria-label="Vendor responses">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
-                      <th className="px-4 py-3">Vendor Name</th>
-                      <th className="px-4 py-3 text-right">Bid Amount (₹)</th>
-                      <th className="px-4 py-3">Submitted At</th>
-                      <th className="px-4 py-3">Status</th>
+                      <th scope="col" className="px-4 py-3">Vendor Name</th>
+                      <th scope="col" className="px-4 py-3 text-right">Bid Amount (₹)</th>
+                      <th scope="col" className="px-4 py-3">Submitted At</th>
+                      <th scope="col" className="px-4 py-3">Status</th>
                     </tr>
                   </thead>
                   <tbody>

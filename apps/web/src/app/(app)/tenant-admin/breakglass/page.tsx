@@ -65,17 +65,17 @@ export default async function Page() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Break-glass access log" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Actor</th>
-                <th className="px-4 py-3">Actor Email</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3">Resource Accessed</th>
-                <th className="px-4 py-3">Started At</th>
-                <th className="px-4 py-3">Ended At</th>
-                <th className="px-4 py-3">Approved By</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Actor</th>
+                <th scope="col" className="px-4 py-3">Actor Email</th>
+                <th scope="col" className="px-4 py-3">Reason</th>
+                <th scope="col" className="px-4 py-3">Resource Accessed</th>
+                <th scope="col" className="px-4 py-3">Started At</th>
+                <th scope="col" className="px-4 py-3">Ended At</th>
+                <th scope="col" className="px-4 py-3">Approved By</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -95,9 +95,12 @@ export default async function Page() {
                   </td>
                 </tr>
               ))}
-              {events.length === 0 && (
+              {events.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">No break-glass events found.</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No break-glass events</span>
+                    <span className="mt-1 block text-slate-400">Emergency support access events will appear here if invoked.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

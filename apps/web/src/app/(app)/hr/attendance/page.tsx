@@ -74,7 +74,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
         </form>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-sm">
+          <table aria-label="Attendance records" className="min-w-full text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
                 <th className="px-4 py-3 text-left">Employee ID</th>

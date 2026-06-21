@@ -9,7 +9,7 @@ import * as commands from "./commands.js";
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 
 export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
-  app.patch("/v1/assets/:id/transfer", async (req, reply) => {
+  app.patch("/v1/assets/assets/:id/transfer", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
@@ -17,7 +17,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.transferAsset(ctx, id, body));
   });
 
-  app.patch("/v1/assets/:id/dispose", async (req, reply) => {
+  app.patch("/v1/assets/assets/:id/dispose", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);

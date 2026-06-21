@@ -20,6 +20,7 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/policy/roles/:id", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
     const { id } = roleIdParam.parse(req.params);
     const view = await queries.getRole(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "role not found");
@@ -28,6 +29,7 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/policy/roles", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
     sendValidated(reply, roleListResponseSchema, await queries.listRoles(ctx.tenantId));
   });
 

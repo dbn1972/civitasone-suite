@@ -1,5 +1,6 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { SubscriptionSummarySchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
@@ -36,6 +37,23 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
     const sub = await queries.getSubscription(id);
     if (!sub) throw new HttpError(404, "NOT_FOUND", "subscription not found");
     return reply.send(sub);
+  });
+
+  app.get("/v1/billing/subscriptions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const sub = await queries.getSubscription(ctx.tenantId);
+    if (!sub) return reply.send(null);
+    sendValidated(reply, SubscriptionSummarySchema, {
+      id: sub.id,
+      plan: sub.planId,
+      status: (sub.status === "active" ? "active" : sub.status === "cancelled" ? "cancelled" : sub.status === "past_due" ? "past_due" : "trial") as "active" | "past_due" | "cancelled" | "trial",
+      currentPeriodStart: new Date().toISOString().slice(0, 10),
+      currentPeriodEnd: sub.trialExpiresAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+      activeUsers: 0,
+      moduleAccess: [],
+      currency: "INR",
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {

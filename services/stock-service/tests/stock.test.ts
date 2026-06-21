@@ -129,6 +129,34 @@ describe("Entry consumer — CQRS wiring (integration)", () => {
   });
 });
 
+// ── 3b. HTTP route auth guard (inject) ───────────────────────────────────
+
+describe("stock-service route auth (inject)", () => {
+  it("GET /v1/stock/dashboard without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/stock/dashboard" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/stock/ledger without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/stock/ledger" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/stock/ledger without itemId (tenant-wide) but no token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/stock/ledger?limit=10" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 // ── 4. Idempotency — duplicate message ───────────────────────────────────
 
 describe("Entry consumer — idempotency (integration)", () => {

@@ -59,3 +59,13 @@ describe("write-via-queue + read-via-cache (identity)", () => {
     expect(count).toBe(1);
   });
 });
+
+describe("identity-service route auth (inject)", () => {
+  it("GET /identity/sessions without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/identity/sessions" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});

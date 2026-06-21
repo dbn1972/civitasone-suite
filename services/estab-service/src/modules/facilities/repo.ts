@@ -37,3 +37,7 @@ export async function decrementCopies(tx: Writer, bookId: string): Promise<void>
 export async function insertIssue(tx: Writer, row: IssueInsert): Promise<void> {
   await tx.insert(estabIssues).values(row);
 }
+
+export async function listRoomBookingsByTenant(tenantId: string, limit: number): Promise<RoomBookingRow[]> {
+  return db.select().from(estabRoomBookings).where(eq(estabRoomBookings.tenantId, tenantId)).limit(limit);
+}

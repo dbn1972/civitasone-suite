@@ -66,17 +66,17 @@ export default async function Page() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="API keys" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Key Name</th>
-                <th className="px-4 py-3">Prefix</th>
-                <th className="px-4 py-3">Created By</th>
-                <th className="px-4 py-3">Created At</th>
-                <th className="px-4 py-3">Last Used</th>
-                <th className="px-4 py-3">Expires At</th>
-                <th className="px-4 py-3">Scopes</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Key Name</th>
+                <th scope="col" className="px-4 py-3">Prefix</th>
+                <th scope="col" className="px-4 py-3">Created By</th>
+                <th scope="col" className="px-4 py-3">Created At</th>
+                <th scope="col" className="px-4 py-3">Last Used</th>
+                <th scope="col" className="px-4 py-3">Expires At</th>
+                <th scope="col" className="px-4 py-3">Scopes</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -102,9 +102,12 @@ export default async function Page() {
                   </td>
                 </tr>
               ))}
-              {keys.length === 0 && (
+              {keys.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">No API keys found.</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No API keys yet</span>
+                    <span className="mt-1 block text-slate-400">API keys will appear here once created.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

@@ -33,6 +33,13 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
   });
 
+  app.post("/v1/hrms/leave-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const body = applyLeaveBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
+  });
+
   app.patch("/v1/hrms/leave-applications/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);

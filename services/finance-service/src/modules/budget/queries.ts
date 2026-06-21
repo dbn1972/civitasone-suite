@@ -3,6 +3,16 @@ import * as repo from "./repo.js";
 import { sanctionAvailable } from "./domain.js";
 import type { BudgetRow, SanctionRow } from "./schema.js";
 
+function minorToAmount(minor: bigint): number {
+  return Number(minor) / 100;
+}
+
+function mapSanctionStatus(status: string): "approved" | "pending" | "rejected" {
+  if (status === "approved") return "approved";
+  if (status === "rejected") return "rejected";
+  return "pending";
+}
+
 export type AccountListItem = {
   code: string;
   name: string;
@@ -56,5 +66,49 @@ export async function getSanctionAvailable(id: string, tenantId: string): Promis
     id,
     available: sanctionAvailable({ amountMinor: sanction.amountMinor, utilisedMinor: sanction.utilisedMinor }),
     currency:  sanction.currency ?? "INR",
+  };
+}
+
+export async function listSanctionSummaries(tenantId: string, limit: number) {
+  const rows = await cache.getOrLoad(
+    cache.makeKey(tenantId, "sanctions", `list:${limit}`),
+    () => repo.listSanctionsByTenant(tenantId, limit),
+    60,
+  );
+  const summaries = [];
+  for (const row of rows ?? []) {
+    const head = await repo.findHeadById(row.headId);
+    summaries.push({
+      id: row.id,
+      sanctionNo: row.sanctionNo,
+      subject: row.purpose,
+      amount: minorToAmount(row.amountMinor),
+      sanctionedBy: row.createdBy,
+      date: row.createdAt.toISOString().slice(0, 10),
+      status: mapSanctionStatus(row.status),
+      majorHead: head?.code ?? row.headId,
+    });
+  }
+  return summaries;
+}
+
+export async function getSanctionDetail(id: string, tenantId: string) {
+  const row = await cache.getOrLoad<SanctionRow>(
+    cache.makeKey(tenantId, "sanction", id),
+    () => repo.findSanctionById(id),
+  );
+  if (!row || row.tenantId !== tenantId) return null;
+  const head = await repo.findHeadById(row.headId);
+  return {
+    id: row.id,
+    sanctionNo: row.sanctionNo,
+    subject: row.purpose,
+    amount: minorToAmount(row.amountMinor),
+    sanctionedBy: row.createdBy,
+    date: row.createdAt.toISOString().slice(0, 10),
+    status: mapSanctionStatus(row.status),
+    majorHead: head?.code ?? row.headId,
+    lineItems: [],
+    approvalTrail: [],
   };
 }

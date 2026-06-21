@@ -149,6 +149,42 @@ describe("Register consumer — CQRS wiring (integration)", () => {
   });
 });
 
+// ── 5b. HTTP route auth guard (inject) ───────────────────────────────────
+
+describe("asset-service route auth (inject)", () => {
+  it("GET /v1/assets/assets without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/assets/assets" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/assets/assets/:id without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/assets/assets/00000000-0000-4000-8000-000000000001" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/assets/dashboard without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/assets/dashboard" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/assets/maintenance without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/assets/maintenance" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 // ── 6. Idempotency — duplicate message ───────────────────────────────────
 
 describe("Register consumer — idempotency (integration)", () => {

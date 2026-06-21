@@ -69,12 +69,12 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
             {sanction.lineItems.length > 0 && (
               <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">Line Items</div>
-                <table className="min-w-full text-left text-sm">
+                <table className="min-w-full text-left text-sm" aria-label="Sanction line items">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
-                      <th className="px-4 py-3">Description</th>
-                      <th className="px-4 py-3">Head</th>
-                      <th className="px-4 py-3 text-right">Amount (₹)</th>
+                      <th scope="col" className="px-4 py-3">Description</th>
+                      <th scope="col" className="px-4 py-3">Head</th>
+                      <th scope="col" className="px-4 py-3 text-right">Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody>

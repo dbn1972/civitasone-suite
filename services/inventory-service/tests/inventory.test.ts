@@ -6,6 +6,16 @@ import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";
 import { createItemBody } from "../src/modules/items/validators.js";
 
+describe("inventory-service route auth (inject)", () => {
+  it("GET /v1/inventory/items without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/inventory/items" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 describe("item validators", () => {
   it("accepts minimal create body", () => {
     const body = createItemBody.parse({ name: "Sample Item" });

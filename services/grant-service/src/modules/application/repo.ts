@@ -32,3 +32,9 @@ export async function findScoreByApplicationAndReviewer(applicationId: string, r
     .limit(1);
   return rows[0] ?? null;
 }
+
+export async function listApplicationsByTenant(tenantId: string, limit: number): Promise<ApplicationRow[]> {
+  return db.select().from(grantApplications)
+    .where(eq(grantApplications.tenantId, tenantId))
+    .limit(limit);
+}

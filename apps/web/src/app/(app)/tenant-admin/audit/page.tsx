@@ -47,15 +47,15 @@ export default async function Page() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Tenant audit log" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Actor</th>
-                <th className="px-4 py-3">Action</th>
-                <th className="px-4 py-3">Resource</th>
-                <th className="px-4 py-3">Outcome</th>
-                <th className="px-4 py-3">Timestamp</th>
-                <th className="px-4 py-3">IP Address</th>
+                <th scope="col" className="px-4 py-3">Actor</th>
+                <th scope="col" className="px-4 py-3">Action</th>
+                <th scope="col" className="px-4 py-3">Resource</th>
+                <th scope="col" className="px-4 py-3">Outcome</th>
+                <th scope="col" className="px-4 py-3">Timestamp</th>
+                <th scope="col" className="px-4 py-3">IP Address</th>
               </tr>
             </thead>
             <tbody>
@@ -73,9 +73,12 @@ export default async function Page() {
                   <td className="px-4 py-3 font-mono text-xs text-slate-600">{event.ipAddress ?? "—"}</td>
                 </tr>
               ))}
-              {events.length === 0 && (
+              {events.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">No audit events found.</td>
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No audit events yet</span>
+                    <span className="mt-1 block text-slate-400">Tenant-scoped activity will appear here as actions are performed.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

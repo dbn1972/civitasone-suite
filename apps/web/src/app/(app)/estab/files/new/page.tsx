@@ -73,10 +73,11 @@ export default function NewFilePage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">
+              <label htmlFor="subject" className="block text-sm font-medium text-slate-700">
                 Subject <span className="text-red-500">*</span>
               </label>
               <input
+                id="subject"
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
@@ -87,8 +88,9 @@ export default function NewFilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Classification</label>
+              <label htmlFor="classification" className="block text-sm font-medium text-slate-700">Classification</label>
               <select
+                id="classification"
                 value={classification}
                 onChange={(e) => setClassification(e.target.value)}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -102,8 +104,9 @@ export default function NewFilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Department</label>
+              <label htmlFor="department" className="block text-sm font-medium text-slate-700">Department</label>
               <input
+                id="department"
                 type="text"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
@@ -113,8 +116,9 @@ export default function NewFilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Tags</label>
+              <label htmlFor="tags" className="block text-sm font-medium text-slate-700">Tags</label>
               <input
+                id="tags"
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
@@ -124,8 +128,9 @@ export default function NewFilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Initial Note</label>
+              <label htmlFor="initialNote" className="block text-sm font-medium text-slate-700">Initial Note</label>
               <textarea
+                id="initialNote"
                 value={initialNote}
                 onChange={(e) => setInitialNote(e.target.value)}
                 rows={4}

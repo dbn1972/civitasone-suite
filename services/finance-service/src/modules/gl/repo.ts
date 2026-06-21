@@ -35,3 +35,9 @@ export async function getTrialBalance(tenantId: string) {
     .where(eq(financeLedger.tenantId, tenantId))
     .groupBy(financeLedger.headId);
 }
+
+export async function listJournalsByTenant(tenantId: string, limit: number): Promise<JournalRow[]> {
+  return db.select().from(financeJournals)
+    .where(eq(financeJournals.tenantId, tenantId))
+    .limit(limit);
+}

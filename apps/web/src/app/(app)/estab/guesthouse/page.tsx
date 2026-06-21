@@ -51,18 +51,18 @@ export default async function GuesthousePage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Guesthouse bookings" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Booking No</th>
-                <th className="px-4 py-3">Guest Name</th>
-                <th className="px-4 py-3">Designation</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Check-in</th>
-                <th className="px-4 py-3">Check-out</th>
-                <th className="px-4 py-3">Room Type</th>
-                <th className="px-4 py-3">Room No</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Booking No</th>
+                <th scope="col" className="px-4 py-3">Guest Name</th>
+                <th scope="col" className="px-4 py-3">Designation</th>
+                <th scope="col" className="px-4 py-3">Department</th>
+                <th scope="col" className="px-4 py-3">Check-in</th>
+                <th scope="col" className="px-4 py-3">Check-out</th>
+                <th scope="col" className="px-4 py-3">Room Type</th>
+                <th scope="col" className="px-4 py-3">Room No</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

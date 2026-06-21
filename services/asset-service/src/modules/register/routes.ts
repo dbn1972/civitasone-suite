@@ -11,14 +11,15 @@ const ASSET_ROLES  = ["asset_manager", "asset_admin", "super_admin"];
 const READER_ROLES = [...ASSET_ROLES, "audit_officer"];
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/assets", async (req, reply) => {
+  // Gateway upstreamPath "/v1/assets" + loader prefix "/assets" → service sees "/v1/assets/assets"
+  app.post("/v1/assets/assets", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const body = createAssetBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createAsset(ctx, body));
   });
 
-  app.get("/v1/assets/:id", async (req, reply) => {
+  app.get("/v1/assets/assets/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
@@ -27,13 +28,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(asset);
   });
 
-  app.get("/v1/assets", async (req, reply) => {
+  app.get("/v1/assets/assets", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = assetQueryParams.parse(req.query);
-    const opts: { category?: string; status?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
+    const opts: { category?: string; status?: string; type?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
     if (q.category !== undefined) opts.category = q.category;
     if (q.status !== undefined) opts.status = q.status;
+    if (q.type !== undefined) opts.type = q.type;
     const assets = await queries.listAssets(ctx.tenantId, opts);
     return reply.send({ data: assets, limit: q.limit, offset: q.offset });
   });

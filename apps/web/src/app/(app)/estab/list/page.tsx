@@ -57,10 +57,11 @@ export default async function EstabFilesListPage() {
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
+            aria-label="Search file number or subject"
             placeholder="Search file number or subject…"
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <select className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <select aria-label="Filter by classification" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             <option value="">All Classifications</option>
             <option value="top_secret">Top Secret</option>
             <option value="secret">Secret</option>
@@ -68,7 +69,7 @@ export default async function EstabFilesListPage() {
             <option value="restricted">Restricted</option>
             <option value="unclassified">Unclassified</option>
           </select>
-          <select className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <select aria-label="Filter by status" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             <option value="">All Statuses</option>
             <option value="active">Active</option>
             <option value="pending">Pending</option>
@@ -78,17 +79,17 @@ export default async function EstabFilesListPage() {
         </div>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="File register" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">File No</th>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Classification</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Created By</th>
-                <th className="px-4 py-3">Created Date</th>
-                <th className="px-4 py-3">Current Holder</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">File No</th>
+                <th scope="col" className="px-4 py-3">Subject</th>
+                <th scope="col" className="px-4 py-3">Classification</th>
+                <th scope="col" className="px-4 py-3">Department</th>
+                <th scope="col" className="px-4 py-3">Created By</th>
+                <th scope="col" className="px-4 py-3">Created Date</th>
+                <th scope="col" className="px-4 py-3">Current Holder</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

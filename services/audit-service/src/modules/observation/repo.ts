@@ -21,3 +21,9 @@ export async function insertObservation(tx: Writer, row: ObservationInsert): Pro
 export async function updateObservation(tx: Writer, id: string, patch: Partial<ObservationInsert>): Promise<void> {
   await tx.update(auditObservations).set({ ...patch, updatedAt: new Date() }).where(eq(auditObservations.id, id));
 }
+
+export async function listObservationsByTenant(tenantId: string, limit: number): Promise<ObservationRow[]> {
+  return db.select().from(auditObservations)
+    .where(eq(auditObservations.tenantId, tenantId))
+    .limit(limit);
+}

@@ -63,18 +63,18 @@ export default async function AssetMaintenancePage() {
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table aria-label="Maintenance records" className="min-w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
-                  <th className="px-4 py-3">Asset Code</th>
-                  <th className="px-4 py-3">Asset Name</th>
-                  <th className="px-4 py-3">Maintenance Type</th>
-                  <th className="px-4 py-3">Scheduled Date</th>
-                  <th className="px-4 py-3">Completed Date</th>
-                  <th className="px-4 py-3">Vendor</th>
-                  <th className="px-4 py-3 text-right">Est. Cost (₹)</th>
-                  <th className="px-4 py-3 text-right">Actual Cost (₹)</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Asset Code</th>
+                  <th scope="col" className="px-4 py-3">Asset Name</th>
+                  <th scope="col" className="px-4 py-3">Maintenance Type</th>
+                  <th scope="col" className="px-4 py-3">Scheduled Date</th>
+                  <th scope="col" className="px-4 py-3">Completed Date</th>
+                  <th scope="col" className="px-4 py-3">Vendor</th>
+                  <th scope="col" className="px-4 py-3 text-right">Est. Cost (₹)</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actual Cost (₹)</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
                 </tr>
               </thead>
               <tbody>

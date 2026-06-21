@@ -1,0 +1,2365 @@
+{
+  "rows": [
+    {
+      "module": "analytics",
+      "screen": "/analytics/list",
+      "loaders": [
+        "getAnalyticsDashboards"
+      ],
+      "apiPaths": [
+        "/api/v1/analytics/dashboards"
+      ],
+      "upstream": "analytics → /v1/analytics/dashboards",
+      "routeHandler": "/v1/analytics/dashboards",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/[id]",
+      "loaders": [
+        "getAssetById"
+      ],
+      "apiPaths": [
+        "/api/v1/asset/assets/:param"
+      ],
+      "upstream": "asset → /v1/assets/assets/:param",
+      "routeHandler": "/v1/assets/assets/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/dashboard",
+      "loaders": [
+        "getAssetDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/asset/dashboard"
+      ],
+      "upstream": "asset → /v1/assets/dashboard",
+      "routeHandler": "/v1/assets/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fixed-assets",
+      "loaders": [
+        "getFixedAssets"
+      ],
+      "apiPaths": [
+        "/api/v1/asset/assets"
+      ],
+      "upstream": "asset → /v1/assets/assets",
+      "routeHandler": "/v1/assets/assets",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/infra",
+      "loaders": [
+        "getInfraAssets"
+      ],
+      "apiPaths": [
+        "/api/v1/asset/assets"
+      ],
+      "upstream": "asset → /v1/assets/assets",
+      "routeHandler": "/v1/assets/assets",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/list",
+      "loaders": [
+        "getAssets"
+      ],
+      "apiPaths": [
+        "/api/v1/asset/assets"
+      ],
+      "upstream": "asset → /v1/assets/assets",
+      "routeHandler": "/v1/assets/assets",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/maintenance",
+      "loaders": [
+        "getAssetMaintenance"
+      ],
+      "apiPaths": [
+        "/api/v1/asset/maintenance"
+      ],
+      "upstream": "asset → /v1/assets/maintenance",
+      "routeHandler": "/v1/assets/maintenance",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/compliance",
+      "loaders": [
+        "getAuditCompliance"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/compliance"
+      ],
+      "upstream": "audit → /v1/audit/compliance",
+      "routeHandler": "/v1/audit/compliance",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/dashboard",
+      "loaders": [
+        "getAuditDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/dashboard"
+      ],
+      "upstream": "audit → /v1/audit/dashboard",
+      "routeHandler": "/v1/audit/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/exports",
+      "loaders": [
+        "getAuditExports"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/exports"
+      ],
+      "upstream": "audit → /v1/audit/exports",
+      "routeHandler": "/v1/audit/exports",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/observations/[id]",
+      "loaders": [
+        "getAuditObservationById"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/observations/:param"
+      ],
+      "upstream": "audit → /v1/audit/observations/:param",
+      "routeHandler": "/v1/audit/observations/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/observations",
+      "loaders": [
+        "getAuditObservations"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/observations"
+      ],
+      "upstream": "audit → /v1/audit/observations",
+      "routeHandler": "/v1/audit/observations",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit",
+      "loaders": [
+        "getAuditItems"
+      ],
+      "apiPaths": [
+        "/api/audit/events"
+      ],
+      "upstream": "audit-events → /audit/events",
+      "routeHandler": "/audit/events",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/plan",
+      "loaders": [
+        "getAuditPlan"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/plan"
+      ],
+      "upstream": "audit → /v1/audit/plan",
+      "routeHandler": "/v1/audit/plan",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/risk-register",
+      "loaders": [
+        "getRiskRegister"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/risks"
+      ],
+      "upstream": "audit → /v1/audit/risks",
+      "routeHandler": "/v1/audit/risks",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/list",
+      "loaders": [
+        "getBillingPlans"
+      ],
+      "apiPaths": [
+        "/api/v1/billing/plans"
+      ],
+      "upstream": "billing → /v1/billing/plans",
+      "routeHandler": "/v1/billing/plans",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/requests",
+      "loaders": [
+        "getCitizenRequests"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/requests"
+      ],
+      "upstream": "citizen → /v1/citizen/requests",
+      "routeHandler": "/v1/citizen/requests",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/rti",
+      "loaders": [
+        "getRTIApplications"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/rti"
+      ],
+      "upstream": "citizen → /v1/citizen/rti",
+      "routeHandler": "/v1/citizen/rti",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "contracts",
+      "screen": "/contracts/list",
+      "loaders": [
+        "getContracts"
+      ],
+      "apiPaths": [
+        "/api/v1/contract/contracts"
+      ],
+      "upstream": "contract → /v1/contract/contracts",
+      "routeHandler": "/v1/contract/contracts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "contracts",
+      "screen": "/contracts",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/activities",
+      "loaders": [
+        "getCRMActivities"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/activities"
+      ],
+      "upstream": "crm → /v1/crm/activities",
+      "routeHandler": "/v1/crm/activities",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts/[id]",
+      "loaders": [
+        "getContactById"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/contacts/:param"
+      ],
+      "upstream": "crm → /v1/crm/contacts/:param",
+      "routeHandler": "/v1/crm/contacts/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts",
+      "loaders": [
+        "getCrmContacts"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/contacts"
+      ],
+      "upstream": "crm → /v1/crm/contacts",
+      "routeHandler": "/v1/crm/contacts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/dashboard",
+      "loaders": [
+        "getCRMDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/dashboard"
+      ],
+      "upstream": "crm → /v1/crm/dashboard",
+      "routeHandler": "/v1/crm/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/deals/[id]",
+      "loaders": [
+        "getDealById"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/deals/:param"
+      ],
+      "upstream": "crm → /v1/crm/deals/:param",
+      "routeHandler": "/v1/crm/deals/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/deals",
+      "loaders": [
+        "getDeals"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/deals"
+      ],
+      "upstream": "crm → /v1/crm/deals",
+      "routeHandler": "/v1/crm/deals",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "dashboard",
+      "screen": "/dashboard",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "developer-portal",
+      "screen": "/developer-portal",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/compliance",
+      "loaders": [
+        "getEstabCompliance"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/compliance"
+      ],
+      "upstream": "estab → /v1/estab/compliance",
+      "routeHandler": "/v1/estab/compliance",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/dashboard",
+      "loaders": [
+        "getEstabDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/dashboard"
+      ],
+      "upstream": "estab → /v1/estab/dashboard",
+      "routeHandler": "/v1/estab/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/files/[id]",
+      "loaders": [
+        "getEstabFileById"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/files/:param"
+      ],
+      "upstream": "estab → /v1/estab/files/:param",
+      "routeHandler": "/v1/estab/files/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/files/new",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/guesthouse",
+      "loaders": [
+        "getGuesthouseBookings"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/guesthouse-bookings"
+      ],
+      "upstream": "estab → /v1/estab/guesthouse-bookings",
+      "routeHandler": "/v1/estab/guesthouse-bookings",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/list",
+      "loaders": [
+        "getEstabFiles"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/files"
+      ],
+      "upstream": "estab → /v1/estab/files",
+      "routeHandler": "/v1/estab/files",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/meetings/[id]",
+      "loaders": [
+        "getMeetingById"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/meetings/:param"
+      ],
+      "upstream": "estab → /v1/estab/meetings/:param",
+      "routeHandler": "/v1/estab/meetings/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/meetings",
+      "loaders": [
+        "getMeetings"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/meetings"
+      ],
+      "upstream": "estab → /v1/estab/meetings",
+      "routeHandler": "/v1/estab/meetings",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/vehicles",
+      "loaders": [
+        "getVehicles"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/vehicles"
+      ],
+      "upstream": "estab → /v1/estab/vehicles",
+      "routeHandler": "/v1/estab/vehicles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/accounting/financial-statements",
+      "loaders": [
+        "getFinancialStatements"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/statements"
+      ],
+      "upstream": "finance → /v1/finance/statements",
+      "routeHandler": "/v1/finance/statements",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/accounting/general-ledger",
+      "loaders": [
+        "getFinanceGLEntries"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/journals"
+      ],
+      "upstream": "finance → /v1/finance/journals",
+      "routeHandler": "/v1/finance/journals",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/accounting/vouchers/new",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/formulation",
+      "loaders": [
+        "getFinanceBudgets"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/budgets"
+      ],
+      "upstream": "finance → /v1/finance/budgets",
+      "routeHandler": "/v1/finance/budgets",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/sanctions/[id]",
+      "loaders": [
+        "getFinanceSanctionById"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/sanctions/:param"
+      ],
+      "upstream": "finance → /v1/finance/sanctions/:param",
+      "routeHandler": "/v1/finance/sanctions/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/sanctions",
+      "loaders": [
+        "getFinanceSanctions"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/sanctions"
+      ],
+      "upstream": "finance → /v1/finance/sanctions",
+      "routeHandler": "/v1/finance/sanctions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/chart-of-accounts",
+      "loaders": [
+        "getChartOfAccounts"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/accounts"
+      ],
+      "upstream": "finance → /v1/finance/accounts",
+      "routeHandler": "/v1/finance/accounts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/dashboard",
+      "loaders": [
+        "getFinanceDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/dashboard"
+      ],
+      "upstream": "finance → /v1/finance/dashboard",
+      "routeHandler": "/v1/finance/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/advances",
+      "loaders": [
+        "getFinanceAdvances"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/advances"
+      ],
+      "upstream": "finance → /v1/finance/advances",
+      "routeHandler": "/v1/finance/advances",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/bills/[id]",
+      "loaders": [
+        "getFinanceBillById"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/bills/:param"
+      ],
+      "upstream": "finance → /v1/finance/bills/:param",
+      "routeHandler": "/v1/finance/bills/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/bills",
+      "loaders": [
+        "getFinanceBills"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/bills"
+      ],
+      "upstream": "finance → /v1/finance/bills",
+      "routeHandler": "/v1/finance/bills",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/utilization-certificates",
+      "loaders": [
+        "getFinanceUCs"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/utilization-certificates"
+      ],
+      "upstream": "finance → /v1/finance/utilization-certificates",
+      "routeHandler": "/v1/finance/utilization-certificates",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/journal-entry",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/payments",
+      "loaders": [
+        "getPayments"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/payments"
+      ],
+      "upstream": "finance → /v1/finance/payments",
+      "routeHandler": "/v1/finance/payments",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/[id]",
+      "loaders": [
+        "getGrantById"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/grants/:param"
+      ],
+      "upstream": "grant → /v1/grants/grants/:param",
+      "routeHandler": "/v1/grants/grants/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/dashboard",
+      "loaders": [
+        "getGrantsDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/dashboard"
+      ],
+      "upstream": "grant → /v1/grants/dashboard",
+      "routeHandler": "/v1/grants/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/dashboard",
+      "loaders": [
+        "getGrants"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/grants"
+      ],
+      "upstream": "grant → /v1/grants/grants",
+      "routeHandler": "/v1/grants/grants",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/grantees",
+      "loaders": [
+        "getGrantees"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/grantees"
+      ],
+      "upstream": "grant → /v1/grants/grantees",
+      "routeHandler": "/v1/grants/grantees",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/installments",
+      "loaders": [
+        "getGrantInstallments"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/installments"
+      ],
+      "upstream": "grant → /v1/grants/installments",
+      "routeHandler": "/v1/grants/installments",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/list",
+      "loaders": [
+        "getGrants"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/grants"
+      ],
+      "upstream": "grant → /v1/grants/grants",
+      "routeHandler": "/v1/grants/grants",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/releases",
+      "loaders": [
+        "getGrantReleases"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/releases"
+      ],
+      "upstream": "grant → /v1/grants/releases",
+      "routeHandler": "/v1/grants/releases",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/utilization",
+      "loaders": [
+        "getGrantUtilization"
+      ],
+      "apiPaths": [
+        "/api/v1/grants/utilization-certs"
+      ],
+      "upstream": "grant → /v1/grants/utilization-certs",
+      "routeHandler": "/v1/grants/utilization-certs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/internal",
+      "loaders": [
+        "getInternalHelpdeskTickets"
+      ],
+      "apiPaths": [
+        "/api/v1/helpdesk/tickets"
+      ],
+      "upstream": "helpdesk → /v1/helpdesk/tickets",
+      "routeHandler": "/v1/helpdesk/tickets",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/reports",
+      "loaders": [
+        "getTicketAnalytics"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/tickets/analytics"
+      ],
+      "upstream": "citizen → /v1/citizen/tickets/analytics",
+      "routeHandler": "/v1/citizen/tickets/analytics",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/slas",
+      "loaders": [
+        "getBreachedSLATickets"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/tickets"
+      ],
+      "upstream": "citizen → /v1/citizen/tickets",
+      "routeHandler": "/v1/citizen/tickets",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/tickets/[id]",
+      "loaders": [
+        "getHelpdeskTicketById"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/tickets/:param"
+      ],
+      "upstream": "citizen → /v1/citizen/tickets/:param",
+      "routeHandler": "/v1/citizen/tickets/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/tickets",
+      "loaders": [
+        "getHelpdeskTicketList"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/tickets"
+      ],
+      "upstream": "citizen → /v1/citizen/tickets",
+      "routeHandler": "/v1/citizen/tickets",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/appraisals",
+      "loaders": [
+        "getAppraisals"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/appraisals"
+      ],
+      "upstream": "hrms → /v1/hrms/appraisals",
+      "routeHandler": "/v1/hrms/appraisals",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/attendance",
+      "loaders": [
+        "getAttendanceList"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/attendance"
+      ],
+      "upstream": "hrms → /v1/hrms/attendance",
+      "routeHandler": "/v1/hrms/attendance",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/attendance/regularisation",
+      "loaders": [
+        "getAttendanceRegularisations"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/attendance/regularisations"
+      ],
+      "upstream": "hrms → /v1/hrms/attendance/regularisations",
+      "routeHandler": "/v1/hrms/attendance/regularisations",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dashboard",
+      "loaders": [
+        "getHRDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/dashboard"
+      ],
+      "upstream": "hrms → /v1/hrms/dashboard",
+      "routeHandler": "/v1/hrms/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dashboard",
+      "loaders": [
+        "getEmployees"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/employees"
+      ],
+      "upstream": "hrms → /v1/hrms/employees",
+      "routeHandler": "/v1/hrms/employees",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dashboard",
+      "loaders": [
+        "getJobOpenings"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/job-openings"
+      ],
+      "upstream": "hrms → /v1/hrms/job-openings",
+      "routeHandler": "/v1/hrms/job-openings",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employees/[id]",
+      "loaders": [
+        "getEmployeeById"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/employees/:param"
+      ],
+      "upstream": "hrms → /v1/hrms/employees/:param",
+      "routeHandler": "/v1/hrms/employees/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employees",
+      "loaders": [
+        "getEmployees"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/employees"
+      ],
+      "upstream": "hrms → /v1/hrms/employees",
+      "routeHandler": "/v1/hrms/employees",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave/apply",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave",
+      "loaders": [
+        "getLeaveRequestDetails"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/leave-requests"
+      ],
+      "upstream": "hrms → /v1/hrms/leave-requests",
+      "routeHandler": "/v1/hrms/leave-requests",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/orgchart",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/[id]",
+      "loaders": [
+        "getPayrollRunById"
+      ],
+      "apiPaths": [
+        "/api/v1/payroll/runs/:param"
+      ],
+      "upstream": "payroll → /v1/payroll/runs/:param",
+      "routeHandler": "/v1/payroll/runs/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll",
+      "loaders": [
+        "getPayrollRunDetails"
+      ],
+      "apiPaths": [
+        "/api/v1/payroll/runs"
+      ],
+      "upstream": "payroll → /v1/payroll/runs",
+      "routeHandler": "/v1/payroll/runs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/salary-slips",
+      "loaders": [
+        "getSalarySlips"
+      ],
+      "apiPaths": [
+        "/api/v1/payroll/salary-slips"
+      ],
+      "upstream": "payroll → /v1/payroll/salary-slips",
+      "routeHandler": "/v1/payroll/salary-slips",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment",
+      "loaders": [
+        "getJobOpenings"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/job-openings"
+      ],
+      "upstream": "hrms → /v1/hrms/job-openings",
+      "routeHandler": "/v1/hrms/job-openings",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/training",
+      "loaders": [
+        "getTrainingPrograms"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/training-programs"
+      ],
+      "upstream": "hrms → /v1/hrms/training-programs",
+      "routeHandler": "/v1/hrms/training-programs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "install",
+      "screen": "/install",
+      "loaders": [
+        "getInstallSteps"
+      ],
+      "apiPaths": [
+        "/api/v1/install/steps"
+      ],
+      "upstream": "install → /v1/install/steps",
+      "routeHandler": "/v1/install/steps",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/list",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/reconcile",
+      "loaders": [
+        "getStockLedger"
+      ],
+      "apiPaths": [
+        "/api/v1/stock/ledger"
+      ],
+      "upstream": "stock → /v1/stock/ledger",
+      "routeHandler": "/v1/stock/ledger",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/dashboard",
+      "loaders": [
+        "getKnowledgeDocs"
+      ],
+      "apiPaths": [
+        "/api/v1/knowledge/documents"
+      ],
+      "upstream": "knowledge → /v1/knowledge/documents",
+      "routeHandler": "/v1/knowledge/documents",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/list",
+      "loaders": [
+        "getKnowledgeDocs"
+      ],
+      "apiPaths": [
+        "/api/v1/knowledge/documents"
+      ],
+      "upstream": "knowledge → /v1/knowledge/documents",
+      "routeHandler": "/v1/knowledge/documents",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/records",
+      "loaders": [
+        "getKnowledgeRecords"
+      ],
+      "apiPaths": [
+        "/api/v1/knowledge/records"
+      ],
+      "upstream": "knowledge → /v1/knowledge/records",
+      "routeHandler": "/v1/knowledge/records",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/repository",
+      "loaders": [
+        "getKnowledgeDocs"
+      ],
+      "apiPaths": [
+        "/api/v1/knowledge/documents"
+      ],
+      "upstream": "knowledge → /v1/knowledge/documents",
+      "routeHandler": "/v1/knowledge/documents",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/search",
+      "loaders": [
+        "getKnowledgeDocs"
+      ],
+      "apiPaths": [
+        "/api/v1/knowledge/documents"
+      ],
+      "upstream": "knowledge → /v1/knowledge/documents",
+      "routeHandler": "/v1/knowledge/documents",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/cases/[id]",
+      "loaders": [
+        "getLegalCaseById"
+      ],
+      "apiPaths": [
+        "/api/v1/legal/cases/:param"
+      ],
+      "upstream": "legal → /v1/legal/cases/:param",
+      "routeHandler": "/v1/legal/cases/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/court-orders",
+      "loaders": [
+        "getCourtOrders"
+      ],
+      "apiPaths": [
+        "/api/v1/legal/court-orders"
+      ],
+      "upstream": "legal → /v1/legal/court-orders",
+      "routeHandler": "/v1/legal/court-orders",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/dashboard",
+      "loaders": [
+        "getLegalDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/legal/dashboard"
+      ],
+      "upstream": "legal → /v1/legal/dashboard",
+      "routeHandler": "/v1/legal/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/hearings",
+      "loaders": [
+        "getLegalHearings"
+      ],
+      "apiPaths": [
+        "/api/v1/legal/hearings"
+      ],
+      "upstream": "legal → /v1/legal/hearings",
+      "routeHandler": "/v1/legal/hearings",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/list",
+      "loaders": [
+        "getLegalCases"
+      ],
+      "apiPaths": [
+        "/api/v1/legal/cases"
+      ],
+      "upstream": "legal → /v1/legal/cases",
+      "routeHandler": "/v1/legal/cases",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/opinions",
+      "loaders": [
+        "getLegalOpinions"
+      ],
+      "apiPaths": [
+        "/api/v1/legal/opinions"
+      ],
+      "upstream": "legal → /v1/legal/opinions",
+      "routeHandler": "/v1/legal/opinions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/list",
+      "loaders": [
+        "getLocations"
+      ],
+      "apiPaths": [
+        "/api/v1/locations"
+      ],
+      "upstream": "locations → /v1/locations/",
+      "routeHandler": "/v1/locations",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/deliveries",
+      "loaders": [
+        "getNotificationDeliveries"
+      ],
+      "apiPaths": [
+        "/api/notification/deliveries"
+      ],
+      "upstream": "notification → /notifications/deliveries",
+      "routeHandler": "/notifications/deliveries",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/list",
+      "loaders": [
+        "getNotifications"
+      ],
+      "apiPaths": [
+        "/api/notification/notifications"
+      ],
+      "upstream": "notification → /notifications/notifications",
+      "routeHandler": "/notifications/notifications",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "plugins",
+      "screen": "/plugins",
+      "loaders": [
+        "getPlugins"
+      ],
+      "apiPaths": [
+        "/api/v1/plugins/items"
+      ],
+      "upstream": "plugin → /v1/plugins/items",
+      "routeHandler": "/v1/plugins/items",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/approvals",
+      "loaders": [
+        "getProcurementApprovals"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/approvals"
+      ],
+      "upstream": "procurement → /v1/procurement/approvals",
+      "routeHandler": "/v1/procurement/approvals",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/contracts",
+      "loaders": [
+        "getContracts"
+      ],
+      "apiPaths": [
+        "/api/v1/contract/contracts"
+      ],
+      "upstream": "contract → /v1/contract/contracts",
+      "routeHandler": "/v1/contract/contracts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/dashboard",
+      "loaders": [
+        "getProcurementDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/dashboard"
+      ],
+      "upstream": "procurement → /v1/procurement/dashboard",
+      "routeHandler": "/v1/procurement/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/grn",
+      "loaders": [
+        "getProcurementGRNs"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/grns"
+      ],
+      "upstream": "procurement → /v1/procurement/grns",
+      "routeHandler": "/v1/procurement/grns",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/indents/[id]",
+      "loaders": [
+        "getProcurementIndentById"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/indents/:param"
+      ],
+      "upstream": "procurement → /v1/procurement/indents/:param",
+      "routeHandler": "/v1/procurement/indents/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/indents",
+      "loaders": [
+        "getProcurementIndents"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/indents"
+      ],
+      "upstream": "procurement → /v1/procurement/indents",
+      "routeHandler": "/v1/procurement/indents",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders/[id]",
+      "loaders": [
+        "getProcurementPOById"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/pos/:param"
+      ],
+      "upstream": "procurement → /v1/procurement/pos/:param",
+      "routeHandler": "/v1/procurement/pos/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders",
+      "loaders": [
+        "getProcurementPOs"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/pos"
+      ],
+      "upstream": "procurement → /v1/procurement/pos",
+      "routeHandler": "/v1/procurement/pos",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/rfq/[id]",
+      "loaders": [
+        "getRFQById"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/rfqs/:param"
+      ],
+      "upstream": "procurement → /v1/procurement/rfqs/:param",
+      "routeHandler": "/v1/procurement/rfqs/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/rfq",
+      "loaders": [
+        "getRFQs"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/rfqs"
+      ],
+      "upstream": "procurement → /v1/procurement/rfqs",
+      "routeHandler": "/v1/procurement/rfqs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/tenders/[id]",
+      "loaders": [
+        "getProcurementTenderById"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/tenders/:param"
+      ],
+      "upstream": "procurement → /v1/procurement/tenders/:param",
+      "routeHandler": "/v1/procurement/tenders/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/tenders",
+      "loaders": [
+        "getProcurementTenders"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/tenders"
+      ],
+      "upstream": "procurement → /v1/procurement/tenders",
+      "routeHandler": "/v1/procurement/tenders",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/vendors/[id]",
+      "loaders": [
+        "getProcurementVendorById"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/vendors/:param"
+      ],
+      "upstream": "procurement → /v1/procurement/vendors/:param",
+      "routeHandler": "/v1/procurement/vendors/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/vendors",
+      "loaders": [
+        "getProcurementVendors"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/vendors"
+      ],
+      "upstream": "procurement → /v1/procurement/vendors",
+      "routeHandler": "/v1/procurement/vendors",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/[id]",
+      "loaders": [
+        "getProjectById"
+      ],
+      "apiPaths": [
+        "/api/v1/project/projects/:param"
+      ],
+      "upstream": "project → /v1/projects/projects/:param",
+      "routeHandler": "/v1/projects/projects/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/dashboard",
+      "loaders": [
+        "getProjectsDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/project/dashboard"
+      ],
+      "upstream": "project → /v1/projects/dashboard",
+      "routeHandler": "/v1/projects/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/dashboard",
+      "loaders": [
+        "getProjects"
+      ],
+      "apiPaths": [
+        "/api/v1/project/projects"
+      ],
+      "upstream": "project → /v1/projects/projects",
+      "routeHandler": "/v1/projects/projects",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/dashboard",
+      "loaders": [
+        "getSchemes"
+      ],
+      "apiPaths": [
+        "/api/v1/project/schemes"
+      ],
+      "upstream": "project → /v1/projects/schemes",
+      "routeHandler": "/v1/projects/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/fund-releases",
+      "loaders": [
+        "getProjectFundReleases"
+      ],
+      "apiPaths": [
+        "/api/v1/project/fund-releases"
+      ],
+      "upstream": "project → /v1/projects/fund-releases",
+      "routeHandler": "/v1/projects/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/list",
+      "loaders": [
+        "getProjects"
+      ],
+      "apiPaths": [
+        "/api/v1/project/projects"
+      ],
+      "upstream": "project → /v1/projects/projects",
+      "routeHandler": "/v1/projects/projects",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/milestones",
+      "loaders": [
+        "getMilestones"
+      ],
+      "apiPaths": [
+        "/api/v1/project/milestones"
+      ],
+      "upstream": "project → /v1/projects/milestones",
+      "routeHandler": "/v1/projects/milestones",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/schemes",
+      "loaders": [
+        "getSchemes"
+      ],
+      "apiPaths": [
+        "/api/v1/project/schemes"
+      ],
+      "upstream": "project → /v1/projects/schemes",
+      "routeHandler": "/v1/projects/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/[id]",
+      "loaders": [
+        "getReportJobById"
+      ],
+      "apiPaths": [
+        "/api/v1/reports/report-jobs/:param"
+      ],
+      "upstream": "reports → /v1/reports/report-jobs/:param",
+      "routeHandler": "/v1/reports/report-jobs/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/dashboard",
+      "loaders": [
+        "getReportsDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/reports/dashboards"
+      ],
+      "upstream": "reports → /v1/reports/dashboards",
+      "routeHandler": "/v1/reports/dashboards",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/kpi",
+      "loaders": [
+        "getKPIs"
+      ],
+      "apiPaths": [
+        "/api/v1/reports/kpis"
+      ],
+      "upstream": "reports → /v1/reports/kpis",
+      "routeHandler": "/v1/reports/kpis",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/list",
+      "loaders": [
+        "getReportJobs"
+      ],
+      "apiPaths": [
+        "/api/v1/reports/report-jobs"
+      ],
+      "upstream": "reports → /v1/reports/report-jobs",
+      "routeHandler": "/v1/reports/report-jobs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/mis",
+      "loaders": [
+        "getMISSummary"
+      ],
+      "apiPaths": [
+        "/api/v1/reports/mis"
+      ],
+      "upstream": "reports → /v1/reports/mis",
+      "routeHandler": "/v1/reports/mis",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/[id]",
+      "loaders": [
+        "getStockItemById"
+      ],
+      "apiPaths": [
+        "/api/v1/stock/items/:param"
+      ],
+      "upstream": "stock → /v1/stock/items/:param",
+      "routeHandler": "/v1/stock/items/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/dashboard",
+      "loaders": [
+        "getStockDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/stock/dashboard"
+      ],
+      "upstream": "stock → /v1/stock/dashboard",
+      "routeHandler": "/v1/stock/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/ledger",
+      "loaders": [
+        "getStockLedger"
+      ],
+      "apiPaths": [
+        "/api/v1/stock/ledger"
+      ],
+      "upstream": "stock → /v1/stock/ledger",
+      "routeHandler": "/v1/stock/ledger",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/list",
+      "loaders": [
+        "getStockItems"
+      ],
+      "apiPaths": [
+        "/api/v1/stock/items"
+      ],
+      "upstream": "stock → /v1/stock/items",
+      "routeHandler": "/v1/stock/items",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony/list",
+      "loaders": [
+        "getTelephonyCalls"
+      ],
+      "apiPaths": [
+        "/api/v1/telephony/calls"
+      ],
+      "upstream": "telephony → /v1/telephony/calls",
+      "routeHandler": "/v1/telephony/calls",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/api-keys",
+      "loaders": [
+        "getAPIKeys"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/api-keys"
+      ],
+      "upstream": "admin → /v1/admin/api-keys",
+      "routeHandler": "/v1/admin/api-keys",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/audit",
+      "loaders": [
+        "getTenantAuditLog"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/events"
+      ],
+      "upstream": "audit → /v1/audit/events",
+      "routeHandler": "/v1/audit/events",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/breakglass",
+      "loaders": [
+        "getBreakglassLog"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/breakglass"
+      ],
+      "upstream": "audit → /v1/audit/breakglass",
+      "routeHandler": "/v1/audit/breakglass",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/notifications",
+      "loaders": [
+        "getNotificationPreferences"
+      ],
+      "apiPaths": [
+        "/api/notification/preferences"
+      ],
+      "upstream": "notification → /notifications/preferences",
+      "routeHandler": "/notifications/preferences",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin",
+      "loaders": [
+        "getTenantAdminDashboard"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/health"
+      ],
+      "upstream": "admin → /v1/admin/health",
+      "routeHandler": "/v1/admin/health",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/roles/[id]",
+      "loaders": [
+        "getAdminRoleById"
+      ],
+      "apiPaths": [
+        "/api/policy/roles/:param"
+      ],
+      "upstream": "policy → /policy/roles/:param",
+      "routeHandler": "/policy/roles/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/roles",
+      "loaders": [
+        "getAdminRoles"
+      ],
+      "apiPaths": [
+        "/api/policy/roles"
+      ],
+      "upstream": "policy → /policy/roles",
+      "routeHandler": "/policy/roles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/sessions",
+      "loaders": [
+        "getActiveSessions"
+      ],
+      "apiPaths": [
+        "/api/identity/sessions"
+      ],
+      "upstream": "identity → /identity/sessions",
+      "routeHandler": "/identity/sessions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/settings",
+      "loaders": [
+        "getTenantModules"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/tenant/modules"
+      ],
+      "upstream": "admin → /v1/admin/tenant/modules",
+      "routeHandler": "/v1/admin/tenant/modules",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/subscription",
+      "loaders": [
+        "getSubscription"
+      ],
+      "apiPaths": [
+        "/api/v1/billing/subscriptions"
+      ],
+      "upstream": "billing → /v1/billing/subscriptions",
+      "routeHandler": "/v1/billing/subscriptions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/users/[id]",
+      "loaders": [
+        "getAdminUserById"
+      ],
+      "apiPaths": [
+        "/api/identity/users/:param"
+      ],
+      "upstream": "identity → /identity/users/:param",
+      "routeHandler": "/identity/users/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/users",
+      "loaders": [
+        "getAdminUsers"
+      ],
+      "apiPaths": [
+        "/api/identity/users"
+      ],
+      "upstream": "identity → /identity/users",
+      "routeHandler": "/identity/users",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "themes",
+      "screen": "/themes",
+      "loaders": [
+        "getThemeTokens"
+      ],
+      "apiPaths": [
+        "/api/v1/themes/tokens"
+      ],
+      "upstream": "theme → /v1/themes/tokens",
+      "routeHandler": "/v1/themes/tokens",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/list",
+      "loaders": [
+        "getWorkflowInstances"
+      ],
+      "apiPaths": [
+        "/api/v1/workflow/instances"
+      ],
+      "upstream": "workflow → /v1/workflow/instances",
+      "routeHandler": "/v1/workflow/instances",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    }
+  ],
+  "counts": {
+    "wired": 135,
+    "missing": 0,
+    "mismatch": 0,
+    "noLoader": 30
+  }
+}

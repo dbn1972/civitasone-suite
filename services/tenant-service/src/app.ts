@@ -6,6 +6,7 @@ import { sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
+import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { tenantRoutes } from "./modules/tenant/routes.js";
 
@@ -17,6 +18,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
+  await app.register(authPlugin);
   registerOpsRoutes(app, { service: "tenant-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 

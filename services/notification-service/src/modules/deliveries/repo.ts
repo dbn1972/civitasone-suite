@@ -1,11 +1,13 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { notificationDeliveries, type DeliveryInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findByUser(userId: string, limit = 50): Promise<typeof notificationDeliveries.$inferSelect[]> {
-  return db.select().from(notificationDeliveries).limit(limit);
+export async function findByUser(tenantId: string, userId: string, limit = 50): Promise<typeof notificationDeliveries.$inferSelect[]> {
+  return db.select().from(notificationDeliveries)
+    .where(and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.createdBy, userId)))
+    .limit(limit);
 }
 
 export async function findById(id: string): Promise<typeof notificationDeliveries.$inferSelect | null> {

@@ -61,18 +61,18 @@ export default async function BillsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-left text-sm" aria-label="Bill processing list">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Bill No</th>
-                <th className="px-4 py-3">Vendor</th>
-                <th className="px-4 py-3">PO Ref</th>
-                <th className="px-4 py-3 text-right">Amount (₹)</th>
-                <th className="px-4 py-3">Submitted</th>
-                <th className="px-4 py-3">Due</th>
-                <th className="px-4 py-3">3-Way Match</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
+                <th scope="col" className="px-4 py-3">Bill No</th>
+                <th scope="col" className="px-4 py-3">Vendor</th>
+                <th scope="col" className="px-4 py-3">PO Ref</th>
+                <th scope="col" className="px-4 py-3 text-right">Amount (₹)</th>
+                <th scope="col" className="px-4 py-3">Submitted</th>
+                <th scope="col" className="px-4 py-3">Due</th>
+                <th scope="col" className="px-4 py-3">3-Way Match</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>

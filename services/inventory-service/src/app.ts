@@ -9,6 +9,7 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { itemRoutes } from "./modules/items/routes.js";
 
+// DEPRECATED: inventory-service is superseded by stock-service. The /api/v1/inventory gateway route should be removed after migration. UI redirects to /stock.
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },

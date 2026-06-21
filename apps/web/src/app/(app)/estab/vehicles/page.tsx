@@ -57,18 +57,18 @@ export default async function VehiclesPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Vehicle fleet" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Vehicle No</th>
-                <th className="px-4 py-3">Make / Model</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Assigned To</th>
-                <th className="px-4 py-3">Driver</th>
-                <th className="px-4 py-3">Fuel</th>
-                <th className="px-4 py-3 text-right">Odometer (km)</th>
-                <th className="px-4 py-3">Next Service</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Vehicle No</th>
+                <th scope="col" className="px-4 py-3">Make / Model</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Assigned To</th>
+                <th scope="col" className="px-4 py-3">Driver</th>
+                <th scope="col" className="px-4 py-3">Fuel</th>
+                <th scope="col" className="px-4 py-3 text-right">Odometer (km)</th>
+                <th scope="col" className="px-4 py-3">Next Service</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

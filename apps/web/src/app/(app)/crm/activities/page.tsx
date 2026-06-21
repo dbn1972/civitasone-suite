@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageShell } from "../../../_components/PageShell";
 import { getCRMActivities } from "../../../_data/loaders";
@@ -42,7 +43,17 @@ export default async function Page() {
   ];
 
   return (
-    <PageShell title="CRM Activities" description="Calls, meetings, emails, tasks and notes.">
+    <PageShell
+      title="CRM Activities"
+      description="Calls, meetings, emails, tasks and notes."
+      breadcrumb={
+        <>
+          <Link href="/crm" className="hover:text-slate-900">CRM</Link>
+          <span className="mx-2">/</span>
+          <span className="text-slate-900">Activities</span>
+        </>
+      }
+    >
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -55,26 +66,29 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="tbl min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="CRM activities list">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">Type</th>
-              <th className="px-4 py-3 text-left">Subject</th>
-              <th className="px-4 py-3 text-left">Related To</th>
-              <th className="px-4 py-3 text-left">Due Date</th>
-              <th className="px-4 py-3 text-left">Completed At</th>
-              <th className="px-4 py-3 text-left">Owner</th>
-              <th className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Type</th>
+              <th scope="col" className="px-4 py-3 text-left">Subject</th>
+              <th scope="col" className="px-4 py-3 text-left">Related To</th>
+              <th scope="col" className="px-4 py-3 text-left">Due Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Completed At</th>
+              <th scope="col" className="px-4 py-3 text-left">Owner</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>
             {activities.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">No activities</td>
+                <td colSpan={7} className="px-4 py-12 text-center">
+                  <p className="text-slate-500 font-medium">No activities yet</p>
+                  <p className="mt-1 text-sm text-slate-400">Schedule your first call, meeting, or task.</p>
+                </td>
               </tr>
             ) : (
               activities.map((a) => (
-                <tr key={a.id} className="border-t border-slate-200 hover:bg-slate-50">
+                <tr key={a.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
                   <td className="px-4 py-3">{pill(a.type, typeColors[a.type])}</td>
                   <td className="px-4 py-3 text-slate-800">{a.subject}</td>
                   <td className="px-4 py-3 text-slate-500">{a.relatedTo ?? "—"}</td>

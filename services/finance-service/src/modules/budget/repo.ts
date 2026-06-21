@@ -64,3 +64,14 @@ export async function listHeads(tenantId: string, limit: number): Promise<HeadRo
     .where(eq(financeHeads.tenantId, tenantId))
     .limit(limit);
 }
+
+export async function listSanctionsByTenant(tenantId: string, limit: number): Promise<SanctionRow[]> {
+  return db.select().from(financeSanctions)
+    .where(eq(financeSanctions.tenantId, tenantId))
+    .limit(limit);
+}
+
+export async function findHeadById(id: string): Promise<HeadRow | null> {
+  const rows = await db.select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
+  return rows[0] ?? null;
+}

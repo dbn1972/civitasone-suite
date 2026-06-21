@@ -1,28 +1,43 @@
-import { eq, and, or, sql } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { contacts } from "../contacts/schema.js";
 import { deals } from "../deals/schema.js";
+import { activities } from "../activities/schema.js";
 
 export async function getDashboard(tenantId: string) {
-  const [contactRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(contacts)
-    .where(eq(contacts.tenantId, tenantId));
+  return cache.getOrLoad(
+    cache.makeKey(tenantId, "dashboard", "summary"),
+    async () => {
+      const todayUtc = new Date();
+      todayUtc.setUTCHours(0, 0, 0, 0);
 
-  const [openDeals] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(deals)
-    .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
+      const [contactRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(contacts)
+        .where(eq(contacts.tenantId, tenantId));
 
-  const [pipeline] = await db
-    .select({ total: sql<number>`coalesce(sum(${deals.valueMinor}), 0)::bigint` })
-    .from(deals)
-    .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
+      const [openDeals] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(deals)
+        .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
 
-  return {
-    totalContacts: contactRow?.count ?? 0,
-    openDeals: openDeals?.count ?? 0,
-    activitiesToday: 0,
-    pipelineValue: Number(pipeline?.total ?? 0) / 100,
-  };
+      const [pipeline] = await db
+        .select({ total: sql<number>`coalesce(sum(${deals.valueMinor}), 0)::bigint` })
+        .from(deals)
+        .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
+
+      const [todayActs] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(activities)
+        .where(and(eq(activities.tenantId, tenantId), gte(activities.createdAt, todayUtc)));
+
+      return {
+        totalContacts: contactRow?.count ?? 0,
+        openDeals: openDeals?.count ?? 0,
+        activitiesToday: todayActs?.count ?? 0,
+        pipelineValue: Number(pipeline?.total ?? 0) / 100,
+      };
+    },
+  );
 }

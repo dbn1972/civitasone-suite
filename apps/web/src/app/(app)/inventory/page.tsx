@@ -4,8 +4,11 @@ export default function Page() {
   return (
     <ModuleHub
       title="Inventory"
-      description="Module workspace — API-backed list views."
-      links={[{ href: "/inventory/list", label: "Items", note: "Live data from backend API" }]}
+      description="Physical stock tracking, movement ledger and reconciliation."
+      links={[
+        { href: "/inventory/list", label: "Stock Items", note: "All SKUs and current stock levels" },
+        { href: "/inventory/reconcile", label: "Reconciliation", note: "Verify ledger vs. physical stock movements" },
+      ]}
     />
   );
 }

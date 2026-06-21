@@ -77,6 +77,24 @@ describe("tenant consumer — CQRS (integration)", () => {
   });
 });
 
+describe("admin-service route auth (inject)", () => {
+  it("GET /v1/admin/api-keys without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/admin/api-keys" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/admin/breakglass without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/admin/breakglass" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 describe("break-glass consumer — audit emission (integration)", () => {
   beforeAll(async () => {
     await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_ID));

@@ -11,7 +11,7 @@ const ASSET_ROLES  = ["asset_manager", "asset_admin", "super_admin", "finance_of
 const READER_ROLES = [...ASSET_ROLES, "audit_officer"];
 
 export async function depRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/assets/:id/depreciation/schedule", async (req, reply) => {
+  app.post("/v1/assets/assets/:id/depreciation/schedule", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const { id } = assetIdParam.parse(req.params);
@@ -26,7 +26,7 @@ export async function depRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.runDepreciation(ctx, body));
   });
 
-  app.get("/v1/assets/:id/depreciation", async (req, reply) => {
+  app.get("/v1/assets/assets/:id/depreciation", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = assetIdParam.parse(req.params);

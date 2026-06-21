@@ -2,6 +2,7 @@
   "name": "civitasone-suite",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.0.0",
   "description": "CivitasOne Suite — Unified Enterprise Suite for Government, PSU, and Small Offices",
   "engines": {
     "node": ">=20.0.0",
@@ -14,13 +15,20 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules",
-    "ci:check": "pnpm turbo typecheck lint test --parallel"
+    "test:contract": "vitest run tests/contract/gateway.contract.test.ts",
+    "test:screens": "vitest run tests/contract/screens.contract.test.ts",
+    "screen-map": "node scripts/contract/screen-map.mjs",
+    "verify-screens": "node scripts/contract/verify-screens.mjs",
+    "contract:score": "node scripts/contract/score.mjs",
+    "qa:score": "node scripts/qa-readiness-score.mjs",
+    "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
-    "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
     "eslint": "^9.0.0",
-    "prettier": "^3.3.0"
+    "prettier": "^3.3.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.9"
   }
 }

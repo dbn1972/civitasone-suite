@@ -1,5 +1,7 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { GrantUtilizationListSchema } from "@civitasone/schemas/web";
+import { listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -32,6 +34,13 @@ export async function utilisationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const { id: applicationId } = idParam.parse(req.params);
     return reply.send({ data: await queries.getUcStatements(ctx.tenantId, applicationId) });
+  });
+
+  app.get("/v1/grants/utilization-certs", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GrantUtilizationListSchema, await queries.listUtilizationCerts(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -207,3 +207,13 @@ describe("Legal contract review — clearance CQRS (integration)", () => {
     expect(review?.status).toBe("cleared");
   });
 });
+
+describe("legal-service route auth (inject)", () => {
+  it("GET /v1/legal/opinions without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/legal/opinions" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});

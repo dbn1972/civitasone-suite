@@ -29,3 +29,9 @@ export async function insertAadhaarLink(tx: Writer, row: AadhaarLinkInsert): Pro
 export async function updateBankAccount(tx: Writer, id: string, patch: Partial<BankAccountInsert>): Promise<void> {
   await tx.update(grantBankAccounts).set({ ...patch, updatedAt: new Date() }).where(eq(grantBankAccounts.id, id));
 }
+
+export async function listBeneficiariesByTenant(tenantId: string, limit: number): Promise<BeneficiaryRow[]> {
+  return db.select().from(grantBeneficiaries)
+    .where(eq(grantBeneficiaries.tenantId, tenantId))
+    .limit(limit);
+}

@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { requireRole, HttpError } from "../src/shared/context.js";
+import type { RequestContext } from "@civitasone/types";
 import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";
 
@@ -58,5 +60,40 @@ describe("write-via-queue + read-via-cache (policy)", () => {
     });
     await new Promise((r) => setTimeout(r, 20));
     // Just verifying the queue flow works in memory; real consumer tested against DB
+  });
+});
+
+// ── BUG-2 regression: GET /policy/roles and /policy/roles/:id lacked requireRole ──
+
+const ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+function makeCtx(roles: string[]): RequestContext {
+  return { tenantId: "t1", actorId: "u1", actorType: "user", roles, correlationId: "c1", sessionId: "s1" };
+}
+
+describe("role read endpoints — requireRole gate (BUG-2)", () => {
+  it("non-admin role is rejected with 403 HttpError", () => {
+    const ctx = makeCtx(["finance_user"]);
+    expect(() => requireRole(ctx, ADMIN_ROLES)).toThrow(HttpError);
+    expect(() => requireRole(ctx, ADMIN_ROLES)).toThrow("requires one of:");
+  });
+
+  it("staff role is rejected", () => {
+    const ctx = makeCtx(["staff"]);
+    let err: unknown;
+    try { requireRole(ctx, ADMIN_ROLES); } catch (e) { err = e; }
+    expect(err).toBeInstanceOf(HttpError);
+    expect((err as HttpError).status).toBe(403);
+    expect((err as HttpError).code).toBe("FORBIDDEN");
+  });
+
+  it("tenant_admin is allowed", () => {
+    const ctx = makeCtx(["tenant_admin"]);
+    expect(() => requireRole(ctx, ADMIN_ROLES)).not.toThrow();
+  });
+
+  it("platform_admin is allowed", () => {
+    const ctx = makeCtx(["platform_admin"]);
+    expect(() => requireRole(ctx, ADMIN_ROLES)).not.toThrow();
   });
 });

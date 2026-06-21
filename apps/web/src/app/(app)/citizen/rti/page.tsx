@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageShell } from "../../../_components/PageShell";
 import { getRTIApplications } from "../../../_data/loaders";
@@ -38,7 +39,17 @@ export default async function Page() {
   ];
 
   return (
-    <PageShell title="RTI Applications" description="Right to Information filings tracked under RTI Act 2005.">
+    <PageShell
+      title="RTI Applications"
+      description="Right to Information filings tracked under RTI Act 2005."
+      breadcrumb={
+        <>
+          <Link href="/citizen" className="hover:text-slate-900">Citizen</Link>
+          <span className="mx-2">/</span>
+          <span className="text-slate-900">RTI</span>
+        </>
+      }
+    >
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -51,23 +62,26 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="tbl min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="RTI applications">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">RTI No</th>
-              <th className="px-4 py-3 text-left">Applicant</th>
-              <th className="px-4 py-3 text-left">Subject</th>
-              <th className="px-4 py-3 text-left">Public Authority</th>
-              <th className="px-4 py-3 text-left">Filed</th>
-              <th className="px-4 py-3 text-left">Deadline</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">1st Appeal?</th>
+              <th scope="col" className="px-4 py-3 text-left">RTI No</th>
+              <th scope="col" className="px-4 py-3 text-left">Applicant</th>
+              <th scope="col" className="px-4 py-3 text-left">Subject</th>
+              <th scope="col" className="px-4 py-3 text-left">Public Authority</th>
+              <th scope="col" className="px-4 py-3 text-left">Filed</th>
+              <th scope="col" className="px-4 py-3 text-left">Deadline</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">1st Appeal?</th>
             </tr>
           </thead>
           <tbody>
             {rtis.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No RTI applications</td>
+                <td colSpan={8} className="px-4 py-12 text-center">
+                  <p className="text-slate-500 font-medium">No RTI applications</p>
+                  <p className="mt-1 text-sm text-slate-400">Applications filed under RTI Act 2005 will appear here.</p>
+                </td>
               </tr>
             ) : (
               rtis.map((r) => {

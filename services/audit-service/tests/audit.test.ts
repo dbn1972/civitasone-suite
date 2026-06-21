@@ -52,3 +52,21 @@ describe("audit consumer queue wiring", () => {
     expect(count).toBe(1);
   });
 });
+
+describe("audit-service route auth (inject)", () => {
+  it("GET /v1/audit/risks without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/audit/risks" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/audit/exports without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/audit/exports" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});

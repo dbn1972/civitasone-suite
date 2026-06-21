@@ -31,8 +31,16 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
             <span className="text-slate-900">Not Found</span>
           </nav>
           <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
-            <p className="text-slate-400">Report job not found or the service is unavailable.</p>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            <p className="text-slate-500 font-medium mb-1">Report job not found</p>
+            <p className="text-sm text-slate-400">The job may have been deleted or the ID is incorrect.</p>
+            {source === "error" ? (
+              <div className="mt-4">
+                <DataSourceBadge source={source} />
+              </div>
+            ) : null}
+            <Link href="/reports/list" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
+              ← Back to jobs
+            </Link>
           </div>
         </section>
       </main>
@@ -77,9 +85,9 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
                 href={job.downloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
-                Download
+                Download report
               </a>
             )}
           </div>
@@ -96,11 +104,11 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs text-slate-500">Requested At</p>
-            <p className="mt-1 text-sm font-medium text-slate-800">{job.requestedAt}</p>
+            <p className="mt-1 text-sm font-medium text-slate-800 whitespace-nowrap">{job.requestedAt}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs text-slate-500">Completed At</p>
-            <p className="mt-1 text-sm font-medium text-slate-800">{job.completedAt ?? "—"}</p>
+            <p className="mt-1 text-sm font-medium text-slate-800 whitespace-nowrap">{job.completedAt ?? "—"}</p>
           </div>
         </div>
 
@@ -118,20 +126,21 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
           </section>
         )}
 
-        {displayColumns.length > 0 && (
+        {displayColumns.length > 0 ? (
           <section>
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800">Data</h2>
+              <h2 className="text-lg font-semibold text-slate-800">Report Data</h2>
               <p className="text-sm text-slate-500">
-                Showing {visibleRows.length} of {job.totalCount > 0 ? job.totalCount : job.rows.length} rows
+                Showing {visibleRows.length.toLocaleString("en-IN")} of{" "}
+                {(job.totalCount > 0 ? job.totalCount : job.rows.length).toLocaleString("en-IN")} rows
               </p>
             </div>
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-              <table className="min-w-full text-left text-sm">
+              <table aria-label={`${job.reportName} data`} className="min-w-full text-left text-sm">
                 <thead className="bg-slate-100 text-slate-700">
                   <tr>
                     {displayColumns.map((col) => (
-                      <th key={col} className="px-4 py-3 whitespace-nowrap">{col}</th>
+                      <th key={col} scope="col" className="px-4 py-3 whitespace-nowrap">{col}</th>
                     ))}
                   </tr>
                 </thead>
@@ -139,7 +148,7 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
                   {visibleRows.length === 0 ? (
                     <tr>
                       <td colSpan={displayColumns.length} className="px-4 py-8 text-center text-slate-400">
-                        No data rows
+                        No data rows in this report
                       </td>
                     </tr>
                   ) : (
@@ -157,12 +166,12 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
               </table>
             </div>
           </section>
-        )}
-
-        {displayColumns.length === 0 && (
+        ) : (
           <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm">
             <p className="text-slate-400">
-              {job.status === "completed" ? "No data columns in this report." : "Data will be available once the report completes."}
+              {job.status === "completed"
+                ? "No data columns in this report."
+                : "Data will be available once the report completes."}
             </p>
           </div>
         )}

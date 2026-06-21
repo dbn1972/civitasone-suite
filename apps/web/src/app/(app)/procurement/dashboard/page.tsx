@@ -19,6 +19,11 @@ export default async function Page() {
 
   return (
     <PageShell title="Procurement Dashboard" description="Real-time snapshot of procurement activity and pending actions.">
+      <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
+        <Link href="/procurement" className="hover:text-slate-900">Procurement</Link>
+        <span className="mx-2">/</span>
+        <span className="text-slate-900">Dashboard</span>
+      </nav>
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

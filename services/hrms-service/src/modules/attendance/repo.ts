@@ -1,6 +1,9 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { hrmsAttendance, type AttendanceRow, type AttendanceInsert } from "./schema.js";
+import {
+  hrmsAttendance, hrmsAttendanceRegularisations,
+  type AttendanceRow, type AttendanceInsert, type RegularisationRow,
+} from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -35,4 +38,10 @@ export async function upsertAttendance(tx: Writer, row: AttendanceInsert): Promi
         updatedAt: new Date(),
       },
     });
+}
+
+export async function listRegularisationsByTenant(tenantId: string, limit = 100): Promise<RegularisationRow[]> {
+  return db.select().from(hrmsAttendanceRegularisations)
+    .where(eq(hrmsAttendanceRegularisations.tenantId, tenantId))
+    .limit(limit);
 }

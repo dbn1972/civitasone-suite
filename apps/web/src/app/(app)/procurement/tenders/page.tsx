@@ -63,17 +63,17 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Tenders list">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">Tender No</th>
-              <th className="px-4 py-3 text-left">Title</th>
-              <th className="px-4 py-3 text-left">Type</th>
-              <th className="px-4 py-3 text-right">Est. Value (₹)</th>
-              <th className="px-4 py-3 text-left">Publish Date</th>
-              <th className="px-4 py-3 text-left">Bid Close Date</th>
-              <th className="px-4 py-3 text-right">Bids</th>
-              <th className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Tender No</th>
+              <th scope="col" className="px-4 py-3 text-left">Title</th>
+              <th scope="col" className="px-4 py-3 text-left">Type</th>
+              <th scope="col" className="px-4 py-3 text-right">Est. Value (₹)</th>
+              <th scope="col" className="px-4 py-3 text-left">Publish Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Bid Close Date</th>
+              <th scope="col" className="px-4 py-3 text-right">Bids</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>

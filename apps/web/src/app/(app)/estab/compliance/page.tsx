@@ -62,17 +62,17 @@ export default async function CompliancePage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Compliance items" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Code</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Frequency</th>
-                <th className="px-4 py-3">Due Date</th>
-                <th className="px-4 py-3">Assigned To</th>
-                <th className="px-4 py-3">Last Complied</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Code</th>
+                <th scope="col" className="px-4 py-3">Title</th>
+                <th scope="col" className="px-4 py-3">Category</th>
+                <th scope="col" className="px-4 py-3">Frequency</th>
+                <th scope="col" className="px-4 py-3">Due Date</th>
+                <th scope="col" className="px-4 py-3">Assigned To</th>
+                <th scope="col" className="px-4 py-3">Last Complied</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

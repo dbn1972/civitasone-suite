@@ -60,19 +60,19 @@ export default async function StockLedgerPage() {
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table aria-label="Stock ledger" className="min-w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
-                  <th className="px-4 py-3">Item Code</th>
-                  <th className="px-4 py-3">Item Name</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3 text-right">Quantity</th>
-                  <th className="px-4 py-3 text-right">Unit Cost (₹)</th>
-                  <th className="px-4 py-3 text-right">Total Value (₹)</th>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Party</th>
-                  <th className="px-4 py-3 text-right">Balance</th>
+                  <th scope="col" className="px-4 py-3">Item Code</th>
+                  <th scope="col" className="px-4 py-3">Item Name</th>
+                  <th scope="col" className="px-4 py-3">Date</th>
+                  <th scope="col" className="px-4 py-3">Type</th>
+                  <th scope="col" className="px-4 py-3 text-right">Quantity</th>
+                  <th scope="col" className="px-4 py-3 text-right">Unit Cost (₹)</th>
+                  <th scope="col" className="px-4 py-3 text-right">Total Value (₹)</th>
+                  <th scope="col" className="px-4 py-3">Reference</th>
+                  <th scope="col" className="px-4 py-3">Party</th>
+                  <th scope="col" className="px-4 py-3 text-right">Balance</th>
                 </tr>
               </thead>
               <tbody>

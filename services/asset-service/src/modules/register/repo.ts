@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { assetCategories, assetAssets, type CategoryInsert, type AssetInsert, type AssetRow } from "./schema.js";
 
@@ -9,10 +9,15 @@ export async function findAssetById(id: string): Promise<AssetRow | null> {
   return rows[0] ?? null;
 }
 
-export async function findAssetsByTenant(tenantId: string, opts?: { category?: string; status?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
-  let q = db.select().from(assetAssets).where(eq(assetAssets.tenantId, tenantId));
-  // filter applied in queries.ts via in-memory or SQL predicate — keep repo simple
-  return q.limit(opts?.limit ?? 50).offset(opts?.offset ?? 0);
+export async function findAssetsByTenant(tenantId: string, opts?: { category?: string; status?: string; type?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
+  const conditions: SQL[] = [eq(assetAssets.tenantId, tenantId)];
+  if (opts?.category) conditions.push(eq(assetAssets.categoryId, opts.category));
+  if (opts?.status)   conditions.push(eq(assetAssets.status, opts.status));
+  if (opts?.type)     conditions.push(eq(assetAssets.assetType, opts.type));
+  return db.select().from(assetAssets)
+    .where(and(...conditions))
+    .limit(opts?.limit ?? 50)
+    .offset(opts?.offset ?? 0);
 }
 
 export async function insertCategory(tx: Writer, row: CategoryInsert): Promise<void> {

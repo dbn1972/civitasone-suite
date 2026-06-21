@@ -1,0 +1,1111 @@
+{
+  "gateway": "http://localhost:18888",
+  "tenant": "00000000-0000-0000-0000-000000000001",
+  "testedAt": "2026-06-20T23:11:29.142Z",
+  "results": [
+    {
+      "module": "analytics",
+      "screen": "/analytics/list",
+      "loader": "getAnalyticsDashboards",
+      "apiPath": "/api/v1/analytics/dashboards",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/[id]",
+      "loader": "getAssetById",
+      "apiPath": "/api/v1/asset/assets/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/dashboard",
+      "loader": "getAssetDashboard",
+      "apiPath": "/api/v1/asset/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fixed-assets",
+      "loader": "getFixedAssets",
+      "apiPath": "/api/v1/asset/assets",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/maintenance",
+      "loader": "getAssetMaintenance",
+      "apiPath": "/api/v1/asset/maintenance",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/compliance",
+      "loader": "getAuditCompliance",
+      "apiPath": "/api/v1/audit/compliance",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/dashboard",
+      "loader": "getAuditDashboard",
+      "apiPath": "/api/v1/audit/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/exports",
+      "loader": "getAuditExports",
+      "apiPath": "/api/v1/audit/exports",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/observations/[id]",
+      "loader": "getAuditObservationById",
+      "apiPath": "/api/v1/audit/observations/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/observations",
+      "loader": "getAuditObservations",
+      "apiPath": "/api/v1/audit/observations",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit",
+      "loader": "getAuditItems",
+      "apiPath": "/api/audit/events",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/plan",
+      "loader": "getAuditPlan",
+      "apiPath": "/api/v1/audit/plan",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "audit",
+      "screen": "/audit/risk-register",
+      "loader": "getRiskRegister",
+      "apiPath": "/api/v1/audit/risks",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/list",
+      "loader": "getBillingPlans",
+      "apiPath": "/api/v1/billing/plans",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/requests",
+      "loader": "getCitizenRequests",
+      "apiPath": "/api/v1/citizen/requests",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/rti",
+      "loader": "getRTIApplications",
+      "apiPath": "/api/v1/citizen/rti",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "contracts",
+      "screen": "/contracts/list",
+      "loader": "getContracts",
+      "apiPath": "/api/v1/contract/contracts",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/activities",
+      "loader": "getCRMActivities",
+      "apiPath": "/api/v1/crm/activities",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts/[id]",
+      "loader": "getContactById",
+      "apiPath": "/api/v1/crm/contacts/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts",
+      "loader": "getCrmContacts",
+      "apiPath": "/api/v1/crm/contacts",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/dashboard",
+      "loader": "getCRMDashboard",
+      "apiPath": "/api/v1/crm/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/deals/[id]",
+      "loader": "getDealById",
+      "apiPath": "/api/v1/crm/deals/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/deals",
+      "loader": "getDeals",
+      "apiPath": "/api/v1/crm/deals",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/compliance",
+      "loader": "getEstabCompliance",
+      "apiPath": "/api/v1/estab/compliance",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/dashboard",
+      "loader": "getEstabDashboard",
+      "apiPath": "/api/v1/estab/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/files/[id]",
+      "loader": "getEstabFileById",
+      "apiPath": "/api/v1/estab/files/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/guesthouse",
+      "loader": "getGuesthouseBookings",
+      "apiPath": "/api/v1/estab/guesthouse-bookings",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/list",
+      "loader": "getEstabFiles",
+      "apiPath": "/api/v1/estab/files",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/meetings/[id]",
+      "loader": "getMeetingById",
+      "apiPath": "/api/v1/estab/meetings/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/meetings",
+      "loader": "getMeetings",
+      "apiPath": "/api/v1/estab/meetings",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/vehicles",
+      "loader": "getVehicles",
+      "apiPath": "/api/v1/estab/vehicles",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/accounting/financial-statements",
+      "loader": "getFinancialStatements",
+      "apiPath": "/api/v1/finance/statements",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/accounting/general-ledger",
+      "loader": "getFinanceGLEntries",
+      "apiPath": "/api/v1/finance/journals",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/formulation",
+      "loader": "getFinanceBudgets",
+      "apiPath": "/api/v1/finance/budgets",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/sanctions/[id]",
+      "loader": "getFinanceSanctionById",
+      "apiPath": "/api/v1/finance/sanctions/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/sanctions",
+      "loader": "getFinanceSanctions",
+      "apiPath": "/api/v1/finance/sanctions",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/chart-of-accounts",
+      "loader": "getChartOfAccounts",
+      "apiPath": "/api/v1/finance/accounts",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/dashboard",
+      "loader": "getFinanceDashboard",
+      "apiPath": "/api/v1/finance/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/advances",
+      "loader": "getFinanceAdvances",
+      "apiPath": "/api/v1/finance/advances",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/bills/[id]",
+      "loader": "getFinanceBillById",
+      "apiPath": "/api/v1/finance/bills/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/bills",
+      "loader": "getFinanceBills",
+      "apiPath": "/api/v1/finance/bills",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/utilization-certificates",
+      "loader": "getFinanceUCs",
+      "apiPath": "/api/v1/finance/utilization-certificates",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/payments",
+      "loader": "getPayments",
+      "apiPath": "/api/v1/finance/payments",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/[id]",
+      "loader": "getGrantById",
+      "apiPath": "/api/v1/grants/grants/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/dashboard",
+      "loader": "getGrantsDashboard",
+      "apiPath": "/api/v1/grants/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/dashboard",
+      "loader": "getGrants",
+      "apiPath": "/api/v1/grants/grants",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/grantees",
+      "loader": "getGrantees",
+      "apiPath": "/api/v1/grants/grantees",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/installments",
+      "loader": "getGrantInstallments",
+      "apiPath": "/api/v1/grants/installments",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/releases",
+      "loader": "getGrantReleases",
+      "apiPath": "/api/v1/grants/releases",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/utilization",
+      "loader": "getGrantUtilization",
+      "apiPath": "/api/v1/grants/utilization-certs",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/internal",
+      "loader": "getInternalHelpdeskTickets",
+      "apiPath": "/api/v1/helpdesk/tickets",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/reports",
+      "loader": "getTicketAnalytics",
+      "apiPath": "/api/v1/citizen/tickets/analytics",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/slas",
+      "loader": "getBreachedSLATickets",
+      "apiPath": "/api/v1/citizen/tickets",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/tickets/[id]",
+      "loader": "getHelpdeskTicketById",
+      "apiPath": "/api/v1/citizen/tickets/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/appraisals",
+      "loader": "getAppraisals",
+      "apiPath": "/api/v1/hrms/appraisals",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/attendance",
+      "loader": "getAttendanceList",
+      "apiPath": "/api/v1/hrms/attendance",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/attendance/regularisation",
+      "loader": "getAttendanceRegularisations",
+      "apiPath": "/api/v1/hrms/attendance/regularisations",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dashboard",
+      "loader": "getHRDashboard",
+      "apiPath": "/api/v1/hrms/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dashboard",
+      "loader": "getEmployees",
+      "apiPath": "/api/v1/hrms/employees",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dashboard",
+      "loader": "getJobOpenings",
+      "apiPath": "/api/v1/hrms/job-openings",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employees/[id]",
+      "loader": "getEmployeeById",
+      "apiPath": "/api/v1/hrms/employees/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave",
+      "loader": "getLeaveRequestDetails",
+      "apiPath": "/api/v1/hrms/leave-requests",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/[id]",
+      "loader": "getPayrollRunById",
+      "apiPath": "/api/v1/payroll/runs/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll",
+      "loader": "getPayrollRunDetails",
+      "apiPath": "/api/v1/payroll/runs",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/salary-slips",
+      "loader": "getSalarySlips",
+      "apiPath": "/api/v1/payroll/salary-slips",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/training",
+      "loader": "getTrainingPrograms",
+      "apiPath": "/api/v1/hrms/training-programs",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "install",
+      "screen": "/install",
+      "loader": "getInstallSteps",
+      "apiPath": "/api/v1/install/steps",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/reconcile",
+      "loader": "getStockLedger",
+      "apiPath": "/api/v1/stock/ledger",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/dashboard",
+      "loader": "getKnowledgeDocs",
+      "apiPath": "/api/v1/knowledge/documents",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/records",
+      "loader": "getKnowledgeRecords",
+      "apiPath": "/api/v1/knowledge/records",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/cases/[id]",
+      "loader": "getLegalCaseById",
+      "apiPath": "/api/v1/legal/cases/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/court-orders",
+      "loader": "getCourtOrders",
+      "apiPath": "/api/v1/legal/court-orders",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/dashboard",
+      "loader": "getLegalDashboard",
+      "apiPath": "/api/v1/legal/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/hearings",
+      "loader": "getLegalHearings",
+      "apiPath": "/api/v1/legal/hearings",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/list",
+      "loader": "getLegalCases",
+      "apiPath": "/api/v1/legal/cases",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/opinions",
+      "loader": "getLegalOpinions",
+      "apiPath": "/api/v1/legal/opinions",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/list",
+      "loader": "getLocations",
+      "apiPath": "/api/v1/locations",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/deliveries",
+      "loader": "getNotificationDeliveries",
+      "apiPath": "/api/notification/deliveries",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/list",
+      "loader": "getNotifications",
+      "apiPath": "/api/notification/notifications",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "plugins",
+      "screen": "/plugins",
+      "loader": "getPlugins",
+      "apiPath": "/api/v1/plugins/items",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/approvals",
+      "loader": "getProcurementApprovals",
+      "apiPath": "/api/v1/procurement/approvals",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/dashboard",
+      "loader": "getProcurementDashboard",
+      "apiPath": "/api/v1/procurement/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/grn",
+      "loader": "getProcurementGRNs",
+      "apiPath": "/api/v1/procurement/grns",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/indents/[id]",
+      "loader": "getProcurementIndentById",
+      "apiPath": "/api/v1/procurement/indents/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/indents",
+      "loader": "getProcurementIndents",
+      "apiPath": "/api/v1/procurement/indents",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders/[id]",
+      "loader": "getProcurementPOById",
+      "apiPath": "/api/v1/procurement/pos/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders",
+      "loader": "getProcurementPOs",
+      "apiPath": "/api/v1/procurement/pos",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/rfq/[id]",
+      "loader": "getRFQById",
+      "apiPath": "/api/v1/procurement/rfqs/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/rfq",
+      "loader": "getRFQs",
+      "apiPath": "/api/v1/procurement/rfqs",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/tenders/[id]",
+      "loader": "getProcurementTenderById",
+      "apiPath": "/api/v1/procurement/tenders/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/tenders",
+      "loader": "getProcurementTenders",
+      "apiPath": "/api/v1/procurement/tenders",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/vendors/[id]",
+      "loader": "getProcurementVendorById",
+      "apiPath": "/api/v1/procurement/vendors/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/vendors",
+      "loader": "getProcurementVendors",
+      "apiPath": "/api/v1/procurement/vendors",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/[id]",
+      "loader": "getProjectById",
+      "apiPath": "/api/v1/project/projects/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/dashboard",
+      "loader": "getProjectsDashboard",
+      "apiPath": "/api/v1/project/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/dashboard",
+      "loader": "getProjects",
+      "apiPath": "/api/v1/project/projects",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/dashboard",
+      "loader": "getSchemes",
+      "apiPath": "/api/v1/project/schemes",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/fund-releases",
+      "loader": "getProjectFundReleases",
+      "apiPath": "/api/v1/project/fund-releases",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/milestones",
+      "loader": "getMilestones",
+      "apiPath": "/api/v1/project/milestones",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/[id]",
+      "loader": "getReportJobById",
+      "apiPath": "/api/v1/reports/report-jobs/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/dashboard",
+      "loader": "getReportsDashboard",
+      "apiPath": "/api/v1/reports/dashboards",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/kpi",
+      "loader": "getKPIs",
+      "apiPath": "/api/v1/reports/kpis",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/list",
+      "loader": "getReportJobs",
+      "apiPath": "/api/v1/reports/report-jobs",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/mis",
+      "loader": "getMISSummary",
+      "apiPath": "/api/v1/reports/mis",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/[id]",
+      "loader": "getStockItemById",
+      "apiPath": "/api/v1/stock/items/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/dashboard",
+      "loader": "getStockDashboard",
+      "apiPath": "/api/v1/stock/dashboard",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/list",
+      "loader": "getStockItems",
+      "apiPath": "/api/v1/stock/items",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony/list",
+      "loader": "getTelephonyCalls",
+      "apiPath": "/api/v1/telephony/calls",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/api-keys",
+      "loader": "getAPIKeys",
+      "apiPath": "/api/v1/admin/api-keys",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/audit",
+      "loader": "getTenantAuditLog",
+      "apiPath": "/api/v1/audit/events",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/breakglass",
+      "loader": "getBreakglassLog",
+      "apiPath": "/api/v1/audit/breakglass",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/notifications",
+      "loader": "getNotificationPreferences",
+      "apiPath": "/api/notification/preferences",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin",
+      "loader": "getTenantAdminDashboard",
+      "apiPath": "/api/v1/admin/health",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/roles/[id]",
+      "loader": "getAdminRoleById",
+      "apiPath": "/api/policy/roles/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/roles",
+      "loader": "getAdminRoles",
+      "apiPath": "/api/policy/roles",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/sessions",
+      "loader": "getActiveSessions",
+      "apiPath": "/api/identity/sessions",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/settings",
+      "loader": "getTenantModules",
+      "apiPath": "/api/v1/admin/tenant/modules",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/subscription",
+      "loader": "getSubscription",
+      "apiPath": "/api/v1/billing/subscriptions",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/users/[id]",
+      "loader": "getAdminUserById",
+      "apiPath": "/api/identity/users/:param",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/users",
+      "loader": "getAdminUsers",
+      "apiPath": "/api/identity/users",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "themes",
+      "screen": "/themes",
+      "loader": "getThemeTokens",
+      "apiPath": "/api/v1/themes/tokens",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/list",
+      "loader": "getWorkflowInstances",
+      "apiPath": "/api/v1/workflow/instances",
+      "status": 200,
+      "verdict": "EMPTY",
+      "reason": "200 but no data rows (seed data may be missing)"
+    }
+  ],
+  "counts": {
+    "total": 122,
+    "passed": 71,
+    "failed": 0,
+    "empty": 51
+  }
+}

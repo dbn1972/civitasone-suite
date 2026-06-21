@@ -53,18 +53,18 @@ export default async function AdvancesPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-left text-sm" aria-label="Advances list">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Advance No</th>
-                <th className="px-4 py-3">Beneficiary</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3 text-right">Amount (₹)</th>
-                <th className="px-4 py-3 text-right">Adjusted (₹)</th>
-                <th className="px-4 py-3 text-right">Balance (₹)</th>
-                <th className="px-4 py-3">Disbursed</th>
-                <th className="px-4 py-3">Due</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Advance No</th>
+                <th scope="col" className="px-4 py-3">Beneficiary</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3 text-right">Amount (₹)</th>
+                <th scope="col" className="px-4 py-3 text-right">Adjusted (₹)</th>
+                <th scope="col" className="px-4 py-3 text-right">Balance (₹)</th>
+                <th scope="col" className="px-4 py-3">Disbursed</th>
+                <th scope="col" className="px-4 py-3">Due</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

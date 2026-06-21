@@ -1,6 +1,6 @@
 type AppLike = {
   get: (path: string, handler: (...args: unknown[]) => unknown) => void;
-  addHook: (name: string, handler: () => Promise<void>) => void;
+  addHook: (name: string, handler: (...args: unknown[]) => unknown) => void;
   routes?: Array<{ method: string | string[]; url: string }>;
 };
 
@@ -57,6 +57,10 @@ function formatNotificationDeliveryMetrics(): string[] {
 /** Standard /health /ready /metrics /openapi.json for every service. */
 export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
   const version = opts.version ?? process.env.npm_package_version ?? "0.1.0";
+
+  app.addHook("onResponse", async () => {
+    requestCount++;
+  });
 
   app.get("/health", async () => ({
     service: opts.service,

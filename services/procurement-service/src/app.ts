@@ -15,6 +15,8 @@ import { auctionRoutes }  from "./modules/auction/routes.js";
 import { paymentsRoutes } from "./modules/payments/routes.js";
 import { approvalsRoutes } from "./modules/approvals/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
+import { rfqRoutes }      from "./modules/rfq/routes.js";
+import { tenderRoutes }   from "./modules/tender/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -37,6 +39,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(paymentsRoutes);
   await app.register(approvalsRoutes);
   await app.register(dashboardRoutes);
+  await app.register(rfqRoutes);
+  await app.register(tenderRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

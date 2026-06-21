@@ -1,5 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { listQuerySchema } from "@civitasone/schemas/common";
+import { AuditComplianceListSchema } from "@civitasone/schemas/web";
+import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { pendingQuery } from "./validators.js";
 import * as queries from "./queries.js";
@@ -12,6 +15,22 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = pendingQuery.parse(req.query);
     return reply.send({ items: await queries.listPending(ctx.tenantId, q.status) });
+  });
+
+  app.get("/v1/audit/compliance", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const pending = (await queries.listPending(ctx.tenantId, "pending")) ?? [];
+    sendValidated(reply, AuditComplianceListSchema, pending.slice(0, q.limit).map((row) => ({
+      id: row.id,
+      lawOrRule: `Para ${row.paraId.slice(0, 8)}`,
+      requirement: `Compliance follow-up for department ${row.deptRef}`,
+      frequency: "annual",
+      dueDate: row.dueDate?.toString() ?? new Date().toISOString().slice(0, 10),
+      department: row.deptRef,
+      status: (row.status === "complied" ? "complied" : row.status === "overdue" ? "overdue" : row.status === "na" ? "na" : "pending") as "complied" | "pending" | "overdue" | "na",
+    })));
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -82,7 +82,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
                 <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">
                   Salary Slips ({run.salarySlips.length})
                 </div>
-                <table className="min-w-full text-sm">
+                <table aria-label="Salary slips for this run" className="min-w-full text-sm">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
                       <th className="px-4 py-3 text-left">Employee ID</th>

@@ -15,6 +15,12 @@ export async function listUcByApplication(applicationId: string): Promise<UcRow[
   return db.select().from(grantUcStatements).where(eq(grantUcStatements.applicationId, applicationId));
 }
 
+export async function listUcByTenant(tenantId: string, limit: number): Promise<UcRow[]> {
+  return db.select().from(grantUcStatements)
+    .where(eq(grantUcStatements.tenantId, tenantId))
+    .limit(limit);
+}
+
 export async function insertComplianceReport(tx: Writer, row: typeof grantComplianceReports.$inferInsert): Promise<void> {
   await tx.insert(grantComplianceReports).values(row);
 }

@@ -41,58 +41,60 @@ export default async function KnowledgeRepositoryPage() {
           {source === "error" ? <DataSourceBadge source={source} /> : null}
         </header>
 
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <section aria-label="Repository statistics" className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-sm text-slate-500">Total</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{total}</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900">{total.toLocaleString("en-IN")}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-sm text-slate-500">Approved</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">{approved}</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-600">{approved.toLocaleString("en-IN")}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-sm text-slate-500">Pending Review</p>
-            <p className="mt-1 text-2xl font-bold text-amber-600">{pendingReview}</p>
+            <p className="mt-1 text-2xl font-bold text-amber-600">{pendingReview.toLocaleString("en-IN")}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-sm text-slate-500">Archived</p>
-            <p className="mt-1 text-2xl font-bold text-slate-500">{archived}</p>
+            <p className="mt-1 text-2xl font-bold text-slate-500">{archived.toLocaleString("en-IN")}</p>
           </div>
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Document repository" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Author</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3">Updated</th>
-                <th className="px-4 py-3">Version</th>
-                <th className="px-4 py-3">Tags</th>
-                <th className="px-4 py-3">Access</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Doc ID</th>
+                <th scope="col" className="px-4 py-3">Title</th>
+                <th scope="col" className="px-4 py-3">Category</th>
+                <th scope="col" className="px-4 py-3">Author</th>
+                <th scope="col" className="px-4 py-3">Version</th>
+                <th scope="col" className="px-4 py-3">Created</th>
+                <th scope="col" className="px-4 py-3">Tags</th>
+                <th scope="col" className="px-4 py-3">Access</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
               {docs.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
                     No documents found in the repository.
                   </td>
                 </tr>
               ) : (
                 docs.map((doc) => (
                   <tr key={doc.id} className="border-t border-slate-200 hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                      {doc.id.slice(0, 8).toUpperCase()}
+                    </td>
                     <td className="px-4 py-3 font-medium text-slate-900 max-w-xs truncate" title={doc.title}>
                       {doc.title}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{doc.category}</td>
                     <td className="px-4 py-3 text-slate-600">{doc.author ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{doc.createdAt}</td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{doc.updatedAt ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{doc.version}</td>
+                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{doc.createdAt}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {doc.tags.length === 0 ? (

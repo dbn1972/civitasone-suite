@@ -48,7 +48,17 @@ export default async function Page() {
   ];
 
   return (
-    <PageShell title="Deal Pipeline" description="Track high-value opportunities across stages.">
+    <PageShell
+      title="Deal Pipeline"
+      description="Track high-value opportunities across stages."
+      breadcrumb={
+        <>
+          <Link href="/crm" className="hover:text-slate-900">CRM</Link>
+          <span className="mx-2">/</span>
+          <span className="text-slate-900">Deals</span>
+        </>
+      }
+    >
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -61,27 +71,30 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="tbl min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Deal pipeline">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">Deal Name</th>
-              <th className="px-4 py-3 text-left">Contact</th>
-              <th className="px-4 py-3 text-left">Stage</th>
-              <th className="px-4 py-3 text-right">Amount (₹)</th>
-              <th className="px-4 py-3 text-right">Prob %</th>
-              <th className="px-4 py-3 text-left">Owner</th>
-              <th className="px-4 py-3 text-left">Close Date</th>
-              <th className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Deal Name</th>
+              <th scope="col" className="px-4 py-3 text-left">Contact</th>
+              <th scope="col" className="px-4 py-3 text-left">Stage</th>
+              <th scope="col" className="px-4 py-3 text-right">Amount (₹)</th>
+              <th scope="col" className="px-4 py-3 text-right">Prob %</th>
+              <th scope="col" className="px-4 py-3 text-left">Owner</th>
+              <th scope="col" className="px-4 py-3 text-left">Close Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>
             {deals.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No deals found</td>
+                <td colSpan={8} className="px-4 py-12 text-center">
+                  <p className="text-slate-500 font-medium">No deals found</p>
+                  <p className="mt-1 text-sm text-slate-400">Start adding deals to track your pipeline.</p>
+                </td>
               </tr>
             ) : (
               deals.map((deal) => (
-                <tr key={deal.id} className="border-t border-slate-200 hover:bg-slate-50">
+                <tr key={deal.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-900">
                     <Link href={`/crm/deals/${deal.id}`} className="hover:text-indigo-600 hover:underline">
                       {deal.dealName}

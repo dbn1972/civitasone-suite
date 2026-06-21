@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
-import { payrollRunsResponseSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
+import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createStructureBody, createRunBody, idParam } from "./validators.js";
@@ -16,7 +16,16 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, payrollRunsResponseSchema, await queries.listRuns(ctx.tenantId, q.limit));
+    sendValidated(reply, PayrollRunDetailListSchema, await queries.listRuns(ctx.tenantId, q.limit));
+  });
+
+  app.get("/v1/payroll/runs/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const run = await queries.getRunDetail(id, ctx.tenantId);
+    if (!run) throw new HttpError(404, "NOT_FOUND", "run not found");
+    sendValidated(reply, PayrollRunFullDetailSchema, run);
   });
 
   app.get("/v1/payroll/salary-slips", async (req, reply) => {

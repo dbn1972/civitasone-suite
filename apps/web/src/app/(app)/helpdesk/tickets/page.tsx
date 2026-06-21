@@ -49,7 +49,17 @@ export default async function Page() {
   ];
 
   return (
-    <PageShell title="Citizen Tickets" description="Citizen-facing support queue via citizen-service.">
+    <PageShell
+      title="Citizen Tickets"
+      description="Citizen-facing support queue via citizen-service."
+      breadcrumb={
+        <>
+          <Link href="/helpdesk" className="hover:text-slate-900">Helpdesk</Link>
+          <span className="mx-2">/</span>
+          <span className="text-slate-900">Tickets</span>
+        </>
+      }
+    >
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -62,27 +72,30 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="tbl min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Citizen tickets list">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">Ticket No</th>
-              <th className="px-4 py-3 text-left">Subject</th>
-              <th className="px-4 py-3 text-left">Requester</th>
-              <th className="px-4 py-3 text-left">Priority</th>
-              <th className="px-4 py-3 text-left">SLA Status</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">Created</th>
-              <th className="px-4 py-3 text-left">Channel</th>
+              <th scope="col" className="px-4 py-3 text-left">Ticket No</th>
+              <th scope="col" className="px-4 py-3 text-left">Subject</th>
+              <th scope="col" className="px-4 py-3 text-left">Requester</th>
+              <th scope="col" className="px-4 py-3 text-left">Priority</th>
+              <th scope="col" className="px-4 py-3 text-left">SLA Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Created</th>
+              <th scope="col" className="px-4 py-3 text-left">Channel</th>
             </tr>
           </thead>
           <tbody>
             {tickets.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No tickets</td>
+                <td colSpan={8} className="px-4 py-12 text-center">
+                  <p className="text-slate-500 font-medium">No tickets</p>
+                  <p className="mt-1 text-sm text-slate-400">Citizen tickets will appear here once submitted.</p>
+                </td>
               </tr>
             ) : (
               tickets.map((t) => (
-                <tr key={t.id} className="border-t border-slate-200 hover:bg-slate-50">
+                <tr key={t.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-slate-700">
                     <Link href={`/helpdesk/tickets/${t.id}`} className="hover:text-indigo-600 hover:underline">
                       {t.ticketNo}

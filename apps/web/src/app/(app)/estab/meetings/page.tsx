@@ -64,18 +64,18 @@ export default async function MeetingsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Meetings list" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Meeting No</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Time</th>
-                <th className="px-4 py-3">Venue</th>
-                <th className="px-4 py-3">Chairperson</th>
-                <th className="px-4 py-3 text-right">Attendees</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Meeting No</th>
+                <th scope="col" className="px-4 py-3">Title</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Date</th>
+                <th scope="col" className="px-4 py-3">Time</th>
+                <th scope="col" className="px-4 py-3">Venue</th>
+                <th scope="col" className="px-4 py-3">Chairperson</th>
+                <th scope="col" className="px-4 py-3 text-right">Attendees</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

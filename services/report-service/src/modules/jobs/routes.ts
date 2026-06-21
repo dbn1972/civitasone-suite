@@ -5,8 +5,14 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import {
+  ReportJobSummaryListSchema,
+  ReportJobDetailSchema,
+  KPISummaryListSchema,
+  MISSummaryListSchema,
+} from "@civitasone/schemas/web";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createJobBody, jobsListSchema } from "./validators.js";
+import { createJobBody, jobsListSchema, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -25,6 +31,60 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, jobsListSchema, await queries.listJobs(ctx.tenantId, q.limit, q.offset));
+  });
+
+  app.get("/v1/reports/report-jobs", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const result = await queries.listJobs(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, ReportJobSummaryListSchema, result.data.map((job) => ({
+      id: job.id,
+      reportName: job.name,
+      module: job.reportType ?? "general",
+      requestedBy: job.requestedBy ?? job.tenantId,
+      requestedAt: job.completedAt ? job.completedAt.toISOString() : new Date().toISOString(),
+      completedAt: job.completedAt?.toISOString(),
+      format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
+      status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
+      downloadUrl: job.downloadUrl ?? undefined,
+      rowCount: job.rowCount ?? undefined,
+    })));
+  });
+
+  app.get("/v1/reports/report-jobs/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = idParam.parse(req.params);
+    const job = await queries.getJob(ctx.tenantId, id);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    sendValidated(reply, ReportJobDetailSchema, {
+      id: job.id,
+      reportName: job.name,
+      module: job.reportType ?? "general",
+      requestedBy: job.requestedBy ?? job.tenantId,
+      requestedAt: job.completedAt ? job.completedAt.toISOString() : new Date().toISOString(),
+      completedAt: job.completedAt?.toISOString(),
+      format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
+      status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
+      downloadUrl: job.downloadUrl ?? undefined,
+      rowCount: job.rowCount ?? undefined,
+      columns: [],
+      rows: [],
+      totalCount: job.rowCount ?? 0,
+    });
+  });
+
+  app.get("/v1/reports/kpis", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    sendValidated(reply, KPISummaryListSchema, []);
+  });
+
+  app.get("/v1/reports/mis", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    sendValidated(reply, MISSummaryListSchema, []);
   });
 
   app.setErrorHandler((err, req, reply) => {

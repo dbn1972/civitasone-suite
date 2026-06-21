@@ -26,7 +26,7 @@ export async function entryRoutes(app: FastifyInstance): Promise<void> {
     const ledgerOpts: { from?: string; to?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
     if (q.from !== undefined) ledgerOpts.from = q.from;
     if (q.to !== undefined) ledgerOpts.to = q.to;
-    const rows = await repo.findLedger(ctx.tenantId, q.itemId, ledgerOpts);
+    const rows = await repo.findLedger(ctx.tenantId, q.itemId ?? null, ledgerOpts);
     return reply.send({ data: rows, limit: q.limit, offset: q.offset });
   });
 

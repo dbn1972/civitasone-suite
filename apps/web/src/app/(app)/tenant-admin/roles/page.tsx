@@ -47,14 +47,14 @@ export default async function Page() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Tenant roles" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Users</th>
-                <th className="px-4 py-3">Created At</th>
+                <th scope="col" className="px-4 py-3">Name</th>
+                <th scope="col" className="px-4 py-3">Description</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Users</th>
+                <th scope="col" className="px-4 py-3">Created At</th>
               </tr>
             </thead>
             <tbody>
@@ -77,9 +77,12 @@ export default async function Page() {
                   <td className="px-4 py-3 text-slate-600">{role.createdAt.slice(0, 10)}</td>
                 </tr>
               ))}
-              {roles.length === 0 && (
+              {roles.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">No roles found.</td>
+                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No roles yet</span>
+                    <span className="mt-1 block text-slate-400">Role definitions will appear here once configured.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

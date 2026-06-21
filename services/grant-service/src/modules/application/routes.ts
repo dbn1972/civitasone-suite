@@ -1,5 +1,7 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { GrantSummaryListSchema, GrantDetailSchema } from "@civitasone/schemas/web";
+import { listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -51,6 +53,22 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const app = await queries.getApplication(ctx.tenantId, id);
     if (!app) throw new HttpError(404, "NOT_FOUND", "application not found");
     return reply.send(app);
+  });
+
+  app.get("/v1/grants/grants", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GrantSummaryListSchema, await queries.listGrantSummaries(ctx.tenantId, q.limit));
+  });
+
+  app.get("/v1/grants/grants/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const grant = await queries.getGrantDetail(id, ctx.tenantId);
+    if (!grant) throw new HttpError(404, "NOT_FOUND", "grant not found");
+    sendValidated(reply, GrantDetailSchema, grant);
   });
 
   app.setErrorHandler((err, req, reply) => {

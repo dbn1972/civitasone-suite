@@ -57,17 +57,17 @@ export default async function SanctionsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-left text-sm" aria-label="Sanctions list">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Sanction No</th>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Major Head</th>
-                <th className="px-4 py-3 text-right">Amount (₹)</th>
-                <th className="px-4 py-3">Sanctioned By</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
+                <th scope="col" className="px-4 py-3">Sanction No</th>
+                <th scope="col" className="px-4 py-3">Subject</th>
+                <th scope="col" className="px-4 py-3">Major Head</th>
+                <th scope="col" className="px-4 py-3 text-right">Amount (₹)</th>
+                <th scope="col" className="px-4 py-3">Sanctioned By</th>
+                <th scope="col" className="px-4 py-3">Date</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>

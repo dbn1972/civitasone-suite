@@ -59,18 +59,18 @@ export default async function LegalHearingsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Hearings" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Case No</th>
-                <th className="px-4 py-3">Case Title</th>
-                <th className="px-4 py-3">Court</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Time</th>
-                <th className="px-4 py-3">Purpose</th>
-                <th className="px-4 py-3">Outcome</th>
-                <th className="px-4 py-3">Next Date</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Case No</th>
+                <th scope="col" className="px-4 py-3">Case Title</th>
+                <th scope="col" className="px-4 py-3">Court</th>
+                <th scope="col" className="px-4 py-3">Date</th>
+                <th scope="col" className="px-4 py-3">Time</th>
+                <th scope="col" className="px-4 py-3">Purpose</th>
+                <th scope="col" className="px-4 py-3">Outcome</th>
+                <th scope="col" className="px-4 py-3">Next Date</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -95,9 +95,12 @@ export default async function LegalHearingsPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {items.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-400">No hearings found.</td>
+                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No hearings scheduled</span>
+                    <span className="mt-1 block text-slate-400">Court hearings will appear here once added to cases.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

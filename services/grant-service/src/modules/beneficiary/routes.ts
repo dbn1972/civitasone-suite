@@ -1,5 +1,7 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { GranteeSummaryListSchema } from "@civitasone/schemas/web";
+import { listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -41,6 +43,13 @@ export async function beneficiaryRoutes(app: FastifyInstance): Promise<void> {
     const ben = await queries.getBeneficiary(ctx.tenantId, id);
     if (!ben) throw new HttpError(404, "NOT_FOUND", "beneficiary not found");
     return reply.send(ben);
+  });
+
+  app.get("/v1/grants/grantees", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GranteeSummaryListSchema, await queries.listGranteeSummaries(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler((err, req, reply) => {

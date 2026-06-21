@@ -18,6 +18,25 @@ export async function getAttendanceByEmpAndMonth(tenantId: string, employeeId: s
   ) as Promise<AttendanceRow[]>;
 }
 
+export async function listRegularisations(tenantId: string, limit: number) {
+  const key = cache.listKey(tenantId, "attendance_reg", `list:${limit}`);
+  return (await cache.getOrLoad(key, async () => {
+    const rows = await repo.listRegularisationsByTenant(tenantId, limit);
+    const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
+    const empMap = new Map(employees.map((e) => [e.id, e]));
+    return rows.map((r) => ({
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
+      date: r.date,
+      reason: r.reason,
+      requestedStatus: r.requestedStatus,
+      status: r.status as "pending" | "approved" | "rejected",
+      requestedAt: r.requestedAt.toISOString(),
+    }));
+  })) ?? [];
+}
+
 export async function listAttendance(tenantId: string, limit: number) {
   return cache.listOrLoad(tenantId, "attendance", `list:${limit}`, async () => {
     const rows = await repo.listByTenant(tenantId, limit);

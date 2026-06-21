@@ -67,19 +67,19 @@ export default async function FixedAssetsPage() {
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table aria-label="Fixed assets" className="min-w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
-                  <th className="px-4 py-3">Asset Code</th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Purchase Date</th>
-                  <th className="px-4 py-3 text-right">Purchase Cost (₹)</th>
-                  <th className="px-4 py-3 text-right">Current Value (₹)</th>
-                  <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Dept</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Condition</th>
+                  <th scope="col" className="px-4 py-3">Asset Code</th>
+                  <th scope="col" className="px-4 py-3">Name</th>
+                  <th scope="col" className="px-4 py-3">Category</th>
+                  <th scope="col" className="px-4 py-3">Purchase Date</th>
+                  <th scope="col" className="px-4 py-3 text-right">Purchase Cost (₹)</th>
+                  <th scope="col" className="px-4 py-3 text-right">Current Value (₹)</th>
+                  <th scope="col" className="px-4 py-3">Location</th>
+                  <th scope="col" className="px-4 py-3">Dept</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Condition</th>
                 </tr>
               </thead>
               <tbody>

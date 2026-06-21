@@ -1,6 +1,7 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
+import { authPlugin } from "@civitasone/auth/plugin";
 import { registerOpsRoutes } from "@civitasone/observability";
 import { createQueue, resolveQueueDriver } from "./bus.js";
 
@@ -11,11 +12,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
+  await app.register(authPlugin);
 
   const bus = createQueue();
   registerOpsRoutes(app, { service: "queue-service", checks: { queue: bus } });
 
-  app.get("/v1/queue/status", async () => {
+  app.get("/v1/queue/status", { config: { public: true } }, async (req: FastifyRequest, reply) => {
+    const auth = req.headers.authorization;
+    const internal = req.headers["x-internal"];
+    if ((!auth || typeof auth !== "string") && internal !== "1") {
+      return reply.code(401).send({ code: "UNAUTHORIZED", message: "authentication or internal header required" });
+    }
     const status = await bus.healthCheck();
     return {
       driver: resolveQueueDriver(),

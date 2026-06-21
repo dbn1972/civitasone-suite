@@ -40,3 +40,7 @@ export async function listResponses(rtiId: string) {
 export async function listAppeals(rtiId: string) {
   return db.select().from(citizenRtiAppeals).where(eq(citizenRtiAppeals.rtiId, rtiId));
 }
+
+export async function listRtiByTenant(tenantId: string, limit: number): Promise<RtiRow[]> {
+  return db.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.tenantId, tenantId)).limit(limit);
+}

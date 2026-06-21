@@ -14,6 +14,7 @@ async function checkSanctionAvailable(sanctionRef: string, required: bigint): Pr
   const sanctionId = sanctionRef.replace(/^.*:/, "");
   const res = await fetch(`${FINANCE_URL}/v1/finance/sanctions/${sanctionId}/available`, {
     headers: { "x-internal": "1" },
+    signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error(`finance-service sanctions check failed: ${res.status}`);
   const data = await res.json() as { available: string };

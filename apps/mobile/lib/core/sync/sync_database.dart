@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 
 /// Gmail-style SQLite cache — mailboxes, entities, outbox (native mobile).
 class SyncDatabase {
@@ -33,6 +34,7 @@ class SyncDatabase {
           id TEXT PRIMARY KEY,
           mailbox TEXT NOT NULL,
           operation TEXT NOT NULL,
+          entity_id TEXT NOT NULL DEFAULT '',
           payload_json TEXT NOT NULL,
           created_at TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'queued',
@@ -43,6 +45,39 @@ class SyncDatabase {
     });
     _instance = SyncDatabase._(db);
     return _instance!;
+  }
+
+  /// For testing: open an in-memory database (no singleton).
+  static Future<SyncDatabase> openInMemory(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS mailboxes (
+        mailbox TEXT PRIMARY KEY,
+        cursor TEXT NOT NULL DEFAULT '0',
+        last_synced_at TEXT NOT NULL
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS entities (
+        id TEXT PRIMARY KEY,
+        mailbox TEXT NOT NULL,
+        data_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        etag TEXT,
+        sync_state TEXT NOT NULL DEFAULT 'synced'
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS outbox (
+        id TEXT PRIMARY KEY,
+        mailbox TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        entity_id TEXT NOT NULL DEFAULT '',
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'queued',
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT
+      )''');
+    await db.execute('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    return SyncDatabase._(db);
   }
 
   Future<String> getCursor(String mailbox) async {
@@ -59,7 +94,42 @@ class SyncDatabase {
   }
 
   Future<List<Map<String, Object?>>> listOutbox(String mailbox) async {
-    return _db.query('outbox', where: 'mailbox = ? AND status IN (?, ?)', whereArgs: [mailbox, 'queued', 'failed']);
+    return _db.query('outbox',
+        where: 'mailbox = ? AND status IN (?, ?)', whereArgs: [mailbox, 'queued', 'failed']);
+  }
+
+  /// Enqueue a mutation into the outbox. Returns the outbox entry ID.
+  Future<String> enqueueOutbox({
+    required String mailbox,
+    required String operation,
+    required String entityId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final id = const Uuid().v4();
+    await _db.insert('outbox', {
+      'id': id,
+      'mailbox': mailbox,
+      'operation': operation,
+      'entity_id': entityId,
+      'payload_json': jsonEncode(payload),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'status': 'queued',
+      'retry_count': 0,
+    });
+    return id;
+  }
+
+  /// Mark an outbox entry as successfully synced — removes it from the queue.
+  Future<void> markOutboxDone(String id) async {
+    await _db.delete('outbox', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Mark an outbox entry as failed — increments retry count.
+  Future<void> markOutboxFailed(String id, String error) async {
+    await _db.rawUpdate(
+      'UPDATE outbox SET status = ?, last_error = ?, retry_count = retry_count + 1 WHERE id = ?',
+      ['failed', error, id],
+    );
   }
 
   Future<void> upsertEntity({

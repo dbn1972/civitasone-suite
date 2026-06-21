@@ -1,5 +1,6 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { CitizenRequestSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -67,6 +68,13 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { citizenId } = citizenIdQuery.parse(req.query);
     return reply.send(await queries.listGrievances(ctx.tenantId, citizenId));
+  });
+
+  app.get("/v1/citizen/requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, CitizenRequestSummaryListSchema, await queries.listRequests(ctx.tenantId, q.limit, q.offset));
   });
 
   app.setErrorHandler((err, req, reply) => {

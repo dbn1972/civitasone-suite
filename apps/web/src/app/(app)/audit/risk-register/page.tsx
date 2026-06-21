@@ -69,19 +69,19 @@ export default async function RiskRegisterPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Risk register" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Risk Code</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Likelihood</th>
-                <th className="px-4 py-3">Impact</th>
-                <th className="px-4 py-3 text-right">Score</th>
-                <th className="px-4 py-3">Owner</th>
-                <th className="px-4 py-3">Mitigation</th>
-                <th className="px-4 py-3">Review Date</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Risk Code</th>
+                <th scope="col" className="px-4 py-3">Title</th>
+                <th scope="col" className="px-4 py-3">Category</th>
+                <th scope="col" className="px-4 py-3">Likelihood</th>
+                <th scope="col" className="px-4 py-3">Impact</th>
+                <th scope="col" className="px-4 py-3 text-right">Score</th>
+                <th scope="col" className="px-4 py-3">Owner</th>
+                <th scope="col" className="px-4 py-3">Mitigation</th>
+                <th scope="col" className="px-4 py-3">Review Date</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -107,9 +107,12 @@ export default async function RiskRegisterPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {items.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-400">No risks found.</td>
+                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">Risk register is empty</span>
+                    <span className="mt-1 block text-slate-400">No risks have been logged yet.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

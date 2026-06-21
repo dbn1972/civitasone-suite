@@ -1,13 +1,16 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 import { notificationDeliveries } from "./schema.js";
 import * as repo from "./repo.js";
 
-export async function listDeliveries(tenantId: string, limit = 50, offset = 0): Promise<typeof notificationDeliveries.$inferSelect[]> {
+export async function listDeliveries(tenantId: string, limit = 50, offset = 0, actorId?: string): Promise<typeof notificationDeliveries.$inferSelect[]> {
+  const conditions = actorId
+    ? and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.createdBy, actorId))
+    : eq(notificationDeliveries.tenantId, tenantId);
   return db.select().from(notificationDeliveries)
-    .where(eq(notificationDeliveries.tenantId, tenantId))
+    .where(conditions)
     .limit(limit).offset(offset);
 }
 

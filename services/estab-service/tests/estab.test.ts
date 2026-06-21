@@ -143,6 +143,58 @@ describe("RTI domain — deadline computation (pure)", () => {
   });
 });
 
+// ── 3b. HTTP route auth guard (inject) ───────────────────────────────────
+
+describe("estab-service route auth (inject)", () => {
+  it("GET /v1/estab/dashboard without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/estab/dashboard" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/estab/meetings without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/estab/meetings" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/estab/vehicles without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/estab/vehicles" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/estab/guesthouse-bookings without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/estab/guesthouse-bookings" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/estab/room-bookings (alias) without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/estab/room-bookings" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("GET /v1/estab/compliance without token → 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/estab/compliance" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 // ── 4. CQRS — RTI create wiring ───────────────────────────────────────────
 
 describe("RTI CQRS — create wiring (integration)", () => {

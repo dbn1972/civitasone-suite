@@ -1,12 +1,31 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { BreakglassSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
 import { breakGlassBody, closeParam } from "./validators.js";
 import * as commands from "./commands.js";
+import * as repo from "./repo.js";
 
 export async function supportRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/admin/breakglass", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listBreakGlass(ctx.tenantId, q.limit);
+    sendValidated(reply, BreakglassSummaryListSchema, rows.map((row) => ({
+      id: row.id,
+      actor: row.actorId,
+      actorEmail: row.actorId,
+      reason: row.reason,
+      resourceAccessed: row.ticketId,
+      startedAt: row.openedAt.toISOString(),
+      endedAt: row.closedAt?.toISOString(),
+      status: (row.closedAt ? "ended" : row.expiresAt < new Date() ? "auto_expired" : "active") as "active" | "ended" | "auto_expired",
+    })));
+  });
+
   app.post("/v1/admin/support/break-glass", async (req, reply) => {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);

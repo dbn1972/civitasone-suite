@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageShell } from "../../../_components/PageShell";
 import { getNotificationDeliveries } from "../../../_data/loaders";
 
 const channelColors: Record<string, string> = {
@@ -16,6 +17,14 @@ const statusColors: Record<string, string> = {
   bounced: "bg-orange-50 text-orange-700",
 };
 
+function pill(label: string, colors: Record<string, string>, key: string) {
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[key] ?? "bg-slate-100 text-slate-600"}`}>
+      {label.replace(/_/g, " ")}
+    </span>
+  );
+}
+
 export default async function NotificationDeliveriesPage() {
   const { data: deliveries, source } = await getNotificationDeliveries();
 
@@ -24,91 +33,77 @@ export default async function NotificationDeliveriesPage() {
   const failed = deliveries.filter((d) => d.status === "failed").length;
   const pending = deliveries.filter((d) => d.status === "pending").length;
 
+  const stats = [
+    { label: "Total", value: total.toLocaleString("en-IN"), color: "text-slate-900" },
+    { label: "Delivered", value: delivered.toLocaleString("en-IN"), color: "text-emerald-600" },
+    { label: "Failed", value: failed.toLocaleString("en-IN"), color: "text-red-600" },
+    { label: "Pending", value: pending.toLocaleString("en-IN"), color: "text-amber-600" },
+  ];
+
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
+    <PageShell
+      title="Notification Deliveries"
+      description="Delivery log for all outgoing notifications."
+      breadcrumb={
+        <>
           <Link href="/notifications" className="hover:text-slate-900">Notifications</Link>
           <span className="mx-2">/</span>
           <span className="text-slate-900">Deliveries</span>
-        </nav>
+        </>
+      }
+    >
+      {source === "error" ? <DataSourceBadge source={source} /> : null}
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Notification Deliveries</h1>
-            <p className="mt-1 text-sm text-slate-600">Delivery log for all outgoing notifications.</p>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs text-slate-500">{s.label}</p>
+            <p className={`mt-1 text-2xl font-semibold ${s.color}`}>{s.value}</p>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
+        ))}
+      </div>
 
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{total}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Delivered</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">{delivered}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Failed</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{failed}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Pending</p>
-            <p className="mt-1 text-2xl font-bold text-amber-600">{pending}</p>
-          </div>
-        </section>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-700">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full text-sm" aria-label="Notification delivery log">
+          <thead className="bg-slate-100 text-slate-700">
+            <tr>
+              <th scope="col" className="px-4 py-3 text-left">Notification Title</th>
+              <th scope="col" className="px-4 py-3 text-left">Recipient</th>
+              <th scope="col" className="px-4 py-3 text-left">Channel</th>
+              <th scope="col" className="px-4 py-3 text-center">Attempts</th>
+              <th scope="col" className="px-4 py-3 text-left">Delivered At</th>
+              <th scope="col" className="px-4 py-3 text-left">Failure Reason</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deliveries.length === 0 ? (
               <tr>
-                <th className="px-4 py-3">Notification Title</th>
-                <th className="px-4 py-3">Recipient</th>
-                <th className="px-4 py-3">Channel</th>
-                <th className="px-4 py-3 text-center">Attempts</th>
-                <th className="px-4 py-3">Delivered At</th>
-                <th className="px-4 py-3">Failure Reason</th>
-                <th className="px-4 py-3">Status</th>
+                <td colSpan={7} className="px-4 py-12 text-center">
+                  <p className="text-slate-500 font-medium">No delivery records</p>
+                  <p className="mt-1 text-sm text-slate-400">Delivery logs will appear here once notifications are sent.</p>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {deliveries.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                    No delivery records found
+            ) : (
+              deliveries.map((d) => (
+                <tr key={d.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-900">{d.notificationTitle}</td>
+                  <td className="px-4 py-3 text-slate-600">{d.recipient}</td>
+                  <td className="px-4 py-3">{pill(d.channel, channelColors, d.channel)}</td>
+                  <td className="px-4 py-3 text-center text-slate-600">{d.attemptCount}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{d.deliveredAt ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-600 max-w-xs truncate" title={d.failureReason ?? undefined}>
+                    {(d.status === "failed" || d.status === "bounced") && d.failureReason
+                      ? d.failureReason
+                      : "—"}
                   </td>
+                  <td className="px-4 py-3">{pill(d.status, statusColors, d.status)}</td>
                 </tr>
-              ) : (
-                deliveries.map((d) => (
-                  <tr key={d.id} className="border-t border-slate-200 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">{d.notificationTitle}</td>
-                    <td className="px-4 py-3 text-slate-600">{d.recipient}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${channelColors[d.channel] ?? "bg-slate-100 text-slate-600"}`}>
-                        {d.channel.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-slate-600">{d.attemptCount}</td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{d.deliveredAt ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-600 max-w-xs truncate" title={d.failureReason}>
-                      {(d.status === "failed" || d.status === "bounced") && d.failureReason
-                        ? d.failureReason
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[d.status] ?? "bg-slate-100 text-slate-600"}`}>
-                        {d.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
-      </section>
-    </main>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </PageShell>
   );
 }

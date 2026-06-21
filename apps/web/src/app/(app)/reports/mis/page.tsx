@@ -12,6 +12,8 @@ function changeColor(change: string | undefined): string {
 export default async function MISDashboardPage() {
   const { data: modules, source } = await getMISSummary();
 
+  const totalMetrics = modules.reduce((s, m) => s + m.metrics.length, 0);
+
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-8">
       <section className="mx-auto max-w-7xl space-y-5">
@@ -29,6 +31,37 @@ export default async function MISDashboardPage() {
           {source === "error" ? <DataSourceBadge source={source} /> : null}
         </header>
 
+        {modules.length > 0 && (
+          <section aria-label="MIS summary statistics" className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm text-slate-500">Modules</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{modules.length.toLocaleString("en-IN")}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm text-slate-500">Total Metrics</p>
+              <p className="mt-1 text-2xl font-bold text-blue-600">{totalMetrics.toLocaleString("en-IN")}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm text-slate-500">Positive Trends</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-600">
+                {modules
+                  .flatMap((m) => m.metrics)
+                  .filter((m) => m.change?.startsWith("+"))
+                  .length.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm text-slate-500">Negative Trends</p>
+              <p className="mt-1 text-2xl font-bold text-red-600">
+                {modules
+                  .flatMap((m) => m.metrics)
+                  .filter((m) => m.change?.startsWith("-"))
+                  .length.toLocaleString("en-IN")}
+              </p>
+            </div>
+          </section>
+        )}
+
         {modules.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
             <p className="text-slate-400">MIS data is being compiled. Please check back shortly.</p>
@@ -41,13 +74,13 @@ export default async function MISDashboardPage() {
                   <h2 className="font-semibold text-slate-800">{mod.module}</h2>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
+                  <table aria-label={`${mod.module} metrics`} className="min-w-full text-left text-sm">
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
-                        <th className="px-4 py-2">Metric</th>
-                        <th className="px-4 py-2 text-right">Value</th>
-                        <th className="px-4 py-2">Unit</th>
-                        <th className="px-4 py-2 text-right">Change</th>
+                        <th scope="col" className="px-4 py-2">Metric</th>
+                        <th scope="col" className="px-4 py-2 text-right">Value</th>
+                        <th scope="col" className="px-4 py-2">Unit</th>
+                        <th scope="col" className="px-4 py-2 text-right">Change</th>
                       </tr>
                     </thead>
                     <tbody>

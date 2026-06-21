@@ -7,5 +7,9 @@ coverage/
 .env
 .env.local
 .env*.local
+infra/.env
 .DS_Store
 *.tsbuildinfo
+apps/web/test-results/
+apps/web/e2e-report/
+.claude/

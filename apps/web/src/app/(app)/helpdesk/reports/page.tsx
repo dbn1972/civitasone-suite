@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageShell } from "../../../_components/PageShell";
 import { getTicketAnalytics } from "../../../_data/loaders";
@@ -14,7 +15,17 @@ export default async function Page() {
   ];
 
   return (
-    <PageShell title="Helpdesk Reports" description="Service performance and support quality indicators.">
+    <PageShell
+      title="Helpdesk Reports"
+      description="Service performance and support quality indicators."
+      breadcrumb={
+        <>
+          <Link href="/helpdesk" className="hover:text-slate-900">Helpdesk</Link>
+          <span className="mx-2">/</span>
+          <span className="text-slate-900">Reports</span>
+        </>
+      }
+    >
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
@@ -31,12 +42,12 @@ export default async function Page() {
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">
             By Priority
           </div>
-          <table className="min-w-full text-sm">
+          <table className="min-w-full text-sm" aria-label="Tickets by priority">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                <th className="px-4 py-2 text-left">Priority</th>
-                <th className="px-4 py-2 text-right">Count</th>
-                <th className="px-4 py-2 text-left w-32">% of Total</th>
+                <th scope="col" className="px-4 py-2 text-left">Priority</th>
+                <th scope="col" className="px-4 py-2 text-right">Count</th>
+                <th scope="col" className="px-4 py-2 text-left w-32">% of Total</th>
               </tr>
             </thead>
             <tbody>
@@ -66,12 +77,12 @@ export default async function Page() {
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">
             By Channel
           </div>
-          <table className="min-w-full text-sm">
+          <table className="min-w-full text-sm" aria-label="Tickets by channel">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                <th className="px-4 py-2 text-left">Channel</th>
-                <th className="px-4 py-2 text-right">Count</th>
-                <th className="px-4 py-2 text-left w-32">%</th>
+                <th scope="col" className="px-4 py-2 text-left">Channel</th>
+                <th scope="col" className="px-4 py-2 text-right">Count</th>
+                <th scope="col" className="px-4 py-2 text-left w-32">%</th>
               </tr>
             </thead>
             <tbody>

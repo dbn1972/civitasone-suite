@@ -1,5 +1,10 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import {
+  ProjectSummaryListSchema,
+  ProjectDetailSchema,
+  MilestoneSummaryListSchema,
+} from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -27,6 +32,29 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const q = listProjectsQuery.parse(req.query);
     const tenantId = q.tenantId ?? ctx.tenantId;
     return reply.send(await queries.listProjects(tenantId, q.status, q.page, q.limit));
+  });
+
+  app.get("/v1/projects/projects", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listProjectsQuery.parse(req.query);
+    sendValidated(reply, ProjectSummaryListSchema, await queries.listProjectSummaries(q.tenantId ?? ctx.tenantId, q.limit));
+  });
+
+  app.get("/v1/projects/milestones", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, MilestoneSummaryListSchema, await queries.listMilestoneSummaries(ctx.tenantId, limit));
+  });
+
+  app.get("/v1/projects/projects/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const project = await queries.getProjectDetail(id, ctx.tenantId);
+    if (!project) throw new HttpError(404, "NOT_FOUND", "project not found");
+    sendValidated(reply, ProjectDetailSchema, project);
   });
 
   app.get("/v1/projects/:id", async (req, reply) => {

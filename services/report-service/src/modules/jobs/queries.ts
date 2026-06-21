@@ -6,6 +6,13 @@ import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { JobView } from "./schema.js";
 
+export async function getJob(tenantId: string, id: string): Promise<JobView | null> {
+  return cache.getOrLoad(
+    cache.makeKey(tenantId, RESOURCE, id),
+    () => repo.findById(id, tenantId),
+  );
+}
+
 export async function listJobs(
   tenantId: string,
   limit: number,

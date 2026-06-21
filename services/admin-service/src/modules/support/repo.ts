@@ -12,3 +12,10 @@ export async function closeBreakGlass(tx: Writer, id: string, actorId: string): 
   await tx.update(adminBreakGlassLog).set({ closedAt: new Date(), updatedBy: actorId, updatedAt: new Date() })
     .where(eq(adminBreakGlassLog.id, id));
 }
+
+export async function listBreakGlass(tenantId: string, limit: number) {
+  return db.select().from(adminBreakGlassLog)
+    .where(eq(adminBreakGlassLog.tenantId, tenantId))
+    .limit(limit)
+    .orderBy(adminBreakGlassLog.openedAt);
+}

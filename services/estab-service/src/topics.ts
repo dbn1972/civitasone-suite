@@ -28,6 +28,7 @@ export const EVENTS = {
   fileCreated:          "estab.file.created",
   fileMoved:            "estab.file.moved",
   rtiCreated:           "estab.rti.created",
+  rtiResponded:         "estab.rti.responded",
   rtiOverdue:           "estab.rti.overdue",
   resolutionCreated:    "estab.resolution.created",
   courtCaseDateSet:     "estab.court_case.date_set",

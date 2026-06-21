@@ -1,5 +1,10 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import {
+  MeetingSummaryListSchema,
+  MeetingDetailSchema,
+  ComplianceSummaryListSchema,
+} from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -48,6 +53,29 @@ export async function committeeRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const meetings = await queries.getMeetingsByCommittee(ctx.tenantId, id);
     return reply.send({ data: meetings });
+  });
+
+  app.get("/v1/estab/meetings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, MeetingSummaryListSchema, await queries.listMeetingSummaries(ctx.tenantId, q.limit));
+  });
+
+  app.get("/v1/estab/meetings/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const meeting = await queries.getMeetingDetail(id, ctx.tenantId);
+    if (!meeting) throw new HttpError(404, "NOT_FOUND", "meeting not found");
+    sendValidated(reply, MeetingDetailSchema, meeting);
+  });
+
+  app.get("/v1/estab/compliance", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, ComplianceSummaryListSchema, await queries.listComplianceSummaries(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -70,17 +70,17 @@ export default async function AuditObservationsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Audit observations" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Obs No</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Severity</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Raised Date</th>
-                <th className="px-4 py-3">Due Date</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Obs No</th>
+                <th scope="col" className="px-4 py-3">Title</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Severity</th>
+                <th scope="col" className="px-4 py-3">Department</th>
+                <th scope="col" className="px-4 py-3">Raised Date</th>
+                <th scope="col" className="px-4 py-3">Due Date</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -112,9 +112,12 @@ export default async function AuditObservationsPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {items.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">No observations found.</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No observations yet</span>
+                    <span className="mt-1 block text-slate-400">Audit observations will appear here once raised.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

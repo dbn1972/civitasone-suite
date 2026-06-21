@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
-import { auditEventsListSchema } from "@civitasone/schemas/web";
+import { auditEventsListSchema, TenantAuditEventListSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
@@ -16,9 +16,40 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
       type:     z.string().optional(),
     }).parse(req.query);
     const tenantId = q.tenantId ?? ctx.tenantId;
+    if (tenantId !== ctx.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin", "audit_admin"].includes(r))) {
+      throw new HttpError(403, "FORBIDDEN", "cross-tenant audit access denied");
+    }
+    requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
     const from = q.from ? new Date(q.from) : new Date(Date.now() - 7 * 86400 * 1000);
     const to   = q.to   ? new Date(q.to)   : new Date();
     sendValidated(reply, auditEventsListSchema, await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset));
+  });
+
+  app.get("/v1/audit/events", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const q = listQuerySchema.extend({
+      tenantId: z.string().uuid().optional(),
+      tenantScoped: z.coerce.boolean().optional(),
+      from: z.string().datetime().optional(),
+      to: z.string().datetime().optional(),
+      type: z.string().optional(),
+    }).parse(req.query);
+    const tenantId = q.tenantScoped === false ? (q.tenantId ?? ctx.tenantId) : ctx.tenantId;
+    requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
+    const from = q.from ? new Date(q.from) : new Date(Date.now() - 7 * 86400 * 1000);
+    const to = q.to ? new Date(q.to) : new Date();
+    sendValidated(reply, TenantAuditEventListSchema, (await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset)).map((event) => ({
+      id: event.id,
+      actor: typeof event.actor === "object" && event.actor !== null && "email" in event.actor
+        ? String(event.actor.email)
+        : typeof event.actor === "object" && event.actor !== null && "name" in event.actor
+          ? String(event.actor.name)
+          : "system",
+      action: event.type,
+      resource: event.target ?? undefined,
+      outcome: event.severity === "error" || event.severity === "critical" ? "failure" : "success",
+      timestamp: event.occurredAt,
+    })));
   });
 
   app.get("/audit/events/:id", async (req, reply) => {

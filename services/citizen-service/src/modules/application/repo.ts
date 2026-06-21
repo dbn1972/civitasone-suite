@@ -49,3 +49,7 @@ export async function insertStatusHistory(tx: Writer, row: StatusHistoryInsert):
 export async function listOverdueApplications(tenantId: string): Promise<ApplicationRow[]> {
   return db.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId));
 }
+
+export async function listApplicationsByTenant(tenantId: string, limit: number): Promise<ApplicationRow[]> {
+  return db.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId)).limit(limit);
+}

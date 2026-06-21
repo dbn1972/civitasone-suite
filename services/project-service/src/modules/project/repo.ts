@@ -70,3 +70,7 @@ export async function updateMilestoneTx(tx: Writer, id: string, patch: Partial<t
 export async function listMilestonesByProject(projectId: string): Promise<(typeof projectMilestones.$inferSelect)[]> {
   return db.select().from(projectMilestones).where(eq(projectMilestones.projectId, projectId));
 }
+
+export async function listMilestonesByTenant(tenantId: string, limit: number): Promise<(typeof projectMilestones.$inferSelect)[]> {
+  return db.select().from(projectMilestones).where(eq(projectMilestones.tenantId, tenantId)).limit(limit);
+}

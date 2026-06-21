@@ -35,3 +35,7 @@ export async function updateBooking(tx: Writer, id: string, patch: Partial<Vehic
 export async function updateVehicle(tx: Writer, id: string, patch: Partial<VehicleInsert>): Promise<void> {
   await tx.update(estabVehicles).set({ ...patch, updatedAt: new Date() }).where(eq(estabVehicles.id, id));
 }
+
+export async function listVehiclesByTenant(tenantId: string, limit: number): Promise<VehicleRow[]> {
+  return db.select().from(estabVehicles).where(eq(estabVehicles.tenantId, tenantId)).limit(limit);
+}

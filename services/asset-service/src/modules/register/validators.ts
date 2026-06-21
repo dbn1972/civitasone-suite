@@ -4,6 +4,7 @@ export const createAssetBody = z.object({
   name:            z.string().min(1).max(256),
   code:            z.string().min(1).max(64),
   categoryId:      z.string().uuid(),
+  assetType:       z.enum(["fixed", "infra", "movable", "it", "vehicle", "other"]).default("other"),
   acquisitionCost: z.number().int().nonnegative(),
   salvageValue:    z.number().int().nonnegative().default(0),
   usefulLifeYears: z.number().int().positive().default(5),
@@ -21,6 +22,7 @@ export type CreateAssetBody = z.infer<typeof createAssetBody>;
 export const assetQueryParams = z.object({
   category: z.string().uuid().optional(),
   status:   z.string().optional(),
+  type:     z.enum(["fixed", "infra", "movable", "it", "vehicle", "other"]).optional(),
   limit:    z.coerce.number().int().positive().max(200).default(50),
   offset:   z.coerce.number().int().nonnegative().default(0),
 });

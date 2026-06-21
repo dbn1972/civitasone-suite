@@ -85,7 +85,7 @@ export default async function GrantDetailPage({ params }: { params: { id: string
             <h2 className="text-base font-semibold text-slate-900">Installments</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table aria-label="Grant installments" className="min-w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
                   <th className="px-4 py-3">Installment No</th>
@@ -125,7 +125,7 @@ export default async function GrantDetailPage({ params }: { params: { id: string
             <h2 className="text-base font-semibold text-slate-900">Utilisation Certificates</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table aria-label="Utilisation certificates" className="min-w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
                   <th className="px-4 py-3">UC No</th>

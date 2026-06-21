@@ -53,16 +53,16 @@ export default async function UCsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-left text-sm" aria-label="Utilization certificates">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">UC No</th>
-                <th className="px-4 py-3">Grantee</th>
-                <th className="px-4 py-3">Grant Ref</th>
-                <th className="px-4 py-3 text-right">Amount (₹)</th>
-                <th className="px-4 py-3">Period</th>
-                <th className="px-4 py-3">Submitted</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">UC No</th>
+                <th scope="col" className="px-4 py-3">Grantee</th>
+                <th scope="col" className="px-4 py-3">Grant Ref</th>
+                <th scope="col" className="px-4 py-3 text-right">Amount (₹)</th>
+                <th scope="col" className="px-4 py-3">Period</th>
+                <th scope="col" className="px-4 py-3">Submitted</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>

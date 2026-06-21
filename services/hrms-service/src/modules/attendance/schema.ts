@@ -50,7 +50,25 @@ export const hrmsAttendance = attendanceSchema.table("hrms_attendance", {
   version:        integer("version").notNull().default(1),
 });
 
+export const hrmsAttendanceRegularisations = attendanceSchema.table("hrms_attendance_regularisations", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  employeeId:      uuid("employee_id").notNull(),
+  date:            date("date").notNull(),
+  reason:          text("reason").notNull(),
+  requestedStatus: varchar("requested_status", { length: 32 }).notNull().default("present"),
+  status:          varchar("status", { length: 24 }).notNull().default("pending"),
+  requestedAt:     timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+  updatedBy:       uuid("updated_by").notNull(),
+  version:         integer("version").notNull().default(1),
+});
+
 export type AttendanceRow = typeof hrmsAttendance.$inferSelect;
 export type AttendanceInsert = typeof hrmsAttendance.$inferInsert;
+export type RegularisationRow = typeof hrmsAttendanceRegularisations.$inferSelect;
+export type RegularisationInsert = typeof hrmsAttendanceRegularisations.$inferInsert;
 
-export const schema = { hrmsShifts, hrmsShiftAssignments, hrmsAttendance };
+export const schema = { hrmsShifts, hrmsShiftAssignments, hrmsAttendance, hrmsAttendanceRegularisations };

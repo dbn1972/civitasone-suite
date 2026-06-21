@@ -67,17 +67,17 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Purchase indents">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">Indent No</th>
-              <th className="px-4 py-3 text-left">Requested By</th>
-              <th className="px-4 py-3 text-left">Department</th>
-              <th className="px-4 py-3 text-right">Items</th>
-              <th className="px-4 py-3 text-right">Est. Amount (₹)</th>
-              <th className="px-4 py-3 text-left">Request Date</th>
-              <th className="px-4 py-3 text-left">Required By</th>
-              <th className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Indent No</th>
+              <th scope="col" className="px-4 py-3 text-left">Requested By</th>
+              <th scope="col" className="px-4 py-3 text-left">Department</th>
+              <th scope="col" className="px-4 py-3 text-right">Items</th>
+              <th scope="col" className="px-4 py-3 text-right">Est. Amount (₹)</th>
+              <th scope="col" className="px-4 py-3 text-left">Request Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Required By</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>

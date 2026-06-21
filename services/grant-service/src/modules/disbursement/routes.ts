@@ -1,5 +1,7 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { GrantReleaseListSchema } from "@civitasone/schemas/web";
+import { listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -38,8 +40,19 @@ export async function disbursementRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { appId } = appIdQuery.parse(req.query);
-    const installments = await queries.getInstallmentsByApplication(ctx.tenantId, appId);
-    return reply.send({ data: installments });
+    if (appId) {
+      const installments = await queries.getInstallmentsByApplication(ctx.tenantId, appId);
+      return reply.send({ data: installments });
+    }
+    const installments = await queries.listAllInstallments(ctx.tenantId, 200);
+    return reply.send({ data: installments ?? [] });
+  });
+
+  app.get("/v1/grants/releases", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GrantReleaseListSchema, await queries.listGrantReleases(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler((err, req, reply) => {

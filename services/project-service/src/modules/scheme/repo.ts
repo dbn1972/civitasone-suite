@@ -60,3 +60,11 @@ export async function updateFundReleaseTx(tx: Writer, id: string, patch: Partial
 export async function listFundReleasesByScheme(schemeId: string): Promise<FundReleaseRow[]> {
   return db.select().from(projectFundReleases).where(eq(projectFundReleases.schemeId, schemeId));
 }
+
+export async function listFundReleasesByTenant(tenantId: string, limit: number): Promise<FundReleaseRow[]> {
+  return db.select().from(projectFundReleases).where(eq(projectFundReleases.tenantId, tenantId)).limit(limit);
+}
+
+export async function listSchemesByTenant(tenantId: string, limit: number): Promise<SchemeRow[]> {
+  return db.select().from(projectSchemes).where(eq(projectSchemes.tenantId, tenantId)).limit(limit);
+}

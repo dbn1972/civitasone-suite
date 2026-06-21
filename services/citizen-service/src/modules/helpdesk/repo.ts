@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, lt, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { citizenTickets, citizenTicketNotes, type TicketRow, type TicketInsert, type TicketNoteInsert } from "./schema.js";
 
@@ -18,10 +18,36 @@ export async function listNotes(ticketId: string) {
   return db.select().from(citizenTicketNotes).where(eq(citizenTicketNotes.ticketId, ticketId));
 }
 
-export async function listTicketsByTenant(tenantId: string, status?: string, limit = 100): Promise<TicketRow[]> {
+export async function listTicketsByTenant(
+  tenantId: string,
+  status?: string,
+  limit = 100,
+  slaStatus?: string,
+): Promise<TicketRow[]> {
+  const slaBreachCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const conditions = [eq(citizenTickets.tenantId, tenantId)];
   if (status) conditions.push(eq(citizenTickets.status, status));
+  if (slaStatus === "breached") {
+    conditions.push(eq(citizenTickets.status, "open"));
+    conditions.push(lt(citizenTickets.createdAt, slaBreachCutoff));
+  }
   return db.select().from(citizenTickets).where(and(...conditions)).limit(limit);
+}
+
+export async function countBreachedTickets(
+  tenantId: string,
+  since: Date,
+): Promise<Array<{ count: number }>> {
+  return db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(citizenTickets)
+    .where(
+      and(
+        eq(citizenTickets.tenantId, tenantId),
+        eq(citizenTickets.status, "open"),
+        lt(citizenTickets.createdAt, since),
+      ),
+    );
 }
 
 export async function countTicketsByStatus(tenantId: string): Promise<Array<{ status: string; count: number }>> {

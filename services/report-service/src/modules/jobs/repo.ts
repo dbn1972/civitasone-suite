@@ -12,6 +12,11 @@ function toView(r: JobRow): JobView {
     name: r.name,
     reportType: r.reportType,
     status: r.status,
+    format: r.format,
+    rowCount: r.rowCount,
+    requestedBy: r.requestedBy,
+    completedAt: r.completedAt,
+    downloadUrl: r.downloadUrl,
     version: r.version,
   };
 }

@@ -1,5 +1,9 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import {
+  SanctionSummaryListSchema,
+  SanctionDetailSchema,
+} from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -44,6 +48,13 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(budget);
   });
 
+  app.get("/v1/finance/sanctions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, SanctionSummaryListSchema, await queries.listSanctionSummaries(ctx.tenantId, limit));
+  });
+
   app.get("/v1/finance/sanctions/:id/available", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -51,6 +62,15 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const result = await queries.getSanctionAvailable(id, ctx.tenantId);
     if (!result) throw new HttpError(404, "NOT_FOUND", "sanction not found");
     return reply.send({ ...result, available: result.available.toString() });
+  });
+
+  app.get("/v1/finance/sanctions/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const detail = await queries.getSanctionDetail(id, ctx.tenantId);
+    if (!detail) throw new HttpError(404, "NOT_FOUND", "sanction not found");
+    sendValidated(reply, SanctionDetailSchema, detail);
   });
 
   app.post("/v1/finance/sanctions", async (req, reply) => {

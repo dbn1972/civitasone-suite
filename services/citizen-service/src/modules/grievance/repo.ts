@@ -22,6 +22,13 @@ export async function listGrievancesByCitizen(tenantId: string, citizenId: strin
     .where(and(eq(citizenGrievances.tenantId, tenantId), eq(citizenGrievances.citizenId, citizenId)));
 }
 
+export async function listGrievancesByTenant(tenantId: string, limit: number, offset: number): Promise<GrievanceRow[]> {
+  return db.select().from(citizenGrievances)
+    .where(eq(citizenGrievances.tenantId, tenantId))
+    .limit(limit)
+    .offset(offset);
+}
+
 export async function listActions(grievanceId: string) {
   return db.select().from(citizenGrievanceActions).where(eq(citizenGrievanceActions.grievanceId, grievanceId));
 }

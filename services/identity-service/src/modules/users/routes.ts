@@ -21,6 +21,10 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.get("/identity/users/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = userIdParam.parse(req.params);
+    const isSelf = ctx.actorId === id;
+    if (!isSelf && !ctx.roles.some((r) => ADMIN.includes(r))) {
+      throw new HttpError(403, "FORBIDDEN", "cannot read other users");
+    }
     const view = await queries.getUser(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
     return reply.send(view);

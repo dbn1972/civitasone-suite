@@ -151,14 +151,14 @@ export default function NewVoucherPage() {
                 + Add Row
               </button>
             </div>
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-sm" aria-label="Journal voucher line items">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
-                  <th className="px-3 py-2 text-left">Account Code</th>
-                  <th className="px-3 py-2 text-left">Account Name</th>
-                  <th className="px-3 py-2 text-right">Debit (₹)</th>
-                  <th className="px-3 py-2 text-right">Credit (₹)</th>
-                  <th className="px-3 py-2 text-center w-12">–</th>
+                  <th scope="col" className="px-3 py-2 text-left">Account Code</th>
+                  <th scope="col" className="px-3 py-2 text-left">Account Name</th>
+                  <th scope="col" className="px-3 py-2 text-right">Debit (₹)</th>
+                  <th scope="col" className="px-3 py-2 text-right">Credit (₹)</th>
+                  <th scope="col" className="px-3 py-2 text-center w-12">–</th>
                 </tr>
               </thead>
               <tbody>

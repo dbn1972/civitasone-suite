@@ -24,11 +24,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo typecheck --parallel
-      - run: pnpm turbo lint --parallel
+      - run: pnpm turbo typecheck
+      - run: pnpm turbo lint
 
   # ─────────────────────────────────────────────
   # Job 2: Unit + integration tests (vitest)
+  # Postgres on host port 5435 matches vitest defaults per service.
+  # Bootstrap + migrations: scripts/ci/bootstrap-postgres.sh
   # ─────────────────────────────────────────────
   test:
     name: Tests
@@ -40,7 +42,7 @@ jobs:
           POSTGRES_USER: civitas
           POSTGRES_PASSWORD: civitas_test
           POSTGRES_DB: civitas_test
-        ports: ['5432:5432']
+        ports: ['5435:5432']
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -51,21 +53,29 @@ jobs:
         ports: ['6379:6379']
         options: --health-cmd "redis-cli ping" --health-interval 10s
     env:
-      DATABASE_URL: postgres://civitas:civitas_test@localhost:5432/civitas_test
       REDIS_URL: redis://localhost:6379
       QUEUE_DRIVER: memory
       JWT_SECRET: ci-test-secret-min-32-chars-long
+      JWT_ALGORITHM: HS256
       NODE_ENV: test
+      PGHOST: localhost
+      PGPORT: '5435'
+      PGUSER: civitas
+      PGPASSWORD: civitas_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - name: Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo build --filter='./packages/*'
+      - name: Bootstrap Postgres (per-service DBs + migrations)
+        run: bash scripts/ci/bootstrap-postgres.sh
       - name: Run all service tests
-        run: pnpm turbo test --parallel
+        run: pnpm turbo test
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -127,7 +137,8 @@ jobs:
           SKIP_ENV_VALIDATION: true
 
   # ─────────────────────────────────────────────
-  # Job 5: Contract tests (gateway routing)
+  # Job 5: Contract tests (gateway routing + screen chain)
+  # Uses Vitest — runs both gateway and screen contract tests.
   # ─────────────────────────────────────────────
   contract-tests:
     name: Contract Tests
@@ -141,8 +152,153 @@ jobs:
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo build --filter='./packages/*' --filter='./services/gateway-service'
-      - name: Run contract tests
-        run: pnpm --filter @civitasone/web test -- --testPathPattern=contract
+      - name: Run gateway contract tests (Vitest)
+        run: pnpm exec vitest run tests/contract/gateway.contract.test.ts
         env:
           QUEUE_DRIVER: memory
           JWT_SECRET: ci-test-secret-min-32-chars-long
+      - name: Run screen contract tests — static chain analysis (Vitest)
+        run: pnpm exec vitest run tests/contract/screens.contract.test.ts
+        env:
+          QUEUE_DRIVER: memory
+
+  # ─────────────────────────────────────────────
+  # Job 6: Screen verification gate
+  # Static analysis: every screen must be WIRED (gateway + route + migration).
+  # Live check: every wired screen returns HTTP 200 against the mock gateway.
+  # Fails the build on any MISSING or MISMATCH screen.
+  # ─────────────────────────────────────────────
+  verify-screens:
+    name: Screen Verification Gate
+    runs-on: ubuntu-latest
+    needs: [typecheck-lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='./packages/*' --filter='./services/gateway-service'
+      - name: Generate screen contract map (static analysis)
+        run: node scripts/contract/screen-map.mjs
+      - name: Gate — fail on MISSING or MISMATCH screens
+        run: |
+          node -e "
+            const fs = require('fs');
+            const map = JSON.parse(fs.readFileSync('scripts/contract/screen-map.json', 'utf8'));
+            const broken = map.rows.filter(r => r.status === 'MISSING' || r.status === 'MISMATCH');
+            if (broken.length > 0) {
+              console.error('BROKEN SCREEN CHAINS:');
+              broken.forEach(r => console.error(\`  [\${r.status}] \${r.module}\${r.screen}: \${r.detail}\`));
+              process.exit(1);
+            }
+            console.log('All ' + map.counts.wired + ' screens are WIRED.');
+          "
+      - name: Start mock gateway on port 8080
+        run: node scripts/ci/start-mock-gateway.mjs &
+      - name: Wait for mock gateway
+        run: |
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
+              echo "Mock gateway ready."
+              break
+            fi
+            sleep 1
+          done
+      - name: Verify all wired screens return HTTP 200
+        run: node scripts/contract/verify-screens.mjs --gateway http://localhost:8080
+        env:
+          JWT_SECRET: ci-test-secret-min-32-chars-long
+
+  # ─────────────────────────────────────────────
+  # Job 7: Playwright E2E (mock gateway via global-setup)
+  # Starts a seeded mock HTTP server via global-setup.ts on port 4001,
+  # then runs Next.js dev server pointed at it, then runs the full suite.
+  # Falls back to mock (not live stack) for CI portability.
+  # ─────────────────────────────────────────────
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [web-build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Build packages for web dev server
+        run: pnpm turbo build --filter='./packages/*'
+      - name: Install Playwright browsers
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
+      - name: Run Playwright E2E suite
+        run: pnpm --filter @civitasone/web run e2e
+        env:
+          CI: true
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/e2e-report/
+          retention-days: 7
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Job 8: Mobile — Flutter analyze + test
+  # Runs flutter analyze and flutter test for apps/mobile.
+  # Uses the official Flutter SDK action.
+  # ─────────────────────────────────────────────
+  mobile:
+    name: Mobile (Flutter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+          cache: true
+      - name: Flutter version
+        run: flutter --version
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Flutter analyze
+        working-directory: apps/mobile
+        run: flutter analyze --no-fatal-infos
+      - name: Flutter unit + widget tests (excluding goldens)
+        working-directory: apps/mobile
+        run: flutter test --exclude-tags golden
+      - name: Flutter golden tests (generate on first run)
+        working-directory: apps/mobile
+        run: flutter test --tags golden --update-goldens
+      - name: Upload generated goldens as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-goldens
+          path: apps/mobile/test/goldens/goldens/
+          retention-days: 14
+
+  # ─────────────────────────────────────────────
+  # Job 9: QA readiness score (informational on PRs)
+  # ─────────────────────────────────────────────
+  qa-readiness:
+    name: QA Readiness
+    runs-on: ubuntu-latest
+    needs: [typecheck-lint]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: QA readiness score
+        run: node scripts/qa-readiness-score.mjs

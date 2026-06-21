@@ -69,20 +69,20 @@ export default async function LegalCasesListPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Legal cases" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Case No</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Court</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Filed Date</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Petitioner</th>
-                <th className="px-4 py-3">Respondent</th>
-                <th className="px-4 py-3">Advocate</th>
-                <th className="px-4 py-3">Next Hearing</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Case No</th>
+                <th scope="col" className="px-4 py-3">Title</th>
+                <th scope="col" className="px-4 py-3">Court</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Filed Date</th>
+                <th scope="col" className="px-4 py-3">Department</th>
+                <th scope="col" className="px-4 py-3">Petitioner</th>
+                <th scope="col" className="px-4 py-3">Respondent</th>
+                <th scope="col" className="px-4 py-3">Advocate</th>
+                <th scope="col" className="px-4 py-3">Next Hearing</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -113,9 +113,12 @@ export default async function LegalCasesListPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {items.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-400">No cases found.</td>
+                  <td colSpan={11} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No cases yet</span>
+                    <span className="mt-1 block text-slate-400">Legal cases will appear here once filed.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

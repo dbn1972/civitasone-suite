@@ -31,16 +31,16 @@ export default async function Page() {
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Vendors list">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">Vendor Code</th>
-              <th className="px-4 py-3 text-left">Name</th>
-              <th className="px-4 py-3 text-left">GSTIN</th>
-              <th className="px-4 py-3 text-left">Category</th>
-              <th className="px-4 py-3 text-left">Empanelment</th>
-              <th className="px-4 py-3 text-right">Rating</th>
-              <th className="px-4 py-3 text-left">Contact</th>
+              <th scope="col" className="px-4 py-3 text-left">Vendor Code</th>
+              <th scope="col" className="px-4 py-3 text-left">Name</th>
+              <th scope="col" className="px-4 py-3 text-left">GSTIN</th>
+              <th scope="col" className="px-4 py-3 text-left">Category</th>
+              <th scope="col" className="px-4 py-3 text-left">Empanelment</th>
+              <th scope="col" className="px-4 py-3 text-right">Rating</th>
+              <th scope="col" className="px-4 py-3 text-left">Contact</th>
             </tr>
           </thead>
           <tbody>

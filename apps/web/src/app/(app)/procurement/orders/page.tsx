@@ -61,16 +61,16 @@ export default async function Page({ searchParams }: { searchParams: { vendor?: 
       </form>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Purchase orders">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">PO No</th>
-              <th className="px-4 py-3 text-left">Vendor</th>
-              <th className="px-4 py-3 text-right">Amount (₹)</th>
-              <th className="px-4 py-3 text-left">Order Date</th>
-              <th className="px-4 py-3 text-left">Delivery Date</th>
-              <th className="px-4 py-3 text-left">GRN Status</th>
-              <th className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">PO No</th>
+              <th scope="col" className="px-4 py-3 text-left">Vendor</th>
+              <th scope="col" className="px-4 py-3 text-right">Amount (₹)</th>
+              <th scope="col" className="px-4 py-3 text-left">Order Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Delivery Date</th>
+              <th scope="col" className="px-4 py-3 text-left">GRN Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>

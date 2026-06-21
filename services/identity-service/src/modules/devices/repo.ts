@@ -6,7 +6,14 @@ import { registeredDevices, mailboxCursors, entityChangelog } from "./schema.js"
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 function trustSecret(): string {
-  return process.env.DEVICE_TRUST_SECRET ?? "dev_device_trust_secret_change_in_prod";
+  const secret = process.env.DEVICE_TRUST_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("DEVICE_TRUST_SECRET is required in production");
+    }
+    return "dev_device_trust_secret_change_in_prod";
+  }
+  return secret;
 }
 
 export function mintTrustToken(deviceId: string, userId: string): string {

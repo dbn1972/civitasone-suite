@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
-import { paymentsListSchema } from "@civitasone/schemas/web";
+import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSummaryListSchema, UCSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -11,6 +11,7 @@ import * as queries from "./queries.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
+const READER_ROLES   = [...FINANCE_ROLES, "audit_officer", "procurement_officer"];
 
 export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/payments", async (req, reply) => {
@@ -19,6 +20,37 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, paymentsListSchema, await queries.listPayments(ctx.tenantId, q.limit, q.offset));
   });
+
+  app.get("/v1/finance/bills", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, BillSummaryListSchema, await queries.listBillSummaries(ctx.tenantId, limit));
+  });
+
+  app.get("/v1/finance/bills/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const detail = await queries.getBillDetail(id, ctx.tenantId);
+    if (!detail) throw new HttpError(404, "NOT_FOUND", "bill not found");
+    sendValidated(reply, BillDetailSchema, detail);
+  });
+
+  app.get("/v1/finance/advances", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, AdvanceSummaryListSchema, await queries.listAdvances(ctx.tenantId, limit));
+  });
+
+  app.get("/v1/finance/utilization-certificates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, UCSummaryListSchema, await queries.listUCs(ctx.tenantId, limit));
+  });
+
   app.post("/v1/finance/bills", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);

@@ -27,4 +27,4 @@ export const pfmsReconcileBody = z.object({
 export type PfmsReconcileBody = z.infer<typeof pfmsReconcileBody>;
 
 export const idParam    = z.object({ id: z.string().uuid() });
-export const appIdQuery = z.object({ appId: z.string().uuid() });
+export const appIdQuery = z.object({ appId: z.string().uuid().optional() });

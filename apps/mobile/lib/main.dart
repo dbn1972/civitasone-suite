@@ -8,6 +8,7 @@ import 'features/finance/payments_screen.dart';
 import 'features/finance/journal_screen.dart';
 import 'features/hr/employees_screen.dart';
 import 'features/hr/leave_screen.dart';
+import 'features/hr/leave_apply_screen.dart';
 import 'features/hr/attendance_screen.dart';
 import 'features/procurement/indents_screen.dart';
 import 'features/procurement/pos_screen.dart';
@@ -15,6 +16,7 @@ import 'features/procurement/approvals_screen.dart';
 import 'features/crm/contacts_screen.dart';
 import 'features/crm/deals_screen.dart';
 import 'features/helpdesk/tickets_screen.dart';
+import 'features/helpdesk/ticket_create_screen.dart';
 import 'features/projects/projects_screen.dart';
 import 'features/estab/files_screen.dart';
 import 'features/mis/mis_screen.dart';
@@ -61,12 +63,24 @@ class CivitasOneApp extends ConsumerWidget {
             GoRoute(path: '/mis', builder: (_, __) => const MisScreen()),
           ],
         ),
+        // Write-path screens rendered outside the shell (no bottom nav).
+        GoRoute(
+          path: '/hr/leave/apply',
+          builder: (_, __) => const LeaveApplyScreen(),
+        ),
+        GoRoute(
+          path: '/helpdesk/tickets/new',
+          builder: (_, __) => const TicketCreateScreen(),
+        ),
       ],
     );
     return MaterialApp.router(
       title: 'CivitasOne Suite',
       routerConfig: router,
-      theme: ThemeData(useMaterial3: true),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF6366F1),
+      ),
     );
   }
 }
@@ -87,6 +101,12 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await widget.auth.signIn();
       if (mounted) context.go('/dashboard');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign-in failed: $e'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,17 +115,60 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('CivitasOne — Secure Sign In', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('PKCE · device trust · SQLite offline sync'),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _loading ? null : _signIn,
-            child: Text(_loading ? 'Signing in…' : 'Sign in with Keycloak'),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(Icons.account_balance,
+                    size: 36, color: Color(0xFF6366F1)),
+              ),
+              const SizedBox(height: 24),
+              Text('CivitasOne Suite',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(
+                'Government · PSU · Enterprise',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Theme.of(context).colorScheme.outline),
+              ),
+              const SizedBox(height: 8),
+              const Text('PKCE · device trust · offline sync',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _loading ? null : _signIn,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Sign in with Keycloak',
+                          style: TextStyle(fontSize: 16)),
+                ),
+              ),
+            ]),
           ),
-        ]),
+        ),
       ),
     );
   }
@@ -128,7 +191,10 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('CivitasOne')),
+      appBar: AppBar(
+        title: const Text('CivitasOne'),
+        centerTitle: false,
+      ),
       body: GridView.builder(
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -154,7 +220,9 @@ class DashboardScreen extends StatelessWidget {
                 children: [
                   Icon(m.icon, size: 36, color: m.color),
                   const SizedBox(height: 8),
-                  Text(m.label, style: TextStyle(fontWeight: FontWeight.w600, color: m.color)),
+                  Text(m.label,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, color: m.color)),
                 ],
               ),
             ),

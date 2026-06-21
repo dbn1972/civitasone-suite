@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, jsonb,
+  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, jsonb, date,
 } from "drizzle-orm/pg-core";
 
 export const paymentsSchema = pgSchema("payments");
@@ -61,9 +61,51 @@ export const financePfms = paymentsSchema.table("finance_pfms", {
   version:          integer("version").notNull().default(1),
 });
 
+export const financeAdvances = paymentsSchema.table("finance_advances", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  advanceNo:      text("advance_no").notNull(),
+  beneficiary:    text("beneficiary").notNull(),
+  type:           varchar("type", { length: 16 }).notNull().default("employee"),
+  amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
+  currency:       char("currency", { length: 3 }).notNull().default("INR"),
+  disbursedDate:  date("disbursed_date").notNull().defaultNow(),
+  dueDate:        date("due_date"),
+  adjustedMinor:  bigint("adjusted_minor", { mode: "bigint" }).notNull().default(0n),
+  status:         varchar("status", { length: 16 }).notNull().default("active"),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:      uuid("created_by").notNull(),
+  updatedBy:      uuid("updated_by").notNull(),
+  version:        integer("version").notNull().default(1),
+});
+
+export const financeUC = paymentsSchema.table("finance_uc", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  ucNo:          text("uc_no").notNull(),
+  grantRef:      text("grant_ref"),
+  grantee:       text("grantee").notNull(),
+  amountMinor:   bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
+  currency:      char("currency", { length: 3 }).notNull().default("INR"),
+  periodFrom:    date("period_from").notNull().defaultNow(),
+  periodTo:      date("period_to").notNull().defaultNow(),
+  submittedDate: date("submitted_date"),
+  status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  updatedBy:     uuid("updated_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+
 export type BillRow    = typeof financeBills.$inferSelect;
 export type BillInsert = typeof financeBills.$inferInsert;
 export type PaymentRow    = typeof financePayments.$inferSelect;
 export type PaymentInsert = typeof financePayments.$inferInsert;
+export type AdvanceRow    = typeof financeAdvances.$inferSelect;
+export type AdvanceInsert = typeof financeAdvances.$inferInsert;
+export type UCRow    = typeof financeUC.$inferSelect;
+export type UCInsert = typeof financeUC.$inferInsert;
 
-export const schema = { financeBills, financePayments, financePfms };
+export const schema = { financeBills, financePayments, financePfms, financeAdvances, financeUC };

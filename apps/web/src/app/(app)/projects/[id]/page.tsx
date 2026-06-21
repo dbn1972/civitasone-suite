@@ -87,7 +87,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table aria-label="Project milestones" className="min-w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
                   <th className="px-4 py-3">Title</th>
@@ -125,7 +125,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             <h2 className="text-base font-semibold text-slate-900">Fund Releases</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table aria-label="Fund releases" className="min-w-full text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
                   <th className="px-4 py-3">Release Date</th>

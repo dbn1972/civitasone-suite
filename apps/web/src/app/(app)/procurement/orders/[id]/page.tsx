@@ -75,16 +75,16 @@ export default async function Page({ params }: { params: { id: string } }) {
             {po.lineItems.length > 0 && (
               <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">Line Items</div>
-                <table className="min-w-full text-left text-sm">
+                <table className="min-w-full text-left text-sm" aria-label="PO line items">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
-                      <th className="px-4 py-3">Item Code</th>
-                      <th className="px-4 py-3">Item Name</th>
-                      <th className="px-4 py-3 text-right">Ordered Qty</th>
-                      <th className="px-4 py-3">Unit</th>
-                      <th className="px-4 py-3 text-right">Unit Price (₹)</th>
-                      <th className="px-4 py-3 text-right">Total (₹)</th>
-                      <th className="px-4 py-3 text-right">GRN Qty</th>
+                      <th scope="col" className="px-4 py-3">Item Code</th>
+                      <th scope="col" className="px-4 py-3">Item Name</th>
+                      <th scope="col" className="px-4 py-3 text-right">Ordered Qty</th>
+                      <th scope="col" className="px-4 py-3">Unit</th>
+                      <th scope="col" className="px-4 py-3 text-right">Unit Price (₹)</th>
+                      <th scope="col" className="px-4 py-3 text-right">Total (₹)</th>
+                      <th scope="col" className="px-4 py-3 text-right">GRN Qty</th>
                     </tr>
                   </thead>
                   <tbody>

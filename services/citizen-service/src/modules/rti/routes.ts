@@ -1,5 +1,6 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { RTISummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -32,6 +33,13 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = appealRtiBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.appealRti(ctx, id, body));
+  });
+
+  app.get("/v1/citizen/rti", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, RTISummaryListSchema, await queries.listRtiSummaries(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/citizen/rti/:id", async (req, reply) => {

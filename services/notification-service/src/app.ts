@@ -12,6 +12,7 @@ import { deliveryRoutes } from "./modules/deliveries/routes.js";
 import { channelRoutes } from "./modules/channels/routes.js";
 import { alertRoutes } from "./modules/alerts/routes.js";
 import { bulkRoutes } from "./modules/bulk/routes.js";
+import { inboxRoutes } from "./modules/inbox/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -30,6 +31,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(channelRoutes);
   await app.register(alertRoutes);
   await app.register(bulkRoutes);
+  await app.register(inboxRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

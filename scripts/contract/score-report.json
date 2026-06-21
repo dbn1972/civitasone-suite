@@ -1,0 +1,1583 @@
+{
+  "generatedAt": "2026-06-20T19:11:55.997Z",
+  "overallScore": "6.4/10",
+  "overallScoreNum": 6.4,
+  "staticCounts": {
+    "wired": 100,
+    "missing": 2,
+    "mismatch": 2,
+    "noLoader": 54
+  },
+  "modules": [
+    {
+      "module": "analytics",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "assets",
+      "total": 5,
+      "wired": 5,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "audit",
+      "total": 7,
+      "wired": 7,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "billing",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "citizen",
+      "total": 2,
+      "wired": 2,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "contracts",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "crm",
+      "total": 4,
+      "wired": 4,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "estab",
+      "total": 6,
+      "wired": 6,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "finance",
+      "total": 10,
+      "wired": 10,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "grants",
+      "total": 6,
+      "wired": 6,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "helpdesk",
+      "total": 4,
+      "wired": 4,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "hr",
+      "total": 10,
+      "wired": 10,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "install",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "knowledge",
+      "total": 4,
+      "wired": 4,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "legal",
+      "total": 5,
+      "wired": 5,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "locations",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "notifications",
+      "total": 2,
+      "wired": 2,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "plugins",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "projects",
+      "total": 5,
+      "wired": 5,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "reports",
+      "total": 4,
+      "wired": 4,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "stock",
+      "total": 3,
+      "wired": 3,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "telephony",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "themes",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "workflow",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "score": "6.5/10",
+      "scoreNum": 6.5,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "tenant-admin",
+      "total": 10,
+      "wired": 9,
+      "missing": 0,
+      "mismatch": 1,
+      "score": "6.4/10",
+      "scoreNum": 6.4,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "0.90",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "procurement",
+      "total": 8,
+      "wired": 5,
+      "missing": 2,
+      "mismatch": 1,
+      "score": "5.6/10",
+      "scoreNum": 5.6,
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "1.50",
+          "max": 2,
+          "pct": "75%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": "run verify-screens.mjs for live score"
+        },
+        "B_hardening": {
+          "earned": "0.63",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "manual / playwright"
+        },
+        "D_tests": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm test --filter"
+        },
+        "D_typecheck": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "run pnpm typecheck --filter"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "playwright E2E"
+        }
+      }
+    },
+    {
+      "module": "dashboard",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "developer-portal",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "inventory",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    }
+  ],
+  "rubric": {
+    "A1_gateway_resolves": {
+      "points": 2,
+      "desc": "Gateway resolves API path → service route"
+    },
+    "A2_route_exists": {
+      "points": 2,
+      "desc": "Route handler registered in service"
+    },
+    "A3_table_exists": {
+      "points": 1.5,
+      "desc": "Migration table exists for service"
+    },
+    "A4_live_200": {
+      "points": 1.5,
+      "desc": "Live HTTP 200 with ≥1 seeded row (verify-screens)"
+    },
+    "B_hardening": {
+      "points": 1,
+      "desc": "Backend hardening present (auth, zod, CQRS, cache)"
+    },
+    "C_frontend": {
+      "points": 0.5,
+      "desc": "Frontend states: loading/empty/error visible"
+    },
+    "D_tests": {
+      "points": 0.5,
+      "desc": "Route integration tests pass"
+    },
+    "D_typecheck": {
+      "points": 0.5,
+      "desc": "TypeScript typecheck green for changed files"
+    },
+    "D_playwright": {
+      "points": 0.5,
+      "desc": "Playwright E2E spec passes"
+    }
+  }
+}

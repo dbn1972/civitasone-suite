@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, text } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("knowledge");
 
@@ -8,6 +8,11 @@ export const documents = domainSchema.table("documents", {
   title: varchar("title", { length: 200 }).notNull(),
   category: varchar("category", { length: 64 }),
   status: varchar("status", { length: 24 }).notNull().default("draft"),
+  tags: text("tags").array().notNull().default([]),
+  accessLevel: varchar("access_level", { length: 32 }).notNull().default("internal"),
+  fileType: varchar("file_type", { length: 64 }),
+  fileSize: bigint("file_size", { mode: "number" }),
+  author: varchar("author", { length: 200 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -24,6 +29,13 @@ export type DocumentView = {
   title: string;
   category: string | null;
   status: string;
+  tags: string[];
+  accessLevel: string;
+  fileType: string | null;
+  fileSize: number | null;
+  author: string | null;
+  createdAt: Date;
+  updatedAt: Date;
   version: number;
 };
 

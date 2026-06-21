@@ -25,3 +25,7 @@ export async function updatePlan(tx: Writer, id: string, patch: Partial<PlanInse
 export async function insertPlanItem(tx: Writer, row: typeof auditPlanItems.$inferInsert): Promise<void> {
   await tx.insert(auditPlanItems).values(row);
 }
+
+export async function listPlanItemsByTenant(tenantId: string, limit: number) {
+  return db.select().from(auditPlanItems).where(eq(auditPlanItems.tenantId, tenantId)).limit(limit);
+}

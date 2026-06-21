@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, boolean, integer, timestamp, text } from "drizzle-orm/pg-core";
 
 export const sessionsSchema = pgSchema("sessions");
 
@@ -10,8 +10,12 @@ export const sessions = sessionsSchema.table("sessions", {
   device:    varchar("device", { length: 256 }),
   mfaMethod: varchar("mfa_method", { length: 32 }),
   trusted:   boolean("trusted").notNull().default(false),
-  status:    varchar("status", { length: 24 }).notNull().default("active"),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  status:       varchar("status", { length: 24 }).notNull().default("active"),
+  userEmail:    text("user_email").notNull().default(""),
+  userName:     text("user_name"),
+  userAgent:    varchar("user_agent", { length: 512 }),
+  lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt:    timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

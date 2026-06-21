@@ -9,6 +9,10 @@ export type SessionView = {
   mfaMethod: string | null;
   trusted: boolean;
   status: SessionStatus;
+  userEmail: string;
+  userName: string | null;
+  userAgent: string | null;
+  lastActiveAt: string;
   startedAt: string;
   expiresAt: string;
   version: number;

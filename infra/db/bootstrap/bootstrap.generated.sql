@@ -190,10 +190,27 @@ GRANT CONNECT ON DATABASE civitas_notification TO notification_svc;
 \connect civitas_notification
 REVOKE ALL ON SCHEMA public FROM PUBLIC;            -- no default public schema use
 -- L2: one schema per bounded-context module, owned by the service role.
-CREATE SCHEMA IF NOT EXISTS templates AUTHORIZATION notification_svc;
+CREATE SCHEMA IF NOT EXISTS templates  AUTHORIZATION notification_svc;
 CREATE SCHEMA IF NOT EXISTS deliveries AUTHORIZATION notification_svc;
-CREATE SCHEMA IF NOT EXISTS _outbox AUTHORIZATION notification_svc;  -- transactional outbox
-CREATE SCHEMA IF NOT EXISTS _inbox  AUTHORIZATION notification_svc;  -- consumer idempotency / processed-message log
+CREATE SCHEMA IF NOT EXISTS alerts     AUTHORIZATION notification_svc;
+CREATE SCHEMA IF NOT EXISTS bulk       AUTHORIZATION notification_svc;
+CREATE SCHEMA IF NOT EXISTS channels   AUTHORIZATION notification_svc;
+CREATE SCHEMA IF NOT EXISTS _outbox    AUTHORIZATION notification_svc;  -- transactional outbox
+CREATE SCHEMA IF NOT EXISTS _inbox     AUTHORIZATION notification_svc;  -- consumer idempotency / processed-message log
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA templates  TO notification_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA deliveries TO notification_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA alerts     TO notification_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA bulk       TO notification_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA channels   TO notification_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA _outbox    TO notification_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA _inbox     TO notification_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA templates  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA deliveries GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA alerts     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA bulk       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA channels   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA _outbox    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA _inbox     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_svc;
 
 -- OPTIONAL hard L2: give each module its own role with USAGE on its own schema only,
 -- and connect each module's repo pool with that role. Commented by default.

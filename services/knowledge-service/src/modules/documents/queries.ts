@@ -3,6 +3,16 @@ import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { DocumentView } from "./schema.js";
 
+export async function searchDocuments(
+  tenantId: string,
+  query: string,
+  category: string | undefined,
+  limit: number,
+): Promise<DocumentView[]> {
+  const rows = await repo.searchByTenant(tenantId, query, category, limit);
+  return rows;
+}
+
 export async function listDocuments(
   tenantId: string,
   limit: number,

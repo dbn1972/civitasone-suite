@@ -61,16 +61,16 @@ export default async function AuditPlanPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Audit plan" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Audit Unit</th>
-                <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Planned From</th>
-                <th className="px-4 py-3">Planned To</th>
-                <th className="px-4 py-3">Auditor Team</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Audit Unit</th>
+                <th scope="col" className="px-4 py-3">Department</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Planned From</th>
+                <th scope="col" className="px-4 py-3">Planned To</th>
+                <th scope="col" className="px-4 py-3">Auditor Team</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -93,9 +93,12 @@ export default async function AuditPlanPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {items.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">No audit plan items found.</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No plan items yet</span>
+                    <span className="mt-1 block text-slate-400">Scheduled audit engagements will appear here.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

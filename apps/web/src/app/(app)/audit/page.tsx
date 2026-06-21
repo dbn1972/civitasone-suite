@@ -46,13 +46,13 @@ export default async function AuditPage() {
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">Event Log</div>
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Audit event log" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Actor</th>
-                <th className="px-4 py-3">Action</th>
-                <th className="px-4 py-3">Resource</th>
-                <th className="px-4 py-3">Outcome</th>
+                <th scope="col" className="px-4 py-3">Actor</th>
+                <th scope="col" className="px-4 py-3">Action</th>
+                <th scope="col" className="px-4 py-3">Resource</th>
+                <th scope="col" className="px-4 py-3">Outcome</th>
               </tr>
             </thead>
             <tbody>
@@ -68,9 +68,12 @@ export default async function AuditPage() {
                   </td>
                 </tr>
               ))}
-              {auditItems.length === 0 && (
+              {auditItems.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400">No audit events found.</td>
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No audit events yet</span>
+                    <span className="mt-1 block text-slate-400">Tenant activity will appear here as actions are performed.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

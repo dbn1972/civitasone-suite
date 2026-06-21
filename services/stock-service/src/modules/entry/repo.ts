@@ -1,4 +1,4 @@
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { stockEntries, stockEntryItems, type EntryInsert, type EntryItemInsert, type EntryRow } from "./schema.js";
 import { stockLedger, type LedgerInsert } from "../ledger/schema.js";
@@ -65,14 +65,13 @@ export async function markEntryPosted(tx: Writer, id: string, actorId: string): 
     .where(eq(stockEntries.id, id));
 }
 
-export async function findLedger(tenantId: string, itemId: string, opts?: { from?: string; to?: string; limit?: number; offset?: number }) {
+export async function findLedger(tenantId: string, itemId: string | null, opts?: { from?: string; to?: string; limit?: number; offset?: number }) {
+  const conditions: SQL[] = [eq(stockLedger.tenantId, tenantId)];
+  if (itemId) conditions.push(eq(stockLedger.itemId, itemId));
+  if (opts?.from) conditions.push(gte(stockLedger.postingDate, opts.from));
+  if (opts?.to)   conditions.push(lte(stockLedger.postingDate, opts.to));
   return db.select().from(stockLedger)
-    .where(and(
-      eq(stockLedger.tenantId, tenantId),
-      eq(stockLedger.itemId, itemId),
-      opts?.from ? gte(stockLedger.postingDate, opts.from) : undefined,
-      opts?.to   ? lte(stockLedger.postingDate, opts.to)   : undefined,
-    ))
+    .where(and(...conditions))
     .limit(opts?.limit ?? 100)
     .offset(opts?.offset ?? 0);
 }

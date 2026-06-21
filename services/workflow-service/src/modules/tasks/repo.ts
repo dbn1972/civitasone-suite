@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 
@@ -11,6 +11,15 @@ export async function findById(id: string, tenantId: string): Promise<TaskView |
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
+}
+
+export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TaskView[]> {
+  const rows = await db.select().from(tasks)
+    .where(eq(tasks.tenantId, tenantId))
+    .orderBy(desc(tasks.updatedAt))
+    .limit(limit)
+    .offset(offset);
+  return rows.map(toView);
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;

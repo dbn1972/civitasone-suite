@@ -59,17 +59,17 @@ export default async function Page() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm" aria-label="Goods receipt notes">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left">GRN No</th>
-              <th className="px-4 py-3 text-left">PO Ref</th>
-              <th className="px-4 py-3 text-left">Vendor</th>
-              <th className="px-4 py-3 text-left">Received Date</th>
-              <th className="px-4 py-3 text-left">Received By</th>
-              <th className="px-4 py-3 text-right">Items</th>
-              <th className="px-4 py-3 text-right">Total Value (₹)</th>
-              <th className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">GRN No</th>
+              <th scope="col" className="px-4 py-3 text-left">PO Ref</th>
+              <th scope="col" className="px-4 py-3 text-left">Vendor</th>
+              <th scope="col" className="px-4 py-3 text-left">Received Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Received By</th>
+              <th scope="col" className="px-4 py-3 text-right">Items</th>
+              <th scope="col" className="px-4 py-3 text-right">Total Value (₹)</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>

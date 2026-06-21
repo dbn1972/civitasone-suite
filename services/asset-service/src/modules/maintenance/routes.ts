@@ -5,11 +5,29 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { maintenancePlanBody, workOrderBody, completeWorkOrderBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
+import * as queries from "./queries.js";
+import { z } from "zod";
 
-const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
+const ASSET_ROLES  = ["asset_manager", "asset_admin", "super_admin"];
+const READER_ROLES = [...ASSET_ROLES, "audit_officer"];
+
+const listQuerySchema = z.object({
+  limit:  z.coerce.number().int().positive().max(200).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
 
 export async function maintenanceRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/assets/:id/maintenance", async (req, reply) => {
+  // List maintenance work orders (tenant-scoped)
+  app.get("/v1/assets/maintenance", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listMaintenance(ctx.tenantId, q.limit, q.offset);
+    return reply.send({ data: rows, limit: q.limit, offset: q.offset });
+  });
+
+  // gateway upstreamPath "/v1/assets" + caller "/assets/:id/maintenance" → "/v1/assets/assets/:id/maintenance"
+  app.post("/v1/assets/assets/:id/maintenance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);

@@ -75,7 +75,20 @@ export default function OrgChartPage() {
         </header>
 
         {loading && (
-          <div className="py-16 text-center text-slate-400">Loading organisation chart…</div>
+          <div className="animate-pulse space-y-6 rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="flex justify-center gap-12">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-6">
+                  <div className="h-16 w-40 rounded-xl bg-slate-200" />
+                  <div className="flex gap-6">
+                    {Array.from({ length: 2 }).map((_, j) => (
+                      <div key={j} className="h-16 w-36 rounded-xl bg-slate-200" />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {!loading && error && (

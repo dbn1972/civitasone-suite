@@ -1,5 +1,6 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -26,11 +27,24 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: lines, pagination: { hasMore: lines.length === params.limit, pageSize: params.limit } });
   });
 
+  app.get("/v1/finance/journals", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, limit));
+  });
+
   app.get("/v1/finance/statements/trial-balance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const rows = await queries.getTrialBalance(ctx.tenantId);
     return reply.send({ data: rows });
+  });
+
+  app.get("/v1/finance/statements", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    sendValidated(reply, FinancialStatementSummaryListSchema, await queries.listFinancialStatements(ctx.tenantId));
   });
 
   app.setErrorHandler((err, req, reply) => {

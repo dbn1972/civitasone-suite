@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { legalHearings, legalOrders, type HearingRow } from "./schema.js";
+import { legalHearings, legalOrders, legalOpinions, type HearingRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -19,4 +19,16 @@ export async function updateHearing(tx: Writer, id: string, patch: Partial<typeo
 
 export async function insertOrder(tx: Writer, row: typeof legalOrders.$inferInsert): Promise<void> {
   await tx.insert(legalOrders).values(row);
+}
+
+export async function listHearingsByTenant(tenantId: string, limit: number): Promise<HearingRow[]> {
+  return db.select().from(legalHearings).where(eq(legalHearings.tenantId, tenantId)).limit(limit);
+}
+
+export async function listOrdersByTenant(tenantId: string, limit: number) {
+  return db.select().from(legalOrders).where(eq(legalOrders.tenantId, tenantId)).limit(limit);
+}
+
+export async function listOpinionsByTenant(tenantId: string, limit: number) {
+  return db.select().from(legalOpinions).where(eq(legalOpinions.tenantId, tenantId)).limit(limit);
 }

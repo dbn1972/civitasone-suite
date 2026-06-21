@@ -44,7 +44,8 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/attendance/regularisations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    sendValidated(reply, AttendanceRegularisationListSchema, []);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, AttendanceRegularisationListSchema, await queries.listRegularisations(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler(errorHandler);

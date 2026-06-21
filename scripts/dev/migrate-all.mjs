@@ -1,0 +1,100 @@
+#!/usr/bin/env node
+/**
+ * migrate-all.mjs — apply every service's migrations to its database.
+ * Idempotent: all migrations use CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS.
+ *
+ * Usage: node scripts/dev/migrate-all.mjs
+ */
+import { execSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
+
+const SERVICES = [
+  { name: "admin-service",       db: "civitas_admin" },
+  { name: "analytics-service",   db: "civitas_analytics" },
+  { name: "asset-service",       db: "civitas_asset" },
+  { name: "audit-service",       db: "civitas_audit" },
+  { name: "billing-service",     db: "civitas_billing" },
+  { name: "citizen-service",     db: "civitas_citizen" },
+  { name: "contract-service",    db: "civitas_contract" },
+  { name: "crm-service",         db: "civitas_crm" },
+  { name: "estab-service",       db: "civitas_estab" },
+  { name: "finance-service",     db: "civitas_finance" },
+  { name: "grant-service",       db: "civitas_grant" },
+  { name: "helpdesk-service",    db: "civitas_helpdesk" },
+  { name: "hrms-service",        db: "civitas_hrms" },
+  { name: "identity-service",    db: "civitas_identity" },
+  { name: "install-service",     db: "civitas_install" },
+  { name: "inventory-service",   db: "civitas_inventory" },
+  { name: "knowledge-service",   db: "civitas_knowledge" },
+  { name: "legal-service",       db: "civitas_legal" },
+  { name: "location-service",    db: "civitas_location" },
+  { name: "notification-service",db: "civitas_notification" },
+  { name: "payroll-service",     db: "civitas_payroll" },
+  { name: "plugin-service",      db: "civitas_plugin" },
+  { name: "policy-service",      db: "civitas_policy" },
+  { name: "procurement-service", db: "civitas_procurement" },
+  { name: "project-service",     db: "civitas_project" },
+  { name: "report-service",      db: "civitas_report" },
+  { name: "stock-service",       db: "civitas_stock" },
+  { name: "telephony-service",   db: "civitas_telephony" },
+  { name: "tenant-service",      db: "civitas_tenant" },
+  { name: "theme-service",       db: "civitas_theme" },
+  { name: "workflow-service",    db: "civitas_workflow" },
+];
+
+let applied = 0;
+let skipped = 0;
+let errors  = 0;
+
+for (const svc of SERVICES) {
+  const migrationsDir = join(ROOT, "services", svc.name, "migrations");
+  if (!existsSync(migrationsDir)) {
+    console.log(`[skip] ${svc.name}: no migrations dir`);
+    skipped++;
+    continue;
+  }
+
+  const files = readdirSync(migrationsDir)
+    .filter(f => f.endsWith(".sql"))
+    .sort();
+
+  if (files.length === 0) {
+    console.log(`[skip] ${svc.name}: no SQL files`);
+    skipped++;
+    continue;
+  }
+
+  for (const file of files) {
+    const filePath = join(migrationsDir, file);
+    const sql = readFileSync(filePath);
+    try {
+      execSync(
+        `docker exec -i civitasone-postgres psql -U civitas_admin -d ${svc.db}`,
+        { input: sql, stdio: ["pipe", "pipe", "pipe"] }
+      );
+      console.log(`[ok]   ${svc.name}/${file} → ${svc.db}`);
+      applied++;
+    } catch (err) {
+      const stderr = err.stderr?.toString() ?? "";
+      const stdout = err.stdout?.toString() ?? "";
+      const combined = stderr + stdout;
+      if (combined.includes("already exists") && !combined.includes("ERROR")) {
+        console.log(`[idem] ${svc.name}/${file} (already applied)`);
+        applied++;
+      } else {
+        console.error(`[ERR]  ${svc.name}/${file}: ${combined.trim().slice(0, 300)}`);
+        errors++;
+      }
+    }
+  }
+}
+
+console.log(`\n── Migration summary ──────────────────`);
+console.log(`Applied : ${applied}`);
+console.log(`Skipped : ${skipped}`);
+console.log(`Errors  : ${errors}`);
+if (errors > 0) process.exit(1);

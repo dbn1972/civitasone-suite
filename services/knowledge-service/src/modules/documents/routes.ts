@@ -1,13 +1,25 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createDocumentBody, documentsListSchema } from "./validators.js";
+import { createDocumentBody } from "./validators.js";
+import {
+  KnowledgeDocSummaryListSchema,
+  KnowledgeRecordListSchema,
+  KnowledgeSearchResultListSchema,
+} from "@civitasone/schemas/web";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const ROLES = ["knowledge_user", "knowledge_admin", "super_admin"];
+
+const searchBody = z.object({
+  query: z.string().min(1).max(500),
+  category: z.string().optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+});
 
 export async function documentRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/knowledge/documents", async (req, reply) => {
@@ -21,7 +33,57 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, documentsListSchema, await queries.listDocuments(ctx.tenantId, q.limit, q.offset));
+    const result = await queries.listDocuments(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, KnowledgeDocSummaryListSchema, result.data.map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      category: doc.category ?? "general",
+      author: doc.author ?? undefined,
+      createdAt: doc.createdAt.toISOString(),
+      updatedAt: doc.updatedAt.toISOString(),
+      tags: doc.tags,
+      status: (["draft", "under_review", "approved", "archived"].includes(doc.status)
+        ? doc.status
+        : "draft") as "draft" | "under_review" | "approved" | "archived",
+      accessLevel: (["public", "internal", "restricted", "confidential"].includes(doc.accessLevel)
+        ? doc.accessLevel
+        : "internal") as "public" | "internal" | "restricted" | "confidential",
+      fileType: doc.fileType ?? undefined,
+      fileSize: doc.fileSize ?? undefined,
+      version: String(doc.version),
+    })));
+  });
+
+  app.get("/v1/knowledge/records", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const result = await queries.listDocuments(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, KnowledgeRecordListSchema, result.data.map((doc) => ({
+      id: doc.id,
+      recordNo: doc.id.slice(0, 8).toUpperCase(),
+      title: doc.title,
+      type: "file" as const,
+      createdDate: doc.createdAt.toISOString().slice(0, 10),
+      status: (doc.status === "archived" ? "inactive" : "active") as "active" | "inactive" | "disposed" | "transferred",
+    })));
+  });
+
+  app.post("/v1/knowledge/search", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const body = searchBody.parse(req.body);
+    const result = await queries.searchDocuments(ctx.tenantId, body.query, body.category, body.limit);
+    sendValidated(reply, KnowledgeSearchResultListSchema, result.map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      category: doc.category ?? "general",
+      excerpt: undefined,
+      relevanceScore: undefined,
+      documentType: doc.fileType ?? undefined,
+      createdAt: doc.createdAt.toISOString(),
+      url: undefined,
+    })));
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -1,25 +1,23 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import type { RequestContext } from "@civitasone/types";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { SessionSummaryListSchema } from "@civitasone/schemas/web";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createSessionBody, sessionIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
+const SESSION_ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/identity/sessions", { config: { public: true } }, async (req, reply) => {
+  app.post("/identity/sessions", async (req, reply) => {
+    const ctx = resolveContext(req);
     const body = createSessionBody.parse(req.body);
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    const ctx: RequestContext = {
-      tenantId: body.tenantId,
-      actorId: body.userId,
-      actorType: "user",
-      roles: [],
-      correlationId,
-      sessionId: "",
-    };
+    if (ctx.tenantId !== body.tenantId) {
+      throw new HttpError(403, "FORBIDDEN", "tenant mismatch");
+    }
+    if (ctx.actorId !== body.userId) requireRole(ctx, SESSION_ADMIN);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createSession(ctx, body));
   });
 
@@ -35,5 +33,25 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     const view = await queries.getSession(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "session not found");
     return reply.send(view);
+  });
+
+  app.get("/identity/sessions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SESSION_ADMIN);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listSessions(ctx.tenantId, q.limit);
+    sendValidated(reply, SessionSummaryListSchema, (rows ?? []).map((s) => ({
+      id: s.id,
+      userId: s.userId,
+      userEmail: s.userEmail,
+      userName: s.userName ?? undefined,
+      ipAddress: s.ip,
+      userAgent: s.userAgent ?? undefined,
+      createdAt: s.startedAt,
+      lastActiveAt: s.lastActiveAt,
+      expiresAt: s.expiresAt,
+      mfaVerified: s.mfaMethod !== null,
+      status: s.status,
+    })));
   });
 }

@@ -58,17 +58,17 @@ export default async function LegalOpinionsPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table aria-label="Legal opinions" className="min-w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-4 py-3">Opinion No</th>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Requested By</th>
-                <th className="px-4 py-3">Request Date</th>
-                <th className="px-4 py-3">Due Date</th>
-                <th className="px-4 py-3">Advisor</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Issued Date</th>
+                <th scope="col" className="px-4 py-3">Opinion No</th>
+                <th scope="col" className="px-4 py-3">Subject</th>
+                <th scope="col" className="px-4 py-3">Requested By</th>
+                <th scope="col" className="px-4 py-3">Request Date</th>
+                <th scope="col" className="px-4 py-3">Due Date</th>
+                <th scope="col" className="px-4 py-3">Advisor</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Issued Date</th>
               </tr>
             </thead>
             <tbody>
@@ -93,9 +93,12 @@ export default async function LegalOpinionsPage() {
                   </tr>
                 );
               })}
-              {items.length === 0 && (
+              {items.length === 0 && source !== "error" && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">No legal opinions found.</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <span className="block font-medium text-slate-700">No opinions yet</span>
+                    <span className="mt-1 block text-slate-400">Legal opinions will appear here once requested.</span>
+                  </td>
                 </tr>
               )}
             </tbody>

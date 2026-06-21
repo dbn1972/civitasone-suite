@@ -1,5 +1,6 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { FundReleaseSummaryListSchema, SchemeSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -28,6 +29,20 @@ export async function schemeRoutes(app: FastifyInstance): Promise<void> {
     const scheme = await queries.getScheme(id, ctx.tenantId);
     if (!scheme) throw new HttpError(404, "NOT_FOUND", "scheme not found");
     return reply.send(scheme);
+  });
+
+  app.get("/v1/projects/schemes", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, SchemeSummaryListSchema, await queries.listSchemeSummaries(ctx.tenantId, limit));
+  });
+
+  app.get("/v1/projects/fund-releases", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+    sendValidated(reply, FundReleaseSummaryListSchema, await queries.listFundReleaseSummaries(ctx.tenantId, limit));
   });
 
   app.post("/v1/projects/schemes/:id/components", async (req, reply) => {

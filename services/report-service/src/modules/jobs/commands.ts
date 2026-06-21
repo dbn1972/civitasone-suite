@@ -17,7 +17,12 @@ export async function createJob(ctx: RequestContext, body: CreateJobBody): Promi
     tenantId: ctx.tenantId,
     name: body.name,
     reportType: body.reportType ?? null,
-    status: "active",
+    status: "queued",
+    format: "pdf",
+    rowCount: null,
+    requestedBy: ctx.actorId,
+    completedAt: null,
+    downloadUrl: null,
     version: 1,
   };
 

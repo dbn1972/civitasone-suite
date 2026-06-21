@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
-import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
-import { ticketsListSchema, metricsListResponseSchema, slaListResponseSchema } from "@civitasone/schemas/web";
-import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { ZodError, z } from "zod";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { ticketsListSchema, metricsListResponseSchema, slaListResponseSchema, TicketAnalyticsSchema } from "@civitasone/schemas/web";
+import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { idParam, createTicketBody, ticketNoteBody, closeTicketBody } from "./validators.js";
 import * as commands from "./commands.js";
@@ -10,12 +10,18 @@ import * as queries from "./queries.js";
 
 const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 
+const ticketListQuerySchema = z.object({
+  limit:     z.coerce.number().int().min(1).max(500).default(50),
+  offset:    z.coerce.number().int().min(0).default(0),
+  slaStatus: z.enum(["within_sla", "due_soon", "breached"]).optional(),
+});
+
 export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/citizen/tickets", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, ticketsListSchema, await queries.listTickets(ctx.tenantId, q.limit));
+    const q = ticketListQuerySchema.parse(req.query);
+    sendValidated(reply, ticketsListSchema, await queries.listTickets(ctx.tenantId, q.limit, q.slaStatus));
   });
 
   app.get("/v1/citizen/analytics/metrics", async (req, reply) => {
@@ -35,6 +41,12 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const body = createTicketBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createTicket(ctx, body));
+  });
+
+  app.get("/v1/citizen/tickets/analytics", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    sendValidated(reply, TicketAnalyticsSchema, await queries.getTicketAnalytics(ctx.tenantId));
   });
 
   app.post("/v1/citizen/tickets/:id/notes", async (req, reply) => {

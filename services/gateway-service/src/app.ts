@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID } from "node:crypto";
 import { resolveRoute } from "./registry.js";
@@ -14,6 +16,7 @@ const FORWARD_HEADERS = [
   "x-device-trust-token",
   "x-step-up-token",
   "x-tenant-id",
+  "x-internal",
 ] as const;
 
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -56,6 +59,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: (process.env.CORS_ORIGIN ?? "http://localhost:3000").split(","),
     credentials: true,
     allowedHeaders: ["content-type", "authorization", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token"],
+  });
+
+  await app.register(helmet, { contentSecurityPolicy: false });
+  await app.register(rateLimit, {
+    global: true,
+    max: Number(process.env.GATEWAY_RATE_LIMIT_MAX ?? 1000),
+    timeWindow: process.env.GATEWAY_RATE_LIMIT_WINDOW ?? "1 minute",
   });
 
   registerOpsRoutes(app, { service: "gateway-service" });

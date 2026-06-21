@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageShell } from "../../../_components/PageShell";
 import { getNotifications } from "../../../_data/loaders";
 
 const channelColors: Record<string, string> = {
@@ -16,6 +17,14 @@ const statusColors: Record<string, string> = {
   read: "bg-slate-100 text-slate-500",
 };
 
+function pill(label: string, colors: Record<string, string>, key: string) {
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[key] ?? "bg-slate-100 text-slate-600"}`}>
+      {label.replace(/_/g, " ")}
+    </span>
+  );
+}
+
 export default async function NotificationsListPage() {
   const { data: notifications, source } = await getNotifications();
 
@@ -24,93 +33,79 @@ export default async function NotificationsListPage() {
   const failed = notifications.filter((n) => n.status === "failed").length;
   const read = notifications.filter((n) => n.status === "read").length;
 
+  const stats = [
+    { label: "Total", value: total.toLocaleString("en-IN"), color: "text-slate-900" },
+    { label: "Sent", value: sent.toLocaleString("en-IN"), color: "text-emerald-600" },
+    { label: "Failed", value: failed.toLocaleString("en-IN"), color: "text-red-600" },
+    { label: "Read", value: read.toLocaleString("en-IN"), color: "text-slate-500" },
+  ];
+
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
+    <PageShell
+      title="Notifications"
+      description="All notification events across the platform."
+      breadcrumb={
+        <>
           <Link href="/notifications" className="hover:text-slate-900">Notifications</Link>
           <span className="mx-2">/</span>
           <span className="text-slate-900">Inbox</span>
-        </nav>
+        </>
+      }
+    >
+      {source === "error" ? <DataSourceBadge source={source} /> : null}
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Notifications</h1>
-            <p className="mt-1 text-sm text-slate-600">All notification events across the platform.</p>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs text-slate-500">{s.label}</p>
+            <p className={`mt-1 text-2xl font-semibold ${s.color}`}>{s.value}</p>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
+        ))}
+      </div>
 
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{total}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Sent</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">{sent}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Failed</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{failed}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Read</p>
-            <p className="mt-1 text-2xl font-bold text-slate-500">{read}</p>
-          </div>
-        </section>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-700">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full text-sm" aria-label="Notifications inbox">
+          <thead className="bg-slate-100 text-slate-700">
+            <tr>
+              <th scope="col" className="px-4 py-3 text-left">Title</th>
+              <th scope="col" className="px-4 py-3 text-left">Message</th>
+              <th scope="col" className="px-4 py-3 text-left">Module</th>
+              <th scope="col" className="px-4 py-3 text-left">Event Type</th>
+              <th scope="col" className="px-4 py-3 text-left">Recipient</th>
+              <th scope="col" className="px-4 py-3 text-left">Channel</th>
+              <th scope="col" className="px-4 py-3 text-left">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Created At</th>
+              <th scope="col" className="px-4 py-3 text-left">Read At</th>
+            </tr>
+          </thead>
+          <tbody>
+            {notifications.length === 0 ? (
               <tr>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Message</th>
-                <th className="px-4 py-3">Module</th>
-                <th className="px-4 py-3">Event Type</th>
-                <th className="px-4 py-3">Recipient</th>
-                <th className="px-4 py-3">Channel</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Created At</th>
-                <th className="px-4 py-3">Read At</th>
+                <td colSpan={9} className="px-4 py-12 text-center">
+                  <p className="text-slate-500 font-medium">No notifications yet</p>
+                  <p className="mt-1 text-sm text-slate-400">Notifications from platform events will appear here.</p>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {notifications.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
-                    No notifications found
+            ) : (
+              notifications.map((n) => (
+                <tr key={n.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">{n.title}</td>
+                  <td className="px-4 py-3 text-slate-600 max-w-xs truncate" title={n.message}>
+                    {n.message}
                   </td>
+                  <td className="px-4 py-3 text-slate-600">{n.module}</td>
+                  <td className="px-4 py-3 text-slate-600">{n.eventType}</td>
+                  <td className="px-4 py-3 text-slate-600">{n.recipient}</td>
+                  <td className="px-4 py-3">{pill(n.channel, channelColors, n.channel)}</td>
+                  <td className="px-4 py-3">{pill(n.status, statusColors, n.status)}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{n.createdAt}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{n.readAt ?? "—"}</td>
                 </tr>
-              ) : (
-                notifications.map((n) => (
-                  <tr key={n.id} className="border-t border-slate-200 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">{n.title}</td>
-                    <td className="px-4 py-3 text-slate-600 max-w-xs truncate" title={n.message}>
-                      {n.message}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{n.module}</td>
-                    <td className="px-4 py-3 text-slate-600">{n.eventType}</td>
-                    <td className="px-4 py-3 text-slate-600">{n.recipient}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${channelColors[n.channel] ?? "bg-slate-100 text-slate-600"}`}>
-                        {n.channel.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[n.status] ?? "bg-slate-100 text-slate-600"}`}>
-                        {n.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{n.createdAt}</td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{n.readAt ?? "—"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
-      </section>
-    </main>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </PageShell>
   );
 }

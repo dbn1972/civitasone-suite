@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { financeBills, financePayments, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert } from "./schema.js";
+import { financeBills, financePayments, financeAdvances, financeUC, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type UCRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -34,6 +34,24 @@ export async function listPaymentsByTenant(tenantId: string, limit: number, offs
     .offset(offset);
 }
 
+export async function listBillsByTenant(tenantId: string, limit: number): Promise<BillRow[]> {
+  return db.select().from(financeBills)
+    .where(eq(financeBills.tenantId, tenantId))
+    .limit(limit);
+}
+
 export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<void> {
   await tx.insert(financePayments).values(row);
+}
+
+export async function listAdvancesByTenant(tenantId: string, limit: number): Promise<AdvanceRow[]> {
+  return db.select().from(financeAdvances)
+    .where(eq(financeAdvances.tenantId, tenantId))
+    .limit(limit);
+}
+
+export async function listUCsByTenant(tenantId: string, limit: number): Promise<UCRow[]> {
+  return db.select().from(financeUC)
+    .where(eq(financeUC.tenantId, tenantId))
+    .limit(limit);
 }

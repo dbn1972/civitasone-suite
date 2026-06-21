@@ -29,7 +29,13 @@ export default async function Page() {
   ];
 
   return (
-    <PageShell title="CRM Dashboard" description="High-level pipeline and activity snapshot.">
+    <PageShell
+      title="CRM Dashboard"
+      description="High-level pipeline and activity snapshot."
+      breadcrumb={
+        <span className="text-slate-900">CRM</span>
+      }
+    >
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

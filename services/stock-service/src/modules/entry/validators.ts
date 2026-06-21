@@ -28,7 +28,7 @@ export const physicalVerificationBody = z.object({
 export type PhysicalVerificationBody = z.infer<typeof physicalVerificationBody>;
 
 export const ledgerQueryParams = z.object({
-  itemId:      z.string().uuid(),
+  itemId:      z.string().uuid().optional(),
   warehouseId: z.string().uuid().optional(),
   from:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

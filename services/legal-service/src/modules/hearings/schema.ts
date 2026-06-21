@@ -35,5 +35,23 @@ export const legalOrders = hearingsSchema.table("legal_orders", {
   version:   integer("version").notNull().default(1),
 });
 
+export const legalOpinions = hearingsSchema.table("legal_opinions", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  opinionNo:   text("opinion_no").notNull(),
+  subject:     text("subject").notNull(),
+  requestedBy: text("requested_by").notNull(),
+  requestDate: date("request_date").notNull(),
+  dueDate:     date("due_date"),
+  advisorName: text("advisor_name"),
+  status:      varchar("status", { length: 24 }).notNull().default("pending"),
+  issuedDate:  date("issued_date"),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
+  updatedBy:   uuid("updated_by").notNull(),
+  version:     integer("version").notNull().default(1),
+});
+
 export type HearingRow = typeof legalHearings.$inferSelect;
-export const schema = { legalHearings, legalOrders };
+export const schema = { legalHearings, legalOrders, legalOpinions };

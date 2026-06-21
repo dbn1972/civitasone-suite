@@ -8,6 +8,10 @@ function toView(r: SessionRow): SessionView {
     id: r.id, tenantId: r.tenantId, userId: r.userId, ip: r.ip,
     device: r.device ?? null, mfaMethod: r.mfaMethod ?? null, trusted: r.trusted,
     status: r.status as SessionView["status"],
+    userEmail: r.userEmail,
+    userName: r.userName ?? null,
+    userAgent: r.userAgent ?? null,
+    lastActiveAt: r.lastActiveAt.toISOString(),
     startedAt: r.startedAt.toISOString(), expiresAt: r.expiresAt.toISOString(),
     version: r.version,
   };
@@ -31,4 +35,12 @@ export async function update(tx: Writer, id: string, patch: Partial<SessionInser
 export async function findByIdTx(tx: Writer, id: string): Promise<SessionView | null> {
   const rows = await tx.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   return rows[0] ? toView(rows[0]) : null;
+}
+
+export async function listByTenant(tenantId: string, limit: number): Promise<SessionView[]> {
+  const rows = await db.select().from(sessions)
+    .where(eq(sessions.tenantId, tenantId))
+    .limit(limit)
+    .orderBy(sessions.startedAt);
+  return rows.map(toView);
 }

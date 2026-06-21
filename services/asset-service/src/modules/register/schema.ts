@@ -37,6 +37,7 @@ export const assetAssets = registerSchema.table("asset_assets", {
   acquisitionDate: date("acquisition_date").notNull(),
   poRef:           text("po_ref"),
   grnRef:          text("grn_ref"),
+  assetType:       varchar("asset_type", { length: 16 }).notNull().default("other"),
   location:        text("location"),
   notes:           text("notes"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -66,3 +66,15 @@ export async function markPfmsReconciled(tx: Writer, disbursementId: string): Pr
     .set({ reconciled: true, reconciledAt: new Date(), updatedAt: new Date() })
     .where(eq(grantPfmsRecords.disbursementId, disbursementId));
 }
+
+export async function listDisbursementsByTenant(tenantId: string, limit: number): Promise<DisbursementRow[]> {
+  return db.select().from(grantDisbursements)
+    .where(eq(grantDisbursements.tenantId, tenantId))
+    .limit(limit);
+}
+
+export async function listInstallmentsByTenant(tenantId: string, limit = 200): Promise<InstallmentRow[]> {
+  return db.select().from(grantInstallments)
+    .where(eq(grantInstallments.tenantId, tenantId))
+    .limit(limit);
+}
