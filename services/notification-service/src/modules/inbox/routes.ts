@@ -8,6 +8,7 @@ import {
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, HttpError } from "../../shared/context.js";
 import * as deliveryQueries from "../deliveries/queries.js";
+import * as templateQueries from "../templates/queries.js";
 
 export async function inboxRoutes(app: FastifyInstance): Promise<void> {
   app.get("/notifications/notifications", async (req, reply) => {
@@ -29,7 +30,18 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/notifications/preferences", async (req, reply) => {
     const ctx = resolveContext(req);
-    sendValidated(reply, NotificationPrefSummaryListSchema, []);
+    const q = listQuerySchema.parse(req.query);
+    const prefs = await templateQueries.listTenantPrefs(ctx.tenantId, q.limit);
+    sendValidated(reply, NotificationPrefSummaryListSchema, prefs.map((p) => ({
+      id: p.id,
+      eventType: p.eventType,
+      module: "notification",
+      label: p.eventType.replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      emailEnabled: p.email,
+      smsEnabled: false,
+      inAppEnabled: p.inApp,
+      webhookEnabled: false,
+    })));
   });
 
   app.setErrorHandler((err, req, reply) => {

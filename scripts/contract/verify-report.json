@@ -1,7 +1,7 @@
 {
-  "gateway": "http://localhost:18888",
+  "gateway": "http://localhost:18080",
   "tenant": "00000000-0000-0000-0000-000000000001",
-  "testedAt": "2026-06-20T23:11:29.142Z",
+  "testedAt": "2026-06-21T01:47:31.973Z",
   "results": [
     {
       "module": "analytics",
@@ -9,8 +9,8 @@
       "loader": "getAnalyticsDashboards",
       "apiPath": "/api/v1/analytics/dashboards",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "assets",
@@ -54,8 +54,8 @@
       "loader": "getAuditCompliance",
       "apiPath": "/api/v1/audit/compliance",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "audit",
@@ -72,8 +72,8 @@
       "loader": "getAuditExports",
       "apiPath": "/api/v1/audit/exports",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "audit",
@@ -90,8 +90,8 @@
       "loader": "getAuditObservations",
       "apiPath": "/api/v1/audit/observations",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "audit",
@@ -108,8 +108,8 @@
       "loader": "getAuditPlan",
       "apiPath": "/api/v1/audit/plan",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "audit",
@@ -117,8 +117,8 @@
       "loader": "getRiskRegister",
       "apiPath": "/api/v1/audit/risks",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "billing",
@@ -126,8 +126,8 @@
       "loader": "getBillingPlans",
       "apiPath": "/api/v1/billing/plans",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "citizen",
@@ -153,8 +153,8 @@
       "loader": "getContracts",
       "apiPath": "/api/v1/contract/contracts",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "crm",
@@ -216,8 +216,8 @@
       "loader": "getEstabCompliance",
       "apiPath": "/api/v1/estab/compliance",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "estab",
@@ -243,8 +243,8 @@
       "loader": "getGuesthouseBookings",
       "apiPath": "/api/v1/estab/guesthouse-bookings",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "estab",
@@ -279,8 +279,8 @@
       "loader": "getVehicles",
       "apiPath": "/api/v1/estab/vehicles",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -288,8 +288,8 @@
       "loader": "getFinancialStatements",
       "apiPath": "/api/v1/finance/statements",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -297,8 +297,8 @@
       "loader": "getFinanceGLEntries",
       "apiPath": "/api/v1/finance/journals",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -306,8 +306,8 @@
       "loader": "getFinanceBudgets",
       "apiPath": "/api/v1/finance/budgets",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -324,8 +324,8 @@
       "loader": "getFinanceSanctions",
       "apiPath": "/api/v1/finance/sanctions",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -351,8 +351,8 @@
       "loader": "getFinanceAdvances",
       "apiPath": "/api/v1/finance/advances",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -369,8 +369,8 @@
       "loader": "getFinanceBills",
       "apiPath": "/api/v1/finance/bills",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -378,8 +378,8 @@
       "loader": "getFinanceUCs",
       "apiPath": "/api/v1/finance/utilization-certificates",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "finance",
@@ -423,8 +423,8 @@
       "loader": "getGrantees",
       "apiPath": "/api/v1/grants/grantees",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "grants",
@@ -432,8 +432,8 @@
       "loader": "getGrantInstallments",
       "apiPath": "/api/v1/grants/installments",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "grants",
@@ -441,8 +441,8 @@
       "loader": "getGrantReleases",
       "apiPath": "/api/v1/grants/releases",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "grants",
@@ -450,8 +450,8 @@
       "loader": "getGrantUtilization",
       "apiPath": "/api/v1/grants/utilization-certs",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "helpdesk",
@@ -495,8 +495,8 @@
       "loader": "getAppraisals",
       "apiPath": "/api/v1/hrms/appraisals",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "hr",
@@ -504,8 +504,8 @@
       "loader": "getAttendanceList",
       "apiPath": "/api/v1/hrms/attendance",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "hr",
@@ -513,8 +513,8 @@
       "loader": "getAttendanceRegularisations",
       "apiPath": "/api/v1/hrms/attendance/regularisations",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "hr",
@@ -540,8 +540,8 @@
       "loader": "getJobOpenings",
       "apiPath": "/api/v1/hrms/job-openings",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "hr",
@@ -558,8 +558,8 @@
       "loader": "getLeaveRequestDetails",
       "apiPath": "/api/v1/hrms/leave-requests",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "hr",
@@ -585,8 +585,8 @@
       "loader": "getSalarySlips",
       "apiPath": "/api/v1/payroll/salary-slips",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "hr",
@@ -594,8 +594,8 @@
       "loader": "getTrainingPrograms",
       "apiPath": "/api/v1/hrms/training-programs",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "install",
@@ -630,8 +630,8 @@
       "loader": "getKnowledgeRecords",
       "apiPath": "/api/v1/knowledge/records",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "legal",
@@ -648,8 +648,8 @@
       "loader": "getCourtOrders",
       "apiPath": "/api/v1/legal/court-orders",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "legal",
@@ -666,8 +666,8 @@
       "loader": "getLegalHearings",
       "apiPath": "/api/v1/legal/hearings",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "legal",
@@ -684,8 +684,8 @@
       "loader": "getLegalOpinions",
       "apiPath": "/api/v1/legal/opinions",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "locations",
@@ -693,8 +693,8 @@
       "loader": "getLocations",
       "apiPath": "/api/v1/locations",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "notifications",
@@ -720,8 +720,8 @@
       "loader": "getPlugins",
       "apiPath": "/api/v1/plugins/items",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "procurement",
@@ -747,8 +747,8 @@
       "loader": "getProcurementGRNs",
       "apiPath": "/api/v1/procurement/grns",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "procurement",
@@ -765,8 +765,8 @@
       "loader": "getProcurementIndents",
       "apiPath": "/api/v1/procurement/indents",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "procurement",
@@ -801,8 +801,8 @@
       "loader": "getRFQs",
       "apiPath": "/api/v1/procurement/rfqs",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "procurement",
@@ -819,8 +819,8 @@
       "loader": "getProcurementTenders",
       "apiPath": "/api/v1/procurement/tenders",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "procurement",
@@ -873,8 +873,8 @@
       "loader": "getSchemes",
       "apiPath": "/api/v1/project/schemes",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "projects",
@@ -882,8 +882,8 @@
       "loader": "getProjectFundReleases",
       "apiPath": "/api/v1/project/fund-releases",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "projects",
@@ -891,8 +891,8 @@
       "loader": "getMilestones",
       "apiPath": "/api/v1/project/milestones",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "reports",
@@ -936,8 +936,8 @@
       "loader": "getMISSummary",
       "apiPath": "/api/v1/reports/mis",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "stock",
@@ -972,8 +972,8 @@
       "loader": "getTelephonyCalls",
       "apiPath": "/api/v1/telephony/calls",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "tenant-admin",
@@ -981,8 +981,8 @@
       "loader": "getAPIKeys",
       "apiPath": "/api/v1/admin/api-keys",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "tenant-admin",
@@ -997,10 +997,10 @@
       "module": "tenant-admin",
       "screen": "/tenant-admin/breakglass",
       "loader": "getBreakglassLog",
-      "apiPath": "/api/v1/audit/breakglass",
+      "apiPath": "/api/v1/admin/breakglass",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "tenant-admin",
@@ -1008,8 +1008,8 @@
       "loader": "getNotificationPreferences",
       "apiPath": "/api/notification/preferences",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "tenant-admin",
@@ -1044,8 +1044,8 @@
       "loader": "getActiveSessions",
       "apiPath": "/api/identity/sessions",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "tenant-admin",
@@ -1062,8 +1062,8 @@
       "loader": "getSubscription",
       "apiPath": "/api/v1/billing/subscriptions",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "tenant-admin",
@@ -1089,8 +1089,8 @@
       "loader": "getThemeTokens",
       "apiPath": "/api/v1/themes/tokens",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     },
     {
       "module": "workflow",
@@ -1098,14 +1098,14 @@
       "loader": "getWorkflowInstances",
       "apiPath": "/api/v1/workflow/instances",
       "status": 200,
-      "verdict": "EMPTY",
-      "reason": "200 but no data rows (seed data may be missing)"
+      "verdict": "PASS",
+      "reason": ""
     }
   ],
   "counts": {
     "total": 122,
-    "passed": 71,
+    "passed": 122,
     "failed": 0,
-    "empty": 51
+    "empty": 0
   }
 }

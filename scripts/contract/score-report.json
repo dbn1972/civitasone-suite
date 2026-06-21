@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-06-20T19:11:55.997Z",
-  "overallScore": "6.4/10",
-  "overallScoreNum": 6.4,
+  "generatedAt": "2026-06-21T01:47:42.181Z",
+  "overallScore": "10/10",
+  "overallScoreNum": 10,
   "staticCounts": {
-    "wired": 100,
-    "missing": 2,
-    "mismatch": 2,
-    "noLoader": 54
+    "wired": 135,
+    "missing": 0,
+    "mismatch": 0,
+    "noLoader": 30
   },
   "modules": [
     {
@@ -15,8 +15,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -34,11 +36,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -46,35 +48,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "assets",
-      "total": 5,
-      "wired": 5,
+      "total": 6,
+      "wired": 6,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "6/6",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -92,11 +97,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 4,
+          "livePassedPaths": 4,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -104,35 +109,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "audit",
-      "total": 7,
-      "wired": 7,
+      "total": 8,
+      "wired": 8,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "8/8",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -150,11 +158,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 8,
+          "livePassedPaths": 8,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -162,26 +170,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "billing",
@@ -189,8 +198,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -208,11 +219,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -220,26 +231,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "citizen",
@@ -247,8 +259,10 @@
       "wired": 2,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "2/2",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -266,11 +280,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 2,
+          "livePassedPaths": 2,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -278,26 +292,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "contracts",
@@ -305,8 +320,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -324,11 +341,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -336,35 +353,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "crm",
-      "total": 4,
-      "wired": 4,
+      "total": 6,
+      "wired": 6,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "6/6",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -382,11 +402,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 6,
+          "livePassedPaths": 6,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -394,35 +414,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "estab",
-      "total": 6,
-      "wired": 6,
+      "total": 8,
+      "wired": 8,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "8/8",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -440,11 +463,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 8,
+          "livePassedPaths": 8,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -452,35 +475,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "finance",
-      "total": 10,
-      "wired": 10,
+      "total": 12,
+      "wired": 12,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "12/12",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -498,11 +524,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 12,
+          "livePassedPaths": 12,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -510,35 +536,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "grants",
-      "total": 6,
-      "wired": 6,
+      "total": 8,
+      "wired": 8,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "8/8",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -556,11 +585,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 7,
+          "livePassedPaths": 7,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -568,35 +597,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "helpdesk",
-      "total": 4,
-      "wired": 4,
+      "total": 5,
+      "wired": 5,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "5/5",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -614,11 +646,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 4,
+          "livePassedPaths": 4,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -626,35 +658,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "hr",
-      "total": 10,
-      "wired": 10,
+      "total": 14,
+      "wired": 14,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "14/14",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -672,11 +707,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 12,
+          "livePassedPaths": 12,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -684,26 +719,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "install",
@@ -711,8 +747,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -730,11 +768,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -742,93 +780,99 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
+    },
+    {
+      "module": "inventory",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "1.50",
+          "max": 1.5,
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "e2e spec present"
+        }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "knowledge",
-      "total": 4,
-      "wired": 4,
-      "missing": 0,
-      "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A3_table_exists": {
-          "earned": "1.50",
-          "max": 1.5,
-          "pct": "100%"
-        },
-        "A4_live_200": {
-          "earned": "0.00",
-          "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
-        },
-        "B_hardening": {
-          "earned": "1.00",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "manual / playwright"
-        },
-        "D_tests": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm test --filter"
-        },
-        "D_typecheck": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm typecheck --filter"
-        },
-        "D_playwright": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "playwright E2E"
-        }
-      }
-    },
-    {
-      "module": "legal",
       "total": 5,
       "wired": 5,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "5/5",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -846,11 +890,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 2,
+          "livePassedPaths": 2,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -858,26 +902,88 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
+    },
+    {
+      "module": "legal",
+      "total": 6,
+      "wired": 6,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "6/6",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "1.50",
+          "max": 1.5,
+          "liveTestedPaths": 6,
+          "livePassedPaths": 6,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "e2e spec present"
+        }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "locations",
@@ -885,8 +991,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -904,11 +1012,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -916,26 +1024,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "notifications",
@@ -943,8 +1052,10 @@
       "wired": 2,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "2/2",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -962,11 +1073,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 2,
+          "livePassedPaths": 2,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -974,26 +1085,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "plugins",
@@ -1001,8 +1113,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1020,11 +1134,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -1032,35 +1146,160 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
+    },
+    {
+      "module": "procurement",
+      "total": 14,
+      "wired": 14,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "14/14",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "1.50",
+          "max": 1.5,
+          "liveTestedPaths": 13,
+          "livePassedPaths": 13,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "e2e spec present"
+        }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "projects",
+      "total": 8,
+      "wired": 8,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "8/8",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "1.50",
+          "max": 1.5,
+          "liveTestedPaths": 6,
+          "livePassedPaths": 6,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "e2e spec present"
+        }
+      },
+      "topBlocker": "—"
+    },
+    {
+      "module": "reports",
       "total": 5,
       "wired": 5,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "5/5",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1078,11 +1317,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 5,
+          "livePassedPaths": 5,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -1090,35 +1329,38 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
-      "module": "reports",
+      "module": "stock",
       "total": 4,
       "wired": 4,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "4/4",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1136,69 +1378,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
-          "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
-        },
-        "B_hardening": {
-          "earned": "1.00",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "manual / playwright"
-        },
-        "D_tests": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm test --filter"
-        },
-        "D_typecheck": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm typecheck --filter"
-        },
-        "D_playwright": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "playwright E2E"
-        }
-      }
-    },
-    {
-      "module": "stock",
-      "total": 3,
-      "wired": 3,
-      "missing": 0,
-      "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A3_table_exists": {
           "earned": "1.50",
           "max": 1.5,
-          "pct": "100%"
-        },
-        "A4_live_200": {
-          "earned": "0.00",
-          "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 3,
+          "livePassedPaths": 3,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -1206,26 +1390,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "telephony",
@@ -1233,8 +1418,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1252,11 +1439,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -1264,26 +1451,88 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
+    },
+    {
+      "module": "tenant-admin",
+      "total": 12,
+      "wired": 12,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "12/12",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "1.50",
+          "max": 1.5,
+          "liveTestedPaths": 12,
+          "livePassedPaths": 12,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "e2e spec present"
+        }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "themes",
@@ -1291,8 +1540,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1310,11 +1561,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -1322,26 +1573,27 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "workflow",
@@ -1349,8 +1601,10 @@
       "wired": 1,
       "missing": 0,
       "mismatch": 0,
-      "score": "6.5/10",
-      "scoreNum": 6.5,
+      "wiredStr": "1/1",
+      "score": "10/10",
+      "scoreNum": 10,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1368,11 +1622,11 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "0.00",
+          "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
+          "liveTestedPaths": 1,
+          "livePassedPaths": 1,
+          "note": ""
         },
         "B_hardening": {
           "earned": "1.00",
@@ -1380,148 +1634,37 @@
           "note": "static proxy via chain wired%"
         },
         "C_frontend": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "manual / playwright"
+          "note": "loading.tsx present"
         },
         "D_tests": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm test --filter"
+          "note": "service tests present"
         },
         "D_typecheck": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "run pnpm typecheck --filter"
+          "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "playwright E2E"
+          "note": "e2e spec present"
         }
-      }
-    },
-    {
-      "module": "tenant-admin",
-      "total": 10,
-      "wired": 9,
-      "missing": 0,
-      "mismatch": 1,
-      "score": "6.4/10",
-      "scoreNum": 6.4,
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A3_table_exists": {
-          "earned": "1.50",
-          "max": 1.5,
-          "pct": "100%"
-        },
-        "A4_live_200": {
-          "earned": "0.00",
-          "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
-        },
-        "B_hardening": {
-          "earned": "0.90",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "manual / playwright"
-        },
-        "D_tests": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm test --filter"
-        },
-        "D_typecheck": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm typecheck --filter"
-        },
-        "D_playwright": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "playwright E2E"
-        }
-      }
-    },
-    {
-      "module": "procurement",
-      "total": 8,
-      "wired": 5,
-      "missing": 2,
-      "mismatch": 1,
-      "score": "5.6/10",
-      "scoreNum": 5.6,
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "1.50",
-          "max": 2,
-          "pct": "75%"
-        },
-        "A3_table_exists": {
-          "earned": "1.50",
-          "max": 1.5,
-          "pct": "100%"
-        },
-        "A4_live_200": {
-          "earned": "0.00",
-          "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": "run verify-screens.mjs for live score"
-        },
-        "B_hardening": {
-          "earned": "0.63",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "manual / playwright"
-        },
-        "D_tests": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm test --filter"
-        },
-        "D_typecheck": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "run pnpm typecheck --filter"
-        },
-        "D_playwright": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "playwright E2E"
-        }
-      }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "dashboard",
       "total": 0,
       "score": "N/A",
       "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
       "checks": {},
       "detail": "No loader screens (navigation hub only)"
     },
@@ -1530,14 +1673,10 @@
       "total": 0,
       "score": "N/A",
       "scoreNum": null,
-      "checks": {},
-      "detail": "No loader screens (navigation hub only)"
-    },
-    {
-      "module": "inventory",
-      "total": 0,
-      "score": "N/A",
-      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
       "checks": {},
       "detail": "No loader screens (navigation hub only)"
     }

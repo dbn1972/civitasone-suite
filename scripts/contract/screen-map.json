@@ -2171,10 +2171,10 @@
         "getBreakglassLog"
       ],
       "apiPaths": [
-        "/api/v1/audit/breakglass"
+        "/api/v1/admin/breakglass"
       ],
-      "upstream": "audit → /v1/audit/breakglass",
-      "routeHandler": "/v1/audit/breakglass",
+      "upstream": "admin → /v1/admin/breakglass",
+      "routeHandler": "/v1/admin/breakglass",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"

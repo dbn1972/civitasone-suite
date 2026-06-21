@@ -1,6 +1,7 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import {
+  BudgetSummaryListSchema,
   SanctionSummaryListSchema,
   SanctionDetailSchema,
 } from "@civitasone/schemas/web";
@@ -41,9 +42,12 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/budgets", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { headId, fy } = budgetQueryParams.parse(req.query);
-    if (!headId || !fy) throw new HttpError(400, "VALIDATION_FAILED", "headId and fy are required");
-    const budget = await queries.getBudget(ctx.tenantId, headId, fy);
+    const q = budgetQueryParams.parse(req.query);
+    if (!q.headId || !q.fy) {
+      const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
+      return sendValidated(reply, BudgetSummaryListSchema, await queries.listBudgetSummaries(ctx.tenantId, limit));
+    }
+    const budget = await queries.getBudget(ctx.tenantId, q.headId, q.fy);
     if (!budget) throw new HttpError(404, "NOT_FOUND", "budget not found");
     return reply.send(budget);
   });

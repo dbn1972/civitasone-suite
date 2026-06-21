@@ -40,7 +40,9 @@ test.describe('Tenant Admin', () => {
 
   test('roles page shows role from mock API', async ({ page }) => {
     await page.goto('/tenant-admin/roles');
-    await expect(page.getByRole('link', { name: 'admin', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('table', { name: 'Tenant roles' }).getByRole('link', { name: 'admin', exact: true }),
+    ).toBeVisible();
   });
 
   test('settings page renders without error', async ({ page }) => {

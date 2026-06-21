@@ -1,0 +1,141 @@
+{
+  "overall": 10,
+  "modules": {
+    "analytics": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "assets": {
+      "score": 10,
+      "wired": "6/6",
+      "blockers": []
+    },
+    "audit": {
+      "score": 10,
+      "wired": "8/8",
+      "blockers": []
+    },
+    "billing": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "citizen": {
+      "score": 10,
+      "wired": "2/2",
+      "blockers": []
+    },
+    "contracts": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "crm": {
+      "score": 10,
+      "wired": "6/6",
+      "blockers": []
+    },
+    "estab": {
+      "score": 10,
+      "wired": "8/8",
+      "blockers": []
+    },
+    "finance": {
+      "score": 10,
+      "wired": "12/12",
+      "blockers": []
+    },
+    "grants": {
+      "score": 10,
+      "wired": "8/8",
+      "blockers": []
+    },
+    "helpdesk": {
+      "score": 10,
+      "wired": "5/5",
+      "blockers": []
+    },
+    "hr": {
+      "score": 10,
+      "wired": "14/14",
+      "blockers": []
+    },
+    "install": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "inventory": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "knowledge": {
+      "score": 10,
+      "wired": "5/5",
+      "blockers": []
+    },
+    "legal": {
+      "score": 10,
+      "wired": "6/6",
+      "blockers": []
+    },
+    "locations": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "notifications": {
+      "score": 10,
+      "wired": "2/2",
+      "blockers": []
+    },
+    "plugins": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "procurement": {
+      "score": 10,
+      "wired": "14/14",
+      "blockers": []
+    },
+    "projects": {
+      "score": 10,
+      "wired": "8/8",
+      "blockers": []
+    },
+    "reports": {
+      "score": 10,
+      "wired": "5/5",
+      "blockers": []
+    },
+    "stock": {
+      "score": 10,
+      "wired": "4/4",
+      "blockers": []
+    },
+    "telephony": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "tenant-admin": {
+      "score": 10,
+      "wired": "12/12",
+      "blockers": []
+    },
+    "themes": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "workflow": {
+      "score": 10,
+      "wired": "1/1",
+      "blockers": []
+    }
+  },
+  "failing": []
+}

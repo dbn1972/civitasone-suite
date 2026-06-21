@@ -35,8 +35,9 @@ test.describe('Knowledge', () => {
 
   test('documents list page shows seeded document data', async ({ page }) => {
     await page.goto('/knowledge/list');
-    await expect(page.getByRole('cell', { name: 'Procurement Policy 2024' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Policy' })).toBeVisible();
+    const table = page.getByRole('table', { name: 'Knowledge documents' });
+    await expect(table.getByRole('cell', { name: 'Procurement Policy 2024' })).toBeVisible();
+    await expect(table.getByRole('cell', { name: 'Policy', exact: true })).toBeVisible();
   });
 
   test('records management page shows heading and column headers', async ({ page }) => {

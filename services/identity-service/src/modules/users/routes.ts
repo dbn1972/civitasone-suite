@@ -21,10 +21,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.get("/identity/users/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = userIdParam.parse(req.params);
-    const isSelf = ctx.actorId === id;
-    if (!isSelf && !ctx.roles.some((r) => ADMIN.includes(r))) {
-      throw new HttpError(403, "FORBIDDEN", "cannot read other users");
-    }
+    if (ctx.actorId !== id) requireRole(ctx, ADMIN);
     const view = await queries.getUser(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
     return reply.send(view);
@@ -32,6 +29,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/identity/users", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
     const q = tenantIdQuery.parse(req.query);
     if (ctx.tenantId !== q.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin"].includes(r))) {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");

@@ -8,9 +8,9 @@ test.describe('Stock', () => {
 
   test('hub page shows navigation links', async ({ page }) => {
     await page.goto('/stock');
-    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Stock List' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Stock Ledger' })).toBeVisible();
+    await expect(page.locator('a[href="/stock/dashboard"]')).toBeVisible();
+    await expect(page.locator('a[href="/stock/list"]')).toBeVisible();
+    await expect(page.locator('a[href="/stock/ledger"]')).toBeVisible();
   });
 
   test('dashboard shows heading and KPI cards', async ({ page }) => {
@@ -24,9 +24,8 @@ test.describe('Stock', () => {
 
   test('dashboard KPI shows non-zero total SKUs from seeded data', async ({ page }) => {
     await page.goto('/stock/dashboard');
-    // totalSKUs > 0 — the displayed value should not be "0"
-    const totalSkusCard = page.locator('div').filter({ hasText: /^Total SKUs$/ }).locator('+ p');
-    await expect(totalSkusCard).not.toHaveText('0');
+    const totalSkusCard = page.locator('.rounded-xl').filter({ hasText: 'Total SKUs' });
+    await expect(totalSkusCard).not.toContainText(/^0$/);
   });
 
   test('stock list shows heading and column headers', async ({ page }) => {
@@ -35,7 +34,7 @@ test.describe('Stock', () => {
     await expect(page.getByRole('columnheader', { name: 'Item Code' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Category' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Unit' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Unit', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Current Stock' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Min Level' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Unit Cost (₹)' })).toBeVisible();

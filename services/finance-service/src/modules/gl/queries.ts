@@ -1,6 +1,15 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import type { JournalLine } from "./schema.js";
 import type { LedgerQueryParams } from "./validators.js";
+
+function normalizeLine(raw: Record<string, unknown>): JournalLine {
+  return {
+    accountCode: String(raw.accountCode ?? raw.account ?? ""),
+    debitMinor: Number(raw.debitMinor ?? raw.debit ?? 0),
+    creditMinor: Number(raw.creditMinor ?? raw.credit ?? 0),
+  };
+}
 
 export async function getLedger(tenantId: string, params: LedgerQueryParams) {
   return repo.getLedgerLines(tenantId, params.headId, params.from, params.to, params.limit);
@@ -22,7 +31,10 @@ export async function listJournalEntries(tenantId: string, limit: number) {
   );
   const entries = [];
   for (const journal of journals ?? []) {
-    for (const line of journal.lines) {
+    const lines = Array.isArray(journal.lines) ? journal.lines : [];
+    for (const raw of lines) {
+      const line = normalizeLine(raw as Record<string, unknown>);
+      if (!line.accountCode) continue;
       entries.push({
         id: `${journal.id}:${line.accountCode}`,
         voucherNo: journal.voucherNo,

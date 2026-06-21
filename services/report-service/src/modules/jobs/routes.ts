@@ -15,6 +15,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createJobBody, jobsListSchema, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as kpiQueries from "../kpis/queries.js";
+import * as misQueries from "../mis/queries.js";
 
 const ROLES = ["report_user", "report_admin", "super_admin"];
 
@@ -78,13 +80,15 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/reports/kpis", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    sendValidated(reply, KPISummaryListSchema, []);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, KPISummaryListSchema, await kpiQueries.listKpis(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/reports/mis", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    sendValidated(reply, MISSummaryListSchema, []);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, MISSummaryListSchema, await misQueries.listMisSummary(ctx.tenantId, q.limit));
   });
 
   app.setErrorHandler((err, req, reply) => {

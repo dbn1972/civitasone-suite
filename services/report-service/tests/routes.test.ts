@@ -96,6 +96,20 @@ describe("GET /v1/reports/kpis — shape", () => {
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(res.json())).toBe(true);
   });
+
+  it("tenant isolation: other tenant returns 200 empty", async () => {
+    const app = await buildApp();
+    const other = "bbbbbbbb-2222-4000-8000-000000000099";
+    const token = signToken({ sub: "u2", tid: other, roles: ["report_user"], sid: "s2" }, SECRET);
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/reports/kpis",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+  });
 });
 
 describe("GET /v1/reports/mis — shape", () => {

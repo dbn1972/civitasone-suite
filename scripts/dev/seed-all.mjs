@@ -118,8 +118,31 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO gl.finance_journals (id, tenant_id, voucher_no, type, posting_date, lines, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('dddddddd-0001-0000-0000-000000000011', '${T}', 'JV/2024/001', 'payment', '2024-12-01', '[{"account":"2055","debit":5000000,"credit":0}]', 'posted', now(), now(), '${A}', '${A}', 1),
-  ('dddddddd-0001-0000-0000-000000000012', '${T}', 'JV/2024/002', 'budget',  '2024-12-01', '[{"account":"4059","debit":20000000,"credit":0}]', 'posted', now(), now(), '${A}', '${A}', 1)
+  ('dddddddd-0001-0000-0000-000000000011', '${T}', 'JV/2024/001', 'payment', '2024-12-01', '[{"accountCode":"2055","debitMinor":5000000,"creditMinor":0}]', 'posted', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000012', '${T}', 'JV/2024/002', 'budget',  '2024-12-01', '[{"accountCode":"4059","debitMinor":20000000,"creditMinor":0}]', 'posted', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE gl.finance_journals SET lines = '[{"accountCode":"2055","debitMinor":5000000,"creditMinor":0}]'::jsonb
+WHERE tenant_id = '${T}' AND id = 'dddddddd-0001-0000-0000-000000000011';
+UPDATE gl.finance_journals SET lines = '[{"accountCode":"4059","debitMinor":20000000,"creditMinor":0}]'::jsonb
+WHERE tenant_id = '${T}' AND id = 'dddddddd-0001-0000-0000-000000000012';
+
+INSERT INTO gl.finance_ledger (id, tenant_id, head_id, debit_minor, credit_minor, balance_minor, voucher_no, posting_date, currency, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('dddddddd-0001-0000-0000-000000000013', '${T}', 'dddddddd-0001-0000-0000-000000000001', 350000000, 50000000, 300000000, 'JV/2024/001', '2024-12-01', 'INR', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000014', '${T}', 'dddddddd-0001-0000-0000-000000000002', 120000000, 20000000, 100000000, 'JV/2024/002', '2024-12-01', 'INR', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO payments.finance_advances (id, tenant_id, advance_no, beneficiary, type, amount_minor, currency, disbursed_date, due_date, adjusted_minor, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('dddddddd-0001-0000-0000-000000000015', '${T}', 'ADV/2024/001', 'Ravi Kumar',   'employee', 5000000,  'INR', '2024-11-01', '2025-03-31', 2000000, 'active',  now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000016', '${T}', 'ADV/2024/002', 'TechSupplies', 'vendor',   10000000, 'INR', '2024-10-15', '2025-01-15', 0,       'active',  now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO payments.finance_uc (id, tenant_id, uc_no, grant_ref, grantee, amount_minor, currency, period_from, period_to, submitted_date, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('dddddddd-0001-0000-0000-000000000017', '${T}', 'UC/2024/001', 'PMGSY-2024', 'District PWD', 1500000000, 'INR', '2024-04-01', '2024-09-30', '2024-10-15', 'submitted', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000018', '${T}', 'UC/2024/002', 'SCM-2024',   'Smart City Corp', 950000000, 'INR', '2024-04-01', '2024-09-30', null,         'pending',   now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
@@ -177,6 +200,34 @@ INSERT INTO attendance.hrms_attendance (id, tenant_id, employee_id, attendance_d
 VALUES
   ('eeeeeeee-0001-0000-0000-000000000015', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '2024-12-01', 'present', '09:05', '17:35', 'biometric', now(), now(), '${A}', '${A}', 1),
   ('eeeeeeee-0001-0000-0000-000000000016', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '2024-12-01', 'present', '10:10', '18:05', 'biometric', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE employee.hrms_employees
+SET manager_id = 'eeeeeeee-0001-0000-0000-000000000005', updated_at = now()
+WHERE id = 'eeeeeeee-0001-0000-0000-000000000006' AND tenant_id = '${T}';
+
+INSERT INTO attendance.hrms_attendance_regularisations (id, tenant_id, employee_id, date, reason, requested_status, status, requested_at, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('eeeeeeee-0001-0000-0000-000000000017', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '2024-11-28', 'Biometric missed due to field visit', 'present', 'pending',  now(), now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000018', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '2024-11-15', 'Late mark — official meeting',       'present', 'approved', now(), now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO appraisal.hrms_appraisals (id, tenant_id, employee_id, appraisal_period, rating, status, reviewer_id, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('eeeeeeee-0001-0000-0000-000000000019', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '2023-24', 4.5, 'completed', '${A}',  now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000020', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '2023-24', 4.0, 'in_review', '${A}', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO recruitment.hrms_job_openings (id, tenant_id, ref_no, title, department_id, designation_id, vacancies, description, status, posted_at, closes_at, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('eeeeeeee-0001-0000-0000-000000000021', '${T}', 'JOB/2024/001', 'Section Officer (Finance)', 'eeeeeeee-0001-0000-0000-000000000002', 'eeeeeeee-0001-0000-0000-000000000004', 2, 'Direct recruitment for finance section', 'open', '2024-11-01', '2025-01-31', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000022', '${T}', 'JOB/2024/002', 'Administrative Assistant',  'eeeeeeee-0001-0000-0000-000000000001', null,                                   1, 'Support staff for admin wing',           'open', '2024-12-01', '2025-02-28', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO training.hrms_trainings (id, tenant_id, title, venue, from_date, to_date, facilitator, max_participants, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('eeeeeeee-0001-0000-0000-000000000023', '${T}', 'GFR 2017 Procurement Training', 'Training Hall A', '2025-01-15', '2025-01-17', 'Institute of Govt Accounts', 30, 'planned', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000024', '${T}', 'Digital Governance Workshop',   'Conference Room B', '2024-12-10', '2024-12-11', 'NIC Delhi',                  25, 'planned', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
@@ -237,6 +288,18 @@ INSERT INTO grn.procurement_grns (id, tenant_id, grn_no, po_ref, vendor_id, rece
 VALUES
   ('11111111-0002-0000-0000-000000000005', '${T}', 'GRN/2024/001', 'PO/2024/001', 'eeeeeeee-0001-0000-0000-000000000001', '2024-12-15', 'accepted', now(), now(), '${A}', '${A}', 1),
   ('11111111-0002-0000-0000-000000000006', '${T}', 'GRN/2024/002', 'PO/2024/001', 'eeeeeeee-0001-0000-0000-000000000001', '2024-12-20', 'draft',    now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO rfq.procurement_rfqs (id, tenant_id, rfq_no, title, description, indent_ref, vendors_invited, responses_received, closing_date, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('11111111-0003-0000-0000-000000000001', '${T}', 'RFQ/2024/001', 'Office stationery RFQ', 'Annual stationery supply', 'IND/2024/001', 5, 3, '2024-12-31', 'issued', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0003-0000-0000-000000000002', '${T}', 'RFQ/2024/002', 'Computer peripherals RFQ', 'Laptops and accessories', 'IND/2024/002', 4, 2, '2025-01-31', 'draft',  now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO tender.procurement_tenders (id, tenant_id, tender_no, title, scope, eligibility, type, estimated_minor, currency, publish_date, bid_closing_date, opening_date, bids_received, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('11111111-0003-0000-0000-000000000003', '${T}', 'TND/2024/001', 'Road maintenance works', 'Annual maintenance of district roads', 'Class A contractors', 'open', 5000000000, 'INR', '2024-10-01', '2024-11-30', '2024-12-05', 4, 'published', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0003-0000-0000-000000000004', '${T}', 'TND/2024/002', 'IT infrastructure upgrade', 'Server and network equipment', 'Registered IT vendors', 'limited', 1200000000, 'INR', '2024-11-01', '2024-12-15', '2024-12-20', 2, 'evaluation', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
@@ -366,10 +429,16 @@ VALUES
   ('55555555-0001-0000-0000-000000000008', '${T}', '55555555-0001-0000-0000-000000000005', 2, 60000, 'INR', 'pending',  now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO disbursement.grant_disbursements (id, tenant_id, installment_id, amount_minor, currency, mode, status, disbursed_at, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO disbursement.grant_disbursements (id, tenant_id, installment_id, amount_minor, currency, mode, pfms_txn_id, status, disbursed_at, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('55555555-0001-0000-0000-000000000009', '${T}', '55555555-0001-0000-0000-000000000007', 60000, 'INR', 'PFMS', 'completed', now(), now(), now(), '${A}', '${A}', 1),
-  ('55555555-0001-0000-0000-000000000010', '${T}', '55555555-0001-0000-0000-000000000008', 60000, 'INR', 'PFMS', 'initiated', null, now(), now(), '${A}', '${A}', 1)
+  ('55555555-0001-0000-0000-000000000009', '${T}', '55555555-0001-0000-0000-000000000007', 60000, 'INR', 'PFMS', 'PFMS/2024/0001', 'completed', now(), now(), now(), '${A}', '${A}', 1),
+  ('55555555-0001-0000-0000-000000000010', '${T}', '55555555-0001-0000-0000-000000000008', 60000, 'INR', 'PFMS', 'PFMS/2024/0002', 'initiated', null, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET pfms_txn_id = EXCLUDED.pfms_txn_id, status = EXCLUDED.status;
+
+INSERT INTO utilisation.grant_uc_statements (id, tenant_id, application_id, period, released_minor, utilised_minor, variance_minor, currency, status, submitted_at, uc_ref, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('55555555-0001-0000-0000-000000000011', '${T}', '55555555-0001-0000-0000-000000000005', '2024-25', 120000, 60000, 60000, 'INR', 'accepted', now(), 'UC/GRANT/2024/001', now(), now(), '${A}', '${A}', 1),
+  ('55555555-0001-0000-0000-000000000012', '${T}', '55555555-0001-0000-0000-000000000005', '2023-24', 60000,  60000, 0,     'INR', 'submitted', now(), null,                now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
@@ -399,6 +468,33 @@ INSERT INTO assets.estab_vehicles (id, tenant_id, reg_no, make_model, fuel_type,
 VALUES
   ('66666666-0001-0000-0000-000000000007', '${T}', 'DL01AB1234', 'Toyota Innova',      'petrol', 'available', now(), now(), '${A}', '${A}', 1),
   ('66666666-0001-0000-0000-000000000008', '${T}', 'DL01CD5678', 'Maruti Swift Dzire', 'cng',    'available', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+DO $$ BEGIN
+  IF to_regclass('committee.estab_compliance') IS NOT NULL THEN
+    INSERT INTO committee.estab_compliance (id, tenant_id, compliance_code, title, category, frequency, due_date, assigned_to, status, last_complied_date, remarks, created_at, updated_at, created_by, updated_by, version)
+    VALUES
+      ('66666666-0001-0000-0000-000000000009', '${T}', 'COMP/2024/001', 'Quarterly RTI compliance report', 'RTI Act', 'quarterly', '2025-03-31', '${A}', 'pending',  null, 'Pending submission to CIC', now(), now(), '${A}', '${A}', 1),
+      ('66666666-0001-0000-0000-000000000010', '${T}', 'COMP/2024/002', 'Annual fire safety audit',        'Safety',  'annual',    '2025-04-30', '${A}', 'complied', '2024-04-15', 'Completed by PWD', now(), now(), '${A}', '${A}', 1)
+    ON CONFLICT (id) DO NOTHING;
+  END IF;
+END $$;
+
+INSERT INTO facilities.estab_guesthouses (id, tenant_id, name, location, contact, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('66666666-0001-0000-0000-000000000011', '${T}', 'Secretariat Guest House', 'Block C, Secretariat Complex', '011-23456789', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO facilities.estab_rooms (id, tenant_id, guesthouse_id, room_no, type, capacity, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('66666666-0001-0000-0000-000000000012', '${T}', '66666666-0001-0000-0000-000000000011', '101', 'standard', 2, 'available', now(), now(), '${A}', '${A}', 1),
+  ('66666666-0001-0000-0000-000000000013', '${T}', '66666666-0001-0000-0000-000000000011', '102', 'suite',    1, 'available', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO facilities.estab_room_bookings (id, tenant_id, room_id, guest_name, guest_ref, check_in, check_out, sponsor_dept, charges_minor, currency, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('66666666-0001-0000-0000-000000000014', '${T}', '66666666-0001-0000-0000-000000000012', 'Dr. Meena Rao', '${A}', now() + interval '2 days', now() + interval '4 days', 'ADMIN', 0, 'INR', 'booked', now(), now(), '${A}', '${A}', 1),
+  ('66666666-0001-0000-0000-000000000015', '${T}', '66666666-0001-0000-0000-000000000013', 'Sh. Arjun Singh', null, now() + interval '7 days', now() + interval '9 days', 'FIN', 500000, 'INR', 'booked', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
@@ -487,6 +583,30 @@ VALUES
   ('99999999-0001-0000-0000-000000000005', '${T}', 'OBS/2024/001', '99999999-0001-0000-0000-000000000003', 'Finance Dept', 'Budget overrun in dept XYZ — excess spending of Rs 5L',         'compliance', 'high',   500000, 'open',          now(), now(), '${A}', '${A}', 1),
   ('99999999-0001-0000-0000-000000000006', '${T}', 'OBS/2024/002', '99999999-0001-0000-0000-000000000003', 'Admin Dept',   'Missing procurement documentation for PO/2024/001',             'compliance', 'medium', 0,      'pending_reply',  now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO plan.audit_plan_items (id, tenant_id, plan_id, dept_ref, unit_ref, scheduled_from, scheduled_to, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('99999999-0001-0000-0000-000000000021', '${T}', '99999999-0001-0000-0000-000000000003', 'Finance Dept',     'Accounts Unit',  '2024-04-01', '2024-06-30', 'planned',     now(), now(), '${A}', '${A}', 1),
+  ('99999999-0001-0000-0000-000000000022', '${T}', '99999999-0001-0000-0000-000000000004', 'Revenue Dept',     'Tax Assessment', '2024-07-01', '2024-09-30', 'in_progress', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO risk.audit_risks (id, tenant_id, risk_code, title, category, likelihood, impact, risk_score, owner_ref, mitigation_status, review_date, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('99999999-0001-0000-0000-000000000031', '${T}', 'RISK/2024/001', 'Budget overspend without sanction', 'financial',    'likely',          'major',      16, 'Finance Head', 'in_progress', '2025-03-31', 'open', now(), now(), '${A}', '${A}', 1),
+  ('99999999-0001-0000-0000-000000000032', '${T}', 'RISK/2024/002', 'Delayed vendor payments',           'operational',  'possible',        'moderate',   9,  'Accounts Officer', 'not_started', '2025-06-30', 'open', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO exports.exports (id, tenant_id, period_from, period_to, format, signed_url, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('99999999-0001-0000-0000-000000000041', '${T}', '2024-04-01', '2024-09-30', 'pdf',  'https://exports.demo.gov.in/audit-q2.pdf',  'completed', now(), now(), '${A}', '${A}', 1),
+  ('99999999-0001-0000-0000-000000000042', '${T}', '2024-10-01', '2024-12-31', 'xlsx', null,                                         'pending',   now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO compliance.audit_pending_register (id, tenant_id, para_id, dept_ref, amount_involved_minor, status, due_date, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('99999999-0001-0000-0000-000000000051', '${T}', '99999999-0001-0000-0000-000000000005', 'Finance Dept', 500000, 'pending',  '2025-03-31', now(), now(), '${A}', '${A}', 1),
+  ('99999999-0001-0000-0000-000000000052', '${T}', '99999999-0001-0000-0000-000000000006', 'Admin Dept',   0,        'pending',  '2025-04-30', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -519,6 +639,22 @@ VALUES
   ('aaaaaaaa-0002-0000-0000-000000000007', '${T}', 'LN/2024/001', 'Land acquisition notice', 'Ram Prasad',      'sent', 'open',    now(), now(), '${A}', '${A}', 1),
   ('aaaaaaaa-0002-0000-0000-000000000008', '${T}', 'LN/2024/002', 'Show cause notice',        'XYZ Contractors', 'sent', 'pending', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
+
+DO $$ BEGIN
+  IF to_regclass('hearings.legal_opinions') IS NOT NULL THEN
+    INSERT INTO hearings.legal_opinions (id, tenant_id, opinion_no, subject, requested_by, request_date, due_date, advisor_name, status, issued_date, created_at, updated_at, created_by, updated_by, version)
+    VALUES
+      ('aaaaaaaa-0002-0000-0000-000000000009', '${T}', 'LO/2024/001', 'Validity of tender cancellation', 'Finance Dept', '2024-10-01', '2024-11-01', 'Legal Advisor', 'issued',  '2024-10-28', now(), now(), '${A}', '${A}', 1),
+      ('aaaaaaaa-0002-0000-0000-000000000010', '${T}', 'LO/2024/002', 'Land compensation liability',     'Revenue Dept', '2024-11-15', '2024-12-15', 'Panel Counsel', 'pending', null,         now(), now(), '${A}', '${A}', 1)
+    ON CONFLICT (id) DO NOTHING;
+  END IF;
+END $$;
+
+INSERT INTO hearings.legal_orders (id, tenant_id, case_id, order_type, direction, dept_ref, summary, order_date, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('aaaaaaaa-0002-0000-0000-000000000011', '${T}', 'aaaaaaaa-0002-0000-0000-000000000003', 'interim', 'Stay tender cancellation pending hearing', 'PWD', 'Interim stay granted on tender TND/2024/001', '2024-09-15', now(), now(), '${A}', '${A}', 1),
+  ('aaaaaaaa-0002-0000-0000-000000000012', '${T}', 'aaaaaaaa-0002-0000-0000-000000000004', 'final',   'Enhance compensation by 15%',              'Revenue', 'Court directs revised compensation award',    '2024-08-20', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -543,6 +679,22 @@ INSERT INTO config.admin_module_configs (id, tenant_id, module_key, enabled, cre
 VALUES
   ('bbbbbbbb-0002-0000-0000-000000000003', '${T}', 'finance', true, now(), now(), '${A}', '${A}', 1),
   ('bbbbbbbb-0002-0000-0000-000000000004', '${T}', 'hrms',    true, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+DO $$ BEGIN
+  IF to_regclass('api_keys.admin_api_keys') IS NOT NULL THEN
+    INSERT INTO api_keys.admin_api_keys (id, tenant_id, key_name, key_prefix, key_hash, scopes, status, created_at, updated_at, created_by, updated_by, version)
+    VALUES
+      ('bbbbbbbb-0003-0000-0000-000000000001', '${T}', 'Integration Gateway Key', 'civ_live', 'sha256:seed-demo-hash-001', ARRAY['read','write'], 'active', now(), now(), '${A}', '${A}', 1),
+      ('bbbbbbbb-0003-0000-0000-000000000002', '${T}', 'Reporting Export Key',    'civ_rpt',  'sha256:seed-demo-hash-002', ARRAY['read'],         'active', now(), now(), '${A}', '${A}', 1)
+    ON CONFLICT (id) DO NOTHING;
+  END IF;
+END $$;
+
+INSERT INTO support.admin_break_glass_log (id, tenant_id, ticket_id, actor_id, reason, opened_at, expires_at, closed_at, correlation_id, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('bbbbbbbb-0004-0000-0000-000000000001', '${T}', 'bbbbbbbb-0004-0000-0000-000000000099', '${A}', 'Emergency access to finance sanctions during outage', now() - interval '2 hours', now() + interval '1 hour', now() - interval '30 minutes', 'seed-breakglass-001', now(), now(), '${A}', '${A}', 1),
+  ('bbbbbbbb-0004-0000-0000-000000000002', '${T}', 'bbbbbbbb-0004-0000-0000-000000000099', '${A}', 'Support ticket escalation — read-only tenant audit', now() - interval '30 minutes', now() + interval '2 hours', null, 'seed-breakglass-002', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
@@ -585,6 +737,12 @@ INSERT INTO deliveries.deliveries (id, tenant_id, template_id, recipient, channe
 VALUES
   ('dddddddd-0002-0000-0000-000000000003', '${T}', 'dddddddd-0002-0000-0000-000000000001', 'finance@demo.gov.in', 'email', 'delivered', now(), now(), now(), '${A}', '${A}', 1),
   ('dddddddd-0002-0000-0000-000000000004', '${T}', 'dddddddd-0002-0000-0000-000000000002', '9876541001',          'sms',   'delivered', now(), now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO templates.prefs (id, tenant_id, user_id, event_type, in_app, email, push, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('dddddddd-0003-0000-0000-000000000001', '${T}', '${A}', 'bill.approved',  true,  true,  false, now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0003-0000-0000-000000000002', '${T}', '${A}', 'leave.approved', true,  false, false, now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
@@ -656,11 +814,19 @@ ON CONFLICT (id) DO NOTHING;
 // ─────────────────────────────────────────────────────────────────────────────
 console.log("=== report-service ===");
 // schema is reports.jobs (not report.jobs)
-seed("civitas_report", "jobs", `
-INSERT INTO reports.jobs (id, tenant_id, name, report_type, status, created_at, updated_at, created_by, updated_by, version)
+seed("civitas_report", "jobs+kpis", `
+INSERT INTO reports.jobs (id, tenant_id, name, report_type, status, format, row_count, requested_by, completed_at, download_url, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('33333333-0003-0000-0000-000000000001', '${T}', 'Monthly Budget Report Dec 2024', 'budget_summary',  'active', now(), now(), '${A}', '${A}', 1),
-  ('33333333-0003-0000-0000-000000000002', '${T}', 'Vendor Payment Report Q3',       'payment_summary', 'active', now(), now(), '${A}', '${A}', 1)
+  ('33333333-0003-0000-0000-000000000001', '${T}', 'Monthly Budget Report Dec 2024', 'budget_summary',  'completed', 'pdf',  42, '${A}', now(), 'https://reports.demo.gov.in/budget-dec-2024.pdf', now(), now(), '${A}', '${A}', 1),
+  ('33333333-0003-0000-0000-000000000002', '${T}', 'Vendor Payment Report Q3',       'payment_summary', 'completed', 'xlsx', 18, '${A}', now(), 'https://reports.demo.gov.in/payments-q3.xlsx',    now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO reports.kpis (id, tenant_id, kpi_name, module, target_value, current_value, unit, period, trend, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('33333333-0003-0000-0000-000000000003', '${T}', 'Budget Utilisation',  'finance',     100, 87.5,  '%',  '2024-25', 'up',     'on_track', now(), now(), '${A}', '${A}', 1),
+  ('33333333-0003-0000-0000-000000000004', '${T}', 'Pending Sanctions',   'finance',     10,  3,     'count','2024-25', 'down',   'on_track', now(), now(), '${A}', '${A}', 1),
+  ('33333333-0003-0000-0000-000000000005', '${T}', 'Employee Headcount',  'hr',          500, 482,   'count','2024-25', 'stable', 'on_track', now(), now(), '${A}', '${A}', 1),
+  ('33333333-0003-0000-0000-000000000006', '${T}', 'Open Audit Observations', 'audit',   20,  8,     'count','2024-25', 'down',   'at_risk',  now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 

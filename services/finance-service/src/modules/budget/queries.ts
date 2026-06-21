@@ -56,6 +56,32 @@ export async function getBudget(tenantId: string, headId: string, fy: string): P
   );
 }
 
+export async function listBudgetSummaries(tenantId: string, limit: number) {
+  const rows = await cache.getOrLoad(
+    cache.makeKey(tenantId, "budgets", `list:${limit}`),
+    () => repo.listBudgetsByTenant(tenantId, limit),
+    60,
+  );
+  const summaries = [];
+  for (const row of rows ?? []) {
+    const head = await repo.findHeadById(row.headId);
+    const allocated = Number(row.allocatedMinor ?? row.beMinor ?? 0n);
+    const utilised = Number(row.utilisedMinor ?? 0n);
+    summaries.push({
+      id: row.id,
+      majorHead: head?.code ?? row.headId,
+      subHead: head?.name,
+      sanctionedAmount: allocated / 100,
+      releasedAmount: Number(row.reMinor ?? row.allocatedMinor ?? 0n) / 100,
+      expenditure: utilised / 100,
+      balance: Math.max(0, allocated - utilised) / 100,
+      status: utilised >= allocated ? "exhausted" : "active",
+      financialYear: row.fy,
+    });
+  }
+  return summaries;
+}
+
 export async function getSanctionAvailable(id: string, tenantId: string): Promise<{ id: string; available: bigint; currency: string } | null> {
   const sanction = await cache.getOrLoad<SanctionRow>(
     cache.makeKey(tenantId, "sanction", id),

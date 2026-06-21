@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
+import { listQuerySchema } from "@civitasone/schemas/common";
 import { ReportDashboardSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole } from "../../shared/context.js";
+import * as kpiQueries from "../kpis/queries.js";
 
 const ROLES = ["report_user", "report_admin", "super_admin"];
 
@@ -9,6 +11,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/reports/dashboards", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    sendValidated(reply, ReportDashboardSchema, { kpis: [], summary: "Reports dashboard ready" });
+    const q = listQuerySchema.parse(req.query);
+    const items = await kpiQueries.listDashboardItems(ctx.tenantId, q.limit);
+    sendValidated(reply, ReportDashboardSchema, {
+      kpis: items,
+      summary: items.length > 0 ? `${items.length} KPIs tracked` : "Reports dashboard ready",
+    });
   });
 }

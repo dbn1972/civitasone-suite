@@ -32,6 +32,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = sessionIdParam.parse(req.params);
     const view = await queries.getSession(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "session not found");
+    if (view.userId !== ctx.actorId) requireRole(ctx, SESSION_ADMIN);
     return reply.send(view);
   });
 

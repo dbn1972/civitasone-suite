@@ -1,6 +1,6 @@
 # Screen Contract Map
 
-Generated: 2026-06-20T23:06:23.928Z
+Generated: 2026-06-21T01:46:18.773Z
 
 **Summary:** 135 WIRED | 0 MISSING | 0 MISMATCH | 30 NO_LOADER
 
@@ -158,7 +158,7 @@ Generated: 2026-06-20T23:06:23.928Z
 | telephony | /telephony | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/api-keys | getAPIKeys | /api/v1/admin/api-keys | admin → /v1/admin/api-keys | ✓ `/v1/admin/api-keys` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/audit | getTenantAuditLog | /api/v1/audit/events | audit → /v1/audit/events | ✓ `/v1/audit/events` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/breakglass | getBreakglassLog | /api/v1/audit/breakglass | audit → /v1/audit/breakglass | ✓ `/v1/audit/breakglass` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/breakglass | getBreakglassLog | /api/v1/admin/breakglass | admin → /v1/admin/breakglass | ✓ `/v1/admin/breakglass` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/notifications | getNotificationPreferences | /api/notification/preferences | notification → /notifications/preferences | ✓ `/notifications/preferences` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin | getTenantAdminDashboard | /api/v1/admin/health | admin → /v1/admin/health | ✓ `/v1/admin/health` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/roles/[id] | getAdminRoleById | /api/policy/roles/:param | policy → /policy/roles/:param | ✓ `/policy/roles/:id` | ✓ | ✅ WIRED |

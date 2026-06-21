@@ -51,6 +51,12 @@ export async function findPrefsByUser(userId: string): Promise<PrefView[]> {
   return (await db.select().from(notificationPrefs).where(eq(notificationPrefs.userId, userId))).map(toPrefView);
 }
 
+export async function findPrefsByTenant(tenantId: string, limit: number): Promise<PrefView[]> {
+  return (await db.select().from(notificationPrefs)
+    .where(eq(notificationPrefs.tenantId, tenantId))
+    .limit(limit)).map(toPrefView);
+}
+
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insertTemplate(tx: Writer, row: TemplateInsert): Promise<void> {

@@ -2192,7 +2192,7 @@ export async function getAPIKeys(): Promise<LoaderResult<APIKeySummary[]>> {
 }
 
 export async function getBreakglassLog(): Promise<LoaderResult<BreakglassSummary[]>> {
-  return fetchJson<unknown, BreakglassSummary[]>("/api/v1/audit/breakglass", [], {
+  return fetchJson<unknown, BreakglassSummary[]>("/api/v1/admin/breakglass", [], {
     revalidateSeconds: 30,
     telemetryKey: "admin.breakglass",
     responseSchema: BreakglassSummaryListSchema,

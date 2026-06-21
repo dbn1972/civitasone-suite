@@ -71,6 +71,12 @@ export async function listSanctionsByTenant(tenantId: string, limit: number): Pr
     .limit(limit);
 }
 
+export async function listBudgetsByTenant(tenantId: string, limit: number): Promise<BudgetRow[]> {
+  return db.select().from(financeBudgets)
+    .where(eq(financeBudgets.tenantId, tenantId))
+    .limit(limit);
+}
+
 export async function findHeadById(id: string): Promise<HeadRow | null> {
   const rows = await db.select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
   return rows[0] ?? null;

@@ -54,6 +54,7 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/audit/events/:id", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const view = await queries.getEvent(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "event not found");

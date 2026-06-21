@@ -9,10 +9,10 @@ test.describe('Reports', () => {
   test('reports hub shows heading and navigation links', async ({ page }) => {
     await page.goto('/reports');
     await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Report Jobs' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'KPI Tracker' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'MIS Dashboard' })).toBeVisible();
+    await expect(page.locator('a[href="/reports/dashboard"]')).toBeVisible();
+    await expect(page.locator('a[href="/reports/list"]')).toBeVisible();
+    await expect(page.locator('a[href="/reports/kpi"]')).toBeVisible();
+    await expect(page.locator('a[href="/reports/mis"]')).toBeVisible();
   });
 
   test('reports hub nav links point to correct hrefs', async ({ page }) => {
@@ -35,9 +35,10 @@ test.describe('Reports', () => {
 
   test('report jobs list shows seeded job data', async ({ page }) => {
     await page.goto('/reports/list');
-    await expect(page.getByRole('cell', { name: 'Monthly Finance Summary' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'finance' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'completed' })).toBeVisible();
+    const table = page.getByRole('table', { name: 'Report jobs' });
+    await expect(table.getByRole('cell', { name: 'Monthly Finance Summary' })).toBeVisible();
+    await expect(table.getByRole('cell', { name: 'finance', exact: true })).toBeVisible();
+    await expect(table.getByRole('cell', { name: 'completed', exact: true })).toBeVisible();
   });
 
   test('KPI tracker page shows heading and column headers', async ({ page }) => {

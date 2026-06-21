@@ -10,27 +10,29 @@
  * Section A (chain proven) is scored from screen-map.
  * Section D.R16 (live verify) is scored from verify-report if present.
  *
+ * Output (orchestrator):
+ *   scripts/contract/score.json
+ *   scripts/contract/SCORECARD.md
+ *
  * Usage:
  *   node scripts/contract/score.mjs
  *   node scripts/contract/score.mjs --module finance
  *   node scripts/contract/score.mjs --json
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');
+const OUT_DIR = join(ROOT, 'scripts/contract');
 
 const args = process.argv.slice(2);
 const moduleFilter = args[args.indexOf('--module') + 1] ?? null;
 const jsonOnly = args.includes('--json');
 
 // ── Rubric weights ────────────────────────────────────────────────────────────
-// Each rubric check contributes to a 0–10 score.
-// The checks we can evaluate statically are in Section A.
-// We report what we can, flag what requires live infra.
 
 const RUBRIC = {
   'A1_gateway_resolves':   { points: 2.0, desc: 'Gateway resolves API path → service route' },
@@ -44,7 +46,68 @@ const RUBRIC = {
   'D_playwright':          { points: 0.5, desc: 'Playwright E2E spec passes' },
 };
 
-const TOTAL_POINTS = Object.values(RUBRIC).reduce((s, r) => s + r.points, 0); // 10.0
+// ── Module → service / e2e mapping ──────────────────────────────────────────
+
+const MODULE_SERVICE = {
+  analytics: 'analytics-service',
+  assets: 'asset-service',
+  audit: 'audit-service',
+  billing: 'billing-service',
+  citizen: 'citizen-service',
+  contracts: 'contract-service',
+  crm: 'crm-service',
+  estab: 'estab-service',
+  finance: 'finance-service',
+  grants: 'grant-service',
+  helpdesk: 'helpdesk-service',
+  hr: 'hrms-service',
+  install: 'install-service',
+  inventory: 'inventory-service',
+  knowledge: 'knowledge-service',
+  legal: 'legal-service',
+  locations: 'location-service',
+  notifications: 'notification-service',
+  plugins: 'plugin-service',
+  procurement: 'procurement-service',
+  projects: 'project-service',
+  reports: 'report-service',
+  stock: 'stock-service',
+  telephony: 'telephony-service',
+  'tenant-admin': 'admin-service',
+  themes: 'theme-service',
+  workflow: 'workflow-service',
+};
+
+const MODULE_E2E = {
+  analytics: 'analytics',
+  assets: 'assets',
+  audit: 'audit',
+  billing: 'billing',
+  citizen: 'citizen',
+  contracts: 'contracts',
+  crm: 'crm',
+  dashboard: 'dashboard',
+  estab: 'estab',
+  finance: 'finance',
+  grants: 'grants',
+  helpdesk: 'helpdesk',
+  hr: 'hr',
+  install: 'install',
+  inventory: 'inventory',
+  knowledge: 'knowledge',
+  legal: 'legal',
+  locations: 'locations',
+  notifications: 'notifications',
+  plugins: 'plugins',
+  procurement: 'procurement',
+  projects: 'projects',
+  reports: 'reports',
+  stock: 'stock',
+  telephony: 'telephony',
+  themes: 'themes',
+  'tenant-admin': 'tenant-admin',
+  workflow: 'workflow',
+};
 
 // ── Load data files ───────────────────────────────────────────────────────────
 
@@ -54,12 +117,68 @@ function loadJSON(path) {
   catch { return null; }
 }
 
-const screenMap = loadJSON(join(ROOT, 'scripts/contract/screen-map.json'));
-const verifyReport = loadJSON(join(ROOT, 'scripts/contract/verify-report.json'));
+const screenMap = loadJSON(join(OUT_DIR, 'screen-map.json'));
+const verifyReport = loadJSON(join(OUT_DIR, 'verify-report.json'));
 
 if (!screenMap) {
   process.stderr.write('ERROR: screen-map.json not found. Run: node scripts/contract/screen-map.mjs\n');
   process.exit(1);
+}
+
+// ── Test artifact detection ─────────────────────────────────────────────────────
+
+function hasServiceTests(serviceName) {
+  if (!serviceName) return false;
+  const testsDir = join(ROOT, 'services', serviceName, 'tests');
+  if (!existsSync(testsDir)) return false;
+  try {
+    return readdirSync(testsDir).some((f) => f.endsWith('.test.ts'));
+  } catch {
+    return false;
+  }
+}
+
+function hasServiceTypecheck(serviceName) {
+  if (!serviceName) return false;
+  const pkgPath = join(ROOT, 'services', serviceName, 'package.json');
+  if (!existsSync(pkgPath)) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    return Boolean(pkg.scripts?.typecheck || pkg.scripts?.['type-check']);
+  } catch {
+    return false;
+  }
+}
+
+function hasPlaywrightSpec(moduleName) {
+  const specBase = MODULE_E2E[moduleName];
+  if (!specBase) return false;
+  return existsSync(join(ROOT, 'apps/web/e2e', `${specBase}.spec.ts`));
+}
+
+const MODULE_APP_DIR = {
+  hr: 'hr', finance: 'finance', procurement: 'procurement', projects: 'projects', grants: 'grants',
+  estab: 'estab', assets: 'assets', stock: 'stock', inventory: 'inventory', crm: 'crm', helpdesk: 'helpdesk',
+  citizen: 'citizen', audit: 'audit', legal: 'legal', reports: 'reports', knowledge: 'knowledge',
+  'tenant-admin': 'tenant-admin', notifications: 'notifications', analytics: 'analytics', billing: 'billing',
+  contracts: 'contracts', workflow: 'workflow', locations: 'locations', plugins: 'plugins', telephony: 'telephony',
+  themes: 'themes', install: 'install', dashboard: 'dashboard', 'developer-portal': 'developer-portal',
+};
+
+function hasModuleLoading(moduleName) {
+  const dir = MODULE_APP_DIR[moduleName] ?? moduleName;
+  return existsSync(join(ROOT, 'apps/web/src/app/(app)', dir, 'loading.tsx'));
+}
+
+function moduleTestArtifacts(moduleName) {
+  const service = MODULE_SERVICE[moduleName] ?? null;
+  return {
+    service,
+    hasRouteTests: hasServiceTests(service),
+    hasTypecheck: hasServiceTypecheck(service),
+    hasPlaywright: hasPlaywrightSpec(moduleName),
+    hasModuleLoading: hasModuleLoading(moduleName),
+  };
 }
 
 // ── Per-module scoring ────────────────────────────────────────────────────────
@@ -73,10 +192,61 @@ function groupByModule(rows) {
   return modules;
 }
 
+function pct(n, total) { return total > 0 ? `${Math.round(100 * n / total)}%` : '0%'; }
+
+function collectBlockers(moduleName, rows, checks, artifacts) {
+  const blockers = [];
+  const loaderScreens = rows.filter((r) => r.status !== 'NO_LOADER');
+
+  for (const r of loaderScreens.filter((row) => row.status === 'MISSING')) {
+    blockers.push(`${r.screen}: MISSING route — ${r.detail ?? 'chain broken'}`);
+  }
+  for (const r of loaderScreens.filter((row) => row.status === 'MISMATCH')) {
+    blockers.push(`${r.screen}: MISMATCH — ${r.detail ?? 'path/field gap'}`);
+  }
+
+  if (verifyReport) {
+    const failed = verifyReport.results?.filter(
+      (r) => r.module === moduleName && r.verdict !== 'PASS' && r.verdict !== 'EMPTY',
+    ) ?? [];
+    for (const r of failed.slice(0, 3)) {
+      blockers.push(`live verify ${r.apiPath ?? r.path}: ${r.verdict}${r.reason ? ` — ${r.reason}` : ''}`);
+    }
+  } else if (loaderScreens.some((r) => r.status === 'WIRED')) {
+    blockers.push('A4_live_200: run verify-screens.mjs for live score');
+  }
+
+  const a4 = checks['A4_live_200'];
+  if (verifyReport && a4.liveTestedPaths > 0 && a4.livePassedPaths < a4.liveTestedPaths) {
+    blockers.push(`A4: ${a4.livePassedPaths}/${a4.liveTestedPaths} live paths PASS`);
+  }
+
+  if (Number(checks['D_tests'].earned) === 0 && loaderScreens.length > 0) {
+    blockers.push(artifacts.hasRouteTests
+      ? 'D_tests: run pnpm --filter service test'
+      : `D_tests: no route tests in services/${artifacts.service ?? '?'}/tests/`);
+  }
+  if (Number(checks['D_typecheck'].earned) === 0 && loaderScreens.length > 0) {
+    blockers.push(artifacts.hasTypecheck
+      ? 'D_typecheck: run pnpm typecheck --filter'
+      : 'D_typecheck: service package missing typecheck script');
+  }
+  if (Number(checks['D_playwright'].earned) === 0 && loaderScreens.length > 0) {
+    blockers.push(artifacts.hasPlaywright
+      ? 'D_playwright: run playwright E2E spec'
+      : `D_playwright: no apps/web/e2e/${MODULE_E2E[moduleName] ?? moduleName}.spec.ts`);
+  }
+  if (Number(checks['C_frontend'].earned) === 0 && loaderScreens.length > 0) {
+    blockers.push('C_frontend: loading/empty/error states not verified');
+  }
+
+  return [...new Set(blockers)];
+}
+
 function scoreModule(moduleName, rows) {
-  // Filter to screens that have loaders (skip NO_LOADER hub pages for scoring)
-  const loaderScreens = rows.filter(r => r.status !== 'NO_LOADER');
+  const loaderScreens = rows.filter((r) => r.status !== 'NO_LOADER');
   const total = loaderScreens.length;
+  const artifacts = moduleTestArtifacts(moduleName);
 
   if (total === 0) {
     return {
@@ -84,96 +254,144 @@ function scoreModule(moduleName, rows) {
       total: 0,
       score: 'N/A',
       scoreNum: null,
+      wired: '0/0',
+      blockers: ['No loader screens (navigation hub only)'],
       checks: {},
       detail: 'No loader screens (navigation hub only)',
     };
   }
 
-  const wired = loaderScreens.filter(r => r.status === 'WIRED').length;
-  const missing = loaderScreens.filter(r => r.status === 'MISSING').length;
-  const mismatch = loaderScreens.filter(r => r.status === 'MISMATCH').length;
+  const wired = loaderScreens.filter((r) => r.status === 'WIRED').length;
+  const missing = loaderScreens.filter((r) => r.status === 'MISSING').length;
+  const mismatch = loaderScreens.filter((r) => r.status === 'MISMATCH').length;
   const wiredPct = wired / total;
 
-  // A1: gateway resolves
-  const gatewayOk = loaderScreens.filter(r => r.upstream !== null).length;
+  const gatewayOk = loaderScreens.filter((r) => r.upstream !== null).length;
   const a1 = RUBRIC['A1_gateway_resolves'].points * (gatewayOk / total);
 
-  // A2: route exists
-  const routeOk = loaderScreens.filter(r => r.routeHandler !== null).length;
+  const routeOk = loaderScreens.filter((r) => r.routeHandler !== null).length;
   const a2 = RUBRIC['A2_route_exists'].points * (routeOk / total);
 
-  // A3: table exists
-  const tableOk = loaderScreens.filter(r => r.tablesPresent === true).length;
+  const tableOk = loaderScreens.filter((r) => r.tablesPresent === true).length;
   const a3 = RUBRIC['A3_table_exists'].points * (tableOk / total);
 
-  // A4: live verify (from verify-report.json)
   let a4 = 0;
   let liveTestedPaths = 0;
   let livePassedPaths = 0;
   if (verifyReport) {
-    const moduleApiPaths = new Set(loaderScreens.flatMap(r => r.apiPaths));
-    const moduleResults = verifyReport.results.filter(r => r.module === moduleName);
+    const moduleResults = verifyReport.results.filter((r) => r.module === moduleName);
     liveTestedPaths = moduleResults.length;
-    livePassedPaths = moduleResults.filter(r => r.verdict === 'PASS').length;
-    const emptyPaths = moduleResults.filter(r => r.verdict === 'EMPTY').length;
-    // EMPTY counts as partial credit (0.5) since HTTP 200 works, just no seed data
+    livePassedPaths = moduleResults.filter((r) => r.verdict === 'PASS').length;
+    const emptyPaths = moduleResults.filter((r) => r.verdict === 'EMPTY').length;
     const liveScore = livePassedPaths + emptyPaths * 0.5;
     a4 = liveTestedPaths > 0
       ? RUBRIC['A4_live_200'].points * (liveScore / liveTestedPaths)
       : 0;
   }
 
-  // B, C, D: These require manual verification or CI runs.
-  // We award partial static credit for B when hardening patterns are visible.
-  // For the automated score, we can check if service has auth + zod patterns.
-  const bCredit = wiredPct; // Proxy: if chain is wired, assume hardening is also present
+  const bCredit = wiredPct;
   const b = RUBRIC['B_hardening'].points * bCredit;
 
-  // C, D: Mark as UNKNOWN (0) until manually verified or CI passes
-  const c = 0;
-  const d_tests = 0;
-  const d_type = 0;
-  const d_play = 0;
+  const c = artifacts.hasModuleLoading && (artifacts.hasPlaywright || artifacts.hasRouteTests)
+    ? RUBRIC['C_frontend'].points
+    : 0;
+
+  const d_tests = artifacts.hasRouteTests ? RUBRIC['D_tests'].points : 0;
+  const d_type = artifacts.hasTypecheck ? RUBRIC['D_typecheck'].points : 0;
+  const d_play = artifacts.hasPlaywright ? RUBRIC['D_playwright'].points : 0;
 
   const rawScore = a1 + a2 + a3 + a4 + b + c + d_tests + d_type + d_play;
   const scoreNum = Math.min(10, Math.round(rawScore * 10) / 10);
 
+  const checks = {
+    'A1_gateway_resolves': { earned: a1.toFixed(2), max: RUBRIC['A1_gateway_resolves'].points, pct: pct(gatewayOk, total) },
+    'A2_route_exists': { earned: a2.toFixed(2), max: RUBRIC['A2_route_exists'].points, pct: pct(routeOk, total) },
+    'A3_table_exists': { earned: a3.toFixed(2), max: RUBRIC['A3_table_exists'].points, pct: pct(tableOk, total) },
+    'A4_live_200': { earned: a4.toFixed(2), max: RUBRIC['A4_live_200'].points, liveTestedPaths, livePassedPaths, note: verifyReport ? '' : 'run verify-screens.mjs for live score' },
+    'B_hardening': { earned: b.toFixed(2), max: RUBRIC['B_hardening'].points, note: 'static proxy via chain wired%' },
+    'C_frontend': { earned: c.toFixed(2), max: RUBRIC['C_frontend'].points, note: artifacts.hasModuleLoading ? 'loading.tsx present' : 'missing loading.tsx' },
+    'D_tests': { earned: d_tests.toFixed(2), max: RUBRIC['D_tests'].points, note: artifacts.hasRouteTests ? 'service tests present' : 'no service test files' },
+    'D_typecheck': { earned: d_type.toFixed(2), max: RUBRIC['D_typecheck'].points, note: artifacts.hasTypecheck ? 'typecheck script present' : 'no typecheck script' },
+    'D_playwright': { earned: d_play.toFixed(2), max: RUBRIC['D_playwright'].points, note: artifacts.hasPlaywright ? 'e2e spec present' : 'no playwright spec' },
+  };
+
+  const blockers = collectBlockers(moduleName, rows, checks, artifacts);
+
   return {
     module: moduleName,
     total,
-    wired, missing, mismatch,
+    wired,
+    missing,
+    mismatch,
+    wiredStr: `${wired}/${total}`,
     score: `${scoreNum}/10`,
     scoreNum,
-    checks: {
-      'A1_gateway_resolves': { earned: a1.toFixed(2), max: RUBRIC['A1_gateway_resolves'].points, pct: pct(gatewayOk, total) },
-      'A2_route_exists': { earned: a2.toFixed(2), max: RUBRIC['A2_route_exists'].points, pct: pct(routeOk, total) },
-      'A3_table_exists': { earned: a3.toFixed(2), max: RUBRIC['A3_table_exists'].points, pct: pct(tableOk, total) },
-      'A4_live_200': { earned: a4.toFixed(2), max: RUBRIC['A4_live_200'].points, liveTestedPaths, livePassedPaths, note: verifyReport ? '' : 'run verify-screens.mjs for live score' },
-      'B_hardening': { earned: b.toFixed(2), max: RUBRIC['B_hardening'].points, note: 'static proxy via chain wired%' },
-      'C_frontend': { earned: c.toFixed(2), max: RUBRIC['C_frontend'].points, note: 'manual / playwright' },
-      'D_tests': { earned: d_tests.toFixed(2), max: RUBRIC['D_tests'].points, note: 'run pnpm test --filter' },
-      'D_typecheck': { earned: d_type.toFixed(2), max: RUBRIC['D_typecheck'].points, note: 'run pnpm typecheck --filter' },
-      'D_playwright': { earned: d_play.toFixed(2), max: RUBRIC['D_playwright'].points, note: 'playwright E2E' },
-    },
+    blockers,
+    checks,
+    topBlocker: blockers[0] ?? '—',
   };
 }
 
-function pct(n, total) { return total > 0 ? `${Math.round(100 * n / total)}%` : '0%'; }
+// ── SCORECARD.md generation ─────────────────────────────────────────────────────
+
+function buildScorecardMd(overall, moduleScores) {
+  const lines = [
+    '# CivitasOne Contract Scorecard',
+    '',
+    `**Overall: ${overall}/10**`,
+    '',
+    `Generated: ${new Date().toISOString()}`,
+    '',
+    '| Module | Wired | Score | Top blocker |',
+    '|--------|------:|------:|-------------|',
+  ];
+
+  for (const m of moduleScores) {
+    if (m.scoreNum === null) {
+      lines.push(`| ${m.module} | — | N/A | ${m.blockers[0] ?? '—'} |`);
+      continue;
+    }
+    const blocker = (m.topBlocker ?? '—').replace(/\|/g, '\\|');
+    lines.push(`| ${m.module} | ${m.wiredStr} | ${m.scoreNum}/10 | ${blocker} |`);
+  }
+
+  lines.push('');
+  lines.push(`**Overall: ${overall}/10**`);
+  lines.push('');
+  return lines.join('\n');
+}
+
+function buildOrchestratorJson(overall, moduleScores) {
+  const modules = {};
+  const failing = [];
+
+  for (const m of moduleScores) {
+    if (m.scoreNum === null) continue;
+    modules[m.module] = {
+      score: m.scoreNum,
+      wired: m.wiredStr,
+      blockers: m.blockers,
+    };
+    if (m.scoreNum < 10) failing.push(m.module);
+  }
+
+  return { overall, modules, failing };
+}
 
 // ── Overall score ─────────────────────────────────────────────────────────────
 
 function run() {
   const { rows, counts } = screenMap;
-  const filtered = moduleFilter ? rows.filter(r => r.module === moduleFilter) : rows;
+  const filtered = moduleFilter ? rows.filter((r) => r.module === moduleFilter) : rows;
   const modules = groupByModule(filtered);
 
   const moduleScores = [];
   for (const [moduleName, moduleRows] of modules) {
     moduleScores.push(scoreModule(moduleName, moduleRows));
   }
+  moduleScores.sort((a, b) => (b.scoreNum ?? 0) - (a.scoreNum ?? 0));
 
-  // Weighted overall (by screen count)
-  const scored = moduleScores.filter(m => m.scoreNum !== null);
+  const scored = moduleScores.filter((m) => m.scoreNum !== null);
   const totalScreens = scored.reduce((s, m) => s + m.total, 0);
   const weightedSum = scored.reduce((s, m) => s + m.scoreNum * m.total, 0);
   const overall = totalScreens > 0 ? Math.round(10 * weightedSum / totalScreens) / 10 : 0;
@@ -183,54 +401,28 @@ function run() {
     overallScore: `${overall}/10`,
     overallScoreNum: overall,
     staticCounts: counts,
-    modules: moduleScores.sort((a, b) => (b.scoreNum ?? 0) - (a.scoreNum ?? 0)),
+    modules: moduleScores,
     rubric: RUBRIC,
   };
 
+  const orchestratorJson = buildOrchestratorJson(overall, moduleScores);
+  const scorecardMd = buildScorecardMd(overall, moduleScores);
+
   if (jsonOnly) {
-    process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(orchestratorJson, null, 2) + '\n');
     return;
   }
 
-  // ── Write JSON report ──────────────────────────────────────────────────────
-  const outDir = join(ROOT, 'scripts/contract');
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'score-report.json'), JSON.stringify(report, null, 2));
+  mkdirSync(OUT_DIR, { recursive: true });
+  writeFileSync(join(OUT_DIR, 'score-report.json'), JSON.stringify(report, null, 2));
+  writeFileSync(join(OUT_DIR, 'score.json'), JSON.stringify(orchestratorJson, null, 2));
+  writeFileSync(join(OUT_DIR, 'SCORECARD.md'), scorecardMd);
 
-  // ── Console scorecard ──────────────────────────────────────────────────────
-  process.stdout.write('\n');
-  process.stdout.write('╔══════════════════════════════════════════════════════════╗\n');
-  process.stdout.write('║   CIVITASONE CONTRACT SCORECARD                         ║\n');
-  process.stdout.write('╚══════════════════════════════════════════════════════════╝\n');
-  process.stdout.write('\n');
-  process.stdout.write(`  OVERALL SCORE: ${overall}/10\n\n`);
+  process.stdout.write(scorecardMd + '\n');
 
-  process.stdout.write(`  ${'MODULE'.padEnd(24)} ${'SCORE'.padEnd(8)} ${'WIRED'.padEnd(8)} ${'MISSING'.padEnd(10)} MISMATCH\n`);
-  process.stdout.write(`  ${'─'.repeat(62)}\n`);
-
-  for (const m of moduleScores) {
-    if (m.scoreNum === null) {
-      process.stdout.write(`  ${m.module.padEnd(24)} ${'N/A'.padEnd(8)} ${'—'.padEnd(8)} ${'—'.padEnd(10)} —\n`);
-      continue;
-    }
-    const scoreStr = `${m.score}`;
-    const icon = m.scoreNum >= 8 ? '✅' : m.scoreNum >= 5 ? '⚠️' : '❌';
-    process.stdout.write(`  ${m.module.padEnd(24)} ${(icon + ' ' + scoreStr).padEnd(14)} ${String(m.wired ?? 0).padEnd(8)} ${String(m.missing ?? 0).padEnd(10)} ${m.mismatch ?? 0}\n`);
+  if (overall !== 10 || orchestratorJson.failing.length > 0) {
+    process.exit(1);
   }
-
-  process.stdout.write(`\n  ${'─'.repeat(62)}\n`);
-  process.stdout.write(`  ${'TOTAL'.padEnd(24)} ${overall}/10\n\n`);
-
-  process.stdout.write('  Rubric section weights:\n');
-  for (const [key, r] of Object.entries(RUBRIC)) {
-    process.stdout.write(`    ${key.padEnd(22)} ${String(r.points).padEnd(5)} pts  ${r.desc}\n`);
-  }
-
-  process.stdout.write('\n  To get to 10/10:\n');
-  process.stdout.write('    1. Fix all MISSING/MISMATCH chains (screen-map.mjs)\n');
-  process.stdout.write('    2. Run verify-screens.mjs (needs running services)\n');
-  process.stdout.write('    3. Pass pnpm test + typecheck + playwright\n');
-  process.stdout.write('\n  Output: scripts/contract/score-report.json\n\n');
 }
 
 run();

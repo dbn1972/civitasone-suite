@@ -8,10 +8,10 @@ test.describe('Legal', () => {
 
   test('hub page shows navigation links', async ({ page }) => {
     await page.goto('/legal');
-    await expect(page.getByRole('link', { name: 'Cases List' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Hearings' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Court Orders' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Legal Opinions' })).toBeVisible();
+    await expect(page.locator('a[href="/legal/list"]')).toBeVisible();
+    await expect(page.locator('a[href="/legal/hearings"]')).toBeVisible();
+    await expect(page.locator('a[href="/legal/court-orders"]')).toBeVisible();
+    await expect(page.locator('a[href="/legal/opinions"]')).toBeVisible();
   });
 
   test('legal cases list shows heading and column headers', async ({ page }) => {
@@ -42,7 +42,7 @@ test.describe('Legal', () => {
     await expect(page.getByRole('columnheader', { name: 'Case No' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Case Title' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Court' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Date' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Date', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Time' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Purpose' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Outcome' })).toBeVisible();

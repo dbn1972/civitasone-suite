@@ -21,6 +21,13 @@ export async function getUserPrefs(tenantId: string, userId: string): Promise<Pr
   ) as Promise<PrefView[]>;
 }
 
+export async function listTenantPrefs(tenantId: string, limit: number): Promise<PrefView[]> {
+  return cache.getOrLoad<PrefView[]>(
+    cache.makeKey(tenantId, `${RESOURCE.prefs}_list`, String(limit)),
+    () => repo.findPrefsByTenant(tenantId, limit),
+  ) as Promise<PrefView[]>;
+}
+
 export async function listTemplateVersions(tenantId: string, id: string): Promise<TemplateView[]> {
   return cache.getOrLoad<TemplateView[]>(
     cache.makeKey(tenantId, `${RESOURCE.template}_versions`, id),

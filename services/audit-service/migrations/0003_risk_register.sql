@@ -24,3 +24,6 @@ CREATE TABLE IF NOT EXISTS risk.audit_risks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_risks_tenant ON risk.audit_risks (tenant_id, status);
+
+ALTER TABLE risk.audit_risks OWNER TO audit_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON risk.audit_risks TO audit_svc;
