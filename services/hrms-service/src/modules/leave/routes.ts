@@ -3,13 +3,53 @@ import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { eq } from "drizzle-orm";
+import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { hrmsEmployees } from "../employee/schema.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam } from "./validators.js";
+import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
+import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+
+
+/**
+ * Enforce CCS(Leave) Rules synchronously before accepting a leave application.
+ * Activates the rules engine for codes it knows (CL/EL/HPL/ML/PL/CCL/...);
+ * codes outside the engine (e.g. EOL/MED) fall back to the consumer balance
+ * check so nothing breaks. Throws 422 on a rule violation.
+ */
+async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof applyLeaveBody.parse>): Promise<void> {
+  const alloc = await repo.findAllocById(body.allocId);
+  if (!alloc) throw new HttpError(404, "ALLOC_NOT_FOUND", "leave allocation not found");
+  const types = await repo.listLeaveTypesByTenant(tenantId);
+  const lt = types.find((t) => t.id === body.leaveTypeId);
+  if (!lt) throw new HttpError(404, "LEAVE_TYPE_NOT_FOUND", "leave type not found");
+  const code = (lt.code ?? "").toUpperCase();
+  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return;
+  const [emp] = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, body.employeeId));
+  if (!emp) throw new HttpError(404, "EMP_NOT_FOUND", "employee not found");
+  const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
+  const empType = (allowed as string[]).includes(emp.employeeType ?? "")
+    ? (emp.employeeType as EmployeeType) : "permanent";
+  const result = await validateLeaveRequest({
+    employeeType: empType,
+    leaveCode: code as LeaveCategory,
+    fromDate: body.fromDate,
+    toDate: body.toDate,
+    daysApplied: body.daysApplied,
+    currentBalance: alloc.balanceDays,
+    totalAccumulated: alloc.totalDays,
+    serviceStartDate: (emp.dateOfJoining as unknown as string) ?? body.fromDate,
+    tenantId,
+    isOnProbation: (emp.status ?? "") === "probation",
+  });
+  if (!result.valid) throw new HttpError(422, "LEAVE_RULE_VIOLATION", result.errors.join("; "));
+}
 
 export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/leave-types", async (req, reply) => {
@@ -17,6 +57,13 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createLeaveTypeBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createLeaveType(ctx, body));
+  });
+
+  app.get("/v1/hrms/leave-allocations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const allocs = await queries.listLeaveAllocations(ctx.tenantId, 50);
+    return reply.send({ data: allocs });
   });
 
   app.post("/v1/hrms/leave-allocations", async (req, reply) => {
@@ -30,6 +77,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
+    await enforceCcsLeaveRules(ctx.tenantId, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
   });
 
@@ -37,12 +85,16 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
+    await enforceCcsLeaveRules(ctx.tenantId, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
   });
 
   app.patch("/v1/hrms/leave-applications/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...HR_ROLES, "manager"]);
+    if (!ctx.roles.includes("super_admin")) {
+      throw new HttpError(403, "WORKFLOW_REQUIRED", "Approve leave via workflow task inbox (/hr/leave/approvals)");
+    }
+    await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveLeave(ctx, id));
   });

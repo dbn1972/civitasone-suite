@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-
-const RESOURCE = "activity";
 import type { CreateActivityBody } from "./validators.js";
 import type { ActivityView } from "./schema.js";
+
+const RESOURCE = "activity";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -15,19 +15,22 @@ export async function createActivity(ctx: RequestContext, body: CreateActivityBo
   const projected: ActivityView = {
     id,
     tenantId: ctx.tenantId,
-    actorName: body.actorName,
+    actorName: body.actorName ?? "CRM User",
     text: body.text,
+    contactId: body.contactId ?? null,
+    dealId: body.dealId ?? null,
+    type: body.type ?? "note",
+    subject: body.subject ?? body.text.slice(0, 80),
+    status: body.status ?? "open",
+    dueDate: body.dueDate ?? null,
+    completedAt: body.status === "completed" ? createdAt : null,
     createdAt,
   };
 
   await cache.put(cache.makeKey(ctx.tenantId, RESOURCE, id), projected);
   await queue.publish(COMMANDS.createActivity, {
-    messageId: id,
-    type: COMMANDS.createActivity,
-    tenantId: ctx.tenantId,
-    actorId: ctx.actorId,
-    correlationId: ctx.correlationId,
-    schemaVersion: "1.0",
+    messageId: id, type: COMMANDS.createActivity,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: projected,
   });
 

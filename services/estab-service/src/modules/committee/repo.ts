@@ -1,7 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabCommittees, estabMeetings, estabResolutions, estabCompliance } from "./schema.js";
-import type { CommitteeInsert, MeetingInsert, MeetingRow, ResolutionInsert, ComplianceRow } from "./schema.js";
+import type { CommitteeInsert, MeetingInsert, MeetingRow, ResolutionInsert, ResolutionRow, ComplianceRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -23,6 +23,11 @@ export async function findMeetingById(id: string, tenantId: string): Promise<Mee
 export async function countResolutions(tx: Writer, meetingId: string): Promise<number> {
   const rows = await (tx as typeof db).select().from(estabResolutions).where(eq(estabResolutions.meetingId, meetingId));
   return rows.length;
+}
+
+export async function findResolutionsByMeeting(meetingId: string, tenantId: string): Promise<ResolutionRow[]> {
+  return db.select().from(estabResolutions)
+    .where(and(eq(estabResolutions.meetingId, meetingId), eq(estabResolutions.tenantId, tenantId)));
 }
 
 export async function insertCommittee(tx: Writer, row: CommitteeInsert): Promise<void> {

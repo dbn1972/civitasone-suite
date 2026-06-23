@@ -20,6 +20,7 @@ export const EVENTS = {
 
 export const CONSUMED = {
   grnAccepted: "procurement.grn.accepted",
+  assetDisposeApproved: "asset.dispose.approve",
 } as const;
 
 export const SERVICE = "asset";

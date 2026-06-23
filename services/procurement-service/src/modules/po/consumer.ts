@@ -5,9 +5,12 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertBudgetSufficient, assertCanDispatch } from "./domain.js";
+import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed } from "./domain.js";
+import * as vendorRepo from "../vendor/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+const WORKFLOW_CREATE = "workflow.instance.create";
+const PO_WORKFLOW_NAME = "Procurement PO Approval";
 const FINANCE_URL = process.env.FINANCE_SERVICE_URL ?? "http://finance-service:3007";
 
 async function checkSanctionAvailable(sanctionRef: string, required: bigint): Promise<void> {
@@ -26,9 +29,27 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; rateContractRef?: string; deliveryDate?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: number }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: number; itemType?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
+
+    // Vendor blacklist check (CVC compliance): reject PO for blacklisted vendor
+    const vendor = await vendorRepo.findVendorById(p.vendorId);
+    if (vendor && vendor.vendorType === "blacklisted") {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await enqueue(tx, {
+          topic: EVENTS.poVendorBlacklisted,
+          eventType: EVENTS.poVendorBlacklisted,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            poId: p.id, poNo: p.poNo, vendorId: p.vendorId,
+            reason: vendor.blacklistReason ?? "vendor is blacklisted (CVC order)",
+          },
+        });
+      });
+      return;
+    }
 
     // Budget check: call finance-service BEFORE any DB write (no DB call inside txn)
     if (p.sanctionRef) {
@@ -54,22 +75,52 @@ export function registerPoConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, poNo: p.poNo, vendorId: p.vendorId,
         indentRef: p.indentRef, sanctionRef: p.sanctionRef ?? null,
         rateContractRef: p.rateContractRef ?? null, gemOrderNo: null,
-        totalMinor, currency: "INR", status: "approved",
+        totalMinor, currency: "INR", status: "pending",
         deliveryDate: p.deliveryDate ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       const itemRows = p.items.map((i) => ({
         id: randomUUID(), poId: p.id, tenantId: p.tenantId,
         itemCode: i.itemCode, description: i.description, quantity: i.quantity,
         unit: i.unit, unitPriceMinor: BigInt(i.unitPriceMinor), currency: "INR" as const,
+        itemType: i.itemType ?? "consumable",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertPoItems(tx, itemRows);
+      const wfId = randomUUID();
+      await enqueue(tx, {
+        topic: WORKFLOW_CREATE, eventType: WORKFLOW_CREATE,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          id: wfId,
+          tenantId: msg.tenantId,
+          name: `${PO_WORKFLOW_NAME} — ${p.poNo}`,
+          status: "active",
+          definitionCode: "procurement_po_approval",
+          initialTaskName: "Procurement Head Approval",
+          version: 1,
+          refType: "procurement_po",
+          refId: p.id,
+        },
+      });
+      await audit(tx, msg, "create", "po", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
+  });
+
+  queue.subscribe(COMMANDS.poApprove, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const po = await repo.findPoByIdTx(tx, p.id);
+      if (!po) throw new Error(`po ${p.id} not found`);
+      assertTransitionAllowed(po.status ?? "draft", "approved");
+      await repo.updatePo(tx, p.id, { status: "approved", updatedBy: msg.actorId, version: (po.version ?? 1) + 1 });
       await enqueue(tx, {
         topic: EVENTS.poApproved, eventType: EVENTS.poApproved,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { poId: p.id, poNo: p.poNo, vendorId: p.vendorId, totalMinor: totalMinor.toString() },
+        payload: { poId: p.id, poNo: po.poNo, vendorId: po.vendorId, totalMinor: String(po.totalMinor) },
       });
-      await audit(tx, msg, "create", "po", p.id);
+      await audit(tx, msg, "approve", "po", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
   });
@@ -91,7 +142,7 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; gemOrderNo: string; deliveryDate?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: number }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: number; itemType?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
     await db.transaction(async (tx) => {
@@ -106,6 +157,7 @@ export function registerPoConsumers(queue: Queue): void {
         id: randomUUID(), poId: p.id, tenantId: p.tenantId,
         itemCode: i.itemCode, description: i.description, quantity: i.quantity,
         unit: i.unit, unitPriceMinor: BigInt(i.unitPriceMinor), currency: "INR" as const,
+        itemType: i.itemType ?? "consumable",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertPoItems(tx, itemRows);

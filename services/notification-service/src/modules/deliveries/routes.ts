@@ -3,20 +3,25 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { NotificationDeliveryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sendNotificationBody, deliveryIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
+const NOTIFY_SEND_ROLES = ["notification_admin", "super_admin", "platform_admin", "tenant_admin"];
+const NOTIFY_READ_ROLES = [...NOTIFY_SEND_ROLES, "audit_officer"];
+
 export async function deliveryRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/send", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, NOTIFY_SEND_ROLES);
     const body = sendNotificationBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.sendNotification(ctx, body));
   });
 
   app.get("/notifications/deliveries", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, NOTIFY_READ_ROLES);
     const q = z.object({
       userId: z.string().uuid().optional(),
       limit:  z.coerce.number().int().min(1).max(200).default(50),
@@ -30,7 +35,7 @@ export async function deliveryRoutes(app: FastifyInstance): Promise<void> {
       recipient: d.recipient,
       channel: (d.channel === "email" ? "email" : d.channel === "sms" ? "sms" : d.channel === "webhook" ? "webhook" : "in_app") as "email" | "sms" | "in_app" | "webhook",
       attemptCount: d.retryCount ?? 1,
-      deliveredAt: d.sentAt?.toISOString(),
+      deliveredAt: d.sentAt instanceof Date ? d.sentAt.toISOString() : d.sentAt ?? undefined,
       failureReason: d.error ?? undefined,
       status: (d.status === "delivered" || d.status === "sent" ? "delivered" : d.status === "failed" ? "failed" : d.status === "bounced" ? "bounced" : "pending") as "pending" | "delivered" | "failed" | "bounced",
     })));
@@ -38,6 +43,7 @@ export async function deliveryRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/notifications/deliveries/:id", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, NOTIFY_READ_ROLES);
     const { id } = deliveryIdParam.parse(req.params);
     const delivery = await queries.getDelivery(ctx.tenantId, id);
     if (!delivery) throw new HttpError(404, "NOT_FOUND", "delivery not found");

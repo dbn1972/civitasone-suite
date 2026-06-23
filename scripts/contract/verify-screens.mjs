@@ -34,6 +34,66 @@ const gatewayBase = (() => {
 })();
 const tenantId = process.env.TEST_TENANT_ID ?? '00000000-0000-0000-0000-000000000001';
 
+/** Fixed seed UUIDs from scripts/dev/seed-all.mjs — used to resolve :param in live verify. */
+const SEED_IDS = {
+  actor: '00000000-0000-0000-0000-000000000099',
+  user: '00000000-0000-0000-0000-000000000002',
+  role: 'bbbbbbbb-0001-0000-0000-000000000001',
+  asset: '77777777-0001-0000-0000-000000000003',
+  payrollRun: 'ffffffff-0001-0000-0000-000000000005',
+  employee: 'eeeeeeee-0001-0000-0000-000000000005',
+  vendor: 'eeeeeeee-0001-0000-0000-000000000001',
+  indent: '11111111-0002-0000-0000-000000000001',
+  po: '11111111-0002-0000-0000-000000000003',
+  rfq: '11111111-0003-0000-0000-000000000001',
+  tender: '11111111-0003-0000-0000-000000000003',
+  project: '44444444-0001-0000-0000-000000000003',
+  grant: '55555555-0001-0000-0000-000000000005',
+  stockItem: '88888888-0001-0000-0000-000000000005',
+  legalCase: 'aaaaaaaa-0002-0000-0000-000000000003',
+  crmContact: 'eeeeeeee-0002-0000-0000-000000000001',
+  crmDeal: 'eeeeeeee-0002-0000-0000-000000000003',
+  estabFile: '66666666-0001-0000-0000-000000000001',
+  estabMeeting: '66666666-0001-0000-0000-000000000005',
+  auditObservation: '99999999-0001-0000-0000-000000000005',
+  reportJob: '33333333-0003-0000-0000-000000000001',
+  financeBill: 'dddddddd-0001-0000-0000-000000000007',
+  financeSanction: 'dddddddd-0001-0000-0000-000000000005',
+  helpdeskTicket: '55555555-0004-0000-0000-000000000001',
+};
+
+function resolveApiPath(apiPath) {
+  const rules = [
+    [/asset\/assets\/:param/, SEED_IDS.asset],
+    [/payroll\/runs\/:param/, SEED_IDS.payrollRun],
+    [/hrms\/employees\/:param/, SEED_IDS.employee],
+    [/procurement\/vendors\/:param/, SEED_IDS.vendor],
+    [/procurement\/indents\/:param/, SEED_IDS.indent],
+    [/procurement\/pos\/:param/, SEED_IDS.po],
+    [/procurement\/rfqs\/:param/, SEED_IDS.rfq],
+    [/procurement\/tenders\/:param/, SEED_IDS.tender],
+    [/project\/projects\/:param/, SEED_IDS.project],
+    [/grants\/grants\/:param/, SEED_IDS.grant],
+    [/stock\/items\/:param/, SEED_IDS.stockItem],
+    [/legal\/cases\/:param/, SEED_IDS.legalCase],
+    [/crm\/contacts\/:param/, SEED_IDS.crmContact],
+    [/crm\/deals\/:param/, SEED_IDS.crmDeal],
+    [/estab\/files\/:param/, SEED_IDS.estabFile],
+    [/estab\/meetings\/:param/, SEED_IDS.estabMeeting],
+    [/audit\/observations\/:param/, SEED_IDS.auditObservation],
+    [/reports\/report-jobs\/:param/, SEED_IDS.reportJob],
+    [/finance\/bills\/:param/, SEED_IDS.financeBill],
+    [/finance\/sanctions\/:param/, SEED_IDS.financeSanction],
+    [/citizen\/tickets\/:param/, SEED_IDS.helpdeskTicket],
+    [/policy\/roles\/:param/, SEED_IDS.role],
+    [/identity\/users\/:param/, SEED_IDS.user],
+  ];
+  for (const [pattern, id] of rules) {
+    if (pattern.test(apiPath)) return apiPath.replace(':param', id);
+  }
+  return apiPath.replace(':param', SEED_IDS.actor);
+}
+
 // ── JWT minting ───────────────────────────────────────────────────────────────
 
 function mintDevJWT() {
@@ -43,6 +103,7 @@ function mintDevJWT() {
     sub: '00000000-0000-0000-0000-000000000099',
     iss: 'civitasone-dev',
     aud: 'civitasone',
+    tid: tenantId,
     tenantId,
     roles: ['super_admin', 'admin', 'finance_admin', 'hr_admin', 'procurement_admin', 'audit_admin'],
     exp: Math.floor(Date.now() / 1000) + 3600,
@@ -137,7 +198,7 @@ async function run() {
   let failed = 0;
 
   for (const row of unique) {
-    const apiPath = row.apiPaths[0];
+    const apiPath = resolveApiPath(row.apiPaths[0]);
     const { status, ok, body, error } = await fetchRoute(apiPath, jwt);
 
     let verdict;

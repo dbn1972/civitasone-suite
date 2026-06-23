@@ -26,6 +26,14 @@ export async function maintenanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows, limit: q.limit, offset: q.offset });
   });
 
+  app.get("/v1/assets/assets/:id/maintenance", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const rows = await queries.listMaintenanceByAsset(ctx.tenantId, id);
+    return reply.send({ data: rows });
+  });
+
   // gateway upstreamPath "/v1/assets" + caller "/assets/:id/maintenance" → "/v1/assets/assets/:id/maintenance"
   app.post("/v1/assets/assets/:id/maintenance", async (req, reply) => {
     const ctx = resolveContext(req);

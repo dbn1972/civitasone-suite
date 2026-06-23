@@ -58,6 +58,27 @@ export function registerBeneficiaryConsumers(queue: Queue): void {
     };
     // DPDP §4: extract last4 + token immediately, raw Aadhaar never reaches DB
     const { last4, token } = maskAadhaar(p.aadhaar);
+
+    // De-duplication: reject if this Aadhaar token already belongs to a different beneficiary
+    const existing = await repo.findAadhaarByTokenAndTenant(p.tenantId, token);
+    if (existing && existing.beneficiaryId !== p.beneficiaryId) {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await enqueue(tx, {
+          topic: EVENTS.beneficiaryCreated, eventType: "grant.beneficiary.aadhaar_duplicate",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            beneficiaryId: p.beneficiaryId,
+            aadhaarLast4: last4,
+            existingBeneficiaryId: existing.beneficiaryId,
+            reason: "AADHAAR_DUPLICATE: this Aadhaar is already registered to another beneficiary in this tenant",
+          },
+        });
+        await audit(tx, msg, "aadhaar_duplicate_rejected", "grant_beneficiary", p.beneficiaryId);
+      });
+      return;
+    }
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertAadhaarLink(tx, {

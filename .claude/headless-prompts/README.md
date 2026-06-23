@@ -1,38 +1,33 @@
-# CivitasOne Headless Build Prompts
+# CivitasOne Headless Prompts
 
-Run any prompt on the remote server:
+Cleaned up 2026-06-22. Only active work lives at the top level; all completed
+campaign rounds are under `archive/` (nothing deleted — fully reversible).
+
+## Active
+
+| Folder | Purpose |
+|--------|---------|
+| `cursor-handoff/` | **Current handoff.** Agent-ready fixes for Cursor / `claude -p`. Start at `06-FIX-PROMPTS.md` (P0→P1 prompts), then `01-P1-FIXES.md` / `02-P2-FIXES.md`. Track in `05-COMPLETION-SCORECARD.md`. |
+| `uat-round2/` | Latest authoritative UAT round. `CTO-REPORT-ROUND2.md` = current scorecard & verdict; `UAT-ROUND2-WORLD-CLASS.md` = reusable world-class UAT prompt; `STATUS.tsv` = run log. |
+
+## Archive (completed rounds — reference only)
+
+| Folder | Round | Date |
+|--------|-------|------|
+| `archive/round1-build/` | Initial module build prompts (01–22) | Jun 20 |
+| `archive/web-ui/` | Web UI expansion prompts (30–40) | Jun 20 |
+| `archive/remediation/` | R00–R40 remediation round | Jun 20 |
+| `archive/redesign/` | D00–D40 design round | Jun 21 |
+| `archive/fixes-r1/` | FIX-1…4 data-shape fixes | Jun 21 |
+| `archive/uat-fixes-r1/` | UAT round 1 fixes (FIX-00…11) | Jun 21 |
+| `archive/logs/` | Old orchestration execution logs | Jun 20 |
+| `archive/scripts/` | Round-1 orchestrators (`orchestrate.sh`, `run-all.sh`) | Jun 20 |
+
+## How to run a prompt
 
 ```bash
 ssh cloudsphere-ec2
 cd ~/CivitasOne/civitasone-suite
 export PATH="$HOME/.npm-global/bin:$PATH"
-claude -p "$(cat .claude/headless-prompts/01-platform.md)" --dangerously-skip-permissions
+claude -p "$(cat .claude/headless-prompts/cursor-handoff/06-FIX-PROMPTS.md)" --dangerously-skip-permissions
 ```
-
-## Build order (must follow — services depend on each other via events)
-
-| Step | File | Service | Why first |
-|------|------|---------|-----------|
-| 1 | 01-platform.md | identity + tenant + policy + audit | Every other service depends on JWT auth and tenant context |
-| 2 | 02-finance.md | finance-service | Budget/sanction check needed by procurement |
-| 3 | 03-procurement.md | procurement-service | P2P backbone — feeds asset, stock, finance |
-| 4 | 04-hr.md | hrms-service | Payroll posts to finance GL |
-| 5 | 05-establishment.md | estab-service | File approval triggers procurement indent |
-| 6 | 06-asset.md | asset-service | Fed by procurement GRN |
-| 7 | 07-projects.md | project-service + scheme | Fund releases post to finance |
-| 8 | 08-grants.md | grant-service | Bills/PFMS via finance |
-| 9 | 09-citizen.md | citizen-service | Standalone CRM |
-| 10 | 10-audit-legal.md | audit + legal services | Cross-cutting, reads all modules |
-| 11 | 11-notification.md | notification-service | Consumed by all modules |
-| 12 | 12-admin.md | admin + billing | Control plane, last |
-
-## What each prompt does
-Each prompt runs a complete slice:
-1. Reads the screen HTML from `~/CivitasOne/erpnext-develop/{module}/web/`
-2. Reads the schema from `MODULES_AND_SCHEMA.md`
-3. Writes the Drizzle migration SQL
-4. Writes the Fastify routes (CQRS: validate → SQS → 202)
-5. Writes the worker/consumer (SQS → outbox → Postgres)
-6. Writes the query handlers (Redis cache → Postgres)
-7. Runs `pnpm typecheck && pnpm test`
-8. Applies the migration to the live Postgres on localhost:5435

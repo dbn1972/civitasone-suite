@@ -1,5 +1,5 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
@@ -30,8 +30,8 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/journals", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, limit));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/finance/statements/trial-balance", async (req, reply) => {

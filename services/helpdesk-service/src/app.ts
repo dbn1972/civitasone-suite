@@ -8,6 +8,7 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { ticketRoutes } from "./modules/tickets/routes.js";
+import { slaRoutes } from "./modules/sla/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -22,6 +23,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "helpdesk-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(ticketRoutes);
+  await app.register(slaRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

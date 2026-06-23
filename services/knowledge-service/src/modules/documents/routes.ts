@@ -39,8 +39,8 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       title: doc.title,
       category: doc.category ?? "general",
       author: doc.author ?? undefined,
-      createdAt: doc.createdAt.toISOString(),
-      updatedAt: doc.updatedAt.toISOString(),
+      createdAt: new Date(doc.createdAt as unknown as string).toISOString(),
+      updatedAt: new Date(doc.updatedAt as unknown as string).toISOString(),
       tags: doc.tags,
       status: (["draft", "under_review", "approved", "archived"].includes(doc.status)
         ? doc.status
@@ -64,7 +64,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       recordNo: doc.id.slice(0, 8).toUpperCase(),
       title: doc.title,
       type: "file" as const,
-      createdDate: doc.createdAt.toISOString().slice(0, 10),
+      createdDate: new Date(doc.createdAt as Date | string).toISOString().slice(0, 10),
       status: (doc.status === "archived" ? "inactive" : "active") as "active" | "inactive" | "disposed" | "transferred",
     })));
   });
@@ -81,7 +81,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       excerpt: undefined,
       relevanceScore: undefined,
       documentType: doc.fileType ?? undefined,
-      createdAt: doc.createdAt.toISOString(),
+      createdAt: new Date(doc.createdAt as unknown as string).toISOString(),
       url: undefined,
     })));
   });

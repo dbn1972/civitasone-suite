@@ -13,7 +13,7 @@ export async function listJobOpenings(tenantId: string, limit: number) {
       applicationDeadline: r.closesAt ?? undefined,
       status: (r.status === "closed" ? "closed" : r.status === "on_hold" ? "on_hold" : "open") as "open" | "closed" | "on_hold",
       applicationsReceived: appCounts.get(r.id) ?? 0,
-      postedDate: r.postedAt ?? r.createdAt.toISOString().slice(0, 10),
+      postedDate: r.postedAt ?? new Date(r.createdAt as unknown as string).toISOString().slice(0, 10),
     }));
   });
 }

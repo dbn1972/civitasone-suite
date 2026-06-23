@@ -1,113 +1,96 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageShell } from "../../../_components/PageShell";
+import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
 import { getTicketAnalytics } from "../../../_data/loaders";
 
 export default async function Page() {
   const { data: analytics, source } = await getTicketAnalytics();
 
-  const stats = [
-    { label: "Total Tickets", value: analytics.totalTickets.toLocaleString("en-IN") },
-    { label: "Open", value: analytics.openTickets.toLocaleString("en-IN") },
-    { label: "Resolved This Month", value: analytics.resolvedThisMonth.toLocaleString("en-IN") },
-    { label: "SLA Breached", value: analytics.slaBreachedCount.toLocaleString("en-IN") },
-    { label: "Avg Resolution (hrs)", value: analytics.avgResolutionHours.toFixed(1) },
-  ];
-
   return (
-    <PageShell
-      title="Helpdesk Reports"
-      description="Service performance and support quality indicators."
-      breadcrumb={
-        <>
-          <Link href="/helpdesk" className="hover:text-slate-900">Helpdesk</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Reports</span>
-        </>
-      }
-    >
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs text-slate-500">{s.label}</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{s.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-5 md:grid-cols-2">
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">
-            By Priority
-          </div>
-          <table className="min-w-full text-sm" aria-label="Tickets by priority">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th scope="col" className="px-4 py-2 text-left">Priority</th>
-                <th scope="col" className="px-4 py-2 text-right">Count</th>
-                <th scope="col" className="px-4 py-2 text-left w-32">% of Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analytics.byPriority.length === 0 ? (
+    <>
+      <PageHeader
+        title="Helpdesk Reports"
+        subtitle="Service performance and support quality indicators."
+        back="/helpdesk"
+      />
+      {source === "error" && <DataSourceBadge source={source} />}
+      <StatGrid>
+        <StatCard icon="🎫" iconBg="#fff3e0" label="Total Tickets" value={analytics.totalTickets.toLocaleString("en-IN")} />
+        <StatCard icon="🔵" iconBg="#eff6ff" label="Open" value={analytics.openTickets.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Resolved (MTD)" value={analytics.resolvedThisMonth.toLocaleString("en-IN")} />
+        <StatCard icon="🚨" iconBg="#fef2f2" label="SLA Breached" value={analytics.slaBreachedCount.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="grid g-2">
+        <div className="card">
+          <div className="card-h"><h3>By Priority</h3></div>
+          {analytics.byPriority.length === 0 ? (
+            <EmptyState icon="📊" title="No data" message="Priority breakdown will appear here." />
+          ) : (
+            <table className="tbl">
+              <thead>
                 <tr>
-                  <td colSpan={3} className="px-4 py-4 text-center text-slate-400">No data</td>
+                  <th>Priority</th>
+                  <th style={{ textAlign: "right" }}>Count</th>
+                  <th>% of Total</th>
                 </tr>
-              ) : (
-                analytics.byPriority.map((row) => (
-                  <tr key={row.priority} className="border-t border-slate-100">
-                    <td className="px-4 py-2 capitalize text-slate-800">{row.priority}</td>
-                    <td className="px-4 py-2 text-right text-slate-700">{row.count.toLocaleString("en-IN")}</td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 rounded-full bg-indigo-200" style={{ width: `${Math.min(row.pct, 100)}%`, minWidth: "4px" }} />
-                        <span className="text-xs text-slate-500">{row.pct.toFixed(1)}%</span>
+              </thead>
+              <tbody>
+                {analytics.byPriority.map((row) => (
+                  <tr key={row.priority}>
+                    <td style={{ textTransform: "capitalize" }}>{row.priority}</td>
+                    <td className="num">{row.count.toLocaleString("en-IN")}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div className="bar" style={{ width: 80 }}>
+                          <div className="fill" style={{ width: `${Math.min(row.pct, 100)}%` }} />
+                        </div>
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{row.pct.toFixed(1)}%</span>
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">
-            By Channel
-          </div>
-          <table className="min-w-full text-sm" aria-label="Tickets by channel">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th scope="col" className="px-4 py-2 text-left">Channel</th>
-                <th scope="col" className="px-4 py-2 text-right">Count</th>
-                <th scope="col" className="px-4 py-2 text-left w-32">%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analytics.byChannel.length === 0 ? (
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="card">
+          <div className="card-h"><h3>By Channel</h3></div>
+          {analytics.byChannel.length === 0 ? (
+            <EmptyState icon="📊" title="No data" message="Channel breakdown will appear here." />
+          ) : (
+            <table className="tbl">
+              <thead>
                 <tr>
-                  <td colSpan={3} className="px-4 py-4 text-center text-slate-400">No data</td>
+                  <th>Channel</th>
+                  <th style={{ textAlign: "right" }}>Count</th>
+                  <th>%</th>
                 </tr>
-              ) : (
-                analytics.byChannel.map((row) => (
-                  <tr key={row.channel} className="border-t border-slate-100">
-                    <td className="px-4 py-2 capitalize text-slate-800">{row.channel.replace(/_/g, " ")}</td>
-                    <td className="px-4 py-2 text-right text-slate-700">{row.count.toLocaleString("en-IN")}</td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 rounded-full bg-orange-200" style={{ width: `${Math.min(row.pct, 100)}%`, minWidth: "4px" }} />
-                        <span className="text-xs text-slate-500">{row.pct.toFixed(1)}%</span>
+              </thead>
+              <tbody>
+                {analytics.byChannel.map((row) => (
+                  <tr key={row.channel}>
+                    <td style={{ textTransform: "capitalize" }}>{row.channel.replace(/_/g, " ")}</td>
+                    <td className="num">{row.count.toLocaleString("en-IN")}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div className="bar" style={{ width: 80 }}>
+                          <div className="fill" style={{ width: `${Math.min(row.pct, 100)}%`, background: "#fb923c" }} />
+                        </div>
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{row.pct.toFixed(1)}%</span>
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
-    </PageShell>
+      <div className="card">
+        <div className="card-h"><h3>Performance</h3></div>
+        <div className="fields">
+          <div className="fld"><div className="fl">Avg Resolution Time</div><div className="fv">{analytics.avgResolutionHours.toFixed(1)} hrs</div></div>
+        </div>
+      </div>
+    </>
   );
 }

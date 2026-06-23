@@ -6,7 +6,7 @@ import type { CampaignView, CampaignRecipientView } from "./domain.js";
 function toCampaignView(r: typeof notificationCampaigns.$inferSelect, stats?: { recipientCount: number; deliveredCount: number }): CampaignView {
   return {
     id: r.id, tenantId: r.tenantId, templateId: r.templateId, name: r.name,
-    status: r.status, scheduledAt: r.scheduledAt?.toISOString() ?? null, version: r.version,
+    status: r.status, scheduledAt: r.scheduledAt instanceof Date ? r.scheduledAt.toISOString() : r.scheduledAt ?? null, version: r.version,
     ...(stats ? { recipientCount: stats.recipientCount, deliveredCount: stats.deliveredCount } : {}),
   };
 }

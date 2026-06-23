@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const MOCK_GATEWAY_PORT = 4001;
 const MOCK_GATEWAY_URL = `http://127.0.0.1:${MOCK_GATEWAY_PORT}`;
-const E2E_PORT = 3001;
+const E2E_PORT = process.env.E2E_PORT ? parseInt(process.env.E2E_PORT, 10) : 4100;
 
 export default defineConfig({
   testDir: './e2e',

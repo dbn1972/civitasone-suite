@@ -14,8 +14,8 @@ export async function findVendorByIdTx(tx: Writer, id: string): Promise<VendorRo
   return rows[0] ?? null;
 }
 
-export async function listVendorsByTenant(tenantId: string, limit = 100): Promise<VendorRow[]> {
-  return db.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId)).limit(limit);
+export async function listVendorsByTenant(tenantId: string, limit = 100, offset = 0): Promise<VendorRow[]> {
+  return db.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId)).limit(limit).offset(offset);
 }
 
 export async function insertVendor(tx: Writer, row: VendorInsert): Promise<void> {

@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeRtiDeadline, toDateString } from "./domain.js";
+import { autoRegisterDak } from "../files/dak-auto.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -74,6 +75,13 @@ export function registerLegalConsumers(queue: Queue): void {
           recipientId: p.cpioRef,
           variables: { rtiId: p.id, deadline: toDateString(deadline) },
         }),
+      });
+      await autoRegisterDak(tx, msg, {
+        dakNo: p.rtiNo,
+        fromAddress: p.applicant,
+        subject: `RTI: ${p.subject}`,
+        sourceSection: "rti",
+        assignedTo: p.cpioRef,
       });
       await audit(tx, msg, "create", "rti", p.id);
     });

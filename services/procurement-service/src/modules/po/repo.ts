@@ -9,13 +9,17 @@ export async function findPoById(id: string): Promise<PoRow | null> {
   return rows[0] ?? null;
 }
 
+export async function findPoItemsByPoId(poId: string): Promise<(typeof procurementPoItems.$inferSelect)[]> {
+  return db.select().from(procurementPoItems).where(eq(procurementPoItems.poId, poId));
+}
+
 export async function findPoByIdTx(tx: Writer, id: string): Promise<PoRow | null> {
   const rows = await (tx as typeof db).select().from(procurementPos).where(eq(procurementPos.id, id)).limit(1);
   return rows[0] ?? null;
 }
 
-export async function listPosByTenant(tenantId: string, limit = 100): Promise<PoRow[]> {
-  return db.select().from(procurementPos).where(eq(procurementPos.tenantId, tenantId)).limit(limit);
+export async function listPosByTenant(tenantId: string, limit = 100, offset = 0): Promise<PoRow[]> {
+  return db.select().from(procurementPos).where(eq(procurementPos.tenantId, tenantId)).limit(limit).offset(offset);
 }
 
 export async function insertPo(tx: Writer, row: PoInsert): Promise<void> {

@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
+import * as verificationRepo from "../verification/repo.js";
 import { computeDisposalGainLoss, assertAssetTransferable, assertAssetDisposable } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -47,6 +48,10 @@ export function registerLifecycleConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const asset = await registerRepo.findAssetById(p.assetId);
       if (asset) assertAssetDisposable(asset.status);
+      const approval = await verificationRepo.findApprovedWriteoff(p.tenantId, p.assetId);
+      if (!approval) {
+        throw new Error("COMMITTEE_APPROVAL_REQUIRED: Asset write-off requires committee approval per GFR Rule 173.");
+      }
       const gainLoss = computeDisposalGainLoss(
         BigInt(p.proceedsMinor),
         asset?.bookValue ?? 0n

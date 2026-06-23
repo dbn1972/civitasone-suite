@@ -1,63 +1,71 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssetDashboard } from "../../../_data/loaders";
+import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
 
 export default async function AssetDashboardPage() {
   const { data, source } = await getAssetDashboard();
+  const taggedPct = data.totalAssets > 0 ? Math.round((data.taggedAssets ?? 0) / data.totalAssets * 100) : 0;
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/assets" className="hover:text-slate-900">Assets</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Dashboard</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Asset Management</h1>
-            <p className="mt-1 text-sm text-slate-600">Fixed &amp; infrastructure assets, maintenance and disposal.</p>
+    <>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Asset Management"
+        subtitle="Fixed assets, GRN capitalization, depreciation GL, physical verification."
+        actions={
+          <>
+            <Link href="/assets/depreciation" className="btn ghost">Run depreciation</Link>
+            <Link href="/assets/register" className="btn primary">+ Register Asset</Link>
+          </>
+        }
+      />
+      <StatGrid>
+        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Total Assets" value={data.totalAssets.toLocaleString("en-IN")} />
+        <StatCard icon="🏗️" iconBg="#eff6ff" label="Fixed Assets" value={(data.fixedAssets ?? 0).toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Net Book Value" value={`₹${(data.netBlock / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="🏷️" iconBg="#f5f3ff" label="Tagged" value={`${taggedPct}%`} />
+        <StatCard icon="🛠️" iconBg="#fffaeb" label="Under Maintenance" value={data.underMaintenance.toLocaleString("en-IN")} />
+        <StatCard icon="⚠️" iconBg="#fef2f2" label="Due Disposal" value={data.dueForDisposal.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="grid g-main" style={{ marginTop: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="card">
+            <div className="card-h">
+              <h3>Recent additions (from GRN)</h3>
+              <Link className="lnk" href="/assets/list">Register →</Link>
+            </div>
+            {(data.recentGrnAssets ?? []).length === 0 ? (
+              <EmptyState icon="🖥️" title="No GRN-capitalized assets" message="Accept a GRN with fixed_asset PO lines to auto-register." />
+            ) : (
+              <table className="tbl">
+                <thead><tr><th>Code</th><th>Name</th><th>Date</th><th className="num">Cost</th></tr></thead>
+                <tbody>
+                  {(data.recentGrnAssets ?? []).map((a) => (
+                    <tr key={a.id}>
+                      <td><Link href={`/assets/${a.id}`} className="mono">{a.code}</Link></td>
+                      <td>{a.name}</td>
+                      <td>{a.acquisitionDate?.slice(0, 10) ?? "—"}</td>
+                      <td className="num">₹{(a.acquisitionCost / 100).toLocaleString("en-IN")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Assets</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{data.totalAssets.toLocaleString("en-IN")}</p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="card">
+            <div className="card-h"><h3>Quick links</h3></div>
+            <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
+              <Link href="/assets/register">+ Register asset manually</Link>
+              <Link href="/assets/depreciation">📉 Run monthly depreciation</Link>
+              <Link href="/assets/verification">🔍 Physical verification</Link>
+              <Link href="/assets/maintenance">🛠️ Maintenance queue</Link>
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Under Maintenance</p>
-            <p className="mt-1 text-2xl font-bold text-amber-600">{data.underMaintenance.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Due for Disposal</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{data.dueForDisposal.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Net Block (₹)</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">₹{(data.netBlock / 100).toLocaleString("en-IN")}</p>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {[
-            { label: "Asset List", href: "/assets/list" },
-            { label: "Fixed Assets", href: "/assets/fixed-assets" },
-            { label: "Infrastructure", href: "/assets/infra" },
-            { label: "Maintenance", href: "/assets/maintenance" },
-          ].map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md text-sm font-medium text-slate-800"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </section>
-      </section>
-    </main>
+        </div>
+      </div>
+    </>
   );
 }

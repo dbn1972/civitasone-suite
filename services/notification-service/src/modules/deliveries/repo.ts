@@ -10,6 +10,15 @@ export async function findByUser(tenantId: string, userId: string, limit = 50): 
     .limit(limit);
 }
 
+export async function findByTenant(tenantId: string, limit = 50, offset = 0, actorId?: string): Promise<typeof notificationDeliveries.$inferSelect[]> {
+  const conditions = actorId
+    ? and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.createdBy, actorId))
+    : eq(notificationDeliveries.tenantId, tenantId);
+  return db.select().from(notificationDeliveries)
+    .where(conditions)
+    .limit(limit).offset(offset);
+}
+
 export async function findById(id: string): Promise<typeof notificationDeliveries.$inferSelect | null> {
   const rows = await db.select().from(notificationDeliveries).where(eq(notificationDeliveries.id, id)).limit(1);
   return rows[0] ?? null;

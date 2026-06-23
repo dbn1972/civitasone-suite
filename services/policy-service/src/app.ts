@@ -9,6 +9,7 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { roleRoutes } from "./modules/roles/routes.js";
 import { bindingRoutes } from "./modules/bindings/routes.js";
+import { evaluateRoutes } from "./modules/evaluate/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -24,6 +25,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(roleRoutes);
   await app.register(bindingRoutes);
+  await app.register(evaluateRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

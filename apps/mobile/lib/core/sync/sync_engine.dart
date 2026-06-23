@@ -50,47 +50,65 @@ class SyncEngine {
           'deviceId': deviceId,
           'mailbox': mailbox,
           'cursor': cursor,
-          'mutations': outbox.map((e) {
+          'mutations': await Future.wait(outbox.map((e) async {
             final payload =
                 jsonDecode(e['payload_json'] as String) as Map<String, dynamic>;
+            final entityId =
+                e['entity_id'] as String? ?? payload['entityId'] as String? ?? e['id'] as String;
+            // 02-T4: attach last-known etag so the server can detect a stale edit.
+            final baseEtag = await db.getEntityEtag(entityId);
             return {
               'clientMutationId': e['id'],
               'operation': e['operation'],
-              'entityId': e['entity_id'] as String? ?? payload['entityId'] ?? e['id'],
+              'entityId': entityId,
               'payload': payload,
               'clientUpdatedAt': e['created_at'],
+              if (baseEtag != null) 'baseEtag': baseEtag,
             };
-          }).toList(),
+          })),
         }, options: Options(headers: headers));
 
         cursor = pushRes.data['cursor'] as String? ?? cursor;
         await db.setCursor(mailbox, cursor);
 
-        // Reconcile per-mutation results from the server.
-        final results = pushRes.data['results'] as List<dynamic>? ?? [];
-        if (results.isEmpty) {
-          // Server returned no per-mutation results — treat all as done.
-          for (final e in outbox) {
-            await db.markOutboxDone(e['id'] as String);
+        // 02-T6: reconcile per-mutation results by clientMutationId. NEVER infer
+        // success from an empty array — an unacknowledged mutation stays queued.
+        final results = (pushRes.data['results'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>();
+        final resultMap = {
+          for (final r in results) r['clientMutationId'] as String: r,
+        };
+        for (final e in outbox) {
+          final id = e['id'] as String;
+          final result = resultMap[id];
+          if (result == null) {
+            // No acknowledgement for this mutation — leave it queued to retry.
+            continue;
           }
-        } else {
-          final resultMap = {
-            for (final r in results)
-              (r as Map<String, dynamic>)['clientMutationId'] as String: r,
-          };
-          for (final e in outbox) {
-            final id = e['id'] as String;
-            final result = resultMap[id];
-            if (result == null || result['success'] == true) {
-              await db.markOutboxDone(id);
-            } else {
-              await db.markOutboxFailed(
-                  id, result['error'] as String? ?? 'server_rejected');
+          final status = result['status'] as String?;
+          if (status == 'applied') {
+            await db.markOutboxDone(id);
+          } else if (status == 'conflict') {
+            // 02-T4: stop retrying and adopt the server's current state.
+            await db.markOutboxFailed(id, result['reason'] as String? ?? 'conflict', permanent: true);
+            final serverData = result['serverData'] as Map<String, dynamic>?;
+            if (serverData != null) {
+              await db.upsertEntity(
+                id: (serverData['id'] as String?) ?? (e['entity_id'] as String? ?? id),
+                mailbox: mailbox,
+                data: serverData,
+                updatedAt: DateTime.now().toUtc().toIso8601String(),
+                etag: result['etag'] as String?,
+                syncState: 'conflict',
+              );
             }
+          } else {
+            // failed — retryable with backoff (dead-letters at the cap).
+            await db.markOutboxFailed(id, result['reason'] as String? ?? 'server_rejected');
           }
         }
       } on DioException catch (err) {
-        // Network error — leave outbox entries as queued for next sync.
+        // Network error — backoff/retry; dead-letters at the cap.
         for (final e in outbox) {
           await db.markOutboxFailed(
               e['id'] as String, err.message ?? 'network_error');
@@ -109,9 +127,16 @@ class SyncEngine {
 
       final entities = pullRes.data['entities'] as List<dynamic>? ?? [];
       for (final item in entities) {
-        if (item['operation'] == 'delete') continue;
+        final entityId = item['id'] as String;
+        if (item['operation'] == 'delete') {
+          // 02-T5: apply server-side tombstone locally.
+          await db.deleteEntity(entityId);
+          continue;
+        }
+        // 02-T4: don't clobber a local row that has a pending outbox edit.
+        if (await db.hasPendingOutboxForEntity(entityId)) continue;
         await db.upsertEntity(
-          id: item['id'] as String,
+          id: entityId,
           mailbox: mailbox,
           data: (item['data'] as Map<String, dynamic>?) ?? {},
           updatedAt: item['updatedAt'] as String,

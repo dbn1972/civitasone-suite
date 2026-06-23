@@ -8,5 +8,13 @@ export const taskViewSchema = z.object({
   instanceId: z.string().uuid(),
   name: z.string(),
   status: z.string(),
+  roleRef: z.string().nullable().optional(),
+  refType: z.string().nullable().optional(),
+  refId: z.string().uuid().nullable().optional(),
+  decision: z.string().nullable().optional(),
   version: z.number().int(),
+});
+
+export const completeTaskBody = z.object({
+  decision: z.enum(["approve", "reject"]).default("approve"),
 });

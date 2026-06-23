@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createAssetBody, assetQueryParams, idParam } from "./validators.js";
+import { createAssetBody, assetQueryParams, idParam, tagBarcodeBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -38,6 +38,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (q.type !== undefined) opts.type = q.type;
     const assets = await queries.listAssets(ctx.tenantId, opts);
     return reply.send({ data: assets, limit: q.limit, offset: q.offset });
+  });
+
+  app.patch("/v1/assets/assets/:id/barcode", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ASSET_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = tagBarcodeBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.tagBarcode(ctx, id, body.barcode));
   });
 
   app.setErrorHandler(errorHandler);

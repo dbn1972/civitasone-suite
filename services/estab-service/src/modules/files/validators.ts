@@ -3,12 +3,16 @@ import { z } from "zod";
 export const idParam = z.object({ id: z.string().uuid() });
 
 export const createFileBody = z.object({
-  fileNo:         z.string().min(1),
+  fileNo:         z.string().min(1).optional(),
   subject:        z.string().min(1),
   dept:           z.string().min(1),
   priority:       z.enum(["normal", "urgent", "immediate"]).default("normal"),
   classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("public"),
   currentWith:    z.string().uuid(),
+  initialNote:    z.string().optional(),
+  inwardId:       z.string().uuid().optional(),
+  dakNo:          z.string().optional(),
+  parentFileId:   z.string().uuid().optional(),
 });
 export type CreateFileBody = z.infer<typeof createFileBody>;
 
@@ -16,8 +20,14 @@ export const addNotingBody = z.object({
   body:      z.string().min(1),
   action:    z.string().optional(),
   officerId: z.string().uuid(),
+  noteType:  z.enum(["yellow", "green", "remark", "order"]).default("yellow"),
 });
 export type AddNotingBody = z.infer<typeof addNotingBody>;
+
+export const submitNotingBody = z.object({
+  notingId: z.string().uuid(),
+});
+export type SubmitNotingBody = z.infer<typeof submitNotingBody>;
 
 export const moveFileBody = z.object({
   toOfficer: z.string().uuid(),
@@ -40,9 +50,27 @@ export const createDispatchBody = z.object({
 export type CreateDispatchBody = z.infer<typeof createDispatchBody>;
 
 export const registerInwardBody = z.object({
-  dakNo:       z.string().min(1),
-  fromAddress: z.string().min(1),
-  subject:     z.string().min(1),
-  assignedTo:  z.string().uuid().optional(),
+  dakNo:         z.string().min(1),
+  fromAddress:   z.string().min(1),
+  subject:       z.string().min(1),
+  assignedTo:    z.string().uuid().optional(),
+  sourceSection: z.string().optional(),
 });
 export type RegisterInwardBody = z.infer<typeof registerInwardBody>;
+
+export const addAttachmentBody = z.object({
+  fileName:   z.string().min(1),
+  fileType:   z.string().default("application/pdf"),
+  sizeBytes:  z.number().int().nonnegative().default(0),
+  storageRef: z.string().optional(),
+  contentBase64: z.string().optional(),
+});
+export type AddAttachmentBody = z.infer<typeof addAttachmentBody>;
+
+export const openFileFromInwardBody = z.object({
+  dept:           z.string().min(1),
+  currentWith:    z.string().uuid(),
+  classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("public"),
+  initialNote:    z.string().optional(),
+});
+export type OpenFileFromInwardBody = z.infer<typeof openFileFromInwardBody>;

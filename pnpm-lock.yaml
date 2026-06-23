@@ -186,6 +186,25 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/outbox:
+    dependencies:
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../queue
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
   packages/queue:
     dependencies:
       '@civitasone/events':
@@ -253,6 +272,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -311,6 +333,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -369,6 +394,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -430,6 +458,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -488,6 +519,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -546,6 +580,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -607,6 +644,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -668,6 +708,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -726,6 +769,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -787,6 +833,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -891,6 +940,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -952,6 +1004,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1010,6 +1065,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1071,6 +1129,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1129,6 +1190,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1187,6 +1251,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1245,6 +1312,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1303,6 +1373,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1364,6 +1437,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1425,6 +1501,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1447,8 +1526,8 @@ importers:
         specifier: ^5.4.0
         version: 5.11.1
       nodemailer:
-        specifier: ^6.9.0
-        version: 6.10.1
+        specifier: ^9.0.1
+        version: 9.0.1
       pino:
         specifier: ^8.21.0
         version: 8.21.0
@@ -1492,6 +1571,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1553,6 +1635,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1611,6 +1696,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1669,6 +1757,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1730,6 +1821,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1828,6 +1922,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1886,6 +1983,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1947,6 +2047,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -2005,6 +2108,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -2063,6 +2169,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -2121,6 +2230,9 @@ importers:
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -4936,8 +5048,8 @@ packages:
     resolution: {integrity: sha512-1uz8041X6LoI6ZSdZacM9lVY28vuzDlSKitnpbSNK0RfKoIJkX29NBPVEFXhnuSuEOA9Ww0xnPJ+ILWbGAv8DA==}
     engines: {node: '>=18'}
 
-  nodemailer@6.10.1:
-    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+  nodemailer@9.0.1:
+    resolution: {integrity: sha512-Gwv8SQewT616ZM/URn0H54b8PWo/Wum7md3EW2aWy1lO27+WZCX+Xyak3J+NlmHUjDh5ME+uesJUDRbR3Ye8Bw==}
     engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
@@ -8586,7 +8698,7 @@ snapshots:
 
   node-releases@2.0.48: {}
 
-  nodemailer@6.10.1: {}
+  nodemailer@9.0.1: {}
 
   normalize-path@3.0.0: {}
 

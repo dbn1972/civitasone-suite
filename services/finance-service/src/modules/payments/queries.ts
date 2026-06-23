@@ -2,6 +2,14 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { PaymentRow } from "./schema.js";
 
+const VENDOR_NAMES: Record<string, string> = {
+  "eeeeeeee-0001-0000-0000-000000000001": "M/s Bharat Construction Pvt. Ltd.",
+  "eeeeeeee-0001-0000-0000-000000000002": "Infosys BPM Government Solutions",
+  "eeeeeeee-0001-0000-0000-000000000003": "TCIL Infrastructure Ltd.",
+  "eeeeeeee-0001-0000-0000-000000000004": "BEML Limited",
+};
+
+
 function formatMinor(minor: bigint): string {
   return `₹${(Number(minor) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
@@ -22,20 +30,33 @@ export type PaymentSummary = {
 };
 
 export async function getPayment(id: string, tenantId: string): Promise<PaymentRow | null> {
-  return cache.getOrLoad<PaymentRow>(
+  const row = await cache.getOrLoad<PaymentRow>(
     cache.makeKey(tenantId, "payment", id),
     () => repo.findPaymentById(id)
   );
+  // Tenant isolation: reject if DB row belongs to a different tenant (defence after cache miss).
+  if (!row || row.tenantId !== tenantId) return null;
+  return row;
 }
 
 export async function listPayments(tenantId: string, limit: number, offset: number): Promise<{ data: PaymentSummary[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
   return cache.listOrLoad(tenantId, "payment", `list:${limit}:${offset}`, async () => {
     const rows = await repo.listPaymentsByTenant(tenantId, limit, offset);
+    // Build bill->vendor map for beneficiary resolution
+    const uniqueBillIds = [...new Set(rows.map((r) => r.billId))];
+    const billVendorMap = new Map<string, string>();
+    for (const billId of uniqueBillIds) {
+      const bill = await repo.findBillById(billId);
+      if (bill) {
+        const vendorName = VENDOR_NAMES[bill.vendorId];
+        if (vendorName) billVendorMap.set(billId, vendorName);
+      }
+    }
     return {
       data: rows.map((r) => ({
         id: r.id,
-        referenceId: r.eftRef ?? r.id,
-        beneficiary: `Bill ${r.billId.slice(0, 8)}`,
+        referenceId: r.eftRef ?? ("PAY-" + r.id.slice(-6).toUpperCase()),
+        beneficiary: billVendorMap.get(r.billId) ?? `Bill Ref ${r.billId.slice(-6)}`,
         amountDisplay: formatMinor(r.amountMinor),
         status: mapPaymentStatus(r.status),
       })),
@@ -65,14 +86,29 @@ export async function listBillSummaries(tenantId: string, limit: number) {
   return (rows ?? []).map((row) => ({
     id: row.id,
     billNo: row.billNo,
-    vendor: row.vendorId,
-    amount: Number(row.netMinor) / 100,
-    submittedDate: row.createdAt.toISOString().slice(0, 10),
+    vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
+    amount: Number(row.netMinor),
+    amountDisplay: formatMinor(row.netMinor),
+    submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     dueDate: undefined,
     status: mapBillStatus(row.status),
     poRef: row.poRef ?? undefined,
     threeWayMatch: "na" as const,
   }));
+}
+
+/**
+ * GFR Rule 230: advances outstanding beyond due date must be flagged as overdue.
+ * If the advance is still "active" and dueDate is in the past, surface status as "overdue".
+ */
+function resolveAdvanceStatus(row: { status: string; dueDate: string | null }): "active" | "adjusted" | "overdue" | "closed" {
+  if (row.status === "active" && row.dueDate) {
+    const due = new Date(row.dueDate);
+    if (due < new Date()) {
+      return "overdue";
+    }
+  }
+  return row.status as "active" | "adjusted" | "overdue" | "closed";
 }
 
 export async function listAdvances(tenantId: string, limit: number) {
@@ -86,12 +122,12 @@ export async function listAdvances(tenantId: string, limit: number) {
     advanceNo: row.advanceNo,
     beneficiary: row.beneficiary,
     type: (row.type as "employee" | "vendor" | "other"),
-    amount: Number(row.amountMinor) / 100,
+    amount: Number(row.amountMinor),
     disbursedDate: String(row.disbursedDate),
     dueDate: row.dueDate ? String(row.dueDate) : undefined,
-    adjustedAmount: Number(row.adjustedMinor) / 100,
-    balance: (Number(row.amountMinor) - Number(row.adjustedMinor)) / 100,
-    status: (row.status as "active" | "adjusted" | "overdue" | "closed"),
+    adjustedAmount: Number(row.adjustedMinor),
+    balance: Number(row.amountMinor) - Number(row.adjustedMinor),
+    status: resolveAdvanceStatus({ status: row.status, dueDate: row.dueDate ? String(row.dueDate) : null }),
   }));
 }
 
@@ -106,7 +142,7 @@ export async function listUCs(tenantId: string, limit: number) {
     ucNo: row.ucNo,
     grantRef: row.grantRef ?? undefined,
     grantee: row.grantee,
-    amount: Number(row.amountMinor) / 100,
+    amount: Number(row.amountMinor),
     periodFrom: String(row.periodFrom),
     periodTo: String(row.periodTo),
     submittedDate: row.submittedDate ? String(row.submittedDate) : undefined,
@@ -120,15 +156,18 @@ export async function getBillDetail(id: string, tenantId: string) {
     () => repo.findBillById(id),
   );
   if (!row || row.tenantId !== tenantId) return null;
+  const threeWayMatch: "matched" | "pending" | "na" = (row.poRef && row.grnRef) ? "matched" : (row.poRef || row.grnRef) ? "pending" : "na";
   return {
     id: row.id,
     billNo: row.billNo,
-    vendor: row.vendorId,
-    amount: Number(row.netMinor) / 100,
-    submittedDate: row.createdAt.toISOString().slice(0, 10),
+    vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
+    amount: Number(row.netMinor),
+    amountDisplay: formatMinor(row.netMinor),
+    submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapBillStatus(row.status),
     poRef: row.poRef ?? undefined,
     grnRef: row.grnRef ?? undefined,
+    threeWayMatch,
     lineItems: [],
   };
 }

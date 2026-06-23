@@ -1,7 +1,7 @@
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 export function registerPortalConsumers(queue: Queue): void {
@@ -9,6 +9,7 @@ export function registerPortalConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; name: string;
       email?: string; mobile?: string; digilockerToken?: string; address?: string; ward?: string;
+      consentGranted?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -20,6 +21,21 @@ export function registerPortalConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "citizen_profile", p.id);
+    });
+  });
+
+  /** DPDP §12: anonymise PII on erasure request — preserves audit trail. */
+  queue.subscribe(COMMANDS.profileDelete, async (msg) => {
+    const p = msg.payload as { requestId: string; tenantId: string; citizenId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.anonymiseProfile(tx, p.citizenId, msg.actorId);
+      await enqueue(tx, {
+        topic: EVENTS.profileDeleted, eventType: EVENTS.profileDeleted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { requestId: p.requestId, citizenId: p.citizenId, reason: p.reason },
+      });
+      await audit(tx, msg, "delete", "citizen_profile", p.citizenId);
     });
   });
 }

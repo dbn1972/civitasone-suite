@@ -1,4 +1,5 @@
 import { sendValidated } from "@civitasone/schemas/validate";
+import { listQuerySchema } from "@civitasone/schemas/common";
 import { TenderSummaryListSchema, TenderDetailSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
@@ -14,9 +15,8 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/tenders", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit  = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    const offset = Number((req.query as { offset?: string }).offset ?? 0);
-    sendValidated(reply, TenderSummaryListSchema, await queries.listTenders(ctx.tenantId, limit, offset));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, TenderSummaryListSchema, await queries.listTenders(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/procurement/tenders/:id", async (req, reply) => {

@@ -81,3 +81,12 @@ export async function findHeadById(id: string): Promise<HeadRow | null> {
   const rows = await db.select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
   return rows[0] ?? null;
 }
+
+export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | null> {
+  const rows = await (tx as typeof db).select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateHead(tx: Writer, id: string, patch: Partial<HeadRow>): Promise<void> {
+  await tx.update(financeHeads).set({ ...patch, updatedAt: new Date() }).where(eq(financeHeads.id, id));
+}

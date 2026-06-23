@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and, count, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementGrns, procurementGrnItems, procurementInspections, type GrnRow, type GrnInsert, type GrnItemInsert } from "./schema.js";
 
@@ -23,6 +23,38 @@ export async function findInspectionByGrnTx(tx: Writer, grnId: string): Promise<
   return rows[0] ?? null;
 }
 
+export async function findGrnItemsByGrnId(grnId: string): Promise<(typeof procurementGrnItems.$inferSelect)[]> {
+  return db.select().from(procurementGrnItems).where(eq(procurementGrnItems.grnId, grnId));
+}
+
+export async function findInspectionByGrnId(grnId: string): Promise<(typeof procurementInspections.$inferSelect) | null> {
+  const rows = await db.select().from(procurementInspections).where(eq(procurementInspections.grnId, grnId)).limit(1);
+  return rows[0] ?? null;
+}
+
+/** Count accepted GRNs linked to a PO reference (poRef or po id). */
+export async function countAcceptedGrnsByPoRef(tenantId: string, poRef: string): Promise<number> {
+  const rows = await db.select({ cnt: count() }).from(procurementGrns).where(and(
+    eq(procurementGrns.tenantId, tenantId),
+    eq(procurementGrns.poRef, poRef),
+    eq(procurementGrns.status, "accepted"),
+  ));
+  return Number(rows[0]?.cnt ?? 0);
+}
+
+/** Check three_way_match table for a matched record with invoice. */
+export async function hasMatchedThreeWayWithInvoice(tenantId: string, poRef: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT 1 FROM procurement.three_way_match
+    WHERE tenant_id = ${tenantId}::uuid
+      AND po_id::text = ${poRef}
+      AND match_status = 'matched'
+      AND invoice_id IS NOT NULL
+    LIMIT 1
+  `);
+  return (result as unknown as { length: number }).length > 0;
+}
+
 export async function insertGrn(tx: Writer, row: GrnInsert): Promise<void> {
   await tx.insert(procurementGrns).values(row);
 }
@@ -39,7 +71,7 @@ export async function insertInspection(tx: Writer, row: typeof procurementInspec
   await tx.insert(procurementInspections).values(row);
 }
 
-export async function listGrnsByTenant(tenantId: string, limit: number, offset: number): Promise<GrnRow[]> {
+export async function listGrnsByTenant(tenantId: string, limit = 100, offset = 0): Promise<GrnRow[]> {
   return db.select().from(procurementGrns)
     .where(eq(procurementGrns.tenantId, tenantId))
     .limit(limit)

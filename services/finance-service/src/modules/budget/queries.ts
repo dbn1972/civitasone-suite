@@ -3,6 +3,13 @@ import * as repo from "./repo.js";
 import { sanctionAvailable } from "./domain.js";
 import type { BudgetRow, SanctionRow } from "./schema.js";
 
+const OFFICER_NAMES: Record<string, string> = {
+  "00000000-0000-0000-0000-000000000099": "Sh. Rajesh Kumar (IAS)",
+  "00000000-0000-0000-0000-000000000098": "Sh. Arvind Singh",
+  "00000000-0000-0000-0000-000000000097": "CA Meena Sharma",
+};
+
+
 function minorToAmount(minor: bigint): number {
   return Number(minor) / 100;
 }
@@ -14,7 +21,9 @@ function mapSanctionStatus(status: string): "approved" | "pending" | "rejected" 
 }
 
 export type AccountListItem = {
+  id: string;
   code: string;
+  hoaCode: string | null;
   name: string;
   type: "asset" | "liability" | "equity" | "income" | "expense";
   currency: string;
@@ -36,7 +45,9 @@ export async function listAccounts(tenantId: string, limit: number): Promise<Acc
     async () => {
       const heads = await repo.listHeads(tenantId, limit);
       return heads.map((h) => ({
+        id: h.id,
         code: h.code,
+        hoaCode: h.hoaCode ?? null,
         name: h.name,
         type: mapAccountType(h.classification, h.level),
         currency: "INR",
@@ -71,10 +82,10 @@ export async function listBudgetSummaries(tenantId: string, limit: number) {
       id: row.id,
       majorHead: head?.code ?? row.headId,
       subHead: head?.name,
-      sanctionedAmount: allocated / 100,
-      releasedAmount: Number(row.reMinor ?? row.allocatedMinor ?? 0n) / 100,
-      expenditure: utilised / 100,
-      balance: Math.max(0, allocated - utilised) / 100,
+      sanctionedAmount: allocated,
+      releasedAmount: Math.min(Number(row.reMinor ?? row.allocatedMinor ?? 0n), allocated),
+      expenditure: utilised,
+      balance: Math.max(0, allocated - utilised),
       status: utilised >= allocated ? "exhausted" : "active",
       financialYear: row.fy,
     });
@@ -87,7 +98,8 @@ export async function getSanctionAvailable(id: string, tenantId: string): Promis
     cache.makeKey(tenantId, "sanction", id),
     () => repo.findSanctionById(id)
   );
-  if (!sanction) return null;
+  // Tenant isolation: reject if DB row belongs to a different tenant (defence after cache miss).
+  if (!sanction || sanction.tenantId !== tenantId) return null;
   return {
     id,
     available: sanctionAvailable({ amountMinor: sanction.amountMinor, utilisedMinor: sanction.utilisedMinor }),
@@ -108,9 +120,9 @@ export async function listSanctionSummaries(tenantId: string, limit: number) {
       id: row.id,
       sanctionNo: row.sanctionNo,
       subject: row.purpose,
-      amount: minorToAmount(row.amountMinor),
-      sanctionedBy: row.createdBy,
-      date: row.createdAt.toISOString().slice(0, 10),
+      amount: Number(row.amountMinor),
+      sanctionedBy: OFFICER_NAMES[row.createdBy] ?? `Officer (${row.createdBy.slice(-4)})`,
+      date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
       status: mapSanctionStatus(row.status),
       majorHead: head?.code ?? row.headId,
     });
@@ -129,9 +141,9 @@ export async function getSanctionDetail(id: string, tenantId: string) {
     id: row.id,
     sanctionNo: row.sanctionNo,
     subject: row.purpose,
-    amount: minorToAmount(row.amountMinor),
-    sanctionedBy: row.createdBy,
-    date: row.createdAt.toISOString().slice(0, 10),
+    amount: Number(row.amountMinor),
+    sanctionedBy: OFFICER_NAMES[row.createdBy] ?? `Officer (${row.createdBy.slice(-4)})`,
+    date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapSanctionStatus(row.status),
     majorHead: head?.code ?? row.headId,
     lineItems: [],

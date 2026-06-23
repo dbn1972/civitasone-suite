@@ -7,6 +7,7 @@ import { registerLifecycleConsumers }    from "./modules/lifecycle/consumer.js";
 import { registerDepreciationConsumers } from "./modules/depreciation/consumer.js";
 import { registerMaintenanceConsumers }  from "./modules/maintenance/consumer.js";
 import { registerInsuranceConsumers }    from "./modules/insurance/consumer.js";
+import { registerEnterpriseConsumers }   from "./modules/enterprise/consumer.js";
 
 const log = pino({ name: "asset-worker" });
 
@@ -15,6 +16,7 @@ registerLifecycleConsumers(queue);
 registerDepreciationConsumers(queue);
 registerMaintenanceConsumers(queue);
 registerInsuranceConsumers(queue);
+registerEnterpriseConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

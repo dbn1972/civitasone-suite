@@ -5,7 +5,24 @@ export class DomainError extends Error {
   }
 }
 
-export type PoStatus = "draft" | "approved" | "gem_placed" | "dispatched" | "closed" | "cancelled";
+export type PoStatus = "draft" | "pending" | "approved" | "gem_placed" | "dispatched" | "closed" | "cancelled";
+
+const VALID_TRANSITIONS: Record<PoStatus, PoStatus[]> = {
+  draft:       ["pending", "approved"],
+  pending:     ["approved", "cancelled"],
+  approved:    ["dispatched", "closed", "cancelled"],
+  gem_placed:  ["dispatched", "closed"],
+  dispatched:  ["closed"],
+  closed:      [],
+  cancelled:   [],
+};
+
+export function assertTransitionAllowed(from: string, to: PoStatus): void {
+  const allowed = VALID_TRANSITIONS[from as PoStatus] ?? [];
+  if (!allowed.includes(to)) {
+    throw new DomainError("INVALID_TRANSITION", `PO cannot transition from '${from}' to '${to}'`);
+  }
+}
 
 export function assertBudgetSufficient(available: bigint, requested: bigint): void {
   if (requested > available) {

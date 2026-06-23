@@ -19,6 +19,10 @@ export const helpdeskTicketSchema = z.object({
   subject: z.string(),
   priority: z.enum(["Low", "Medium", "High", "Critical"]),
   status: z.enum(["Open", "In Progress", "Resolved", "Closed"]),
+  dueDate: z.string().optional(),
+  escalatedAt: z.string().optional(),
+  slaStatus: z.enum(["within_sla", "at_risk", "breached"]).optional(),
+  assignee: z.string().optional(),
 });
 
 export const slaQueueSchema = z.object({
@@ -56,16 +60,30 @@ export const attendanceSummarySchema = z.object({
 });
 
 export const vendorSummarySchema = z.object({
+  id: z.string().uuid().optional(),
   name: z.string(),
   category: z.string(),
   ratingDisplay: z.string(),
+  gstin: z.string().optional(),
+  kycStatus: z.string().optional(),
+  kycVerifiedAt: z.string().nullable().optional(),
+  bankAccount: z.string().optional(),
+  ifsc: z.string().optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  pan: z.string().optional(),
 });
 
 export const purchaseOrderSchema = z.object({
   id: z.string(),
+  poNo: z.string().optional(),
   vendor: z.string(),
   amountDisplay: z.string(),
-  status: z.enum(["Pending", "Approved", "Review", "Rejected"]),
+  totalMinor: z.string().optional(),
+  orderDate: z.string().optional(),
+  deliveryDate: z.string().nullable().optional(),
+  grnStatus: z.string().optional(),
+  status: z.enum(["draft", "pending", "approved", "dispatched", "partial_grn", "fully_received", "cancelled", "gem_placed"]),
 });
 
 export const approvalSummarySchema = z.object({
@@ -221,6 +239,7 @@ export const BillSummarySchema = z.object({
   billNo: z.string(),
   vendor: z.string(),
   amount: z.number(),
+  amountDisplay: z.string().optional(),
   submittedDate: z.string(),
   dueDate: z.string().optional(),
   status: z.enum(["pending", "approved", "paid", "rejected", "under_review"]),
@@ -279,6 +298,7 @@ export const GLEntrySummarySchema = z.object({
   credit: z.number().default(0),
   narration: z.string().optional(),
   referenceNo: z.string().optional(),
+  type: z.enum(["payment", "receipt", "journal", "budget"]).optional(),
 });
 export const GLEntrySummaryListSchema = z.array(GLEntrySummarySchema);
 
@@ -505,6 +525,8 @@ export const VendorDetailSchema = z.object({
   address: z.string().optional(),
   bankAccountNo: z.string().optional(),
   ifscCode: z.string().optional(),
+  kycStatus: z.string().optional(),
+  kycVerifiedAt: z.string().nullable().optional(),
 });
 export const VendorDetailListSchema = z.array(VendorDetailSchema);
 
@@ -546,6 +568,7 @@ export const GRNSummarySchema = z.object({
   itemCount: z.number(),
   totalValue: z.number(),
   status: z.enum(["draft", "received", "quality_check", "accepted", "partially_rejected", "rejected"]),
+  threeWayMatch: z.boolean().optional(),
 });
 export const GRNSummaryListSchema = z.array(GRNSummarySchema);
 
@@ -584,7 +607,7 @@ export const PurchaseOrderListItemSchema = z.object({
   orderDate: z.string(),
   deliveryDate: z.string().optional(),
   grnStatus: z.string().optional(),
-  status: z.enum(["draft", "approved", "partial_grn", "fully_received", "cancelled"]),
+  status: z.enum(["draft", "pending", "approved", "dispatched", "partial_grn", "fully_received", "cancelled", "gem_placed"]),
 });
 export const PurchaseOrderListItemListSchema = z.array(PurchaseOrderListItemSchema);
 
@@ -640,6 +663,8 @@ export const ContactDetailSchema = z.object({
   designation: z.string().optional(),
   city: z.string().optional(),
   lastActivityDate: z.string().optional(),
+  leadStatus: z.string().optional(),
+  marketingConsent: z.boolean().optional(),
   tags: z.array(z.string()).default([]),
   deals: z.array(z.object({
     id: z.string(),
@@ -737,6 +762,8 @@ export const RTISummarySchema = z.object({
   transferredTo: z.string().optional(),
   status: z.enum(["received", "forwarded", "under_review", "replied", "appeal", "closed"]),
   isFirstAppeal: z.boolean().default(false),
+  /** RTI Act 2005 §7: true when 30-day deadline has passed with no response */
+  isOverdue: z.boolean().default(false),
 });
 export const RTISummaryListSchema = z.array(RTISummarySchema);
 
@@ -826,6 +853,9 @@ export const GrantsDashboardSchema = z.object({
   disbursedAmount: z.number().default(0),
   pendingUCs: z.number().default(0),
   totalGrantees: z.number().default(0),
+  /** G-03 compliance monitoring: number of approved grants past their reporting deadline */
+  overdueGrants: z.number().default(0),
+  overdueGrantIds: z.array(z.string()).default([]),
 });
 
 export const GrantSummarySchema = z.object({
@@ -926,6 +956,9 @@ export const EstabDashboardSchema = z.object({
   meetingsToday: z.number().default(0),
   vehiclesInUse: z.number().default(0),
   complianceItemsDue: z.number().default(0),
+  slaBreached: z.number().default(0),
+  dakPending: z.number().default(0),
+  avgPendencyDays: z.number().default(0),
 });
 
 export const EstabFileSummarySchema = z.object({
@@ -1052,9 +1085,19 @@ export const ComplianceSummaryListSchema = z.array(ComplianceSummarySchema);
 // Asset schemas
 export const AssetDashboardSchema = z.object({
   totalAssets: z.number().default(0),
+  fixedAssets: z.number().default(0),
+  infraAssets: z.number().default(0),
   underMaintenance: z.number().default(0),
   dueForDisposal: z.number().default(0),
+  taggedAssets: z.number().default(0),
   netBlock: z.number().default(0),
+  recentGrnAssets: z.array(z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+    acquisitionDate: z.string(),
+    acquisitionCost: z.number(),
+  })).default([]),
 });
 
 export const AssetSummarySchema = z.object({

@@ -1,65 +1,70 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../_components/ds";
 import { getProcurementApprovals } from "../../../_data/loaders";
+import { ProcurementApprovalsPanel } from "./ProcurementApprovalsPanel";
 
-export default async function Page() {
+export default async function ApprovalsPage() {
   const { data: approvals, source } = await getProcurementApprovals();
 
+  const overdue = approvals.filter((a) => a.dueDisplay.toLowerCase().includes("overdue") || a.dueDisplay.toLowerCase().includes("today")).length;
+
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/procurement" className="hover:text-slate-900">Procurement</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Approvals</span>
-        </nav>
+    <>
+      <PageHeader
+        title="Procurement Approvals"
+        subtitle="Pending items requiring policy and budget sign-off."
+        actions={
+          <>
+            <button className="btn ghost">Escalation Rules</button>
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
+          </>
+        }
+      />
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Procurement Approvals</h1>
-            <p className="mt-1 text-sm text-slate-600">Pending items requiring policy and budget sign-off.</p>
+      <StatGrid>
+        <StatCard icon="⏳" iconBg="#e7edfd" label="Pending Approvals" value={approvals.length} />
+        <StatCard icon="⚠️" iconBg="#fef3f2" label="Overdue / Today" value={overdue} />
+        <StatCard icon="👥" iconBg="#eff6ff" label="Unique Owners" value={new Set(approvals.map((a) => a.owner)).size} />
+        <StatCard icon="📋" iconBg="#ecfdf3" label="Action Required" value={approvals.length} />
+      </StatGrid>
+
+      <Card
+        title="Pending approvals"
+        link={
+          <div className="seg">
+            <span className="on">All</span>
+            <span>Indent</span>
+            <span>PO</span>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Pending</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{approvals.length}</p>
-          </div>
-        </section>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm" aria-label="Pending approvals">
-            <thead className="bg-slate-100 text-slate-700">
+        }
+      >
+        {approvals.length === 0 ? (
+          <EmptyState icon="✅" title="No pending approvals" message="All items are up to date." />
+        ) : (
+          <table className="tbl">
+            <thead>
               <tr>
-                <th scope="col" className="px-4 py-3">Approval ID</th>
-                <th scope="col" className="px-4 py-3">Reference</th>
-                <th scope="col" className="px-4 py-3">Owner</th>
-                <th scope="col" className="px-4 py-3">Due</th>
+                <th>Approval ID</th>
+                <th>Reference</th>
+                <th>Owner</th>
+                <th>Due</th>
               </tr>
             </thead>
             <tbody>
-              {approvals.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
-                    No pending approvals
-                  </td>
+              {approvals.map((item) => (
+                <tr key={item.id}>
+                  <td><span className="mono">{item.id}</span></td>
+                  <td><span className="mono">{item.referenceId}</span></td>
+                  <td>{item.owner}</td>
+                  <td>{item.dueDisplay}</td>
                 </tr>
-              ) : (
-                approvals.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-200 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{item.id}</td>
-                    <td className="px-4 py-3 font-medium text-indigo-600">{item.referenceId}</td>
-                    <td className="px-4 py-3 text-slate-700">{item.owner}</td>
-                    <td className="px-4 py-3 text-slate-600">{item.dueDisplay}</td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
-        </section>
-      </section>
-    </main>
+        )}
+      </Card>
+
+      <ProcurementApprovalsPanel />
+    </>
   );
 }

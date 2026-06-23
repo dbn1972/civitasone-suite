@@ -19,18 +19,7 @@ export function assertSufficientLeaveBalance(balance: LeaveBalance, daysApplied:
   }
 }
 
-export function countWorkingDays(fromDate: string, toDate: string): number {
-  const from = new Date(fromDate);
-  const to   = new Date(toDate);
-  let count  = 0;
-  const cur  = new Date(from);
-  while (cur <= to) {
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return Math.max(count, 1);
-}
+export { countWorkingDays } from "./holidays.js";
 
 export function assertLeaveAppStatusTransition(current: string, next: string): void {
   const allowed: Record<string, string[]> = {

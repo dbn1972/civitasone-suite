@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { PFMS_HOA_REGEX } from "../../shared/pfms.js";
+
+export const updateHeadHoABody = z.object({
+  hoaCode: z.string().regex(PFMS_HOA_REGEX, "HoA must be exactly 18 numeric digits (PFMS format)"),
+});
+export type UpdateHeadHoABody = z.infer<typeof updateHeadHoABody>;
 
 export const createBudgetBody = z.object({
   headId:   z.string().uuid(),

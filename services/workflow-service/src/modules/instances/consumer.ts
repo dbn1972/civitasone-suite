@@ -6,40 +6,77 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, INSTANCE_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as taskRepo from "../tasks/repo.js";
+import * as defRepo from "../definitions/repo.js";
 import type { CreateInstancePayload } from "./commands.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+type ExtendedCreatePayload = CreateInstancePayload & { startNodeKey?: string };
+
 export function registerInstancesConsumers(queue: Queue): void {
-  queue.subscribe<CreateInstancePayload>(COMMANDS.createInstance, async (msg) => {
+  queue.subscribe<ExtendedCreatePayload>(COMMANDS.createInstance, async (msg) => {
+    let taskId = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
+      const def = p.definitionCode
+        ? await defRepo.findByCodeTx(tx, p.tenantId, p.definitionCode)
+        : null;
+
+      let startNode = def ? await defRepo.findFirstNodeTx(tx, def.id) : null;
+      if (def && p.startNodeKey) {
+        startNode = await defRepo.findNodeByKeyTx(tx, def.id, p.startNodeKey) ?? startNode;
+      }
+
       await repo.insert(tx, {
         id: p.id,
         tenantId: p.tenantId,
         name: p.name,
         status: p.status,
+        definitionId: def?.id ?? null,
+        refType: p.refType ?? null,
+        refId: p.refId ?? null,
+        currentNode: startNode?.nodeKey ?? null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
       });
-      const taskId = randomUUID();
+
+      taskId = randomUUID();
       await taskRepo.insert(tx, {
         id: taskId,
         tenantId: p.tenantId,
         instanceId: p.id,
-        name: p.initialTaskName,
+        name: startNode?.name ?? p.initialTaskName,
         status: "pending",
+        roleRef: startNode?.roleRef ?? null,
+        refType: p.refType ?? null,
+        refId: p.refId ?? null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
       });
-      await emit(tx, msg, EVENTS.instanceCreated, { instanceId: p.id, name: p.name, taskId }, "create", p.id);
+
+      await emit(tx, msg, EVENTS.instanceCreated, { instanceId: p.id, name: p.name, taskId, refType: p.refType, refId: p.refId }, "create", p.id);
+      await emit(tx, msg, EVENTS.taskAssigned, {
+        taskId,
+        instanceId: p.id,
+        name: startNode?.name ?? p.initialTaskName,
+        roleRef: startNode?.roleRef,
+        refType: p.refType,
+        refId: p.refId,
+      }, "assign_task", taskId);
     });
-    const view = { id: msg.payload.id, tenantId: msg.payload.tenantId, name: msg.payload.name, status: msg.payload.status, version: msg.payload.version };
+    const view = {
+      id: msg.payload.id,
+      tenantId: msg.payload.tenantId,
+      name: msg.payload.name,
+      status: msg.payload.status,
+      version: msg.payload.version,
+    };
     await cache.put(cache.makeKey(msg.tenantId, INSTANCE_RESOURCE, msg.payload.id), view);
     await cache.invalidateResource(msg.tenantId, INSTANCE_RESOURCE);
+    if (taskId) await cache.invalidateResource(msg.tenantId, "task");
   });
 }
 

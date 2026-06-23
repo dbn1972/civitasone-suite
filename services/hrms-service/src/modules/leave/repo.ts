@@ -44,6 +44,21 @@ export async function findLeaveAppsByTenant(tenantId: string, limit = 100): Prom
     .limit(limit);
 }
 
+export async function listLeaveTypesByTenant(tenantId: string): Promise<Array<typeof hrmsLeaveTypes.$inferSelect>> {
+  return db.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, tenantId));
+}
+
+export async function listAllocsForEmployee(tenantId: string, employeeId: string): Promise<LeaveAllocRow[]> {
+  return db.select().from(hrmsLeaveAllocs)
+    .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId)));
+}
+
+export async function findApprovedLeaveInMonth(tenantId: string, month: string): Promise<LeaveAppRow[]> {
+  const rows = await db.select().from(hrmsLeaveApps)
+    .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.status, "approved")));
+  return rows.filter((r) => (r.fromDate ?? "").startsWith(month) || (r.toDate ?? "").startsWith(month));
+}
+
 export async function insertLeaveType(tx: Writer, row: typeof hrmsLeaveTypes.$inferInsert): Promise<void> {
   await tx.insert(hrmsLeaveTypes).values(row);
 }

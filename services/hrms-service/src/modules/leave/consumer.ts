@@ -1,12 +1,17 @@
 import type { Queue } from "@civitasone/queue";
+import { randomUUID } from "node:crypto";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition } from "./domain.js";
+import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 
 const AUDIT = "audit.event.record";
+const WORKFLOW_CREATE = "workflow.instance.create";
+const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 
 export function registerLeaveConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.leaveTypeCreate, async (msg) => {
@@ -57,6 +62,22 @@ export function registerLeaveConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { leaveAppId: p.id, employeeId: p.employeeId, fromDate: p.fromDate, toDate: p.toDate },
       });
+      const wfId = randomUUID();
+      await enqueue(tx, {
+        topic: WORKFLOW_CREATE, eventType: WORKFLOW_CREATE,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          id: wfId,
+          tenantId: msg.tenantId,
+          name: `${LEAVE_WORKFLOW_NAME} — ${p.id.slice(0, 8)}`,
+          status: "active",
+          definitionCode: "leave_approval",
+          initialTaskName: "Reporting Officer Approval",
+          version: 1,
+          refType: "leave_app",
+          refId: p.id,
+        },
+      });
       await audit(tx, msg, "apply", "leave_app", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", (msg.payload as any).employeeId));
@@ -65,18 +86,39 @@ export function registerLeaveConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.leaveApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; approvedBy: string };
     let employeeId = "";
+    let fromDate = "";
+    let toDate = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findLeaveAppById(p.id, p.tenantId);
       if (!app) throw new Error(`leave app ${p.id} not found`);
       assertLeaveAppStatusTransition(app.status, "approved");
       employeeId = app.employeeId;
+      fromDate = app.fromDate;
+      toDate = app.toDate;
       await repo.debitLeaveBalance(tx, app.allocId, app.daysApplied);
       await repo.updateLeaveApp(tx, p.id, { status: "approved", approvedBy: p.approvedBy, updatedBy: msg.actorId });
+      await markLeaveDaysOnAttendance(tx, {
+        tenantId: p.tenantId,
+        employeeId: app.employeeId,
+        fromDate: app.fromDate,
+        toDate: app.toDate,
+        actorId: msg.actorId,
+      });
       await enqueue(tx, {
         topic: EVENTS.leaveApproved, eventType: EVENTS.leaveApproved,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { leaveAppId: p.id, employeeId: app.employeeId, daysApplied: app.daysApplied },
+        payload: { leaveAppId: p.id, employeeId: app.employeeId, daysApplied: app.daysApplied, fromDate: app.fromDate, toDate: app.toDate },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.leave.approved",
+          recipient: app.employeeId,
+          recipientId: app.employeeId,
+          variables: { leaveAppId: p.id, days: String(app.daysApplied) },
+        }),
       });
       await audit(tx, msg, "approve", "leave_app", p.id);
     });

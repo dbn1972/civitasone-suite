@@ -13,6 +13,8 @@ import { grievanceRoutes }   from "./modules/grievance/routes.js";
 import { rtiRoutes }         from "./modules/rti/routes.js";
 import { helpdeskRoutes }    from "./modules/helpdesk/routes.js";
 import { analyticsRoutes }   from "./modules/analytics/routes.js";
+import { escalationRoutes } from "./modules/escalation/routes.js";
+import { slaRulesRoutes } from "./modules/sla-rules/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,6 +35,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rtiRoutes);
   await app.register(helpdeskRoutes);
   await app.register(analyticsRoutes);
+  await app.register(escalationRoutes);
+  await app.register(slaRulesRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

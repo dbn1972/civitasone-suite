@@ -1,6 +1,7 @@
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
+import '../sync/sync_database.dart';
 
 /// Keycloak PKCE — civitasone-mobile client, deep link callback.
 /// Handles transparent access-token refresh via stored refresh token.
@@ -79,6 +80,9 @@ class PkceAuthService {
     await _storage.delete(key: _accessKey);
     await _storage.delete(key: _refreshKey);
     await _storage.delete(key: _expiryKey);
+    // SEC / 02-T2 / 08-T4: wipe the local encrypted cache, not just tokens, so
+    // entity/outbox/cursor data never outlives the session.
+    await SyncDatabase.wipe();
   }
 
   Future<String?> _refreshAccessToken() async {

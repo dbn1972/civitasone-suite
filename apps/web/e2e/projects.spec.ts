@@ -14,17 +14,21 @@ test.describe('Projects', () => {
     await expect(page.getByRole('link', { name: 'Schemes' })).toBeVisible();
   });
 
+  // ── Dashboard ────────────────────────────────────────────────────────────
+
+  test('projects dashboard shows KPI cards', async ({ page }) => {
+    await page.goto('/projects/dashboard');
+    await expect(page.getByText(/project/i).first()).toBeVisible();
+  });
+
+  // ── Projects list ─────────────────────────────────────────────────────────
+
   test('projects list shows heading and column headers', async ({ page }) => {
     await page.goto('/projects/list');
     await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Project Code' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Scheme' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Department' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Start Date' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Budget (₹)' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Expenditure (₹)' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Completion %' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 
@@ -34,13 +38,35 @@ test.describe('Projects', () => {
     await expect(page.getByRole('cell', { name: 'Highway Expansion' })).toBeVisible();
   });
 
+  // ── Project detail ────────────────────────────────────────────────────────
+
+  test('project detail shows heading', async ({ page }) => {
+    await page.goto('/projects/prj-001');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  });
+
+  test('project detail shows project name', async ({ page }) => {
+    await page.goto('/projects/prj-001');
+    await expect(page.getByText('Highway Expansion Phase 1')).toBeVisible();
+  });
+
+  test('project detail shows milestones section', async ({ page }) => {
+    await page.goto('/projects/prj-001');
+    await expect(page.getByText(/milestone/i)).toBeVisible();
+  });
+
+  test('navigating projects list → detail shows project detail', async ({ page }) => {
+    await page.goto('/projects/list');
+    await page.getByRole('link', { name: 'PROJ-001' }).click();
+    await expect(page.getByText('Highway Expansion Phase 1')).toBeVisible();
+  });
+
+  // ── Sub-lists ─────────────────────────────────────────────────────────────
+
   test('milestones page shows heading and column headers', async ({ page }) => {
     await page.goto('/projects/milestones');
     await expect(page.getByRole('heading', { name: 'Milestones' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Project Name' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Milestone Title' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Due Date' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Completed Date' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 
@@ -49,12 +75,11 @@ test.describe('Projects', () => {
     await expect(page.getByRole('heading', { name: 'Schemes' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Scheme Code' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Ministry' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Department' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Funding Type' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Allocation (₹)' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Released (₹)' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Projects' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
+  });
+
+  test('fund releases page loads without error', async ({ page }) => {
+    await page.goto('/projects/fund-releases');
+    await expect(page.getByRole('heading', { name: /fund release/i })).toBeVisible();
   });
 });

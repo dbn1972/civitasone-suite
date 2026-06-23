@@ -6,9 +6,11 @@ import {
   NotificationPrefSummaryListSchema,
 } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as deliveryQueries from "../deliveries/queries.js";
 import * as templateQueries from "../templates/queries.js";
+
+const PREF_ADMIN_ROLES = ["notification_admin", "super_admin", "tenant_admin", "platform_admin"];
 
 export async function inboxRoutes(app: FastifyInstance): Promise<void> {
   app.get("/notifications/notifications", async (req, reply) => {
@@ -24,12 +26,13 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
       recipient: d.recipient,
       channel: (d.channel === "email" ? "email" : d.channel === "sms" ? "sms" : d.channel === "webhook" ? "webhook" : "in_app") as "email" | "sms" | "in_app" | "webhook",
       status: (d.status === "delivered" || d.status === "sent" ? "sent" : d.status === "failed" ? "failed" : "pending") as "sent" | "pending" | "failed" | "read",
-      createdAt: d.createdAt.toISOString(),
+      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
     })));
   });
 
   app.get("/notifications/preferences", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, PREF_ADMIN_ROLES);
     const q = listQuerySchema.parse(req.query);
     const prefs = await templateQueries.listTenantPrefs(ctx.tenantId, q.limit);
     sendValidated(reply, NotificationPrefSummaryListSchema, prefs.map((p) => ({

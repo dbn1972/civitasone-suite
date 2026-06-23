@@ -19,4 +19,10 @@ describe("gateway registry", () => {
       expect(names.has(required)).toBe(true);
     }
   });
+
+  it("admin-users route maps to /identity/users (not /v1/identity/users)", () => {
+    const resolved = resolveRoute("/api/v1/admin/users");
+    expect(resolved?.route.name).toBe("admin-users");
+    expect(resolved?.route.upstreamPath).toBe("/identity/users");
+  });
 });

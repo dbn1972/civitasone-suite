@@ -14,19 +14,21 @@ test.describe('Legal', () => {
     await expect(page.locator('a[href="/legal/opinions"]')).toBeVisible();
   });
 
+  // ── Dashboard ────────────────────────────────────────────────────────────
+
+  test('legal dashboard shows KPI cards', async ({ page }) => {
+    await page.goto('/legal/dashboard');
+    await expect(page.getByText(/case/i).first()).toBeVisible();
+  });
+
+  // ── Cases list ────────────────────────────────────────────────────────────
+
   test('legal cases list shows heading and column headers', async ({ page }) => {
     await page.goto('/legal/list');
     await expect(page.getByRole('heading', { name: 'Legal Cases' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Case No' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Title' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Court' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Filed Date' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Department' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Petitioner' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Respondent' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Advocate' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Next Hearing' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 
@@ -36,30 +38,46 @@ test.describe('Legal', () => {
     await expect(page.getByRole('cell', { name: 'State v. ABC Construction' })).toBeVisible();
   });
 
+  // ── Case detail ───────────────────────────────────────────────────────────
+
+  test('legal case detail shows heading', async ({ page }) => {
+    await page.goto('/legal/cases/leg-001');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  });
+
+  test('legal case detail shows case title', async ({ page }) => {
+    await page.goto('/legal/cases/leg-001');
+    await expect(page.getByText('State v. ABC Construction Ltd')).toBeVisible();
+  });
+
+  test('legal case detail breadcrumb links back to cases', async ({ page }) => {
+    await page.goto('/legal/cases/leg-001');
+    await expect(page.getByRole('link', { name: /cases|legal/i }).first()).toBeVisible();
+  });
+
+  test('navigating cases list → detail shows case detail', async ({ page }) => {
+    await page.goto('/legal/list');
+    await page.getByRole('link', { name: 'CASE-001' }).click();
+    await expect(page.getByText('State v. ABC Construction Ltd')).toBeVisible();
+  });
+
+  // ── Sub-lists ─────────────────────────────────────────────────────────────
+
   test('hearings page shows heading and column headers', async ({ page }) => {
     await page.goto('/legal/hearings');
     await expect(page.getByRole('heading', { name: 'Hearings' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Case No' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Case Title' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Court' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Date', exact: true })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Time' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Purpose' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Outcome' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Next Date' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 
   test('legal opinions page shows heading and column headers', async ({ page }) => {
     await page.goto('/legal/opinions');
     await expect(page.getByRole('heading', { name: 'Legal Opinions' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Opinion No' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Subject' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Requested By' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Request Date' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Due Date' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Advisor' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Issued Date' })).toBeVisible();
+  });
+
+  test('court orders page shows heading', async ({ page }) => {
+    await page.goto('/legal/court-orders');
+    await expect(page.getByRole('heading', { name: /court order/i })).toBeVisible();
   });
 });

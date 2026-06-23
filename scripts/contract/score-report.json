@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-06-21T01:47:42.181Z",
+  "generatedAt": "2026-06-21T05:55:08.153Z",
   "overallScore": "10/10",
   "overallScoreNum": 10,
   "staticCounts": {
-    "wired": 135,
+    "wired": 139,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 30
+    "noLoader": 27
   },
   "modules": [
     {
@@ -499,11 +499,11 @@
     },
     {
       "module": "finance",
-      "total": 12,
-      "wired": 12,
+      "total": 13,
+      "wired": 13,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "12/12",
+      "wiredStr": "13/13",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -682,11 +682,11 @@
     },
     {
       "module": "hr",
-      "total": 14,
-      "wired": 14,
+      "total": 16,
+      "wired": 16,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "14/14",
+      "wiredStr": "16/16",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -804,11 +804,11 @@
     },
     {
       "module": "inventory",
-      "total": 1,
-      "wired": 1,
+      "total": 2,
+      "wired": 2,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "1/1",
+      "wiredStr": "2/2",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],

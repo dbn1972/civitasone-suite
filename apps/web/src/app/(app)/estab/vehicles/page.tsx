@@ -1,22 +1,6 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getVehicles } from "../../../_data/loaders";
-import type { VehicleSummary } from "@civitasone/types";
-
-const vehicleStatusColors: Record<VehicleSummary["status"], string> = {
-  available: "bg-emerald-50 text-emerald-700",
-  in_use: "bg-blue-50 text-blue-700",
-  maintenance: "bg-amber-50 text-amber-700",
-  reserved: "bg-purple-50 text-purple-700",
-  disposed: "bg-slate-100 text-slate-500",
-};
-
-const fuelTypeColors: Record<VehicleSummary["fuelType"], string> = {
-  petrol: "bg-slate-100 text-slate-600",
-  diesel: "bg-slate-100 text-slate-600",
-  cng: "bg-emerald-50 text-emerald-700",
-  electric: "bg-blue-50 text-blue-700",
-};
+import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
 
 export default async function VehiclesPage() {
   const { data: vehicles, source } = await getVehicles();
@@ -26,83 +10,76 @@ export default async function VehiclesPage() {
   const maintenance = vehicles.filter((v) => v.status === "maintenance").length;
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/estab" className="hover:text-slate-900">Establishment</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Fleet</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Vehicle Management</h1>
-            <p className="mt-1 text-sm text-slate-600">Allocation, log books, fuel and maintenance for the fleet.</p>
+    <>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Vehicle Management"
+        subtitle="Allocation, log books, fuel and maintenance for the fleet."
+        actions={
+          <>
+            <button className="btn ghost">Allocate</button>
+            <button className="btn primary">+ Add Vehicle</button>
+          </>
+        }
+      />
+      <div
+        className="banner"
+        style={{
+          background: "#e6f7f5",
+          border: "1px solid #99e6da",
+          color: "#0f766e",
+          borderRadius: 12,
+          padding: "13px 16px",
+          marginBottom: 18,
+          fontSize: 13,
+        }}
+      >
+        🔗 <b>Vehicles are Assets.</b> The vehicle record (value, depreciation) lives in the Asset register; this screen adds fleet operations — allocation, logbook &amp; fuel.
+      </div>
+      <StatGrid>
+        <StatCard icon="🚗" iconBg="#e6f7f5" label="Fleet" value={total.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#eff6ff" label="On Duty / Avail" value={(inUse + available).toLocaleString("en-IN")} />
+        <StatCard icon="⛽" iconBg="#fffaeb" label="Service Due" value={maintenance.toLocaleString("en-IN")} />
+        <StatCard icon="🔧" iconBg="#fef3f2" label="Under Maintenance" value={maintenance.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h">
+          <h3>Vehicle fleet</h3>
+          <div className="seg">
+            <span className="on">All</span>
+            <span>Pool</span>
+            <span>Assigned</span>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {[
-            { label: "Total Fleet", value: total, color: "text-slate-900" },
-            { label: "Available", value: available, color: "text-emerald-600" },
-            { label: "In Use", value: inUse, color: "text-blue-600" },
-            { label: "Under Maintenance", value: maintenance, color: "text-amber-600" },
-          ].map((s) => (
-            <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">{s.label}</p>
-              <p className={`mt-1 text-2xl font-bold ${s.color}`}>{s.value}</p>
-            </div>
-          ))}
-        </section>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table aria-label="Vehicle fleet" className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-700">
+        </div>
+        {vehicles.length === 0 ? (
+          <EmptyState icon="🚗" title="No vehicles found" message="Register vehicles to manage your fleet." />
+        ) : (
+          <table className="tbl">
+            <thead>
               <tr>
-                <th scope="col" className="px-4 py-3">Vehicle No</th>
-                <th scope="col" className="px-4 py-3">Make / Model</th>
-                <th scope="col" className="px-4 py-3">Type</th>
-                <th scope="col" className="px-4 py-3">Assigned To</th>
-                <th scope="col" className="px-4 py-3">Driver</th>
-                <th scope="col" className="px-4 py-3">Fuel</th>
-                <th scope="col" className="px-4 py-3 text-right">Odometer (km)</th>
-                <th scope="col" className="px-4 py-3">Next Service</th>
-                <th scope="col" className="px-4 py-3">Status</th>
+                <th>Reg no.</th>
+                <th>Model</th>
+                <th>Allocated to</th>
+                <th>Odometer</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {vehicles.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">No vehicles found</td>
+              {vehicles.map((v) => (
+                <tr key={v.id}>
+                  <td><span className="mono">{v.vehicleNo}</span></td>
+                  <td>{v.make} {v.model}</td>
+                  <td>{v.assignedTo ?? "Pool"}</td>
+                  <td>{v.odometerKm.toLocaleString("en-IN")} km</td>
+                  <td>
+                    <StatusPill status={v.status.replace(/_/g, " ")} label={v.status.replace(/_/g, " ")} />
+                  </td>
                 </tr>
-              ) : (
-                vehicles.map((v) => (
-                  <tr key={v.id} className="border-t border-slate-200 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-slate-700">{v.vehicleNo}</td>
-                    <td className="px-4 py-3 text-slate-800">{v.make} {v.model}</td>
-                    <td className="px-4 py-3 capitalize text-slate-600">{v.type.replace(/_/g, " ")}</td>
-                    <td className="px-4 py-3 text-slate-600">{v.assignedTo ?? "Pool"}</td>
-                    <td className="px-4 py-3 text-slate-600">{v.driverName ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${fuelTypeColors[v.fuelType]}`}>
-                        {v.fuelType}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-700">{v.odometerKm.toLocaleString("en-IN")}</td>
-                    <td className="px-4 py-3 text-slate-600">{v.nextServiceDue ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${vehicleStatusColors[v.status]}`}>
-                        {v.status.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
-        </section>
-      </section>
-    </main>
+        )}
+      </div>
+    </>
   );
 }

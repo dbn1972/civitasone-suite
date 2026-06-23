@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
+import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
 
 const BAR_W = 640;
 const BAR_H = 150;
@@ -8,11 +9,7 @@ const BAR_PAD = 10;
 const BAR_GAP = 6;
 const LABEL_H = 16;
 
-function CategoryBarChart({
-  categories,
-}: {
-  categories: { name: string; count: number }[];
-}) {
+function CategoryBarChart({ categories }: { categories: { name: string; count: number }[] }) {
   const items = categories.slice(0, 7);
   if (items.length === 0) return null;
 
@@ -22,12 +19,7 @@ function CategoryBarChart({
   const chartH = BAR_H - LABEL_H;
 
   return (
-    <svg
-      width="100%"
-      viewBox={`0 0 ${BAR_W} ${BAR_H}`}
-      aria-label="Documents by category bar chart"
-      role="img"
-    >
+    <svg width="100%" viewBox={`0 0 ${BAR_W} ${BAR_H}`} aria-label="Documents by category bar chart" role="img">
       {items.map((cat, i) => {
         const ratio = cat.count / maxVal;
         const barH = Math.max(4, Math.round(ratio * (chartH - 6)));
@@ -57,42 +49,26 @@ function StorageDonut({ usedPct }: { usedPct: number }) {
   const offset = circ - filled;
 
   return (
-    <svg
-      width={132}
-      height={132}
-      viewBox="0 0 132 132"
-      aria-label={`Storage usage: ${usedPct.toFixed(0)}% of quota`}
-      role="img"
-    >
+    <svg width={132} height={132} viewBox="0 0 132 132" aria-label={`Storage usage: ${usedPct.toFixed(0)}% of quota`} role="img">
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f4" strokeWidth={13} />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke="#ca8a04"
-        strokeWidth={13}
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${cx} ${cy})`}
-      />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#ca8a04" strokeWidth={13}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+        transform={`rotate(-90 ${cx} ${cy})`} />
       <text x="50%" y="46%" textAnchor="middle" dy=".1em" fontSize={22} fontWeight={780} fill="#101828">
         {usedPct.toFixed(0)}%
       </text>
-      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#98a2b3">
-        of quota
-      </text>
+      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#98a2b3">of quota</text>
     </svg>
   );
 }
 
-const statusColors: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-600",
-  under_review: "bg-amber-50 text-amber-700",
-  approved: "bg-emerald-50 text-emerald-700",
-  archived: "bg-slate-100 text-slate-500",
-};
+function docStatusLabel(s: string) {
+  if (s === "approved") return "Published";
+  if (s === "under_review") return "Under review";
+  if (s === "draft") return "Draft";
+  if (s === "archived") return "Archived";
+  return s;
+}
 
 export default async function KnowledgeDashboardPage() {
   const { data: docs, source } = await getKnowledgeDocs();
@@ -101,9 +77,9 @@ export default async function KnowledgeDashboardPage() {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const total = docs.length;
-  const recent = docs.filter((d) => new Date(d.createdAt) >= thirtyDaysAgo).length;
-  const pendingApproval = docs.filter((d) => d.status === "under_review").length;
-  const categories = [...new Set(docs.map((d) => d.category))].length;
+  const circulars = docs.filter((d) => d.category?.toLowerCase().includes("circular")).length;
+  const underRetention = docs.filter((d) => d.status === "approved" || d.status === "under_review").length;
+  const dueForArchival = docs.filter((d) => d.status === "archived").length;
 
   const categoryMap = docs.reduce<Record<string, number>>((acc, d) => {
     acc[d.category] = (acc[d.category] ?? 0) + 1;
@@ -120,141 +96,96 @@ export default async function KnowledgeDashboardPage() {
     .slice(0, 5);
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/knowledge" className="hover:text-slate-900">Knowledge</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Dashboard</span>
-        </nav>
+    <div className="wrap">
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Knowledge &amp; Document Management"
+        subtitle="Digital repository, records retention &amp; enterprise search."
+        actions={
+          <>
+            <button className="btn ghost">Bulk upload</button>
+            <button className="btn primary">+ Publish Document</button>
+          </>
+        }
+      />
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Knowledge &amp; Document Management</h1>
-            <p className="mt-1 text-sm text-slate-600">Digital repository, records retention &amp; enterprise search.</p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
+      <StatGrid>
+        <StatCard icon="📂" iconBg="#fef9e7" label="Documents" value={total.toLocaleString("en-IN")} />
+        <StatCard icon="📜" iconBg="#eff6ff" label="Circulars/Policies" value={circulars.toLocaleString("en-IN")} />
+        <StatCard icon="🗃️" iconBg="#ecfdf3" label="Under Retention" value={underRetention.toLocaleString("en-IN")} />
+        <StatCard icon="📦" iconBg="#fffaeb" label="Due for Archival" value={dueForArchival.toLocaleString("en-IN")} />
+      </StatGrid>
 
-        <section aria-label="Document statistics" className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Documents</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{total.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Recent (30d)</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{recent.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Pending Approval</p>
-            <p className="mt-1 text-2xl font-bold text-amber-600">{pendingApproval.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Categories</p>
-            <p className="mt-1 text-2xl font-bold text-purple-600">{categories.toLocaleString("en-IN")}</p>
-          </div>
-        </section>
-
-        {total === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
-            <p className="text-slate-400">No documents in the repository yet.</p>
-          </div>
-        ) : (
-          <div className="grid gap-5 lg:grid-cols-3">
-            <div className="space-y-5 lg:col-span-2">
-              <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-5 py-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-800">Recent publications</h2>
-                  <Link href="/knowledge/repository" className="text-xs text-blue-600 hover:underline">
-                    Repository →
-                  </Link>
-                </div>
-                <div className="overflow-x-auto">
-                  <table aria-label="Recent documents" className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th scope="col" className="px-4 py-3">Document</th>
-                        <th scope="col" className="px-4 py-3">Category</th>
-                        <th scope="col" className="px-4 py-3">Author</th>
-                        <th scope="col" className="px-4 py-3">Date</th>
-                        <th scope="col" className="px-4 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentDocs.map((doc) => (
-                        <tr key={doc.id} className="border-t border-slate-100 hover:bg-slate-50">
-                          <td className="px-4 py-3 font-medium text-slate-900 max-w-xs truncate" title={doc.title}>
-                            {doc.title}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">{doc.category}</td>
-                          <td className="px-4 py-3 text-slate-600">{doc.author ?? "—"}</td>
-                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{doc.createdAt}</td>
-                          <td className="px-4 py-3">
-                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[doc.status] ?? "bg-slate-100 text-slate-600"}`}>
-                              {doc.status.replace("_", " ")}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-base font-semibold text-slate-800">Documents by category</h2>
-                <CategoryBarChart categories={categoryList} />
-              </section>
+      {total === 0 ? (
+        <div className="empty-state" style={{ marginTop: "18px" }}>
+          <div className="ic">📂</div>
+          <h4>No documents yet</h4>
+          <p>No documents in the repository yet.</p>
+        </div>
+      ) : (
+        <div className="grid g-main" style={{ marginTop: "18px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            <div className="card">
+              <div className="card-h">
+                <h3>Recent publications</h3>
+                <Link className="lnk" href="/knowledge/repository">Repository →</Link>
+              </div>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Document</th>
+                    <th>Type</th>
+                    <th>Dept</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentDocs.map((doc) => (
+                    <tr key={doc.id} className="clickable">
+                      <td>{doc.title}</td>
+                      <td>{doc.category}</td>
+                      <td>{doc.author ?? "—"}</td>
+                      <td>{doc.createdAt?.slice(0, 10)}</td>
+                      <td><StatusPill status={doc.status === "approved" ? "approved" : doc.status} label={docStatusLabel(doc.status)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div className="space-y-5">
-              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-base font-semibold text-slate-800">Storage</h2>
-                <div className="flex justify-center">
-                  <StorageDonut usedPct={storagePct} />
-                </div>
-              </section>
+            <div className="card">
+              <div className="card-h"><h3>Documents by category</h3></div>
+              <div className="pad"><CategoryBarChart categories={categoryList} /></div>
+            </div>
+          </div>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-base font-semibold text-slate-800">Quick search</h2>
-                <div className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-400">
-                  🔎{" "}
-                  <Link href="/knowledge/search" className="hover:text-slate-700">
-                    Search circulars, policies, records…
-                  </Link>
+          <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            <div className="card">
+              <div className="card-h"><h3>Storage</h3></div>
+              <div className="pad" style={{ display: "grid", placeItems: "center" }}>
+                <StorageDonut usedPct={storagePct} />
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-h"><h3>Quick search</h3></div>
+              <div className="pad">
+                <div className="tb-search" style={{ maxWidth: "none" }}>
+                  🔎<input placeholder="Search circulars, policies…" readOnly />
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {["travel policy", "GFR 2017", "recruitment"].map((term) => (
-                    <Link
-                      key={term}
-                      href={`/knowledge/search?q=${encodeURIComponent(term)}`}
-                      className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600 hover:bg-slate-200"
-                    >
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
+                  {["travel policy", "reservation", "GFR 2017"].map((term) => (
+                    <Link key={term} href={`/knowledge/search?q=${encodeURIComponent(term)}`} className="chip" style={{ textDecoration: "none" }}>
                       {term}
                     </Link>
                   ))}
                 </div>
-              </section>
-
-              <section className="grid grid-cols-1 gap-2">
-                {[
-                  { label: "Repository", href: "/knowledge/repository" },
-                  { label: "Records Management", href: "/knowledge/records" },
-                  { label: "Enterprise Search", href: "/knowledge/search" },
-                ].map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md text-sm font-medium text-slate-800"
-                  >
-                    {link.label} →
-                  </Link>
-                ))}
-              </section>
+              </div>
             </div>
           </div>
-        )}
-      </section>
-    </main>
+        </div>
+      )}
+    </div>
   );
 }

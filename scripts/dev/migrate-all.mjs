@@ -98,3 +98,10 @@ console.log(`Applied : ${applied}`);
 console.log(`Skipped : ${skipped}`);
 console.log(`Errors  : ${errors}`);
 if (errors > 0) process.exit(1);
+
+console.log("\nApplying service role grants...");
+try {
+  execSync("node scripts/dev/grant-all.mjs", { cwd: ROOT, stdio: "inherit" });
+} catch {
+  errors++;
+}

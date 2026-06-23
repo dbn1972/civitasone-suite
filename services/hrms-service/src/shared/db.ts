@@ -6,6 +6,7 @@ import { schema as attendanceModule }  from "../modules/attendance/schema.js";
 import { schema as leaveModule }       from "../modules/leave/schema.js";
 import { schema as trainingModule }    from "../modules/training/schema.js";
 import { schema as lifecycleModule }   from "../modules/lifecycle/schema.js";
+import { schema as serviceBookModule } from "../modules/service-book/schema.js";
 import { schema as appraisalModule }   from "../modules/appraisals/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
@@ -15,7 +16,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://hrms_svc:***@hos
 export const sqlClient = createSqlClient(url);
 
 export const db = drizzle(sqlClient, {
-  schema: { ...employeeModule, ...recruitmentModule, ...attendanceModule, ...leaveModule, ...trainingModule, ...lifecycleModule, ...appraisalModule, ...outboxSchema },
+  schema: { ...employeeModule, ...recruitmentModule, ...attendanceModule, ...leaveModule, ...trainingModule, ...lifecycleModule, ...serviceBookModule, ...appraisalModule, ...outboxSchema },
 });
 
 export type Db = typeof db;

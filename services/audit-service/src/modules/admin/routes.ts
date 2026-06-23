@@ -35,10 +35,10 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const rows = await exportsRepo.listExportsByTenant(ctx.tenantId, q.limit);
     const jobs = rows.map((row) => ({
       id: row.id,
-      jobType: `${row.periodFrom.toISOString().slice(0, 7)}-export`,
+      jobType: `${new Date(row.periodFrom as unknown as string).toISOString().slice(0, 7)}-export`,
       requestedBy: row.createdBy,
-      requestedAt: row.createdAt.toISOString(),
-      completedAt: row.status === "completed" ? row.updatedAt.toISOString() : undefined,
+      requestedAt: new Date(row.createdAt as unknown as string).toISOString(),
+      completedAt: row.status === "completed" ? new Date(row.updatedAt as unknown as string).toISOString() : undefined,
       format: (["pdf", "xlsx", "csv"].includes(row.format) ? row.format : "pdf") as "pdf" | "xlsx" | "csv",
       status: (
         row.status === "pending" ? "queued" :

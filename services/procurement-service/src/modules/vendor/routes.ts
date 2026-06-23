@@ -16,7 +16,7 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, vendorListResponseSchema, await queries.listVendors(ctx.tenantId, q.limit));
+    sendValidated(reply, vendorListResponseSchema, await queries.listVendors(ctx.tenantId, q.limit, q.offset));
   });
 
   app.post("/v1/procurement/vendors", async (req, reply) => {

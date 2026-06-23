@@ -14,7 +14,8 @@ import { financeBills } from "../src/modules/payments/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { assertJournalBalances } from "../src/modules/gl/domain.js";
-import { assertBudgetNotExceeded, availableBalance } from "../src/modules/budget/domain.js";
+import { assertBudgetNotExceeded, availableBalance, assertValidPfmsHoA } from "../src/modules/budget/domain.js";
+import { assertValidDdoCode } from "../src/shared/pfms.js";
 import { EVENTS } from "../src/topics.js";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
@@ -105,6 +106,7 @@ describe("Bill consumer — 3-way match (integration)", () => {
         billNo: "BILL-3WM-001",
         vendorId: "aaaaaaaa-0000-4000-8000-000000000001",
         headId:   "bbbbbbbb-0000-4000-8000-000000000001",
+        ddoCode:  "DDO123456",
         grossMinor: 50000,
         currency: "INR",
         deductions: [],
@@ -156,6 +158,7 @@ describe("Bill consumer — CQRS wiring (integration)", () => {
         billNo: "BILL-HAPPY-001",
         vendorId: "aaaaaaaa-1111-4000-8000-000000000001",
         headId:   "bbbbbbbb-1111-4000-8000-000000000001",
+        ddoCode:  "DDO123456",
         grossMinor: 75000,
         currency: "INR",
         deductions: [{ type: "tds", amountMinor: 7500 }],
@@ -181,5 +184,26 @@ describe("Bill consumer — CQRS wiring (integration)", () => {
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain("audit.event.record");
     expect(eventTypes).not.toContain(EVENTS.billMismatch);
+  });
+});
+
+// ── 5. PFMS HoA / DDO validation (pure) ──────────────────────────
+
+describe("PFMS domain — HoA and DDO validation (pure)", () => {
+  it("valid 18-digit HoA passes", () => {
+    expect(() => assertValidPfmsHoA("207101010101010101")).not.toThrow();
+  });
+
+  it("invalid HoA throws INVALID_HOA_CODE", () => {
+    expect(() => assertValidPfmsHoA("6002")).toThrowError("INVALID_HOA_CODE");
+    expect(() => assertValidPfmsHoA("20710101010101010")).toThrowError("INVALID_HOA_CODE");
+  });
+
+  it("valid DDO code passes", () => {
+    expect(() => assertValidDdoCode("DDO123456")).not.toThrow();
+  });
+
+  it("invalid DDO code throws INVALID_DDO_CODE", () => {
+    expect(() => assertValidDdoCode("AB")).toThrowError("INVALID_DDO_CODE");
   });
 });

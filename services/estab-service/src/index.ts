@@ -4,5 +4,5 @@ const app = await buildApp();
 
 await app.listen({
   port: Number(process.env.PORT ?? 3010),
-  host: process.env.HOST ?? "0.0.0.0",
+  host: process.env.BIND_HOST ?? "127.0.0.1",
 });

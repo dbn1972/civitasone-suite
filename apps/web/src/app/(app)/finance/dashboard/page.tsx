@@ -1,69 +1,95 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getFinanceDashboard } from "../../../_data/loaders";
+import Link from "next/link";
+import { BudgetChart } from "./BudgetChart";
+
+const QUICK_LINKS = [
+  { label: "Budget Formulation", href: "/finance/budget/formulation", icon: "📝" },
+  { label: "Sanctions", href: "/finance/budget/sanctions", icon: "🖊️" },
+  { label: "Bill Processing", href: "/finance/expenditure/bills", icon: "🧮" },
+  { label: "Advances", href: "/finance/expenditure/advances", icon: "💵" },
+  { label: "Utilization Certificates", href: "/finance/expenditure/utilization-certificates", icon: "📋" },
+  { label: "General Ledger", href: "/finance/accounting/general-ledger", icon: "📒" },
+  { label: "New Voucher", href: "/finance/accounting/vouchers/new", icon: "🖊️" },
+  { label: "Financial Statements", href: "/finance/accounting/financial-statements", icon: "📊" },
+  { label: "Chart of Accounts", href: "/finance/chart-of-accounts", icon: "🧱" },
+  { label: "Payments", href: "/finance/payments", icon: "💳" },
+];
 
 export default async function FinanceDashboardPage() {
   const { data, source } = await getFinanceDashboard();
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/finance" className="hover:text-slate-900">Finance</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Dashboard</span>
-        </nav>
+    <>
+      <PageHeader
+        title="Financial Management"
+        subtitle="Budget, expenditure, receipts and treasury — one governed view."
+        actions={
+          <>
+            <button className="btn ghost">FY 2026-27 ▾</button>
+            <button className="btn primary">Export MIS</button>
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
+          </>
+        }
+      />
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Finance Dashboard</h1>
-            <p className="mt-1 text-sm text-slate-600">Key finance KPIs and quick navigation.</p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
+      <StatGrid>
+        <StatCard
+          icon="💰"
+          iconBg="#e7edfd"
+          label="Budget Utilisation (FY)"
+          value={`${data.budgetUtilisationPct.toFixed(1)}%`}
+          delta="Approved"
+          up={false}
+        />
+        <StatCard
+          icon="📤"
+          iconBg="#eff6ff"
+          label="Expenditure (YTD)"
+          value={`₹${(data.totalExpenditure / 100).toLocaleString("en-IN")}`}
+          delta={`${data.budgetUtilisationPct.toFixed(1)}%`}
+          up={true}
+        />
+        <StatCard
+          icon="📥"
+          iconBg="#ecfdf3"
+          label="Payments (MTD)"
+          value={`${data.paymentsThisMonth} payments this month`}
+          up={true}
+        />
+        <StatCard
+          icon="⏳"
+          iconBg="#fffaeb"
+          label="Pending Approvals"
+          value={data.pendingSanctions}
+          up={false}
+        />
+      </StatGrid>
 
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Budget Utilisation</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{data.budgetUtilisationPct.toFixed(1)}%</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Pending Sanctions</p>
-            <p className="mt-1 text-2xl font-bold text-yellow-600">{data.pendingSanctions}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Payments This Month</p>
-            <p className="mt-1 text-2xl font-bold text-green-600">₹{(data.paymentsThisMonth / 100).toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Expenditure</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">₹{(data.totalExpenditure / 100).toLocaleString("en-IN")}</p>
-          </div>
-        </section>
+      <Card title="Budget Utilisation">
+        <div style={{ padding: 16 }}>
+          <BudgetChart utilisationPct={data.budgetUtilisationPct} expenditure={data.totalExpenditure} />
+        </div>
+      </Card>
 
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-          {[
-            { label: "Budget Formulation", href: "/finance/budget/formulation" },
-            { label: "Sanctions", href: "/finance/budget/sanctions" },
-            { label: "Bill Processing", href: "/finance/expenditure/bills" },
-            { label: "Advances", href: "/finance/expenditure/advances" },
-            { label: "Utilization Certificates", href: "/finance/expenditure/utilization-certificates" },
-            { label: "General Ledger", href: "/finance/accounting/general-ledger" },
-            { label: "New Voucher", href: "/finance/accounting/vouchers/new" },
-            { label: "Financial Statements", href: "/finance/accounting/financial-statements" },
-            { label: "Chart of Accounts", href: "/finance/chart-of-accounts" },
-            { label: "Payments", href: "/finance/payments" },
-          ].map((link) => (
+      <Card title="Finance Modules">
+        <div className="grid g-4" style={{ padding: "16px", gap: "12px" }}>
+          {QUICK_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md text-sm font-medium text-slate-800"
+              className="stat"
+              style={{ textDecoration: "none", cursor: "pointer" }}
             >
-              {link.label}
+              <div className="top">
+                <div className="ic" style={{ background: "#eef2ff" }}>{link.icon}</div>
+              </div>
+              <div className="lab">{link.label}</div>
             </Link>
           ))}
-        </section>
-      </section>
-    </main>
+        </div>
+      </Card>
+    </>
   );
 }

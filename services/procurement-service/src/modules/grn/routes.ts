@@ -1,5 +1,5 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GRNSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
@@ -15,9 +15,8 @@ export async function grnRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/grns", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit  = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    const offset = Number((req.query as { offset?: string }).offset ?? 0);
-    sendValidated(reply, GRNSummaryListSchema, await queries.listGrns(ctx.tenantId, limit, offset));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, GRNSummaryListSchema, await queries.listGrns(ctx.tenantId, q.limit, q.offset));
   });
 
   app.post("/v1/procurement/grns", async (req, reply) => {

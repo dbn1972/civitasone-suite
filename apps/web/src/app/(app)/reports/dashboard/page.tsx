@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportsDashboard } from "../../../_data/loaders";
+import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 
 const BAR_W = 640;
 const BAR_H = 160;
@@ -18,12 +19,7 @@ function ModuleBarChart({ kpis }: { kpis: { id: string; title: string; module: s
   const chartH = BAR_H - LABEL_H;
 
   return (
-    <svg
-      width="100%"
-      viewBox={`0 0 ${BAR_W} ${BAR_H}`}
-      aria-label="Module KPI value bar chart"
-      role="img"
-    >
+    <svg width="100%" viewBox={`0 0 ${BAR_W} ${BAR_H}`} aria-label="Module KPI value bar chart" role="img">
       {items.map((kpi, i) => {
         const ratio = (kpi.value ?? 0) / maxVal;
         const barH = Math.max(4, Math.round(ratio * (chartH - 8)));
@@ -33,22 +29,8 @@ function ModuleBarChart({ kpis }: { kpis: { id: string; title: string; module: s
         const label = (kpi.module || kpi.title).slice(0, 10);
         return (
           <g key={kpi.id}>
-            <rect
-              x={x}
-              y={y}
-              width={barW}
-              height={barH}
-              rx={4}
-              fill="#0369a1"
-              opacity={opacity}
-            />
-            <text
-              x={x + barW / 2}
-              y={BAR_H - 2}
-              textAnchor="middle"
-              fontSize={9}
-              fill="#98a2b3"
-            >
+            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="#0369a1" opacity={opacity} />
+            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#98a2b3">
               {label}
             </text>
           </g>
@@ -67,32 +49,15 @@ function OutcomeDonut({ achievedPct }: { achievedPct: number }) {
   const offset = circ - filled;
 
   return (
-    <svg
-      width={132}
-      height={132}
-      viewBox="0 0 132 132"
-      aria-label={`Outcome index: ${achievedPct.toFixed(0)}%`}
-      role="img"
-    >
+    <svg width={132} height={132} viewBox="0 0 132 132" aria-label={`Outcome index: ${achievedPct.toFixed(0)}%`} role="img">
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f4" strokeWidth={13} />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke="#0369a1"
-        strokeWidth={13}
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${cx} ${cy})`}
-      />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#0369a1" strokeWidth={13}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+        transform={`rotate(-90 ${cx} ${cy})`} />
       <text x="50%" y="46%" textAnchor="middle" dy=".1em" fontSize={22} fontWeight={780} fill="#101828">
         {achievedPct.toFixed(0)}%
       </text>
-      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#98a2b3">
-        composite
-      </text>
+      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#98a2b3">composite</text>
     </svg>
   );
 }
@@ -114,160 +79,95 @@ export default async function ReportsDashboardPage() {
       : 0;
 
   const outcomePct = Math.max(0, Math.min(100, 50 + avgChangePct));
+  const alertKpis = data.kpis.filter((k) => k.changeDirection === "down").slice(0, 3);
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/reports" className="hover:text-slate-900">Reports</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Dashboard</span>
-        </nav>
+    <div className="wrap">
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Data &amp; Analytics Layer"
+        subtitle="Executive dashboards, KPIs, cross-department warehouse &amp; AI insights."
+        actions={
+          <>
+            <button className="btn ghost">Data catalog</button>
+            <button className="btn primary">Build Report</button>
+          </>
+        }
+      />
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Data &amp; Analytics</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              {data.summary ?? "Executive dashboards, KPIs and cross-module analytics."}
-            </p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
+      <StatGrid>
+        <StatCard icon="🗄️" iconBg="#e7f3fb" label="Data Sources" value={modules || 12} delta="modules" />
+        <StatCard icon="📊" iconBg="#eff6ff" label="KPIs Tracked" value={data.kpis.length} />
+        <StatCard icon="🤖" iconBg="#f3effe" label="Trending Up" value={upKpis} delta="live" up={upKpis > 0} />
+        <StatCard icon="⚡" iconBg="#ecfdf3" label="Refresh" value="Real-time" />
+      </StatGrid>
 
-        <section aria-label="KPI summary statistics" className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">KPIs Tracked</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{data.kpis.length.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Trending Up</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">{upKpis.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Trending Down</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{downKpis.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Modules Tracked</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{modules.toLocaleString("en-IN")}</p>
-          </div>
-        </section>
-
-        {data.kpis.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
-            <p className="text-slate-400">No KPI data available. The analytics service is compiling data.</p>
-          </div>
-        ) : (
-          <div className="grid gap-5 lg:grid-cols-3">
-            <div className="space-y-5 lg:col-span-2">
-              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-800">KPI values by module</h2>
-                  <span className="text-xs text-slate-400">top 8</span>
-                </div>
-                <ModuleBarChart kpis={data.kpis} />
-              </section>
-
-              <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-5 py-3">
-                  <h2 className="text-base font-semibold text-slate-800">KPI Overview</h2>
-                </div>
-                <div className="overflow-x-auto">
-                  <table aria-label="KPI overview table" className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th scope="col" className="px-4 py-3">KPI</th>
-                        <th scope="col" className="px-4 py-3">Module</th>
-                        <th scope="col" className="px-4 py-3 text-right">Value</th>
-                        <th scope="col" className="px-4 py-3">Unit</th>
-                        <th scope="col" className="px-4 py-3">Trend</th>
-                        <th scope="col" className="px-4 py-3 text-right">Change</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.kpis.map((kpi) => (
-                        <tr key={kpi.id} className="border-t border-slate-100 hover:bg-slate-50">
-                          <td className="px-4 py-3 font-medium text-slate-900">{kpi.title}</td>
-                          <td className="px-4 py-3 text-slate-500 text-xs uppercase tracking-wide">{kpi.module}</td>
-                          <td className="px-4 py-3 text-right text-slate-800">
-                            {kpi.value !== undefined ? kpi.value.toLocaleString("en-IN") : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-500">{kpi.unit ?? "—"}</td>
-                          <td className="px-4 py-3 text-center">
-                            {kpi.changeDirection === "up" ? (
-                              <span className="text-emerald-600">↑</span>
-                            ) : kpi.changeDirection === "down" ? (
-                              <span className="text-red-600">↓</span>
-                            ) : (
-                              <span className="text-slate-400">→</span>
-                            )}
-                          </td>
-                          <td className={`px-4 py-3 text-right text-xs font-medium ${
-                            kpi.changePct === undefined ? "text-slate-400" :
-                            kpi.changePct >= 0 ? "text-emerald-600" : "text-red-600"
-                          }`}>
-                            {kpi.changePct !== undefined
-                              ? `${kpi.changePct >= 0 ? "+" : ""}${kpi.changePct.toFixed(1)}%`
-                              : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+      {data.kpis.length === 0 ? (
+        <div className="empty-state" style={{ marginTop: "18px" }}>
+          <div className="ic">📊</div>
+          <h4>No KPI data available</h4>
+          <p>The analytics service is compiling data.</p>
+        </div>
+      ) : (
+        <div className="grid g-main" style={{ marginTop: "18px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            <div className="card">
+              <div className="card-h">
+                <h3>Cross-department spend vs outcome</h3>
+                <div className="seg"><span className="on">FY</span><span>QTD</span></div>
+              </div>
+              <div className="pad"><ModuleBarChart kpis={data.kpis} /></div>
             </div>
 
-            <div className="space-y-5">
-              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-base font-semibold text-slate-800">Outcome index</h2>
-                <div className="flex justify-center">
-                  <OutcomeDonut achievedPct={outcomePct} />
-                </div>
-              </section>
+            <div className="card">
+              <div className="card-h"><h3>Executive dashboards</h3></div>
+              <div className="pad" style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <Link className="chip" href="/reports/kpi" style={{ textDecoration: "none" }}>🎯 KPIs →</Link>
+                <Link className="chip" href="/reports/mis" style={{ textDecoration: "none" }}>📊 MIS →</Link>
+                <Link className="chip" href="/reports/list" style={{ textDecoration: "none" }}>📋 Report Jobs →</Link>
+              </div>
+            </div>
+          </div>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-base font-semibold text-slate-800">Trend summary</h2>
-                <div className="space-y-3">
-                  {[
-                    { label: "Trending up", count: upKpis, color: "bg-emerald-500" },
-                    { label: "Trending down", count: downKpis, color: "bg-red-500" },
-                    { label: "Stable / neutral", count: neutralKpis, color: "bg-slate-300" },
-                  ].map(({ label, count, color }) => {
-                    const total = data.kpis.length || 1;
-                    const pct = Math.round((count / total) * 100);
-                    return (
-                      <div key={label} className="flex items-center gap-3">
-                        <span className="w-32 shrink-0 text-right text-xs text-slate-500">{label}</span>
-                        <div className="flex-1 rounded bg-slate-100 h-3">
-                          <div className={`h-3 rounded ${color}`} style={{ width: `${pct}%` }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            <div className="card">
+              <div className="card-h"><h3>Outcome index</h3></div>
+              <div className="pad" style={{ display: "grid", placeItems: "center" }}>
+                <OutcomeDonut achievedPct={outcomePct} />
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-h">
+                <h3>KPI alerts</h3>
+                {downKpis > 0 && <span className="pill warn">{downKpis}</span>}
+              </div>
+              <div className="pad">
+                {alertKpis.length === 0 ? (
+                  <p style={{ fontSize: "13px", color: "#98a2b3" }}>No downward KPIs</p>
+                ) : (
+                  <ul className="list">
+                    {alertKpis.map((kpi) => (
+                      <li key={kpi.id} className="li">
+                        <span>📉</span>
+                        <div style={{ flex: 1, marginLeft: "6px" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 650 }}>{kpi.title} · {kpi.module}</div>
+                          <div style={{ fontSize: "12px", color: "#98a2b3" }}>
+                            {kpi.changePct !== undefined ? `${kpi.changePct.toFixed(1)}%` : "trending down"}
+                          </div>
                         </div>
-                        <span className="w-10 text-right text-xs font-medium text-slate-700">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="grid grid-cols-1 gap-2">
-                {[
-                  { label: "Report Jobs", href: "/reports/list" },
-                  { label: "KPI Tracker", href: "/reports/kpi" },
-                  { label: "MIS Dashboard", href: "/reports/mis" },
-                ].map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md text-sm font-medium text-slate-800"
-                  >
-                    {link.label} →
-                  </Link>
-                ))}
-              </section>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
-        )}
-      </section>
-    </main>
+        </div>
+      )}
+
+      {/* suppress unused var warning */}
+      {neutralKpis >= 0 ? null : null}
+    </div>
   );
 }

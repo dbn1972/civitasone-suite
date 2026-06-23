@@ -20,3 +20,8 @@ CREATE TABLE IF NOT EXISTS api_keys.admin_api_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_admin_api_keys_tenant ON api_keys.admin_api_keys (tenant_id, status);
+
+GRANT USAGE ON SCHEMA api_keys TO admin_svc;
+GRANT ALL ON ALL TABLES IN SCHEMA api_keys TO admin_svc;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA api_keys TO admin_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA api_keys GRANT ALL ON TABLES TO admin_svc;

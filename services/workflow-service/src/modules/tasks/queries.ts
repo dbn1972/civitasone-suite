@@ -10,9 +10,12 @@ export async function listTasks(
   tenantId: string,
   limit: number,
   offset: number,
-): Promise<{ data: Awaited<ReturnType<typeof repo.findById>>[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, TASK_RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+  opts?: { status?: string; roles?: string[] },
+) {
+  const loader = async () => {
+    const rows = opts?.status === "pending" && opts.roles?.length
+      ? await repo.listPendingForRoles(tenantId, opts.roles, limit, offset)
+      : await repo.listByTenant(tenantId, limit, offset);
     return {
       data: rows,
       pagination: {
@@ -21,5 +24,8 @@ export async function listTasks(
         ...(rows.length ? { cursor: String(offset + rows.length) } : {}),
       },
     };
-  });
+  };
+
+  const key = `list:${opts?.status ?? "all"}:${limit}:${offset}`;
+  return cache.listOrLoad(tenantId, TASK_RESOURCE, key, loader);
 }

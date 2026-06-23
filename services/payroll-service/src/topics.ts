@@ -9,7 +9,16 @@ export const COMMANDS = {
 
 export const EVENTS = {
   runApproved:    "payroll.run.approved",
+  runDisbursed:   "payroll.run.disbursed",
   loanDisbursed:  "payroll.loan.disbursed",
+} as const;
+
+export const CONSUMED_EVENTS = {
+  leaveApproved:     "hrms.leave.approved",
+  attendanceMarked:  "hrms.attendance.marked",
+  employeeCreated:   "hrms.employee.created",
+  employeeSeparated: "hrms.employee.separated",
+  financePaymentMade: "finance.payment.made",
 } as const;
 
 export const SERVICE = "payroll";

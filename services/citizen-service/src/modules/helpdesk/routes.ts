@@ -4,11 +4,18 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { ticketsListSchema, metricsListResponseSchema, slaListResponseSchema, TicketAnalyticsSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { idParam, createTicketBody, ticketNoteBody, closeTicketBody } from "./validators.js";
+import {
+  idParam, createTicketBody, ticketNoteBody, closeTicketBody,
+  assignTicketBody, resolveTicketBody,
+} from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
-const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
+const STAFF_ROLES = [
+  "helpdesk_user", "helpdesk_agent", "helpdesk_admin",
+  "citizen_officer", "citizen_admin", "super_admin",
+];
+const CITIZEN_ROLES = ["citizen", ...STAFF_ROLES];
 
 const ticketListQuerySchema = z.object({
   limit:     z.coerce.number().int().min(1).max(500).default(50),
@@ -21,6 +28,10 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const q = ticketListQuerySchema.parse(req.query);
+    if (q.slaStatus) {
+      const data = await queries.listTicketDetails(ctx.tenantId, q.limit, q.slaStatus);
+      return reply.send({ data, pagination: { hasMore: data.length === q.limit, pageSize: q.limit } });
+    }
     sendValidated(reply, ticketsListSchema, await queries.listTickets(ctx.tenantId, q.limit, q.slaStatus));
   });
 
@@ -51,15 +62,31 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/citizen/tickets/:id/notes", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CITIZEN_ROLES);
+    requireRole(ctx, STAFF_ROLES);
     const { id } = idParam.parse(req.params);
     const body = ticketNoteBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addNote(ctx, id, body));
   });
 
+  app.patch("/v1/citizen/tickets/:id/assign", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = assignTicketBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.assignTicket(ctx, id, body));
+  });
+
+  app.patch("/v1/citizen/tickets/:id/resolve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = resolveTicketBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.resolveTicket(ctx, id, body));
+  });
+
   app.patch("/v1/citizen/tickets/:id/close", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CITIZEN_ROLES);
+    requireRole(ctx, STAFF_ROLES);
     const { id } = idParam.parse(req.params);
     const body = closeTicketBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeTicket(ctx, id, body));

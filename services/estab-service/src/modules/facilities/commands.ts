@@ -1,10 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { db } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
+import * as repo from "./repo.js";
+import { checkNoRoomOverlap } from "./domain.js";
+import { HttpError } from "../../shared/context.js";
 import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
+export type Created = { id: string };
 
 export async function createGuesthouse(ctx: RequestContext, body: CreateGuesthouseBody): Promise<Accepted> {
   const id = randomUUID();
@@ -16,14 +21,29 @@ export async function createGuesthouse(ctx: RequestContext, body: CreateGuesthou
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function bookRoom(ctx: RequestContext, body: BookRoomBody): Promise<Accepted> {
+export async function bookRoom(ctx: RequestContext, body: BookRoomBody): Promise<Created> {
+  const existing = await repo.findBookingsByRoom(body.roomId);
+  const checkIn = new Date(body.checkIn);
+  const checkOut = new Date(body.checkOut);
+  try {
+    checkNoRoomOverlap(existing, checkIn, checkOut);
+  } catch {
+    throw new HttpError(409, "BOOKING_CONFLICT",
+      "This room is already booked for the requested time. Choose a different slot.");
+  }
+
   const id = randomUUID();
-  await queue.publish(COMMANDS.roomBook, {
-    messageId: id, type: COMMANDS.roomBook,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+  await db.transaction(async (tx) => {
+    await repo.insertRoomBooking(tx, {
+      id, tenantId: ctx.tenantId, roomId: body.roomId,
+      guestName: body.guestName, guestRef: body.guestRef ?? null,
+      checkIn, checkOut, sponsorDept: body.sponsorDept ?? null,
+      chargesMinor: 0n, currency: "INR", status: "booked",
+      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    });
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "room_booking", id));
+  return { id };
 }
 
 export async function checkin(ctx: RequestContext, bookingId: string): Promise<Accepted> {

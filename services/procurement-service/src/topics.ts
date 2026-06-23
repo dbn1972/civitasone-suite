@@ -5,6 +5,7 @@ export const COMMANDS = {
   vendorEmpanel:   "procurement.vendor.empanel",
   vendorBlacklist: "procurement.vendor.blacklist",
   poCreate:        "procurement.po.create",
+  poApprove:       "procurement.po.approve",
   poDispatch:      "procurement.po.dispatch",
   gemOrderCreate:  "procurement.gem_order.create",
   grnCreate:       "procurement.grn.create",
@@ -16,13 +17,15 @@ export const COMMANDS = {
 } as const;
 
 export const EVENTS = {
-  indentApproved:    "procurement.indent.approved",
-  poApproved:        "procurement.po.approved",
-  poBudgetExceeded:  "procurement.po.budget_exceeded",
-  grnAccepted:       "procurement.grn.accepted",
-  grnRejected:       "procurement.grn.rejected",
-  vendorBlacklisted: "procurement.vendor.blacklisted",
-  auctionClosed:     "procurement.auction.closed",
+  tenderRequired:      "procurement.tender.required",
+  indentApproved:      "procurement.indent.approved",
+  poApproved:          "procurement.po.approved",
+  poBudgetExceeded:    "procurement.po.budget_exceeded",
+  poVendorBlacklisted: "procurement.po.vendor_blacklisted",
+  grnAccepted:         "procurement.grn.accepted",
+  grnRejected:         "procurement.grn.rejected",
+  vendorBlacklisted:   "procurement.vendor.blacklisted",
+  auctionClosed:       "procurement.auction.closed",
 } as const;
 
 /** Topics consumed from other services */

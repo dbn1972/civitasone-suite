@@ -8,6 +8,9 @@ export const COMMANDS = {
   planItemCreate:        "audit.plan_item.create",
   planStart:             "audit.plan.start",
   observationCreate:     "audit.observation.create",
+  // AU-01: auditee reply and auditor review commands
+  observationReply:      "audit.observation.reply",
+  observationReview:     "audit.observation.review",
   paraDraft:             "audit.para.draft",
   paraIssue:             "audit.para.issue",
   paraDeptResponse:      "audit.para.dept_response",

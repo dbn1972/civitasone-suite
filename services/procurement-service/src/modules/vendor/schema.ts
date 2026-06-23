@@ -17,6 +17,8 @@ export const procurementVendors = vendorSchema.table("procurement_vendors", {
   bankAccount:     text("bank_account"),
   ifsc:            text("ifsc"),
   blacklistReason: text("blacklist_reason"),
+  kycStatus:       varchar("kyc_status", { length: 20 }).notNull().default("pending"),
+  kycVerifiedAt:   timestamp("kyc_verified_at", { withTimezone: true }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),

@@ -1,105 +1,88 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatCard, StatusPill } from "../../../_components/ds";
 import { getSubscription } from "../../../_data/loaders";
-
-const statusColors: Record<string, string> = {
-  active: "bg-emerald-50 text-emerald-700",
-  past_due: "bg-red-50 text-red-700",
-  cancelled: "bg-slate-100 text-slate-600",
-  trial: "bg-yellow-50 text-yellow-700",
-};
 
 function formatCurrency(amount: number, currency: string): string {
   if (currency === "INR") return `₹${amount.toLocaleString("en-IN")}`;
   return `${currency} ${amount.toLocaleString()}`;
 }
 
-export default async function Page() {
+export default async function SubscriptionPage() {
   const { data: subscription, source } = await getSubscription();
 
+  const usagePct = subscription && subscription.userLimit
+    ? Math.min(100, Math.round((subscription.activeUsers / subscription.userLimit) * 100))
+    : null;
+
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-4xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/tenant-admin" className="hover:text-slate-900">Tenant Admin</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Subscription</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Subscription</h1>
-            <p className="mt-1 text-sm text-slate-600">Billing plan, limits, and module access for this tenant.</p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        {subscription ? (
+    <div className="wrap">
+      <PageHeader
+        back="/tenant-admin"
+        title="Subscription"
+        subtitle="Billing plan, usage limits, and module access for this tenant."
+        actions={
           <>
-            <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">{subscription.plan}</h2>
-                  {subscription.billingEmail ? (
-                    <p className="mt-1 text-sm text-slate-500">Billing: {subscription.billingEmail}</p>
-                  ) : null}
-                </div>
-                <span className={`rounded-full px-3 py-1 text-sm font-medium capitalize ${statusColors[subscription.status] ?? "bg-slate-100 text-slate-600"}`}>
-                  {subscription.status.replace(/_/g, " ")}
-                </span>
-              </div>
-
-              <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div>
-                  <dt className="text-xs text-slate-500">Period Start</dt>
-                  <dd className="mt-0.5 text-sm text-slate-900">{subscription.currentPeriodStart.slice(0, 10)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Period End</dt>
-                  <dd className="mt-0.5 text-sm text-slate-900">{subscription.currentPeriodEnd.slice(0, 10)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Amount</dt>
-                  <dd className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {subscription.amount != null ? formatCurrency(subscription.amount, subscription.currency) : "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">User Limit</dt>
-                  <dd className="mt-0.5 text-sm text-slate-900">
-                    {subscription.userLimit != null ? subscription.userLimit.toLocaleString("en-IN") : "Unlimited"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Active Users</dt>
-                  <dd className="mt-0.5 text-sm text-slate-900">{subscription.activeUsers.toLocaleString("en-IN")}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-slate-500">Currency</dt>
-                  <dd className="mt-0.5 text-sm text-slate-900">{subscription.currency}</dd>
-                </div>
-              </dl>
-            </article>
-
-            {subscription.moduleAccess.length > 0 ? (
-              <section>
-                <h2 className="text-base font-semibold text-slate-900">Module Access</h2>
-                <ul className="mt-3 flex flex-wrap gap-2">
-                  {subscription.moduleAccess.map((mod: string) => (
-                    <li key={mod} className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm text-indigo-700">
-                      {mod}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+            <button className="btn ghost">Download invoice</button>
+            <button className="btn primary">Upgrade plan</button>
           </>
-        ) : (
-          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <p className="text-sm text-slate-400">No subscription data available.</p>
+        }
+      />
+      {source === "error" && <DataSourceBadge source={source} />}
+      {subscription ? (
+        <>
+          <div className="grid g-4" style={{ marginBottom: 18 }}>
+            <StatCard icon="📋" iconBg="#f1f5f9" label="Plan" value={subscription.plan} />
+            <StatCard icon="👥" iconBg="#eff6ff" label="Active Users" value={subscription.activeUsers} />
+            <StatCard icon="🎯" iconBg="#fffaeb" label="User Limit" value={subscription.userLimit != null ? subscription.userLimit : "∞"} />
+            <StatCard icon="💳" iconBg="#ecfdf3" label="Amount" value={subscription.amount != null ? formatCurrency(subscription.amount, subscription.currency) : "—"} />
           </div>
-        )}
-      </section>
-    </main>
+          <div className="grid g-2" style={{ marginTop: 18 }}>
+            <div className="card">
+              <div className="card-h">
+                <h3>Usage & quota</h3>
+                <StatusPill status={subscription.status} label={subscription.status.replace(/_/g, " ")} />
+              </div>
+              <div className="pad">
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
+                    <span>Users</span>
+                    <span>{subscription.activeUsers} / {subscription.userLimit ?? "∞"}</span>
+                  </div>
+                  {usagePct !== null && (
+                    <div className="bar">
+                      <i style={{ width: `${usagePct}%`, background: usagePct >= 90 ? "#ef4444" : usagePct >= 70 ? "#f59e0b" : "#22c55e" }} />
+                    </div>
+                  )}
+                </div>
+                <div className="fields">
+                  <div className="fld"><div className="l">Period</div><div className="v">{subscription.currentPeriodStart.slice(0, 10)} – {subscription.currentPeriodEnd.slice(0, 10)}</div></div>
+                  {subscription.billingEmail && <div className="fld"><div className="l">Billing email</div><div className="v">{subscription.billingEmail}</div></div>}
+                  <div className="fld"><div className="l">Currency</div><div className="v">{subscription.currency}</div></div>
+                </div>
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-h"><h3>Module access</h3><span className="pill info">{subscription.moduleAccess.length} modules</span></div>
+              <div className="pad">
+                {subscription.moduleAccess.length > 0 ? (
+                  subscription.moduleAccess.map((mod: string) => (
+                    <div key={mod} className="prefrow">
+                      <span>{mod}</span>
+                      <span className="pill good">Included</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state"><div>🧩</div><h4>No modules listed</h4><p>Module access will appear here.</p></div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="card">
+          <div className="empty-state"><div>📋</div><h4>No subscription data</h4><p>Subscription information is unavailable.</p></div>
+        </div>
+      )}
+    </div>
   );
 }

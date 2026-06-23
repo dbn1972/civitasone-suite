@@ -32,7 +32,7 @@ export async function listRegularisations(tenantId: string, limit: number) {
       reason: r.reason,
       requestedStatus: r.requestedStatus,
       status: r.status as "pending" | "approved" | "rejected",
-      requestedAt: r.requestedAt.toISOString(),
+      requestedAt: new Date(r.requestedAt as unknown as string).toISOString(),
     }));
   })) ?? [];
 }

@@ -6,8 +6,31 @@ test.describe('Plugins', () => {
     await authenticate(page);
   });
 
-  test('plugins list page loads', async ({ page }) => {
-    await page.goto('/plugins/list');
-    await expect(page.getByRole('heading').first()).toBeVisible();
+  // ── Plugins page ──────────────────────────────────────────────────────────
+
+  test('plugins page shows Plugins heading', async ({ page }) => {
+    await page.goto('/plugins');
+    await expect(page.getByRole('heading', { name: 'Plugins' })).toBeVisible();
+  });
+
+  test('plugins page shows plugin toggle cards', async ({ page }) => {
+    await page.goto('/plugins');
+    await expect(page.getByText('PFMS Connector')).toBeVisible();
+  });
+
+  test('plugins page shows enabled plugin status', async ({ page }) => {
+    await page.goto('/plugins');
+    await expect(page.getByText('enabled')).toBeVisible();
+  });
+
+  test('plugins page shows disabled plugin Aadhaar eSign', async ({ page }) => {
+    await page.goto('/plugins');
+    await expect(page.getByText('Aadhaar eSign')).toBeVisible();
+    await expect(page.getByText('disabled')).toBeVisible();
+  });
+
+  test('plugins page shows description', async ({ page }) => {
+    await page.goto('/plugins');
+    await expect(page.getByText(/plugin/i).first()).toBeVisible();
   });
 });

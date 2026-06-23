@@ -103,3 +103,29 @@ describe("unauthenticated requests", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe("POST /v1/workflow/tasks/:id/complete — self-approval prevention (I-05)", () => {
+  it("non-existent task → 404", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflow/tasks/00000000-aaaa-4000-8000-000000000001/complete",
+      headers: { authorization: `Bearer ${makeToken(["workflow_admin"])}` },
+      payload: { decision: "approve" },
+    });
+    await app.close();
+    // Task not found in test DB → 404
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("unauthenticated task complete → 401", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflow/tasks/00000000-aaaa-4000-8000-000000000001/complete",
+      payload: { decision: "approve" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(401);
+  });
+});

@@ -7,9 +7,16 @@ function toView(r: AuditEventRow): AuditEventView {
   return {
     id: r.id, tenantId: r.tenantId, type: r.type, actor: r.actor,
     target: r.target ?? null, payload: r.payload, severity: r.severity,
+    // CERT-In §4 fields (columns added by migration 0004; computed from payload when not in DB row)
+    ipAddress: r.ipAddress ?? null,
+    userAgent: r.userAgent ?? null,
+    oldValue: r.oldValue ?? null,
+    newValue: r.newValue ?? null,
     prevHash: r.prevHash ?? null, eventHash: r.eventHash ?? null,
     correlationId: r.correlationId ?? null,
     occurredAt: r.occurredAt.toISOString(),
+    // Compute 180-day retention deadline; retain_until DB column added by migration 0004
+    retainUntil: (r.retainUntil ?? new Date(r.occurredAt.getTime() + 180 * 86400 * 1000)).toISOString(),
   };
 }
 

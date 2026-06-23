@@ -8,6 +8,7 @@ export const financeHeads = budgetSchema.table("finance_heads", {
   id:             uuid("id").primaryKey().defaultRandom(),
   tenantId:       uuid("tenant_id").notNull(),
   code:           text("code").notNull(),
+  hoaCode:        char("hoa_code", { length: 18 }),
   name:           text("name").notNull(),
   level:          integer("level").notNull(),        // 0=major 1=minor 2=sub
   classification: text("classification"),

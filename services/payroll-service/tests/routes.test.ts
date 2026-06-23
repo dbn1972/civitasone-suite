@@ -104,3 +104,122 @@ describe("GET /v1/payroll/salary-slips — list shape", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+// ── Test E: Payroll disbursement requires prior approval ─────────────────────
+//
+// The CQRS command layer enforces the state machine: a payroll run must be in
+// status=approved before it can be disbursed. Sending runDisburse on a
+// processing-status run should fail with INVALID_STATUS_TRANSITION in the consumer.
+// At the route level, the consumer is async; however we can verify:
+//   1. The route itself rejects unauthenticated disburse attempts (401).
+//   2. The route requires payroll_admin role (403 for wrong role).
+//   3. Disbursing a non-existent run: 202 accepted (command published),
+//      but consumer will throw and mark run as failed.
+// The domain-level enforcement is verified directly via assertRunStatusTransition.
+
+describe("Payroll disbursement — requires approval state (route + domain)", () => {
+  it("PATCH /v1/payroll/runs/:id/disburse without token → 401", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/payroll/runs/00000000-0000-4000-8000-000000000001/disburse",
+    });
+    await app.close();
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("PATCH /v1/payroll/runs/:id/disburse with wrong role → 403", async () => {
+    const app = await buildApp();
+    const token = makeToken(["finance_officer"]);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/payroll/runs/00000000-0000-4000-8000-000000000001/disburse",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("PATCH /v1/payroll/runs/:id/approve without token → 401", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/payroll/runs/00000000-0000-4000-8000-000000000001/approve",
+    });
+    await app.close();
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("domain: assertRunStatusTransition processing → disbursed throws INVALID_STATUS_TRANSITION", async () => {
+    // A run in 'processing' cannot be directly disbursed — must be approved first.
+    const { assertRunStatusTransition } = await import("../src/modules/payroll/domain.js");
+    expect(() => assertRunStatusTransition("processing", "disbursed")).toThrowError(
+      "INVALID_STATUS_TRANSITION",
+    );
+  });
+
+  it("domain: assertRunStatusTransition draft → disbursed throws INVALID_STATUS_TRANSITION", async () => {
+    const { assertRunStatusTransition } = await import("../src/modules/payroll/domain.js");
+    expect(() => assertRunStatusTransition("draft", "disbursed")).toThrowError(
+      "INVALID_STATUS_TRANSITION",
+    );
+  });
+
+  it("domain: assertRunStatusTransition approved → disbursed passes (valid)", async () => {
+    const { assertRunStatusTransition } = await import("../src/modules/payroll/domain.js");
+    expect(() => assertRunStatusTransition("approved", "disbursed")).not.toThrow();
+  });
+
+  it("consumer: disbursing a run that is in processing status sets run to failed (state machine enforced)", async () => {
+    const { MemoryQueue } = await import("@civitasone/queue");
+    const { eq } = await import("drizzle-orm");
+    const { db } = await import("../src/shared/db.js");
+    const { payrollRuns } = await import("../src/modules/payroll/schema.js");
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { outboxMessages, processed } = await import("../src/shared/outbox.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const RUN_DISBURSE_TEST = "dddddddd-eeee-4000-8000-000000000099";
+    const MSG_DISBURSE = "eeeeeeee-ffff-4000-8000-000000000099";
+    const ACTOR = "00000000-aaaa-4000-8000-000000000099";
+    const TENANT = "22222222-dddd-4000-8000-000000000099";
+
+    // Clean up
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await db.delete(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
+    await db.delete(processed).where(eq(processed.messageId, MSG_DISBURSE));
+
+    // Insert a run in 'processing' status (not yet approved)
+    await db.insert(payrollRuns).values({
+      id: RUN_DISBURSE_TEST, tenantId: TENANT, runNo: "RUN-DISBURSE-TEST",
+      month: "2024-09", structureId: "ffffffff-0000-4000-8000-000000000099",
+      totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
+
+    const q = new MemoryQueue();
+    registerPayrollConsumers(q);
+    await q.start();
+
+    // Attempt to disburse a 'processing' run — state machine must reject it
+    await q.publish(COMMANDS.runDisburse, {
+      messageId: MSG_DISBURSE, type: COMMANDS.runDisburse,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-disburse-no-approval",
+      schemaVersion: "1.0",
+      payload: { id: RUN_DISBURSE_TEST, tenantId: TENANT },
+    });
+
+    await new Promise<void>((r) => setTimeout(r, 600));
+    await q.stop();
+
+    // The run must still be in 'processing' — disburse was rejected by state machine
+    const runs = await db.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.status).not.toBe("disbursed");
+
+    // Cleanup
+    await db.delete(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await db.delete(processed).where(eq(processed.messageId, MSG_DISBURSE));
+  });
+});

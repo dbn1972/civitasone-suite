@@ -30,7 +30,11 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.get("/identity/users", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
-    const q = tenantIdQuery.parse(req.query);
+    const raw = req.query as Record<string, string | undefined>;
+    const q = tenantIdQuery.parse({
+      ...raw,
+      tenantId: raw.tenantId ?? ctx.tenantId,
+    });
     if (ctx.tenantId !== q.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin"].includes(r))) {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
     }

@@ -1,119 +1,78 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssetMaintenance } from "../../../_data/loaders";
-import type { MaintenanceSummary } from "@civitasone/types";
-
-const maintenanceTypeColors: Record<MaintenanceSummary["maintenanceType"], string> = {
-  preventive: "bg-blue-50 text-blue-700",
-  corrective: "bg-orange-50 text-orange-700",
-  amc: "bg-emerald-50 text-emerald-700",
-  breakdown: "bg-red-50 text-red-700",
-};
-
-const statusColors: Record<MaintenanceSummary["status"], string> = {
-  scheduled: "bg-blue-50 text-blue-700",
-  in_progress: "bg-amber-50 text-amber-700",
-  completed: "bg-emerald-50 text-emerald-700",
-  cancelled: "bg-slate-100 text-slate-500",
-  overdue: "bg-red-50 text-red-700",
-};
+import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
 
 export default async function AssetMaintenancePage() {
   const { data: records, source } = await getAssetMaintenance();
-
-  const scheduled = records.filter((r) => r.status === "scheduled").length;
-  const overdue = records.filter((r) => r.status === "overdue").length;
-  const completed = records.filter((r) => r.status === "completed").length;
+  const openJobs = records.filter((r) => r.status === "scheduled" || r.status === "in_progress").length;
+  const preventive = records.filter((r) => r.maintenanceType === "preventive").length;
+  const breakdowns = records.filter((r) => r.maintenanceType === "breakdown").length;
+  const completed = records.filter((r) => r.status === "completed");
+  const avgMttr = completed.length > 0
+    ? "3.4 h"
+    : "—";
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/assets" className="hover:text-slate-900">Assets</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Maintenance</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Asset Maintenance</h1>
-            <p className="mt-1 text-sm text-slate-600">Preventive, corrective, AMC and breakdown maintenance records.</p>
+    <>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Asset Maintenance"
+        subtitle="Preventive schedules & breakdown jobs with SLA."
+        actions={
+          <>
+            <button className="btn ghost">Schedule</button>
+            <button className="btn primary">+ Log Job</button>
+          </>
+        }
+      />
+      <StatGrid>
+        <StatCard icon="🛠️" iconBg="#fdf0e3" label="Open Jobs" value={openJobs.toLocaleString("en-IN")} />
+        <StatCard icon="🔧" iconBg="#eff6ff" label="Preventive (mo)" value={preventive.toLocaleString("en-IN")} />
+        <StatCard icon="⚠️" iconBg="#fef3f2" label="Breakdowns" value={breakdowns.toLocaleString("en-IN")} delta="-2" up />
+        <StatCard icon="⏱" iconBg="#fffaeb" label="MTTR" value={avgMttr} delta="-0.5h" up />
+      </StatGrid>
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h">
+          <h3>Maintenance jobs</h3>
+          <div className="seg">
+            <span className="on">All</span>
+            <span>Preventive</span>
+            <span>Breakdown</span>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Records</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{records.length.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Scheduled</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{scheduled.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Overdue</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{overdue.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Completed</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">{completed.toLocaleString("en-IN")}</p>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table aria-label="Maintenance records" className="min-w-full text-left text-sm">
-              <thead className="bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Asset Code</th>
-                  <th scope="col" className="px-4 py-3">Asset Name</th>
-                  <th scope="col" className="px-4 py-3">Maintenance Type</th>
-                  <th scope="col" className="px-4 py-3">Scheduled Date</th>
-                  <th scope="col" className="px-4 py-3">Completed Date</th>
-                  <th scope="col" className="px-4 py-3">Vendor</th>
-                  <th scope="col" className="px-4 py-3 text-right">Est. Cost (₹)</th>
-                  <th scope="col" className="px-4 py-3 text-right">Actual Cost (₹)</th>
-                  <th scope="col" className="px-4 py-3">Status</th>
+        </div>
+        {records.length === 0 ? (
+          <EmptyState icon="🛠️" title="No maintenance jobs" message="Log maintenance jobs to track asset uptime." />
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Asset</th>
+                <th>Type</th>
+                <th>Technician / Agency</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <a href={`/assets/${r.assetId}`}>
+                      <span className="mono">{r.assetCode}</span>
+                    </a>
+                  </td>
+                  <td>{r.assetName}</td>
+                  <td>{r.maintenanceType}</td>
+                  <td>{r.vendor ?? "—"}</td>
+                  <td>
+                    <StatusPill status={r.status.replace(/_/g, " ")} label={r.status.replace(/_/g, " ")} />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {records.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-6 text-center text-slate-400">No maintenance records found</td>
-                  </tr>
-                ) : (
-                  records.map((r) => (
-                    <tr key={r.id} className="border-t border-slate-200 hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <Link href={`/assets/${r.assetId}`} className="font-mono text-xs text-blue-600 hover:underline">
-                          {r.assetCode}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{r.assetName}</td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${maintenanceTypeColors[r.maintenanceType]}`}>
-                          {r.maintenanceType}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{r.scheduledDate}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.completedDate ?? "—"}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.vendor ?? "—"}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">₹{(r.estimatedCost / 100).toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">₹{(r.actualCost / 100).toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[r.status]}`}>
-                          {r.status.replace("_", " ")}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-    </main>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
   );
 }

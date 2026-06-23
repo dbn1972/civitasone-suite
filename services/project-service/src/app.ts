@@ -13,6 +13,7 @@ import { progressRoutes }    from "./modules/progress/routes.js";
 import { utilisationRoutes } from "./modules/utilisation/routes.js";
 import { geoRoutes }         from "./modules/geo/routes.js";
 import { dashboardRoutes }   from "./modules/dashboard/routes.js";
+import { evidenceRoutes }    from "./modules/evidence/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,6 +34,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(utilisationRoutes);
   await app.register(geoRoutes);
   await app.register(dashboardRoutes);
+  await app.register(evidenceRoutes);
+
+  const { worldClassProjectRoutes } = await import("./modules/project/world-class-routes.js");
+  await app.register(worldClassProjectRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

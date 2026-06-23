@@ -7,6 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../application/repo.js";
+import * as ucRepo from "../utilisation/repo.js";
 import { assertDisbursementWithinApproved, canRetryDisbursement, MAX_DISBURSEMENT_RETRIES } from "./domain.js";
 
 async function notifyDisbursementOutcome(
@@ -65,6 +66,16 @@ export function registerDisbursementConsumers(queue: Queue): void {
       const installment = await repo.findInstallmentByIdTx(tx, p.installmentId);
       if (!installment) return;
 
+      // Idempotency guard: installment already disbursed — reject duplicate
+      if (installment.status === "disbursed") {
+        await enqueue(tx, {
+          topic: "grant.disbursement.duplicate", eventType: "grant.disbursement.duplicate",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { installmentId: p.installmentId, reason: "DUPLICATE_DISBURSEMENT: this installment has already been disbursed" },
+        });
+        return;
+      }
+
       // Guard: total disbursed must not exceed approved amount
       const app = await appRepo.findApplicationByIdTx(tx, installment.applicationId);
       if (app) {
@@ -76,6 +87,28 @@ export function registerDisbursementConsumers(queue: Queue): void {
             topic: EVENTS.disbursementExceedsApproved, eventType: EVENTS.disbursementExceedsApproved,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
             payload: { installmentId: p.installmentId, approved: app.amountApprovedMinor.toString(), alreadyDisbursed: alreadyDisbursed.toString() },
+          });
+          return;
+        }
+      }
+
+      // PFMS critical rule: installment N+1 cannot be released unless a UC has been
+      // submitted for the application (confirming utilisation of previous tranche).
+      // Installment 1 (no = 1) is exempt from this gate; all subsequent installments require UC.
+      if (installment.installmentNo > 1) {
+        const ucExists = await ucRepo.hasSubmittedUcForApplication(
+          installment.applicationId,
+          installment.installmentNo,
+        );
+        if (!ucExists) {
+          await enqueue(tx, {
+            topic: EVENTS.disbursementExceedsApproved, eventType: "grant.disbursement.uc_gate_blocked",
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              installmentId: p.installmentId, installmentNo: installment.installmentNo,
+              applicationId: installment.applicationId,
+              reason: "UC_GATE_BLOCKED: a Utilisation Certificate must be submitted for the previous tranche before releasing the next tranche (PFMS rule)",
+            },
           });
           return;
         }

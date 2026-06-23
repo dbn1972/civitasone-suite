@@ -19,6 +19,10 @@ function token(tenantId = TENANT, roles = ["notification_user"]) {
   return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-001" }, SECRET);
 }
 
+function adminToken(tenantId = TENANT) {
+  return token(tenantId, ["notification_admin"]);
+}
+
 afterAll(async () => { await sqlClient.end(); });
 
 describe("GET /notifications/notifications — inbox (tenant + user scoped)", () => {
@@ -60,7 +64,19 @@ describe("GET /notifications/notifications — inbox (tenant + user scoped)", ()
 });
 
 describe("GET /notifications/deliveries", () => {
-  it("returns 200 with array of NotificationDelivery", async () => {
+  it("returns 200 with array of NotificationDelivery (admin role)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/notifications/deliveries",
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json())).toBe(true);
+  });
+
+  it("returns 403 for non-admin role", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -68,13 +84,24 @@ describe("GET /notifications/deliveries", () => {
       headers: { authorization: `Bearer ${token()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(Array.isArray(res.json())).toBe(true);
+    expect(res.statusCode).toBe(403);
   });
 });
 
 describe("GET /notifications/preferences", () => {
-  it("returns 200 with array shape", async () => {
+  it("returns 200 with array shape (admin role)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/notifications/preferences",
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json())).toBe(true);
+  });
+
+  it("returns 403 for non-admin role", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -82,8 +109,7 @@ describe("GET /notifications/preferences", () => {
       headers: { authorization: `Bearer ${token()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(Array.isArray(res.json())).toBe(true);
+    expect(res.statusCode).toBe(403);
   });
 });
 

@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { createStructureBody, createRunBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -17,6 +17,13 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, PayrollRunDetailListSchema, await queries.listRuns(ctx.tenantId, q.limit));
+  });
+
+  app.get("/v1/payroll/structures", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    return reply.send(await queries.listStructures(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/payroll/runs/:id", async (req, reply) => {
@@ -52,6 +59,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/payroll/runs/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
+    await requirePermissionKey(ctx, "payroll.run.approve");
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id));
   });

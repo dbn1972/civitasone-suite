@@ -77,10 +77,20 @@ export const projectMembers = projectSchema.table("project_members", {
   version:     integer("version").notNull().default(1),
 });
 
+export const projectMilestoneEvidence = projectSchema.table("milestone_evidence", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  milestoneId:  uuid("milestone_id").notNull(),
+  fileKey:      varchar("file_key", { length: 1024 }).notNull(),
+  fileName:     varchar("file_name", { length: 512 }),
+  uploadedAt:   timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  uploadedBy:   uuid("uploaded_by").notNull(),
+});
+
 export type ProjectRow    = typeof projectProjects.$inferSelect;
 export type ProjectInsert = typeof projectProjects.$inferInsert;
 export type TaskRow       = typeof projectTasks.$inferSelect;
 export type TaskInsert    = typeof projectTasks.$inferInsert;
 export type MilestoneRow  = typeof projectMilestones.$inferSelect;
 
-export const schema = { projectProjects, projectTasks, projectMilestones, projectMembers };
+export const schema = { projectProjects, projectTasks, projectMilestones, projectMembers, projectMilestoneEvidence };

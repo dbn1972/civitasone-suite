@@ -19,8 +19,8 @@ export async function listGuesthouseBookingSummaries(tenantId: string, limit: nu
     bookingNo: row.id.slice(0, 8).toUpperCase(),
     guestName: row.guestName,
     department: row.sponsorDept ?? undefined,
-    checkInDate: row.checkIn.toISOString().slice(0, 10),
-    checkOutDate: row.checkOut.toISOString().slice(0, 10),
+    checkInDate: new Date(row.checkIn as unknown as string).toISOString().slice(0, 10),
+    checkOutDate: new Date(row.checkOut as unknown as string).toISOString().slice(0, 10),
     status: mapBookingStatus(row.status),
   }));
 }

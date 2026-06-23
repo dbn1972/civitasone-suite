@@ -32,6 +32,7 @@ export const procurementPoItems = poSchema.table("procurement_po_items", {
   unit:           varchar("unit", { length: 32 }).notNull().default("nos"),
   unitPriceMinor: bigint("unit_price_minor", { mode: "bigint" }).notNull().default(0n),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),
+  itemType:       varchar("item_type", { length: 16 }).notNull().default("consumable"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

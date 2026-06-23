@@ -7,6 +7,11 @@ function minorToAmount(minor: bigint): number {
   return Number(minor) / 100;
 }
 
+function toDateOnly(value: Date | string | null | undefined): string {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  return new Date(value as string).toISOString().slice(0, 10);
+}
+
 function mapGrantStatus(status: string): "active" | "completed" | "suspended" | "cancelled" {
   if (status === "approved" || status === "disbursing") return "active";
   if (status === "completed") return "completed";
@@ -26,7 +31,7 @@ async function mapApplicationRow(row: ApplicationRow) {
     totalAmount: minorToAmount(row.amountApprovedMinor || row.amountRequestedMinor),
     disbursedAmount: 0,
     pendingAmount: minorToAmount(row.amountApprovedMinor || row.amountRequestedMinor),
-    sanctionDate: (row.approvedAt ?? row.submittedAt ?? row.createdAt).toISOString().slice(0, 10),
+    sanctionDate: toDateOnly(row.approvedAt ?? row.submittedAt ?? row.createdAt),
     purpose: row.purpose,
     status: mapGrantStatus(row.status),
   };

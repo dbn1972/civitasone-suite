@@ -78,6 +78,22 @@ VALUES
   ('cccccccc-0001-0000-0000-000000000001', '${T}', '${A}', 'bbbbbbbb-0001-0000-0000-000000000001', 'active', now(), now(), '${A}', '${A}', 1),
   ('cccccccc-0001-0000-0000-000000000002', '${T}', '00000000-0000-0000-0000-000000000002', 'bbbbbbbb-0001-0000-0000-000000000002', 'active', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO roles.roles (id, tenant_id, name, description, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('bbbbbbbb-0001-0000-0000-000000000003', '${T}', 'hr_admin',      'HR module admin',      'active', now(), now(), '${A}', '${A}', 1),
+  ('bbbbbbbb-0001-0000-0000-000000000004', '${T}', 'payroll_admin', 'Payroll module admin', 'active', now(), now(), '${A}', '${A}', 1),
+  ('bbbbbbbb-0001-0000-0000-000000000005', '${T}', 'manager',       'Department manager',   'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO roles.permissions (id, tenant_id, role_id, resource, action, effect, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('dddddddd-0001-0000-0000-000000000001', '${T}', 'bbbbbbbb-0001-0000-0000-000000000003', 'hrms.leave',   'approve', 'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000002', '${T}', 'bbbbbbbb-0001-0000-0000-000000000005', 'hrms.leave',   'approve', 'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000003', '${T}', 'bbbbbbbb-0001-0000-0000-000000000004', 'payroll.run',  'approve', 'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000004', '${T}', 'bbbbbbbb-0001-0000-0000-000000000001', 'hrms.leave',   'approve', 'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000005', '${T}', 'bbbbbbbb-0001-0000-0000-000000000001', 'payroll.run',  'approve', 'allow', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,9 +104,17 @@ DELETE FROM budget.finance_heads WHERE tenant_id = '${T}' AND code IN ('2055', '
 
 INSERT INTO budget.finance_heads (id, tenant_id, code, name, level, classification, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('dddddddd-0001-0000-0000-000000000001', '${T}', '2055', 'Police - General Administration', 0, 'revenue', now(), now(), '${A}', '${A}', 1),
-  ('dddddddd-0001-0000-0000-000000000002', '${T}', '4059', 'Capital Outlay on Public Works',  0, 'capital', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('dddddddd-0001-0000-0000-000000000001', '${T}', '2202', 'General Education',              0, 'revenue', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000002', '${T}', '2210', 'Medical & Public Health',        0, 'revenue', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000019', '${T}', '5054', 'Roads & Bridges',                0, 'capital', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000020', '${T}', '0029', 'Land Revenue',                   0, 'revenue', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000021', '${T}', '1200', 'Fixed Assets (Gross)',           0, 'capital', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000022', '${T}', '1250', 'Accumulated Depreciation',       0, 'capital', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000023', '${T}', '5100', 'Depreciation Expense',           0, 'expense', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000026', '${T}', '5101', 'Statutory Depreciation Expense',   0, 'expense', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000024', '${T}', '1100', 'Cash / Bank',                    0, 'asset',   now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000025', '${T}', '4200', 'Gain/Loss on Asset Disposal',    0, 'expense', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET code = EXCLUDED.code, name = EXCLUDED.name, updated_at = now();
 
 INSERT INTO budget.finance_budgets (id, tenant_id, head_id, fy, be_minor, re_minor, allocated_minor, utilised_minor, currency, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -156,9 +180,11 @@ DELETE FROM leave.hrms_leave_types WHERE tenant_id = '${T}' AND code IN ('EL', '
 
 INSERT INTO employee.hrms_departments (id, tenant_id, code, name, parent_id, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0001-0000-0000-000000000001', '${T}', 'ADMIN', 'Administration', null, now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0001-0000-0000-000000000002', '${T}', 'FIN',   'Finance',        null, now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('eeeeeeee-0001-0000-0000-000000000001', '${T}', 'FIN',   'Finance',      null, now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000002', '${T}', 'PWD',   'Public Works', null, now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000017', '${T}', 'HLTH',  'Health',       null, now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000018', '${T}', 'EDU',   'Education',    null, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET code = EXCLUDED.code, name = EXCLUDED.name, updated_at = now();
 
 INSERT INTO employee.hrms_designations (id, tenant_id, code, name, level, pay_grade, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -168,9 +194,11 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, employee_type, status, basic_minor, currency, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0001-0000-0000-000000000005', '${T}', 'EMP001', 'Ravi Kumar',   'eeeeeeee-0001-0000-0000-000000000001', 'eeeeeeee-0001-0000-0000-000000000003', '2010-01-15', 'permanent', 'confirmed', 14400000, 'INR', now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0001-0000-0000-000000000006', '${T}', 'EMP002', 'Priya Sharma', 'eeeeeeee-0001-0000-0000-000000000002', 'eeeeeeee-0001-0000-0000-000000000004', '2015-06-01', 'permanent', 'confirmed', 9000000,  'INR', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('eeeeeeee-0001-0000-0000-000000000005', '${T}', 'EMP001', 'Ravi Kumar',    'eeeeeeee-0001-0000-0000-000000000001', 'eeeeeeee-0001-0000-0000-000000000003', '2010-01-15', 'permanent', 'confirmed', 14400000, 'INR', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000006', '${T}', 'EMP002', 'Priya Sharma',  'eeeeeeee-0001-0000-0000-000000000002', 'eeeeeeee-0001-0000-0000-000000000004', '2015-06-01', 'permanent', 'confirmed', 9000000,  'INR', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000019', '${T}', 'EMP003', 'Anil Mehta',    'eeeeeeee-0001-0000-0000-000000000017', 'eeeeeeee-0001-0000-0000-000000000004', '2018-03-10', 'permanent', 'confirmed', 8500000,  'INR', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000020', '${T}', 'EMP004', 'Sunita Reddy',  'eeeeeeee-0001-0000-0000-000000000018', 'eeeeeeee-0001-0000-0000-000000000004', '2019-08-20', 'permanent', 'confirmed', 8200000,  'INR', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, department_id = EXCLUDED.department_id, updated_at = now();
 
 INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, carry_forward, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -266,29 +294,44 @@ console.log("=== procurement-service ===");
 // pos: indent_ref(text) not indent_id(uuid)
 // grns: po_ref(text) not po_id(uuid), received_date(date) not received_at
 seed("civitas_procurement", "vendors+indents+pos+grns", `
-INSERT INTO vendor.procurement_vendors (id, tenant_id, name, pan, gstin, email, phone, vendor_type, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO vendor.procurement_vendors (id, tenant_id, name, pan, gstin, email, phone, vendor_type, bank_account, ifsc, kyc_status, kyc_verified_at, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0001-0000-0000-000000000001', '${T}', 'TechSupplies Pvt Ltd', 'AABCT1234D', '29AABCT1234D1Z5', 'tech@supplier.com',    '9999900001', 'registered', now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0001-0000-0000-000000000002', '${T}', 'OfficeWorks Ltd',      'AACWO5678F', '27AACWO5678F1Z3', 'sales@officeworks.com', '9999900002', 'registered', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('eeeeeeee-0001-0000-0000-000000000001', '${T}', 'Bharat Electronics Ltd',  'AABBE1234A', '29AABBE1234A1Z5', 'procurement@bel.co.in',     '9988001100', 'registered', '011702010017989', 'SBIN0001234', 'verified',  now(), now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000002', '${T}', 'Tata Consultancy Services','AAATC5678B', '27AAATC5678B1Z3', 'gov@tcs.com',               '9988002200', 'registered', '005301014521234', 'HDFC0001235', 'verified',  now(), now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000010', '${T}', 'Larsen & Toubro Ltd',     'AAALT9012C', '27AAALT9012C1Z1', 'contracts@larsentoubro.com','9988003300', 'registered', '002105000037895', 'ICIC0000021', 'verified',  now(), now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000011', '${T}', 'BSNL',                    'AABSN3456D', '29AABSN3456D1Z8', 'supply@bsnl.co.in',         '9988004400', 'registered', NULL,              NULL,          'pending',   NULL, now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000012', '${T}', 'Reliance Infra Ltd',      'AARIL7890E', '27AARIL7890E1Z2', 'infra@ril.com',             '9988005500', 'registered', '919010054321000', 'UTIB0001501', 'verified',  now(), now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, gstin = EXCLUDED.gstin, email = EXCLUDED.email, phone = EXCLUDED.phone, bank_account = EXCLUDED.bank_account, ifsc = EXCLUDED.ifsc, kyc_status = EXCLUDED.kyc_status, kyc_verified_at = EXCLUDED.kyc_verified_at, updated_at = now();
 
-INSERT INTO indent.procurement_indents (id, tenant_id, indent_no, department, purpose, status, indent_date, required_by, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO indent.procurement_indents (id, tenant_id, indent_no, department, purpose, total_minor, currency, status, indent_date, required_by, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('11111111-0002-0000-0000-000000000001', '${T}', 'IND/2024/001', 'ADMIN', 'Office stationery requirement', 'approved', '2024-11-01', '2025-01-31', now(), now(), '${A}', '${A}', 1),
-  ('11111111-0002-0000-0000-000000000002', '${T}', 'IND/2024/002', 'FIN',   'Computer peripherals',          'pending',  '2024-11-15', '2025-02-28', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('11111111-0002-0000-0000-000000000001', '${T}', 'IND/2026/001', 'Finance',       'Annual office stationery — Q1 FY 2026-27', 185000,  'INR', 'approved', '2026-01-10', '2026-03-31', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000002', '${T}', 'IND/2026/002', 'Public Works',  'Network switches for district HQ',         890000,  'INR', 'pending',  '2026-02-01', '2026-04-30', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000007', '${T}', 'IND/2026/003', 'Health',        'Medical consumables for PHC Ward 12',      340000,  'INR', 'approved', '2026-02-15', '2026-05-15', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000008', '${T}', 'IND/2026/004', 'Education',     'Smart classroom kits — Block A',           1250000, 'INR', 'pending',  '2026-03-01', '2026-06-30', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET department = EXCLUDED.department, purpose = EXCLUDED.purpose, total_minor = EXCLUDED.total_minor, status = EXCLUDED.status, updated_at = now();
+
+INSERT INTO indent.procurement_indent_items (id, indent_id, tenant_id, item_code, description, quantity, unit, unit_price_minor, currency, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('11111111-0002-0000-0000-000000000051', '11111111-0002-0000-0000-000000000001', '${T}', 'STA-001', 'A4 Paper Reams',          50, 'pkt',   250, 'INR', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000052', '11111111-0002-0000-0000-000000000001', '${T}', 'STA-002', 'Ballpoint Pens Box',      20, 'box',   175, 'INR', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000053', '11111111-0002-0000-0000-000000000002', '${T}', 'NET-001', '24-port Network Switch',   4, 'nos', 185000, 'INR', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000054', '11111111-0002-0000-0000-000000000007', '${T}', 'MED-001', 'Surgical Gloves (100pk)', 30, 'box',  2800, 'INR', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000055', '11111111-0002-0000-0000-000000000008', '${T}', 'EDU-001', 'Smart Board Kit',          5, 'nos', 235000, 'INR', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET quantity = EXCLUDED.quantity, unit_price_minor = EXCLUDED.unit_price_minor, updated_at = now();
 
 INSERT INTO po.procurement_pos (id, tenant_id, po_no, vendor_id, indent_ref, total_minor, currency, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('11111111-0002-0000-0000-000000000003', '${T}', 'PO/2024/001', 'eeeeeeee-0001-0000-0000-000000000001', 'IND/2024/001', 1500000, 'INR', 'approved', now(), now(), '${A}', '${A}', 1),
-  ('11111111-0002-0000-0000-000000000004', '${T}', 'PO/2024/002', 'eeeeeeee-0001-0000-0000-000000000002', 'IND/2024/002', 3500000, 'INR', 'draft',    now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('11111111-0002-0000-0000-000000000003', '${T}', 'PO/2026/001', 'eeeeeeee-0001-0000-0000-000000000001', 'IND/2026/001', 1500000, 'INR', 'approved', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000004', '${T}', 'PO/2026/002', 'eeeeeeee-0001-0000-0000-000000000002', 'IND/2026/002', 3500000, 'INR', 'draft',    now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000009', '${T}', 'PO/2026/003', 'eeeeeeee-0001-0000-0000-000000000010', 'IND/2026/003', 8500000, 'INR', 'approved', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET po_no = EXCLUDED.po_no, vendor_id = EXCLUDED.vendor_id, total_minor = EXCLUDED.total_minor, status = EXCLUDED.status, updated_at = now();
 
-INSERT INTO grn.procurement_grns (id, tenant_id, grn_no, po_ref, vendor_id, received_date, status, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO grn.procurement_grns (id, tenant_id, grn_no, po_ref, vendor_id, received_date, three_way_match, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('11111111-0002-0000-0000-000000000005', '${T}', 'GRN/2024/001', 'PO/2024/001', 'eeeeeeee-0001-0000-0000-000000000001', '2024-12-15', 'accepted', now(), now(), '${A}', '${A}', 1),
-  ('11111111-0002-0000-0000-000000000006', '${T}', 'GRN/2024/002', 'PO/2024/001', 'eeeeeeee-0001-0000-0000-000000000001', '2024-12-20', 'draft',    now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('11111111-0002-0000-0000-000000000005', '${T}', 'GRN/2024/001', 'PO/2024/001', 'eeeeeeee-0001-0000-0000-000000000001', '2024-12-15', true,  'accepted', now(), now(), '${A}', '${A}', 1),
+  ('11111111-0002-0000-0000-000000000006', '${T}', 'GRN/2024/002', 'PO/2024/001', 'eeeeeeee-0001-0000-0000-000000000001', '2024-12-20', false, 'draft',    now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET three_way_match = EXCLUDED.three_way_match, status = EXCLUDED.status, updated_at = now();
 
 INSERT INTO rfq.procurement_rfqs (id, tenant_id, rfq_no, title, description, indent_ref, vendors_invited, responses_received, closing_date, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -360,6 +403,13 @@ VALUES
   ('33333333-0001-0000-0000-000000000011', '${T}', '33333333-0001-0000-0000-000000000005', 'RTI/2024/001', 'Road repair expenditure',  'Details of expenditure on road repair works 2023-24', '${A}', (now() + interval '30 days')::date, 'filed', now(), now(), '${A}', '${A}', 1),
   ('33333333-0001-0000-0000-000000000012', '${T}', '33333333-0001-0000-0000-000000000006', 'RTI/2024/002', 'Staff attendance records', 'Attendance records of officers for Q1 2024',          '${A}', (now() + interval '30 days')::date, 'filed', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO helpdesk.citizen_tickets (id, tenant_id, citizen_id, subject, description, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('55555555-0004-0000-0000-000000000001', '${T}', '33333333-0001-0000-0000-000000000005', 'Water supply disruption — Ward 12', 'No water supply in Ward 12 for 3 days; tanker requested', 'open', now(), now(), '${A}', '${A}', 1),
+  ('55555555-0004-0000-0000-000000000002', '${T}', '33333333-0001-0000-0000-000000000006', 'Street light not working — MG Road', 'Street lights on MG Road not functioning since Monday', 'in_progress', now(), now(), '${A}', '${A}', 1),
+  ('55555555-0004-0000-0000-000000000003', '${T}', '33333333-0001-0000-0000-000000000005', 'Property tax receipt not generated', 'Online payment succeeded but receipt PDF unavailable', 'open', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET subject = EXCLUDED.subject, description = EXCLUDED.description, status = EXCLUDED.status, updated_at = now();
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -508,11 +558,16 @@ VALUES
   ('77777777-0001-0000-0000-000000000002', '${T}', 'FF', 'Furniture & Fixtures', 10, 10.0, 'SLM', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO register.asset_assets (id, tenant_id, code, name, category_id, acquisition_cost, currency, acquisition_date, status, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO register.asset_assets (id, tenant_id, code, name, category_id, acquisition_cost, accumulated_dep, book_value, dep_rate, dep_method, currency, acquisition_date, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('77777777-0001-0000-0000-000000000003', '${T}', 'AST/2024/001', 'Dell Laptop XPS15',          '77777777-0001-0000-0000-000000000001', 9000000, 'INR', '2024-04-01', 'active', now(), now(), '${A}', '${A}', 1),
-  ('77777777-0001-0000-0000-000000000004', '${T}', 'AST/2024/002', 'Conference Table 12-Seater', '77777777-0001-0000-0000-000000000002', 5000000, 'INR', '2024-04-01', 'active', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('77777777-0001-0000-0000-000000000003', '${T}', 'AST/2024/001', 'Dell Laptop XPS15',          '77777777-0001-0000-0000-000000000001', 9000000, 3600000, 5400000, 20.0, 'SLM', 'INR', '2024-04-01', 'active', now(), now(), '${A}', '${A}', 1),
+  ('77777777-0001-0000-0000-000000000004', '${T}', 'AST/2024/002', 'Conference Table 12-Seater', '77777777-0001-0000-0000-000000000002', 5000000, 1000000, 4000000, 10.0, 'SLM', 'INR', '2024-04-01', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET
+  accumulated_dep = EXCLUDED.accumulated_dep,
+  book_value = EXCLUDED.book_value,
+  dep_rate = EXCLUDED.dep_rate,
+  dep_method = EXCLUDED.dep_method,
+  updated_at = now();
 
 INSERT INTO maintenance.asset_maintenance_plans (id, tenant_id, asset_id, frequency, next_due, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -541,11 +596,14 @@ VALUES
   ('88888888-0001-0000-0000-000000000004', '${T}', 'Cleaning Supplies', 'CLEAN', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO item.stock_items (id, tenant_id, code, name, category_id, uom_id, reorder_level, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO item.stock_items (id, tenant_id, code, name, category_id, uom_id, reorder_level, reorder_qty, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('88888888-0001-0000-0000-000000000005', '${T}', 'STK001', 'A4 Paper Ream',  '88888888-0001-0000-0000-000000000003', '88888888-0001-0000-0000-000000000001', 20,  now(), now(), '${A}', '${A}', 1),
-  ('88888888-0001-0000-0000-000000000006', '${T}', 'STK002', 'Ball Point Pen', '88888888-0001-0000-0000-000000000003', '88888888-0001-0000-0000-000000000001', 100, now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('88888888-0001-0000-0000-000000000005', '${T}', 'STK001', 'A4 Paper Ream',  '88888888-0001-0000-0000-000000000003', '88888888-0001-0000-0000-000000000001', 60,  50,  now(), now(), '${A}', '${A}', 1),
+  ('88888888-0001-0000-0000-000000000006', '${T}', 'STK002', 'Ball Point Pen', '88888888-0001-0000-0000-000000000003', '88888888-0001-0000-0000-000000000001', 100, 200, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET
+  reorder_level = EXCLUDED.reorder_level,
+  reorder_qty   = EXCLUDED.reorder_qty,
+  updated_at    = now();
 
 INSERT INTO warehouse.stock_warehouses (id, tenant_id, code, name, address, is_active, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -553,11 +611,20 @@ VALUES
   ('88888888-0001-0000-0000-000000000008', '${T}', 'WH02', 'Field Store', 'Field Office Sector 14',       true, now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO ledger.stock_ledger (id, tenant_id, item_id, warehouse_id, entry_id, voucher_type, qty_in, balance_qty, posting_date, created_at, created_by)
+INSERT INTO ledger.stock_ledger (id, tenant_id, item_id, warehouse_id, entry_id, voucher_type, qty_in, balance_qty, rate_minor, posting_date, created_at, created_by)
 VALUES
-  ('88888888-0001-0000-0000-000000000009', '${T}', '88888888-0001-0000-0000-000000000005', '88888888-0001-0000-0000-000000000007', '88888888-0001-0001-0000-000000000009', 'receipt', 50,  50,  now()::date, now(), '${A}'),
-  ('88888888-0001-0000-0000-000000000010', '${T}', '88888888-0001-0000-0000-000000000006', '88888888-0001-0000-0000-000000000007', '88888888-0001-0001-0000-000000000010', 'receipt', 200, 200, now()::date, now(), '${A}')
-ON CONFLICT (id) DO NOTHING;
+  ('88888888-0001-0000-0000-000000000009', '${T}', '88888888-0001-0000-0000-000000000005', '88888888-0001-0000-0000-000000000007', '88888888-0001-0001-0000-000000000009', 'receipt', 50,  50,  25000, now()::date, now(), '${A}'),
+  ('88888888-0001-0000-0000-000000000010', '${T}', '88888888-0001-0000-0000-000000000006', '88888888-0001-0000-0000-000000000007', '88888888-0001-0001-0000-000000000010', 'receipt', 200, 200, 1500,  now()::date, now(), '${A}')
+ON CONFLICT (id) DO UPDATE SET rate_minor = EXCLUDED.rate_minor, balance_qty = EXCLUDED.balance_qty;
+
+INSERT INTO valuation.stock_valuation_rates (id, tenant_id, item_id, warehouse_id, qty, rate_minor, currency, updated_at, version)
+VALUES
+  ('88888888-0002-0000-0000-000000000001', '${T}', '88888888-0001-0000-0000-000000000005', '88888888-0001-0000-0000-000000000007', 50,  25000, 'INR', now(), 1),
+  ('88888888-0002-0000-0000-000000000002', '${T}', '88888888-0001-0000-0000-000000000006', '88888888-0001-0000-0000-000000000007', 200, 1500,  'INR', now(), 1)
+ON CONFLICT (id) DO UPDATE SET
+  qty        = EXCLUDED.qty,
+  rate_minor = EXCLUDED.rate_minor,
+  updated_at = now();
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -622,11 +689,11 @@ VALUES
   ('aaaaaaaa-0002-0000-0000-000000000002', '${T}', 'CS', 'Civil Suit',    now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO cases.legal_cases (id, tenant_id, case_no, title, court, subject, case_type_id, petitioner, status, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO cases.legal_cases (id, tenant_id, case_no, title, court, subject, case_type_id, petitioner, status, next_date, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('aaaaaaaa-0002-0000-0000-000000000003', '${T}', 'WP/12345/2024', 'M/s ABC Builders vs State Govt', 'Delhi High Court',       'Tender cancellation challenge', 'aaaaaaaa-0002-0000-0000-000000000001', 'M/s ABC Builders', 'pending',     now(), now(), '${A}', '${A}', 1),
-  ('aaaaaaaa-0002-0000-0000-000000000004', '${T}', 'CS/5678/2024',  'Land acquisition dispute',        'District Court Gurgaon', 'Compensation dispute',          'aaaaaaaa-0002-0000-0000-000000000002', 'Rajesh Sharma',    'pending',     now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('aaaaaaaa-0002-0000-0000-000000000003', '${T}', 'WP/12345/2024', 'M/s ABC Builders vs State Govt', 'Delhi High Court',       'Tender cancellation challenge', 'aaaaaaaa-0002-0000-0000-000000000001', 'M/s ABC Builders', 'pending', (now() + interval '30 days')::date, now(), now(), '${A}', '${A}', 1),
+  ('aaaaaaaa-0002-0000-0000-000000000004', '${T}', 'CS/5678/2024',  'Land acquisition dispute',        'District Court Gurgaon', 'Compensation dispute',          'aaaaaaaa-0002-0000-0000-000000000002', 'Rajesh Sharma',    'pending', (now() + interval '14 days')::date, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET next_date = EXCLUDED.next_date, updated_at = now();
 
 INSERT INTO hearings.legal_hearings (id, tenant_id, case_id, hearing_date, court, purpose, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -750,23 +817,29 @@ ON CONFLICT (id) DO NOTHING;
 console.log("=== crm-service ===");
 // activities: NO version/updated_at/updated_by (only id, tenant_id, actor_name, text, created_at, created_by)
 seed("civitas_crm", "contacts+deals+activities", `
-INSERT INTO crm.contacts (id, tenant_id, name, email, phone, company, status, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO crm.accounts (id, tenant_id, name, industry, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0002-0000-0000-000000000001', '${T}', 'Rajesh Gupta', 'rajesh@techcorp.in',   '9900001111', 'TechCorp Solutions', 'active', now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0002-0000-0000-000000000002', '${T}', 'Kavita Singh', 'kavita@infraworks.in', '9900002222', 'InfraWorks Ltd',     'active', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('eeeeeeee-0002-0000-0000-000000000010', '${T}', 'TechCorp Solutions', 'IT Services', 'active', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0002-0000-0000-000000000011', '${T}', 'InfraWorks Ltd', 'Infrastructure', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (tenant_id, name) DO NOTHING;
 
-INSERT INTO crm.deals (id, tenant_id, name, stage, value_minor, currency, status, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO crm.contacts (id, tenant_id, name, email, phone, company, designation, city, lead_status, lead_source, owner_id, account_id, tags, marketing_consent, consent_date, last_activity_at, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0002-0000-0000-000000000003', '${T}', 'Smart City Sensors',        'Proposal',    25000000, 'INR', 'active', now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0002-0000-0000-000000000004', '${T}', 'IT Infrastructure Upgrade', 'Negotiation', 80000000, 'INR', 'active', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (id) DO NOTHING;
+  ('eeeeeeee-0002-0000-0000-000000000001', '${T}', 'Rajesh Gupta', 'rajesh@techcorp.in', '9900001111', 'TechCorp Solutions', 'CTO', 'Mumbai', 'qualified', 'referral', '${A}', 'eeeeeeee-0002-0000-0000-000000000010', '["enterprise","priority"]'::jsonb, true, '2024-01-15', now() - interval '2 days', 'active', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0002-0000-0000-000000000002', '${T}', 'Kavita Singh', 'kavita@infraworks.in', '9900002222', 'InfraWorks Ltd', 'Director', 'Delhi', 'contacted', 'web', '${A}', 'eeeeeeee-0002-0000-0000-000000000011', '["infra"]'::jsonb, false, null, now() - interval '5 days', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (tenant_id, email) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, company = EXCLUDED.company, designation = EXCLUDED.designation, city = EXCLUDED.city, lead_status = EXCLUDED.lead_status, tags = EXCLUDED.tags, updated_at = now();
 
-INSERT INTO crm.activities (id, tenant_id, actor_name, text, created_at, created_by)
+INSERT INTO crm.deals (id, tenant_id, name, stage, value_minor, currency, contact_id, owner_id, probability, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0002-0000-0000-000000000005', '${T}', 'Demo Admin', 'Initial meeting with vendor for smart city sensors', now(), '${A}'),
-  ('eeeeeeee-0002-0000-0000-000000000006', '${T}', 'Demo Admin', 'Proposal submitted for IT infrastructure upgrade',   now(), '${A}')
-ON CONFLICT (id) DO NOTHING;
+  ('eeeeeeee-0002-0000-0000-000000000003', '${T}', 'Smart City Sensors',        'Proposal',    25000000, 'INR', 'eeeeeeee-0002-0000-0000-000000000001', '${A}', 60, 'active', now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0002-0000-0000-000000000004', '${T}', 'IT Infrastructure Upgrade', 'Negotiation', 80000000, 'INR', 'eeeeeeee-0002-0000-0000-000000000002', '${A}', 75, 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO UPDATE SET contact_id = EXCLUDED.contact_id, owner_id = EXCLUDED.owner_id, probability = EXCLUDED.probability;
+
+INSERT INTO crm.activities (id, tenant_id, actor_name, text, contact_id, type, subject, status, created_at, created_by)
+VALUES
+  ('eeeeeeee-0002-0000-0000-000000000005', '${T}', 'Demo Admin', 'Initial meeting with vendor for smart city sensors', 'eeeeeeee-0002-0000-0000-000000000001', 'meeting', 'Discovery call', 'completed', now() - interval '2 days', '${A}'),
+  ('eeeeeeee-0002-0000-0000-000000000006', '${T}', 'Demo Admin', 'Proposal submitted for IT infrastructure upgrade', 'eeeeeeee-0002-0000-0000-000000000002', 'email', 'Proposal sent', 'completed', now() - interval '5 days', '${A}')
+ON CONFLICT (id) DO UPDATE SET contact_id = EXCLUDED.contact_id, type = EXCLUDED.type, subject = EXCLUDED.subject;
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -774,14 +847,28 @@ console.log("=== knowledge-service ===");
 seed("civitas_knowledge", "documents", `
 INSERT INTO knowledge.documents (id, tenant_id, title, category, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('ffffffff-0002-0000-0000-000000000001', '${T}', 'Financial Management Manual 2024', 'finance',     'published', now(), now(), '${A}', '${A}', 1),
-  ('ffffffff-0002-0000-0000-000000000002', '${T}', 'Procurement Guidelines GFR 2017',  'procurement', 'published', now(), now(), '${A}', '${A}', 1)
+  ('ffffffff-0002-0000-0000-000000000001', '${T}', 'Financial Management Manual 2024', 'finance',     'approved', now(), now(), '${A}', '${A}', 1),
+  ('ffffffff-0002-0000-0000-000000000002', '${T}', 'Procurement Guidelines GFR 2017',  'procurement', 'approved', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
 console.log("=== workflow-service ===");
-seed("civitas_workflow", "instances+tasks", `
+seed("civitas_workflow", "definitions+instances+tasks", `
+INSERT INTO workflow.definitions (id, tenant_id, code, name, version, status, created_at, updated_at, created_by, updated_by)
+VALUES
+  ('aaaaaaaa-0003-0000-0000-000000000001', '${T}', 'leave_approval', 'Leave Approval Workflow', 1, 'active', now(), now(), '${A}', '${A}'),
+  ('bbbbbbbb-0003-0000-0000-000000000001', '${T}', 'procurement_indent_approval', 'Procurement Indent Approval', 1, 'active', now(), now(), '${A}', '${A}'),
+  ('cccccccc-0003-0000-0000-000000000001', '${T}', 'procurement_po_approval', 'Procurement PO Approval', 1, 'active', now(), now(), '${A}', '${A}')
+ON CONFLICT (tenant_id, code) DO NOTHING;
+
+INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, role_ref, sort_order, created_at)
+VALUES
+  ('aaaaaaaa-0003-0000-0000-000000000002', 'aaaaaaaa-0003-0000-0000-000000000001', 'manager_approval', 'Reporting Officer Approval', 'manager', 1, now()),
+  ('bbbbbbbb-0003-0000-0000-000000000002', 'bbbbbbbb-0003-0000-0000-000000000001', 'proc_officer', 'Procurement Officer Approval', 'procurement_officer', 1, now()),
+  ('cccccccc-0003-0000-0000-000000000002', 'cccccccc-0003-0000-0000-000000000001', 'proc_head', 'Procurement Head Approval', 'procurement_admin', 1, now())
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO workflow.instances (id, tenant_id, name, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
   ('11111111-0003-0000-0000-000000000001', '${T}', 'Budget Approval Workflow', 'active', now(), now(), '${A}', '${A}', 1),

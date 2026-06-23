@@ -1,99 +1,66 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageShell } from "../../../_components/PageShell";
+import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
 import { getBreachedSLATickets } from "../../../_data/loaders";
+import Link from "next/link";
 
 export default async function Page() {
   const { data: tickets, source } = await getBreachedSLATickets();
 
   const breached = tickets.filter((t) => t.slaStatus === "breached");
+  const dueSoon = tickets.filter((t) => t.slaStatus === "due_soon").length;
+  const withinSla = tickets.filter((t) => t.slaStatus === "within_sla").length;
 
   const sorted = [...breached].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   );
 
-  const priorityColors: Record<string, string> = {
-    low: "bg-slate-100 text-slate-600",
-    medium: "bg-blue-50 text-blue-700",
-    high: "bg-orange-50 text-orange-700",
-    critical: "bg-red-50 text-red-700",
-  };
-
-  const statusColors: Record<string, string> = {
-    open: "bg-blue-50 text-blue-700",
-    in_progress: "bg-amber-50 text-amber-700",
-    pending: "bg-orange-50 text-orange-700",
-    resolved: "bg-emerald-50 text-emerald-700",
-    closed: "bg-slate-100 text-slate-500",
-  };
-
-  function pill(label: string, colors: Record<string, string>, key: string) {
-    return (
-      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[key] ?? "bg-slate-100 text-slate-600"}`}>
-        {label.replace(/_/g, " ")}
-      </span>
-    );
-  }
-
   return (
-    <PageShell
-      title="SLA Queue — Breached Tickets"
-      description="Tickets where SLA has been breached, sorted oldest first."
-      breadcrumb={
-        <>
-          <Link href="/helpdesk" className="hover:text-slate-900">Helpdesk</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">SLA Queue</span>
-        </>
-      }
-    >
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
-
-      <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {sorted.length} breached {sorted.length === 1 ? "ticket" : "tickets"} require immediate attention.
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm" aria-label="SLA breached tickets">
-          <thead className="bg-slate-100 text-slate-700">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left">Ticket No</th>
-              <th scope="col" className="px-4 py-3 text-left">Subject</th>
-              <th scope="col" className="px-4 py-3 text-left">Requester</th>
-              <th scope="col" className="px-4 py-3 text-left">Priority</th>
-              <th scope="col" className="px-4 py-3 text-left">Status</th>
-              <th scope="col" className="px-4 py-3 text-left">Created</th>
-              <th scope="col" className="px-4 py-3 text-left">Assigned To</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 ? (
+    <>
+      <PageHeader
+        title="SLA Queue"
+        subtitle="Tickets where SLA has been breached, sorted oldest first."
+        back="/helpdesk"
+      />
+      {source === "error" && <DataSourceBadge source={source} />}
+      <StatGrid>
+        <StatCard icon="🚨" iconBg="#fef2f2" label="SLA Breached" value={breached.length.toLocaleString("en-IN")} />
+        <StatCard icon="⚠️" iconBg="#fffbeb" label="Due Soon" value={dueSoon.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Within SLA" value={withinSla.toLocaleString("en-IN")} />
+        <StatCard icon="📊" iconBg="#eef2ff" label="Total Tickets" value={tickets.length.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="card">
+        <div className="card-h"><h3>Breached SLA tickets</h3></div>
+        {sorted.length === 0 ? (
+          <EmptyState icon="✅" title="All clear — no SLA breaches" message="No tickets have exceeded their SLA threshold." />
+        ) : (
+          <table className="tbl">
+            <thead>
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
-                  <p className="text-emerald-600 font-medium">All clear — no SLA breaches</p>
-                  <p className="mt-1 text-sm text-slate-400">No tickets have exceeded their SLA threshold.</p>
-                </td>
+                <th>Ticket No</th>
+                <th>Subject</th>
+                <th>Requester</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Assigned To</th>
               </tr>
-            ) : (
-              sorted.map((t) => (
-                <tr key={t.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-slate-700">
-                    <Link href={`/helpdesk/tickets/${t.id}`} className="hover:text-indigo-600 hover:underline">
-                      {t.ticketNo}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-slate-800">{t.subject}</td>
-                  <td className="px-4 py-3 text-slate-600">{t.requesterName}</td>
-                  <td className="px-4 py-3">{pill(t.priority, priorityColors, t.priority)}</td>
-                  <td className="px-4 py-3">{pill(t.status, statusColors, t.status)}</td>
-                  <td className="px-4 py-3 text-slate-500">{t.createdAt.slice(0, 10)}</td>
-                  <td className="px-4 py-3 text-slate-500">{t.assignedTo ?? "Unassigned"}</td>
+            </thead>
+            <tbody>
+              {sorted.map((t) => (
+                <tr key={t.id} className="clickable">
+                  <td><Link href={`/helpdesk/tickets/${t.id}`}>{t.ticketNo}</Link></td>
+                  <td>{t.subject}</td>
+                  <td>{t.requesterName}</td>
+                  <td><StatusPill status={t.priority} /></td>
+                  <td><StatusPill status={t.status} label={t.status.replace(/_/g, " ")} /></td>
+                  <td>{t.createdAt.slice(0, 10)}</td>
+                  <td>{t.assignedTo ?? "Unassigned"}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
-    </PageShell>
+    </>
   );
 }

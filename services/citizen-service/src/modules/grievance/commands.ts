@@ -4,7 +4,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type {
   RegisterGrievanceBody, AssignGrievanceBody, GrievanceActionBody,
-  ResolveGrievanceBody, EscalateGrievanceBody,
+  ResolveGrievanceBody, EscalateGrievanceBody, ReopenGrievanceBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -59,4 +59,14 @@ export async function escalateGrievance(ctx: RequestContext, id: string, body: E
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "grievance", id));
   return { id: escId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function reopenGrievance(ctx: RequestContext, id: string, body: ReopenGrievanceBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.grievanceReopen, {
+    type: COMMANDS.grievanceReopen,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "grievance", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -1,104 +1,90 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader } from "../../../../_components/ds";
 import { getAdminRoleById } from "../../../../_data/loaders";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function AdminRoleDetailPage({ params }: { params: { id: string } }) {
   const { data: role, source } = await getAdminRoleById(params.id);
 
   if (!role) {
     return (
-      <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-        <section className="mx-auto max-w-4xl">
-          <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-            <Link href="/tenant-admin" className="hover:text-slate-900">Tenant Admin</Link>
-            <span className="mx-2">/</span>
-            <Link href="/tenant-admin/roles" className="hover:text-slate-900">Roles</Link>
-            <span className="mx-2">/</span>
-            <span className="text-slate-900">Not Found</span>
-          </nav>
-          <p className="mt-8 text-sm text-slate-500">Role not found.</p>
-        </section>
-      </main>
+      <div className="wrap">
+        <a href="/tenant-admin/roles" className="back">← Back</a>
+        <p style={{ color: "#667085", marginTop: 16 }}>Role not found.</p>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-4xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/tenant-admin" className="hover:text-slate-900">Tenant Admin</Link>
-          <span className="mx-2">/</span>
-          <Link href="/tenant-admin/roles" className="hover:text-slate-900">Roles</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">{role.name}</span>
-        </nav>
-
-        <header className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold text-slate-900">{role.name}</h1>
-            {role.isSystemRole ? (
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">System</span>
-            ) : (
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Custom</span>
-            )}
+    <div className="wrap">
+      <PageHeader
+        back="/tenant-admin/roles"
+        title={role.name}
+        subtitle={role.description ?? "Role permissions and user assignments"}
+        actions={
+          <>
+            {role.isSystemRole
+              ? <span className="pill info">System role</span>
+              : <span className="pill mut">Custom role</span>}
+            {!role.isSystemRole && <button className="btn primary">Edit role</button>}
+            {source === "error" && <DataSourceBadge source={source} />}
+          </>
+        }
+      />
+      <div className="grid g-main" style={{ alignItems: "start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="card">
+            <div className="card-h"><h3>Details</h3></div>
+            <div className="fields">
+              <div className="fld"><div className="l">Name</div><div className="v">{role.name}</div></div>
+              <div className="fld"><div className="l">Type</div><div className="v">{role.isSystemRole ? "System" : "Custom"}</div></div>
+              <div className="fld"><div className="l">Users assigned</div><div className="v">{role.userCount}</div></div>
+              <div className="fld"><div className="l">Created</div><div className="v">{role.createdAt.slice(0, 10)}</div></div>
+              {role.description && <div className="fld"><div className="l">Description</div><div className="v">{role.description}</div></div>}
+            </div>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <dl className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <dt className="text-xs text-slate-500">Description</dt>
-              <dd className="mt-0.5 text-sm text-slate-900">{role.description ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Users Assigned</dt>
-              <dd className="mt-0.5 text-sm font-semibold text-slate-900">{role.userCount}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Created At</dt>
-              <dd className="mt-0.5 text-sm text-slate-900">{role.createdAt.slice(0, 10)}</dd>
-            </div>
-          </dl>
-        </article>
-
-        <section>
-          <h2 className="text-base font-semibold text-slate-900">Permissions</h2>
-          <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-100 text-slate-700">
+          <div className="card">
+            <div className="card-h"><h3>Permissions</h3><span className="pill info">{role.permissions.length} rules</span></div>
+            <table className="tbl">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3">Module</th>
-                  <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Resource</th>
-                  <th className="px-4 py-3">Allowed</th>
+                  <th>Module</th>
+                  <th>Action</th>
+                  <th>Resource</th>
+                  <th>Allowed</th>
                 </tr>
               </thead>
               <tbody>
                 {role.permissions.map((perm: { module: string; action: string; resource?: string; allowed: boolean }, i: number) => (
-                  <tr key={i} className="border-t border-slate-200 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{perm.module}</td>
-                    <td className="px-4 py-3 text-slate-700">{perm.action}</td>
-                    <td className="px-4 py-3 text-slate-600">{perm.resource ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      {perm.allowed ? (
-                        <span className="text-emerald-600 font-semibold">Yes</span>
-                      ) : (
-                        <span className="text-red-600 font-semibold">No</span>
-                      )}
-                    </td>
+                  <tr key={i}>
+                    <td><span className="mono">{perm.module}</span></td>
+                    <td>{perm.action}</td>
+                    <td>{perm.resource ?? "—"}</td>
+                    <td>{perm.allowed ? <span className="pill good">Yes</span> : <span className="pill bad">No</span>}</td>
                   </tr>
                 ))}
                 {role.permissions.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400">No permissions defined.</td>
-                  </tr>
+                  <tr><td colSpan={4}><div className="empty-state"><div>🔑</div><h4>No permissions</h4><p>No permission rules defined for this role.</p></div></td></tr>
                 )}
               </tbody>
             </table>
           </div>
-        </section>
-      </section>
-    </main>
+        </div>
+        <div className="card">
+          <div className="card-h"><h3>Permission toggles</h3></div>
+          <div className="pad">
+            {role.permissions.length > 0 ? (
+              role.permissions.slice(0, 12).map((perm: { module: string; action: string; resource?: string; allowed: boolean }, i: number) => (
+                <div key={i} className="prefrow">
+                  <span style={{ fontSize: 13 }}>{perm.module} · {perm.action}</span>
+                  <span className={`pill ${perm.allowed ? "good" : "mut"}`}>{perm.allowed ? "On" : "Off"}</span>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state" style={{ paddingTop: 32 }}><div>🔑</div><h4>No rules</h4><p>Permission rules will appear here.</p></div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

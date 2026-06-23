@@ -13,6 +13,7 @@ import { planRoutes } from "./modules/plan/routes.js";
 import { observationRoutes } from "./modules/observation/routes.js";
 import { paraRoutes } from "./modules/para/routes.js";
 import { complianceRoutes } from "./modules/compliance/routes.js";
+import { checklistRoutes } from "./modules/compliance/checklist-routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { adminRoutes } from "./modules/admin/routes.js";
 
@@ -34,6 +35,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(observationRoutes);
   await app.register(paraRoutes);
   await app.register(complianceRoutes);
+  await app.register(checklistRoutes);
   await app.register(dashboardRoutes);
   await app.register(adminRoutes);
   registerSchemaErrorHandler(app, HttpError);

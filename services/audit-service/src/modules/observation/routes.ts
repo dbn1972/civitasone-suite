@@ -9,11 +9,15 @@ import * as queries from "./queries.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createObservationBody, draftParaBody, idParam } from "./validators.js";
+import { createObservationBody, draftParaBody, complianceReplyBody, reviewReplyBody, idParam } from "./validators.js";
 
 import * as commands from "./commands.js";
 
 const AUDIT_ROLES = ["audit_officer", "audit_admin", "super_admin"];
+// Auditee roles: department head / officer submits compliance reply
+const AUDITEE_ROLES = ["dept_head", "dept_officer", "finance_officer", ...AUDIT_ROLES];
+// Only audit admin / audit head can accept/reject a reply
+const REVIEW_ROLES = ["audit_admin", "super_admin"];
 const READER_ROLES = [...AUDIT_ROLES, "finance_admin"];
 
 export async function observationRoutes(app: FastifyInstance): Promise<void> {
@@ -22,6 +26,33 @@ export async function observationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, AUDIT_ROLES);
     const body = createObservationBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createObservation(ctx, body));
+  });
+
+  /**
+   * AU-01: Auditee submits compliance reply.
+   * Allowed: dept_head, dept_officer, finance_officer, audit roles.
+   * Transitions observation → "replied".
+   */
+  app.post("/v1/audit/observations/:id/reply", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDITEE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = complianceReplyBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitComplianceReply(ctx, id, body));
+  });
+
+  /**
+   * AU-01: Auditor accepts or rejects the compliance reply.
+   * Allowed: audit_admin, super_admin only.
+   * Accept → "compliance_pending" (or "closed" if fully satisfactory).
+   * Reject → back to "open" for re-submission.
+   */
+  app.post("/v1/audit/observations/:id/review", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVIEW_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = reviewReplyBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reviewComplianceReply(ctx, id, body));
   });
 
   app.post("/v1/audit/observations/:id/draft-para", async (req, reply) => {

@@ -1,6 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { financeSanctions } from "../budget/schema.js";
+import { financeSanctions, financeBudgets } from "../budget/schema.js";
 import { financePayments } from "../payments/schema.js";
 import { financeLedger } from "../gl/schema.js";
 
@@ -20,8 +20,19 @@ export async function getDashboard(tenantId: string) {
     .from(financeLedger)
     .where(eq(financeLedger.tenantId, tenantId));
 
+  const [budgetRow] = await db
+    .select({
+      totalBE: sql<number>`coalesce(sum(be_minor), 0)::bigint`,
+    })
+    .from(financeBudgets)
+    .where(eq(financeBudgets.tenantId, tenantId));
+
+  const sanctioned = Number(budgetRow?.totalBE ?? 0);
+  const expenditure = Number(expRow?.total ?? 0);
+  const budgetUtilisationPct = sanctioned > 0 ? Math.round((expenditure / sanctioned) * 100) : 0;
+
   return {
-    budgetUtilisationPct: 0,
+    budgetUtilisationPct,
     pendingSanctions: pendingRow?.count ?? 0,
     paymentsThisMonth: payRow?.count ?? 0,
     totalExpenditure: Number(expRow?.total ?? 0) / 100,

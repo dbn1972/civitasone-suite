@@ -37,8 +37,9 @@ export async function applyLeave(ctx: RequestContext, body: ApplyLeaveBody): Pro
 }
 
 export async function approveLeave(ctx: RequestContext, id: string): Promise<Accepted> {
+  const messageId = randomUUID();
   await queue.publish(COMMANDS.leaveApprove, {
-    type: COMMANDS.leaveApprove,
+    messageId, type: COMMANDS.leaveApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId },
   });

@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as receiptRepo from "../receipt/repo.js";
 import { weightedAvgRate, assertStockNotNegative, voucherTypeForEntry } from "./domain.js";
 import type { EntryItemInsert } from "./schema.js";
 import type { LedgerInsert } from "../ledger/schema.js";
@@ -24,17 +25,21 @@ export function registerEntryConsumers(queue: Queue): void {
 
     const warehouseId = p.toWarehouseId ?? p.fromWarehouseId ?? "00000000-0000-4000-8000-000000000000";
 
-    // Validate stock for issue/transfer_out before DB transaction
-    if (p.entryType === "issue" || p.entryType === "transfer") {
-      const srcWarehouse = p.fromWarehouseId ?? warehouseId;
-      for (const item of p.items) {
-        const balance = await repo.getCurrentBalance(p.tenantId, item.itemId, srcWarehouse);
-        assertStockNotNegative(balance, item.qty);
-      }
-    }
+    // Validate stock for issue/transfer_out — use FIFO lock inside transaction
+    const needsStockCheck = p.entryType === "issue" || p.entryType === "transfer";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      if (needsStockCheck) {
+        const srcWarehouse = p.fromWarehouseId ?? warehouseId;
+        for (const item of p.items) {
+          const available = await receiptRepo.lockAvailableQty(tx, p.tenantId, item.itemId, srcWarehouse);
+          if (available < item.qty) {
+            throw new Error(`INSUFFICIENT_STOCK: Only ${available} units available, ${item.qty} requested.`);
+          }
+        }
+      }
 
       await repo.insertEntry(tx, {
         id: p.id, tenantId: p.tenantId, entryType: p.entryType,
@@ -83,9 +88,10 @@ export function registerEntryConsumers(queue: Queue): void {
           await repo.appendLedger(tx, ledgerRow);
         }
 
-        // Decrement source warehouse for issue/transfer
+        // Decrement source warehouse for issue/transfer (FIFO batch consumption)
         if (isIssue || (isTransfer && p.fromWarehouseId)) {
           const src = p.fromWarehouseId ?? warehouseId;
+          await receiptRepo.consumeFIFO(tx, p.tenantId, item.itemId, src, item.qty);
           const current = await repo.getValuationRate(p.tenantId, item.itemId, src);
           const newQty = current.qty - item.qty;
           await repo.upsertValuationRate(tx, p.tenantId, item.itemId, src, newQty, current.rateMinor, item.currency ?? "INR");
@@ -98,6 +104,17 @@ export function registerEntryConsumers(queue: Queue): void {
             postingDate: p.postingDate, createdBy: msg.actorId,
           };
           await repo.appendLedger(tx, ledgerRow);
+        }
+
+        // Record FIFO receipt batch on inbound stock
+        if (isReceipt || (isTransfer && p.toWarehouseId)) {
+          const dest = isTransfer ? (p.toWarehouseId ?? warehouseId) : warehouseId;
+          await receiptRepo.insertReceipt(tx, {
+            id: randomUUID(), tenantId: p.tenantId, itemId: item.itemId,
+            warehouseId: dest, entryId: p.id,
+            quantity: item.qty, remainingQty: item.qty,
+            unitCostMinor: BigInt(item.rateMinor), currency: item.currency ?? "INR",
+          });
         }
       }
 
@@ -152,6 +169,12 @@ export function registerEntryConsumers(queue: Queue): void {
           rateMinor: newRate, currency: item.currency ?? "INR",
           postingDate: new Date().toISOString().slice(0, 10),
           createdBy: msg.actorId,
+        });
+        await receiptRepo.insertReceipt(tx, {
+          id: randomUUID(), tenantId: msg.tenantId, itemId: item.itemId!,
+          warehouseId, entryId,
+          quantity: item.acceptedQty, remainingQty: item.acceptedQty,
+          unitCostMinor: BigInt(item.rateMinor), currency: item.currency ?? "INR",
         });
       });
     }

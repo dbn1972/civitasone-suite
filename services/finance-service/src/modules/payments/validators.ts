@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { PFMS_DDO_REGEX, PFMS_HOA_REGEX, PFMS_AGENCY_REGEX, PFMS_SCHEME_REGEX } from "../../shared/pfms.js";
+
+const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 alphanumeric characters (PFMS format)");
 
 const deduction = z.object({
   type:        z.string().min(1),
@@ -10,6 +13,9 @@ export const createBillBody = z.object({
   billNo:      z.string().min(1).max(64),
   vendorId:    z.string().uuid(),
   headId:      z.string().uuid(),
+  ddoCode:     ddoCodeField,
+  agencyCode:  z.string().regex(PFMS_AGENCY_REGEX, "agency code 4–12 alphanumeric").optional(),
+  schemeCode:  z.string().regex(PFMS_SCHEME_REGEX, "scheme code 4–20 alphanumeric").optional(),
   sanctionRef: z.string().uuid().optional(),
   grossMinor:  z.number().int().positive(),
   currency:    z.string().length(3).default("INR"),
@@ -26,6 +32,7 @@ export type ApproveBillBody = z.infer<typeof approveBillBody>;
 
 export const initiateEftBody = z.object({
   billId:      z.string().uuid(),
+  ddoCode:     ddoCodeField,
   mode:        z.enum(["NEFT", "RTGS", "IMPS", "DBT", "PFMS", "cheque"]),
   amountMinor: z.number().int().positive(),
   currency:    z.string().length(3).default("INR"),

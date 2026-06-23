@@ -7,7 +7,12 @@ import type { InstanceView } from "./schema.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export type CreateInstancePayload = InstanceView & { initialTaskName: string };
+export type CreateInstancePayload = InstanceView & {
+  initialTaskName: string;
+  definitionCode?: string;
+  refType?: string;
+  refId?: string;
+};
 
 export async function createInstance(ctx: RequestContext, body: CreateInstanceBody): Promise<Accepted> {
   const id = randomUUID();

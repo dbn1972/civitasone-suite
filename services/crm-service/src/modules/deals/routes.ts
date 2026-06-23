@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createDealBody, idParam, dealsListSchema } from "./validators.js";
+import { createDealBody, updateDealStageBody, idParam, dealsListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -31,6 +31,14 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     const deal = await queries.getDeal(id, ctx.tenantId);
     if (!deal) throw new HttpError(404, "NOT_FOUND", "deal not found");
     return reply.send(deal);
+  });
+
+  app.patch("/v1/crm/deals/:id/stage", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateDealStageBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateDealStage(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

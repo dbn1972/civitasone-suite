@@ -13,6 +13,7 @@ import { disbursementRoutes }  from "./modules/disbursement/routes.js";
 import { utilisationRoutes }   from "./modules/utilisation/routes.js";
 import { beneficiaryRoutes }   from "./modules/beneficiary/routes.js";
 import { dashboardRoutes }     from "./modules/dashboard/routes.js";
+import { ucValidationRoutes }  from "./modules/uc-validation/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,6 +34,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(utilisationRoutes);
   await app.register(beneficiaryRoutes);
   await app.register(dashboardRoutes);
+  await app.register(ucValidationRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

@@ -2,7 +2,7 @@
 
 **Overall: 10/10**
 
-Generated: 2026-06-21T01:47:42.185Z
+Generated: 2026-06-21T05:55:08.157Z
 
 | Module | Wired | Score | Top blocker |
 |--------|------:|------:|-------------|
@@ -14,12 +14,12 @@ Generated: 2026-06-21T01:47:42.185Z
 | contracts | 1/1 | 10/10 | — |
 | crm | 6/6 | 10/10 | — |
 | estab | 8/8 | 10/10 | — |
-| finance | 12/12 | 10/10 | — |
+| finance | 13/13 | 10/10 | — |
 | grants | 8/8 | 10/10 | — |
 | helpdesk | 5/5 | 10/10 | — |
-| hr | 14/14 | 10/10 | — |
+| hr | 16/16 | 10/10 | — |
 | install | 1/1 | 10/10 | — |
-| inventory | 1/1 | 10/10 | — |
+| inventory | 2/2 | 10/10 | — |
 | knowledge | 5/5 | 10/10 | — |
 | legal | 6/6 | 10/10 | — |
 | locations | 1/1 | 10/10 | — |

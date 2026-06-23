@@ -8,7 +8,8 @@
   "exports": {
     ".": "./dist/index.js",
     "./plugin": "./dist/plugin.js",
-    "./context": "./dist/context.js"
+    "./context": "./dist/context.js",
+    "./permissions": "./dist/permissions.js"
   },
   "scripts": {
     "build": "tsc",

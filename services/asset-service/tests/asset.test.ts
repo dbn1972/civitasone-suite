@@ -17,7 +17,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRegisterConsumers } from "../src/modules/register/consumer.js";
 import { slmMonthlyAmount, wdvMonthlyAmount, generatePeriods } from "../src/modules/depreciation/domain.js";
 import { assertAssetDisposable, computeDisposalGainLoss } from "../src/modules/lifecycle/domain.js";
-import { COMMANDS } from "../src/topics.js";
+import { COMMANDS, CONSUMED } from "../src/topics.js";
 
 const ACTOR   = "00000000-aaaa-4000-8000-000000000001";
 const TENANT  = "11111111-aaaa-4000-8000-000000000001";
@@ -185,7 +185,55 @@ describe("asset-service route auth (inject)", () => {
   });
 });
 
-// ── 6. Idempotency — duplicate message ───────────────────────────────────
+// ── 6. GRN auto-capitalization ───────────────────────────────────────────
+
+describe("Register consumer — GRN fixed_asset capitalization", () => {
+  const GRN_MSG = "66666666-ffff-4000-8000-000000000001";
+  const GRN_ID = "grn-test-001";
+
+  afterAll(async () => {
+    await db.delete(assetAssets).where(eq(assetAssets.code, "FA-001"));
+  });
+
+  it("creates asset from grnAccepted with fixed_asset items", async () => {
+    const q = new MemoryQueue();
+    registerRegisterConsumers(q);
+    await q.start();
+
+    await q.publish(CONSUMED.grnAccepted, {
+      messageId: GRN_MSG,
+      type: CONSUMED.grnAccepted,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: "corr-grn-cap",
+      schemaVersion: "1.0",
+      payload: {
+        grnId: GRN_ID,
+        poRef: "procurement_po:test-po",
+        vendorId: "vendor-1",
+        items: [{
+          itemCode: "FA-001",
+          itemName: "Server Rack",
+          acceptedQty: 2,
+          rateMinor: 5000000,
+          currency: "INR",
+          itemType: "fixed_asset",
+        }],
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 400));
+    await q.stop();
+
+    const rows = await db.select().from(assetAssets).where(eq(assetAssets.code, "FA-001"));
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows[0]?.assetType).toBe("fixed");
+    expect(Number(rows[0]?.acquisitionCost)).toBe(10000000);
+    expect(rows[0]?.grnRef).toContain(GRN_ID);
+    expect(rows[0]?.barcode).toContain("FA-001");
+  });
+});
+
+// ── 7. Idempotency — duplicate message ───────────────────────────────────
 
 describe("Register consumer — idempotency (integration)", () => {
   beforeAll(async () => { await wipe(ASSET_2, MSG_2); });

@@ -4,6 +4,8 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { estabAttendees } from "./schema.js";
+import { autoRegisterDak, generateDakNo } from "../files/dak-auto.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -30,6 +32,12 @@ export function registerCommitteeConsumers(queue: Queue): void {
         title: p.title, whenAt: new Date(p.whenAt), venue: p.venue ?? null,
         minutesUrl: null, status: "scheduled",
         createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await autoRegisterDak(tx, msg, {
+        dakNo: generateDakNo("MTG"),
+        fromAddress: "Committee Secretariat",
+        subject: `Meeting: ${p.title}`,
+        sourceSection: "meeting",
       });
       await audit(tx, msg, "create", "meeting", p.id);
     });
@@ -65,6 +73,20 @@ export function registerCommitteeConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "meeting", p.meetingId));
     await cache.invalidate(cache.makeKey(msg.tenantId, "committee_meetings", (msg.payload as any).committeeId ?? ""));
+  });
+
+  queue.subscribe(COMMANDS.attendanceRecord, async (msg) => {
+    const p = msg.payload as { id: string; meetingId: string; tenantId: string; memberRef: string; role: string; attended: boolean };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.insert(estabAttendees).values({
+        id: p.id, tenantId: p.tenantId, meetingId: p.meetingId,
+        memberRef: p.memberRef, role: p.role, attended: p.attended,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "record_attendance", "meeting_attendee", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "meeting", p.meetingId));
   });
 }
 

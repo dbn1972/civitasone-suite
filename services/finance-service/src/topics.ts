@@ -29,6 +29,8 @@ export const EVENTS = {
 export const CONSUMED_EVENTS = {
   eftInitiate:              "finance.payment.eft.initiate",
   auditParaPendingRecovery: "audit.para.pending_recovery",
+  payrollRunApproved:       "payroll.run.approved",
+  grnAccepted:              "procurement.grn.accepted",
 } as const;
 
 export const SERVICE  = "finance";

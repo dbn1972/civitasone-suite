@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as portalRepo from "../portal/repo.js";
 import type { ApplicationRow } from "./schema.js";
 
 export async function getApplication(tenantId: string, id: string): Promise<(ApplicationRow & { history: Awaited<ReturnType<typeof repo.listStatusHistory>>; documents: Awaited<ReturnType<typeof repo.listDocuments>> }) | null> {
@@ -36,13 +37,30 @@ export async function listCitizenRequestSummaries(tenantId: string, limit: numbe
     cache.makeKey(tenantId, "citizen_requests", `list:${limit}`),
     () => repo.listApplicationsByTenant(tenantId, limit),
   );
-  return (rows ?? []).map((row) => ({
-    id: row.id,
-    requestNo: row.refNo,
-    serviceType: row.serviceId,
-    citizenName: row.citizenId,
-    submittedAt: row.submittedAt.toISOString(),
-    expectedResolutionDate: row.deadline?.toString(),
-    status: mapRequestStatus(row.status),
-  }));
+  const profileMap = new Map<string, { name: string; phone: string | null }>();
+  for (const row of rows ?? []) {
+    if (!profileMap.has(row.citizenId)) {
+      const profile = await cache.getOrLoad(
+        cache.makeKey(row.tenantId, "citizen_profile", row.citizenId),
+        () => portalRepo.findProfileById(row.citizenId),
+      );
+      profileMap.set(row.citizenId, {
+        name: profile?.name ?? row.citizenId,
+        phone: profile?.mobile ?? null,
+      });
+    }
+  }
+  return (rows ?? []).map((row) => {
+    const p = profileMap.get(row.citizenId);
+    return {
+      id: row.id,
+      requestNo: row.refNo,
+      serviceType: row.serviceId,
+      citizenName: p?.name ?? row.citizenId,
+      ...(p?.phone ? { citizenPhone: `XXXXXX${p.phone.slice(-4)}` } : {}),
+      submittedAt: new Date(row.submittedAt as unknown as string).toISOString(),
+      ...(row.deadline ? { expectedResolutionDate: row.deadline.toString() } : {}),
+      status: mapRequestStatus(row.status),
+    };
+  });
 }

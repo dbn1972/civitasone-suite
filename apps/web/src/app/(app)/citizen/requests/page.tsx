@@ -1,100 +1,72 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageShell } from "../../../_components/PageShell";
+import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
 import { getCitizenRequests } from "../../../_data/loaders";
-import type { CitizenRequestSummary } from "@civitasone/types";
-
-const statusColors: Record<CitizenRequestSummary["status"], string> = {
-  submitted: "bg-blue-50 text-blue-700",
-  under_review: "bg-amber-50 text-amber-700",
-  in_progress: "bg-orange-50 text-orange-700",
-  resolved: "bg-emerald-50 text-emerald-700",
-  rejected: "bg-red-50 text-red-700",
-};
-
-function pill(label: string, colorClass: string) {
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colorClass}`}>
-      {label.replace(/_/g, " ")}
-    </span>
-  );
-}
 
 export default async function Page() {
   const { data: requests, source } = await getCitizenRequests();
 
-  const total = requests.length;
-  const underReview = requests.filter((r) => r.status === "under_review" || r.status === "in_progress").length;
+  const open = requests.filter((r) => r.status === "submitted" || r.status === "under_review" || r.status === "in_progress").length;
   const resolved = requests.filter((r) => r.status === "resolved").length;
   const rejected = requests.filter((r) => r.status === "rejected").length;
 
-  const stats = [
-    { label: "Total Requests", value: total.toLocaleString("en-IN") },
-    { label: "Under Review", value: underReview.toLocaleString("en-IN") },
-    { label: "Resolved", value: resolved.toLocaleString("en-IN") },
-    { label: "Rejected", value: rejected.toLocaleString("en-IN") },
-  ];
-
   return (
-    <PageShell
-      title="Citizen Service Requests"
-      description="Grievances and service requests with SLA and routing."
-      breadcrumb={
-        <>
-          <Link href="/citizen" className="hover:text-slate-900">Citizen</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Requests</span>
-        </>
-      }
-    >
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs text-slate-500">{s.label}</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{s.value}</p>
+    <>
+      <PageHeader
+        title="Citizen Service Requests"
+        subtitle="Grievances and service requests with SLA &amp; routing."
+        actions={
+          <>
+            <button className="btn ghost">Categories</button>
+            <button className="btn primary">+ Log Request</button>
+          </>
+        }
+      />
+      {source === "error" && <DataSourceBadge source={source} />}
+      <StatGrid>
+        <StatCard icon="📨" iconBg="#e0f5fa" label="Open" value={open.toLocaleString("en-IN")} />
+        <StatCard icon="🔴" iconBg="#fef3f2" label="Rejected" value={rejected.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Resolved (MTD)" value={resolved.toLocaleString("en-IN")} />
+        <StatCard icon="😊" iconBg="#fffaeb" label="Total" value={requests.length.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="card">
+        <div className="card-h">
+          <h3>Grievances &amp; service requests</h3>
+          <div className="seg">
+            <span className="on">All</span>
+            <span>Grievance</span>
+            <span>Service</span>
+            <span>Breached</span>
           </div>
-        ))}
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm" aria-label="Citizen service requests">
-          <thead className="bg-slate-100 text-slate-700">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left">Request No</th>
-              <th scope="col" className="px-4 py-3 text-left">Service Type</th>
-              <th scope="col" className="px-4 py-3 text-left">Citizen Name</th>
-              <th scope="col" className="px-4 py-3 text-left">Phone</th>
-              <th scope="col" className="px-4 py-3 text-left">Submitted</th>
-              <th scope="col" className="px-4 py-3 text-left">Expected Resolution</th>
-              <th scope="col" className="px-4 py-3 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.length === 0 ? (
+        </div>
+        {requests.length === 0 ? (
+          <EmptyState icon="📨" title="No service requests" message="Citizen requests will appear here once submitted." />
+        ) : (
+          <table className="tbl">
+            <thead>
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
-                  <p className="text-slate-500 font-medium">No service requests</p>
-                  <p className="mt-1 text-sm text-slate-400">Citizen requests will appear here once submitted.</p>
-                </td>
+                <th>Request No</th>
+                <th>Citizen Name</th>
+                <th>Service Type</th>
+                <th>Submitted</th>
+                <th>Phone</th>
+                <th>Status</th>
               </tr>
-            ) : (
-              requests.map((r) => (
-                <tr key={r.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-slate-700">{r.requestNo}</td>
-                  <td className="px-4 py-3 text-slate-800">{r.serviceType}</td>
-                  <td className="px-4 py-3 text-slate-800">{r.citizenName}</td>
-                  <td className="px-4 py-3 text-slate-500">{r.citizenPhone ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-500">{r.submittedAt.slice(0, 10)}</td>
-                  <td className="px-4 py-3 text-slate-500">{r.expectedResolutionDate ?? "—"}</td>
-                  <td className="px-4 py-3">{pill(r.status, statusColors[r.status])}</td>
+            </thead>
+            <tbody>
+              {requests.map((r) => (
+                <tr key={r.id}>
+                  <td><span style={{ fontFamily: "monospace" }}>{r.requestNo}</span></td>
+                  <td>{r.citizenName}</td>
+                  <td>{r.serviceType}</td>
+                  <td>{r.submittedAt.slice(0, 10)}</td>
+                  <td>{r.citizenPhone ?? "—"}</td>
+                  <td><StatusPill status={r.status} label={r.status.replace(/_/g, " ")} /></td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
-    </PageShell>
+    </>
   );
 }

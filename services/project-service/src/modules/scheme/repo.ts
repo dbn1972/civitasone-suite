@@ -1,5 +1,6 @@
-import { eq, and } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { projectProjects } from "../project/schema.js";
 import {
   projectSchemes, projectSchemeComponents, projectFundReleases,
   type SchemeRow, type SchemeInsert, type ComponentRow, type ComponentInsert,
@@ -67,4 +68,12 @@ export async function listFundReleasesByTenant(tenantId: string, limit: number):
 
 export async function listSchemesByTenant(tenantId: string, limit: number): Promise<SchemeRow[]> {
   return db.select().from(projectSchemes).where(eq(projectSchemes.tenantId, tenantId)).limit(limit);
+}
+
+export async function countProjectsByScheme(schemeId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(projectProjects)
+    .where(eq(projectProjects.schemeId, schemeId));
+  return row?.count ?? 0;
 }

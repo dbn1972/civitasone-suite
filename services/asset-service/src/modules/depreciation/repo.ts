@@ -1,4 +1,4 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { assetDepSchedules, assetDepEntries, type DepScheduleInsert, type DepEntryInsert, type DepScheduleRow, type DepEntryRow } from "./schema.js";
 
@@ -16,9 +16,10 @@ export async function findEntriesByAsset(assetId: string, tenantId: string): Pro
     .where(and(eq(assetDepEntries.assetId, assetId), eq(assetDepEntries.tenantId, tenantId)));
 }
 
-export async function findDueEntries(period: string): Promise<DepEntryRow[]> {
-  return db.select().from(assetDepEntries)
-    .where(and(eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt)));
+export async function findDueEntries(period: string, depBook?: string): Promise<DepEntryRow[]> {
+  const conditions: SQL[] = [eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt)];
+  if (depBook) conditions.push(eq(assetDepEntries.depBook, depBook));
+  return db.select().from(assetDepEntries).where(and(...conditions));
 }
 
 export async function insertSchedule(tx: Writer, row: DepScheduleInsert): Promise<void> {

@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS location.locations (
 );
 CREATE INDEX IF NOT EXISTS idx_locations_tenant ON location.locations(tenant_id);
 
+GRANT USAGE ON SCHEMA location TO location_svc;
+GRANT ALL ON ALL TABLES IN SCHEMA location TO location_svc;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA location TO location_svc;
+ALTER DEFAULT PRIVILEGES IN SCHEMA location GRANT ALL ON TABLES TO location_svc;
+
 CREATE TABLE IF NOT EXISTS _outbox.messages (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   topic          varchar(128) NOT NULL,

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'api_client.dart';
 import 'auth/pkce_auth.dart';
 import 'sync/sync_database.dart';
 import 'sync/sync_engine.dart';
@@ -17,6 +18,14 @@ final keycloakIssuerProvider = Provider<String>(
 
 final authProvider = Provider<PkceAuthService>((ref) {
   return PkceAuthService(issuer: ref.read(keycloakIssuerProvider));
+});
+
+/// Dio-based API client with auth token injection, 401 handling, and offline queue.
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient(
+    baseUrl: ref.read(apiBaseProvider),
+    auth: ref.read(authProvider),
+  );
 });
 
 final dbProvider = FutureProvider<SyncDatabase>((ref) => SyncDatabase.open());

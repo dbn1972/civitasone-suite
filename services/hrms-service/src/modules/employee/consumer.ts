@@ -82,6 +82,7 @@ export function registerEmployeeConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const emp = await repo.findById(p.employeeId, p.tenantId);
       await lifecycleRepo.insertSeparation(tx, {
         id: msg.messageId, tenantId: p.tenantId, employeeId: p.employeeId,
         separationType: p.separationType, effectiveDate: p.effectiveDate,
@@ -91,6 +92,18 @@ export function registerEmployeeConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateEmployee(tx, p.employeeId, { status: "separated", updatedBy: msg.actorId });
+      await enqueue(tx, {
+        topic: EVENTS.employeeSeparated, eventType: EVENTS.employeeSeparated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          employeeId: p.employeeId,
+          separationType: p.separationType,
+          effectiveDate: p.effectiveDate,
+          encashmentDays: p.encashmentDays,
+          basicMinor: emp?.basicMinor?.toString() ?? "0",
+          dateOfJoining: emp?.dateOfJoining ?? p.effectiveDate,
+        },
+      });
       await audit(tx, msg, "separate", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));

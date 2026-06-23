@@ -1,5 +1,5 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import {
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam } from "./validators.js";
+import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -34,9 +34,18 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/accounts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    const accounts = await queries.listAccounts(ctx.tenantId, limit);
-    return reply.send({ data: accounts, pagination: { hasMore: accounts.length === limit, pageSize: limit } });
+    const q = listQuerySchema.parse(req.query);
+    const accounts = await queries.listAccounts(ctx.tenantId, q.limit);
+    return reply.send({ data: accounts, pagination: { hasMore: accounts.length === q.limit, pageSize: q.limit } });
+  });
+
+  app.patch("/v1/finance/accounts/:id/hoa", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateHeadHoABody.parse(req.body);
+    await commands.updateHeadHoA(ctx, id, body);
+    return reply.send({ id, hoaCode: body.hoaCode, status: "updated" });
   });
 
   app.get("/v1/finance/budgets", async (req, reply) => {
@@ -44,8 +53,8 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = budgetQueryParams.parse(req.query);
     if (!q.headId || !q.fy) {
-      const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-      return sendValidated(reply, BudgetSummaryListSchema, await queries.listBudgetSummaries(ctx.tenantId, limit));
+      const lq = listQuerySchema.parse(req.query);
+      return sendValidated(reply, BudgetSummaryListSchema, await queries.listBudgetSummaries(ctx.tenantId, lq.limit));
     }
     const budget = await queries.getBudget(ctx.tenantId, q.headId, q.fy);
     if (!budget) throw new HttpError(404, "NOT_FOUND", "budget not found");
@@ -55,8 +64,8 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/sanctions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    sendValidated(reply, SanctionSummaryListSchema, await queries.listSanctionSummaries(ctx.tenantId, limit));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, SanctionSummaryListSchema, await queries.listSanctionSummaries(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/finance/sanctions/:id/available", async (req, reply) => {

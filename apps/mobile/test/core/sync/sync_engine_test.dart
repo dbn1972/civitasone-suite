@@ -29,6 +29,9 @@ void main() {
     when(() => mockDb.getCursor(any())).thenAnswer((_) async => '0');
     when(() => mockDb.setCursor(any(), any())).thenAnswer((_) async {});
     when(() => mockDb.listOutbox(any())).thenAnswer((_) async => []);
+    when(() => mockDb.getEntityEtag(any())).thenAnswer((_) async => null);
+    when(() => mockDb.hasPendingOutboxForEntity(any())).thenAnswer((_) async => false);
+    when(() => mockDb.deleteEntity(any())).thenAnswer((_) async {});
 
     engine = SyncEngine(
       db: mockDb,
@@ -130,7 +133,7 @@ void main() {
             data: {
               'cursor': 'c2',
               'results': [
-                {'clientMutationId': 'outbox-2', 'success': true},
+                {'clientMutationId': 'outbox-2', 'status': 'applied'},
               ],
             },
             statusCode: 200,
@@ -178,8 +181,8 @@ void main() {
               'results': [
                 {
                   'clientMutationId': 'outbox-3',
-                  'success': false,
-                  'error': 'validation_failed',
+                  'status': 'failed',
+                  'reason': 'validation_failed',
                 },
               ],
             },
@@ -200,6 +203,67 @@ void main() {
 
       verify(() => mockDb.markOutboxFailed('outbox-3', 'validation_failed'))
           .called(1);
+    });
+
+    test('02-T6: an unacknowledged mutation stays queued (not marked done)', () async {
+      final outboxEntry = {
+        'id': 'outbox-9',
+        'mailbox': 'approvals',
+        'operation': 'approve',
+        'entity_id': 'e9',
+        'payload_json': '{"entityId":"e9"}',
+        'created_at': '2026-06-20T10:00:00Z',
+        'status': 'queued',
+        'retry_count': 0,
+      };
+      when(() => mockDb.listOutbox('approvals')).thenAnswer((_) async => [outboxEntry]);
+      when(() => mockDb.markOutboxDone(any())).thenAnswer((_) async {});
+      when(() => mockDb.markOutboxFailed(any(), any())).thenAnswer((_) async {});
+
+      when(() => mockDio.post('/api/v1/sync/push', data: any(named: 'data'), options: any(named: 'options')))
+          .thenAnswer((_) async => Response(
+                requestOptions: RequestOptions(path: '/api/v1/sync/push'),
+                data: {'cursor': 'c2', 'results': []}, // empty — no per-mutation ack
+                statusCode: 200,
+              ));
+      when(() => mockDio.post('/api/v1/sync/pull', data: any(named: 'data'), options: any(named: 'options')))
+          .thenAnswer((_) async => Response(
+                requestOptions: RequestOptions(path: '/api/v1/sync/pull'),
+                data: {'cursor': 'c3', 'entities': []},
+                statusCode: 200,
+              ));
+
+      await engine.syncMailbox('approvals');
+
+      // Empty results must NOT silently mark the mutation done.
+      verifyNever(() => mockDb.markOutboxDone(any()));
+    });
+  });
+
+  group('syncMailbox — pull', () {
+    test('02-T5: a server tombstone deletes the local entity', () async {
+      when(() => mockDb.listOutbox('approvals')).thenAnswer((_) async => []);
+      when(() => mockDio.post('/api/v1/sync/push', data: any(named: 'data'), options: any(named: 'options')))
+          .thenAnswer((_) async => Response(
+                requestOptions: RequestOptions(path: '/api/v1/sync/push'),
+                data: {'cursor': '0', 'results': []},
+                statusCode: 200,
+              ));
+      when(() => mockDio.post('/api/v1/sync/pull', data: any(named: 'data'), options: any(named: 'options')))
+          .thenAnswer((_) async => Response(
+                requestOptions: RequestOptions(path: '/api/v1/sync/pull'),
+                data: {
+                  'cursor': 'c3',
+                  'entities': [
+                    {'id': 'gone-1', 'operation': 'delete'},
+                  ],
+                },
+                statusCode: 200,
+              ));
+
+      await engine.syncMailbox('approvals');
+
+      verify(() => mockDb.deleteEntity('gone-1')).called(1);
     });
   });
 }

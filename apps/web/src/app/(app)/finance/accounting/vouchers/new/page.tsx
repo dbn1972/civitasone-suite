@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type LineItem = {
@@ -13,11 +14,12 @@ type LineItem = {
 const EMPTY_LINE: LineItem = { accountCode: "", accountName: "", debit: "", credit: "" };
 
 export default function NewVoucherPage() {
+  const router = useRouter();
   const [lines, setLines] = useState<LineItem[]>([EMPTY_LINE, EMPTY_LINE]);
   const [narration, setNarration] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
 
   const updateLine = (idx: number, field: keyof LineItem, value: string) => {
@@ -38,7 +40,7 @@ export default function NewVoucherPage() {
     const totalDebit = filledLines.reduce((s, l) => s + toPaise(l.debit), 0);
     const totalCredit = filledLines.reduce((s, l) => s + toPaise(l.credit), 0);
     if (totalDebit !== totalCredit) {
-      errs.push(`Debit (₹${(totalDebit / 100).toFixed(2)}) must equal Credit (₹${(totalCredit / 100).toFixed(2)})`);
+      errs.push(`Debit (\u20b9${(totalDebit / 100).toFixed(2)}) must equal Credit (\u20b9${(totalCredit / 100).toFixed(2)})`);
     }
     return errs;
   };
@@ -48,17 +50,17 @@ export default function NewVoucherPage() {
     const errs = validate();
     if (errs.length > 0) { setErrors(errs); return; }
     setErrors([]);
+    setInlineError(null);
     setSubmitting(true);
     try {
       const payload = {
-        date,
         narration,
-        lineItems: lines
+        lines: lines
           .filter((l) => l.accountCode.trim())
           .map((l) => ({
             accountCode: l.accountCode,
-            debitPaise: toPaise(l.debit),
-            creditPaise: toPaise(l.credit),
+            debitMinor: toPaise(l.debit),
+            creditMinor: toPaise(l.credit),
           })),
       };
       const res = await fetch("/api/proxy/v1/finance/journals", {
@@ -67,18 +69,15 @@ export default function NewVoucherPage() {
         body: JSON.stringify(payload),
       });
       if (res.status === 202 || res.ok) {
-        setToast({ type: "success", message: "Voucher submitted successfully" });
-        setLines([{ ...EMPTY_LINE }, { ...EMPTY_LINE }]);
-        setNarration("");
+        router.push("/finance/accounting/general-ledger");
       } else {
         const body = await res.json().catch(() => ({})) as { message?: string };
-        setToast({ type: "error", message: body.message ?? `Error ${res.status}` });
+        setInlineError(body.message ?? `Error ${res.status}`);
       }
     } catch {
-      setToast({ type: "error", message: "Network error. Please try again." });
+      setInlineError("Network error. Please try again.");
     } finally {
       setSubmitting(false);
-      setTimeout(() => setToast(null), 5000);
     }
   };
 
@@ -88,166 +87,153 @@ export default function NewVoucherPage() {
   const isBalanced = totalDebit === totalCredit && totalDebit > 0;
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-4xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/finance" className="hover:text-slate-900">Finance</Link>
-          <span className="mx-2">/</span>
-          <Link href="/finance/accounting/general-ledger" className="hover:text-slate-900">General Ledger</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">New Voucher</span>
-        </nav>
+    <>
+      <Link href="/finance/accounting/general-ledger" className="back">\u2190 Back</Link>
+      <div className="ph">
+        <div>
+          <h1>New Journal Voucher</h1>
+          <div className="sub">Create a double-entry journal voucher. Debit must equal Credit.</div>
+        </div>
+      </div>
 
-        <header>
-          <h1 className="text-3xl font-semibold text-slate-900">New Journal Voucher</h1>
-          <p className="mt-1 text-sm text-slate-600">Create a double-entry journal voucher. Debit must equal Credit.</p>
-        </header>
+      {inlineError && (
+        <div className="card pad" style={{ borderColor: "#fecaca", background: "#fef2f2" }}>
+          <span style={{ color: "#dc2626", fontWeight: 500, fontSize: "0.875rem" }}>{inlineError}</span>
+        </div>
+      )}
 
-        {toast && (
-          <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${toast.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>
-            {toast.message}
-          </div>
-        )}
+      {errors.length > 0 && (
+        <div className="card pad" style={{ borderColor: "#fecaca", background: "#fef2f2" }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {errors.map((err, i) => (
+              <li key={i} style={{ fontSize: "0.875rem", color: "#dc2626" }}>\u2022 {err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-        {errors.length > 0 && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <ul className="space-y-1 text-sm text-red-700">
-              {errors.map((err, i) => <li key={i}>• {err}</li>)}
-            </ul>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Date</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Narration</label>
-                <input
-                  type="text"
-                  value={narration}
-                  onChange={(e) => setNarration(e.target.value)}
-                  placeholder="Brief description of the transaction"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
+      <form onSubmit={handleSubmit}>
+        <div className="card">
+          <div className="card-h"><h3>Voucher Header</h3></div>
+          <div className="fields pad">
+            <div className="field">
+              <label className="label">Date</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="input"
+                required
+              />
             </div>
-          </section>
-
-          <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-800">Line Items</span>
-              <button type="button" onClick={addLine} className="text-sm text-indigo-600 hover:underline">
-                + Add Row
-              </button>
+            <div className="field">
+              <label className="label">Narration</label>
+              <input
+                type="text"
+                value={narration}
+                onChange={(e) => setNarration(e.target.value)}
+                placeholder="Brief description of the transaction"
+                className="input"
+                required
+              />
             </div>
-            <table className="min-w-full text-sm" aria-label="Journal voucher line items">
-              <thead className="bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-3 py-2 text-left">Account Code</th>
-                  <th scope="col" className="px-3 py-2 text-left">Account Name</th>
-                  <th scope="col" className="px-3 py-2 text-right">Debit (₹)</th>
-                  <th scope="col" className="px-3 py-2 text-right">Credit (₹)</th>
-                  <th scope="col" className="px-3 py-2 text-center w-12">–</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((line, idx) => (
-                  <tr key={idx} className="border-t border-slate-100">
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={line.accountCode}
-                        onChange={(e) => updateLine(idx, "accountCode", e.target.value)}
-                        placeholder="e.g. 4001"
-                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={line.accountName}
-                        onChange={(e) => updateLine(idx, "accountName", e.target.value)}
-                        placeholder="Account name"
-                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        value={line.debit}
-                        onChange={(e) => updateLine(idx, "debit", e.target.value)}
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        value={line.credit}
-                        onChange={(e) => updateLine(idx, "credit", e.target.value)}
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {lines.length > 2 ? (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(idx)}
-                          className="text-xs text-red-500 hover:text-red-700"
-                          aria-label="Remove row"
-                        >
-                          ✕
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t border-slate-200 bg-slate-50 text-sm font-medium">
-                <tr>
-                  <td colSpan={2} className="px-3 py-2 text-right text-slate-600">Totals:</td>
-                  <td className={`px-3 py-2 text-right ${isBalanced ? "text-emerald-700" : "text-red-700"}`}>
-                    ₹{(totalDebit / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className={`px-3 py-2 text-right ${isBalanced ? "text-emerald-700" : "text-red-700"}`}>
-                    ₹{(totalCredit / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </section>
-
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-md bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {submitting ? "Submitting…" : "Submit Voucher"}
-            </button>
-            <Link href="/finance/accounting/general-ledger" className="rounded-md border border-slate-300 px-6 py-2 text-sm text-slate-700 hover:bg-slate-50">
-              Cancel
-            </Link>
           </div>
-        </form>
-      </section>
-    </main>
+        </div>
+
+        <div className="card" style={{ marginTop: "16px" }}>
+          <div className="card-h">
+            <h3>Line Items</h3>
+            <div className="lnk">
+              <button type="button" onClick={addLine} className="btn ghost" style={{ fontSize: "0.8rem", padding: "4px 10px" }}>+ Add Row</button>
+            </div>
+          </div>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Account Code</th>
+                <th>Account Name</th>
+                <th className="num">Debit (\u20b9)</th>
+                <th className="num">Credit (\u20b9)</th>
+                <th style={{ width: "40px" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <input
+                      type="text"
+                      value={line.accountCode}
+                      onChange={(e) => updateLine(idx, "accountCode", e.target.value)}
+                      placeholder="e.g. 4001"
+                      className="input"
+                      style={{ fontSize: "0.8rem", padding: "4px 8px" }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={line.accountName}
+                      onChange={(e) => updateLine(idx, "accountName", e.target.value)}
+                      placeholder="Account name"
+                      className="input"
+                      style={{ fontSize: "0.8rem", padding: "4px 8px" }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={line.debit}
+                      onChange={(e) => updateLine(idx, "debit", e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="input num"
+                      style={{ fontSize: "0.8rem", padding: "4px 8px", textAlign: "right" }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={line.credit}
+                      onChange={(e) => updateLine(idx, "credit", e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="input num"
+                      style={{ fontSize: "0.8rem", padding: "4px 8px", textAlign: "right" }}
+                    />
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    {lines.length > 2 && (
+                      <button type="button" onClick={() => removeLine(idx)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "0.85rem" }}>\u2715</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2} style={{ textAlign: "right", fontWeight: 600, padding: "10px 12px" }}>Totals</td>
+                <td className="num" style={{ fontWeight: 600, color: isBalanced ? "#16a34a" : "#dc2626" }}>
+                  \u20b9{(totalDebit / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="num" style={{ fontWeight: 600, color: isBalanced ? "#16a34a" : "#dc2626" }}>
+                  \u20b9{(totalCredit / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+          <button type="submit" disabled={submitting} className="btn primary" onClick={handleSubmit}>
+            {submitting ? "Submitting\u2026" : "Submit Voucher"}
+          </button>
+          <Link href="/finance/accounting/general-ledger" className="btn ghost">Cancel</Link>
+        </div>
+      </form>
+    </>
   );
 }

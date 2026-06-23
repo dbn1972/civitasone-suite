@@ -7,6 +7,10 @@ export const instances = domainSchema.table("instances", {
   tenantId: uuid("tenant_id").notNull(),
   name: varchar("name", { length: 200 }).notNull(),
   status: varchar("status", { length: 24 }).notNull().default("active"),
+  definitionId: uuid("definition_id"),
+  refType: varchar("ref_type", { length: 64 }),
+  refId: uuid("ref_id"),
+  currentNode: varchar("current_node", { length: 64 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -22,6 +26,10 @@ export type InstanceView = {
   tenantId: string;
   name: string;
   status: string;
+  definitionId?: string | null;
+  refType?: string | null;
+  refId?: string | null;
+  currentNode?: string | null;
   version: number;
 };
 

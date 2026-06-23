@@ -60,6 +60,7 @@ import type {
   RFQSummary,
   RFQDetail,
   GRNSummary,
+  GRNDetail,
   TenderSummary,
   TenderDetail,
   PurchaseOrderListItem,
@@ -255,6 +256,35 @@ import {
   NotificationDeliveryListSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult } from "./apiClient";
+import {
+  mapAdminUserSummaries,
+  mapAssetSummaries,
+  mapAssetDetail,
+  mapDepreciationEntries,
+  mapAssetMaintenanceHistory,
+  mapCrmDealSummaries,
+  mapDealSummaries,
+  mapEstabFileSummaries,
+  mapEstabFileDetail,
+  mapHelpdeskTicketList,
+  mapHelpdeskTicketDetail,
+  mapLegalCaseSummaries,
+  mapMaintenanceSummaries,
+  mapProcurementIndentSummaries,
+  mapProcurementIndentDetail,
+  mapProcurementPOListItems,
+  mapProcurementPODetail,
+  mapProcurementGRNSummaries,
+  mapProcurementGRNDetail,
+  mapProcurementVendorDetails,
+  mapProcurementVendorDetail,
+  mapPurchaseOrderSummaries,
+  mapStockItemSummaries,
+  mapStockItemDetail,
+  mapStockLedgerEntries,
+  mapTenantUsers as mapTenantUsersFromApi,
+  mapVendorSummaries,
+} from "./apiMappers";
 
 export type { LoaderResult, LoaderSource } from "./apiClient";
 
@@ -444,40 +474,6 @@ function mapPayrollRuns(payload: unknown): PayrollRunSummary[] | null {
   return mapped.length > 0 ? mapped : null;
 }
 
-function mapVendors(payload: unknown): VendorSummary[] | null {
-  const rows = getArrayPayload(payload);
-  if (!rows) return null;
-
-  const mapped: VendorSummary[] = [];
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const name = toText(row.name);
-    const category = toText(row.category) ?? "General";
-    const ratingDisplay = toText(row.ratingDisplay) ?? toText(row.rating) ?? "—";
-    if (!name) continue;
-    mapped.push({ name, category, ratingDisplay });
-  }
-  return mapped.length > 0 ? mapped : null;
-}
-
-function mapPurchaseOrders(payload: unknown): PurchaseOrderSummary[] | null {
-  const rows = getArrayPayload(payload);
-  if (!rows) return null;
-
-  const mapped: PurchaseOrderSummary[] = [];
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const id = toText(row.id) ?? toText(row.indentNo) ?? toText(row.poNo);
-    const vendor = toText(row.vendor) ?? toText(row.vendorName);
-    const amountDisplay = toText(row.amountDisplay) ?? toText(row.amount);
-    const status = row.status;
-    if (!id || !vendor || !amountDisplay) continue;
-    if (status !== "Pending" && status !== "Approved" && status !== "Review" && status !== "Rejected") continue;
-    mapped.push({ id, vendor, amountDisplay, status });
-  }
-  return mapped.length > 0 ? mapped : null;
-}
-
 function mapApprovals(payload: unknown): ApprovalSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
@@ -512,32 +508,6 @@ function mapAccounts(payload: unknown): AccountSummary[] | null {
     if (type !== "asset" && type !== "liability" && type !== "equity" && type !== "income" && type !== "expense") continue;
     if (status !== "active" && status !== "inactive") continue;
     mapped.push({ code, name, type, currency, balanceDisplay, status });
-  }
-  return mapped.length > 0 ? mapped : null;
-}
-
-function mapTenantUsers(payload: unknown): TenantUserSummary[] | null {
-  const rows = getArrayPayload(payload);
-  if (!rows) return null;
-
-  const mapped: TenantUserSummary[] = [];
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const name = toText(row.name) ?? toText(row.email);
-    const role = toText(row.role) ?? toText(row.empCode) ?? "Member";
-    const rawStatus = toText(row.status);
-    const status =
-      rawStatus === "Active" || rawStatus === "Suspended" || rawStatus === "Invited"
-        ? rawStatus
-        : rawStatus === "active"
-          ? "Active"
-          : rawStatus === "suspended"
-            ? "Suspended"
-            : rawStatus === "locked" || rawStatus === "deactivated"
-              ? "Suspended"
-              : null;
-    if (!name || !status) continue;
-    mapped.push({ name, role, status });
   }
   return mapped.length > 0 ? mapped : null;
 }
@@ -664,8 +634,7 @@ export async function getTenantUsers(): Promise<LoaderResult<TenantUserSummary[]
   return fetchJson("/api/identity/users", [] as TenantUserSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "tenant.users",
-    responseSchema: userListResponseSchema,
-    mapResponse: mapTenantUsers,
+    mapResponse: mapTenantUsersFromApi,
   });
 }
 
@@ -862,8 +831,7 @@ export async function getVendors(): Promise<LoaderResult<VendorSummary[]>> {
   return fetchJson("/api/v1/procurement/vendors", [] as VendorSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "procurement.vendors",
-    responseSchema: vendorListResponseSchema,
-    mapResponse: mapVendors,
+    mapResponse: mapVendorSummaries,
   });
 }
 
@@ -871,8 +839,7 @@ export async function getPurchaseOrders(): Promise<LoaderResult<PurchaseOrderSum
   return fetchJson("/api/v1/procurement/pos", [] as PurchaseOrderSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "procurement.orders",
-    responseSchema: posListResponseSchema,
-    mapResponse: mapPurchaseOrders,
+    mapResponse: mapPurchaseOrderSummaries,
   });
 }
 
@@ -912,8 +879,11 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
     const email = toText(row.email) ?? "";
     const phone = toText(row.phone) ?? "";
     const account = toText(row.company) ?? toText(row.account) ?? "—";
+    const leadStatus = toText(row.leadStatus) ?? undefined;
+    const lastActivity = toText(row.lastActivityAt)?.slice(0, 10) ?? undefined;
+    const tags = Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [];
     if (!name) continue;
-    mapped.push({ id, name, account, email, phone });
+    mapped.push({ id, name, account, email, phone, leadStatus, tags, lastActivity });
   }
   return mapped.length > 0 ? mapped : null;
 }
@@ -960,8 +930,12 @@ function mapCrmActivities(payload: unknown): ActivitySummary[] | null {
   return mapped.length > 0 ? mapped : null;
 }
 
-export async function getCrmContacts(): Promise<LoaderResult<CRMContactSummary[]>> {
-  return fetchJson("/api/v1/crm/contacts", [] as CRMContactSummary[], {
+export async function getCrmContacts(opts?: { search?: string; segment?: string }): Promise<LoaderResult<CRMContactSummary[]>> {
+  const qs = new URLSearchParams();
+  if (opts?.search) qs.set("search", opts.search);
+  if (opts?.segment && opts.segment !== "all") qs.set("segment", opts.segment);
+  const path = qs.toString() ? `/api/v1/crm/contacts?${qs}` : "/api/v1/crm/contacts";
+  return fetchJson(path, [] as CRMContactSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "crm.contacts",
     responseSchema: crmContactsListSchema,
@@ -973,8 +947,7 @@ export async function getCrmDeals(): Promise<LoaderResult<CRMDealSummary[]>> {
   return fetchJson("/api/v1/crm/deals", [] as CRMDealSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "crm.deals",
-    responseSchema: crmDealsListSchema,
-    mapResponse: mapCrmDeals,
+    mapResponse: mapCrmDealSummaries,
   });
 }
 
@@ -1306,39 +1279,75 @@ export async function getProcurementDashboard(): Promise<LoaderResult<Procuremen
   });
 }
 
-export async function getProcurementIndents(): Promise<LoaderResult<IndentSummary[]>> {
-  return fetchJson<unknown, IndentSummary[]>("/api/v1/procurement/indents", [], {
+export type ProcurementListQuery = {
+  limit?: number;
+  offset?: number;
+  q?: string;
+};
+
+function buildListPath(base: string, query?: ProcurementListQuery): string {
+  if (!query) return base;
+  const params = new URLSearchParams();
+  if (query.limit != null) params.set("limit", String(query.limit));
+  if (query.offset != null) params.set("offset", String(query.offset));
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+function filterByQuery<T>(rows: T[], q: string | undefined, match: (row: T, needle: string) => boolean): T[] {
+  const needle = q?.trim().toLowerCase();
+  if (!needle) return rows;
+  return rows.filter((row) => match(row, needle));
+}
+
+export async function getProcurementIndents(query?: ProcurementListQuery): Promise<LoaderResult<IndentSummary[]>> {
+  const path = buildListPath("/api/v1/procurement/indents", query);
+  const result = await fetchJson<unknown, IndentSummary[]>(path, [], {
     revalidateSeconds: 60,
     telemetryKey: "procurement.indents",
-    responseSchema: IndentSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as IndentSummary[] | null,
+    mapResponse: mapProcurementIndentSummaries,
   });
+  if (!result.data || !query?.q) return result;
+  return {
+    ...result,
+    data: filterByQuery(result.data, query.q, (row, needle) =>
+      row.indentNo.toLowerCase().includes(needle)
+      || row.department.toLowerCase().includes(needle)
+      || row.requestedBy.toLowerCase().includes(needle)),
+  };
 }
 
 export async function getProcurementIndentById(id: string): Promise<LoaderResult<IndentDetail | null>> {
   return fetchJson<unknown, IndentDetail | null>(`/api/v1/procurement/indents/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "procurement.indent.detail",
-    responseSchema: IndentDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as IndentDetail) : null),
+    mapResponse: mapProcurementIndentDetail,
   });
 }
 
-export async function getProcurementVendors(): Promise<LoaderResult<VendorDetail[]>> {
-  return fetchJson<unknown, VendorDetail[]>("/api/v1/procurement/vendors", [], {
+export async function getProcurementVendors(query?: ProcurementListQuery): Promise<LoaderResult<VendorDetail[]>> {
+  const path = buildListPath("/api/v1/procurement/vendors", query);
+  const result = await fetchJson<unknown, VendorDetail[]>(path, [], {
     revalidateSeconds: 300,
     telemetryKey: "procurement.vendors.detail",
-    responseSchema: VendorDetailListSchema,
-    mapResponse: (p) => getArrayPayload(p) as VendorDetail[] | null,
+    mapResponse: mapProcurementVendorDetails,
   });
+  if (!result.data || !query?.q) return result;
+  return {
+    ...result,
+    data: filterByQuery(result.data, query.q, (row, needle) =>
+      row.name.toLowerCase().includes(needle)
+      || (row.gstin?.toLowerCase().includes(needle) ?? false)
+      || row.category.toLowerCase().includes(needle)),
+  };
 }
 
 export async function getProcurementVendorById(id: string): Promise<LoaderResult<VendorDetail | null>> {
   return fetchJson<unknown, VendorDetail | null>(`/api/v1/procurement/vendors/${id}`, null, {
     revalidateSeconds: 120,
     telemetryKey: "procurement.vendor.detail",
-    responseSchema: VendorDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as VendorDetail) : null),
+    mapResponse: mapProcurementVendorDetail,
   });
 }
 
@@ -1360,12 +1369,29 @@ export async function getRFQById(id: string): Promise<LoaderResult<RFQDetail | n
   });
 }
 
-export async function getProcurementGRNs(): Promise<LoaderResult<GRNSummary[]>> {
-  return fetchJson<unknown, GRNSummary[]>("/api/v1/procurement/grns", [], {
+export async function getProcurementGRNs(query?: ProcurementListQuery): Promise<LoaderResult<GRNSummary[]>> {
+  const path = buildListPath("/api/v1/procurement/grns", query);
+  const result = await fetchJson<unknown, GRNSummary[]>(path, [], {
     revalidateSeconds: 60,
     telemetryKey: "procurement.grns",
     responseSchema: GRNSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as GRNSummary[] | null,
+    mapResponse: mapProcurementGRNSummaries,
+  });
+  if (!result.data || !query?.q) return result;
+  return {
+    ...result,
+    data: filterByQuery(result.data, query.q, (row, needle) =>
+      row.grnNo.toLowerCase().includes(needle)
+      || row.poRef.toLowerCase().includes(needle)
+      || row.vendor.toLowerCase().includes(needle)),
+  };
+}
+
+export async function getProcurementGRNById(id: string): Promise<LoaderResult<GRNDetail | null>> {
+  return fetchJson<unknown, GRNDetail | null>(`/api/v1/procurement/grns/${id}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "procurement.grn.detail",
+    mapResponse: mapProcurementGRNDetail,
   });
 }
 
@@ -1387,21 +1413,27 @@ export async function getProcurementTenderById(id: string): Promise<LoaderResult
   });
 }
 
-export async function getProcurementPOs(): Promise<LoaderResult<PurchaseOrderListItem[]>> {
-  return fetchJson<unknown, PurchaseOrderListItem[]>("/api/v1/procurement/pos", [], {
+export async function getProcurementPOs(query?: ProcurementListQuery): Promise<LoaderResult<PurchaseOrderListItem[]>> {
+  const path = buildListPath("/api/v1/procurement/pos", query);
+  const result = await fetchJson<unknown, PurchaseOrderListItem[]>(path, [], {
     revalidateSeconds: 60,
     telemetryKey: "procurement.pos",
-    responseSchema: PurchaseOrderListItemListSchema,
-    mapResponse: (p) => getArrayPayload(p) as PurchaseOrderListItem[] | null,
+    mapResponse: mapProcurementPOListItems,
   });
+  if (!result.data || !query?.q) return result;
+  return {
+    ...result,
+    data: filterByQuery(result.data, query.q, (row, needle) =>
+      row.poNo.toLowerCase().includes(needle)
+      || row.vendor.toLowerCase().includes(needle)),
+  };
 }
 
 export async function getProcurementPOById(id: string): Promise<LoaderResult<PODetail | null>> {
   return fetchJson<unknown, PODetail | null>(`/api/v1/procurement/pos/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "procurement.po.detail",
-    responseSchema: PODetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as PODetail) : null),
+    mapResponse: mapProcurementPODetail,
   });
 }
 
@@ -1457,8 +1489,7 @@ export async function getDeals(): Promise<LoaderResult<DealSummary[]>> {
   return fetchJson<unknown, DealSummary[]>("/api/v1/crm/deals", [], {
     revalidateSeconds: 60,
     telemetryKey: "crm.deals.full",
-    responseSchema: DealSummaryListSchema,
-    mapResponse: mapDeals,
+    mapResponse: mapDealSummaries,
   });
 }
 
@@ -1472,7 +1503,7 @@ export async function getDealById(id: string): Promise<LoaderResult<DealSummary 
 }
 
 export async function getContactById(id: string): Promise<LoaderResult<ContactDetail | null>> {
-  return fetchJson<unknown, ContactDetail | null>(`/api/v1/crm/contacts/${id}`, null, {
+  return fetchJson<unknown, ContactDetail | null>(`/api/v1/crm/contacts/${id}/detail`, null, {
     revalidateSeconds: 60,
     telemetryKey: "crm.contact.detail",
     responseSchema: ContactDetailSchema,
@@ -1566,8 +1597,7 @@ export async function getHelpdeskTicketList(): Promise<LoaderResult<TicketDetail
   return fetchJson<unknown, TicketDetail[]>("/api/v1/citizen/tickets", [], {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.tickets.full",
-    responseSchema: TicketDetailListSchema,
-    mapResponse: mapTicketDetails,
+    mapResponse: mapHelpdeskTicketList,
   });
 }
 
@@ -1575,8 +1605,7 @@ export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<Ti
   return fetchJson<unknown, TicketDetail | null>(`/api/v1/citizen/tickets/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.ticket.detail",
-    responseSchema: TicketDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as TicketDetail) : null),
+    mapResponse: mapHelpdeskTicketDetail,
   });
 }
 
@@ -1770,6 +1799,9 @@ const ESTAB_DASHBOARD_EMPTY: EstabDashboard = {
   meetingsToday: 0,
   vehiclesInUse: 0,
   complianceItemsDue: 0,
+  slaBreached: 0,
+  dakPending: 0,
+  avgPendencyDays: 0,
 };
 
 function mapEstabDashboard(payload: unknown): EstabDashboard | null {
@@ -1779,6 +1811,9 @@ function mapEstabDashboard(payload: unknown): EstabDashboard | null {
     meetingsToday: typeof payload.meetingsToday === "number" ? payload.meetingsToday : 0,
     vehiclesInUse: typeof payload.vehiclesInUse === "number" ? payload.vehiclesInUse : 0,
     complianceItemsDue: typeof payload.complianceItemsDue === "number" ? payload.complianceItemsDue : 0,
+    slaBreached: typeof payload.slaBreached === "number" ? payload.slaBreached : 0,
+    dakPending: typeof payload.dakPending === "number" ? payload.dakPending : 0,
+    avgPendencyDays: typeof payload.avgPendencyDays === "number" ? payload.avgPendencyDays : 0,
   };
 }
 
@@ -1795,8 +1830,7 @@ export async function getEstabFiles(): Promise<LoaderResult<EstabFileSummary[]>>
   return fetchJson<unknown, EstabFileSummary[]>("/api/v1/estab/files", [], {
     revalidateSeconds: 60,
     telemetryKey: "estab.files",
-    responseSchema: EstabFileSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as EstabFileSummary[] | null,
+    mapResponse: mapEstabFileSummaries,
   });
 }
 
@@ -1805,7 +1839,7 @@ export async function getEstabFileById(id: string): Promise<LoaderResult<EstabFi
     revalidateSeconds: 30,
     telemetryKey: "estab.file.detail",
     responseSchema: EstabFileDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as EstabFileDetail) : null),
+    mapResponse: (p) => mapEstabFileDetail(p),
   });
 }
 
@@ -1858,18 +1892,38 @@ export async function getEstabCompliance(): Promise<LoaderResult<ComplianceSumma
 
 const ASSET_DASHBOARD_EMPTY: AssetDashboard = {
   totalAssets: 0,
+  fixedAssets: 0,
+  infraAssets: 0,
   underMaintenance: 0,
   dueForDisposal: 0,
+  taggedAssets: 0,
   netBlock: 0,
+  recentGrnAssets: [],
 };
 
 function mapAssetDashboard(payload: unknown): AssetDashboard | null {
   if (!isRecord(payload)) return null;
+  const recentRaw = Array.isArray(payload.recentGrnAssets) ? payload.recentGrnAssets : [];
   return {
     totalAssets: typeof payload.totalAssets === "number" ? payload.totalAssets : 0,
+    fixedAssets: typeof payload.fixedAssets === "number" ? payload.fixedAssets : 0,
+    infraAssets: typeof payload.infraAssets === "number" ? payload.infraAssets : 0,
     underMaintenance: typeof payload.underMaintenance === "number" ? payload.underMaintenance : 0,
     dueForDisposal: typeof payload.dueForDisposal === "number" ? payload.dueForDisposal : 0,
+    taggedAssets: typeof payload.taggedAssets === "number" ? payload.taggedAssets : 0,
     netBlock: typeof payload.netBlock === "number" ? payload.netBlock : 0,
+    recentGrnAssets: recentRaw.flatMap((r) => {
+      if (!isRecord(r)) return [];
+      const id = toText(r.id);
+      if (!id) return [];
+      return [{
+        id,
+        code: toText(r.code) ?? id,
+        name: toText(r.name) ?? "Asset",
+        acquisitionDate: toText(r.acquisitionDate) ?? "",
+        acquisitionCost: typeof r.acquisitionCost === "number" ? r.acquisitionCost : 0,
+      }];
+    }),
   };
 }
 
@@ -1886,26 +1940,46 @@ export async function getAssets(): Promise<LoaderResult<AssetSummary[]>> {
   return fetchJson<unknown, AssetSummary[]>("/api/v1/asset/assets", [], {
     revalidateSeconds: 120,
     telemetryKey: "assets.list",
-    responseSchema: AssetSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as AssetSummary[] | null,
+    mapResponse: mapAssetSummaries,
   });
 }
 
 export async function getAssetById(id: string): Promise<LoaderResult<AssetDetail | null>> {
-  return fetchJson<unknown, AssetDetail | null>(`/api/v1/asset/assets/${id}`, null, {
+  const base = await fetchJson<unknown, AssetDetail | null>(`/api/v1/asset/assets/${id}`, null, {
     revalidateSeconds: 60,
     telemetryKey: "assets.detail",
-    responseSchema: AssetDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as AssetDetail) : null),
+    mapResponse: mapAssetDetail,
   });
+  if (!base.data) return base;
+
+  const [dep, maint] = await Promise.all([
+    fetchJson<unknown, AssetDetail["depreciationSchedule"]>(`/api/v1/asset/assets/${id}/depreciation`, [], {
+      revalidateSeconds: 60,
+      telemetryKey: "assets.depreciation",
+      mapResponse: mapDepreciationEntries,
+    }),
+    fetchJson<unknown, AssetDetail["maintenanceHistory"]>(`/api/v1/asset/assets/${id}/maintenance`, [], {
+      revalidateSeconds: 60,
+      telemetryKey: "assets.maintenance.history",
+      mapResponse: mapAssetMaintenanceHistory,
+    }),
+  ]);
+
+  return {
+    ...base,
+    data: {
+      ...base.data,
+      depreciationSchedule: dep.data ?? [],
+      maintenanceHistory: maint.data ?? [],
+    },
+  };
 }
 
 export async function getFixedAssets(): Promise<LoaderResult<AssetSummary[]>> {
   return fetchJson<unknown, AssetSummary[]>("/api/v1/asset/assets?type=fixed", [], {
     revalidateSeconds: 120,
     telemetryKey: "assets.fixed",
-    responseSchema: AssetSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as AssetSummary[] | null,
+    mapResponse: mapAssetSummaries,
   });
 }
 
@@ -1913,8 +1987,7 @@ export async function getInfraAssets(): Promise<LoaderResult<AssetSummary[]>> {
   return fetchJson<unknown, AssetSummary[]>("/api/v1/asset/assets?type=infra", [], {
     revalidateSeconds: 120,
     telemetryKey: "assets.infra",
-    responseSchema: AssetSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as AssetSummary[] | null,
+    mapResponse: mapAssetSummaries,
   });
 }
 
@@ -1922,8 +1995,7 @@ export async function getAssetMaintenance(): Promise<LoaderResult<MaintenanceSum
   return fetchJson<unknown, MaintenanceSummary[]>("/api/v1/asset/maintenance", [], {
     revalidateSeconds: 120,
     telemetryKey: "assets.maintenance",
-    responseSchema: MaintenanceSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as MaintenanceSummary[] | null,
+    mapResponse: mapMaintenanceSummaries,
   });
 }
 
@@ -1959,8 +2031,7 @@ export async function getStockItems(): Promise<LoaderResult<StockItemSummary[]>>
   return fetchJson<unknown, StockItemSummary[]>("/api/v1/stock/items", [], {
     revalidateSeconds: 60,
     telemetryKey: "stock.items",
-    responseSchema: StockItemSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as StockItemSummary[] | null,
+    mapResponse: mapStockItemSummaries,
   });
 }
 
@@ -1968,8 +2039,7 @@ export async function getStockItemById(id: string): Promise<LoaderResult<StockIt
   return fetchJson<unknown, StockItemDetail | null>(`/api/v1/stock/items/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "stock.item.detail",
-    responseSchema: StockItemDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as StockItemDetail) : null),
+    mapResponse: mapStockItemDetail,
   });
 }
 
@@ -1977,8 +2047,7 @@ export async function getStockLedger(): Promise<LoaderResult<StockLedgerEntry[]>
   return fetchJson<unknown, StockLedgerEntry[]>("/api/v1/stock/ledger", [], {
     revalidateSeconds: 60,
     telemetryKey: "stock.ledger",
-    responseSchema: StockLedgerEntryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as StockLedgerEntry[] | null,
+    mapResponse: mapStockLedgerEntries,
   });
 }
 
@@ -2076,8 +2145,7 @@ export async function getLegalCases(): Promise<LoaderResult<LegalCaseSummary[]>>
   return fetchJson<unknown, LegalCaseSummary[]>("/api/v1/legal/cases", [], {
     revalidateSeconds: 60,
     telemetryKey: "legal.cases",
-    responseSchema: LegalCaseSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as LegalCaseSummary[] | null,
+    mapResponse: mapLegalCaseSummaries,
   });
 }
 
@@ -2123,8 +2191,7 @@ export async function getAdminUsers(): Promise<LoaderResult<UserSummary[]>> {
   return fetchJson<unknown, UserSummary[]>("/api/identity/users", [], {
     revalidateSeconds: 60,
     telemetryKey: "admin.users",
-    responseSchema: AdminUserSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as UserSummary[] | null,
+    mapResponse: mapAdminUserSummaries,
   });
 }
 
@@ -2313,5 +2380,33 @@ export async function getNotificationDeliveries(): Promise<LoaderResult<Notifica
     telemetryKey: "notifications.deliveries",
     responseSchema: NotificationDeliveryListSchema,
     mapResponse: (p) => getArrayPayload(p) as NotificationDelivery[] | null,
+  });
+}
+
+export type StatutoryRow = { id: string; employeeId: string; period: string; empContribMinor?: number; erContribMinor?: number; basicMinor?: number };
+
+export async function getGpfStatements(): Promise<LoaderResult<StatutoryRow[]>> {
+  return fetchJson<unknown, StatutoryRow[]>("/api/v1/payroll/statutory/gpf", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "payroll.gpf",
+    mapResponse: (p) => (Array.isArray(p) ? p : (p as { data?: StatutoryRow[] })?.data ?? []) as StatutoryRow[],
+  });
+}
+
+export async function getNpsStatements(): Promise<LoaderResult<StatutoryRow[]>> {
+  return fetchJson<unknown, StatutoryRow[]>("/api/v1/payroll/statutory/nps", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "payroll.nps",
+    mapResponse: (p) => (Array.isArray(p) ? p : (p as { data?: StatutoryRow[] })?.data ?? []) as StatutoryRow[],
+  });
+}
+
+export type PayMatrixLevel = { level: number; payGrade: string; cells: Array<{ cell: number; basicDisplay: string }> };
+
+export async function getPayMatrix(): Promise<LoaderResult<PayMatrixLevel[]>> {
+  return fetchJson<unknown, PayMatrixLevel[]>("/api/v1/hrms/pay-matrix", [], {
+    revalidateSeconds: 300,
+    telemetryKey: "hrms.payMatrix",
+    mapResponse: (p) => (p as { data?: PayMatrixLevel[] })?.data ?? [],
   });
 }

@@ -1,90 +1,80 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatCard } from "../../../_components/ds";
 import { getTenantAuditLog } from "../../../_data/loaders";
 
-const outcomeColors: Record<string, string> = {
-  success: "bg-emerald-50 text-emerald-700",
-  failure: "bg-red-50 text-red-700",
-};
-
-export default async function Page() {
+export default async function TenantAuditPage() {
   const { data: events, source } = await getTenantAuditLog();
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const total = events.length;
-  const failures = events.filter((e) => e.outcome === "failure").length;
   const successes = events.filter((e) => e.outcome === "success").length;
+  const failures = events.filter((e) => e.outcome === "failure").length;
+  const today24h = events.filter((e) => e.timestamp.slice(0, 10) === today).length;
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/tenant-admin" className="hover:text-slate-900">Tenant Admin</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Audit Log</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Audit Log</h1>
-            <p className="mt-1 text-sm text-slate-600">Tenant-scoped audit events — all actor actions and outcomes.</p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Events</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{total}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Success</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">{successes}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Failures</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{failures}</p>
-          </div>
-        </section>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table aria-label="Tenant audit log" className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th scope="col" className="px-4 py-3">Actor</th>
-                <th scope="col" className="px-4 py-3">Action</th>
-                <th scope="col" className="px-4 py-3">Resource</th>
-                <th scope="col" className="px-4 py-3">Outcome</th>
-                <th scope="col" className="px-4 py-3">Timestamp</th>
-                <th scope="col" className="px-4 py-3">IP Address</th>
+    <div className="wrap">
+      <PageHeader
+        back="/tenant-admin"
+        title="Audit Log"
+        subtitle="Tenant-scoped audit events — all actor actions and outcomes."
+        actions={
+          <>
+            <button className="btn ghost">Export</button>
+            <button className="btn ghost">Filter</button>
+          </>
+        }
+      />
+      <div className="grid g-4" style={{ marginBottom: 18 }}>
+        <StatCard icon="📋" iconBg="#f1f5f9" label="Events (24h)" value={today24h} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Success" value={successes} />
+        <StatCard icon="❌" iconBg="#fef3f2" label="Failures" value={failures} />
+        <StatCard icon="👥" iconBg="#eff6ff" label="Total Events" value={total} />
+      </div>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <div className="card">
+        <div className="card-h">
+          <h3>Activity log</h3>
+          <div className="seg"><span className="on">All</span><span>Failures</span></div>
+        </div>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Target</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((event) => (
+              <tr key={event.id}>
+                <td style={{ whiteSpace: "nowrap" }}>{event.timestamp.slice(0, 16).replace("T", " ")}</td>
+                <td>
+                  <div className="who">
+                    <div className="av">{event.actor.slice(0, 2).toUpperCase()}</div>
+                    <div>
+                      <div className="nm">{event.actor}</div>
+                      {event.ipAddress && <div className="ml"><span className="mono">{event.ipAddress}</span></div>}
+                    </div>
+                  </div>
+                </td>
+                <td><span className="mono">{event.action}</span></td>
+                <td>{event.resource ?? "—"}</td>
+                <td>
+                  {event.outcome === "success" ? <span className="pill good">Success</span>
+                    : event.outcome === "failure" ? <span className="pill bad">Failure</span>
+                    : <span className="pill info">{event.outcome}</span>}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {events.map((event) => (
-                <tr key={event.id} className="border-t border-slate-200 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-800">{event.actor}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{event.action}</td>
-                  <td className="px-4 py-3 text-slate-600">{event.resource ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${outcomeColors[event.outcome] ?? "bg-slate-100 text-slate-600"}`}>
-                      {event.outcome}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{event.timestamp.slice(0, 16).replace("T", " ")}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-600">{event.ipAddress ?? "—"}</td>
-                </tr>
-              ))}
-              {events.length === 0 && source !== "error" && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
-                    <span className="block font-medium text-slate-700">No audit events yet</span>
-                    <span className="mt-1 block text-slate-400">Tenant-scoped activity will appear here as actions are performed.</span>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-      </section>
-    </main>
+            ))}
+            {events.length === 0 && (
+              <tr><td colSpan={5}><div className="empty-state"><div>📋</div><h4>No audit events yet</h4><p>Tenant-scoped activity will appear here as actions are performed.</p></div></td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

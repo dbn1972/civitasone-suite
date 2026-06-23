@@ -21,7 +21,10 @@ export async function runDepreciation(ctx: RequestContext, body: RunDepBody): Pr
   await queue.publish(COMMANDS.depRun, {
     messageId: id, type: COMMANDS.depRun,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, period: body.period },
+    payload: {
+      id, tenantId: ctx.tenantId, period: body.period,
+      depBook: body.depBook === "all" ? undefined : body.depBook,
+    },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

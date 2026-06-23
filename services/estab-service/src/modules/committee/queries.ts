@@ -11,13 +11,14 @@ function mapMeetingStatus(status: string): "scheduled" | "in_progress" | "comple
 }
 
 function mapMeetingRow(row: MeetingRow) {
+  const whenAt = row.whenAt instanceof Date ? new Date(row.whenAt as unknown as string).toISOString() : String(row.whenAt ?? "");
   return {
     id: row.id,
     meetingNo: row.id.slice(0, 8).toUpperCase(),
     title: row.title,
     type: "committee" as const,
-    scheduledDate: row.whenAt.toISOString().slice(0, 10),
-    scheduledTime: row.whenAt.toISOString().slice(11, 16),
+    scheduledDate: whenAt.slice(0, 10),
+    scheduledTime: whenAt.slice(11, 16),
     venue: row.venue ?? undefined,
     status: mapMeetingStatus(row.status),
   };
@@ -42,7 +43,16 @@ export async function listMeetingSummaries(tenantId: string, limit: number) {
 export async function getMeetingDetail(id: string, tenantId: string) {
   const row = await repo.findMeetingById(id, tenantId);
   if (!row) return null;
-  return { ...mapMeetingRow(row), agenda: [], attendees: [], actionPoints: [] };
+  const resolutions = await repo.findResolutionsByMeeting(id, tenantId);
+  // Map resolution fields to the MeetingDetailSchema actionPoints shape
+  const actionPoints = resolutions.map((r) => ({
+    id: r.id,
+    description: r.body,
+    assignedTo: r.actionOwner ?? "unassigned",
+    dueDate: r.dueDate ?? undefined,
+    status: (r.status === "complied" ? "completed" : "pending") as "pending" | "completed",
+  }));
+  return { ...mapMeetingRow(row), agenda: [], attendees: [], actionPoints };
 }
 
 function mapFrequency(f: string): "daily" | "weekly" | "monthly" | "quarterly" | "annual" | "one_time" {

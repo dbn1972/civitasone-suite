@@ -10,6 +10,12 @@ import type { GrnItemInsert } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+function inferItemType(itemCode: string, poItemType?: string | null): string {
+  if (poItemType) return poItemType;
+  if (/^(FA|AST|FIX)/i.test(itemCode)) return "fixed_asset";
+  return "consumable";
+}
+
 export function registerGrnConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.grnCreate, async (msg) => {
     const p = msg.payload as {
@@ -52,10 +58,28 @@ export function registerGrnConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       if (threeWayMatch) {
+        const poId = p.poRef.replace(/^procurement_po:/, "");
+        const po = await import("../po/repo.js").then((m) => m.findPoById(poId));
+        const poItems = await import("../po/repo.js").then((m) => m.findPoItemsByPoId(poId));
+        const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
+        const grossMinor = po ? Number(po.totalMinor) : 0;
+        const enrichedItems = p.items.map((gi) => {
+          const poItem = poItemMap.get(gi.poItemRef);
+          const itemType = inferItemType(gi.itemCode, poItem?.itemType);
+          return {
+            itemCode: gi.itemCode,
+            itemName: poItem?.description ?? gi.itemCode,
+            acceptedQty: gi.acceptedQty,
+            rateMinor: poItem ? Number(poItem.unitPriceMinor) : 0,
+            currency: poItem?.currency ?? "INR",
+            itemType,
+            itemId: poItem?.id,
+          };
+        });
         await enqueue(tx, {
           topic: EVENTS.grnAccepted, eventType: EVENTS.grnAccepted,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId },
+          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, grossMinor, items: enrichedItems },
         });
       } else {
         await enqueue(tx, {
@@ -70,7 +94,7 @@ export function registerGrnConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

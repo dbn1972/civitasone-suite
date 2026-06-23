@@ -20,7 +20,7 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
       actorEmail: row.actorId,
       reason: row.reason,
       resourceAccessed: row.ticketId,
-      startedAt: row.openedAt.toISOString(),
+      startedAt: new Date(row.openedAt as unknown as string).toISOString(),
       endedAt: row.closedAt?.toISOString(),
       status: (row.closedAt ? "ended" : row.expiresAt < new Date() ? "auto_expired" : "active") as "active" | "ended" | "auto_expired",
     })));

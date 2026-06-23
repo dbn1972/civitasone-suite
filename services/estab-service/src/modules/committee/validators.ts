@@ -27,3 +27,10 @@ export const minutesBody = z.object({
   minutesUrl: z.string().url(),
 });
 export type MinutesBody = z.infer<typeof minutesBody>;
+
+export const recordAttendanceBody = z.object({
+  memberRef: z.string().uuid(),
+  role:      z.string().optional().default("member"),
+  attended:  z.boolean(),
+});
+export type RecordAttendanceBody = z.infer<typeof recordAttendanceBody>;

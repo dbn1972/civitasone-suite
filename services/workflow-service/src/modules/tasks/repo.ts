@@ -1,9 +1,20 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 
 export function toView(r: TaskRow): TaskView {
-  return { id: r.id, tenantId: r.tenantId, instanceId: r.instanceId, name: r.name, status: r.status, version: r.version };
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    instanceId: r.instanceId,
+    name: r.name,
+    status: r.status,
+    roleRef: r.roleRef,
+    refType: r.refType,
+    refId: r.refId,
+    decision: r.decision,
+    version: r.version,
+  };
 }
 
 export async function findById(id: string, tenantId: string): Promise<TaskView | null> {
@@ -22,15 +33,43 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   return rows.map(toView);
 }
 
+export async function listPendingForRoles(
+  tenantId: string,
+  roles: string[],
+  limit: number,
+  offset: number,
+): Promise<TaskView[]> {
+  const rows = await db.select().from(tasks)
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.status, "pending")))
+    .orderBy(desc(tasks.updatedAt))
+    .limit(limit * 3)
+    .offset(offset);
+
+  const filtered = rows.filter((r) => !r.roleRef || roles.includes(r.roleRef) || roles.includes("super_admin"));
+  return filtered.slice(0, limit).map(toView);
+}
+
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insert(tx: Writer, row: TaskInsert): Promise<void> {
   await tx.insert(tasks).values(row);
 }
 
-export async function markCompleted(tx: Writer, id: string, tenantId: string, actorId: string): Promise<TaskView | null> {
+export async function markCompleted(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  actorId: string,
+  decision: string,
+): Promise<TaskView | null> {
   const existing = await findById(id, tenantId);
   if (!existing || existing.status === "completed") return null;
-  await tx.update(tasks).set({ status: "completed", updatedBy: actorId, updatedAt: new Date(), version: existing.version + 1 }).where(eq(tasks.id, id));
-  return { ...existing, status: "completed", version: existing.version + 1 };
+  await tx.update(tasks).set({
+    status: "completed",
+    decision,
+    updatedBy: actorId,
+    updatedAt: new Date(),
+    version: existing.version + 1,
+  }).where(eq(tasks.id, id));
+  return { ...existing, status: "completed", decision, version: existing.version + 1 };
 }

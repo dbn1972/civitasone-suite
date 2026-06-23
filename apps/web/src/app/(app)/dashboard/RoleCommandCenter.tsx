@@ -1,0 +1,98 @@
+import Link from "next/link";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+type Action = { label: string; href: string; note: string; priority: "urgent" | "normal" };
+
+const CENTERS: Array<{
+  id: string;
+  title: string;
+  match: (roles: string[]) => boolean;
+  actions: Action[];
+}> = [
+  {
+    id: "finance",
+    title: "Finance Command Center",
+    match: (r) => r.some((x) => x.includes("finance")),
+    actions: [
+      { label: "Pending bills", href: "/finance/expenditure/bills", note: "Approve or return for correction", priority: "urgent" },
+      { label: "Sanctions queue", href: "/finance/budget/sanctions", note: "Budget availability before spend", priority: "urgent" },
+      { label: "Payment run", href: "/finance/payments", note: "Treasury disbursement", priority: "normal" },
+      { label: "Period close", href: "/finance/accounting/period-close", note: "Hard-close readiness", priority: "normal" },
+    ],
+  },
+  {
+    id: "procurement",
+    title: "Procurement Command Center",
+    match: (r) => r.some((x) => x.includes("procurement")),
+    actions: [
+      { label: "Open indents", href: "/procurement/indents", note: "Review and sanction", priority: "urgent" },
+      { label: "PO approvals", href: "/procurement/purchase-orders", note: "Commit funds with budget check", priority: "urgent" },
+      { label: "GRN pending", href: "/procurement/grn", note: "Receipt → stock/asset", priority: "normal" },
+      { label: "Vendor KYC", href: "/procurement/vendors", note: "Blocked vendors halt PO", priority: "normal" },
+    ],
+  },
+  {
+    id: "hr",
+    title: "HR & Payroll Command Center",
+    match: (r) => r.some((x) => x.includes("hr") || x.includes("payroll")),
+    actions: [
+      { label: "Leave approvals", href: "/hr/leave/approvals", note: "Maker-checker leave queue", priority: "urgent" },
+      { label: "Payroll run", href: "/hr/payroll", note: "Approve → GL → payment", priority: "urgent" },
+      { label: "Attendance exceptions", href: "/hr/attendance", note: "Regularization pending", priority: "normal" },
+    ],
+  },
+  {
+    id: "audit",
+    title: "Audit Command Center",
+    match: (r) => r.some((x) => x.includes("audit")),
+    actions: [
+      { label: "Open observations", href: "/audit/observations", note: "Compliance follow-up", priority: "urgent" },
+      { label: "Risk register", href: "/audit/risk", note: "Escalated risks", priority: "normal" },
+      { label: "Audit trail export", href: "/audit/trail", note: "Immutable evidence", priority: "normal" },
+    ],
+  },
+  {
+    id: "admin",
+    title: "Tenant Admin Command Center",
+    match: (r) => r.some((x) => x.includes("admin") || x.includes("tenant")),
+    actions: [
+      { label: "Pending users", href: "/tenant-admin/users", note: "Access provisioning", priority: "urgent" },
+      { label: "Roles & policies", href: "/tenant-admin/roles", note: "RBAC alignment", priority: "normal" },
+      { label: "Break-glass log", href: "/tenant-admin/breakglass", note: "Emergency access review", priority: "urgent" },
+    ],
+  },
+];
+
+export function RoleCommandCenter() {
+  const roles = getSessionRoles();
+  const centers = CENTERS.filter((c) => c.match(roles));
+  if (centers.length === 0) return null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+      {centers.map((center) => (
+        <div key={center.id} className="card">
+          <div className="card-h">
+            <h3>{center.title}</h3>
+            <Link href="/workflow" className="btn ghost" style={{ fontSize: 12 }}>All approvals →</Link>
+          </div>
+          <div className="pad">
+            <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0, marginBottom: 12 }}>
+              What needs your action now — prioritized for your role.
+            </p>
+            <div className="grid g-2">
+              {center.actions.map((a) => (
+                <Link key={a.href} href={a.href} style={{ textDecoration: "none" }}>
+                  <div className="stat" style={{ cursor: "pointer", borderLeft: a.priority === "urgent" ? "3px solid #dc2626" : "3px solid transparent" }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{a.label}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{a.note}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

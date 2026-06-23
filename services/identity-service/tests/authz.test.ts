@@ -10,7 +10,7 @@ function readModule(path: string): string {
 
 describe("identity authz guards", () => {
   it("user read requires self or admin", () => {
-    expect(readModule("users/routes.ts")).toContain("cannot read other users");
+    expect(readModule("users/routes.ts")).toContain("cross-tenant access denied");
   });
 
   it("session create requires auth and tenant match", () => {

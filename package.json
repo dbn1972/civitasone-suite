@@ -19,6 +19,7 @@
     "test:screens": "vitest run tests/contract/screens.contract.test.ts",
     "screen-map": "node scripts/contract/screen-map.mjs",
     "verify-screens": "node scripts/contract/verify-screens.mjs",
+    "verify:live": "bash scripts/dev/verify-live-stack.sh",
     "contract:score": "node scripts/contract/score.mjs",
     "qa:score": "node scripts/qa-readiness-score.mjs",
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"

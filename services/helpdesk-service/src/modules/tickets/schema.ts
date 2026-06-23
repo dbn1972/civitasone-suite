@@ -12,6 +12,7 @@ export const tickets = helpdeskSchema.table("tickets", {
   status: varchar("status", { length: 24 }).notNull().default("open"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  assigneeId: uuid("assignee_id"),
   createdBy: uuid("created_by").notNull(),
   updatedBy: uuid("updated_by").notNull(),
   version: integer("version").notNull().default(1),

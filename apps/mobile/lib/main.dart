@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/auth/pkce_auth.dart';
+import 'core/background_sync.dart';
 import 'core/providers.dart';
 import 'core/shell/app_shell.dart';
 import 'features/finance/payments_screen.dart';
 import 'features/finance/journal_screen.dart';
-import 'features/hr/employees_screen.dart';
-import 'features/hr/leave_screen.dart';
-import 'features/hr/leave_apply_screen.dart';
-import 'features/hr/attendance_screen.dart';
+import 'features/hr/hr_module.dart';
 import 'features/procurement/indents_screen.dart';
 import 'features/procurement/pos_screen.dart';
 import 'features/procurement/approvals_screen.dart';
@@ -21,16 +19,52 @@ import 'features/projects/projects_screen.dart';
 import 'features/estab/files_screen.dart';
 import 'features/mis/mis_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // MOB-1c (02-T3): register background sync. Guarded so an unsupported platform
+  // (e.g. tests / desktop) never blocks app start.
+  try {
+    await initBackgroundSync();
+  } catch (_) {/* background sync unavailable on this platform */}
   runApp(const ProviderScope(child: CivitasOneApp()));
 }
 
-class CivitasOneApp extends ConsumerWidget {
+class CivitasOneApp extends ConsumerStatefulWidget {
   const CivitasOneApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CivitasOneApp> createState() => _CivitasOneAppState();
+}
+
+class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // MOB-1c: flush queued mutations + pull deltas when the app returns to foreground.
+    if (state == AppLifecycleState.resumed) {
+      final engine = ref.read(syncEngineProvider);
+      if (engine != null) {
+        // Fire and forget; failures are retried by the periodic task.
+        // ignore: discarded_futures
+        syncAllMailboxes(engine);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final router = GoRouter(
       initialLocation: '/login',
       redirect: (context, state) async {
@@ -49,9 +83,7 @@ class CivitasOneApp extends ConsumerWidget {
             GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
             GoRoute(path: '/finance/payments', builder: (_, __) => const PaymentsScreen()),
             GoRoute(path: '/finance/journals', builder: (_, __) => const JournalScreen()),
-            GoRoute(path: '/hr/employees', builder: (_, __) => const EmployeesScreen()),
-            GoRoute(path: '/hr/leave', builder: (_, __) => const LeaveScreen()),
-            GoRoute(path: '/hr/attendance', builder: (_, __) => const AttendanceScreen()),
+            ...hrShellRoutes(),
             GoRoute(path: '/procurement/indents', builder: (_, __) => const IndentsScreen()),
             GoRoute(path: '/procurement/pos', builder: (_, __) => const PurchaseOrdersScreen()),
             GoRoute(path: '/procurement/approvals', builder: (_, __) => const ApprovalsScreen()),
@@ -64,10 +96,7 @@ class CivitasOneApp extends ConsumerWidget {
           ],
         ),
         // Write-path screens rendered outside the shell (no bottom nav).
-        GoRoute(
-          path: '/hr/leave/apply',
-          builder: (_, __) => const LeaveApplyScreen(),
-        ),
+        ...hrFullScreenRoutes(),
         GoRoute(
           path: '/helpdesk/tickets/new',
           builder: (_, __) => const TicketCreateScreen(),

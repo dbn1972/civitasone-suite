@@ -1,15 +1,17 @@
 import { z } from "zod";
 
 export const createSchemeBody = z.object({
-  code:            z.string().min(1).max(32),
-  name:            z.string().min(3).max(256),
-  sanctionRef:     z.string().optional(),
-  budgetMinor:     z.number().int().nonnegative(),
-  minAmountMinor:  z.number().int().nonnegative().default(0),
-  maxAmountMinor:  z.number().int().nonnegative(),
-  currency:        z.string().length(3).default("INR"),
-  openAt:          z.string().datetime().optional(),
-  closeAt:         z.string().datetime().optional(),
+  code:                   z.string().min(1).max(32),
+  name:                   z.string().min(3).max(256),
+  sanctionRef:            z.string().optional(),
+  budgetMinor:            z.number().int().nonnegative(),
+  minAmountMinor:         z.number().int().nonnegative().default(0),
+  maxAmountMinor:         z.number().int().nonnegative(),
+  currency:               z.string().length(3).default("INR"),
+  openAt:                 z.string().datetime().optional(),
+  closeAt:                z.string().datetime().optional(),
+  /** Quarterly = 90, Half-yearly = 180, Annual = 365. Required for compliance monitoring. */
+  reportingFrequencyDays: z.number().int().positive().optional(),
 });
 export type CreateSchemeBody = z.infer<typeof createSchemeBody>;
 

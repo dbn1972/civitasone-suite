@@ -17,9 +17,14 @@ export const COMMANDS = {
 
 export const EVENTS = {
   employeeCreated:   "hrms.employee.created",
+  employeeSeparated: "hrms.employee.separated",
   leaveApplied:      "hrms.leave.applied",
   leaveApproved:     "hrms.leave.approved",
   attendanceMarked:  "hrms.attendance.marked",
+} as const;
+
+export const CONSUMED_EVENTS = {
+  tenantCreated: "tenant.tenant.created",
 } as const;
 
 export const SERVICE = "hrms";

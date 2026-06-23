@@ -10,12 +10,17 @@ export const COMMANDS = {
   grievanceAction:         "citizen.grievance.action",
   grievanceResolve:        "citizen.grievance.resolve",
   grievanceEscalate:       "citizen.grievance.escalate",
+  grievanceReopen:         "citizen.grievance.reopen",
+  profileDelete:           "citizen.profile.delete",
   rtiFile:                 "citizen.rti.file",
   rtiResponseReceive:      "citizen.rti.response_receive",
   rtiAppeal:               "citizen.rti.appeal",
   ticketCreate:            "citizen.ticket.create",
   ticketNote:              "citizen.ticket.note",
   ticketClose:             "citizen.ticket.close",
+  ticketAssign:            "citizen.ticket.assign",
+  ticketResolve:           "citizen.ticket.resolve",
+  ticketEscalate:          "citizen.ticket.escalate",
   applicationSlaCheck:     "citizen.application.sla_check",
   grievanceSlaCheck:       "citizen.grievance.sla_check",
 } as const;
@@ -24,8 +29,10 @@ export const EVENTS = {
   applicationApproved:    "citizen.application.approved",
   applicationSlaBreached: "citizen.application.sla_breached",
   grievanceResolved:      "citizen.grievance.resolved",
+  grievanceReopened:      "citizen.grievance.reopened",
   rtiFiled:               "citizen.rti.filed",
   grievanceEscalated:     "citizen.grievance.escalated",
+  profileDeleted:         "citizen.profile.deleted",
 } as const;
 
 export const CONSUMED_EVENTS = {

@@ -5,14 +5,15 @@ export class DomainError extends Error {
   }
 }
 
-export type IndentStatus = "draft" | "pending" | "approved" | "rejected" | "closed";
+export type IndentStatus = "draft" | "pending" | "tender_required" | "approved" | "rejected" | "closed";
 
 const VALID_TRANSITIONS: Record<IndentStatus, IndentStatus[]> = {
-  draft:    ["pending"],
-  pending:  ["approved", "rejected"],
-  approved: ["closed"],
-  rejected: [],
-  closed:   [],
+  draft:           ["pending"],
+  pending:         ["approved", "rejected", "tender_required"],
+  tender_required: ["approved", "rejected"],
+  approved:        ["closed"],
+  rejected:        [],
+  closed:          [],
 };
 
 export function assertTransitionAllowed(from: string, to: IndentStatus): void {

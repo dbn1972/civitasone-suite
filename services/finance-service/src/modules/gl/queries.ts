@@ -12,7 +12,13 @@ function normalizeLine(raw: Record<string, unknown>): JournalLine {
 }
 
 export async function getLedger(tenantId: string, params: LedgerQueryParams) {
-  return repo.getLedgerLines(tenantId, params.headId, params.from, params.to, params.limit);
+  let resolvedHeadId: string | undefined;
+  if (params.headId) {
+    const id = await repo.resolveHeadId(tenantId, params.headId);
+    if (!id) return [];
+    resolvedHeadId = id;
+  }
+  return repo.getLedgerLines(tenantId, resolvedHeadId, params.from, params.to, params.limit);
 }
 
 export async function getTrialBalance(tenantId: string) {
@@ -44,6 +50,7 @@ export async function listJournalEntries(tenantId: string, limit: number) {
         debit: line.debitMinor / 100,
         credit: line.creditMinor / 100,
         referenceNo: journal.voucherNo,
+        type: journal.type as "payment" | "receipt" | "journal" | "budget",
       });
     }
   }

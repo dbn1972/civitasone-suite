@@ -43,7 +43,7 @@
     },
     "finance": {
       "score": 10,
-      "wired": "12/12",
+      "wired": "13/13",
       "blockers": []
     },
     "grants": {
@@ -58,7 +58,7 @@
     },
     "hr": {
       "score": 10,
-      "wired": "14/14",
+      "wired": "16/16",
       "blockers": []
     },
     "install": {
@@ -68,7 +68,7 @@
     },
     "inventory": {
       "score": 10,
-      "wired": "1/1",
+      "wired": "2/2",
       "blockers": []
     },
     "knowledge": {

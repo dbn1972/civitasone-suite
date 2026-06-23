@@ -9,6 +9,8 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { instanceRoutes } from "./modules/instances/routes.js";
 import { taskRoutes } from "./modules/tasks/routes.js";
+import { definitionRoutes } from "./modules/definitions/routes.js";
+import { delegationRoutes } from "./modules/delegations/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -18,8 +20,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
   await app.register(authPlugin);
   registerOpsRoutes(app, { service: "workflow-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
+  await app.register(definitionRoutes);
   await app.register(instanceRoutes);
   await app.register(taskRoutes);
+  await app.register(delegationRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

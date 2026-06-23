@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as portalRepo from "../portal/repo.js";
 import type { GrievanceRow } from "./schema.js";
 import type { CitizenRequestSummary } from "@civitasone/types";
 
@@ -35,12 +36,29 @@ export async function listRequests(tenantId: string, limit: number, offset: numb
     cache.makeKey(tenantId, "requests", `list:${limit}:${offset}`),
     () => repo.listGrievancesByTenant(tenantId, limit, offset),
   );
-  return (rows ?? []).map((row) => ({
-    id: row.id,
-    requestNo: `GR-${row.id.slice(0, 8).toUpperCase()}`,
-    serviceType: row.category,
-    citizenName: row.citizenId,
-    submittedAt: row.createdAt.toISOString(),
-    status: mapRequestStatus(row.status),
-  }));
+  const profileMap = new Map<string, { name: string; phone: string | null }>();
+  for (const row of rows ?? []) {
+    if (!profileMap.has(row.citizenId)) {
+      const profile = await cache.getOrLoad(
+        cache.makeKey(tenantId, "citizen_profile", row.citizenId),
+        () => portalRepo.findProfileById(row.citizenId),
+      );
+      profileMap.set(row.citizenId, {
+        name: profile?.name ?? row.citizenId,
+        phone: profile?.mobile ?? null,
+      });
+    }
+  }
+  return (rows ?? []).map((row) => {
+    const p = profileMap.get(row.citizenId);
+    return {
+      id: row.id,
+      requestNo: `GR-${row.id.slice(0, 8).toUpperCase()}`,
+      serviceType: row.category,
+      citizenName: p?.name ?? row.citizenId,
+      ...(p?.phone ? { citizenPhone: `XXXXXX${p.phone.slice(-4)}` } : {}),
+      submittedAt: new Date(row.createdAt as unknown as string).toISOString(),
+      status: mapRequestStatus(row.status),
+    };
+  });
 }

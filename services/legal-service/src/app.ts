@@ -13,6 +13,7 @@ import { noticeRoutes } from "./modules/notices/routes.js";
 import { contractRoutes } from "./modules/contracts/routes.js";
 import { settlementRoutes } from "./modules/settlements/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
+import { reminderRoutes } from "./modules/reminders/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -32,6 +33,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(contractRoutes);
   await app.register(settlementRoutes);
   await app.register(dashboardRoutes);
+  await app.register(reminderRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

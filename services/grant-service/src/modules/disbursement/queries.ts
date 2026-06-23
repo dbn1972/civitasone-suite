@@ -7,6 +7,11 @@ function minorToAmount(minor: bigint): number {
   return Number(minor) / 100;
 }
 
+function toDateOnly(value: Date | string | null | undefined): string {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  return new Date(value as string).toISOString().slice(0, 10);
+}
+
 export async function getInstallmentsByApplication(tenantId: string, appId: string) {
   return repo.findInstallmentsByApplication(appId);
 }
@@ -35,7 +40,7 @@ export async function listGrantReleases(tenantId: string, limit: number) {
       grantNo: application?.grantNo ?? "—",
       granteeName: beneficiary?.name ?? "—",
       amount: minorToAmount(row.amountMinor),
-      releaseDate: (row.disbursedAt ?? row.createdAt).toISOString().slice(0, 10),
+      releaseDate: toDateOnly(row.disbursedAt ?? row.createdAt),
       bankRef: row.pfmsTxnId ?? undefined,
       status: (row.status === "completed" ? "credited" : row.status === "failed" ? "pending" : "processed") as "pending" | "processed" | "credited",
     });

@@ -1,93 +1,81 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatusPill } from "../../../_components/ds";
 import { getAuditExports } from "../../../_data/loaders";
-
-const statusColors: Record<string, string> = {
-  queued: "bg-slate-100 text-slate-600",
-  processing: "bg-yellow-50 text-yellow-700",
-  completed: "bg-emerald-50 text-emerald-700",
-  failed: "bg-red-50 text-red-700",
-};
-
-const formatColors: Record<string, string> = {
-  pdf: "bg-red-50 text-red-700",
-  xlsx: "bg-green-50 text-green-700",
-  csv: "bg-blue-50 text-blue-700",
-};
 
 export default async function AuditExportsPage() {
   const { data: items, source } = await getAuditExports();
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/audit" className="hover:text-slate-900">Audit</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Export Jobs</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Export Jobs</h1>
-            <p className="mt-1 text-sm text-slate-600">Scheduled audit data export jobs with download links.</p>
+    <div className="wrap">
+      <PageHeader
+        title="Compliance Export"
+        subtitle="Generate signed, tamper-evident audit exports for regulators."
+        actions={
+          <>
+            <button className="btn ghost">Schedule</button>
+            <button className="btn primary">+ New Export</button>
+          </>
+        }
+      />
+      {source === "error" && <DataSourceBadge source={source} />}
+      <div className="grid g-main-l">
+        <div className="card">
+          <div className="card-h"><h3>Build export</h3></div>
+          <div className="pad">
+            <label className="lbl">Date range</label>
+            <input className="inp" defaultValue="01 Jun 2026 – 19 Jun 2026" readOnly />
+            <label className="lbl">Scope</label>
+            <input className="inp" defaultValue="All tenants · All services" readOnly />
+            <label className="lbl">Format</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <span className="chip">CSV</span>
+              <span className="chip" style={{ background: "var(--primary-soft)", color: "var(--primary-d)" }}>JSON (signed)</span>
+              <span className="chip">PDF report</span>
+            </div>
+            <button className="btn primary" style={{ width: "100%", marginTop: 14 }}>Generate export</button>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table aria-label="Export jobs" className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-700">
+        </div>
+        <div className="card">
+          <div className="card-h"><h3>Recent exports</h3></div>
+          <table className="tbl">
+            <thead>
               <tr>
-                <th scope="col" className="px-4 py-3">Job Type</th>
-                <th scope="col" className="px-4 py-3">Requested By</th>
-                <th scope="col" className="px-4 py-3">Requested At</th>
-                <th scope="col" className="px-4 py-3">Completed At</th>
-                <th scope="col" className="px-4 py-3">Format</th>
-                <th scope="col" className="px-4 py-3">Status</th>
-                <th scope="col" className="px-4 py-3">Download</th>
+                <th>Export</th>
+                <th>Requested</th>
+                <th>Format</th>
+                <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-t border-slate-200 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-800">{item.jobType}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.requestedBy}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.requestedAt}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.completedAt ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase ${formatColors[item.format] ?? "bg-slate-100 text-slate-600"}`}>
-                      {item.format}
-                    </span>
+                <tr key={item.id}>
+                  <td className="mono">{item.jobType}</td>
+                  <td>{item.requestedAt.slice(0, 10)}</td>
+                  <td><span className="pill info">{item.format.toUpperCase()}</span></td>
+                  <td>
+                    {item.status === "completed" ? <span className="pill good">Ready</span>
+                      : item.status === "processing" ? <span className="pill warn">Generating</span>
+                      : item.status === "failed" ? <span className="pill bad">Failed</span>
+                      : <span className="pill mut">Queued</span>}
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[item.status] ?? "bg-slate-100 text-slate-600"}`}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {item.status === "completed" && item.downloadUrl ? (
-                      <a href={item.downloadUrl} className="text-indigo-600 hover:underline text-xs" download>
-                        Download
-                      </a>
-                    ) : (
-                      <span className="text-slate-400 text-xs">—</span>
-                    )}
+                  <td>
+                    {item.status === "completed" && item.downloadUrl
+                      ? <a href={item.downloadUrl} className="lnk" download>Download</a>
+                      : <span className="lnk" style={{ color: "#98a2b3" }}>—</span>}
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && source !== "error" && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                    <span className="block font-medium text-slate-700">No export jobs</span>
-                    <span className="mt-1 block text-slate-400">Scheduled export jobs will appear here.</span>
-                  </td>
-                </tr>
+              {items.length === 0 && (
+                <tr><td colSpan={5}><div className="empty-state"><div>📤</div><h4>No export jobs</h4><p>Scheduled export jobs will appear here.</p></div></td></tr>
               )}
             </tbody>
           </table>
-        </section>
-      </section>
-    </main>
+          <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
+            <div style={{ fontSize: "12.5px", color: "#475467" }}>Exports are cryptographically signed with a 7-year retention lock (WORM).</div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

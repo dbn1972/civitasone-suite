@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, bigint, char, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, char, timestamp, date } from "drizzle-orm/pg-core";
 
 export const crmSchema = pgSchema("crm");
 
@@ -9,6 +9,10 @@ export const deals = crmSchema.table("deals", {
   stage: varchar("stage", { length: 24 }).notNull().default("Lead"),
   valueMinor: bigint("value_minor", { mode: "bigint" }).notNull().default(0n),
   currency: char("currency", { length: 3 }).notNull().default("INR"),
+  contactId: uuid("contact_id"),
+  ownerId: uuid("owner_id"),
+  closeDate: date("close_date"),
+  probability: integer("probability").notNull().default(0),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -28,6 +32,11 @@ export type DealView = {
   valueMinor: string;
   currency: string;
   valueDisplay: string;
+  contactId: string | null;
+  contactName: string | null;
+  ownerId: string | null;
+  closeDate: string | null;
+  probability: number;
   status: string;
   version: number;
 };

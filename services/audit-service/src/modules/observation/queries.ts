@@ -32,7 +32,7 @@ function mapObservationRow(row: ObservationRow) {
     type: mapObservationType(row.category),
     severity: mapSeverity(row.riskLevel),
     department: row.auditeeRef,
-    raisedDate: row.createdAt.toISOString().slice(0, 10),
+    raisedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapObservationStatus(row.status),
   };
 }

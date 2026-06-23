@@ -1,6 +1,7 @@
 import {
   pgSchema, uuid, text, varchar, char, bigint, integer, timestamp, boolean,
 } from "drizzle-orm/pg-core";
+// NOTE: boolean imported but not yet used below — retained for future schema additions
 
 export const schemeSchema = pgSchema("scheme");
 
@@ -15,9 +16,10 @@ export const grantSchemes = schemeSchema.table("grant_schemes", {
   minAmountMinor:  bigint("min_amount_minor", { mode: "bigint" }).notNull().default(0n),
   maxAmountMinor:  bigint("max_amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:        char("currency", { length: 3 }).notNull().default("INR"),
-  status:          varchar("status", { length: 24 }).notNull().default("draft"),
-  openAt:          timestamp("open_at", { withTimezone: true }),
-  closeAt:         timestamp("close_at", { withTimezone: true }),
+  status:                 varchar("status", { length: 24 }).notNull().default("draft"),
+  reportingFrequencyDays: integer("reporting_frequency_days").default(90),  // Quarterly=90, Half-yearly=180, Annual=365
+  openAt:                 timestamp("open_at", { withTimezone: true }),
+  closeAt:                timestamp("close_at", { withTimezone: true }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),

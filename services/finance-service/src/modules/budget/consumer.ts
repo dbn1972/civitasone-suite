@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertValidFY } from "./domain.js";
+import { assertValidFY, assertReleaseWithinSanction } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -29,6 +29,10 @@ export function registerBudgetConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const existing = await repo.findBudgetById(p.id);
+      if (existing) {
+        assertReleaseWithinSanction(existing.beMinor, BigInt(p.reMinor));
+      }
       await repo.updateBudget(tx, p.id, { reMinor: BigInt(p.reMinor), updatedBy: msg.actorId });
       await audit(tx, msg, "re_appropriate", "budget", p.id);
     });

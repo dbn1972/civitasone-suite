@@ -12,11 +12,19 @@ const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"]
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
 
 export async function poRoutes(app: FastifyInstance): Promise<void> {
+  // Alias: /v1/procurement/orders → same handler as /v1/procurement/pos
+  app.get("/v1/procurement/orders", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset));
+  });
+
   app.get("/v1/procurement/pos", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit));
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset));
   });
 
   app.post("/v1/procurement/pos", async (req, reply) => {

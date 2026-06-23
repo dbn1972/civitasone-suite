@@ -4,7 +4,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { MarkAttendanceBody } from "./validators.js";
 
-export type Accepted = { batchId: string; count: number; status: string; correlationId: string };
+export type Accepted = { id: string; batchId: string; count: number; status: string; correlationId: string };
 
 export async function markAttendance(ctx: RequestContext, body: MarkAttendanceBody): Promise<Accepted> {
   const batchId = randomUUID();
@@ -13,5 +13,5 @@ export async function markAttendance(ctx: RequestContext, body: MarkAttendanceBo
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { batchId, tenantId: ctx.tenantId, records: body.records },
   });
-  return { batchId, count: body.records.length, status: "accepted", correlationId: ctx.correlationId };
+  return { id: batchId, batchId, count: body.records.length, status: "accepted", correlationId: ctx.correlationId };
 }

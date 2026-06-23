@@ -1,17 +1,11 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageShell } from "../../../_components/PageShell";
+import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState } from "../../../_components/ds";
 import { getProcurementIndents } from "../../../_data/loaders";
+import { ListToolbar } from "../_components/ListToolbar";
+import { paginateList, type ListSearchParams } from "../_components/listUtils";
 
-const statusColors: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-600",
-  pending_approval: "bg-amber-50 text-amber-700",
-  approved: "bg-emerald-50 text-emerald-700",
-  rejected: "bg-red-50 text-red-700",
-  converted_to_po: "bg-blue-50 text-blue-700",
-};
-
-const statusLabels: Record<string, string> = {
+const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   pending_approval: "Pending Approval",
   approved: "Approved",
@@ -19,98 +13,79 @@ const statusLabels: Record<string, string> = {
   converted_to_po: "Converted to PO",
 };
 
-export default async function Page() {
-  const { data: indents, source } = await getProcurementIndents();
+export default async function IndentsPage({ searchParams }: { searchParams: ListSearchParams }) {
+  const pageSize = Math.min(50, Math.max(5, Number.parseInt(searchParams.limit ?? "10", 10) || 10));
+  const { data: indents, source } = await getProcurementIndents({
+    limit: 500,
+    q: searchParams.q,
+  });
+  const { rows, total, page, limit, pageCount, q } = paginateList(indents, { ...searchParams, limit: String(pageSize) });
 
-  const total = indents.length;
   const pendingApproval = indents.filter((i) => i.status === "pending_approval").length;
   const approved = indents.filter((i) => i.status === "approved").length;
   const converted = indents.filter((i) => i.status === "converted_to_po").length;
 
   return (
-    <PageShell title="Purchase Indents" description="Track material requisitions from departments through to PO conversion.">
-      <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-        <Link href="/procurement" className="hover:text-slate-900">Procurement</Link>
-        <span className="mx-2">/</span>
-        <span className="text-slate-900">Indents</span>
-      </nav>
+    <>
+      <PageHeader
+        title="Purchase Indents"
+        subtitle="Track material requisitions from departments through to PO conversion."
+        actions={
+          <>
+            <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
+          </>
+        }
+      />
 
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
+      <StatGrid>
+        <StatCard icon="📋" iconBg="#e7edfd" label="Total Indents" value={indents.length} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={pendingApproval} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Approved" value={approved} />
+        <StatCard icon="📦" iconBg="#eff6ff" label="Converted to PO" value={converted} />
+      </StatGrid>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{total}</p>
+      <Card title="All indents">
+        <div className="pad" style={{ paddingBottom: 0 }}>
+          <ListToolbar basePath="/procurement/indents" total={total} page={page} limit={limit} pageCount={pageCount} q={q} />
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Pending Approval</p>
-          <p className="mt-2 text-3xl font-bold text-amber-600">{pendingApproval}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Approved</p>
-          <p className="mt-2 text-3xl font-bold text-emerald-600">{approved}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Converted</p>
-          <p className="mt-2 text-3xl font-bold text-blue-600">{converted}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-700">All Indents</h2>
-        <Link
-          href="/procurement/indents/new"
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          New Indent
-        </Link>
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm" aria-label="Purchase indents">
-          <thead className="bg-slate-100 text-slate-700">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left">Indent No</th>
-              <th scope="col" className="px-4 py-3 text-left">Requested By</th>
-              <th scope="col" className="px-4 py-3 text-left">Department</th>
-              <th scope="col" className="px-4 py-3 text-right">Items</th>
-              <th scope="col" className="px-4 py-3 text-right">Est. Amount (₹)</th>
-              <th scope="col" className="px-4 py-3 text-left">Request Date</th>
-              <th scope="col" className="px-4 py-3 text-left">Required By</th>
-              <th scope="col" className="px-4 py-3 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {indents.map((indent) => (
-              <tr key={indent.id} className="border-t border-slate-200 hover:bg-slate-50">
-                <td className="px-4 py-3">
-                  <Link href={`/procurement/indents/${indent.id}`} className="font-mono text-indigo-600 hover:underline">
-                    {indent.indentNo}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-slate-800">{indent.requestedBy}</td>
-                <td className="px-4 py-3 text-slate-600">{indent.department}</td>
-                <td className="px-4 py-3 text-right text-slate-800">{indent.itemCount}</td>
-                <td className="px-4 py-3 text-right font-medium text-slate-900">
-                  ₹{(indent.estimatedAmount / 100).toLocaleString("en-IN")}
-                </td>
-                <td className="px-4 py-3 text-slate-600">{indent.requestDate}</td>
-                <td className="px-4 py-3 text-slate-600">{indent.requiredByDate ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[indent.status] ?? "bg-slate-100 text-slate-600"}`}>
-                    {statusLabels[indent.status] ?? indent.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {indents.length === 0 && (
+        {rows.length === 0 ? (
+          <EmptyState icon="📋" title="No indents found" message="Create a new indent to get started." />
+        ) : (
+          <table className="tbl">
+            <thead>
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No indents found</td>
+                <th>Indent No</th>
+                <th>Requested By</th>
+                <th>Department</th>
+                <th className="num">Items</th>
+                <th className="num">Est. Amount</th>
+                <th>Request Date</th>
+                <th>Required By</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </PageShell>
+            </thead>
+            <tbody>
+              {rows.map((indent) => (
+                <tr key={indent.id} className="clickable">
+                  <td>
+                    <Link href={`/procurement/indents/${indent.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                      <span className="mono">{indent.indentNo}</span>
+                    </Link>
+                  </td>
+                  <td>{indent.requestedBy}</td>
+                  <td>{indent.department}</td>
+                  <td className="num">{indent.itemCount}</td>
+                  <td className="num">₹{(indent.estimatedAmount / 100).toLocaleString("en-IN")}</td>
+                  <td>{indent.requestDate}</td>
+                  <td>{indent.requiredByDate ?? "—"}</td>
+                  <td><StatusPill status={indent.status} label={STATUS_LABELS[indent.status] ?? indent.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </>
   );
 }

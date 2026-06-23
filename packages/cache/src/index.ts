@@ -54,6 +54,14 @@ export interface CacheOptions {
   store?: CacheStore;
 }
 
+function serialize(value: unknown): string {
+  return JSON.stringify(value, (_key, val) => (typeof val === "bigint" ? val.toString() : val));
+}
+
+function deserialize<T>(raw: string): T {
+  return JSON.parse(raw) as T;
+}
+
 export class Cache {
   private store: CacheStore;
   private ttl: number;
@@ -80,26 +88,26 @@ export class Cache {
   ): Promise<T> {
     const key = this.listKey(tenantId, resource, hash);
     const cached = await this.store.get(key);
-    if (cached !== null) return JSON.parse(cached) as T;
+    if (cached !== null) return deserialize<T>(cached);
     const fresh = await loader();
-    await this.store.set(key, JSON.stringify(fresh), ttlSeconds ?? this.ttl);
+    await this.store.set(key, serialize(fresh), ttlSeconds ?? this.ttl);
     return fresh;
   }
 
   /** Read-through: return cached value or load from source, cache it, return it. */
   async getOrLoad<T>(key: string, loader: () => Promise<T | null>, ttlSeconds?: number): Promise<T | null> {
     const cached = await this.store.get(key);
-    if (cached !== null) return JSON.parse(cached) as T;
+    if (cached !== null) return deserialize<T>(cached);
     const fresh = await loader();
     if (fresh !== null && fresh !== undefined) {
-      await this.store.set(key, JSON.stringify(fresh), ttlSeconds ?? this.ttl);
+      await this.store.set(key, serialize(fresh), ttlSeconds ?? this.ttl);
     }
     return fresh;
   }
 
   /** Prime the cache (used by the command handler for read-your-writes). */
   async put<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
-    await this.store.set(key, JSON.stringify(value), ttlSeconds ?? this.ttl);
+    await this.store.set(key, serialize(value), ttlSeconds ?? this.ttl);
   }
 
   /** Invalidate one key or a whole resource prefix (called by the consumer after a write). */

@@ -1,6 +1,6 @@
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
-import { PageShell } from "../../_components/PageShell";
+import { PageHeader } from "../../_components/ds";
 
 const hrTiles: NavTile[] = [
 	{ title: "Dashboard", href: "/hr/dashboard", description: "People KPIs and quick navigation" },
@@ -19,8 +19,9 @@ const hrTiles: NavTile[] = [
 
 export default function Page() {
 	return (
-		<PageShell title="HR" description="People operations including employees, leave, attendance, payroll, and more.">
+		<>
+			<PageHeader title="Human Resources" subtitle="People operations — employees, leave, attendance, payroll, and more." />
 			<LinkTiles tiles={hrTiles} columns="four" />
-		</PageShell>
+		</>
 	);
 }

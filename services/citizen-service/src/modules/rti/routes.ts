@@ -51,6 +51,13 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(rti);
   });
 
+  /** RTI Act 2005 §7: list RTIs that have breached the 30-day deadline without response (officer view) */
+  app.get("/v1/citizen/rti/overdue", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    return reply.send(await queries.listOverdueRti(ctx.tenantId));
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

@@ -7,7 +7,14 @@ export type HttpErrorLike = {
 };
 
 export function isHttpError(err: unknown): err is HttpErrorLike {
-  return typeof err === "object" && err !== null && "status" in err && "code" in err;
+  if (typeof err !== "object" || err === null) return false;
+  // @fastify/rate-limit surfaces statusCode instead of status — normalise so the
+  // error handler returns 429 rather than falling through to the generic 500 path.
+  if ("statusCode" in err && !("status" in err)) {
+    (err as Record<string, unknown>).status = (err as { statusCode: number }).statusCode;
+    if (!("code" in err)) (err as Record<string, unknown>).code = "RATE_LIMITED";
+  }
+  return "status" in err && "code" in err;
 }
 
 type FastifyLikeRequest = { id: string; headers: Record<string, unknown>; log: { error: (obj: unknown, msg: string) => void } };

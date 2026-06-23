@@ -147,6 +147,29 @@ export function registerGrievanceConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "grievance", p.grievanceId));
   });
 
+  queue.subscribe(COMMANDS.grievanceReopen, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const g = await repo.findGrievanceByIdTx(tx, p.id);
+      if (!g) return;
+      assertGrievanceTransition(g.status, "reopened");
+      await repo.updateGrievance(tx, p.id, { status: "reopened", updatedBy: msg.actorId });
+      await repo.insertAction(tx, {
+        tenantId: p.tenantId, grievanceId: p.id, officerId: msg.actorId,
+        actionType: "reopen", note: p.reason,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.grievanceReopened, eventType: EVENTS.grievanceReopened,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { grievanceId: p.id, reason: p.reason },
+      });
+      await audit(tx, msg, "reopen", "citizen_grievance", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "grievance", p.id));
+  });
+
   queue.subscribe(COMMANDS.grievanceSlaCheck, async (msg) => {
     const p = msg.payload as { grievanceId: string; tenantId: string; slaDays?: number };
     const slaDays = p.slaDays ?? GRIEVANCE_ESCALATION_SLA_DAYS;

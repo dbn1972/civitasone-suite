@@ -3,12 +3,16 @@ export const COMMANDS = {
   fileMove:             "estab.file.move",
   fileClose:            "estab.file.close",
   notingAdd:            "estab.noting.add",
+  notingSubmit:         "estab.noting.submit",
+  inwardOpenFile:       "estab.inward.open_file",
   dispatchCreate:       "estab.dispatch.create",
   inwardRegister:       "estab.inward.register",
+  fileAttachmentAdd:    "estab.file.attachment.add",
   committeeCreate:      "estab.committee.create",
   meetingCreate:        "estab.meeting.create",
   resolutionCreate:     "estab.resolution.create",
   meetingMinutes:       "estab.meeting.minutes",
+  attendanceRecord:     "estab.attendance.record",
   vehicleCreate:        "estab.vehicle.create",
   vehicleBook:          "estab.vehicle.book",
   vehicleReturn:        "estab.vehicle.return",
@@ -39,6 +43,8 @@ export const EVENTS = {
 /** Topics consumed from other services */
 export const CONSUMED_EVENTS = {
   citizenRtiFiled: "citizen.rti.filed",
+  fileApprove: "estab.file.approve",
+  fileReject: "estab.file.reject",
 } as const;
 
 export const SERVICE = "estab";

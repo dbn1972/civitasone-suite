@@ -1,13 +1,6 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatCard, StatusPill } from "../../../_components/ds";
 import { getAuditCompliance } from "../../../_data/loaders";
-
-const statusColors: Record<string, string> = {
-  complied: "bg-emerald-50 text-emerald-700",
-  pending: "bg-yellow-50 text-yellow-700",
-  overdue: "bg-red-50 text-red-700",
-  na: "bg-slate-100 text-slate-600",
-};
 
 export default async function AuditCompliancePage() {
   const { data: items, source } = await getAuditCompliance();
@@ -16,84 +9,78 @@ export default async function AuditCompliancePage() {
   const complied = items.filter((i) => i.status === "complied").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const overdue = items.filter((i) => i.status === "overdue").length;
+  const score = total > 0 ? Math.round((complied / total) * 100) : 0;
+
+  const dpdpItems = items.filter((i) => i.lawOrRule.toLowerCase().includes("dpdp") || i.lawOrRule.toLowerCase().includes("data"));
+  const certItems = items.filter((i) => i.lawOrRule.toLowerCase().includes("cert") || i.lawOrRule.toLowerCase().includes("iso") || i.lawOrRule.toLowerCase().includes("ntp"));
+  const displayDpdp = dpdpItems.length > 0 ? dpdpItems : items.slice(0, Math.ceil(items.length / 2));
+  const displayCert = certItems.length > 0 ? certItems : items.slice(Math.ceil(items.length / 2));
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/audit" className="hover:text-slate-900">Audit</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Compliance Tracking</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Compliance Tracking</h1>
-            <p className="mt-1 text-sm text-slate-600">Statutory and regulatory compliance requirements with due dates and evidence.</p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{total}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Complied</p>
-            <p className="mt-1 text-2xl font-bold text-green-600">{complied}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Pending</p>
-            <p className="mt-1 text-2xl font-bold text-yellow-600">{pending}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Overdue</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{overdue}</p>
-          </div>
-        </section>
-
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table aria-label="Compliance items" className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th scope="col" className="px-4 py-3">Law / Rule</th>
-                <th scope="col" className="px-4 py-3">Section</th>
-                <th scope="col" className="px-4 py-3">Requirement</th>
-                <th scope="col" className="px-4 py-3">Frequency</th>
-                <th scope="col" className="px-4 py-3">Due Date</th>
-                <th scope="col" className="px-4 py-3">Department</th>
-                <th scope="col" className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
+    <div className="wrap">
+      <PageHeader
+        title="Compliance — DPDP & CERT-In"
+        subtitle="Data-protection (DPDP Act), CERT-In directions & security-policy posture."
+        actions={
+          <>
+            <button className="btn ghost">Evidence</button>
+            <button className="btn primary">Generate Report</button>
+          </>
+        }
+      />
+      <div className="grid g-4" style={{ marginBottom: 18 }}>
+        <StatCard icon="📜" iconBg="#f5f3ff" label="Compliance Score" value={`${score}%`} />
+        <StatCard icon="🔏" iconBg="#e6f7f0" label="Controls Complied" value={`${complied} / ${total}`} />
+        <StatCard icon="🛡️" iconBg="#eff8ff" label="CERT-In Directions" value={overdue === 0 ? "Compliant" : "Review"} delta="6-hr reporting" up={overdue === 0} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Open Actions" value={pending + overdue} />
+      </div>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <div className="grid g-2">
+        <div className="card">
+          <div className="card-h"><h3>Compliance requirements</h3></div>
+          <table className="tbl">
+            <thead><tr><th>Law / Rule</th><th>Requirement</th><th>Due</th><th>Status</th></tr></thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-t border-slate-200 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-800">{item.lawOrRule}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.section ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-800 max-w-xs truncate">{item.requirement}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.frequency}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.dueDate}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.department ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[item.status] ?? "bg-slate-100 text-slate-600"}`}>
-                      {item.status}
-                    </span>
+              {displayDpdp.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.lawOrRule}{item.section ? ` §${item.section}` : ""}</td>
+                  <td>{item.requirement}</td>
+                  <td>{item.dueDate}</td>
+                  <td>
+                    {item.status === "complied" ? <span className="pill good">Compliant</span>
+                      : item.status === "overdue" ? <span className="pill bad">Overdue</span>
+                      : item.status === "pending" ? <span className="pill warn">In progress</span>
+                      : <span className="pill mut">Planned</span>}
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && source !== "error" && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                    <span className="block font-medium text-slate-700">No compliance items</span>
-                    <span className="mt-1 block text-slate-400">Compliance requirements will appear here once configured.</span>
-                  </td>
-                </tr>
-              )}
+              {displayDpdp.length === 0 && <tr><td colSpan={4}><div className="empty-state"><div>📜</div><h4>No items</h4><p>Compliance requirements will appear here once configured.</p></div></td></tr>}
             </tbody>
           </table>
-        </section>
-      </section>
-    </main>
+        </div>
+        <div className="card">
+          <div className="card-h"><h3>Regulatory &amp; govt policy</h3></div>
+          <table className="tbl">
+            <thead><tr><th>Law / Rule</th><th>Requirement</th><th>Dept</th><th>Status</th></tr></thead>
+            <tbody>
+              {displayCert.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.lawOrRule}</td>
+                  <td>{item.requirement}</td>
+                  <td>{item.department ?? "—"}</td>
+                  <td>
+                    {item.status === "complied" ? <span className="pill good">Compliant</span>
+                      : item.status === "overdue" ? <span className="pill bad">Overdue</span>
+                      : item.status === "pending" ? <span className="pill warn">In progress</span>
+                      : <span className="pill mut">Planned</span>}
+                  </td>
+                </tr>
+              ))}
+              {displayCert.length === 0 && <tr><td colSpan={4}><div className="empty-state"><div>📋</div><h4>No items</h4><p></p></div></td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }

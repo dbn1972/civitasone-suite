@@ -36,7 +36,7 @@ export async function listUtilizationCerts(tenantId: string, limit: number) {
       amount: minorToAmount(row.utilisedMinor),
       periodFrom: `${row.period}-01`,
       periodTo: `${row.period}-28`,
-      submittedDate: row.submittedAt.toISOString().slice(0, 10),
+      submittedDate: new Date(row.submittedAt as unknown as string).toISOString().slice(0, 10),
       status: mapUcStatus(row.status),
     });
   }

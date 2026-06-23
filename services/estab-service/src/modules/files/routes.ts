@@ -3,14 +3,19 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { idParam, createFileBody, addNotingBody, moveFileBody, closeFileBody, createDispatchBody, registerInwardBody } from "./validators.js";
+import {
+  idParam, createFileBody, addNotingBody, moveFileBody, closeFileBody,
+  createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
+  addAttachmentBody,
+} from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
 import { isTopSecret } from "./domain.js";
 import { enqueue } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
 
-const ESTAB_ROLES  = ["estab_officer", "estab_admin", "super_admin"];
+const ESTAB_ROLES  = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
 
 export async function filesRoutes(app: FastifyInstance): Promise<void> {
@@ -27,6 +32,14 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = addNotingBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addNoting(ctx, id, body));
+  });
+
+  app.post("/v1/estab/files/:id/submit-for-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = submitNotingBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitNotingForApproval(ctx, id, body));
   });
 
   app.patch("/v1/estab/files/:id/move", async (req, reply) => {
@@ -59,6 +72,14 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.registerInward(ctx, body));
   });
 
+  app.post("/v1/estab/inward/:id/open-file", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = openFileFromInwardBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.openFileFromInward(ctx, id, body));
+  });
+
   app.get("/v1/estab/files", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -67,11 +88,43 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: files, pagination: { hasMore: files.length === q.limit, pageSize: q.limit } });
   });
 
+  app.get("/v1/estab/inward", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listInward(ctx.tenantId, q.limit);
+    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+  });
+
+  app.get("/v1/estab/dispatch", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listDispatch(ctx.tenantId, q.limit);
+    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+  });
+
+  app.get("/v1/estab/files/:id/movements", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const movements = await queries.listFileMovements(ctx.tenantId, id);
+    return reply.send({ data: movements });
+  });
+
+  app.post("/v1/estab/files/:id/attachments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = addAttachmentBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addAttachment(ctx, id, body));
+  });
+
   app.get("/v1/estab/files/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const file = await queries.getFile(ctx.tenantId, id);
+    const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
     if (isTopSecret(file.classification)) {
       await db.transaction(async (tx) => {
@@ -84,6 +137,8 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply.send(file);
   });
+
+  await app.register(noteSheetPrintRoutes);
 
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;

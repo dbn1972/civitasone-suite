@@ -1,7 +1,7 @@
 {
-  "gateway": "http://localhost:18080",
+  "gateway": "http://localhost:8080",
   "tenant": "00000000-0000-0000-0000-000000000001",
-  "testedAt": "2026-06-21T01:47:31.973Z",
+  "testedAt": "2026-06-21T16:42:26.305Z",
   "results": [
     {
       "module": "analytics",
@@ -16,7 +16,7 @@
       "module": "assets",
       "screen": "/assets/[id]",
       "loader": "getAssetById",
-      "apiPath": "/api/v1/asset/assets/:param",
+      "apiPath": "/api/v1/asset/assets/77777777-0001-0000-0000-000000000003",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -79,7 +79,7 @@
       "module": "audit",
       "screen": "/audit/observations/[id]",
       "loader": "getAuditObservationById",
-      "apiPath": "/api/v1/audit/observations/:param",
+      "apiPath": "/api/v1/audit/observations/99999999-0001-0000-0000-000000000005",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -169,7 +169,7 @@
       "module": "crm",
       "screen": "/crm/contacts/[id]",
       "loader": "getContactById",
-      "apiPath": "/api/v1/crm/contacts/:param",
+      "apiPath": "/api/v1/crm/contacts/eeeeeeee-0002-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -196,7 +196,7 @@
       "module": "crm",
       "screen": "/crm/deals/[id]",
       "loader": "getDealById",
-      "apiPath": "/api/v1/crm/deals/:param",
+      "apiPath": "/api/v1/crm/deals/eeeeeeee-0002-0000-0000-000000000003",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -232,7 +232,7 @@
       "module": "estab",
       "screen": "/estab/files/[id]",
       "loader": "getEstabFileById",
-      "apiPath": "/api/v1/estab/files/:param",
+      "apiPath": "/api/v1/estab/files/66666666-0001-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -259,7 +259,7 @@
       "module": "estab",
       "screen": "/estab/meetings/[id]",
       "loader": "getMeetingById",
-      "apiPath": "/api/v1/estab/meetings/:param",
+      "apiPath": "/api/v1/estab/meetings/66666666-0001-0000-0000-000000000005",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -313,7 +313,7 @@
       "module": "finance",
       "screen": "/finance/budget/sanctions/[id]",
       "loader": "getFinanceSanctionById",
-      "apiPath": "/api/v1/finance/sanctions/:param",
+      "apiPath": "/api/v1/finance/sanctions/dddddddd-0001-0000-0000-000000000005",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -358,7 +358,7 @@
       "module": "finance",
       "screen": "/finance/expenditure/bills/[id]",
       "loader": "getFinanceBillById",
-      "apiPath": "/api/v1/finance/bills/:param",
+      "apiPath": "/api/v1/finance/bills/dddddddd-0001-0000-0000-000000000007",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -394,7 +394,7 @@
       "module": "grants",
       "screen": "/grants/[id]",
       "loader": "getGrantById",
-      "apiPath": "/api/v1/grants/grants/:param",
+      "apiPath": "/api/v1/grants/grants/55555555-0001-0000-0000-000000000005",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -484,7 +484,7 @@
       "module": "helpdesk",
       "screen": "/helpdesk/tickets/[id]",
       "loader": "getHelpdeskTicketById",
-      "apiPath": "/api/v1/citizen/tickets/:param",
+      "apiPath": "/api/v1/citizen/tickets/55555555-0004-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -547,7 +547,7 @@
       "module": "hr",
       "screen": "/hr/employees/[id]",
       "loader": "getEmployeeById",
-      "apiPath": "/api/v1/hrms/employees/:param",
+      "apiPath": "/api/v1/hrms/employees/eeeeeeee-0001-0000-0000-000000000005",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -563,9 +563,18 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/orgchart",
+      "loader": "getOrgChart",
+      "apiPath": "/api/v1/hrms/org-chart",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "hr",
       "screen": "/hr/payroll/[id]",
       "loader": "getPayrollRunById",
-      "apiPath": "/api/v1/payroll/runs/:param",
+      "apiPath": "/api/v1/payroll/runs/ffffffff-0001-0000-0000-000000000005",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -608,6 +617,15 @@
     },
     {
       "module": "inventory",
+      "screen": "/inventory/list",
+      "loader": "getStockItems",
+      "apiPath": "/api/v1/stock/items",
+      "status": 200,
+      "verdict": "PASS",
+      "reason": ""
+    },
+    {
+      "module": "inventory",
       "screen": "/inventory/reconcile",
       "loader": "getStockLedger",
       "apiPath": "/api/v1/stock/ledger",
@@ -637,7 +655,7 @@
       "module": "legal",
       "screen": "/legal/cases/[id]",
       "loader": "getLegalCaseById",
-      "apiPath": "/api/v1/legal/cases/:param",
+      "apiPath": "/api/v1/legal/cases/aaaaaaaa-0002-0000-0000-000000000003",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -754,7 +772,7 @@
       "module": "procurement",
       "screen": "/procurement/indents/[id]",
       "loader": "getProcurementIndentById",
-      "apiPath": "/api/v1/procurement/indents/:param",
+      "apiPath": "/api/v1/procurement/indents/11111111-0002-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -772,7 +790,7 @@
       "module": "procurement",
       "screen": "/procurement/orders/[id]",
       "loader": "getProcurementPOById",
-      "apiPath": "/api/v1/procurement/pos/:param",
+      "apiPath": "/api/v1/procurement/pos/11111111-0002-0000-0000-000000000003",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -790,7 +808,7 @@
       "module": "procurement",
       "screen": "/procurement/rfq/[id]",
       "loader": "getRFQById",
-      "apiPath": "/api/v1/procurement/rfqs/:param",
+      "apiPath": "/api/v1/procurement/rfqs/11111111-0003-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -808,7 +826,7 @@
       "module": "procurement",
       "screen": "/procurement/tenders/[id]",
       "loader": "getProcurementTenderById",
-      "apiPath": "/api/v1/procurement/tenders/:param",
+      "apiPath": "/api/v1/procurement/tenders/11111111-0003-0000-0000-000000000003",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -826,7 +844,7 @@
       "module": "procurement",
       "screen": "/procurement/vendors/[id]",
       "loader": "getProcurementVendorById",
-      "apiPath": "/api/v1/procurement/vendors/:param",
+      "apiPath": "/api/v1/procurement/vendors/eeeeeeee-0001-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -844,7 +862,7 @@
       "module": "projects",
       "screen": "/projects/[id]",
       "loader": "getProjectById",
-      "apiPath": "/api/v1/project/projects/:param",
+      "apiPath": "/api/v1/project/projects/44444444-0001-0000-0000-000000000003",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -898,7 +916,7 @@
       "module": "reports",
       "screen": "/reports/[id]",
       "loader": "getReportJobById",
-      "apiPath": "/api/v1/reports/report-jobs/:param",
+      "apiPath": "/api/v1/reports/report-jobs/33333333-0003-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -943,7 +961,7 @@
       "module": "stock",
       "screen": "/stock/[id]",
       "loader": "getStockItemById",
-      "apiPath": "/api/v1/stock/items/:param",
+      "apiPath": "/api/v1/stock/items/88888888-0001-0000-0000-000000000005",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -953,15 +971,6 @@
       "screen": "/stock/dashboard",
       "loader": "getStockDashboard",
       "apiPath": "/api/v1/stock/dashboard",
-      "status": 200,
-      "verdict": "PASS",
-      "reason": ""
-    },
-    {
-      "module": "stock",
-      "screen": "/stock/list",
-      "loader": "getStockItems",
-      "apiPath": "/api/v1/stock/items",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -1024,7 +1033,7 @@
       "module": "tenant-admin",
       "screen": "/tenant-admin/roles/[id]",
       "loader": "getAdminRoleById",
-      "apiPath": "/api/policy/roles/:param",
+      "apiPath": "/api/policy/roles/bbbbbbbb-0001-0000-0000-000000000001",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -1069,7 +1078,7 @@
       "module": "tenant-admin",
       "screen": "/tenant-admin/users/[id]",
       "loader": "getAdminUserById",
-      "apiPath": "/api/identity/users/:param",
+      "apiPath": "/api/identity/users/00000000-0000-0000-0000-000000000002",
       "status": 200,
       "verdict": "PASS",
       "reason": ""
@@ -1103,8 +1112,8 @@
     }
   ],
   "counts": {
-    "total": 122,
-    "passed": 122,
+    "total": 123,
+    "passed": 123,
     "failed": 0,
     "empty": 0
   }

@@ -16,6 +16,11 @@ export const createAssetBody = z.object({
   grnRef:          z.string().optional(),
   location:        z.string().optional(),
   notes:           z.string().optional(),
+  barcode:         z.string().optional(),
+});
+
+export const tagBarcodeBody = z.object({
+  barcode: z.string().min(1).max(128),
 });
 export type CreateAssetBody = z.infer<typeof createAssetBody>;
 

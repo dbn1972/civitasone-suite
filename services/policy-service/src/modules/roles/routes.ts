@@ -41,6 +41,16 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateRole(ctx, id, body));
   });
 
+  app.get("/policy/roles/:id/permissions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const { id } = roleIdParam.parse(req.params);
+    const role = await queries.getRole(ctx.tenantId, id);
+    if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
+    const data = await queries.listRolePermissions(ctx.tenantId, id);
+    return reply.send({ data });
+  });
+
   app.post("/policy/roles/:id/permissions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);

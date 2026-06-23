@@ -6,6 +6,11 @@ function minorToAmount(minor: bigint): number {
   return Number(minor) / 100;
 }
 
+function toDateOnly(value: Date | string | null | undefined): string {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  return new Date(value as string).toISOString().slice(0, 10);
+}
+
 function mapFundingType(type: string): "central" | "state" | "centrally_sponsored" | "external" {
   if (type === "state") return "state";
   if (type === "external") return "external";
@@ -25,16 +30,20 @@ export async function listSchemeSummaries(tenantId: string, limit: number) {
     cache.makeKey(tenantId, "schemes", `list:${limit}`),
     () => repo.listSchemesByTenant(tenantId, limit),
   );
-  return (rows ?? []).map((row) => ({
-    id: row.id,
-    schemeCode: row.code,
-    name: row.name,
-    fundingType: mapFundingType(row.type),
-    totalAllocation: minorToAmount(row.totalOutlayMinor),
-    releasedAmount: minorToAmount(row.releasedMinor),
-    projectCount: 0,
-    status: (row.status === "completed" ? "completed" : row.status === "discontinued" ? "discontinued" : "active") as "active" | "completed" | "discontinued",
-  }));
+  const summaries = [];
+  for (const row of rows ?? []) {
+    summaries.push({
+      id: row.id,
+      schemeCode: row.code,
+      name: row.name,
+      fundingType: mapFundingType(row.type),
+      totalAllocation: minorToAmount(row.totalOutlayMinor),
+      releasedAmount: minorToAmount(row.releasedMinor),
+      projectCount: await repo.countProjectsByScheme(row.id),
+      status: (row.status === "completed" ? "completed" : row.status === "discontinued" ? "discontinued" : "active") as "active" | "completed" | "discontinued",
+    });
+  }
+  return summaries;
 }
 
 export async function listFundReleaseSummaries(tenantId: string, limit: number) {
@@ -51,7 +60,7 @@ export async function listFundReleaseSummaries(tenantId: string, limit: number) 
       projectId: row.schemeId,
       projectName: scheme?.name ?? row.schemeId,
       amount: minorToAmount(row.amountMinor),
-      releaseDate: (row.disbursedAt ?? row.createdAt).toISOString().slice(0, 10),
+      releaseDate: toDateOnly(row.disbursedAt ?? row.createdAt),
       releasedBy: row.sanctionedBy ?? undefined,
       status: (row.status === "disbursed" ? "released" : row.status === "utilised" ? "utilized" : "sanctioned") as "sanctioned" | "released" | "utilized",
     });

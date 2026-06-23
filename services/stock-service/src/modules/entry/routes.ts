@@ -27,7 +27,14 @@ export async function entryRoutes(app: FastifyInstance): Promise<void> {
     if (q.from !== undefined) ledgerOpts.from = q.from;
     if (q.to !== undefined) ledgerOpts.to = q.to;
     const rows = await repo.findLedger(ctx.tenantId, q.itemId ?? null, ledgerOpts);
-    return reply.send({ data: rows, limit: q.limit, offset: q.offset });
+    return reply.send({
+      data: rows.map((row) => ({
+        ...row,
+        rateMinor: row.rateMinor?.toString?.() ?? row.rateMinor,
+      })),
+      limit: q.limit,
+      offset: q.offset,
+    });
   });
 
   app.get("/v1/stock/valuation", async (req, reply) => {

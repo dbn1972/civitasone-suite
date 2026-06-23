@@ -1,9 +1,9 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createIndentBody, approveIndentBody, idParam, indentQueryParams } from "./validators.js";
+import { createIndentBody, approveIndentBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -21,16 +21,26 @@ export async function indentRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/procurement/indents/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
+    if (!ctx.roles.includes("super_admin")) {
+      throw new HttpError(403, "WORKFLOW_REQUIRED", "Approve indent via workflow task inbox (/procurement/approvals)");
+    }
     const { id } = idParam.parse(req.params);
     const body = approveIndentBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveIndent(ctx, id, body));
   });
 
+  app.get("/v1/procurement/indents/tender-required", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const rows = await queries.listTenderRequiredIndents(ctx.tenantId);
+    return reply.send({ data: rows.map((r) => ({ ...r, totalMinor: String(r.totalMinor) })) });
+  });
+
   app.get("/v1/procurement/indents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { tenantId } = indentQueryParams.parse(req.query);
-    const list = await queries.listIndents(tenantId ?? ctx.tenantId);
+    const q = listQuerySchema.parse(req.query);
+    const list = await queries.listIndents(ctx.tenantId, q.limit, q.offset);
     return reply.send(list);
   });
 

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateCommitteeBody, CreateMeetingBody, CreateResolutionBody, MinutesBody } from "./validators.js";
+import type { CreateCommitteeBody, CreateMeetingBody, CreateResolutionBody, MinutesBody, RecordAttendanceBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -44,4 +44,15 @@ export async function uploadMinutes(ctx: RequestContext, meetingId: string, body
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "meeting", meetingId));
   return { id: meetingId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function recordAttendance(ctx: RequestContext, meetingId: string, body: RecordAttendanceBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.attendanceRecord, {
+    messageId: id, type: COMMANDS.attendanceRecord,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, meetingId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "meeting", meetingId));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }

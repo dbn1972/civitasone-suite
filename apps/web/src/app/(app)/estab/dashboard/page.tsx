@@ -1,65 +1,88 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getEstabDashboard } from "../../../_data/loaders";
+import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
+import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
 
 export default async function EstabDashboardPage() {
-  const { data, source } = await getEstabDashboard();
+  const [{ data, source }, { data: files }] = await Promise.all([
+    getEstabDashboard(),
+    getEstabFiles(),
+  ]);
+
+  const recent = (files ?? []).slice(0, 8);
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/estab" className="hover:text-slate-900">Establishment</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Dashboard</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Establishment &amp; Administration</h1>
-            <p className="mt-1 text-sm text-slate-600">Files, meetings, fleet, guest house and compliance.</p>
+    <>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Establishment & Administration"
+        subtitle="Integrated eOffice — DAK, noting, multi-hop approval, pendency."
+        actions={
+          <>
+            <Link href="/estab/dak" className="btn ghost">DAK Registry</Link>
+            <Link href="/estab/files/new" className="btn primary">+ Create File</Link>
+          </>
+        }
+      />
+      <StatGrid>
+        <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={data.filesPending.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" iconBg="#fef2f2" label="SLA Breached" value={data.slaBreached.toLocaleString("en-IN")} />
+        <StatCard icon="📬" iconBg="#eff6ff" label="DAK Pending" value={data.dakPending.toLocaleString("en-IN")} />
+        <StatCard icon="📊" iconBg="#fffaeb" label="Avg Pendency (days)" value={String(data.avgPendencyDays)} />
+        <StatCard icon="📅" iconBg="#f5f3ff" label="Meetings Today" value={data.meetingsToday.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Compliance Due" value={data.complianceItemsDue.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="grid g-main" style={{ marginTop: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="card">
+            <div className="card-h">
+              <h3>Recent files (eOffice)</h3>
+              <Link className="lnk" href="/estab/list">All files →</Link>
+            </div>
+            {recent.length === 0 ? (
+              <p className="pad" style={{ color: "#94a3b8", fontSize: 13 }}>No files yet — register DAK or create a file.</p>
+            ) : (
+              <table className="tbl">
+                <thead><tr><th>File No</th><th>Subject</th><th>Status</th><th>Due</th></tr></thead>
+                <tbody>
+                  {recent.map((f) => (
+                    <tr key={f.id}>
+                      <td><Link href={`/estab/files/${f.id}`} className="mono">{f.fileNo}</Link></td>
+                      <td>{f.subject}</td>
+                      <td><StatusPill status={f.status} label={f.status.replace(/_/g, " ")} /></td>
+                      <td>{f.dueDate?.slice(0, 10) ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Files Pending</p>
-            <p className="mt-1 text-2xl font-bold text-amber-600">{data.filesPending.toLocaleString("en-IN")}</p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="card">
+            <div className="card-h">
+              <h3>Quick links</h3>
+            </div>
+            <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
+              <Link href="/estab/dak">📬 DAK / Inward registry</Link>
+              <Link href="/estab/approvals">✅ Noting approval queue (SO → US → DS)</Link>
+              <Link href="/estab/dispatch">📤 Outward dispatch</Link>
+              <Link href="/estab/compliance">📋 Compliance tracker</Link>
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Meetings Today</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{data.meetingsToday.toLocaleString("en-IN")}</p>
+          <div className="card">
+            <div className="card-h">
+              <h3>Pendency snapshot</h3>
+            </div>
+            <div className="fields pad">
+              <div className="fld"><div className="l">Active files</div><div className="v">{data.filesPending}</div></div>
+              <div className="fld"><div className="l">Unlinked DAK</div><div className="v">{data.dakPending}</div></div>
+              <div className="fld"><div className="l">SLA breached</div><div className="v">{data.slaBreached}</div></div>
+              <div className="fld"><div className="l">Avg pendency</div><div className="v">{data.avgPendencyDays} days</div></div>
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Vehicles In Use</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">{data.vehiclesInUse.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Compliance Items Due</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{data.complianceItemsDue.toLocaleString("en-IN")}</p>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-          {[
-            { label: "Files (eOffice)", href: "/estab/list" },
-            { label: "New File", href: "/estab/files/new" },
-            { label: "Meetings", href: "/estab/meetings" },
-            { label: "Fleet", href: "/estab/vehicles" },
-            { label: "Guest House", href: "/estab/guesthouse" },
-            { label: "Compliance", href: "/estab/compliance" },
-          ].map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md text-sm font-medium text-slate-800"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </section>
-      </section>
-    </main>
+        </div>
+      </div>
+    </>
   );
 }

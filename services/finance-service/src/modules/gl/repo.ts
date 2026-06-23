@@ -1,6 +1,7 @@
 import { eq, and, gte, lte, sql, asc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { financeJournals, financeLedger, type JournalRow, type JournalInsert, type LedgerInsert } from "./schema.js";
+import { financeHeads } from "../budget/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -17,8 +18,20 @@ export async function findJournalById(id: string): Promise<JournalRow | null> {
   return rows[0] ?? null;
 }
 
-export async function getLedgerLines(tenantId: string, headId: string, from?: string, to?: string, limit = 50) {
-  const conditions = [eq(financeLedger.tenantId, tenantId), eq(financeLedger.headId, headId)];
+/** Resolve a headId that may be a UUID or a 4-digit account code. Returns the UUID or null. */
+export async function resolveHeadId(tenantId: string, headIdOrCode: string): Promise<string | null> {
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(headIdOrCode);
+  if (isUUID) return headIdOrCode;
+  const rows = await db.select({ id: financeHeads.id })
+    .from(financeHeads)
+    .where(and(eq(financeHeads.tenantId, tenantId), eq(financeHeads.code, headIdOrCode)))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
+export async function getLedgerLines(tenantId: string, headId: string | undefined, from?: string, to?: string, limit = 50) {
+  const conditions: ReturnType<typeof eq>[] = [eq(financeLedger.tenantId, tenantId)];
+  if (headId) conditions.push(eq(financeLedger.headId, headId));
   if (from) conditions.push(gte(financeLedger.postingDate, from));
   if (to)   conditions.push(lte(financeLedger.postingDate, to));
   return db.select().from(financeLedger).where(and(...conditions)).orderBy(asc(financeLedger.postingDate)).limit(limit);

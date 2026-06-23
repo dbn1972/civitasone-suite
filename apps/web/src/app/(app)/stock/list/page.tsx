@@ -1,103 +1,78 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockItems } from "../../../_data/loaders";
+import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
 
 export default async function StockListPage() {
   const { data: items, source } = await getStockItems();
-
   const lowStockCount = items.filter((i) => i.isLowStock).length;
   const totalValue = items.reduce((sum, i) => sum + i.totalValue, 0);
   const categories = new Set(items.map((i) => i.category)).size;
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/stock" className="hover:text-slate-900">Stock</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Items</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Stock Items</h1>
-            <p className="mt-1 text-sm text-slate-600">All stock-keeping units, levels and valuations.</p>
+    <>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Stock Items"
+        subtitle="All stock-keeping units, levels and valuations."
+        actions={
+          <>
+            <button className="btn ghost">Export</button>
+            <button className="btn primary">+ New Item</button>
+          </>
+        }
+      />
+      <StatGrid>
+        <StatCard icon="🏬" iconBg="#e6f7f5" label="SKUs" value={items.length.toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={`₹${(totalValue / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="⚠️" iconBg="#fffaeb" label="Low Stock" value={lowStockCount.toLocaleString("en-IN")} />
+        <StatCard icon="📦" iconBg="#ecfdf3" label="Categories" value={categories.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h">
+          <h3>Stock register</h3>
+          <div className="seg">
+            <span className="on">All</span>
+            <span>Low stock</span>
           </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total SKUs</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{items.length.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Low Stock Items</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{lowStockCount.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Value (₹)</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">₹{(totalValue / 100).toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Categories</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{categories.toLocaleString("en-IN")}</p>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table aria-label="Stock items" className="min-w-full text-left text-sm">
-              <thead className="bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Item Code</th>
-                  <th scope="col" className="px-4 py-3">Name</th>
-                  <th scope="col" className="px-4 py-3">Category</th>
-                  <th scope="col" className="px-4 py-3">Unit</th>
-                  <th scope="col" className="px-4 py-3 text-right">Current Stock</th>
-                  <th scope="col" className="px-4 py-3 text-right">Min Level</th>
-                  <th scope="col" className="px-4 py-3 text-right">Unit Cost (₹)</th>
-                  <th scope="col" className="px-4 py-3 text-right">Total Value (₹)</th>
-                  <th scope="col" className="px-4 py-3">Warehouse</th>
-                  <th scope="col" className="px-4 py-3">Status</th>
+        </div>
+        {items.length === 0 ? (
+          <EmptyState icon="📦" title="No stock items found" message="Add stock items to track inventory levels." />
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Item code</th>
+                <th>Name</th>
+                <th>UOM</th>
+                <th className="num">On-hand qty</th>
+                <th className="num">Value ₹</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="clickable">
+                  <td>
+                    <a href={`/stock/${item.id}`}>
+                      <span className="mono">{item.itemCode}</span>
+                    </a>
+                  </td>
+                  <td>{item.name}</td>
+                  <td>{item.unit}</td>
+                  <td className="num">{item.currentStock.toLocaleString("en-IN")}</td>
+                  <td className="num">₹{(item.totalValue / 100).toLocaleString("en-IN")}</td>
+                  <td>
+                    <StatusPill
+                      status={item.isLowStock ? "bad" : "active"}
+                      label={item.isLowStock ? "Low Stock" : "OK"}
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="px-4 py-6 text-center text-slate-400">No stock items found</td>
-                  </tr>
-                ) : (
-                  items.map((item) => (
-                    <tr key={item.id} className={`border-t border-slate-200 hover:bg-slate-50 ${item.isLowStock ? "bg-red-50" : ""}`}>
-                      <td className="px-4 py-3">
-                        <Link href={`/stock/${item.id}`} className="font-mono text-xs text-blue-600 hover:underline">
-                          {item.itemCode}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{item.name}</td>
-                      <td className="px-4 py-3 text-slate-600">{item.category}</td>
-                      <td className="px-4 py-3 text-slate-600">{item.unit}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">{item.currentStock.toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{item.minStockLevel.toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">₹{(item.unitCost / 100).toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">₹{(item.totalValue / 100).toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3 text-slate-600">{item.warehouseLocation ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        {item.isLowStock ? (
-                          <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700">Low Stock</span>
-                        ) : (
-                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">OK</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-    </main>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
   );
 }

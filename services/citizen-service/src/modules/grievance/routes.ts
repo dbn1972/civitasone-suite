@@ -6,7 +6,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   idParam, citizenIdQuery, registerGrievanceBody, assignGrievanceBody,
-  grievanceActionBody, resolveGrievanceBody, escalateGrievanceBody,
+  grievanceActionBody, resolveGrievanceBody, escalateGrievanceBody, reopenGrievanceBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -15,6 +15,16 @@ const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_adm
 const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
 export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/citizen", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    return reply.send({
+      module: "citizen",
+      endpoints: ["/requests", "/grievances", "/rti", "/tickets"],
+      tenantId: ctx.tenantId,
+    });
+  });
+
   app.post("/v1/citizen/grievances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
@@ -52,6 +62,15 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = escalateGrievanceBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.escalateGrievance(ctx, id, body));
+  });
+
+  /* C-03: Citizen can reopen a resolved grievance within 30 days (CPGRAMS rule) */
+  app.patch("/v1/citizen/grievances/:id/reopen", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = reopenGrievanceBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reopenGrievance(ctx, id, body));
   });
 
   app.get("/v1/citizen/grievances/:id", async (req, reply) => {

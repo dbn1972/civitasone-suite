@@ -22,7 +22,7 @@ export const postJournalBody = z.object({
 export type PostJournalBody = z.infer<typeof postJournalBody>;
 
 export const ledgerQueryParams = z.object({
-  headId: z.string().uuid(),
+  headId: z.string().optional(),   // UUID or 4-digit account code; omit for all recent entries
   from:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   cursor: z.string().optional(),

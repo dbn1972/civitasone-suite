@@ -28,6 +28,8 @@ test.describe('Stock', () => {
     await expect(totalSkusCard).not.toContainText(/^0$/);
   });
 
+  // ── List ──────────────────────────────────────────────────────────────────
+
   test('stock list shows heading and column headers', async ({ page }) => {
     await page.goto('/stock/list');
     await expect(page.getByRole('heading', { name: 'Stock Items' })).toBeVisible();
@@ -48,6 +50,39 @@ test.describe('Stock', () => {
     await expect(page.getByRole('cell', { name: 'SKU-001' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'A4 Paper' })).toBeVisible();
   });
+
+  // ── Detail ───────────────────────────────────────────────────────────────
+
+  test('stock item detail shows item name and details section', async ({ page }) => {
+    await page.goto('/stock/sku-001');
+    await expect(page.getByRole('heading', { name: 'A4 Paper Ream' })).toBeVisible();
+    await expect(page.getByText('Details')).toBeVisible();
+    await expect(page.getByText('Current Stock')).toBeVisible();
+  });
+
+  test('stock item detail breadcrumb links back to list', async ({ page }) => {
+    await page.goto('/stock/sku-001');
+    await expect(page.getByRole('link', { name: 'Items' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Stock' })).toBeVisible();
+  });
+
+  test('stock item detail shows ledger section', async ({ page }) => {
+    await page.goto('/stock/sku-001');
+    await expect(page.getByRole('heading', { name: 'Stock Ledger' })).toBeVisible();
+  });
+
+  test('stock item detail ledger has type column', async ({ page }) => {
+    await page.goto('/stock/sku-001');
+    await expect(page.getByText('Type')).toBeVisible();
+  });
+
+  test('navigating list → detail preserves heading context', async ({ page }) => {
+    await page.goto('/stock/list');
+    await page.getByRole('link', { name: 'SKU-001' }).click();
+    await expect(page.getByRole('heading', { name: 'A4 Paper Ream' })).toBeVisible();
+  });
+
+  // ── Ledger list ───────────────────────────────────────────────────────────
 
   test('stock ledger shows heading and column headers', async ({ page }) => {
     await page.goto('/stock/ledger');

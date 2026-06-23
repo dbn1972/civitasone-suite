@@ -15,9 +15,15 @@ dependencies:
   flutter_riverpod: ^2.5.1
   go_router: ^14.0.0
   sqflite: ^2.3.3
+  # MOB-1a (02-T1): encrypt the on-disk cache at rest. sqflite_sqlcipher is a
+  # drop-in for sqflite that opens the DB with a PRAGMA key.
+  sqflite_sqlcipher: ^3.1.0+1
   path: ^1.9.0
   connectivity_plus: ^6.0.3
   uuid: ^4.4.0
+  # MOB-1c (02-T3): background sync so queued mutations flush without the user
+  # reopening the screen.
+  workmanager: ^0.5.2
 
 dev_dependencies:
   flutter_test:

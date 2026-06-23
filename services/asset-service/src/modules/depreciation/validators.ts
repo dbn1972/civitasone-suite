@@ -8,6 +8,7 @@ export type CreateDepScheduleBody = z.infer<typeof createDepScheduleBody>;
 
 export const runDepBody = z.object({
   period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM"),
+  depBook: z.enum(["company", "statutory", "all"]).default("all"),
 });
 export type RunDepBody = z.infer<typeof runDepBody>;
 

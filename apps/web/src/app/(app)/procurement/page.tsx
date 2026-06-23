@@ -1,6 +1,6 @@
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
-import { PageShell } from "../../_components/PageShell";
+import { PageHeader } from "../../_components/ds";
 
 const procurementTiles: NavTile[] = [
 	{ title: "Dashboard", href: "/procurement/dashboard", description: "Snapshot of procurement activity" },
@@ -16,8 +16,9 @@ const procurementTiles: NavTile[] = [
 
 export default function Page() {
 	return (
-		<PageShell title="Procurement" description="Manage requisitions, vendors, purchase orders, and tenders with approval controls.">
-			<LinkTiles tiles={procurementTiles} />
-		</PageShell>
+		<>
+			<PageHeader title="Procurement" subtitle="Requisitions, vendors, purchase orders, and tenders with approval controls." />
+			<LinkTiles tiles={procurementTiles} columns="four" />
+		</>
 	);
 }

@@ -1,14 +1,26 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import Link from "next/link";
+
+const DEFAULT_OFFICER = "00000000-0000-0000-0000-000000000099";
+
+const CLASS_MAP: Record<string, string> = {
+  unclassified: "public",
+  restricted: "confidential",
+  confidential: "confidential",
+  secret: "secret",
+  top_secret: "top_secret",
+};
 
 export default function NewFilePage() {
+  const router = useRouter();
   const [subject, setSubject] = useState("");
   const [classification, setClassification] = useState("unclassified");
-  const [department, setDepartment] = useState("");
-  const [tags, setTags] = useState("");
+  const [department, setDepartment] = useState("ADMIN");
   const [initialNote, setInitialNote] = useState("");
+  const [dakNo, setDakNo] = useState("");
+  const [parentFileId, setParentFileId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -16,12 +28,17 @@ export default function NewFilePage() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const year = new Date().getFullYear();
+      const fileNo = `F/${year}/${String(Math.floor(Math.random() * 9000) + 1000)}`;
       const payload = {
+        fileNo,
         subject,
-        classification,
-        department: department || undefined,
-        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        dept: department || "ADMIN",
+        classification: CLASS_MAP[classification] ?? "public",
+        currentWith: DEFAULT_OFFICER,
         initialNote: initialNote || undefined,
+        dakNo: dakNo || undefined,
+        parentFileId: parentFileId.trim() || undefined,
       };
       const res = await fetch("/api/proxy/v1/estab/files", {
         method: "POST",
@@ -29,13 +46,11 @@ export default function NewFilePage() {
         body: JSON.stringify(payload),
       });
       if (res.status === 202 || res.ok) {
-        const body = await res.json().catch(() => ({})) as { fileNo?: string };
-        setToast({ type: "success", message: `File created${body.fileNo ? `: ${body.fileNo}` : ""}.` });
-        setSubject("");
-        setDepartment("");
-        setTags("");
-        setInitialNote("");
-        setClassification("unclassified");
+        const body = await res.json().catch(() => ({})) as { id?: string };
+        setToast({ type: "success", message: `File ${fileNo} created with yellow note.` });
+        if (body.id) {
+          setTimeout(() => router.push(`/estab/files/${body.id}`), 800);
+        }
       } else {
         const body = await res.json().catch(() => ({})) as { message?: string };
         setToast({ type: "error", message: body.message ?? `Error ${res.status}` });
@@ -49,52 +64,51 @@ export default function NewFilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-2xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/estab" className="hover:text-slate-900">Establishment</Link>
-          <span className="mx-2">/</span>
-          <Link href="/estab/list" className="hover:text-slate-900">Files</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">New File</span>
-        </nav>
+    <>
+      <a className="back" href="/estab/list">← Back</a>
+      <div className="ph" style={{ marginTop: 6 }}>
+        <div>
+          <h1>Create File</h1>
+          <div className="sub">Opens a new eOffice digital file with an initial yellow note.</div>
+        </div>
+      </div>
 
-        <header>
-          <h1 className="text-3xl font-semibold text-slate-900">Create File</h1>
-          <p className="mt-1 text-sm text-slate-600">Opens a new eOffice digital file with an initial note.</p>
-        </header>
+      {toast && (
+        <div
+          className="banner"
+          style={{
+            background: toast.type === "success" ? "#ecfdf3" : "#fef2f2",
+            border: `1px solid ${toast.type === "success" ? "#6ee7b7" : "#fca5a5"}`,
+            color: toast.type === "success" ? "#065f46" : "#991b1b",
+            borderRadius: 12,
+            padding: "13px 16px",
+            marginBottom: 18,
+            fontSize: 13,
+          }}
+        >
+          {toast.message}
+        </div>
+      )}
 
-        {toast && (
-          <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${toast.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>
-            {toast.message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div>
-              <label htmlFor="subject" className="block text-sm font-medium text-slate-700">
-                Subject <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="subject"
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="Brief subject of the file"
-                required
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+      <div className="card">
+        <div className="card-h"><h3>File details</h3></div>
+        <form onSubmit={handleSubmit}>
+          <div className="fields">
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <label htmlFor="subject" className="l">Subject <span style={{ color: "#ef4444" }}>*</span></label>
+              <input id="subject" type="text" value={subject} onChange={(e) => setSubject(e.target.value)} required style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
             </div>
-
-            <div>
-              <label htmlFor="classification" className="block text-sm font-medium text-slate-700">Classification</label>
-              <select
-                id="classification"
-                value={classification}
-                onChange={(e) => setClassification(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <label htmlFor="dakNo" className="l">Linked DAK No (optional)</label>
+              <input id="dakNo" type="text" value={dakNo} onChange={(e) => setDakNo(e.target.value)} placeholder="DAK/2026/001" style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <label htmlFor="parentFileId" className="l">Parent file ID (part-file, optional)</label>
+              <input id="parentFileId" type="text" value={parentFileId} onChange={(e) => setParentFileId(e.target.value)} placeholder="UUID of main file" style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <label htmlFor="classification" className="l">Classification</label>
+              <select id="classification" value={classification} onChange={(e) => setClassification(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}>
                 <option value="unclassified">Unclassified</option>
                 <option value="restricted">Restricted</option>
                 <option value="confidential">Confidential</option>
@@ -102,61 +116,21 @@ export default function NewFilePage() {
                 <option value="top_secret">Top Secret</option>
               </select>
             </div>
-
-            <div>
-              <label htmlFor="department" className="block text-sm font-medium text-slate-700">Department</label>
-              <input
-                id="department"
-                type="text"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="e.g. Finance, IT, HR"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <label htmlFor="department" className="l">Department</label>
+              <input id="department" type="text" value={department} onChange={(e) => setDepartment(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
             </div>
-
-            <div>
-              <label htmlFor="tags" className="block text-sm font-medium text-slate-700">Tags</label>
-              <input
-                id="tags"
-                type="text"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="Comma-separated tags, e.g. procurement, urgent"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <label htmlFor="initialNote" className="l">Initial yellow note</label>
+              <textarea id="initialNote" value={initialNote} onChange={(e) => setInitialNote(e.target.value)} rows={4} placeholder="Opening yellow note on note sheet" style={{ width: "100%", padding: "8px 12px", border: "1px solid #fde047", borderRadius: 8, fontSize: 13, background: "#fefce8", resize: "vertical" }} />
             </div>
-
-            <div>
-              <label htmlFor="initialNote" className="block text-sm font-medium text-slate-700">Initial Note</label>
-              <textarea
-                id="initialNote"
-                value={initialNote}
-                onChange={(e) => setInitialNote(e.target.value)}
-                rows={4}
-                placeholder="Opening note or context for this file"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </section>
-
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-md bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {submitting ? "Creating…" : "Create File"}
-            </button>
-            <Link
-              href="/estab/list"
-              className="rounded-md border border-slate-300 px-6 py-2 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Cancel
-            </Link>
+          </div>
+          <div className="pad" style={{ borderTop: "1px solid var(--line)", display: "flex", gap: 8 }}>
+            <button type="submit" className="btn primary" disabled={submitting}>{submitting ? "Creating…" : "Create File"}</button>
+            <a href="/estab/list" className="btn ghost">Cancel</a>
           </div>
         </form>
-      </section>
-    </main>
+      </div>
+    </>
   );
 }

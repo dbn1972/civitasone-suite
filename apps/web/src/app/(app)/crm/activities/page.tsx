@@ -1,107 +1,65 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageShell } from "../../../_components/PageShell";
+import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
 import { getCRMActivities } from "../../../_data/loaders";
-import type { CRMActivityEntry } from "@civitasone/types";
-
-const typeColors: Record<CRMActivityEntry["type"], string> = {
-  call: "bg-blue-50 text-blue-700",
-  meeting: "bg-purple-50 text-purple-700",
-  email: "bg-slate-100 text-slate-600",
-  task: "bg-amber-50 text-amber-700",
-  note: "bg-emerald-50 text-emerald-700",
-};
-
-const statusColors: Record<CRMActivityEntry["status"], string> = {
-  open: "bg-blue-50 text-blue-700",
-  overdue: "bg-red-50 text-red-700",
-  completed: "bg-emerald-50 text-emerald-700",
-  cancelled: "bg-slate-100 text-slate-500",
-};
-
-function pill(label: string, colorClass: string) {
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colorClass}`}>
-      {label}
-    </span>
-  );
-}
 
 export default async function Page() {
   const { data: activities, source } = await getCRMActivities();
 
-  const total = activities.length;
   const dueToday = activities.filter((a) => a.dueDate === new Date().toISOString().slice(0, 10)).length;
   const overdue = activities.filter((a) => a.status === "overdue").length;
   const completed = activities.filter((a) => a.status === "completed").length;
 
-  const stats = [
-    { label: "Total", value: total.toLocaleString("en-IN") },
-    { label: "Due Today", value: dueToday.toLocaleString("en-IN") },
-    { label: "Overdue", value: overdue.toLocaleString("en-IN") },
-    { label: "Completed", value: completed.toLocaleString("en-IN") },
-  ];
-
   return (
-    <PageShell
-      title="CRM Activities"
-      description="Calls, meetings, emails, tasks and notes."
-      breadcrumb={
-        <>
-          <Link href="/crm" className="hover:text-slate-900">CRM</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Activities</span>
-        </>
-      }
-    >
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs text-slate-500">{s.label}</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{s.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm" aria-label="CRM activities list">
-          <thead className="bg-slate-100 text-slate-700">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left">Type</th>
-              <th scope="col" className="px-4 py-3 text-left">Subject</th>
-              <th scope="col" className="px-4 py-3 text-left">Related To</th>
-              <th scope="col" className="px-4 py-3 text-left">Due Date</th>
-              <th scope="col" className="px-4 py-3 text-left">Completed At</th>
-              <th scope="col" className="px-4 py-3 text-left">Owner</th>
-              <th scope="col" className="px-4 py-3 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activities.length === 0 ? (
+    <>
+      <PageHeader
+        title="CRM Activities"
+        subtitle="Calls, meetings, emails, tasks and notes."
+        back="/crm"
+        actions={
+          <button className="btn primary">+ Log Activity</button>
+        }
+      />
+      {source === "error" && <DataSourceBadge source={source} />}
+      <StatGrid>
+        <StatCard icon="⚡" iconBg="#fce7ee" label="Total" value={activities.length.toLocaleString("en-IN")} />
+        <StatCard icon="📅" iconBg="#fce7ee" label="Due Today" value={dueToday.toLocaleString("en-IN")} />
+        <StatCard icon="🔴" iconBg="#fef2f2" label="Overdue" value={overdue.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Completed" value={completed.toLocaleString("en-IN")} />
+      </StatGrid>
+      <div className="card">
+        <div className="card-h">
+          <h3>Activities</h3>
+          <div className="seg"><span className="on">All</span><span>Mine</span><span>Today</span></div>
+        </div>
+        {activities.length === 0 ? (
+          <EmptyState icon="⚡" title="No activities yet" message="Schedule your first call, meeting, or task." />
+        ) : (
+          <table className="tbl">
+            <thead>
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
-                  <p className="text-slate-500 font-medium">No activities yet</p>
-                  <p className="mt-1 text-sm text-slate-400">Schedule your first call, meeting, or task.</p>
-                </td>
+                <th>Type</th>
+                <th>Subject</th>
+                <th>Related To</th>
+                <th>Due Date</th>
+                <th>Owner</th>
+                <th>Status</th>
               </tr>
-            ) : (
-              activities.map((a) => (
-                <tr key={a.id} className="border-t border-slate-200 hover:bg-slate-50 focus-within:bg-slate-50">
-                  <td className="px-4 py-3">{pill(a.type, typeColors[a.type])}</td>
-                  <td className="px-4 py-3 text-slate-800">{a.subject}</td>
-                  <td className="px-4 py-3 text-slate-500">{a.relatedTo ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-500">{a.dueDate ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-500">{a.completedAt ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-700">{a.owner}</td>
-                  <td className="px-4 py-3">{pill(a.status, statusColors[a.status])}</td>
+            </thead>
+            <tbody>
+              {activities.map((a) => (
+                <tr key={a.id}>
+                  <td><StatusPill status={a.type} label={a.type} /></td>
+                  <td>{a.subject}</td>
+                  <td>{a.relatedTo ?? "—"}</td>
+                  <td>{a.dueDate ?? "—"}</td>
+                  <td>{a.owner}</td>
+                  <td><StatusPill status={a.status} /></td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
-    </PageShell>
+    </>
   );
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start-stack.sh — starts every CivitasOne service on its registry port.
+# start-stack.sh — builds and starts every CivitasOne service on its registry port.
 # All services log to /tmp/civitas-stack/<svc>.log  (backgrounded).
 # Run stop-stack.sh to kill them.
 #
@@ -11,12 +11,28 @@ LOG_DIR="/tmp/civitas-stack"
 PID_DIR="/tmp/civitas-stack/pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
+if [ "${SKIP_BUILD:-0}" != "1" ]; then
+  echo "[build] compiling service dist/ (turbo build)..."
+  (cd "$ROOT" && pnpm turbo run build --filter='./services/*' --output-logs=errors-only)
+fi
+
+# Stop stale processes so fresh dist is loaded
+if [ -x "$ROOT/scripts/dev/stop-stack.sh" ]; then
+  bash "$ROOT/scripts/dev/stop-stack.sh" 2>/dev/null || true
+  sleep 1
+fi
+
 # ── Common env for all services ───────────────────────────────────────────────
 export REDIS_URL="${REDIS_URL:-redis://localhost:6381}"
-export QUEUE_DRIVER="${QUEUE_DRIVER:-memory}"
-export CACHE_DRIVER="${CACHE_DRIVER:-redis}"
+export QUEUE_DRIVER="${QUEUE_DRIVER:-sqs}"
+export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
+export CACHE_DRIVER="${CACHE_DRIVER:-memory}"
 export JWT_ALGORITHM="${JWT_ALGORITHM:-HS256}"
 export JWT_SECRET="${JWT_SECRET:-civitasone-dev-secret}"
+export INTERNAL_SERVICE_SECRET="${INTERNAL_SERVICE_SECRET:-civitasone-internal-dev-secret}"
 export LOG_LEVEL="${LOG_LEVEL:-warn}"
 export NODE_ENV="development"
 export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
@@ -35,9 +51,13 @@ start_svc() {
 
   local pidfile="$PID_DIR/${name}.pid"
 
-  if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
-    echo "[skip ] ${name} already on :${port}"
-    return
+  # Always replace stale listeners on this port
+  local stale
+  stale=$(ss -tlnp 2>/dev/null | grep ":${port} " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
+  if [ -n "$stale" ]; then
+    echo "[restart] ${name} replacing stale pid ${stale} on :${port}"
+    kill "$stale" 2>/dev/null || true
+    sleep 0.2
   fi
 
   echo "[start] ${name} on :${port}"
@@ -137,6 +157,34 @@ start_svc knowledge-service "$ROOT/services/knowledge-service"   3028 dist/index
 
 start_svc workflow-service "$ROOT/services/workflow-service"     3029 dist/index.js \
   DATABASE_URL="postgres://workflow_svc:workflow_dev_pw@localhost:5435/civitas_workflow"
+
+# ── CQRS workers (async command consumers + outbox relay) ───────────────────
+start_svc finance-worker "$ROOT/services/finance-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance"
+
+start_svc procurement-worker "$ROOT/services/procurement-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://procurement_svc:procurement_dev_pw@localhost:5435/civitas_procurement"
+
+start_svc workflow-worker "$ROOT/services/workflow-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://workflow_svc:workflow_dev_pw@localhost:5435/civitas_workflow"
+
+start_svc payroll-worker "$ROOT/services/payroll-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://payroll_svc:payroll_dev_pw@localhost:5435/civitas_payroll"
+
+start_svc hrms-worker "$ROOT/services/hrms-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms"
+
+start_svc grant-worker "$ROOT/services/grant-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://grant_svc:grant_dev_pw@localhost:5435/civitas_grant"
+
+start_svc project-worker "$ROOT/services/project-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://project_svc:project_dev_pw@localhost:5435/civitas_project"
+
+start_svc asset-worker "$ROOT/services/asset-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://asset_svc:asset_dev_pw@localhost:5435/civitas_asset"
+
+start_svc stock-worker "$ROOT/services/stock-service" 0 dist/worker.js \
+  DATABASE_URL="postgres://stock_svc:stock_dev_pw@localhost:5435/civitas_stock"
 
 start_svc queue-service    "$ROOT/services/queue-service"        3030 dist/server.js
 

@@ -1,5 +1,5 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import {
   ProjectSummaryListSchema,
   ProjectDetailSchema,
@@ -44,8 +44,8 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/projects/milestones", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    sendValidated(reply, MilestoneSummaryListSchema, await queries.listMilestoneSummaries(ctx.tenantId, limit));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, MilestoneSummaryListSchema, await queries.listMilestoneSummaries(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/projects/projects/:id", async (req, reply) => {

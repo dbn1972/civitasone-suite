@@ -58,6 +58,11 @@ export async function insertMilestone(tx: Writer, row: typeof projectMilestones.
   await tx.insert(projectMilestones).values(row);
 }
 
+export async function findMilestoneById(id: string): Promise<typeof projectMilestones.$inferSelect | null> {
+  const rows = await db.select().from(projectMilestones).where(eq(projectMilestones.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findMilestoneByIdTx(tx: Writer, id: string): Promise<typeof projectMilestones.$inferSelect | null> {
   const rows = await (tx as typeof db).select().from(projectMilestones).where(eq(projectMilestones.id, id)).limit(1);
   return rows[0] ?? null;

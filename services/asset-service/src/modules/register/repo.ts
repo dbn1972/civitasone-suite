@@ -48,3 +48,9 @@ export async function updateAssetLocation(tx: Writer, id: string, location: stri
     .set({ location, status: "transferred", updatedAt: new Date(), updatedBy: actorId })
     .where(eq(assetAssets.id, id));
 }
+
+export async function updateAssetBarcode(tx: Writer, id: string, barcode: string, actorId: string): Promise<void> {
+  await (tx as typeof db).update(assetAssets)
+    .set({ barcode, updatedAt: new Date(), updatedBy: actorId })
+    .where(eq(assetAssets.id, id));
+}

@@ -55,3 +55,18 @@ export function assertValidFY(fy: string): void {
     throw new DomainError("INVALID_FY", `fiscal year must be YYYY-YY, got '${fy}'`);
   }
 }
+
+/**
+ * GFR Rule 11: Revised Estimate (reMinor) cannot exceed Budget Estimate (beMinor).
+ * Release orders must be backed by sanctioned budget — prevents over-release.
+ */
+export function assertReleaseWithinSanction(beMinor: bigint, newReMinor: bigint): void {
+  if (newReMinor > beMinor) {
+    throw new DomainError(
+      "GFR_RULE_11_VIOLATION",
+      `revised estimate ${newReMinor} paise exceeds budget estimate ${beMinor} paise (GFR Rule 11)`
+    );
+  }
+}
+
+export { assertValidPfmsHoA, assertValidDdoCode } from "../../shared/pfms.js";

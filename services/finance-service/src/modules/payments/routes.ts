@@ -24,8 +24,8 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/bills", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    sendValidated(reply, BillSummaryListSchema, await queries.listBillSummaries(ctx.tenantId, limit));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, BillSummaryListSchema, await queries.listBillSummaries(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/finance/bills/:id", async (req, reply) => {
@@ -40,15 +40,15 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/advances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    sendValidated(reply, AdvanceSummaryListSchema, await queries.listAdvances(ctx.tenantId, limit));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, AdvanceSummaryListSchema, await queries.listAdvances(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/finance/utilization-certificates", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 200);
-    sendValidated(reply, UCSummaryListSchema, await queries.listUCs(ctx.tenantId, limit));
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, UCSummaryListSchema, await queries.listUCs(ctx.tenantId, q.limit));
   });
 
   app.post("/v1/finance/bills", async (req, reply) => {

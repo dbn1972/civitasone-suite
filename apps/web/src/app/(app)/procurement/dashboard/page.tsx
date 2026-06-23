@@ -1,64 +1,60 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageShell } from "../../../_components/PageShell";
+import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getProcurementDashboard } from "../../../_data/loaders";
 
-const quickLinks = [
-  { title: "Purchase Indents", href: "/procurement/indents" },
-  { title: "Vendors", href: "/procurement/vendors" },
-  { title: "RFQ", href: "/procurement/rfq" },
-  { title: "Purchase Orders", href: "/procurement/orders" },
-  { title: "Goods Receipt", href: "/procurement/grn" },
-  { title: "Contracts", href: "/procurement/contracts" },
-  { title: "Tenders", href: "/procurement/tenders" },
-  { title: "Approvals", href: "/procurement/approvals" },
+const QUICK_LINKS = [
+  { label: "Purchase Indents", href: "/procurement/indents", icon: "📋" },
+  { label: "Vendors", href: "/procurement/vendors", icon: "🏢" },
+  { label: "RFQ", href: "/procurement/rfq", icon: "📝" },
+  { label: "Purchase Orders", href: "/procurement/orders", icon: "📦" },
+  { label: "Goods Receipt", href: "/procurement/grn", icon: "✅" },
+  { label: "Contracts", href: "/procurement/contracts", icon: "📄" },
+  { label: "Tenders", href: "/procurement/tenders", icon: "🏛️" },
+  { label: "Approvals", href: "/procurement/approvals", icon: "🖊️" },
 ];
 
-export default async function Page() {
+export default async function ProcurementDashboardPage() {
   const { data: dashboard, source } = await getProcurementDashboard();
 
   return (
-    <PageShell title="Procurement Dashboard" description="Real-time snapshot of procurement activity and pending actions.">
-      <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-        <Link href="/procurement" className="hover:text-slate-900">Procurement</Link>
-        <span className="mx-2">/</span>
-        <span className="text-slate-900">Dashboard</span>
-      </nav>
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
+    <>
+      <PageHeader
+        title="Procurement Management"
+        subtitle="Real-time snapshot of procurement activity and pending actions."
+        actions={
+          <>
+            <Link href="/procurement/indents" className="btn ghost">View all</Link>
+            <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
+          </>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Pending Indents</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{dashboard.pendingIndents}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Active POs</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{dashboard.activePOs}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">GRNs This Month</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{dashboard.grnsThisMonth}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Contract Renewals Due</p>
-          <p className="mt-2 text-3xl font-bold text-amber-600">{dashboard.contractRenewalsDue}</p>
-        </div>
-      </div>
+      <StatGrid>
+        <StatCard icon="📋" iconBg="#e7edfd" label="Pending Indents" value={dashboard.pendingIndents} />
+        <StatCard icon="📦" iconBg="#eff6ff" label="Active POs" value={dashboard.activePOs} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="GRNs (MTD)" value={dashboard.grnsThisMonth} />
+        <StatCard icon="⚠️" iconBg="#fffaeb" label="Contract Renewals Due" value={dashboard.contractRenewalsDue} />
+      </StatGrid>
 
-      <section className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Quick Access</h2>
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-          {quickLinks.map((link) => (
+      <Card title="Procurement modules">
+        <div className="grid g-4" style={{ padding: "16px", gap: "12px", gridTemplateColumns: "repeat(4, 1fr)" }}>
+          {QUICK_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-800 shadow-sm transition hover:border-indigo-300 hover:text-indigo-700"
+              className="stat"
+              style={{ textDecoration: "none", cursor: "pointer" }}
             >
-              {link.title}
+              <div className="top">
+                <div className="ic" style={{ background: "#eef2ff" }}>{link.icon}</div>
+              </div>
+              <div className="lab">{link.label}</div>
             </Link>
           ))}
         </div>
-      </section>
-    </PageShell>
+      </Card>
+    </>
   );
 }

@@ -145,9 +145,9 @@ const FIXTURES: Record<string, unknown> = {
       requestNo: 'REQ-001',
       serviceType: 'Birth Certificate',
       citizenName: 'Ramesh Kumar',
-      phone: '+91-9876543210',
+      citizenPhone: '+91-9876543210',
       submittedAt: '2024-01-01T00:00:00Z',
-      expectedResolution: '2024-01-08',
+      expectedResolutionDate: '2024-01-08',
       status: 'submitted',
     },
   ],
@@ -212,7 +212,6 @@ const FIXTURES: Record<string, unknown> = {
 
   // Other modules — empty arrays for unlisted routes
   '/api/v1/audit/dashboard': { openObservations: 0, riskRegisterItems: 0, cagParas: 0, compliancePct: 0 },
-  '/api/v1/audit/observations': [],
   '/api/v1/audit/risks': [],
   '/api/v1/audit/plan': [],
   '/api/v1/audit/compliance': [],
@@ -234,9 +233,31 @@ const FIXTURES: Record<string, unknown> = {
       status: 'active',
     },
   ],
-  '/api/v1/project/milestones': [],
+  '/api/v1/project/milestones': [
+    {
+      id: 'ms-001',
+      projectId: 'prj-001',
+      projectName: 'Highway Expansion Phase 1',
+      title: 'Land Acquisition',
+      dueDate: '2024-03-31',
+      completedDate: '2024-03-15',
+      status: 'completed',
+    },
+  ],
   '/api/v1/project/fund-releases': [],
-  '/api/v1/project/schemes': [],
+  '/api/v1/project/schemes': [
+    {
+      id: 'sch-001',
+      schemeCode: 'PMGSY-2024',
+      name: 'Pradhan Mantri Gram Sadak Yojana',
+      ministry: 'Rural Development',
+      fundingType: 'centrally_sponsored',
+      totalAllocation: 10000000000,
+      releasedAmount: 5000000000,
+      projectCount: 15,
+      status: 'active',
+    },
+  ],
 
   '/api/v1/grants/dashboard': { totalGrants: 1, disbursedAmount: 25000000, pendingUCs: 0, totalGrantees: 1 },
   '/api/v1/grants/grants': [
@@ -244,7 +265,7 @@ const FIXTURES: Record<string, unknown> = {
       id: 'grn-001',
       grantNo: 'GRANT-001',
       title: 'Rural Water Supply Scheme',
-      grantee: 'Rajasthan State Govt',
+      granteeName: 'Rajasthan State Govt',
       totalAmount: 50000000,
       disbursedAmount: 25000000,
       pendingAmount: 25000000,
@@ -252,8 +273,30 @@ const FIXTURES: Record<string, unknown> = {
       status: 'active',
     },
   ],
-  '/api/v1/grants/grantees': [],
-  '/api/v1/grants/installments': [],
+  '/api/v1/grants/grantees': [
+    {
+      id: 'gte-001',
+      granteeCode: 'GTE-001',
+      name: 'Rajasthan State Govt',
+      type: 'government',
+      activeGrants: 1,
+      totalGrantsReceived: 50000000,
+      ucCompliancePct: 100,
+    },
+  ],
+  '/api/v1/grants/installments': [
+    {
+      id: 'inst-001',
+      grantId: 'grn-001',
+      grantNo: 'GRANT-001',
+      granteeName: 'Rajasthan State Govt',
+      installmentNo: 1,
+      amount: 25000000,
+      scheduledDate: '2024-01-20',
+      releasedDate: '2024-01-20',
+      status: 'released',
+    },
+  ],
   '/api/v1/grants/releases': [],
   '/api/v1/grants/utilization-certs': [],
   '/api/v1/grants/schemes': [],
@@ -388,21 +431,69 @@ const FIXTURES: Record<string, unknown> = {
   ],
   '/api/v1/knowledge/records': [],
 
-  '/api/v1/workflow/instances': [],
-  '/api/v1/analytics/dashboards': [],
-  '/api/v1/inventory/items': [],
-  '/api/v1/telephony/calls': [],
-  '/api/v1/locations': [],
-  '/api/notification/templates': [],
-  '/api/notification/preferences': [],
-  '/api/v1/install/stages': [],
-  '/api/v1/plugins/items': [],
-  '/api/v1/themes/tokens': [],
-  '/api/v1/contract/contracts': [],
-  '/api/v1/contract/rate-contracts': [],
+  '/api/v1/workflow/instances': [
+    { id: 'wf-001', workflowName: 'Leave Approval', instanceNo: 'WF-001', status: 'running', startedAt: '2024-01-01T00:00:00Z' },
+  ],
+  '/api/v1/analytics/dashboards': [
+    { id: 'ad-001', name: 'Finance KPI Dashboard', module: 'finance', status: 'active' },
+  ],
+  '/api/v1/inventory/items': [
+    { id: 'inv-001', itemCode: 'INV-001', name: 'Office Chair', quantity: 10, status: 'active' },
+  ],
+  '/api/v1/telephony/calls': [
+    { id: 'call-001', caller: '+91-9876543210', duration: 120, status: 'completed', startedAt: '2024-01-01T10:00:00Z' },
+  ],
+  '/api/v1/locations': [
+    { id: 'loc-001', name: 'HQ Delhi', type: 'office', status: 'active' },
+  ],
+  '/api/notification/templates': [
+    { id: 'tmpl-001', name: 'Bill Approved', channel: 'email', status: 'active' },
+  ],
+  '/api/notification/preferences': [
+    { id: 'pref-001', eventType: 'bill.approved', module: 'finance', label: 'Bill Approved', emailEnabled: true, inAppEnabled: true },
+  ],
+  '/api/v1/install/stages': [
+    { id: 'stage-001', stageNo: 1, title: 'Database Setup', status: 'completed' },
+  ],
+  '/api/v1/install/steps': [
+    { id: 'step-001', stepNo: 1, title: 'Database Setup', description: 'Initialize PostgreSQL schema', isRequired: true, status: 'completed', completedAt: '2024-01-01T10:00:00Z' },
+    { id: 'step-002', stepNo: 2, title: 'Seed Master Data', description: 'Load initial lookup tables', isRequired: true, status: 'completed', completedAt: '2024-01-01T10:05:00Z' },
+    { id: 'step-003', stepNo: 3, title: 'Configure SMTP', description: 'Email delivery settings', isRequired: false, status: 'pending' },
+  ],
+  '/api/v1/plugins/items': [
+    { name: 'PFMS Connector', status: 'enabled' },
+    { name: 'Aadhaar eSign', status: 'disabled' },
+  ],
+  '/api/v1/themes/tokens': [
+    { key: '--color-primary', value: '#0052cc' },
+    { key: '--color-secondary', value: '#003087' },
+    { key: '--font-family', value: 'Inter, sans-serif' },
+  ],
+  '/api/notification/notifications': [
+    { id: 'notif-001', title: 'Bill Approved', message: 'Your bill PAY-001 has been approved.', module: 'finance', eventType: 'bill.approved', recipient: 'admin@example.com', channel: 'email', status: 'sent', createdAt: '2024-01-15T10:00:00Z' },
+  ],
+  '/api/v1/contract/contracts': [
+    { id: 'con-001', contractNo: 'CON/2024/001', title: 'Annual AMC - IT Equipment', vendor: 'Tech Corp', startDate: '2024-01-01', endDate: '2024-12-31', value: 50000000, status: 'active' },
+  ],
+  '/api/v1/contract/rate-contracts': [
+    { id: 'rc-001', contractNo: 'RC/2024/001', title: 'Stationery Rate Contract', vendor: 'Paper Mart', status: 'active' },
+  ],
   '/api/v1/devices/register': { trustToken: 'test-trust-token' },
 
-  '/api/v1/reports/dashboards': { kpis: [] },
+  '/api/v1/audit/observations': [
+    {
+      id: 'a0000000-0000-0000-0000-000000000001',
+      observationNo: 'OBS-001',
+      title: 'Weak access controls identified',
+      type: 'internal',
+      severity: 'major',
+      raisedDate: '2024-01-15',
+      dueDate: '2024-03-31',
+      status: 'open',
+    },
+  ],
+
+  '/api/v1/reports/dashboards': { kpis: [{ label: 'Reports Generated', value: '1', note: 'This month' }] },
   '/api/v1/reports/report-jobs': [
     {
       id: 'rpt-001',
@@ -430,11 +521,245 @@ const FIXTURES: Record<string, unknown> = {
       status: 'on_track',
     },
   ],
-  '/api/v1/reports/mis': [],
+  '/api/v1/reports/mis': [
+    { id: 'mis-001', module: 'finance', metric: 'Budget Utilization', value: 75, period: 'Q1 FY2024' },
+  ],
+
+  // ── Detail fixtures for [id] routes ──────────────────────────────────────
+  '/api/v1/stock/items/sku-001': {
+    id: 'sku-001',
+    itemCode: 'SKU-001',
+    name: 'A4 Paper Ream',
+    category: 'Stationery',
+    unit: 'Ream',
+    currentStock: 200,
+    minStockLevel: 50,
+    maxStockLevel: 500,
+    unitCost: 15000,
+    totalValue: 3000000,
+    warehouseLocation: 'Main Store',
+    isLowStock: false,
+    description: 'Standard A4 paper reams, 500 sheets per ream',
+    hsnCode: '4802',
+    gstRate: 12,
+    stockLedger: [
+      { id: 'led-001', date: '2024-01-10', type: 'receipt', quantity: 200, unitCost: 15000, totalValue: 3000000, referenceNo: 'GRN-001', party: 'Paper Mart India', balance: 200 },
+    ],
+  },
+
+  '/api/v1/asset/assets/ast-001': {
+    id: 'ast-001',
+    assetCode: 'AST-001',
+    name: 'Dell Laptop XPS 15',
+    category: 'IT Equipment',
+    type: 'fixed',
+    purchaseDate: '2023-01-15',
+    purchaseCost: 8500000,
+    currentValue: 7200000,
+    location: 'HQ Block A',
+    department: 'IT',
+    status: 'active',
+    condition: 'good',
+    description: 'High performance laptop for IT team',
+    serialNo: 'SN-DELL-XPS15-001',
+    warrantyExpiry: '2026-01-15',
+    depreciationSchedule: [],
+    maintenanceHistory: [],
+  },
+
+  '/api/v1/estab/files/fil-001': {
+    id: 'fil-001',
+    fileNo: 'FILE-001',
+    subject: 'Annual Budget Proposal 2024',
+    classification: 'confidential',
+    department: 'Finance',
+    createdBy: 'Admin User',
+    createdDate: '2024-01-10',
+    currentHolder: 'Director Finance',
+    status: 'active',
+    noteSheets: [],
+    dispatchHistory: [],
+    attachments: [],
+  },
+
+  '/api/v1/estab/meetings/mtg-001': {
+    id: 'mtg-001',
+    meetingNo: 'MTG-001',
+    title: 'Quarterly Review Board Meeting',
+    type: 'review',
+    scheduledDate: '2024-02-15',
+    scheduledTime: '10:00',
+    venue: 'Conference Room A',
+    chairperson: 'Secretary',
+    attendeesCount: 12,
+    agendaItemsCount: 3,
+    status: 'scheduled',
+  },
+
+  '/api/v1/grants/grants/grn-001': {
+    id: 'grn-001',
+    grantNo: 'GRANT-001',
+    title: 'Rural Water Supply Scheme',
+    granteeName: 'Rajasthan State Govt',
+    totalAmount: 50000000,
+    disbursedAmount: 25000000,
+    pendingAmount: 25000000,
+    sanctionDate: '2024-01-15',
+    status: 'active',
+    conditions: 'Funds to be utilised within 2 FYs',
+    installments: [
+      { id: 'inst-1', installmentNo: 1, amount: 25000000, scheduledDate: '2024-01-20', releasedDate: '2024-01-20', status: 'released' },
+    ],
+    ucs: [],
+  },
+
+  '/api/v1/project/projects/prj-001': {
+    id: 'prj-001',
+    projectCode: 'PROJ-001',
+    name: 'Highway Expansion Phase 1',
+    scheme: 'PMGSY',
+    department: 'Roads & Transport',
+    startDate: '2024-01-01',
+    totalBudget: 500000000,
+    expenditure: 200000000,
+    completionPct: 40,
+    status: 'active',
+    description: 'Phase 1 of National Highway expansion project',
+    milestones: [
+      { id: 'ms-1', title: 'Land Acquisition Complete', dueDate: '2024-03-31', completedDate: '2024-03-15', status: 'completed' },
+    ],
+    fundReleases: [],
+  },
+
+  '/api/v1/hrms/employees/EMP-001': {
+    id: 'EMP-001',
+    employeeId: 'EMP-001',
+    name: 'Ravi Kumar',
+    email: 'ravi.kumar@example.gov.in',
+    phone: '+91-9876543210',
+    department: 'IT',
+    designation: 'Senior Engineer',
+    grade: 'B',
+    joiningDate: '2020-03-01',
+    status: 'Active',
+    reportingTo: 'Director IT',
+    postingLocation: 'HQ Delhi',
+  },
+
+  '/api/v1/legal/cases/leg-001': {
+    id: 'leg-001',
+    caseNo: 'CASE-001',
+    title: 'State v. ABC Construction Ltd',
+    court: 'High Court Delhi',
+    type: 'civil',
+    filedDate: '2023-06-01',
+    department: 'Works',
+    petitioner: 'State of Delhi',
+    respondent: 'ABC Construction Ltd',
+    advocateName: 'Adv. Rajesh Kumar',
+    nextHearingDate: '2024-03-15',
+    status: 'active',
+    hearings: [],
+    orders: [],
+  },
+
+  '/api/v1/crm/contacts/c0000000-0000-0000-0000-000000000001': {
+    id: 'c0000000-0000-0000-0000-000000000001',
+    name: 'Anita Desai',
+    email: 'anita@example.com',
+    phone: '+91-9876543210',
+    organization: 'GoI Dept',
+    designation: 'Director',
+    tags: [],
+    deals: [],
+    activityTimeline: [],
+  },
+
+  '/api/v1/citizen/tickets/t0000000-0000-0000-0000-000000000001': {
+    id: 't0000000-0000-0000-0000-000000000001',
+    ticketNo: 'TKT-001',
+    subject: 'Unable to access portal',
+    requesterName: 'Ravi Shankar',
+    priority: 'high',
+    slaStatus: 'within_sla',
+    status: 'open',
+    channel: 'web',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    comments: [],
+  },
+
+  '/api/v1/procurement/vendors/v0000000-0000-0000-0000-000000000001': {
+    id: 'v0000000-0000-0000-0000-000000000001',
+    vendorCode: 'VEN-001',
+    name: 'Tech Supplies Ltd',
+    gstin: '29ABCDE1234F1Z5',
+    category: 'IT',
+    empanelmentStatus: 'empanelled',
+    rating: 4.5,
+    contactPerson: 'Rahul Sharma',
+    email: 'rahul@techsupplies.com',
+    phone: '+91-9988776655',
+  },
+
+  '/api/identity/users/u0000000-0000-0000-0000-000000000001': {
+    id: 'u0000000-0000-0000-0000-000000000001',
+    tenantId: 't0000000-0000-0000-0000-000000000001',
+    email: 'admin@example.com',
+    name: 'Admin User',
+    empCode: null,
+    status: 'active',
+    mfaEnabled: true,
+    version: 1,
+    roles: ['admin'],
+    lastLoginAt: '2024-01-01T00:00:00Z',
+    createdAt: '2024-01-01T00:00:00Z',
+    sessions: [],
+  },
+
+  '/api/policy/roles/r0000000-0000-0000-0000-000000000001': {
+    id: 'r0000000-0000-0000-0000-000000000001',
+    tenantId: 't0000000-0000-0000-0000-000000000001',
+    name: 'admin',
+    description: 'System administrator',
+    status: 'active',
+    version: 1,
+    isSystemRole: true,
+    userCount: 1,
+    createdAt: '2024-01-01T00:00:00Z',
+    permissions: [],
+    users: [],
+  },
+
+  '/api/v1/audit/observations/a0000000-0000-0000-0000-000000000001': {
+    id: 'a0000000-0000-0000-0000-000000000001',
+    observationNo: 'OBS-001',
+    title: 'Weak access controls identified',
+    type: 'internal',
+    severity: 'major',
+    raisedDate: '2024-01-15',
+    dueDate: '2024-03-31',
+    status: 'open',
+    description: 'Access controls need strengthening in finance module',
+    recommendations: 'Implement role-based access controls',
+    replies: [],
+  },
 };
 
 function handler(req: http.IncomingMessage, res: http.ServerResponse) {
   const path = (req.url ?? '/').split('?')[0];
+
+  // Enforce auth: all non-identity routes require a Bearer token.
+  const isPublic = path.startsWith('/api/identity') || path.startsWith('/api/v1/install');
+  if (!isPublic) {
+    const auth = req.headers['authorization'];
+    if (!auth?.startsWith('Bearer ')) {
+      res.writeHead(401, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+      res.end(JSON.stringify({ code: 'UNAUTHENTICATED', message: 'Bearer token required' }));
+      return;
+    }
+  }
+
   const body = path in FIXTURES ? FIXTURES[path] : { data: [] };
   res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
   res.end(JSON.stringify(body));

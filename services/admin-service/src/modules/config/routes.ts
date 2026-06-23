@@ -17,6 +17,14 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, tenantModulesResponseSchema, { data: await queries.listTenantModules(ctx.tenantId) });
   });
 
+  app.get("/v1/admin/config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, TENANT_ADMIN);
+    const config = await queries.getConfig(ctx.tenantId);
+    if (!config) throw new HttpError(404, "NOT_FOUND", "tenant config not found");
+    return reply.send(config);
+  });
+
   app.get("/v1/admin/tenants/:id/config", async (req, reply) => {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);

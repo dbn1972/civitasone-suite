@@ -9,6 +9,9 @@ import { assertTransitionAllowed } from "./domain.js";
 import type { IndentItemInsert } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+const WORKFLOW_CREATE = "workflow.instance.create";
+const INDENT_WORKFLOW_NAME = "Procurement Indent Approval";
+const TENDER_THRESHOLD_MINOR = 2500000n; // Rs 25,000 in paise (GFR Rule 145)
 
 export function registerIndentConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.indentCreate, async (msg) => {
@@ -35,7 +38,38 @@ export function registerIndentConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertIndentItems(tx, itemRows);
+      const wfId = randomUUID();
+      await enqueue(tx, {
+        topic: WORKFLOW_CREATE, eventType: WORKFLOW_CREATE,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          id: wfId,
+          tenantId: msg.tenantId,
+          name: `${INDENT_WORKFLOW_NAME} — ${p.indentNo}`,
+          status: "active",
+          definitionCode: "procurement_indent_approval",
+          initialTaskName: "Procurement Officer Approval",
+          version: 1,
+          refType: "procurement_indent",
+          refId: p.id,
+        },
+      });
       await audit(tx, msg, "create", "indent", p.id);
+
+      // GFR Rule 145: indents above Rs 25,000 require competitive tender
+      if (totalMinor > TENDER_THRESHOLD_MINOR) {
+        await repo.updateIndent(tx, p.id, { status: "tender_required", updatedBy: msg.actorId });
+        await enqueue(tx, {
+          topic: EVENTS.tenderRequired, eventType: EVENTS.tenderRequired,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            indentId: p.id,
+            tenantId: msg.tenantId,
+            estimatedValueMinor: totalMinor.toString(),
+            gfrRule: "Rule145",
+          },
+        });
+      }
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "indent", p.id));
   });

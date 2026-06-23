@@ -7,7 +7,7 @@ import { createLocationBody, idParam, locationsListSchema } from "./validators.j
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
-const LOCATION_ROLES = ["location_user", "location_admin", "super_admin"];
+const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin"];
 
 export async function locationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/locations", async (req, reply) => {

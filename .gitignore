@@ -13,3 +13,14 @@ infra/.env
 apps/web/test-results/
 apps/web/e2e-report/
 .claude/
+
+# Build artifacts / IDE
+.kiro/
+/test-results/
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+apps/mobile/build/
+apps/mobile/.dart_tool/
+apps/web/shoot.js

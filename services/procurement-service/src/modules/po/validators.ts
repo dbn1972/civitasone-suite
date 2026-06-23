@@ -6,6 +6,7 @@ const poItemSchema = z.object({
   quantity:       z.number().int().positive(),
   unit:           z.string().min(1).max(32).default("nos"),
   unitPriceMinor: z.number().int().nonnegative(),
+  itemType:       z.enum(["consumable", "fixed_asset", "service"]).default("consumable"),
 });
 
 export const createPoBody = z.object({

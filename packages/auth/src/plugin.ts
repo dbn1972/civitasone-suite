@@ -59,6 +59,29 @@ const authPluginImpl: FastifyPluginAsync = async (fastify) => {
       return;
     }
 
+    const tenantHeader = req.headers["x-tenant-id"] as string | undefined;
+    if (req.headers["x-internal"] === "1" && tenantHeader) {
+      const serviceSecret = process.env.INTERNAL_SERVICE_SECRET;
+      if (
+        typeof serviceSecret !== "string" ||
+        serviceSecret.length === 0 ||
+        req.headers["x-service-secret"] !== serviceSecret
+      ) {
+        req.log.warn({ ip: req.ip }, "x-internal rejected: missing or invalid service secret");
+        return reply.status(401).send({ error: "UNAUTHORIZED", message: "Bearer token required" });
+      }
+
+      req.ctx = {
+        tenantId: tenantHeader,
+        actorId: "00000000-0000-0000-0000-000000000099",
+        actorType: "service_account",
+        roles: ["super_admin", "hr_admin", "payroll_admin", "finance_admin"],
+        correlationId,
+        sessionId: "",
+      };
+      return;
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
       return reply.status(401).send({ error: "UNAUTHORIZED", message: "Bearer token required" });
@@ -67,7 +90,11 @@ const authPluginImpl: FastifyPluginAsync = async (fastify) => {
     const token = authHeader.slice(7);
     try {
       const payload = await verifyJwt(token);
-      req.ctx = toRequestContext(payload, correlationId);
+      req.ctx = toRequestContext(
+        payload,
+        correlationId,
+        (req.headers["x-tenant-id"] as string | undefined),
+      );
     } catch (err) {
       req.log.warn({ err }, "JWT verification failed");
       return reply.status(401).send({ error: "UNAUTHORIZED", message: "Invalid or expired token" });

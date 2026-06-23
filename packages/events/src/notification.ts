@@ -20,6 +20,8 @@ export const SYSTEM_TEMPLATE_IDS = {
   grantDisbursementFailed:  "00000000-0000-4000-8001-00000000000a",
   vendorBlacklisted:        "00000000-0000-4000-8001-00000000000b",
   estabRtiCpioAlert:        "00000000-0000-4000-8001-00000000000c",
+  hrLeaveApproved:          "00000000-0000-4000-8001-000000000000",
+  payrollRunApproved:       "00000000-0000-4000-8001-000000000000",
 } as const;
 
 const EVENT_TEMPLATE_MAP: Record<string, string> = {
@@ -35,6 +37,8 @@ const EVENT_TEMPLATE_MAP: Record<string, string> = {
   "grant.disbursement.failed":      SYSTEM_TEMPLATE_IDS.grantDisbursementFailed,
   "procurement.vendor.blacklisted": SYSTEM_TEMPLATE_IDS.vendorBlacklisted,
   "estab.rti.created":              SYSTEM_TEMPLATE_IDS.estabRtiCpioAlert,
+  "hrms.leave.approved":            SYSTEM_TEMPLATE_IDS.hrLeaveApproved,
+  "payroll.run.approved":           SYSTEM_TEMPLATE_IDS.payrollRunApproved,
 };
 
 export type NotificationSendPayload = {

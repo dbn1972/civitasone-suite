@@ -26,6 +26,11 @@ export async function completeWorkOrder(tx: Writer, id: string, completedDate: s
     .where(eq(assetWorkOrders.id, id));
 }
 
+export async function listMaintenanceByAsset(tenantId: string, assetId: string) {
+  return db.select().from(assetWorkOrders)
+    .where(and(eq(assetWorkOrders.tenantId, tenantId), eq(assetWorkOrders.assetId, assetId)));
+}
+
 export async function listMaintenanceByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {
   return db.select().from(assetWorkOrders)
     .where(eq(assetWorkOrders.tenantId, tenantId))

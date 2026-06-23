@@ -11,6 +11,7 @@ export function registerSchemeConsumers(queue: Queue): void {
       id: string; tenantId: string; code: string; name: string;
       sanctionRef?: string; budgetMinor: number; minAmountMinor: number;
       maxAmountMinor: number; currency?: string; openAt?: string; closeAt?: string;
+      reportingFrequencyDays?: number;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -23,6 +24,7 @@ export function registerSchemeConsumers(queue: Queue): void {
         maxAmountMinor: BigInt(p.maxAmountMinor),
         currency: p.currency ?? "INR",
         status: "active",
+        reportingFrequencyDays: p.reportingFrequencyDays ?? 90,
         openAt: p.openAt ? new Date(p.openAt) : null,
         closeAt: p.closeAt ? new Date(p.closeAt) : null,
         createdBy: msg.actorId, updatedBy: msg.actorId,

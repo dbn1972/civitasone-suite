@@ -11,7 +11,7 @@ export async function listApiKeys(tenantId: string, limit: number) {
     keyName: row.keyName,
     keyPrefix: row.keyPrefix,
     createdBy: row.createdBy,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: new Date(row.createdAt as unknown as string).toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString(),
     expiresAt: row.expiresAt?.toISOString(),
     scopes: row.scopes ?? [],

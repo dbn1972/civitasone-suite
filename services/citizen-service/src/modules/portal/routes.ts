@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, resolvePublicContext, requireRole, HttpError } from "../../shared/context.js";
-import { idParam, tenantQuery, createProfileBody } from "./validators.js";
+import { idParam, tenantQuery, createProfileBody, deleteProfileBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -15,6 +15,15 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const body = createProfileBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createProfile(ctx, body));
+  });
+
+  /** DPDP §12: right to erasure — citizen requests deletion of their profile and PII */
+  app.delete("/v1/citizen/profiles/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = deleteProfileBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteProfile(ctx, id, body));
   });
 
   app.get("/v1/citizen/services", { config: { public: true } }, async (req, reply) => {

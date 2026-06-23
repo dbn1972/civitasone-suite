@@ -23,7 +23,8 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const body = bookRoomBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.bookRoom(ctx, body));
+    const result = await commands.bookRoom(ctx, body);
+    return reply.code(201).send({ data: result });
   });
 
   app.patch("/v1/estab/room-bookings/:id/checkin", async (req, reply) => {

@@ -34,3 +34,8 @@ export const escalateGrievanceBody = z.object({
   escalatedTo: z.string().uuid().optional(),
 });
 export type EscalateGrievanceBody = z.infer<typeof escalateGrievanceBody>;
+
+export const reopenGrievanceBody = z.object({
+  reason: z.string().min(1),
+});
+export type ReopenGrievanceBody = z.infer<typeof reopenGrievanceBody>;
