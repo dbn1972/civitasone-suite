@@ -45,7 +45,17 @@ export type SyncPushRequest = {
     entityId: string;
     payload: Record<string, unknown>;
     clientUpdatedAt: string;
+    /** SYN-1c: last-known server etag for this entity, for conflict detection */
+    baseEtag?: string;
   }>;
+};
+
+export type SyncMutationResult = {
+  clientMutationId: string;
+  status: "applied" | "conflict" | "failed";
+  etag?: string;
+  serverData?: Record<string, unknown>;
+  reason?: string;
 };
 
 export type SyncPushResponse = {
@@ -53,6 +63,8 @@ export type SyncPushResponse = {
   cursor: string;
   applied: string[];
   conflicts: Array<{ clientMutationId: string; reason: string }>;
+  /** SYN-1d: precise per-mutation outcomes (preferred over applied/conflicts) */
+  results?: SyncMutationResult[];
 };
 
 export type SyncPullRequest = {
@@ -108,25 +120,57 @@ export async function runSyncCycle(
   const outbox = (await storage.listOutbox(mailbox)).filter((e) => e.status === "queued" || e.status === "failed");
 
   if (outbox.length > 0) {
-    const pushRes = await api.push({
-      deviceId,
-      mailbox,
-      cursor,
-      mutations: outbox.map((e) => ({
-        clientMutationId: e.id,
-        operation: e.operation,
-        entityId: (e.payload.id as string) ?? e.id,
-        payload: e.payload,
-        clientUpdatedAt: e.createdAt,
-      })),
-    }, headers);
+    // Attach the last-known etag per entity so the server can detect a stale
+    // edit (SYN-1c). Marking conflicts precisely needs the per-mutation results.
+    const mutations = await Promise.all(
+      outbox.map(async (e) => {
+        const entityId = (e.payload.id as string) ?? e.id;
+        const known = await storage.getEntity(entityId);
+        return {
+          clientMutationId: e.id,
+          operation: e.operation,
+          entityId,
+          payload: e.payload,
+          clientUpdatedAt: e.createdAt,
+          ...(known?.etag ? { baseEtag: known.etag } : {}),
+        };
+      }),
+    );
 
-    for (const id of pushRes.applied) {
-      await storage.updateOutbox(id, { status: "done" });
-      pushed++;
-    }
-    for (const c of pushRes.conflicts) {
-      await storage.updateOutbox(c.clientMutationId, { status: "failed", lastError: c.reason });
+    const pushRes = await api.push({ deviceId, mailbox, cursor, mutations }, headers);
+
+    if (pushRes.results && pushRes.results.length > 0) {
+      // SYN-1d: precise per-mutation handling.
+      for (const r of pushRes.results) {
+        if (r.status === "applied") {
+          await storage.updateOutbox(r.clientMutationId, { status: "done" });
+          pushed++;
+        } else if (r.status === "conflict") {
+          await storage.updateOutbox(r.clientMutationId, { status: "failed", lastError: r.reason ?? "conflict" });
+          // Adopt the server's current state so the client stops diverging.
+          if (r.serverData) {
+            await storage.upsertEntity({
+              id: (r.serverData.id as string) ?? r.clientMutationId,
+              mailbox,
+              data: r.serverData,
+              updatedAt: new Date().toISOString(),
+              ...(r.etag ? { etag: r.etag } : {}),
+              syncState: "conflict",
+            });
+          }
+        } else {
+          await storage.updateOutbox(r.clientMutationId, { status: "failed", lastError: r.reason ?? "failed" });
+        }
+      }
+    } else {
+      // Backward-compatible path for servers that only return applied/conflicts.
+      for (const id of pushRes.applied) {
+        await storage.updateOutbox(id, { status: "done" });
+        pushed++;
+      }
+      for (const c of pushRes.conflicts) {
+        await storage.updateOutbox(c.clientMutationId, { status: "failed", lastError: c.reason });
+      }
     }
     await storage.setCursor(mailbox, pushRes.cursor);
   }

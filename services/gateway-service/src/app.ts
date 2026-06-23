@@ -7,6 +7,8 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID } from "node:crypto";
 import { resolveRoute } from "./registry.js";
 
+// x-internal is intentionally absent: external clients must never inject it.
+// The gateway sets it itself only when it originates an internal service call.
 const FORWARD_HEADERS = [
   "authorization",
   "content-type",
@@ -16,8 +18,29 @@ const FORWARD_HEADERS = [
   "x-device-trust-token",
   "x-step-up-token",
   "x-tenant-id",
-  "x-internal",
+  "x-idempotency-key",
 ] as const;
+
+// Actively strip these from every inbound request before forwarding, regardless of FORWARD_HEADERS.
+const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "x-service-secret"] as const;
+
+/**
+ * Routes that do NOT require a bearer token at the gateway.
+ * SEC-3: sync/devices were REMOVED from this list — they carry tenant data and
+ * must be authenticated at the edge. Only auth-bootstrap (identity login/refresh)
+ * and the first-run installer remain public.
+ */
+const PUBLIC_PREFIXES = ["/api/identity", "/api/v1/install"];
+
+function isInternalIP(ip: string): boolean {
+  return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    /^10\./.test(ip) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
+    /^192\.168\./.test(ip)
+  );
+}
 
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const pathname = req.url.split("?")[0] ?? "/";
@@ -26,8 +49,18 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
     return reply.code(404).send({ code: "NOT_FOUND", message: "no upstream for path" });
   }
 
-  const { route, remainder } = resolved;
+  // Enforce authentication for all non-public routes
+  const isPublic = PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  if (!isPublic) {
+    const auth = req.headers["authorization"];
+    if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
+      return reply.code(401).send({ code: "UNAUTHENTICATED", message: "missing or invalid authorization header" });
+    }
+  }
+
+  const { route, remainder: rawRemainder } = resolved;
   const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  const remainder = rawRemainder === "/" ? "" : rawRemainder;
   const basePath = route.upstreamPath ?? route.prefix.replace(/^\/api/, "");
   const targetUrl = `${route.upstream}${basePath}${remainder}${query}`;
 
@@ -37,6 +70,11 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
     if (typeof v === "string") headers[h] = v;
   }
   if (!headers["x-correlation-id"]) headers["x-correlation-id"] = req.id;
+
+  // Defense-in-depth: ensure bypass headers never reach upstream regardless of FORWARD_HEADERS.
+  for (const h of STRIP_HEADERS) {
+    delete (headers as Record<string, string | undefined>)[h];
+  }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   const init: RequestInit = { method: req.method, headers };
@@ -68,8 +106,53 @@ export async function buildApp(): Promise<FastifyInstance> {
     timeWindow: process.env.GATEWAY_RATE_LIMIT_WINDOW ?? "1 minute",
   });
 
-  registerOpsRoutes(app, { service: "gateway-service" });
+  registerOpsRoutes(app, {
+    service: "gateway-service",
+    checks: {
+      custom: [
+        {
+          name: "identity",
+          ping: async () => {
+            try {
+              const res = await fetch(process.env.IDENTITY_HEALTH_URL ?? "http://127.0.0.1:3001/health", { signal: AbortSignal.timeout(3000) });
+              return res.ok;
+            } catch { return false; }
+          },
+        },
+        {
+          name: "finance",
+          ping: async () => {
+            try {
+              const res = await fetch(process.env.FINANCE_HEALTH_URL ?? "http://127.0.0.1:3007/health", { signal: AbortSignal.timeout(3000) });
+              return res.ok;
+            } catch { return false; }
+          },
+        },
+        {
+          name: "queue_upstream",
+          ping: async () => {
+            try {
+              const res = await fetch(process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3019/health", { signal: AbortSignal.timeout(3000) });
+              return res.ok;
+            } catch { return false; }
+          },
+        },
+      ],
+    },
+  });
 
+  // Protect /metrics: require METRICS_TOKEN header when set, otherwise restrict to internal IPs.
+  app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
+    if ((req.url?.split("?")[0] ?? "") !== "/metrics") return;
+    const metricsToken = process.env.METRICS_TOKEN;
+    if (metricsToken) {
+      if (req.headers["x-metrics-token"] !== metricsToken) {
+        return reply.code(403).send({ code: "FORBIDDEN", message: "metrics access denied" });
+      }
+    } else if (!isInternalIP(req.ip)) {
+      return reply.code(403).send({ code: "FORBIDDEN", message: "metrics access denied" });
+    }
+  });
 
   app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
     try {
@@ -77,6 +160,19 @@ export async function buildApp(): Promise<FastifyInstance> {
     } catch (err) {
       done(err as Error, undefined);
     }
+  });
+
+  // Stricter rate limit for auth/identity endpoints (10 req/min per IP vs global 1000).
+  app.route({
+    method: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    url: "/api/identity/*",
+    config: {
+      rateLimit: {
+        max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
+        timeWindow: process.env.AUTH_RATE_LIMIT_WINDOW ?? "1 minute",
+      },
+    },
+    handler: proxyHandler,
   });
 
   app.route({ method: ["GET", "POST", "PUT", "PATCH", "DELETE"], url: "/api/*", handler: proxyHandler });

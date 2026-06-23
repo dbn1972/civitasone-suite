@@ -1,0 +1,43 @@
+# OPS-1 (09-T1): alert rules that make "invisible failures" fire.
+# These pair with the app metrics emitted by @civitasone/observability and the
+# CloudWatch SQS alarms provisioned in infra/aws/modules/sqs (05-T2).
+groups:
+  - name: civitasone-reliability
+    rules:
+      # A consumer handler is throwing — the class of failure that hid the
+      # stock FOR UPDATE and HRMS leave-engine bugs behind healthy 200s.
+      - alert: ConsumerErrorRateHigh
+        expr: sum by (service, topic) (rate(consumer_errors_total[5m])) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Queue consumer errors on {{ $labels.service }}/{{ $labels.topic }}"
+          description: "consumer_errors_total is increasing — a subscribed handler is throwing."
+
+      # Messages are dead-lettering — poison messages or a persistent failure.
+      - alert: DlqMessagesAppearing
+        expr: increase(dlq_messages_total[10m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations:
+          summary: "Messages dead-lettered on topic {{ $labels.topic }}"
+          description: "dlq_messages_total increased — investigate the topic's DLQ."
+
+      # The transactional outbox relay is failing to publish — writes committed
+      # to the DB are not reaching the queue.
+      - alert: OutboxRelayFailing
+        expr: increase(outbox_relay_failures_total[10m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations:
+          summary: "Outbox relay failures on {{ $labels.service }}"
+          description: "outbox_relay_failures_total increased — committed events may not be published."
+
+      # A service stopped exposing metrics / is down.
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Service {{ $labels.job }} target {{ $labels.instance }} is down"
+          description: "Prometheus cannot scrape the target — process down or /metrics unreachable."

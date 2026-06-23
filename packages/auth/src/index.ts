@@ -20,12 +20,15 @@
 
 import jwt from "jsonwebtoken";
 import jwksRsa from "jwks-rsa";
+import { randomUUID as cryptoRandomUUID, createHash as cryptoCreateHash } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 
 export interface CivitasJwtPayload {
   sub: string;
-  tid: string;
+  tid?: string;
+  /** Dev/test tokens may use tenantId instead of tid */
+  tenantId?: string;
   roles: string[];
   sid?: string;
   sessionId?: string;
@@ -69,10 +72,31 @@ function getSigningKey(header: jwt.JwtHeader): Promise<string> {
 
 // ── Core verify ─────────────────────────────────────────────────────────────
 
-const algorithm = (process.env.JWT_ALGORITHM ?? "RS256") as "RS256" | "HS256";
+/**
+ * SEC-1: HS256 (shared-secret) auth is forbidden in production. The dev/test
+ * shared secret (`civitasone-dev-secret`) was used to forge a super_admin token.
+ * In production we verify exclusively against the Keycloak JWKS (RS256); any
+ * attempt to run HS256 in prod is a fatal misconfiguration, not a silent fallback.
+ */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+function resolveAlgorithm(): "RS256" | "HS256" {
+  const configured = (process.env.JWT_ALGORITHM ?? "RS256") as "RS256" | "HS256";
+  if (isProduction() && configured === "HS256") {
+    throw new Error(
+      "SEC-1: JWT_ALGORITHM=HS256 is forbidden in production. Use RS256/Keycloak.",
+    );
+  }
+  return configured;
+}
 
 export async function verifyJwt(token: string): Promise<CivitasJwtPayload> {
+  const algorithm = resolveAlgorithm();
+
   if (algorithm === "HS256") {
+    // Reachable only in non-production (resolveAlgorithm throws in prod).
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error("JWT_SECRET required when JWT_ALGORITHM=HS256");
     return jwt.verify(token, secret, { algorithms: ["HS256"] }) as CivitasJwtPayload;
@@ -111,10 +135,17 @@ export function signToken(
 
 export function toRequestContext(
   payload: CivitasJwtPayload,
-  correlationId: string
+  correlationId: string,
+  headerTenantId?: string,
 ): RequestContext {
+  // SEC-2: for a real JWT the tenant MUST come from the signed token (tid claim).
+  // The x-tenant-id header is attacker-controllable; only honour it as a fallback
+  // outside production (dev/test tokens that omit tid).
+  const trustedHeaderTenant =
+    process.env.NODE_ENV === "production" ? undefined : headerTenantId;
+  const tenantId = payload.tid ?? payload.tenantId ?? trustedHeaderTenant ?? "";
   return {
-    tenantId: payload.tid,
+    tenantId,
     actorId: payload.sub,
     actorType: "user",
     roles: payload.roles ?? [],
@@ -124,6 +155,17 @@ export function toRequestContext(
 }
 
 // ── RBAC helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * EVT-4 (04-T4): derive a stable id from a client idempotency key so a
+ * double-submit produces the same messageId/entity id and dedupes at the
+ * consumer (`_inbox.processed`). Falls back to a random UUID when no key is set.
+ */
+export function idempotentId(ctx: { idempotencyKey?: string }): string {
+  if (!ctx.idempotencyKey) return cryptoRandomUUID();
+  const h = cryptoCreateHash("sha256").update(ctx.idempotencyKey).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
 
 export function hasAnyRole(ctx: RequestContext, required: string[]): boolean {
   return required.some((r) => ctx.roles.includes(r));

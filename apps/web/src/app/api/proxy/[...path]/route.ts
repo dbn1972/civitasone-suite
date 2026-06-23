@@ -4,7 +4,7 @@ import { COOKIE } from "@/lib/auth/config";
 
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
-const FORWARD = ["content-type", "accept", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token"];
+const FORWARD = ["content-type", "accept", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token", "x-idempotency-key"];
 
 export async function GET(req: Request, ctx: { params: { path: string[] } }) {
   return proxy(req, ctx.params.path, "GET");

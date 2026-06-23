@@ -1,0 +1,36 @@
+# OPS-1 (09-T1): Prometheus scrape + alerting for CivitasOne.
+# Scrapes the per-service /metrics endpoints (service_up, http_requests_total,
+# consumer_errors_total, outbox_relay_failures_total, dlq_messages_total).
+#
+# /metrics is guarded by METRICS_TOKEN or internal-IP allowlist (see
+# packages/observability + gateway). Prometheus on the internal network is
+# allowed by IP; to scrape over an untrusted path set a bearer/token instead.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alert.rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []   # wire an Alertmanager target here in prod
+
+scrape_configs:
+  - job_name: gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels: { service: gateway }
+
+  # Domain services bind 127.0.0.1 on their own ports; list them so consumer
+  # error / DLQ / relay-failure metrics are scraped per service.
+  - job_name: civitasone-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "host.docker.internal:3001"  # identity
+          - "host.docker.internal:3007"  # finance
+          - "host.docker.internal:3030"  # queue
+        labels: { tier: backend }

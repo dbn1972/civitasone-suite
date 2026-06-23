@@ -14,28 +14,29 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@civitasone/types": "workspace:*",
-    "@civitasone/events": "workspace:*",
-    "@civitasone/queue": "workspace:*",
+    "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
     "@civitasone/db": "workspace:*",
-    "@civitasone/auth": "workspace:*",
-    "fastify": "^4.27.0",
-    "@fastify/cors": "^9.0.0",
-    "pino": "^8.21.0",
-    "zod": "^3.23.0",
-    "drizzle-orm": "^0.30.0",
-    "postgres": "^3.4.0",
-    "@civitasone/schemas": "workspace:*",
+    "@civitasone/events": "workspace:*",
     "@civitasone/observability": "workspace:*",
-    "nodemailer": "^6.9.0",
-    "ioredis": "^5.4.0"
+    "@civitasone/outbox": "workspace:*",
+    "@civitasone/queue": "workspace:*",
+    "@civitasone/schemas": "workspace:*",
+    "@civitasone/types": "workspace:*",
+    "@fastify/cors": "^9.0.0",
+    "drizzle-orm": "^0.30.0",
+    "fastify": "^4.27.0",
+    "ioredis": "^5.4.0",
+    "nodemailer": "^9.0.1",
+    "pino": "^8.21.0",
+    "postgres": "^3.4.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "tsx": "^4.16.0",
-    "vitest": "^2.0.0",
     "@types/node": "^20.0.0",
-    "@types/nodemailer": "^6.4.0"
+    "@types/nodemailer": "^6.4.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
   }
 }

@@ -1,9 +1,16 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as schemeRepo from "../scheme/repo.js";
 import type { ProjectRow } from "./schema.js";
 
 function minorToAmount(minor: bigint): number {
   return Number(minor) / 100;
+}
+
+function computeExpenditure(row: ProjectRow): number {
+  const sanctioned = Number(row.sanctionedMinor);
+  const pct = Number(row.financialPct);
+  return Math.round((sanctioned * pct) / 100) / 100;
 }
 
 function mapProjectStatus(status: string): ProjectSummary["status"] {
@@ -19,23 +26,32 @@ type ProjectSummary = {
   id: string;
   projectCode: string;
   name: string;
+  scheme?: string;
+  department?: string;
   startDate: string;
+  expectedEndDate?: string;
   totalBudget: number;
   expenditure: number;
   completionPct: number;
   status: "planning" | "active" | "on_hold" | "completed" | "cancelled" | "delayed";
 };
 
-function mapProjectRow(row: ProjectRow): ProjectSummary {
+function mapProjectRow(row: ProjectRow, schemeName?: string): ProjectSummary {
+  const status = row.rag === "red" && row.status === "active"
+    ? "delayed"
+    : mapProjectStatus(row.status);
   return {
     id: row.id,
     projectCode: row.code,
     name: row.name,
-    startDate: row.startDate?.toString() ?? row.createdAt.toISOString().slice(0, 10),
+    ...(schemeName ? { scheme: schemeName } : {}),
+    ...(row.agencyRef ? { department: row.agencyRef } : {}),
+    startDate: row.startDate?.toString() ?? new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
+    ...(row.endDate ? { expectedEndDate: row.endDate.toString() } : {}),
     totalBudget: minorToAmount(row.dprCostMinor),
-    expenditure: minorToAmount(row.sanctionedMinor),
+    expenditure: computeExpenditure(row),
     completionPct: Number(row.physicalPct),
-    status: mapProjectStatus(row.status),
+    status,
   };
 }
 
@@ -62,15 +78,24 @@ export async function listProjects(
 
 export async function listProjectSummaries(tenantId: string, limit: number): Promise<ProjectSummary[]> {
   const rows = await listProjects(tenantId, undefined, 1, limit);
-  return rows.map(mapProjectRow);
+  const summaries: ProjectSummary[] = [];
+  for (const row of rows) {
+    const scheme = row.schemeId ? await schemeRepo.findSchemeById(row.schemeId) : null;
+    summaries.push(mapProjectRow(row, scheme?.name));
+  }
+  return summaries;
 }
 
 export async function getProjectDetail(id: string, tenantId: string) {
   const row = await getProject(id, tenantId);
   if (!row) return null;
-  const milestones = await repo.listMilestonesByProject(id);
+  const [milestones, scheme, fundReleaseRows] = await Promise.all([
+    repo.listMilestonesByProject(id),
+    row.schemeId ? schemeRepo.findSchemeById(row.schemeId) : Promise.resolve(null),
+    row.schemeId ? schemeRepo.listFundReleasesByScheme(row.schemeId) : Promise.resolve([]),
+  ]);
   return {
-    ...mapProjectRow(row),
+    ...mapProjectRow(row, scheme?.name),
     milestones: milestones.map((m) => ({
       id: m.id,
       title: m.name,
@@ -78,7 +103,14 @@ export async function getProjectDetail(id: string, tenantId: string) {
       completedDate: m.actualDate?.toString(),
       status: (m.status === "completed" ? "completed" : m.status === "delayed" ? "delayed" : "pending") as "pending" | "completed" | "delayed",
     })),
-    fundReleases: [],
+    fundReleases: fundReleaseRows
+      .filter((fr) => fr.status === "disbursed" || fr.status === "utilised")
+      .map((fr) => ({
+        id: fr.id,
+        releaseDate: (fr.disbursedAt ?? fr.sanctionedAt ?? fr.createdAt).toISOString().slice(0, 10),
+        amount: minorToAmount(fr.amountMinor),
+        remarks: fr.pfmsRef ?? fr.releaseNo,
+      })),
   };
 }
 

@@ -75,6 +75,10 @@ export interface RequestContext {
   roles: string[];
   correlationId: string;
   sessionId?: string;
+  /** EVT-4 (04-T4): client-supplied idempotency key (x-idempotency-key header).
+   * Sensitive write commands derive a deterministic messageId from it so a
+   * double-submit dedupes at the consumer instead of creating two events. */
+  idempotencyKey?: string;
 }
 
 // Vol 7: plugin manifest
@@ -127,6 +131,9 @@ export interface CRMContactSummary {
   account: string;
   email: string;
   phone: string;
+  leadStatus?: string;
+  tags?: string[];
+  lastActivity?: string;
 }
 
 export interface ActivitySummary {
@@ -217,6 +224,10 @@ export interface HelpdeskTicketSummary {
   subject: string;
   priority: HelpdeskTicketPriority;
   status: HelpdeskTicketStatus;
+  dueDate?: string;
+  escalatedAt?: string;
+  slaStatus?: "within_sla" | "at_risk" | "breached";
+  assignee?: string;
 }
 
 /** Internal ops ticket row (helpdesk-service); same wire shape as HelpdeskTicketSummary. */
@@ -304,7 +315,8 @@ export type BillSummary = {
   id: string;
   billNo: string;
   vendor: string;
-  amount: number;
+  amount: number;        // minor units (paise)
+  amountDisplay?: string; // pre-formatted display string e.g. "₹47,500.00"
   submittedDate: string;
   dueDate?: string;
   status: "pending" | "approved" | "paid" | "rejected" | "under_review";
@@ -354,6 +366,7 @@ export type GLEntrySummary = {
   credit: number;
   narration?: string;
   referenceNo?: string;
+  type?: "payment" | "receipt" | "journal" | "budget";
 };
 
 export type FinancialStatementSummary = {
@@ -557,6 +570,8 @@ export type VendorDetail = {
   address?: string;
   bankAccountNo?: string;
   ifscCode?: string;
+  kycStatus?: string;
+  kycVerifiedAt?: string | null;
 };
 
 export type RFQSummary = {
@@ -582,6 +597,16 @@ export type RFQDetail = RFQSummary & {
   }>;
 };
 
+export type GRNStatus =
+  | "pending"
+  | "draft"
+  | "received"
+  | "quality_check"
+  | "accepted"
+  | "partially_rejected"
+  | "rejected"
+  | "dispatched";
+
 export type GRNSummary = {
   id: string;
   grnNo: string;
@@ -591,7 +616,29 @@ export type GRNSummary = {
   receivedBy: string;
   itemCount: number;
   totalValue: number;
-  status: "draft" | "received" | "quality_check" | "accepted" | "partially_rejected" | "rejected";
+  status: GRNStatus;
+  threeWayMatch?: boolean;
+};
+
+export type GRNDetail = GRNSummary & {
+  vendorId?: string;
+  notes?: string;
+  threeWayMatch: boolean;
+  items: Array<{
+    id?: string;
+    poItemRef: string;
+    itemCode: string;
+    orderedQty: number;
+    receivedQty: number;
+    acceptedQty: number;
+    unit: string;
+  }>;
+  inspection: {
+    inspectorId: string;
+    inspectionDate: string;
+    result: string;
+    remarks?: string;
+  } | null;
 };
 
 export type TenderSummary = {
@@ -628,7 +675,7 @@ export type PurchaseOrderListItem = {
   orderDate: string;
   deliveryDate?: string;
   grnStatus?: string;
-  status: "draft" | "approved" | "partial_grn" | "fully_received" | "cancelled";
+  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed";
 };
 
 export type PODetail = {
@@ -639,7 +686,7 @@ export type PODetail = {
   orderDate: string;
   deliveryDate?: string;
   totalAmount: number;
-  status: "draft" | "approved" | "partial_grn" | "fully_received" | "cancelled";
+  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed";
   lineItems: Array<{
     itemCode: string;
     itemName: string;
@@ -681,6 +728,8 @@ export type ContactDetail = {
   phone?: string;
   designation?: string;
   city?: string;
+  leadStatus?: string;
+  marketingConsent?: boolean;
   lastActivityDate?: string;
   tags: string[];
   deals: Array<{ id: string; dealName: string; stage: string; amount: number }>;
@@ -940,6 +989,9 @@ export type EstabDashboard = {
   meetingsToday: number;
   vehiclesInUse: number;
   complianceItemsDue: number;
+  slaBreached: number;
+  dakPending: number;
+  avgPendencyDays: number;
 };
 
 export type EstabFileSummary = {
@@ -952,6 +1004,7 @@ export type EstabFileSummary = {
   createdDate: string;
   currentHolder?: string;
   status: "active" | "pending" | "archived" | "disposed";
+  dueDate?: string;
   tags: string[];
 };
 
@@ -1060,9 +1113,13 @@ export type ComplianceSummary = {
 
 export type AssetDashboard = {
   totalAssets: number;
+  fixedAssets?: number;
+  infraAssets?: number;
   underMaintenance: number;
   dueForDisposal: number;
+  taggedAssets?: number;
   netBlock: number;
+  recentGrnAssets?: Array<{ id: string; code: string; name: string; acquisitionDate: string; acquisitionCost: number }>;
 };
 
 export type AssetSummary = {
@@ -1194,6 +1251,7 @@ export type AuditObservationSummary = {
   dueDate?: string;
   status: "open" | "replied" | "partially_closed" | "closed" | "compliance_pending";
   para?: string;
+  amount?: number;
 };
 
 export type AuditObservationDetail = AuditObservationSummary & {

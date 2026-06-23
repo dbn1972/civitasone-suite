@@ -48,8 +48,9 @@ class _TicketCreateScreenState extends ConsumerState<TicketCreateScreen> {
 
     setState(() => _submitting = true);
     try {
-      final db = ref.read(dbProvider).valueOrNull;
-      if (db == null) throw Exception('Database not ready');
+      // Await the DB future so submit works even if the provider hasn't resolved
+      // yet (otherwise valueOrNull can be null and the enqueue is silently lost).
+      final db = await ref.read(dbProvider.future);
 
       final entityId = const Uuid().v4();
       final ticketNo =

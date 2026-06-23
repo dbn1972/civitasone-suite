@@ -77,7 +77,7 @@ async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: EVENTS.failed, eventType: EVENTS.failed, tenantId: msg.tenantId,
           actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { deliveryId, retryCount: nextRetry, nextRetryAt: nextRetryAt.toISOString(), error: sendResult.error },
+          payload: { deliveryId, retryCount: nextRetry, nextRetryAt: nextRetryAt.toISOString(), recipientId: p.recipientId ?? null, error: sendResult.error },
         });
         scheduleRetryPublish(q, msg, deliveryId, nextRetry, retryDelaySeconds(retryCount));
         return;
@@ -88,7 +88,7 @@ async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise
         topic: EVENTS.permanentlyFailed, eventType: EVENTS.permanentlyFailed, tenantId: msg.tenantId,
         actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
-          deliveryId, templateId: p.templateId, recipient: p.recipient, channel: sendResult.channel,
+          deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId: p.recipientId ?? null, channel: sendResult.channel,
           retryCount: nextRetry, error: sendResult.error,
         },
       });
@@ -107,7 +107,7 @@ async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: EVENTS.delivered, eventType: EVENTS.delivered, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
-      payload: { deliveryId, templateId: p.templateId, recipient: p.recipient, channel: sendResult.channel },
+      payload: { deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId: p.recipientId ?? null, channel: sendResult.channel },
     });
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,

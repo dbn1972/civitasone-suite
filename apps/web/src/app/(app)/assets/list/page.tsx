@@ -1,134 +1,49 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssets } from "../../../_data/loaders";
-import type { AssetSummary } from "@civitasone/types";
-
-const statusColors: Record<AssetSummary["status"], string> = {
-  active: "bg-emerald-50 text-emerald-700",
-  in_use: "bg-blue-50 text-blue-700",
-  maintenance: "bg-amber-50 text-amber-700",
-  disposed: "bg-slate-100 text-slate-500",
-  condemned: "bg-red-50 text-red-700",
-};
-
-const conditionColors: Record<NonNullable<AssetSummary["condition"]>, string> = {
-  excellent: "bg-emerald-50 text-emerald-700",
-  good: "bg-blue-50 text-blue-700",
-  fair: "bg-amber-50 text-amber-700",
-  poor: "bg-red-50 text-red-700",
-};
-
-const typeLabels: Record<AssetSummary["type"], string> = {
-  fixed: "Fixed",
-  infra: "Infrastructure",
-  movable: "Movable",
-  it: "IT",
-  vehicle: "Vehicle",
-  other: "Other",
-};
+import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { AssetsTable } from "./AssetsTable";
 
 export default async function AssetListPage() {
   const { data: assets, source } = await getAssets();
-
   const totalActive = assets.filter((a) => a.status === "active" || a.status === "in_use").length;
-  const underMaintenance = assets.filter((a) => a.status === "maintenance").length;
+  const tagged = Math.round((totalActive / Math.max(assets.length, 1)) * 100);
+  const grossBlock = assets.reduce((sum, a) => sum + a.purchaseCost, 0);
   const netBlock = assets.reduce((sum, a) => sum + a.currentValue, 0);
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/assets" className="hover:text-slate-900">Assets</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Asset Register</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Asset Register</h1>
-            <p className="mt-1 text-sm text-slate-600">All assets across categories, departments, and locations.</p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Assets</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{assets.length.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Active / In Use</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">{totalActive.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Under Maintenance</p>
-            <p className="mt-1 text-2xl font-bold text-amber-600">{underMaintenance.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total Net Block (₹)</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-600">₹{(netBlock / 100).toLocaleString("en-IN")}</p>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table aria-label="Asset register" className="min-w-full text-left text-sm">
-              <thead className="bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Asset Code</th>
-                  <th scope="col" className="px-4 py-3">Name</th>
-                  <th scope="col" className="px-4 py-3">Category</th>
-                  <th scope="col" className="px-4 py-3">Type</th>
-                  <th scope="col" className="px-4 py-3">Purchase Date</th>
-                  <th scope="col" className="px-4 py-3 text-right">Purchase Cost (₹)</th>
-                  <th scope="col" className="px-4 py-3 text-right">Current Value (₹)</th>
-                  <th scope="col" className="px-4 py-3">Location</th>
-                  <th scope="col" className="px-4 py-3">Dept</th>
-                  <th scope="col" className="px-4 py-3">Status</th>
-                  <th scope="col" className="px-4 py-3">Condition</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assets.length === 0 ? (
-                  <tr>
-                    <td colSpan={11} className="px-4 py-6 text-center text-slate-400">No assets found</td>
-                  </tr>
-                ) : (
-                  assets.map((asset) => (
-                    <tr key={asset.id} className="border-t border-slate-200 hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <Link href={`/assets/${asset.id}`} className="font-mono text-xs text-blue-600 hover:underline">
-                          {asset.assetCode}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{asset.name}</td>
-                      <td className="px-4 py-3 text-slate-600">{asset.category}</td>
-                      <td className="px-4 py-3 text-slate-600">{typeLabels[asset.type]}</td>
-                      <td className="px-4 py-3 text-slate-600">{asset.purchaseDate}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">₹{(asset.purchaseCost / 100).toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">₹{(asset.currentValue / 100).toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3 text-slate-600">{asset.location ?? "—"}</td>
-                      <td className="px-4 py-3 text-slate-600">{asset.department ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[asset.status]}`}>
-                          {asset.status.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {asset.condition ? (
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${conditionColors[asset.condition]}`}>
-                            {asset.condition}
-                          </span>
-                        ) : "—"}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-    </main>
+    <>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <PageHeader
+        title="Fixed Asset Register"
+        subtitle="Register, tag (QR) and value fixed assets."
+        actions={
+          <>
+            <button className="btn ghost">Bulk tag</button>
+            <button className="btn primary">+ Register Asset</button>
+          </>
+        }
+      />
+      <div
+        className="banner"
+        style={{
+          background: "#fdf0e3",
+          border: "1px solid #fcd9b6",
+          color: "#9a3412",
+          borderRadius: 12,
+          padding: "13px 16px",
+          marginBottom: 18,
+          fontSize: 13,
+        }}
+      >
+        🔗 <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
+      </div>
+      <StatGrid>
+        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} delta="+85" up />
+        <StatCard icon="🔖" iconBg="#eff6ff" label="Tagged (QR)" value={`${tagged}%`} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={`₹${(grossBlock / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={`₹${(netBlock / 100).toLocaleString("en-IN")}`} />
+      </StatGrid>
+      <AssetsTable assets={assets} source={source} />
+    </>
   );
 }

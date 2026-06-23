@@ -1,18 +1,13 @@
 import { randomBytes, createHmac } from "node:crypto";
-import { eq, and, gt, asc } from "drizzle-orm";
+import { eq, and, gt, asc, desc, or, isNull } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { registeredDevices, mailboxCursors, entityChangelog } from "./schema.js";
+import { registeredDevices, mailboxCursors, entityChangelog, processedMutations } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 function trustSecret(): string {
   const secret = process.env.DEVICE_TRUST_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("DEVICE_TRUST_SECRET is required in production");
-    }
-    return "dev_device_trust_secret_change_in_prod";
-  }
+  if (!secret) throw new Error("DEVICE_TRUST_SECRET env var is required");
   return secret;
 }
 
@@ -73,7 +68,7 @@ export async function setCursor(tenantId: string, userId: string, deviceId: stri
 
 export async function appendChangelog(entry: {
   tenantId: string; mailbox: string; entityId: string;
-  operation: string; payload?: Record<string, unknown>;
+  operation: string; payload?: Record<string, unknown>; ownerUserId?: string | null;
 }): Promise<{ seq: string; etag: string }> {
   const etag = randomBytes(8).toString("hex");
   const rows = await db.insert(entityChangelog).values({
@@ -82,6 +77,7 @@ export async function appendChangelog(entry: {
     entityId: entry.entityId,
     operation: entry.operation,
     payload: entry.payload ?? null,
+    ownerUserId: entry.ownerUserId ?? null,
     etag,
   }).returning({ seq: entityChangelog.seq, etag: entityChangelog.etag });
   return { seq: String(rows[0]?.seq ?? "0"), etag: rows[0]?.etag ?? etag };
@@ -110,13 +106,119 @@ export async function appendChangelogBatch(
   return rows.map((r) => ({ seq: String(r.seq), etag: r.etag }));
 }
 
-export async function pullSince(tenantId: string, mailbox: string, sinceSeq: bigint, limit: number) {
+export async function pullSince(
+  tenantId: string,
+  mailbox: string,
+  sinceSeq: bigint,
+  limit: number,
+  opts: { userId?: string; userPrivate?: boolean } = {},
+) {
+  const conditions = [
+    eq(entityChangelog.tenantId, tenantId),
+    eq(entityChangelog.mailbox, mailbox),
+    gt(entityChangelog.seq, sinceSeq),
+  ];
+  // 03-T7: for a user-private mailbox, only return rows owned by this user (or
+  // unowned/shared rows). Rows owned by another user in the tenant are hidden.
+  if (opts.userPrivate && opts.userId) {
+    conditions.push(
+      or(eq(entityChangelog.ownerUserId, opts.userId), isNull(entityChangelog.ownerUserId))!,
+    );
+  }
   return db.select().from(entityChangelog)
+    .where(and(...conditions))
+    .orderBy(asc(entityChangelog.seq))
+    .limit(limit);
+}
+
+// ── SYN-1 (03): idempotency, conflict detection, per-mutation apply ──────────
+
+/** Append a single changelog row (used by the per-mutation push path). */
+export async function appendChangelogOne(
+  tx: Writer,
+  entry: { tenantId: string; mailbox: string; entityId: string; operation: string; payload?: Record<string, unknown> },
+): Promise<{ seq: string; etag: string }> {
+  const etag = randomBytes(8).toString("hex");
+  const rows = await tx.insert(entityChangelog).values({
+    tenantId: entry.tenantId,
+    mailbox: entry.mailbox,
+    entityId: entry.entityId,
+    operation: entry.operation,
+    payload: entry.payload ?? null,
+    etag,
+  }).returning({ seq: entityChangelog.seq, etag: entityChangelog.etag });
+  return { seq: String(rows[0]?.seq ?? "0"), etag: rows[0]?.etag ?? etag };
+}
+
+/** SYN-1c: latest committed state for an entity (for conflict detection). */
+export async function getLatestEntityState(
+  tx: Writer,
+  tenantId: string,
+  mailbox: string,
+  entityId: string,
+): Promise<{ etag: string; operation: string; payload: Record<string, unknown> | null } | null> {
+  const rows = await tx.select().from(entityChangelog)
     .where(and(
       eq(entityChangelog.tenantId, tenantId),
       eq(entityChangelog.mailbox, mailbox),
-      gt(entityChangelog.seq, sinceSeq),
+      eq(entityChangelog.entityId, entityId),
     ))
-    .orderBy(asc(entityChangelog.seq))
-    .limit(limit);
+    .orderBy(desc(entityChangelog.seq))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return { etag: row.etag, operation: row.operation, payload: (row.payload as Record<string, unknown> | null) ?? null };
+}
+
+export type ProcessedResult = {
+  status: "applied" | "conflict" | "failed";
+  resultEtag: string | null;
+  resultSeq: string | null;
+  reason: string | null;
+};
+
+/** SYN-1b: return the stored outcome of a previously-processed mutation. */
+export async function findProcessedMutation(
+  tx: Writer,
+  tenantId: string,
+  deviceId: string,
+  clientMutationId: string,
+): Promise<ProcessedResult | null> {
+  const rows = await tx.select().from(processedMutations)
+    .where(and(
+      eq(processedMutations.tenantId, tenantId),
+      eq(processedMutations.deviceId, deviceId),
+      eq(processedMutations.clientMutationId, clientMutationId),
+    ))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    status: row.status as ProcessedResult["status"],
+    resultEtag: row.resultEtag ?? null,
+    resultSeq: row.resultSeq != null ? String(row.resultSeq) : null,
+    reason: row.reason ?? null,
+  };
+}
+
+/** SYN-1b: persist a mutation outcome so a replay returns the same result. */
+export async function recordProcessedMutation(
+  tx: Writer,
+  entry: {
+    tenantId: string; deviceId: string; clientMutationId: string; mailbox: string;
+    entityId: string; status: "applied" | "conflict" | "failed";
+    resultEtag?: string | null; resultSeq?: string | null; reason?: string | null;
+  },
+): Promise<void> {
+  await tx.insert(processedMutations).values({
+    tenantId: entry.tenantId,
+    deviceId: entry.deviceId,
+    clientMutationId: entry.clientMutationId,
+    mailbox: entry.mailbox,
+    entityId: entry.entityId,
+    status: entry.status,
+    resultEtag: entry.resultEtag ?? null,
+    resultSeq: entry.resultSeq != null ? BigInt(entry.resultSeq) : null,
+    reason: entry.reason ?? null,
+  });
 }

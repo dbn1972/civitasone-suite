@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb, bigserial } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb, bigserial, bigint } from "drizzle-orm/pg-core";
 
 export const devicesSchema = pgSchema("devices");
 
@@ -41,8 +41,25 @@ export const entityChangelog = syncSchema.table("entity_changelog", {
   operation: varchar("operation", { length: 16 }).notNull(),
   payload:   jsonb("payload").$type<Record<string, unknown>>(),
   etag:      text("etag").notNull(),
+  // 03-T7: optional row owner for user-private mailboxes (e.g. notifications).
+  ownerUserId: uuid("owner_user_id"),
   seq:       bigserial("seq", { mode: "bigint" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const schema = { registeredDevices, mailboxCursors, entityChangelog };
+// SYN-1b: idempotency ledger for client mutations (see migration 0007).
+export const processedMutations = syncSchema.table("processed_mutations", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  deviceId:         uuid("device_id").notNull(),
+  clientMutationId: uuid("client_mutation_id").notNull(),
+  mailbox:          varchar("mailbox", { length: 32 }).notNull(),
+  entityId:         uuid("entity_id").notNull(),
+  status:           varchar("status", { length: 16 }).notNull(),
+  resultEtag:       text("result_etag"),
+  resultSeq:        bigint("result_seq", { mode: "bigint" }),
+  reason:           text("reason"),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const schema = { registeredDevices, mailboxCursors, entityChangelog, processedMutations };

@@ -5,7 +5,12 @@ type FeedRule = {
   topic: string;
   mailbox: string;
   entityId: (payload: Record<string, unknown>) => string | null;
+  /** 03-T7: owner for user-private mailboxes (e.g. notifications). */
+  ownerId?: (payload: Record<string, unknown>) => string | null;
 };
+
+const ownerFromRecipient = (p: Record<string, unknown>): string | null =>
+  String(p.recipientId ?? p.userId ?? "") || null;
 
 const FEED_RULES: FeedRule[] = [
   { topic: "hrms.employee.created", mailbox: "employees", entityId: (p) => String(p.employeeId ?? "") || null },
@@ -43,9 +48,9 @@ const FEED_RULES: FeedRule[] = [
   { topic: "citizen.grievance.escalated", mailbox: "grievances", entityId: (p) => String(p.grievanceId ?? p.id ?? "") || null },
   { topic: "citizen.rti.filed", mailbox: "applications", entityId: (p) => String(p.rtiId ?? p.id ?? "") || null },
   // notification
-  { topic: "notification.delivered", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null },
-  { topic: "notification.failed", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null },
-  { topic: "notification.delivery.permanently_failed", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null },
+  { topic: "notification.delivered", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null, ownerId: ownerFromRecipient },
+  { topic: "notification.failed", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null, ownerId: ownerFromRecipient },
+  { topic: "notification.delivery.permanently_failed", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null, ownerId: ownerFromRecipient },
 ];
 
 export function registerSyncFeederConsumers(queue: Queue): void {
@@ -60,6 +65,7 @@ export function registerSyncFeederConsumers(queue: Queue): void {
         entityId,
         operation: "upsert",
         payload,
+        ownerUserId: rule.ownerId ? rule.ownerId(payload) : null,
       });
     });
   }

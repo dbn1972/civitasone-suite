@@ -4,6 +4,7 @@ import 'package:civitasone_mobile/core/sync/sync_database.dart';
 
 void main() {
   late SyncDatabase db;
+  late Database raw;
 
   setUpAll(() {
     sqfliteFfiInit();
@@ -12,8 +13,14 @@ void main() {
 
   setUp(() async {
     // openDatabase with no options — SyncDatabase.openInMemory creates tables.
-    final raw = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    // sqflite caches open databases by path, and `:memory:` is one shared path,
+    // so we must close in tearDown to give each test an isolated database.
+    raw = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     db = await SyncDatabase.openInMemory(raw);
+  });
+
+  tearDown(() async {
+    await raw.close();
   });
 
   group('enqueueOutbox', () {
@@ -84,11 +91,13 @@ void main() {
 
       await db.markOutboxFailed(id, 'network_error');
 
-      final entries = await db.listOutbox('approvals');
-      expect(entries.length, 1);
-      expect(entries.first['status'], 'failed');
-      expect(entries.first['last_error'], 'network_error');
-      expect(entries.first['retry_count'], 1);
+      final entry = await db.getOutboxEntry(id);
+      expect(entry, isNotNull);
+      expect(entry!['status'], 'failed');
+      expect(entry['last_error'], 'network_error');
+      expect(entry['retry_count'], 1);
+      // Backoff scheduled: a failed entry is not immediately re-eligible.
+      expect(entry['next_attempt_at'], isNotNull);
     });
 
     test('increments retry_count on each failure', () async {
@@ -101,8 +110,24 @@ void main() {
 
       await db.markOutboxFailed(id, 'err1');
       await db.markOutboxFailed(id, 'err2');
-      final entries = await db.listOutbox('approvals');
-      expect(entries.first['retry_count'], 2);
+      final entry = await db.getOutboxEntry(id);
+      expect(entry!['retry_count'], 2);
+    });
+
+    test('dead-letters after the retry cap and drops out of listOutbox', () async {
+      final id = await db.enqueueOutbox(
+        mailbox: 'approvals',
+        operation: 'approve',
+        entityId: 'entity-6',
+        payload: {},
+      );
+
+      for (var i = 0; i < 5; i++) {
+        await db.markOutboxFailed(id, 'err');
+      }
+      final entry = await db.getOutboxEntry(id);
+      expect(entry!['status'], 'dead');
+      expect(await db.listOutbox('approvals'), isEmpty);
     });
   });
 

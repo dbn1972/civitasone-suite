@@ -2,19 +2,13 @@
 
 import { useEffect } from "react";
 import { getOrCreateDeviceId, computeBrowserFingerprint, defaultDeviceLabel } from "@civitasone/client-core";
-import { registerServiceWorker } from "@/lib/sync/indexedDb";
+import { registerServiceWorker, requestBackgroundSync } from "@/lib/sync/indexedDb";
 import { syncMailbox } from "@/lib/sync/engine";
+import { resolveNamespace } from "@/lib/sync/identity";
+import { buildSyncHeaders, setTrustToken } from "@/lib/sync/headers";
+import { flushRequestQueue } from "@/lib/sync/requestQueue";
 
-const TRUST_KEY = "civitasone_device_trust";
-
-function getTrustToken(): string | undefined {
-  if (typeof sessionStorage === "undefined") return undefined;
-  return sessionStorage.getItem(TRUST_KEY) ?? undefined;
-}
-
-function setTrustToken(token: string): void {
-  sessionStorage.setItem(TRUST_KEY, token);
-}
+const MAILBOXES = ["approvals", "notifications", "applications"] as const;
 
 /** Gmail-style background sync — BFF /api/proxy with device + trust headers. */
 export function SyncProvider() {
@@ -22,11 +16,23 @@ export function SyncProvider() {
     void registerServiceWorker();
 
     const deviceId = getOrCreateDeviceId();
-    const buildHeaders = (): Record<string, string> => {
-      const h: Record<string, string> = { "x-device-id": deviceId };
-      const trust = getTrustToken();
-      if (trust) h["x-device-trust-token"] = trust;
-      return h;
+
+    const runAll = async () => {
+      // Drain queued domain writes first, then refresh mailbox reads.
+      try {
+        await flushRequestQueue();
+      } catch {
+        /* still offline */
+      }
+      const ns = await resolveNamespace();
+      const headers = buildSyncHeaders();
+      for (const mailbox of MAILBOXES) {
+        try {
+          await syncMailbox(mailbox, headers, deviceId, ns);
+        } catch {
+          /* offline — Background Sync / online listener will retry */
+        }
+      }
     };
 
     void (async () => {
@@ -34,7 +40,7 @@ export function SyncProvider() {
         const fp = await computeBrowserFingerprint();
         const res = await fetch(`/api/proxy/v1/devices/register`, {
           method: "POST",
-          headers: { "content-type": "application/json", ...buildHeaders() },
+          headers: { "content-type": "application/json", ...buildSyncHeaders() },
           body: JSON.stringify({
             deviceId,
             platform: "web",
@@ -46,22 +52,29 @@ export function SyncProvider() {
           const data = (await res.json()) as { trustToken?: string };
           if (data.trustToken) setTrustToken(data.trustToken);
         }
-      } catch { /* retry on next sync */ }
-
-      const headers = buildHeaders();
-      for (const mailbox of ["approvals", "notifications", "applications"] as const) {
-        try { await syncMailbox(mailbox, headers, deviceId); } catch { /* offline */ }
+      } catch {
+        /* retry on next sync */
       }
+      await runAll();
     })();
 
+    // Flush when connectivity returns and register Background Sync as a backup
+    // for when the tab is closed (01-T6).
     const onOnline = () => {
-      const headers = buildHeaders();
-      for (const mailbox of ["approvals", "notifications", "applications"] as const) {
-        void syncMailbox(mailbox, headers, deviceId);
-      }
+      void runAll();
+      void requestBackgroundSync();
     };
+    // The SW posts CIVITASONE_SYNC from its `sync` event after reconnect.
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "CIVITASONE_SYNC") void runAll();
+    };
+
     window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
+    navigator.serviceWorker?.addEventListener?.("message", onMessage);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      navigator.serviceWorker?.removeEventListener?.("message", onMessage);
+    };
   }, []);
 
   return null;

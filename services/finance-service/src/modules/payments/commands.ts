@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateBillBody, ApproveBillBody, InitiateEftBody, GemInvoiceMatchBody } from "./validators.js";
@@ -7,7 +8,7 @@ import type { CreateBillBody, ApproveBillBody, InitiateEftBody, GemInvoiceMatchB
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createBill(ctx: RequestContext, body: CreateBillBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = idempotentId(ctx); // EVT-4: double-submit dedupe
   const totalDeductions = body.deductions.reduce((s, d) => s + d.amountMinor, 0);
   const netMinor = body.grossMinor - totalDeductions;
   await queue.publish(COMMANDS.billCreate, {
@@ -29,7 +30,7 @@ export async function approveBill(ctx: RequestContext, id: string, body: Approve
 }
 
 export async function initiatePayment(ctx: RequestContext, body: InitiateEftBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = idempotentId(ctx); // EVT-4: double-submit dedupe
   await queue.publish(COMMANDS.paymentInitiate, {
     messageId: id, type: COMMANDS.paymentInitiate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

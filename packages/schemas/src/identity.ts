@@ -47,6 +47,10 @@ export const syncMutationSchema = z.object({
   entityId: uuidSchema,
   payload: z.record(z.unknown()).default({}),
   clientUpdatedAt: z.string(),
+  // SYN-1c: the client's last-known etag for this entity. When present, the
+  // server rejects the mutation with a conflict if the entity has advanced
+  // past this version. Omitted for first-time creates.
+  baseEtag: z.string().optional(),
 });
 
 export const syncPushRequestSchema = z.object({
@@ -56,11 +60,25 @@ export const syncPushRequestSchema = z.object({
   mutations: z.array(syncMutationSchema).max(200),
 });
 
+// SYN-1d: explicit per-mutation outcome so a mixed batch (some applied, some
+// rejected) is represented precisely instead of all-or-nothing.
+export const syncMutationResultSchema = z.object({
+  clientMutationId: uuidSchema,
+  status: z.enum(["applied", "conflict", "failed"]),
+  etag: z.string().optional(),
+  /** current server state on conflict, so the client can resolve */
+  serverData: z.record(z.unknown()).optional(),
+  reason: z.string().optional(),
+});
+
 export const syncPushResponseSchema = z.object({
   mailbox: z.string(),
   cursor: z.string(),
   applied: z.array(uuidSchema),
   conflicts: z.array(z.object({ clientMutationId: uuidSchema, reason: z.string() })),
+  // Additive: precise per-mutation results (SYN-1d). Older clients keep reading
+  // applied/conflicts; newer clients prefer results.
+  results: z.array(syncMutationResultSchema).default([]),
 });
 
 export const syncPullRequestSchema = z.object({
