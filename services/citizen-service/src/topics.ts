@@ -33,6 +33,7 @@ export const EVENTS = {
   rtiFiled:               "citizen.rti.filed",
   grievanceEscalated:     "citizen.grievance.escalated",
   profileDeleted:         "citizen.profile.deleted",
+  ticketSlaBreached:      "citizen.ticket.sla_breached",
 } as const;
 
 export const CONSUMED_EVENTS = {

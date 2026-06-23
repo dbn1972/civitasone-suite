@@ -1,10 +1,12 @@
 import type { Queue } from "@civitasone/queue";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { computeSlaDueAt } from "./sla.js";
+import { computeSlaDueAt, computeSlaStatus } from "./sla.js";
+import type { TicketRow } from "./schema.js";
 
 export function registerHelpdeskConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.ticketCreate, async (msg) => {
@@ -72,6 +74,7 @@ export function registerHelpdeskConsumers(queue: Queue): void {
         status: ticket.status === "open" ? "in_progress" : ticket.status,
         updatedBy: msg.actorId,
       });
+      await notifyIfBreached(tx, msg, ticket);
       await audit(tx, msg, "assign", "citizen_ticket", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "ticket", p.id));
@@ -115,6 +118,7 @@ export function registerHelpdeskConsumers(queue: Queue): void {
         level,
       });
       await repo.updateTicket(tx, p.ticketId, { priority: "high", updatedBy: msg.actorId });
+      await notifyIfBreached(tx, msg, ticket);
       await audit(tx, msg, "escalate", "citizen_ticket", p.ticketId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "ticket", p.ticketId));
@@ -126,5 +130,30 @@ async function audit(tx: any, msg: any, action: string, resourceType: string, re
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
     payload: { service: "citizen", action, resourceType, resourceId, outcome: "success" },
+  });
+}
+
+/**
+ * Emit notification.send when a ticket's recomputed SLA status is breached.
+ * Called on existing lifecycle events (assign/escalate) — no separate scheduler.
+ * markProcessed wraps each command, so redelivery stays idempotent.
+ */
+async function notifyIfBreached(tx: any, msg: any, ticket: TicketRow): Promise<void> {
+  if (computeSlaStatus(ticket) !== "breached") return;
+  await enqueue(tx, {
+    topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: buildNotificationPayload({
+      eventType: EVENTS.ticketSlaBreached,
+      recipient: ticket.assigneeId ?? ticket.citizenId,
+      recipientId: ticket.assigneeId ?? ticket.citizenId,
+      variables: {
+        ticketId: ticket.id,
+        ticketNo: ticket.ticketNo ?? ticket.id,
+        priority: ticket.priority,
+        summary: `Ticket SLA breached: ${ticket.subject}`,
+        link: `/helpdesk/tickets/${ticket.id}`,
+      },
+    }),
   });
 }

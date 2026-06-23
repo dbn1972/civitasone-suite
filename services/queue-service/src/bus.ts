@@ -17,7 +17,7 @@ import {
   SetQueueAttributesCommand,
   ListQueuesCommand,
 } from "@aws-sdk/client-sqs";
-import { incrementConsumerError, incrementDlqMessage, captureError } from "@civitasone/observability";
+import { incrementConsumerError, incrementDlqMessage, captureError, recordConsumerHeartbeat } from "@civitasone/observability";
 import { parseEnvelope } from "@civitasone/events";
 
 export type CommandEnvelope<T = unknown> = {
@@ -41,12 +41,29 @@ export type Handler<T = unknown> = (msg: CommandEnvelope<T>) => Promise<void>;
 
 export type QueueDriver = "memory" | "sqs";
 
+/**
+ * 05-T4: optional publish options. For order-sensitive topics (FIFO) the
+ * broker needs a MessageGroupId (ordering scope) and a MessageDeduplicationId
+ * (exactly-once within the dedup window). Defaults are derived from the
+ * envelope (group = tenantId, dedup = messageId) when the topic name ends with
+ * `.fifo`; callers may override either here.
+ */
+export type PublishOptions = {
+  messageGroupId?: string;
+  messageDeduplicationId?: string;
+};
+
 export interface Queue {
-  publish<T>(topic: string, input: PublishInput<T>): Promise<string>;
+  publish<T>(topic: string, input: PublishInput<T>, options?: PublishOptions): Promise<string>;
   subscribe<T>(topic: string, handler: Handler<T>): void;
   start(): Promise<void>;
   stop(): Promise<void>;
   healthCheck(): Promise<{ healthy: boolean; driver: QueueDriver }>;
+}
+
+/** 05-T4: a topic is order-sensitive (FIFO) when its name ends with `.fifo`. */
+export function isFifoTopic(topic: string): boolean {
+  return topic.endsWith(".fifo");
 }
 
 function envelope<T>(input: PublishInput<T>): CommandEnvelope<T> {
@@ -73,7 +90,7 @@ export class MemoryQueue implements Queue {
     this.maxAttempts = opts.maxAttempts ?? 5;
   }
 
-  async publish<T>(topic: string, input: PublishInput<T>): Promise<string> {
+  async publish<T>(topic: string, input: PublishInput<T>, _options?: PublishOptions): Promise<string> {
     const msg = envelope(input);
     const handlers = this.handlers.get(topic) ?? [];
     setTimeout(() => {
@@ -123,6 +140,12 @@ export class MemoryQueue implements Queue {
 }
 
 function topicToQueueName(topic: string): string {
+  // 05-T4: AWS requires FIFO queue names to end with `.fifo`. Preserve the
+  // suffix and only sanitise the base so the broker accepts the FIFO create.
+  if (isFifoTopic(topic)) {
+    const base = topic.slice(0, -".fifo".length).replace(/\./g, "-").slice(0, 75);
+    return `${base}.fifo`;
+  }
   return topic.replace(/\./g, "-").slice(0, 80);
 }
 
@@ -155,7 +178,13 @@ export class SqsQueue implements Queue {
     const cached = this.queueUrls.get(topic);
     if (cached) return cached;
     const name = topicToQueueName(topic);
-    await this.client.send(new CreateQueueCommand({ QueueName: name }));
+    const fifo = isFifoTopic(topic);
+    await this.client.send(new CreateQueueCommand({
+      QueueName: name,
+      // 05-T4: FIFO topics create FIFO queues. ContentBasedDeduplication stays
+      // off because publish() supplies an explicit MessageDeduplicationId.
+      ...(fifo ? { Attributes: { FifoQueue: "true", ContentBasedDeduplication: "false" } } : {}),
+    }));
     const res = await this.client.send(new GetQueueUrlCommand({ QueueName: name }));
     const url = res.QueueUrl!;
     // QUE-2: attach a native SQS RedrivePolicy (DLQ + maxReceiveCount) and a
@@ -188,15 +217,25 @@ export class SqsQueue implements Queue {
   private async getOrCreateDlq(topic: string): Promise<string> {
     const cached = this.dlqUrls.get(topic);
     if (cached) return cached;
-    const name = `${topicToQueueName(topic).slice(0, 76)}-dlq`;
-    await this.client.send(new CreateQueueCommand({ QueueName: name }));
+    const fifo = isFifoTopic(topic);
+    // 05-T4: a FIFO source queue requires a FIFO dead-letter queue (the
+    // RedrivePolicy target must match the queue type), and the name must keep
+    // the `.fifo` suffix.
+    const base = topicToQueueName(topic);
+    const name = fifo
+      ? `${base.slice(0, -".fifo".length).slice(0, 71)}-dlq.fifo`
+      : `${base.slice(0, 76)}-dlq`;
+    await this.client.send(new CreateQueueCommand({
+      QueueName: name,
+      ...(fifo ? { Attributes: { FifoQueue: "true", ContentBasedDeduplication: "false" } } : {}),
+    }));
     const res = await this.client.send(new GetQueueUrlCommand({ QueueName: name }));
     const url = res.QueueUrl!;
     this.dlqUrls.set(topic, url);
     return url;
   }
 
-  async publish<T>(topic: string, input: PublishInput<T>): Promise<string> {
+  async publish<T>(topic: string, input: PublishInput<T>, options?: PublishOptions): Promise<string> {
     const msg = envelope(input);
     const url = await this.getOrCreateQueue(topic);
     await this.client.send(new SendMessageCommand({
@@ -207,6 +246,17 @@ export class SqsQueue implements Queue {
         correlationId: { DataType: "String", StringValue: msg.correlationId },
         type:          { DataType: "String", StringValue: msg.type },
       },
+      // 05-T4: FIFO ordering. MessageGroupId scopes ordering to a tenant so a
+      // tenant's ledger/journal postings stay strictly ordered without
+      // serialising across tenants. MessageDeduplicationId = messageId gives
+      // broker-side exactly-once within the 5-minute dedup window. Callers may
+      // override either (e.g. group by account) via options.
+      ...(isFifoTopic(topic)
+        ? {
+            MessageGroupId: options?.messageGroupId ?? msg.tenantId,
+            MessageDeduplicationId: options?.messageDeduplicationId ?? msg.messageId,
+          }
+        : {}),
     }));
     return msg.messageId;
   }
@@ -251,6 +301,11 @@ export class SqsQueue implements Queue {
           MessageAttributeNames: ["All"],
           MessageSystemAttributeNames: ["ApproximateReceiveCount"],
         }));
+
+        // 09-T4: a successful receive means the poll loop is alive. Record a
+        // heartbeat so readiness (consumerHeartbeatCheck) can detect a hung or
+        // killed loop and flip /ready to 503.
+        recordConsumerHeartbeat(this.service);
 
         for (const sqsMsg of res.Messages ?? []) {
           let msg: CommandEnvelope;

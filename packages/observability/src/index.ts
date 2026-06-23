@@ -32,7 +32,9 @@ export type ReadinessChecks = {
   db?: { ping: () => Promise<boolean> };
   cache?: CacheLike;
   queue?: QueueLike;
-  custom?: Array<{ name: string; ping: () => Promise<boolean> }>;
+  // 09-T4: custom checks may be sync (e.g. consumerHeartbeatCheck reads an
+  // in-memory timestamp) or async. /ready awaits either form.
+  custom?: Array<{ name: string; ping: () => boolean | Promise<boolean> }>;
 };
 
 export type OpsOptions = {
@@ -114,6 +116,68 @@ function formatConsumerErrorMetrics(): string[] {
     const service = key.slice(0, sep);
     const topic = key.slice(sep + 1);
     lines.push(`consumer_errors_total{service="${service}",topic="${topic}"} ${count}`);
+  }
+  return lines;
+}
+
+// ── 09-T4: consumer liveness / heartbeat ─────────────────────────────────────
+// A *-worker process records a heartbeat on every successful poll-loop
+// iteration. Readiness then reflects whether the poll loop is still alive: if
+// the loop stops (crash, hang, killed task) the timestamp goes stale and the
+// readiness check flips /ready to 503 so orchestrators stop routing to it.
+
+const consumerLastPoll = new Map<string, number>(); // service -> epoch ms
+
+/** Record a successful consumer poll for `service` (call each receive loop iteration). */
+export function recordConsumerHeartbeat(service: string): void {
+  consumerLastPoll.set(service, Date.now());
+}
+
+/**
+ * Last poll timestamp (epoch ms) for `service`, or the most recent across all
+ * services when `service` is omitted. Returns null when no heartbeat recorded.
+ */
+export function getLastConsumerHeartbeat(service?: string): number | null {
+  if (service !== undefined) return consumerLastPoll.get(service) ?? null;
+  let max: number | null = null;
+  for (const ts of consumerLastPoll.values()) {
+    if (max === null || ts > max) max = ts;
+  }
+  return max;
+}
+
+/** Reset heartbeats — test helper. */
+export function resetConsumerHeartbeats(): void {
+  consumerLastPoll.clear();
+}
+
+/**
+ * Build a readiness ping that returns false when the consumer has not polled
+ * within `maxStalenessMs` (or has never polled). Wire it into registerOpsRoutes:
+ *
+ *   registerOpsRoutes(app, {
+ *     service: "finance-worker",
+ *     checks: { custom: [{ name: "consumer", ping: consumerHeartbeatCheck({ maxStalenessMs: 90_000, service: "finance-worker" }) }] },
+ *   });
+ *
+ * Killing the poll loop lets the timestamp go stale → ping() returns false →
+ * /ready responds 503.
+ */
+export function consumerHeartbeatCheck(opts: { maxStalenessMs: number; service?: string }): () => boolean {
+  return () => {
+    const last = getLastConsumerHeartbeat(opts.service);
+    if (last === null) return false;
+    return Date.now() - last <= opts.maxStalenessMs;
+  };
+}
+
+function formatConsumerHeartbeatMetrics(): string[] {
+  const lines = [
+    "# HELP consumer_last_poll_timestamp Unix time (seconds) of the last successful consumer poll by service",
+    "# TYPE consumer_last_poll_timestamp gauge",
+  ];
+  for (const [service, ts] of consumerLastPoll) {
+    lines.push(`consumer_last_poll_timestamp{service="${service}"} ${Math.floor(ts / 1000)}`);
   }
   return lines;
 }
@@ -309,6 +373,7 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
       `process_uptime_seconds{service="${opts.service}"} ${Math.floor((Date.now() - startedAt) / 1000)}`,
       ...formatNotificationDeliveryMetrics(),
       ...formatConsumerErrorMetrics(),
+      ...formatConsumerHeartbeatMetrics(),
       ...formatFailureMetrics(),
     ];
     return reply.type("text/plain; version=0.0.4").send(lines.join("\n") + "\n");

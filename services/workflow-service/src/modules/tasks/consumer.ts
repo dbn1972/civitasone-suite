@@ -1,5 +1,6 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -61,7 +62,15 @@ export function registerTasksConsumers(queue: Queue): void {
             roleRef: nextNode.roleRef,
             refType: instance.refType,
             refId: instance.refId,
-          }, "assign_task", newTaskId);
+          }, "assign_task", newTaskId, {
+            recipient: nextNode.roleRef ?? instance.id,
+            variables: {
+              taskId: newTaskId,
+              instanceId: instance.id,
+              summary: `Task assigned: ${nextNode.name}`,
+              link: `/workflow/tasks/${newTaskId}`,
+            },
+          });
         } else if (instance.refType && instance.refId) {
           await dispatchDomainApprove(tx, msg, instance.refType, instance.refId);
           await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
@@ -81,7 +90,16 @@ export function registerTasksConsumers(queue: Queue): void {
         decision,
         refType: instance?.refType,
         refId: instance?.refId,
-      }, "complete", p.id);
+      }, "complete", p.id, {
+        recipient: p.roleRef ?? msg.actorId,
+        variables: {
+          taskId: p.id,
+          instanceId: p.instanceId,
+          decision,
+          summary: `Task ${decision === "reject" ? "rejected" : "completed"}: ${p.name}`,
+          link: `/workflow/tasks/${p.id}`,
+        },
+      });
     });
     await cache.put(cache.makeKey(msg.tenantId, TASK_RESOURCE, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, TASK_RESOURCE);
@@ -162,8 +180,19 @@ async function dispatchDomainApprove(
   }
 }
 
-async function emit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {
+async function emit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string, notify?: { recipient: string; variables: Record<string, string> }): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, { topic: eventType, eventType, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload });
+  if (notify) {
+    await enqueue(t, {
+      topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+      tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: buildNotificationPayload({
+        eventType,
+        recipient: notify.recipient,
+        variables: notify.variables,
+      }),
+    });
+  }
   await enqueue(t, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow", action, resourceType: "task", resourceId, outcome: "success" } });
 }

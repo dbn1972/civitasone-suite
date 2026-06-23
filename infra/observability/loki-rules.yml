@@ -1,0 +1,47 @@
+# 09-T5: Loki ruler alert rules — fire on shipped error logs.
+#
+# Promtail tails /var/log/civitasone/*.log and labels every line job="civitasone"
+# (see promtail-config.yml). Our services log pino JSON, where the numeric
+# `level` field is 50 for error and 60 for fatal. These rules parse that field
+# with LogQL `| json` and alert when error/fatal lines appear.
+#
+# Wiring: this file is mounted into the Loki container under the ruler's
+# rule_path (see docker-compose.observability.yml). The ruler evaluates LogQL
+# alert expressions and (optionally) forwards to Alertmanager.
+groups:
+  - name: civitasone-logs
+    rules:
+      # Any pino error (level >= 50) shipped from a CivitasOne process. This is
+      # the log-side counterpart to the metric-based ConsumerErrorRateHigh /
+      # DlqMessagesAppearing alerts in alert.rules.yml.
+      - alert: ErrorLogsAppearing
+        expr: |
+          sum by (job) (count_over_time({job="civitasone"} | json | level >= 50 [5m])) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error-level logs from {{ $labels.job }}"
+          description: "pino level>=50 (error/fatal) log lines are being shipped — inspect the logs in Loki/Grafana."
+
+      # A burst of errors — escalate above a noise threshold.
+      - alert: ErrorLogRateHigh
+        expr: |
+          sum by (job) (count_over_time({job="civitasone"} | json | level >= 50 [5m])) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error-log rate from {{ $labels.job }}"
+          description: "More than 10 error/fatal log lines in 5m — a service is failing repeatedly."
+
+      # Fatal logs (pino level 60) — a process is crashing; alert immediately.
+      - alert: FatalLogsAppearing
+        expr: |
+          sum by (job) (count_over_time({job="civitasone"} | json | level >= 60 [5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fatal logs from {{ $labels.job }}"
+          description: "pino level>=60 (fatal) log lines shipped — a process likely crashed."

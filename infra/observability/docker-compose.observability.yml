@@ -23,8 +23,13 @@ services:
     container_name: civitasone-loki
     ports:
       - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
+    # 09-T5: use our config (built-in defaults + ruler enabled) and mount the
+    # LogQL alert rules under the ruler's rule dir for the default ("fake")
+    # tenant. The ruler evaluates loki-rules.yml and can forward to Alertmanager.
+    command: -config.file=/etc/loki/loki-config.yml
     volumes:
+      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ./loki-rules.yml:/etc/loki/rules/fake/loki-rules.yml:ro
       - loki-data:/loki
     restart: unless-stopped
 

@@ -43,6 +43,67 @@ const BASELINE_ROLES = [
 // actor's own (or unowned) rows so same-tenant users cannot read each other's.
 const USER_PRIVATE_MAILBOXES = new Set<string>(["notifications"]);
 
+/**
+ * 03-T1: write-through mailboxes. Push is normally write-only changelog
+ * telemetry — it never touches domain tables, so a pushed create/update is NOT
+ * visible via the normal domain read API. For the mailboxes below, an *applied*
+ * mutation is ALSO enqueued (transactional outbox) as the matching domain
+ * command, so the write flows through the normal CQRS command path and becomes
+ * visible via the domain read API.
+ *
+ * Mapping is per (mailbox, operation): a mailbox may be write-through for some
+ * operations (e.g. create) while having no clean command for others. An
+ * operation with no mapped command is changelog-only for that mailbox, and any
+ * mailbox absent from this table is changelog-only entirely (we do NOT fake a
+ * command where no clean mapping exists).
+ *
+ * Write-through mailboxes (mutation operation → domain command topic):
+ *   employees        create → hrms.employee.create
+ *   leave_requests   create → hrms.leave.apply
+ *   crm_contacts     create → crm.contact.create
+ *                    update → crm.contact.update
+ *                    delete → crm.contact.delete
+ *   crm_deals        create → crm.deal.create
+ *   helpdesk_tickets create → helpdesk.ticket.create
+ *   projects         create → project.project.create
+ *
+ * Changelog-only (telemetry; no clean single client→authoritative command):
+ *   attendance     — keyed by employeeId:date, not the uuid entityId a push carries
+ *   payments       — projection of finance/payroll/grant settlement events
+ *   journals       — server-authored double-entry GL postings
+ *   indents        — fed from approval/terminal events, not client creates
+ *   purchase_orders— fed from po.approved (terminal), not client creates
+ *   approvals      — server-driven workflow instance state
+ *   estab_files    — fed from file.created + file.moved (no single command)
+ *   mis_metrics    — read-only analytics query results
+ *   applications   — fed from approval/rejection/SLA events, not client creates
+ *   grievances     — fed from resolved/escalated terminal events
+ *   notifications  — delivery telemetry
+ */
+const WRITE_THROUGH_COMMANDS: Record<
+  string,
+  Partial<Record<"create" | "update" | "delete", string>>
+> = {
+  employees: { create: "hrms.employee.create" },
+  leave_requests: { create: "hrms.leave.apply" },
+  crm_contacts: {
+    create: "crm.contact.create",
+    update: "crm.contact.update",
+    delete: "crm.contact.delete",
+  },
+  crm_deals: { create: "crm.deal.create" },
+  helpdesk_tickets: { create: "helpdesk.ticket.create" },
+  projects: { create: "project.project.create" },
+};
+
+/** Resolve the domain command topic for an applied mutation, if write-through. */
+function resolveWriteThroughCommand(
+  mailbox: string,
+  operation: "create" | "update" | "delete",
+): string | null {
+  return WRITE_THROUGH_COMMANDS[mailbox]?.[operation] ?? null;
+}
+
 function authorizeMailbox(ctx: RequestContext, mailbox: string): void {
   if (ctx.roles.includes("super_admin")) return;
   const required = MAILBOX_ROLES[mailbox];
@@ -139,6 +200,26 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
               mailbox: body.mailbox, entityId: m.entityId, status: "applied",
               resultEtag: result.etag, resultSeq: result.seq,
             });
+
+            // 03-T1: write-through. For mapped mailboxes, also enqueue the
+            // matching domain command on the transactional outbox (same
+            // SAVEPOINT as the changelog + processed_mutations row, so it is
+            // atomic and idempotent) so the write flows through the normal CQRS
+            // path and becomes visible via the domain read API. Unmapped
+            // mailboxes/operations stay changelog-only telemetry.
+            const commandTopic = resolveWriteThroughCommand(body.mailbox, m.operation);
+            if (commandTopic) {
+              await enqueue(sp as Parameters<typeof enqueue>[0], {
+                topic: commandTopic,
+                eventType: commandTopic,
+                tenantId: ctx.tenantId,
+                actorId: ctx.actorId,
+                correlationId: ctx.correlationId,
+                // Authoritative id/tenant override any client-supplied values.
+                payload: { ...m.payload, id: m.entityId, tenantId: ctx.tenantId },
+              });
+            }
+
             latestCursor = result.seq;
             return { clientMutationId: m.clientMutationId, status: "applied", etag: result.etag };
           });

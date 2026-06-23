@@ -1,0 +1,50 @@
+# 09-T5: Loki config for the observability stack.
+# Based on the Loki 2.9 single-binary defaults, with the RULER enabled so the
+# LogQL alert rules in loki-rules.yml are evaluated. Replaces the image's
+# built-in /etc/loki/local-config.yaml (see docker-compose.observability.yml).
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+# RULER: evaluate the LogQL alert rules shipped in loki-rules.yml. The rules are
+# mounted at /etc/loki/rules/fake/ ("fake" is the default tenant when
+# auth_enabled is false). Point alertmanager_url at a running Alertmanager to
+# forward; left here for documentation of the wiring.
+ruler:
+  rule_path: /tmp/loki-rules-scratch
+  storage:
+    type: local
+    local:
+      directory: /etc/loki/rules
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+  # alertmanager_url: http://alertmanager:9093
+
+limits_config:
+  metric_aggregation_enabled: true

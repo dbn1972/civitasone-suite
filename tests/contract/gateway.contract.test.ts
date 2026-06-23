@@ -76,7 +76,30 @@ describe("gateway contract", () => {
     }
   });
 
-  it("allows intentional upstream aliases only for identity and audit", () => {
+  it("allows only intentional upstream aliases", () => {
+    // Each set lists the route names that intentionally share a single upstream
+    // service. Any upstream serving more than one route MUST be fully contained
+    // in exactly one of these families — this catches accidental drift (a route
+    // pointed at the wrong upstream) while permitting the documented aliases.
+    const ALIAS_FAMILIES: readonly string[][] = [
+      // identity-service hosts auth, admin user mgmt, mobile sync + device APIs
+      ["identity", "admin-users", "sync", "devices"],
+      // audit-service: legacy /api/audit + versioned /api/v1/audit
+      ["audit", "audit-events"],
+      // policy-service: unversioned + /v1 alias
+      ["policy", "policy-v1"],
+      // estab-service: short + long spelling
+      ["estab", "establishment"],
+      // hrms-service: canonical /hrms + /hr convenience alias
+      ["hrms", "hr"],
+      // project-service: singular gateway prefix + plural upstream
+      ["project", "projects"],
+      // asset-service: singular gateway prefix + plural upstream
+      ["asset", "assets"],
+      // grant-service: plural /grants + singular /grant alias
+      ["grant", "grant-alias"],
+    ];
+
     const byUpstream = new Map<string, string[]>();
     for (const route of SERVICE_ROUTES) {
       const names = byUpstream.get(route.upstream) ?? [];
@@ -85,9 +108,10 @@ describe("gateway contract", () => {
     }
     for (const names of byUpstream.values()) {
       if (names.length <= 1) continue;
-      const identityAlias = names.every((n) => ["identity", "sync", "devices"].includes(n));
-      const auditAlias = names.every((n) => ["audit", "audit-events"].includes(n));
-      expect(identityAlias || auditAlias).toBe(true);
+      const matchesOneFamily = ALIAS_FAMILIES.some((family) =>
+        names.every((n) => family.includes(n)),
+      );
+      expect(matchesOneFamily, `unexpected upstream alias group: ${names.join(", ")}`).toBe(true);
     }
   });
 

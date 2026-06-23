@@ -20,6 +20,37 @@ function requireSecret(name) {
   return v ?? "";
 }
 
+// ── Database credentials (SEC-1 / SEC-2) ────────────────────────────────────
+// In production the DB connection string is injected from the secret manager,
+// NEVER derived from a dev password pattern. We accept either:
+//   • DATABASE_URL_<SVC>   e.g. DATABASE_URL_HRMS  (per-service override), or
+//   • a single injected DATABASE_URL on the process env.
+// Outside production (dev/test/CI) we fall back to the historical derived
+// `_dev_pw` connection string so local workflows are unchanged.
+// In production, if neither injected secret is present we fail closed (throw),
+// mirroring requireSecret() — we never emit a derived dev password in prod.
+function dbUrl(dbUser, dbName) {
+  if (!dbUser) return undefined;
+
+  const svcKey = dbUser.replace(/_svc$/, "").toUpperCase(); // identity_svc → IDENTITY
+  const perService = process.env[`DATABASE_URL_${svcKey}`];
+  const injected = perService ?? process.env.DATABASE_URL;
+
+  if (IS_PROD) {
+    if (injected && injected.length > 0) return injected;
+    throw new Error(
+      `[ecosystem] DATABASE_URL_${svcKey} (or DATABASE_URL) is required in production. ` +
+        `Inject the DB connection string from the secret manager (do not derive dev passwords). ` +
+        `Refusing to start.`,
+    );
+  }
+
+  // dev/test/CI: prefer an explicit injected URL if provided, else derive the
+  // historical dev-password connection string.
+  if (injected && injected.length > 0) return injected;
+  return `postgres://${dbUser}:${dbUser.replace("_svc", "_dev_pw")}@${DB_HOST}/${dbName}`;
+}
+
 // RS256/Keycloak only in production. HS256 shared-secret auth is forbidden in
 // prod by packages/auth (resolveAlgorithm throws); JWT_SECRET is intentionally
 // NOT set on production processes so the HS256 fallback path is unreachable.
@@ -64,9 +95,7 @@ function svc(name, port, dbUser, dbName, extra = {}) {
       REDIS_URL: REDIS,
       BIND_HOST: "127.0.0.1",
       ...AWS_ENV,
-      ...(dbUser
-        ? { DATABASE_URL: `postgres://${dbUser}:${dbUser.replace("_svc", "_dev_pw")}@${DB_HOST}/${dbName}` }
-        : {}),
+      ...(dbUser ? { DATABASE_URL: dbUrl(dbUser, dbName) } : {}),
       ...extra,
     },
   };
@@ -89,7 +118,7 @@ function worker(name, dbUser, dbName, extra = {}) {
       REDIS_URL: REDIS,
       BIND_HOST: "127.0.0.1",
       ...AWS_ENV,
-      DATABASE_URL: `postgres://${dbUser}:${dbUser.replace("_svc", "_dev_pw")}@${DB_HOST}/${dbName}`,
+      DATABASE_URL: dbUrl(dbUser, dbName),
       ...extra,
     },
   };

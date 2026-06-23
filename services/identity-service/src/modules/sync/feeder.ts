@@ -7,6 +7,13 @@ type FeedRule = {
   entityId: (payload: Record<string, unknown>) => string | null;
   /** 03-T7: owner for user-private mailboxes (e.g. notifications). */
   ownerId?: (payload: Record<string, unknown>) => string | null;
+  /**
+   * 03-T5: changelog operation this rule appends. Defaults to "upsert".
+   * Domain delete/terminal events use "delete" so a server-side delete yields a
+   * tombstone row that pull turns into a delete-entity for the client (see
+   * routes.ts pull: `operation === "delete" ? "delete" : "upsert"`).
+   */
+  operation?: "upsert" | "delete";
 };
 
 const ownerFromRecipient = (p: Record<string, unknown>): string | null =>
@@ -51,6 +58,24 @@ const FEED_RULES: FeedRule[] = [
   { topic: "notification.delivered", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null, ownerId: ownerFromRecipient },
   { topic: "notification.failed", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null, ownerId: ownerFromRecipient },
   { topic: "notification.delivery.permanently_failed", mailbox: "notifications", entityId: (p) => String(p.deliveryId ?? p.notificationId ?? p.id ?? "") || null, ownerId: ownerFromRecipient },
+
+  // ── 03-T5: server-side tombstones ──────────────────────────────────────────
+  // A domain delete/terminal event appends a `delete` changelog row so the next
+  // client pull removes the entity locally. Only delete/terminal topics whose
+  // entity lives in an already-synced mailbox are tombstoned here. The other
+  // delete/terminal topics in the system have NO synced mailbox and so are
+  // intentionally omitted:
+  //   - citizen.profile.deleted   (no citizen-profile mailbox is synced)
+  //   - identity.session.revoked  (sessions are not a synced mailbox)
+  //   - policy.binding.revoked    (RBAC bindings are not a synced mailbox)
+  //   - procurement.auction.closed(auctions are not a synced mailbox)
+  // Retention note: tombstone rows are NOT pruned eagerly — a client that has
+  // been offline past a delete must still observe the delete on its next pull.
+  // Tombstones may be compacted only once every registered device's mailbox
+  // cursor has advanced past the tombstone's seq (i.e. all devices have already
+  // applied the delete); that cursor-gated compaction is a separate retention
+  // job and out of scope for this rule, which only emits the tombstone.
+  { topic: "crm.contact.deleted", mailbox: "crm_contacts", operation: "delete", entityId: (p) => String(p.contactId ?? p.id ?? "") || null },
 ];
 
 export function registerSyncFeederConsumers(queue: Queue): void {
@@ -63,7 +88,7 @@ export function registerSyncFeederConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         mailbox: rule.mailbox,
         entityId,
-        operation: "upsert",
+        operation: rule.operation ?? "upsert",
         payload,
         ownerUserId: rule.ownerId ? rule.ownerId(payload) : null,
       });
