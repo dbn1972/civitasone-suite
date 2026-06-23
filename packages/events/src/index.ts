@@ -80,6 +80,13 @@ export type AuditEventPayload = {
 };
 
 export {
+  eventEnvelopeSchema,
+  parseEnvelope,
+  type ValidatedEnvelope,
+  type ParseEnvelopeResult,
+} from "./envelope.js";
+
+export {
   NOTIFICATION_SEND,
   SYSTEM_TEMPLATE_IDS,
   buildNotificationPayload,

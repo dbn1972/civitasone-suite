@@ -2,9 +2,12 @@
 # Scrapes the per-service /metrics endpoints (service_up, http_requests_total,
 # consumer_errors_total, outbox_relay_failures_total, dlq_messages_total).
 #
-# /metrics is guarded by METRICS_TOKEN or internal-IP allowlist (see
-# packages/observability + gateway). Prometheus on the internal network is
-# allowed by IP; to scrape over an untrusted path set a bearer/token instead.
+# /metrics is guarded by METRICS_TOKEN or internal-IP allowlist. As of 09-T2 the
+# guard is centralized in packages/observability (registerOpsRoutes) so EVERY
+# service enforces it, not just the gateway. Prometheus on the internal network
+# is allowed by source IP (the targets below are internal); to scrape over an
+# untrusted path, set METRICS_TOKEN on the services and add an x-metrics-token
+# bearer/authorization header to these scrape jobs instead.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s

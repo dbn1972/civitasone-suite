@@ -92,6 +92,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: DB-per-service isolation guard (06-T2)
+        run: node scripts/ci/arch-guard.mjs
       - name: Check no cross-service DB joins
         run: |
           # L1 rule: no service may import another service's schema

@@ -146,6 +146,30 @@ export function registerIntegrationConsumers(queue: Queue): void {
       await audit(tx, msg, "recovery_flag", "finance_audit_para", p.paraId);
     });
   });
+
+  /** grant-service → finance: reconcile utilisation certificate against disbursement/sanction */
+  queue.subscribe(CONSUMED_EVENTS.grantUcSubmitted, async (msg) => {
+    const p = msg.payload as {
+      ucId: string; applicationId: string; utilisedMinor: number | string;
+      disbursementId?: string;
+    };
+    const utilisedMinor = BigInt(p.utilisedMinor);
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: EVENTS.ucReconciled, eventType: EVENTS.ucReconciled,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          ucId: p.ucId,
+          applicationId: p.applicationId,
+          disbursementId: p.disbursementId,
+          utilisedMinor: utilisedMinor.toString(),
+          outcome: "reconciled",
+        },
+      });
+      await audit(tx, msg, "uc_reconciled", "grant_uc_statement", p.ucId);
+    });
+  });
 }
 
 async function audit(

@@ -44,6 +44,19 @@ export type OpsOptions = {
 const startedAt = Date.now();
 let requestCount = 0;
 
+// 09-T2: gate /metrics centrally for every service. Mirrors the gateway guard
+// (services/gateway-service/src/app.ts) so the rule lives in one place. Kept
+// internal — do NOT import from the gateway (packages must not depend on services).
+function isInternalIP(ip: string): boolean {
+  return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    /^10\./.test(ip) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
+    /^192\.168\./.test(ip)
+  );
+}
+
 const notificationDeliveryTotal = new Map<string, number>();
 
 /** Increment notification_delivery_total{channel,status}. */
@@ -267,7 +280,23 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
   });
 
   app.get("/metrics", async (...args: unknown[]) => {
-    const reply = args[1] as { type: (t: string) => { send: (b: string) => void } };
+    const request = args[0] as { headers: Record<string, unknown>; ip: string };
+    const reply = args[1] as {
+      type: (t: string) => { send: (b: string) => void };
+      code: (n: number) => { send: (b: unknown) => void };
+    };
+    // 09-T2: protect /metrics on every service. When METRICS_TOKEN is set, require
+    // the x-metrics-token header to match; otherwise allow only internal-IP sources.
+    // Prometheus scrapes are permitted because they originate from internal IPs
+    // (see infra/observability/prometheus.yml) or carry METRICS_TOKEN.
+    const metricsToken = process.env.METRICS_TOKEN;
+    if (metricsToken) {
+      if (request.headers["x-metrics-token"] !== metricsToken) {
+        return reply.code(403).send({ code: "FORBIDDEN", message: "metrics access denied" });
+      }
+    } else if (!isInternalIP(request.ip)) {
+      return reply.code(403).send({ code: "FORBIDDEN", message: "metrics access denied" });
+    }
     const lines = [
       "# HELP service_up Service process is running",
       "# TYPE service_up gauge",

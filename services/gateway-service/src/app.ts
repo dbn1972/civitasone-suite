@@ -32,16 +32,6 @@ const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "
  */
 const PUBLIC_PREFIXES = ["/api/identity", "/api/v1/install"];
 
-function isInternalIP(ip: string): boolean {
-  return (
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    /^10\./.test(ip) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
-    /^192\.168\./.test(ip)
-  );
-}
-
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const pathname = req.url.split("?")[0] ?? "/";
   const resolved = resolveRoute(pathname);
@@ -141,18 +131,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
 
-  // Protect /metrics: require METRICS_TOKEN header when set, otherwise restrict to internal IPs.
-  app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
-    if ((req.url?.split("?")[0] ?? "") !== "/metrics") return;
-    const metricsToken = process.env.METRICS_TOKEN;
-    if (metricsToken) {
-      if (req.headers["x-metrics-token"] !== metricsToken) {
-        return reply.code(403).send({ code: "FORBIDDEN", message: "metrics access denied" });
-      }
-    } else if (!isInternalIP(req.ip)) {
-      return reply.code(403).send({ code: "FORBIDDEN", message: "metrics access denied" });
-    }
-  });
+  // 09-T2: /metrics is now guarded centrally inside registerOpsRoutes (token or
+  // internal-IP), so the gateway no longer needs its own duplicate onRequest
+  // guard. Behavior is identical — same METRICS_TOKEN / internal-IP rule.
 
   app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
     try {

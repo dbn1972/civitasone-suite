@@ -22,6 +22,7 @@
     "verify:live": "bash scripts/dev/verify-live-stack.sh",
     "contract:score": "node scripts/contract/score.mjs",
     "qa:score": "node scripts/qa-readiness-score.mjs",
+    "arch:guard": "node scripts/ci/arch-guard.mjs",
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },
   "devDependencies": {

@@ -23,6 +23,7 @@ export const EVENTS = {
   billMismatch:     "finance.bill.mismatch",
   paymentMade:      "finance.payment.made",
   glPosted:         "finance.gl.posted",
+  ucReconciled:     "finance.uc.reconciled",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching) */
@@ -31,6 +32,7 @@ export const CONSUMED_EVENTS = {
   auditParaPendingRecovery: "audit.para.pending_recovery",
   payrollRunApproved:       "payroll.run.approved",
   grnAccepted:              "procurement.grn.accepted",
+  grantUcSubmitted:         "grant.uc.submitted",
 } as const;
 
 export const SERVICE  = "finance";

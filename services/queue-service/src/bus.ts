@@ -18,6 +18,7 @@ import {
   ListQueuesCommand,
 } from "@aws-sdk/client-sqs";
 import { incrementConsumerError, incrementDlqMessage, captureError } from "@civitasone/observability";
+import { parseEnvelope } from "@civitasone/events";
 
 export type CommandEnvelope<T = unknown> = {
   messageId: string;
@@ -97,6 +98,13 @@ export class MemoryQueue implements Queue {
   private async deliver(topic: string, handler: Handler, msg: CommandEnvelope): Promise<void> {
     const key = `${topic}:${msg.messageId}`;
     if (this.seen.has(key)) return;
+    // 04-T3: validate the envelope before any handler runs. An invalid envelope
+    // is rejected straight to the DLQ and handlers are never invoked.
+    const parsed = parseEnvelope(msg);
+    if (!parsed.ok) {
+      this.dlq.push({ topic, msg, error: `invalid_envelope: ${parsed.error}` });
+      return;
+    }
     this.seen.add(key);
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       try {
@@ -251,6 +259,24 @@ export class SqsQueue implements Queue {
           } catch {
             // Unparseable poison message — dead-letter immediately, never loop.
             await this.routeToDlq(topic, sqsMsg.Body ?? "", "unparseable_body");
+            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            continue;
+          }
+
+          // 04-T3: runtime envelope validation at the consume boundary. A
+          // structurally invalid envelope (missing/blank required field, bad
+          // messageId, missing schemaVersion) can never reach a handler — it is
+          // dead-lettered once and deleted, mirroring the unparseable-body path.
+          const parsed = parseEnvelope(msg);
+          if (!parsed.ok) {
+            incrementConsumerError(this.service, topic);
+            captureError(new Error(`invalid_envelope: ${parsed.error}`), {
+              service: this.service,
+              topic,
+              messageId: msg.messageId,
+              correlationId: msg.correlationId,
+            });
+            await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope");
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
             continue;
           }
