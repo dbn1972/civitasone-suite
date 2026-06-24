@@ -1,6 +1,8 @@
 import { eq, desc, and, or, isNull, isNotNull, lte, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
+import { instances } from "../instances/schema.js";
+import { definitionNodes } from "../definitions/schema.js";
 
 export function toView(r: TaskRow): TaskView {
   return {
@@ -115,7 +117,12 @@ export async function remapOpenTaskNode(
   actorId: string,
 ): Promise<number> {
   const updated = await (tx as typeof db).update(tasks)
-    .set({ nodeKey: newNode, name: newName, roleRef: newRoleRef, updatedBy: actorId, updatedAt: new Date() })
+    // SECURITY C-2 — clear fire_at on remap: a timer task migrated onto a
+    // different (possibly human / non-opted-in) node must NOT carry its old
+    // deemed-approval fire time, or the sweeper could auto-approve it. The
+    // dueTimers node-type re-check is the primary guard; clearing fire_at here
+    // is defence-in-depth so the row no longer even matches the sweep filter.
+    .set({ nodeKey: newNode, name: newName, roleRef: newRoleRef, fireAt: null, updatedBy: actorId, updatedAt: new Date() })
     .where(and(
       eq(tasks.instanceId, instanceId),
       eq(tasks.nodeKey, oldNode),
@@ -217,6 +224,40 @@ export async function claim(
   return { ...existing, assigneeId: actorId, version: existing.version + 1 };
 }
 
+/**
+ * P1-1 / SECURITY M-1 — (re)assign a pending task to a specific user inside a
+ * caller transaction, so the assignment and its transition_history audit row
+ * commit atomically. Returns the prior assignee (for the audit) alongside the
+ * updated view, or null on optimistic-lock conflict.
+ */
+export async function assignTx(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  assigneeId: string,
+  actorId: string,
+): Promise<{ view: TaskView; priorAssigneeId: string | null } | null> {
+  const existing = await findById(id, tenantId);
+  if (!existing) return null;
+  const updated = await (tx as typeof db).update(tasks).set({
+    assigneeId,
+    updatedBy: actorId,
+    updatedAt: new Date(),
+    version: existing.version + 1,
+  })
+    .where(and(
+      eq(tasks.id, id),
+      eq(tasks.status, "pending"),
+      eq(tasks.version, existing.version),
+    ))
+    .returning({ id: tasks.id });
+  if (updated.length === 0) return null;
+  return {
+    view: { ...existing, assigneeId, version: existing.version + 1 },
+    priorAssigneeId: existing.assigneeId ?? null,
+  };
+}
+
 /** P1-1 — (re)assign a pending task to a specific user (admin / reassignment). */
 export async function assign(
   id: string,
@@ -247,11 +288,29 @@ export async function assign(
  * sweeper. Batched; the sweeper re-locks each before advancing.
  */
 export async function dueTimers(now: Date, batch: number): Promise<TaskRow[]> {
-  return db.select().from(tasks)
+  // SECURITY C-2 — re-verify the node type at fire time. A task only qualifies
+  // for deemed-approval auto-completion if, AT FIRE TIME, its current
+  // definition node is a `timer` that is EXPLICITLY opted in for deemed
+  // approval (deemed_approval = true). We resolve the node through the
+  // instance's bound definition (instance.definitionId) + the task's nodeKey,
+  // so a stale fire_at on a task remapped onto a non-timer / non-opted-in node
+  // is NOT auto-completed.
+  const rows = await db.select({ task: tasks }).from(tasks)
+    .innerJoin(instances, eq(instances.id, tasks.instanceId))
+    .innerJoin(
+      definitionNodes,
+      and(
+        eq(definitionNodes.definitionId, instances.definitionId),
+        eq(definitionNodes.nodeKey, tasks.nodeKey),
+      ),
+    )
     .where(and(
       eq(tasks.status, "pending"),
       isNotNull(tasks.fireAt),
       lte(tasks.fireAt, now),
+      eq(definitionNodes.nodeType, "timer"),
+      eq(definitionNodes.deemedApproval, true),
     ))
     .limit(batch);
+  return rows.map((r) => r.task);
 }

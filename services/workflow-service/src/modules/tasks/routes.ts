@@ -69,7 +69,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSIGN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = assignTaskBody.parse(req.body ?? {});
-    const assigned = await commands.assignTask(ctx, id, body.assigneeId);
+    const assigned = await commands.assignTask(ctx, id, body.assigneeId, body.reassign ?? false);
     return sendValidated(reply, taskViewSchema, assigned);
   });
 

@@ -119,6 +119,7 @@ export interface NodeSpec {
   nodeType?: string | undefined;
   slaMinutes?: number | null | undefined;
   timerMinutes?: number | null | undefined;
+  deemedApproval?: boolean | undefined;
   sortOrder?: number | undefined;
 }
 export interface EdgeSpec {
@@ -145,6 +146,7 @@ export async function insertGraphTx(
         nodeType: n.nodeType ?? "task",
         ...(n.slaMinutes !== undefined && n.slaMinutes !== null ? { slaMinutes: n.slaMinutes } : {}),
         ...(n.timerMinutes !== undefined && n.timerMinutes !== null ? { timerMinutes: n.timerMinutes } : {}),
+        ...(n.deemedApproval !== undefined ? { deemedApproval: n.deemedApproval } : {}),
         sortOrder: n.sortOrder ?? i + 1,
       })),
     );

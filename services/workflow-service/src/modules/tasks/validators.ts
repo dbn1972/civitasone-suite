@@ -24,6 +24,9 @@ export const completeTaskBody = z.object({
 // P1-1 — assign a task to a specific user.
 export const assignTaskBody = z.object({
   assigneeId: z.string().uuid(),
+  // SECURITY M-1 — overwriting an already-assigned task requires an explicit
+  // reassign acknowledgement, so a silent reassignment can't happen by default.
+  reassign: z.boolean().optional(),
 });
 
 // P1-3 — bulk-complete a set of tasks; each runs the per-task complete command.

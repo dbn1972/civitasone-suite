@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("workflow");
 
@@ -27,6 +27,10 @@ export const definitionNodes = domainSchema.table("definition_nodes", {
   // P1-2 — deemed-approval window (minutes) for a `timer` node. The instance
   // auto-advances along the timer's outgoing edge once this elapses.
   timerMinutes: integer("timer_minutes"),
+  // SECURITY C-1/C-3 — opt-in: a `timer` node may auto-approve (deemed
+  // approval) ONLY when this is true. Default false => a due timer escalates/
+  // notifies but never auto-completes with sodOverride.
+  deemedApproval: boolean("deemed_approval").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
