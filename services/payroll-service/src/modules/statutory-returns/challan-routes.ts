@@ -41,6 +41,18 @@ async function tdsDepositedMinor(tenantId: string, period: string, formType: str
   return rows.reduce((s, c) => s + BigInt(c.tdsAmountMinor), 0n);
 }
 
+/**
+ * H2: true when a payroll run exists for the period but is NOT yet finalised
+ * (draft/processing/failed). Such a period has deducted==0 only because the run
+ * has not produced/approved its TDS rows yet — it is NOT "no liability". The 24Q
+ * gate must block it (pending_finalisation) rather than green-light it as matched.
+ */
+async function hasNonFinalRun(tenantId: string, period: string): Promise<boolean> {
+  const runs = await db.select().from(payrollRuns)
+    .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period)));
+  return runs.some((r) => r.status === "draft" || r.status === "processing" || r.status === "failed");
+}
+
 export interface Reconciliation {
   tenantId: string;
   period: string;
@@ -50,13 +62,14 @@ export interface Reconciliation {
   varianceMinor: string;   // deposited - deducted
   matched: boolean;
   challanCount: number;
-  status: "matched" | "shortfall" | "excess" | "no_challan";
+  status: "matched" | "shortfall" | "excess" | "no_challan" | "pending_finalisation";
 }
 
 /** Reconcile deducted vs deposited for a period. Pure-ish helper reused by 24Q gating. */
 export async function reconcilePeriod(tenantId: string, period: string, formType = "24Q"): Promise<Reconciliation> {
   const deducted = await tdsDeductedMinor(tenantId, period);
   const deposited = await tdsDepositedMinor(tenantId, period, formType);
+  const pendingFinalisation = await hasNonFinalRun(tenantId, period);
   const challans = await db.select().from(payrollTdsChallan)
     .where(and(
       eq(payrollTdsChallan.tenantId, tenantId),
@@ -64,15 +77,27 @@ export async function reconcilePeriod(tenantId: string, period: string, formType
       eq(payrollTdsChallan.formType, formType),
     ));
   const variance = deposited - deducted;
-  // A period with no TDS liability (nothing deducted, nothing to deposit) is
-  // reconciled by definition — it must not block 24Q filing.
-  const matched = variance === 0n;
+  // H2: a period with a non-finalised run (draft/processing/failed) has
+  // deducted==0 only because TDS is not approved yet — that is NOT "no
+  // liability". Surface it as pending_finalisation and do NOT mark it matched,
+  // so the 24Q gate blocks it.
   let status: Reconciliation["status"];
-  if (deducted === 0n && deposited === 0n) status = "matched";
-  else if (challans.length === 0) status = "no_challan";
-  else if (variance === 0n) status = "matched";
-  else if (variance < 0n) status = "shortfall";
-  else status = "excess";
+  let matched: boolean;
+  if (pendingFinalisation) {
+    status = "pending_finalisation";
+    matched = false;
+  } else if (deducted === 0n && deposited === 0n) {
+    // No liability and no in-flight run: reconciled by definition.
+    status = "matched"; matched = true;
+  } else if (challans.length === 0) {
+    status = "no_challan"; matched = false;
+  } else if (variance === 0n) {
+    status = "matched"; matched = true;
+  } else if (variance < 0n) {
+    status = "shortfall"; matched = false;
+  } else {
+    status = "excess"; matched = false;
+  }
   return {
     tenantId, period, formType,
     tdsDeductedMinor: deducted.toString(),
@@ -95,6 +120,7 @@ async function nonSalaryDeductedMinor(tenantId: string, period: string): Promise
 export async function reconcileNonSalaryPeriod(tenantId: string, period: string): Promise<Reconciliation> {
   const deducted = await nonSalaryDeductedMinor(tenantId, period);
   const deposited = await tdsDepositedMinor(tenantId, period, "26Q");
+  const pendingFinalisation = await hasNonFinalRun(tenantId, period);
   const challans = await db.select().from(payrollTdsChallan)
     .where(and(
       eq(payrollTdsChallan.tenantId, tenantId),
@@ -102,13 +128,21 @@ export async function reconcileNonSalaryPeriod(tenantId: string, period: string)
       eq(payrollTdsChallan.formType, "26Q"),
     ));
   const variance = deposited - deducted;
-  const matched = variance === 0n;
   let status: Reconciliation["status"];
-  if (deducted === 0n && deposited === 0n) status = "matched";
-  else if (challans.length === 0) status = "no_challan";
-  else if (variance === 0n) status = "matched";
-  else if (variance < 0n) status = "shortfall";
-  else status = "excess";
+  let matched: boolean;
+  if (pendingFinalisation) {
+    status = "pending_finalisation"; matched = false;
+  } else if (deducted === 0n && deposited === 0n) {
+    status = "matched"; matched = true;
+  } else if (challans.length === 0) {
+    status = "no_challan"; matched = false;
+  } else if (variance === 0n) {
+    status = "matched"; matched = true;
+  } else if (variance < 0n) {
+    status = "shortfall"; matched = false;
+  } else {
+    status = "excess"; matched = false;
+  }
   return {
     tenantId, period, formType: "26Q",
     tdsDeductedMinor: deducted.toString(),
