@@ -6,94 +6,11 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
 import { buildForm16 } from "./form16.js";
+import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer", "employee"];
-
-/* ---------- Tax Slab Computation ---------- */
-
-interface TaxSlab { from: number; to: number; rate: number }
-
-// New regime slabs differ by financial year (Finance Act changes).
-const NEW_REGIME_BY_FY: Record<number, TaxSlab[]> = {
-  2024: [ // FY 2024-25
-    { from: 0, to: 300000, rate: 0 }, { from: 300000, to: 700000, rate: 0.05 },
-    { from: 700000, to: 1000000, rate: 0.10 }, { from: 1000000, to: 1200000, rate: 0.15 },
-    { from: 1200000, to: 1500000, rate: 0.20 }, { from: 1500000, to: Infinity, rate: 0.30 },
-  ],
-  2025: [ // FY 2025-26 (Finance Act 2025)
-    { from: 0, to: 400000, rate: 0 }, { from: 400000, to: 800000, rate: 0.05 },
-    { from: 800000, to: 1200000, rate: 0.10 }, { from: 1200000, to: 1600000, rate: 0.15 },
-    { from: 1600000, to: 2000000, rate: 0.20 }, { from: 2000000, to: 2400000, rate: 0.25 },
-    { from: 2400000, to: Infinity, rate: 0.30 },
-  ],
-};
-
-const OLD_REGIME_SLABS: TaxSlab[] = [
-  { from: 0, to: 250000, rate: 0 }, { from: 250000, to: 500000, rate: 0.05 },
-  { from: 500000, to: 1000000, rate: 0.20 }, { from: 1000000, to: Infinity, rate: 0.30 },
-];
-
-function slabsFor(regime: "old" | "new", startYear: number): TaxSlab[] {
-  if (regime === "old") return OLD_REGIME_SLABS;
-  return NEW_REGIME_BY_FY[startYear] ?? NEW_REGIME_BY_FY[2025] ?? OLD_REGIME_SLABS;
-}
-
-function slabTax(taxableIncome: number, slabs: TaxSlab[]): { tax: number; breakdown: Array<{ slab: string; taxableAmount: number; tax: number }> } {
-  let remaining = taxableIncome, total = 0;
-  const breakdown: Array<{ slab: string; taxableAmount: number; tax: number }> = [];
-  let lower = 0;
-  for (const s of slabs) {
-    if (remaining <= 0) break;
-    const width = s.to === Infinity ? remaining : s.to - s.from;
-    const inSlab = Math.min(remaining, width);
-    const t = inSlab * s.rate;
-    total += t;
-    breakdown.push({ slab: s.to === Infinity ? `>${(s.from / 100000).toFixed(0)}L` : `${(s.from / 100000).toFixed(1)}L-${(s.to / 100000).toFixed(1)}L`, taxableAmount: inSlab, tax: Math.round(t) });
-    remaining -= inSlab; lower = s.to;
-  }
-  void lower;
-  return { tax: total, breakdown };
-}
-
-/** Sec 87A rebate ceiling by regime + FY (rebate makes tax 0 up to the income limit). */
-function rebate87A(taxableIncome: number, slabTaxAmt: number, regime: "old" | "new", startYear: number): number {
-  if (regime === "old") return taxableIncome <= 500000 ? Math.min(slabTaxAmt, 12500) : 0;
-  if (startYear >= 2025) return taxableIncome <= 1200000 ? Math.min(slabTaxAmt, 60000) : 0;
-  return taxableIncome <= 700000 ? Math.min(slabTaxAmt, 25000) : 0; // FY24-25 new
-}
-
-/** Surcharge rate by total income, with new-regime cap of 25%. */
-function surchargeRate(totalIncome: number, regime: "old" | "new"): number {
-  if (totalIncome <= 5000000) return 0;
-  if (totalIncome <= 10000000) return 0.10;
-  if (totalIncome <= 20000000) return 0.15;
-  if (totalIncome <= 50000000) return 0.25;
-  return regime === "new" ? 0.25 : 0.37;
-}
-
-/** Full income-tax computation: slabs -> 87A rebate -> surcharge(+marginal relief) -> 4% cess; 288B rounding. */
-function computeTax(taxableIncome: number, regime: "old" | "new", startYear: number) {
-  const slabs = slabsFor(regime, startYear);
-  const { tax: rawSlab, breakdown } = slabTax(taxableIncome, slabs);
-  const baseTax = Math.round(rawSlab);
-  const rebate = rebate87A(taxableIncome, baseTax, regime, startYear);
-  const afterRebate = Math.max(0, baseTax - rebate);
-  let surcharge = Math.round(afterRebate * surchargeRate(taxableIncome, regime));
-  // Marginal relief: surcharge cannot make (tax+surcharge) exceed tax-at-threshold + (income-threshold).
-  const thresholds = [5000000, 10000000, 20000000, 50000000];
-  for (const th of thresholds) {
-    if (taxableIncome > th) {
-      const slabAtTh = Math.round(slabTax(th, slabs).tax);
-      const excess = taxableIncome - th;
-      if (afterRebate + surcharge > slabAtTh + excess) surcharge = Math.max(0, slabAtTh + excess - afterRebate);
-    }
-  }
-  const cess = Math.round((afterRebate + surcharge) * 0.04);
-  const total = Math.round((afterRebate + surcharge + cess) / 10) * 10; // Sec 288B nearest 10
-  return { baseTax, rebate, surcharge, cess, totalTax: total, slabBreakdown: breakdown };
-}
 
 /**
  * Parse FY string like "2025-26" to start/end year.
@@ -179,14 +96,25 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
         const other = Number(dec.otherDeductions) / 100;
         exemptions = s80c + s80d + hra + other;
       }
-      exemptions += 50000; // old-regime standard deduction
+      try { exemptions += stdDeduction("old", startYear); }
+      catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
     } else {
-      exemptions = 75000;  // new-regime standard deduction (FY24-25 onward)
+      try { exemptions = stdDeduction("new", startYear); }
+      catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
     }
 
     // Sec 288A: round taxable income to nearest 10.
     const taxableIncome = Math.round(Math.max(0, annualGross - exemptions) / 10) * 10;
-    const r = computeTax(taxableIncome, selectedRegime, startYear);
+    let r;
+    try {
+      r = computeTax(taxableIncome, selectedRegime, startYear);
+    } catch (err) {
+      // P2: an unconfigured FY must FAIL clearly, not silently default to a wrong year.
+      if (err instanceof UnconfiguredFyError) {
+        throw new HttpError(422, "FY_NOT_CONFIGURED", err.message);
+      }
+      throw err;
+    }
 
     return reply.send({
       employeeId,
@@ -227,6 +155,9 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       // M4: HRMS unreachable → 502 (do not emit a blank-identity Form 16).
       if (err instanceof HrmsUnavailableError) {
         throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot issue Form 16: HRMS identity source unreachable");
+      }
+      if (err instanceof UnconfiguredFyError) {
+        throw new HttpError(422, "FY_NOT_CONFIGURED", err.message);
       }
       throw err;
     }

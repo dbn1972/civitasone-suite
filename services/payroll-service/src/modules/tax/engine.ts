@@ -1,37 +1,64 @@
 /**
- * Pure income-tax engine (no DB) — shared by the tax routes and the payroll run
+ * Pure income-tax engine — shared by the tax routes and the payroll run
  * (monthly TDS spread). FY-aware regime slabs, 87A rebate, surcharge + marginal
  * relief, 4% cess, and Sec 288A/288B rounding.
+ *
+ * P2: slabs / surcharge / rebate / standard-deduction are now CONFIG-DRIVEN and
+ * FY-versioned, sourced from `payroll.tax_slab_config` (see loadTaxConfig()).
+ * An UNCONFIGURED (regime, FY) raises UnconfiguredFyError instead of silently
+ * falling back to a wrong year. Callers must loadTaxConfig() once at boot
+ * (worker + HTTP app) before invoking compute paths.
  */
 export interface TaxSlab { from: number; to: number; rate: number }
 export type Regime = "old" | "new";
 
-const NEW_REGIME_BY_FY: Record<number, TaxSlab[]> = {
-  2024: [
-    { from: 0, to: 300000, rate: 0 }, { from: 300000, to: 700000, rate: 0.05 },
-    { from: 700000, to: 1000000, rate: 0.10 }, { from: 1000000, to: 1200000, rate: 0.15 },
-    { from: 1200000, to: 1500000, rate: 0.20 }, { from: 1500000, to: Infinity, rate: 0.30 },
-  ],
-  2025: [
-    { from: 0, to: 400000, rate: 0 }, { from: 400000, to: 800000, rate: 0.05 },
-    { from: 800000, to: 1200000, rate: 0.10 }, { from: 1200000, to: 1600000, rate: 0.15 },
-    { from: 1600000, to: 2000000, rate: 0.20 }, { from: 2000000, to: 2400000, rate: 0.25 },
-    { from: 2400000, to: Infinity, rate: 0.30 },
-  ],
-};
+/** A surcharge band: applies `rate` when total income exceeds `above` rupees. */
+export interface SurchargeBand { above: number; rate: number }
 
-const OLD_REGIME_SLABS: TaxSlab[] = [
-  { from: 0, to: 250000, rate: 0 }, { from: 250000, to: 500000, rate: 0.05 },
-  { from: 500000, to: 1000000, rate: 0.20 }, { from: 1000000, to: Infinity, rate: 0.30 },
-];
-
-export function slabsFor(regime: Regime, startYear: number): TaxSlab[] {
-  if (regime === "old") return OLD_REGIME_SLABS;
-  return NEW_REGIME_BY_FY[startYear] ?? NEW_REGIME_BY_FY[2025] ?? OLD_REGIME_SLABS;
+/** Full per-(regime,FY) tax configuration. */
+export interface FyTaxConfig {
+  slabs: TaxSlab[];
+  stdDeduction: number;        // rupees
+  rebateIncomeCap: number;     // 87A: taxable <= cap -> rebate
+  rebateMax: number;           // 87A: max rebate (rupees)
+  surchargeBands: SurchargeBand[];
 }
 
-export function stdDeduction(regime: Regime): number {
-  return regime === "new" ? 75000 : 50000;
+/** Thrown when a (regime, FY) has no configured slabs - caller must reject, not guess. */
+export class UnconfiguredFyError extends Error {
+  constructor(public regime: Regime, public startYear: number) {
+    super(`no tax configuration for regime '${regime}' FY ${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}; configure payroll.tax_slab_config before computing tax`);
+    this.name = "UnconfiguredFyError";
+  }
+}
+
+// In-memory registry: key `${regime}:${startYear}` -> FyTaxConfig.
+const REGISTRY = new Map<string, FyTaxConfig>();
+const key = (regime: Regime, startYear: number) => `${regime}:${startYear}`;
+
+/** Register/overwrite a single (regime, FY) config (used by the DB loader and tests). */
+export function registerTaxConfig(regime: Regime, startYear: number, cfg: FyTaxConfig): void {
+  REGISTRY.set(key(regime, startYear), cfg);
+}
+
+/** True once at least one config has been registered. */
+export function isTaxConfigLoaded(): boolean {
+  return REGISTRY.size > 0;
+}
+
+/** Look up config or throw UnconfiguredFyError. */
+export function getTaxConfig(regime: Regime, startYear: number): FyTaxConfig {
+  const cfg = REGISTRY.get(key(regime, startYear));
+  if (!cfg) throw new UnconfiguredFyError(regime, startYear);
+  return cfg;
+}
+
+export function slabsFor(regime: Regime, startYear: number): TaxSlab[] {
+  return getTaxConfig(regime, startYear).slabs;
+}
+
+export function stdDeduction(regime: Regime, startYear: number): number {
+  return getTaxConfig(regime, startYear).stdDeduction;
 }
 
 function slabTax(taxableIncome: number, slabs: TaxSlab[]): { tax: number; breakdown: Array<{ slab: string; taxableAmount: number; tax: number }> } {
@@ -48,28 +75,29 @@ function slabTax(taxableIncome: number, slabs: TaxSlab[]): { tax: number; breakd
   return { tax: total, breakdown };
 }
 
-function rebate87A(taxableIncome: number, slabTaxAmt: number, regime: Regime, startYear: number): number {
-  if (regime === "old") return taxableIncome <= 500000 ? Math.min(slabTaxAmt, 12500) : 0;
-  if (startYear >= 2025) return taxableIncome <= 1200000 ? Math.min(slabTaxAmt, 60000) : 0;
-  return taxableIncome <= 700000 ? Math.min(slabTaxAmt, 25000) : 0;
+function rebate87A(taxableIncome: number, slabTaxAmt: number, cfg: FyTaxConfig): number {
+  return taxableIncome <= cfg.rebateIncomeCap ? Math.min(slabTaxAmt, cfg.rebateMax) : 0;
 }
 
-function surchargeRate(totalIncome: number, regime: Regime): number {
-  if (totalIncome <= 5000000) return 0;
-  if (totalIncome <= 10000000) return 0.10;
-  if (totalIncome <= 20000000) return 0.15;
-  if (totalIncome <= 50000000) return 0.25;
-  return regime === "new" ? 0.25 : 0.37;
+function surchargeRate(totalIncome: number, bands: SurchargeBand[]): number {
+  let rate = 0;
+  for (const b of bands) {
+    if (totalIncome > b.above) rate = b.rate;
+  }
+  return rate;
 }
 
 export function computeTax(taxableIncome: number, regime: Regime, startYear: number) {
-  const slabs = slabsFor(regime, startYear);
+  const cfg = getTaxConfig(regime, startYear);
+  const slabs = cfg.slabs;
   const { tax: rawSlab, breakdown } = slabTax(taxableIncome, slabs);
   const baseTax = Math.round(rawSlab);
-  const rebate = rebate87A(taxableIncome, baseTax, regime, startYear);
+  const rebate = rebate87A(taxableIncome, baseTax, cfg);
   const afterRebate = Math.max(0, baseTax - rebate);
-  let surcharge = Math.round(afterRebate * surchargeRate(taxableIncome, regime));
-  for (const th of [5000000, 10000000, 20000000, 50000000]) {
+  let surcharge = Math.round(afterRebate * surchargeRate(taxableIncome, cfg.surchargeBands));
+  // Marginal relief at each surcharge threshold.
+  for (const b of cfg.surchargeBands) {
+    const th = b.above;
     if (taxableIncome > th) {
       const slabAtTh = Math.round(slabTax(th, slabs).tax);
       const excess = taxableIncome - th;
@@ -84,7 +112,7 @@ export function computeTax(taxableIncome: number, regime: Regime, startYear: num
 /** Monthly TDS (in paise) for a payroll run: project annual taxable, compute tax, spread /12. */
 export function monthlyTdsMinor(annualGrossMinor: bigint, regime: Regime, startYear: number): bigint {
   const annualGrossRupees = Number(annualGrossMinor) / 100;
-  const taxable = Math.round(Math.max(0, annualGrossRupees - stdDeduction(regime)) / 10) * 10;
+  const taxable = Math.round(Math.max(0, annualGrossRupees - stdDeduction(regime, startYear)) / 10) * 10;
   const annualTax = computeTax(taxable, regime, startYear).totalTax;
   const monthlyRupees = Math.round(annualTax / 12);
   return BigInt(monthlyRupees) * 100n;
