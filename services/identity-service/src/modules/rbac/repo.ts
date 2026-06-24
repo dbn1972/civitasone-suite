@@ -130,3 +130,41 @@ export async function effectiveAccess(tenantId: string, userId: string): Promise
     permissions: permKeys.sort(),
   };
 }
+
+/**
+ * SEC C1 — tx-scoped re-derivation of a user's effective permission keys,
+ * for apply-time authority re-checks inside the consumer transaction. Uses the
+ * caller-supplied `tx` (Writer) so it reads the same snapshot the apply will
+ * mutate; the caller is expected to have taken a row lock on the target role
+ * (see lockRole) first so a concurrent permission change cannot race the check.
+ */
+export async function effectivePermissionKeys(tx: Writer, tenantId: string, userId: string): Promise<Set<string>> {
+  const roleRows = await tx.select({ id: roleAssignments.roleId })
+    .from(roleAssignments)
+    .where(and(
+      eq(roleAssignments.tenantId, tenantId),
+      eq(roleAssignments.userId, userId),
+      eq(roleAssignments.status, "active"),
+    ));
+  const roleIds = roleRows.map((r) => r.id);
+  if (roleIds.length === 0) return new Set();
+  // Plain select (the Set dedupes; Writer doesn't expose selectDistinct).
+  const permRows = await tx.select({ key: permissions.key })
+    .from(rolePermissions)
+    .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
+    .where(and(eq(rolePermissions.tenantId, tenantId), inArray(rolePermissions.roleId, roleIds)));
+  return new Set(permRows.map((r: { key: string }) => r.key));
+}
+
+/**
+ * SEC C1 — take a row lock on the target role inside the consumer tx so the
+ * authority re-check + apply are serialized against concurrent permission
+ * grants/revokes on that role. Returns the locked role's key, or null if absent.
+ */
+export async function lockRole(tx: Writer, tenantId: string, roleId: string): Promise<RoleView | null> {
+  const rows = await tx.select().from(roles)
+    .where(and(eq(roles.id, roleId), eq(roles.tenantId, tenantId)))
+    .limit(1)
+    .for("update");
+  return rows[0] ? roleToView(rows[0]) : null;
+}

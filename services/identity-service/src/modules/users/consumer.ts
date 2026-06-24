@@ -6,6 +6,7 @@ import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertTransition, type UserView } from "./domain.js";
 import * as keycloak from "../../shared/keycloak.js";
+import { recordPendingDeactivation, resolvePendingDeactivation } from "../../shared/kc-reconcile.js";
 import { pino } from "pino";
 
 const kcLog = pino({ name: "identity-keycloak" });
@@ -61,13 +62,35 @@ export function registerUserConsumers(q: Queue): void {
         status: msg.payload.status, updatedBy: msg.actorId, version: cur.version + 1,
       });
       await emitAudit(tx, msg, EVENTS.userDeactivated, { userId: msg.payload.id, status: msg.payload.status }, "status_change", msg.payload.id);
-      if (msg.payload.status === "deactivated") deactivatedEmail = cur.email;
+      if (msg.payload.status === "deactivated" && keycloak.isKeycloakEnabled()) {
+        deactivatedEmail = cur.email;
+        // SEC H2: durably record a PENDING Keycloak deactivation in the SAME
+        // transaction as the DB deactivation. "DB deactivated ⇒ a reconciliation
+        // obligation exists." If the post-commit best-effort KC call succeeds we
+        // mark it reconciled; if it fails (or we crash), the worker reconciler
+        // retries it — the user is never left enabled in Keycloak silently.
+        await recordPendingDeactivation(tx as { insert: typeof db.insert }, {
+          tenantId: msg.tenantId, userId: msg.payload.id, email: cur.email,
+          correlationId: msg.correlationId, lastError: "pending initial keycloak deactivate",
+        });
+      }
     });
     await cache.invalidate(keyFor(msg.tenantId, msg.payload.id));
-    // Keycloak deprovision (disable + logout sessions). Best-effort, never blocks.
+    // Keycloak deprovision (disable + logout sessions). Best-effort, never blocks
+    // the DB write — but failure is NOT silently dropped: the pending row above
+    // keeps it on the reconciler's retry queue until it succeeds.
     if (deactivatedEmail) {
-      void keycloak.deactivateUser(deactivatedEmail, kcLog)
-        .then((r) => { if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak deactivate"); });
+      void keycloak.deactivateUser(msg.tenantId, deactivatedEmail, kcLog)
+        .then(async (r) => {
+          if (r.skipped) return;
+          kcLog.info({ userId: msg.payload.id, result: r }, "keycloak deactivate");
+          if (r.ok) {
+            await resolvePendingDeactivation(msg.tenantId, msg.payload.id);
+          } else {
+            kcLog.warn({ userId: msg.payload.id, reason: r.reason }, "keycloak deactivate failed — left for reconciler");
+          }
+        })
+        .catch((err) => kcLog.error({ userId: msg.payload.id, err: String(err) }, "keycloak deactivate threw — left for reconciler"));
     }
   });
 }

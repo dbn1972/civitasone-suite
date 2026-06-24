@@ -71,14 +71,37 @@ async function getAdminToken(cfg: KcConfig): Promise<string> {
   return body.access_token;
 }
 
-async function findUserByEmail(cfg: KcConfig, token: string, email: string): Promise<{ id: string; enabled: boolean } | null> {
+/**
+ * SEC H3 — the Keycloak username is namespaced by tenant so two tenants that
+ * share an email address map to TWO distinct realm users. Without this, an
+ * email-only lookup collapses both tenants onto one KC user and deactivating
+ * one tenant's user would disable the other's.
+ */
+function kcUsername(tenantId: string, email: string): string {
+  // Keycloak's default username policy rejects ':' (error-username-invalid-character)
+  // but allows letters, digits, and `. _ - @`. Use a double-underscore separator
+  // so the tenant-namespaced username is realm-valid. The tenant UUID + email both
+  // consist only of allowed characters.
+  return `${tenantId}__${email.toLowerCase()}`;
+}
+
+/**
+ * SEC H3 — look up a realm user by the tenant-namespaced username (exact). We
+ * never resolve by realm-wide email, and we defensively confirm the `tid`
+ * attribute matches the tenant so a cross-tenant match can never be acted on.
+ */
+async function findUser(cfg: KcConfig, token: string, tenantId: string, email: string): Promise<{ id: string; enabled: boolean } | null> {
+  const username = kcUsername(tenantId, email);
   const res = await fetch(
-    `${cfg.url}/admin/realms/${cfg.realm}/users?email=${encodeURIComponent(email)}&exact=true`,
+    `${cfg.url}/admin/realms/${cfg.realm}/users?username=${encodeURIComponent(username)}&exact=true`,
     { headers: { authorization: `Bearer ${token}` } },
   );
   if (!res.ok) throw new Error(`keycloak user lookup failed: ${res.status}`);
-  const arr = (await res.json()) as Array<{ id: string; enabled: boolean }>;
-  return arr[0] ?? null;
+  const arr = (await res.json()) as Array<{ id: string; enabled: boolean; username?: string; attributes?: { tid?: string[] } }>;
+  // Exact-username match, and (when present) tid must match the tenant. Never
+  // fall back to a different tenant's record.
+  const hit = arr.find((u) => u.username === username && (!u.attributes?.tid || u.attributes.tid.includes(tenantId)));
+  return hit ? { id: hit.id, enabled: hit.enabled } : null;
 }
 
 /**
@@ -94,26 +117,31 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
   }
   try {
     const token = await getAdminToken(cfg);
-    const existing = await findUserByEmail(cfg, token, u.email);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
     if (existing) return { ok: true, kcUserId: existing.id, reason: "already exists" };
     const [firstName, ...rest] = u.name.trim().split(/\s+/);
     const res = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({
-        username: u.email,
-        email: u.email,
+        // SEC H3: tenant-namespaced username is the SOLE identity key. We do NOT
+        // set the realm-wide unique `email` field — with the realm's default
+        // duplicateEmailsAllowed=false that field would collide for two tenants
+        // sharing an address and collapse them onto one KC user (exactly the bug
+        // being fixed). The real email is preserved as a non-unique attribute so
+        // it is still available to mappers/claims, scoped per (tenant, user).
+        username: kcUsername(u.tenantId, u.email),
         emailVerified: true,
         enabled: true,
         firstName: firstName ?? u.name,
         lastName: rest.join(" "),
-        attributes: { tid: [u.tenantId], identity_user_id: [u.id] },
+        attributes: { tid: [u.tenantId], identity_user_id: [u.id], email_addr: [u.email] },
       }),
     });
     if (res.status !== 201 && res.status !== 409) {
       throw new Error(`keycloak user create failed: ${res.status} ${await res.text()}`);
     }
-    const created = await findUserByEmail(cfg, token, u.email);
+    const created = await findUser(cfg, token, u.tenantId, u.email);
     return { ok: true, ...(created ? { kcUserId: created.id } : {}) };
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_provision_failed", userId: u.id });
@@ -122,13 +150,18 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
   }
 }
 
-/** Disable the realm user and log out all their sessions. Best-effort. */
-export async function deactivateUser(email: string, log?: { warn: (o: unknown, m: string) => void }): Promise<KcResult> {
+/**
+ * Disable the realm user and log out all their sessions. Best-effort (returns
+ * { ok:false } rather than throwing). SEC H3: scoped to the user's tenant via
+ * the namespaced username — deactivating one tenant's user never touches a
+ * same-email user in another tenant.
+ */
+export async function deactivateUser(tenantId: string, email: string, log?: { warn: (o: unknown, m: string) => void }): Promise<KcResult> {
   const cfg = readConfig();
   if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
   try {
     const token = await getAdminToken(cfg);
-    const existing = await findUserByEmail(cfg, token, email);
+    const existing = await findUser(cfg, token, tenantId, email);
     if (!existing) return { ok: true, reason: "user not present in keycloak" };
     const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
       method: "PUT",
@@ -143,8 +176,8 @@ export async function deactivateUser(email: string, log?: { warn: (o: unknown, m
     });
     return { ok: true, kcUserId: existing.id };
   } catch (err) {
-    captureError(err, { service: "identity", event: "keycloak_deactivate_failed", email });
-    log?.warn({ email, err: String(err) }, "keycloak deactivation failed (degraded)");
+    captureError(err, { service: "identity", event: "keycloak_deactivate_failed", tenantId, email });
+    log?.warn({ tenantId, email, err: String(err) }, "keycloak deactivation failed (degraded)");
     return { ok: false, reason: String(err) };
   }
 }
@@ -158,7 +191,7 @@ export async function reconcileUser(u: { id: string; tenantId: string; email: st
   if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
   try {
     const token = await getAdminToken(cfg);
-    const existing = await findUserByEmail(cfg, token, u.email);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
     if (!existing) {
       if (!u.active) return { ok: true, reason: "inactive user absent in keycloak — no action" };
       return provisionUser(u, log);

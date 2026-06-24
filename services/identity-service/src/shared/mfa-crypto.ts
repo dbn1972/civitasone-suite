@@ -158,3 +158,32 @@ export function verifyTotp(base32Secret: string, code: string, opts: TotpOptions
   }
   return false;
 }
+
+/**
+ * SEC H1: verify a candidate TOTP code and return the matched RFC-6238 step
+ * (counter) so the caller can enforce single-use (reject any code whose step
+ * <= the last accepted step). Returns the matched step, or null if no code in
+ * the +/- window matches. Constant-time compare per candidate step.
+ */
+export function verifyTotpStep(base32Secret: string, code: string, opts: TotpOptions = {}): number | null {
+  const stepSeconds = opts.stepSeconds ?? 30;
+  const digits = opts.digits ?? 6;
+  const window = opts.window ?? 1;
+  const now = opts.now ?? Date.now();
+  const trimmed = code.trim();
+  if (!/^\d+$/.test(trimmed) || trimmed.length !== digits) return null;
+  const key = base32Decode(base32Secret);
+  const counter = Math.floor(now / 1000 / stepSeconds);
+  const candidate = Buffer.from(trimmed, "utf8");
+  let matched: number | null = null;
+  // Iterate the full window (no early return) to keep timing independent of
+  // which step matched.
+  for (let w = -window; w <= window; w++) {
+    const step = counter + w;
+    const expected = Buffer.from(hotp(key, step, digits), "utf8");
+    if (expected.length === candidate.length && timingSafeEqual(expected, candidate)) {
+      matched = step;
+    }
+  }
+  return matched;
+}
