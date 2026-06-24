@@ -4,10 +4,16 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUMED, EVENTS } from "../../topics.js";
+import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC    = "finance.gl.post";
+// 4-digit finance head CODES (resolved by finance via findHeadByCodeTx). These
+// must exist in budget.finance_heads. Overridable via env to match a tenant's
+// chart of accounts.
+const FIXED_ASSET_CODE  = process.env.ASSET_FIXED_ASSET_CODE ?? "1200";
+const GRN_CLEARING_CODE = process.env.ASSET_GRN_CLEARING_CODE ?? "2070";
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 const DEFAULT_VEHICLE_CATEGORY = "77777777-0001-0000-0000-000000000002";
 
@@ -92,23 +98,35 @@ export function registerRegisterConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { assetId, code: item.itemCode, acquisitionCost: Number(totalCost), grnId: p.grnId },
         });
-        // P1-3: acquisition GL on capitalization. Balanced, string-paise journal
-        // Dr Fixed Asset / Cr GRN-Clearing. Deterministic id (acq:<assetId>) makes
-        // it idempotent so a redelivered GRN cannot double-post. The GRN-Clearing
-        // credit is the known counterpart of the procurement GRN receipt; finance
-        // owns clearing that suspense against the vendor payable.
+        // P0-1/P0-2: acquisition GL on capitalization. Finance's GL consumer
+        // treats anything that is NOT type:"depreciation"/"asset_disposal" as a
+        // StandardJournal and requires {id, tenantId, voucherNo, type,
+        // postingDate, lines:[{accountCode,debitMinor,creditMinor}]} with
+        // balanced string-paise legs resolved by 4-digit head CODE. The old
+        // payload had none of that shape (no lines/postingDate/tenantId) and a
+        // truncated id `acq:` (no assetId) — finance silently dropped it and any
+        // redelivery shared the same blank key. We now emit a balanced
+        // StandardJournal: Dr Fixed Asset (1200) / Cr GRN-Clearing (2070), with
+        // a deterministic id `acq:${assetId}` so a redelivered GRN hits the
+        // journal PK in finance and no-ops (single balanced post, no double).
+        const acqDate = new Date().toISOString().slice(0, 10);
         await enqueue(tx, {
           topic: GL_TOPIC, eventType: GL_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: {
-            id: `acq:`,
-            assetId,
+            // finance.finance_journals.id is a uuid column. The human-readable
+            // key `acq:${assetId}` is hashed into a stable RFC-4122 UUIDv5 so the
+            // journal id is both deterministic (redelivery hits the PK -> no-op)
+            // and a valid uuid (no dead-letter on the uuid cast).
+            id: uuidV5(`acq:${assetId}`),
+            tenantId: msg.tenantId,
             type: "asset_acquisition",
-            amountMinor: totalCost.toString(),
-            currency: item.currency ?? "INR",
-            grnId: p.grnId, poRef: p.poRef,
-            debitAccount: "fixed_asset",
-            creditAccount: "grn_clearing",
+            voucherNo: `ACQ/${acqDate}/${assetId.slice(0, 8)}`,
+            postingDate: acqDate,
+            lines: [
+              { accountCode: FIXED_ASSET_CODE, debitMinor: totalCost.toString(), creditMinor: "0" },
+              { accountCode: GRN_CLEARING_CODE, debitMinor: "0", creditMinor: totalCost.toString() },
+            ],
           },
         });
         await audit(tx, msg, "create_from_grn", "asset", assetId);

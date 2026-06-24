@@ -4,9 +4,16 @@ import { assetDepSchedules, assetDepEntries, type DepScheduleInsert, type DepEnt
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findScheduleByAsset(assetId: string, tenantId: string): Promise<DepScheduleRow | null> {
+export async function findScheduleByAsset(assetId: string, tenantId: string, depBook = "company"): Promise<DepScheduleRow | null> {
+  // P0-3: with the dual-book schedules (company + statutory) now persisting per
+  // asset, scope the lookup by dep_book so this returns a single deterministic
+  // schedule instead of an arbitrary one of the two books.
   const rows = await db.select().from(assetDepSchedules)
-    .where(and(eq(assetDepSchedules.assetId, assetId), eq(assetDepSchedules.tenantId, tenantId)))
+    .where(and(
+      eq(assetDepSchedules.assetId, assetId),
+      eq(assetDepSchedules.tenantId, tenantId),
+      eq(assetDepSchedules.depBook, depBook),
+    ))
     .limit(1);
   return rows[0] ?? null;
 }
