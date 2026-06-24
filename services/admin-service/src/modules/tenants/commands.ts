@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE_TENANT } from "../../topics.js";
@@ -8,7 +8,10 @@ import type { TenantView } from "./domain.js";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createTenant(ctx: RequestContext, body: CreateTenantBody): Promise<Accepted> {
-  const id = randomUUID();
+  // P1-1: derive a deterministic id from the idempotency key so a retried
+  // POST /tenants dedupes (same id -> same cache key, markProcessed dedupes the
+  // consumer insert) instead of provisioning a second tenant.
+  const id = idempotentId(ctx);
   const projected: TenantView = {
     id, tenantId: id, name: body.name, domain: body.domain, edition: body.edition,
     status: "draft", region: body.region, residency: body.residency, settings: {}, version: 1,

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function openBreakGlass(ctx: RequestContext, tenantId: string, ticketId: string, reason: string): Promise<Accepted> {
-  const id = randomUUID();
+  const id = idempotentId(ctx);
   await queue.publish(COMMANDS.breakGlassOpen, {
     messageId: id, type: COMMANDS.breakGlassOpen, tenantId,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

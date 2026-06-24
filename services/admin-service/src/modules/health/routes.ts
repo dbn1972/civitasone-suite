@@ -14,9 +14,10 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await queries.getAggregateHealth());
   });
 
+  // P0-1: readiness exposes platform internals and is restricted to super_admin.
   app.get("/v1/admin/health/readiness", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    requireSuperAdmin(ctx);
     return reply.send(computeProductionReadiness());
   });
 

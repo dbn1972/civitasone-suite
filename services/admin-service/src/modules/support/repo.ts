@@ -13,9 +13,13 @@ export async function closeBreakGlass(tx: Writer, id: string, actorId: string): 
     .where(eq(adminBreakGlassLog.id, id));
 }
 
-export async function listBreakGlass(tenantId: string, limit: number) {
-  return db.select().from(adminBreakGlassLog)
-    .where(eq(adminBreakGlassLog.tenantId, tenantId))
-    .limit(limit)
-    .orderBy(adminBreakGlassLog.openedAt);
+// P1-3: break-glass review is a platform tool. When a target tenantId is given
+// (super_admin only) the listing is scoped to that tenant; when omitted it is
+// platform-wide, instead of being silently pinned to the caller's own ctx.tenantId.
+export async function listBreakGlass(limit: number, tenantId?: string) {
+  const base = db.select().from(adminBreakGlassLog);
+  const filtered = tenantId
+    ? base.where(eq(adminBreakGlassLog.tenantId, tenantId))
+    : base;
+  return filtered.limit(limit).orderBy(adminBreakGlassLog.openedAt);
 }
