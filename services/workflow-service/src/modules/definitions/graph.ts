@@ -1,4 +1,13 @@
 import type { NodeSpec, EdgeSpec } from "./repo.js";
+import { validateCondition } from "../../shared/condition.js";
+
+// Node types the engine understands. A `call` node is a sub-workflow /
+// call-activity: on entry it spawns a CHILD instance and waits. validateGraph
+// must treat every known type correctly so a new type can't strand an instance.
+const KNOWN_NODE_TYPES = new Set([
+  "task", "split", "parallel", "join", "start", "end", "timer", "xor", "exclusive", "call",
+]);
+const ASSIGN_STRATEGIES = new Set(["none", "round_robin", "least_loaded", "hierarchy"]);
 
 export interface GraphValidationResult {
   valid: boolean;
@@ -35,10 +44,26 @@ export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValida
     seen.add(k);
   }
 
-  // edge endpoint references must exist
+  // edge endpoint references must exist + edge condition must be well-formed.
+  // A malformed boolean/comparison expression is rejected HERE (deploy time) so
+  // it can never silently evaluate to false at runtime and mis-route.
   for (const e of edges) {
     if (!keySet.has(e.fromNode)) errors.push(`edge fromNode '${e.fromNode}' references a missing node`);
     if (!keySet.has(e.toNode)) errors.push(`edge toNode '${e.toNode}' references a missing node`);
+    const condErr = validateCondition(e.condition);
+    if (condErr) {
+      errors.push(`edge '${e.fromNode}'->'${e.toNode}' has an invalid condition (${condErr}): ${e.condition}`);
+    }
+  }
+
+  // unknown node types are rejected: a type the engine doesn't handle would
+  // strand an instance (no task spawned, no auto-advance).
+  for (const n of nodes) {
+    const nt = n.nodeType ?? "task";
+    if (!KNOWN_NODE_TYPES.has(nt)) errors.push(`node '${n.nodeKey}' has unknown node_type '${nt}'`);
+    if (n.assignStrategy !== undefined && n.assignStrategy !== null && !ASSIGN_STRATEGIES.has(n.assignStrategy)) {
+      errors.push(`node '${n.nodeKey}' has unknown assign_strategy '${n.assignStrategy}'`);
+    }
   }
 
   // start node: exactly one. Prefer explicit nodeType "start"; otherwise the
@@ -63,7 +88,11 @@ export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValida
   // P1-2 — a `timer` node auto-advances along an outgoing edge; it is NEVER a
   // terminal even with no outgoing edge — instead that's an error (it would
   // strand the instance because nothing completes it).
-  const terminals = nodes.filter((n) => n.nodeType !== "timer" && (n.nodeType === "end" || !hasOutgoing.has(n.nodeKey)));
+  // a `call` node (like a timer) auto-advances along its outgoing edge once the
+  // child instance completes; it is NEVER a terminal even with no outgoing edge
+  // (that's an error below — it would strand the parent after the child returns).
+  const terminals = nodes.filter((n) =>
+    n.nodeType !== "timer" && n.nodeType !== "call" && (n.nodeType === "end" || !hasOutgoing.has(n.nodeKey)));
   if (terminals.length === 0) {
     errors.push("no terminal/end node: every node has an outgoing edge (workflow can never complete)");
   }
@@ -77,6 +106,19 @@ export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValida
   }
   const nodeByKey = new Map(nodes.map((n) => [n.nodeKey, n]));
   const terminalKeys = new Set(terminals.map((t) => t.nodeKey));
+
+  // call/sub-workflow nodes: must declare a child definition code AND have an
+  // outgoing edge to resume the parent once the child completes. Without the
+  // outgoing edge the parent would strand after the child returns.
+  for (const n of nodes) {
+    if (n.nodeType !== "call") continue;
+    if (!n.callDefinitionCode || n.callDefinitionCode.trim() === "") {
+      errors.push(`call node '${n.nodeKey}' must declare call_definition_code (the child workflow to instantiate)`);
+    }
+    if (!hasOutgoing.has(n.nodeKey)) {
+      errors.push(`call node '${n.nodeKey}' has no outgoing edge (the parent could never resume after the child completes)`);
+    }
+  }
 
   for (const n of nodes) {
     if (n.nodeType !== "timer") continue;

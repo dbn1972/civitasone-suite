@@ -1,5 +1,5 @@
 import { pino } from "pino";
-import { and, eq, lte, isNotNull, or, isNull, sql } from "drizzle-orm";
+import { and, eq, lte, gt, isNotNull, or, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -126,6 +126,120 @@ export async function sweepOverdueTasks(
 export function startSlaSweeper(intervalMs = 30_000): NodeJS.Timeout {
   return setInterval(() => {
     sweepOverdueTasks().catch((err) => log.error({ err }, "sla sweep cycle failed"));
+  }, intervalMs);
+}
+
+// ---------------------------------------------------------------------------
+// Gap 5 — Pre-breach SLA reminders. DISTINCT from escalation: at configurable
+// elapsed-fraction thresholds (default 50% & 80% of the SLA window) we emit a
+// reminder notification, WITHOUT touching escalation_count. reminder_count
+// tracks how many thresholds have already fired so a threshold never re-sends.
+// ---------------------------------------------------------------------------
+const reminderLog = pino({ name: "workflow-reminder-sweeper" });
+const REMINDER_TOPIC = "workflow.task.reminder";
+
+/** Parse REMINDER_THRESHOLDS (CSV of fractions, e.g. "0.5,0.8"). */
+function reminderThresholds(): number[] {
+  const raw = process.env.REMINDER_THRESHOLDS ?? "0.5,0.8";
+  const xs = raw.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0 && n < 1);
+  return xs.length ? xs.sort((a, b) => a - b) : [0.5, 0.8];
+}
+
+/**
+ * For each pending task that is NOT yet overdue but has crossed a reminder
+ * threshold it hasn't been reminded for, emit a reminder notification + event
+ * and bump reminder_count (NOT escalation_count). Returns the number of
+ * reminders emitted this sweep.
+ *
+ * A threshold k (k = reminder_count+1) has fired when the elapsed fraction
+ * (now - created_at)/(due_at - created_at) >= thresholds[k-1]. We only send one
+ * reminder per sweep per task (the next unsent threshold), so reminders are
+ * paced and never double-sent for the same threshold.
+ */
+export async function sweepReminders(now: Date = new Date(), batch = 200): Promise<number> {
+  const thresholds = reminderThresholds();
+  // candidate tasks: pending, have an SLA (due_at), NOT yet overdue, and still
+  // have an un-fired threshold (reminder_count < thresholds.length).
+  const due = await db.select().from(tasks)
+    .where(and(
+      eq(tasks.status, "pending"),
+      eq(tasks.isCall, false),
+      isNotNull(tasks.dueAt),
+      gt(tasks.dueAt, now),                                  // not yet breached
+      lte(tasks.reminderCount, sql`${thresholds.length - 1}`),
+    ))
+    .limit(batch);
+
+  let sent = 0;
+  for (const t of due) {
+    if (!t.dueAt) continue;
+    const created = t.createdAt?.getTime() ?? t.dueAt.getTime();
+    const span = t.dueAt.getTime() - created;
+    if (span <= 0) continue;
+    const elapsed = (now.getTime() - created) / span;
+    const nextIdx = t.reminderCount; // 0-based index of the next un-fired threshold
+    if (nextIdx >= thresholds.length) continue;
+    const threshold = thresholds[nextIdx]!;
+    if (elapsed < threshold) continue; // not yet at the next threshold
+
+    // resolve recipient (instance owner, else role, else instance id).
+    const inst = await db.select({ createdBy: instances.createdBy }).from(instances)
+      .where(eq(instances.id, t.instanceId)).limit(1);
+    const recipient = inst[0]?.createdBy ?? t.roleRef ?? t.instanceId;
+
+    await db.transaction(async (tx) => {
+      // CAS on reminder_count so overlapping sweeps don't double-send a threshold.
+      const res = await tx.update(tasks)
+        .set({ reminderCount: nextIdx + 1, lastReminderAt: now, updatedAt: now })
+        .where(and(eq(tasks.id, t.id), eq(tasks.status, "pending"), eq(tasks.reminderCount, nextIdx)))
+        .returning({ id: tasks.id });
+      if (res.length === 0) return;
+
+      await historyRepo.record(tx, {
+        tenantId: t.tenantId, instanceId: t.instanceId, taskId: t.id,
+        fromNode: t.nodeKey, toNode: t.nodeKey, action: "reminder", decision: null,
+        actorId: SYSTEM_ACTOR_ID,
+        detail: { thresholdPct: Math.round(threshold * 100), reminderCount: nextIdx + 1, recipient, dueAt: t.dueAt?.toISOString() ?? null },
+      });
+
+      const t2 = tx as Parameters<typeof enqueue>[0];
+      const correlationId = randomUUID();
+      await enqueue(t2, {
+        topic: REMINDER_TOPIC, eventType: REMINDER_TOPIC,
+        tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
+        payload: { taskId: t.id, instanceId: t.instanceId, name: t.name, roleRef: t.roleRef, recipient, thresholdPct: Math.round(threshold * 100), dueAt: t.dueAt?.toISOString() ?? null },
+      });
+      await enqueue(t2, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
+        payload: buildNotificationPayload({
+          eventType: REMINDER_TOPIC,
+          recipient,
+          variables: {
+            taskId: t.id,
+            instanceId: t.instanceId,
+            thresholdPct: String(Math.round(threshold * 100)),
+            summary: `Reminder — task ${Math.round(threshold * 100)}% through its SLA: ${t.name}`,
+            link: `/workflow/tasks/${t.id}`,
+          },
+        }),
+      });
+      await enqueue(t2, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
+        payload: { service: "workflow", action: "reminder", resourceType: "task", resourceId: t.id, outcome: "success" },
+      });
+      sent++;
+    });
+  }
+  if (sent > 0) reminderLog.info({ sent }, "reminder sweeper emitted pre-breach reminders");
+  return sent;
+}
+
+/** Run the reminder sweeper on an interval. Never throws out of the loop. */
+export function startReminderSweeper(intervalMs = 30_000): NodeJS.Timeout {
+  return setInterval(() => {
+    sweepReminders().catch((err) => reminderLog.error({ err }, "reminder sweep cycle failed"));
   }, intervalMs);
 }
 

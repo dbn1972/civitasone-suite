@@ -11,13 +11,15 @@ import * as taskRepo from "../tasks/repo.js";
 import * as defRepo from "../definitions/repo.js";
 import * as historyRepo from "../history/repo.js";
 import type { CreateInstancePayload } from "./commands.js";
+import { subscribeWithDlq } from "../dlq/wrap.js";
+import { resolveAssignee } from "../assignment/resolver.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 type ExtendedCreatePayload = CreateInstancePayload & { startNodeKey?: string };
 
 export function registerInstancesConsumers(queue: Queue): void {
-  queue.subscribe<ExtendedCreatePayload>(COMMANDS.createInstance, async (msg) => {
+  subscribeWithDlq<ExtendedCreatePayload>(queue, COMMANDS.createInstance, async (msg) => {
     let taskId = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -33,6 +35,11 @@ export function registerInstancesConsumers(queue: Queue): void {
       }
 
       const dueAt = computeDueAt(startNode?.slaMinutes);
+      // Gap 4 — auto-assign the start task when the start node declares a
+      // strategy (round-robin / least-loaded / hierarchy). null => unassigned.
+      const startAssignee = (startNode?.assignStrategy && startNode.assignStrategy !== "none")
+        ? await resolveAssignee(tx, p.tenantId, startNode.roleRef ?? null, startNode.assignStrategy, startNode.assignRef ?? null)
+        : null;
 
       await repo.insert(tx, {
         id: p.id,
@@ -63,6 +70,7 @@ export function registerInstancesConsumers(queue: Queue): void {
         refType: p.refType ?? null,
         refId: p.refId ?? null,
         dueAt,
+        ...(startAssignee ? { assigneeId: startAssignee } : {}),
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
@@ -126,7 +134,7 @@ function registerLifecycle(
   eventType: string,
   allowedFrom: string[],
 ): void {
-  queue.subscribe<LifecycleMsgPayload>(command, async (msg) => {
+  subscribeWithDlq<LifecycleMsgPayload>(queue, command, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;

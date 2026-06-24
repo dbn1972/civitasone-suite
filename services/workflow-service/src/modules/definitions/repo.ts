@@ -120,6 +120,12 @@ export interface NodeSpec {
   slaMinutes?: number | null | undefined;
   timerMinutes?: number | null | undefined;
   deemedApproval?: boolean | undefined;
+  // Gap 1 — sub-workflow / call-activity.
+  callDefinitionCode?: string | null | undefined;
+  callContextMap?: Record<string, string> | null | undefined;
+  // Gap 4 — auto-assignment strategy.
+  assignStrategy?: string | null | undefined;
+  assignRef?: string | null | undefined;
   sortOrder?: number | undefined;
 }
 export interface EdgeSpec {
@@ -147,6 +153,10 @@ export async function insertGraphTx(
         ...(n.slaMinutes !== undefined && n.slaMinutes !== null ? { slaMinutes: n.slaMinutes } : {}),
         ...(n.timerMinutes !== undefined && n.timerMinutes !== null ? { timerMinutes: n.timerMinutes } : {}),
         ...(n.deemedApproval !== undefined ? { deemedApproval: n.deemedApproval } : {}),
+        ...(n.callDefinitionCode !== undefined && n.callDefinitionCode !== null ? { callDefinitionCode: n.callDefinitionCode } : {}),
+        ...(n.callContextMap !== undefined && n.callContextMap !== null ? { callContextMap: n.callContextMap } : {}),
+        ...(n.assignStrategy !== undefined && n.assignStrategy !== null ? { assignStrategy: n.assignStrategy } : {}),
+        ...(n.assignRef !== undefined && n.assignRef !== null ? { assignRef: n.assignRef } : {}),
         sortOrder: n.sortOrder ?? i + 1,
       })),
     );
@@ -186,4 +196,32 @@ export async function archiveOtherVersionsTx(
       eq(definitions.code, code),
       ne(definitions.id, keepId),
     ));
+}
+
+// ---------------------------------------------------------------------------
+// Gap 7 — definition templates (platform/global) + clone-into-tenant.
+// ---------------------------------------------------------------------------
+
+/** List template definitions (is_template = true), across tenants (platform). */
+export async function listTemplates(limit = 50, offset = 0) {
+  return db.select().from(definitions)
+    .where(eq(definitions.isTemplate, true))
+    .orderBy(desc(definitions.createdAt))
+    .limit(limit)
+    .offset(offset);
+}
+
+/** Fetch a template by id (must be a template; tenant-agnostic by design). */
+export async function findTemplateById(id: string) {
+  const rows = await db.select().from(definitions)
+    .where(and(eq(definitions.id, id), eq(definitions.isTemplate, true)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Raw node rows for a definition (used when cloning a template's graph). */
+export async function listNodeRows(definitionId: string) {
+  return db.select().from(definitionNodes)
+    .where(eq(definitionNodes.definitionId, definitionId))
+    .orderBy(asc(definitionNodes.sortOrder));
 }

@@ -180,9 +180,11 @@ export async function migrateInstanceVersion(
         nodeType: n.nodeType,
         timerMinutes: n.timerMinutes,
         deemedApproval: n.deemedApproval,
+        callDefinitionCode: n.callDefinitionCode,
+        assignStrategy: n.assignStrategy,
         sortOrder: n.sortOrder,
       })),
-      tEdges.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, sortOrder: e.sortOrder })),
+      tEdges.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
     );
     if (!gv.valid) {
       throw new HttpError(409, "TARGET_INVALID_GRAPH", `cannot migrate onto version ${toVersion}: ${gv.errors.join("; ")}`);

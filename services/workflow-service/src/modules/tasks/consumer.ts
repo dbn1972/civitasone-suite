@@ -11,18 +11,25 @@ import * as repo from "./repo.js";
 import * as instanceRepo from "../instances/repo.js";
 import * as defRepo from "../definitions/repo.js";
 import * as historyRepo from "../history/repo.js";
+import { resolveAssignee } from "../assignment/resolver.js";
+import { subscribeWithDlq } from "../dlq/wrap.js";
+import { SYSTEM_ACTOR_ID } from "./sweeper.js";
 import type { TaskView } from "./schema.js";
 import type { InstanceRow } from "../instances/schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-// The transaction handle passed by drizzle's db.transaction() — needs select/insert/update.
-type Tx = Parameters<typeof repo.insert>[0] & Parameters<typeof defRepo.findNodeByKeyTx>[0];
+// The transaction handle passed by drizzle's db.transaction() — needs
+// select/insert/update + execute (for the assignment resolver's atomic cursor).
+type Tx = Parameters<typeof repo.insert>[0] & Parameters<typeof defRepo.findNodeByKeyTx>[0]
+  & Parameters<typeof resolveAssignee>[0];
 
 type CompletePayload = TaskView & { decision?: string; sodOverride?: boolean };
 
 export function registerTasksConsumers(queue: Queue): void {
-  queue.subscribe<CompletePayload>(COMMANDS.completeTask, async (msg) => {
+  // Gap 3 — wrap with the consumer-side DLQ policy: transient failures retry,
+  // a poison message is dead-lettered after WORKFLOW_DLQ_MAX_ATTEMPTS attempts.
+  subscribeWithDlq<CompletePayload>(queue, COMMANDS.completeTask, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
@@ -99,7 +106,7 @@ export function registerTasksConsumers(queue: Queue): void {
       });
 
       if (decision === "reject" && instance) {
-        await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+        await completeInstance(tx, msg, instance, "reject");
         if (instance.refType === "estab_file" && instance.refId) {
           await enqueue(tx as Parameters<typeof enqueue>[0], {
             topic: DISPATCH.fileReject,
@@ -117,9 +124,9 @@ export function registerTasksConsumers(queue: Queue): void {
         await handleAdvance(tx, msg, instance, p);
       } else if (decision === "approve" && instance?.refType && instance.refId) {
         await dispatchDomainApprove(tx, msg, instance.refType, instance.refId);
-        await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+        await completeInstance(tx, msg, instance, "approve");
       } else if (decision === "approve" && instance) {
-        await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+        await completeInstance(tx, msg, instance, "approve");
       }
 
       await emit(tx, msg, EVENTS.taskCompleted, {
@@ -193,7 +200,7 @@ async function advanceFrom(
     if (instance.refType && instance.refId) {
       await dispatchDomainApprove(tx, msg, instance.refType, instance.refId);
     }
-    await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+    await completeInstance(tx, msg, instance, "approve");
     return;
   }
 
@@ -252,7 +259,198 @@ async function enterNode(
     return;
   }
 
+  // An explicit `end` node is terminal: complete the instance (and dispatch any
+  // domain approval) instead of spawning a human task at it. Without this an
+  // end node with an incoming edge would strand the instance on a dead task.
+  if (node.nodeType === "end") {
+    await instanceRepo.updateCurrentNode(tx, instance.id, nodeKey, msg.actorId);
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: nodeKey, action: "end", decision: null, actorId: msg.actorId, detail: {},
+    });
+    if (instance.refType && instance.refId) {
+      await dispatchDomainApprove(tx, msg, instance.refType, instance.refId);
+    }
+    await completeInstance(tx, msg, instance, "approve");
+    return;
+  }
+
+  // Gap 1 — sub-workflow / call-activity. Spawn a CHILD instance of the node's
+  // call_definition_code and hold the parent here (a non-human "call task" with
+  // is_call=true + child_instance_id) until the child reaches a terminal state.
+  if (node.nodeType === "call") {
+    await spawnCallActivity(tx, msg, instance, fromNode, node);
+    return;
+  }
+
   await spawnTask(tx, msg, instance, fromNode, node, action);
+}
+
+/**
+ * Gap 1 — enter a call node: create a child instance of the target definition
+ * (must be active + structurally valid) with a mapped context, and a parent
+ * "call task" that waits for the child. The parent's currentNode becomes the
+ * call node; it cannot advance until the child completes (see resumeParent).
+ */
+async function spawnCallActivity(
+  tx: Tx,
+  msg: CommandEnvelope,
+  instance: InstanceRow,
+  fromNode: string,
+  node: {
+    nodeKey: string; name: string; roleRef: string | null;
+    callDefinitionCode?: string | null; callContextMap?: Record<string, string> | null;
+  },
+): Promise<void> {
+  await instanceRepo.updateCurrentNode(tx, instance.id, node.nodeKey, msg.actorId);
+
+  const childDefCode = node.callDefinitionCode ?? null;
+  const childDef = childDefCode ? await defRepo.findByCodeTx(tx, instance.tenantId, childDefCode) : null;
+
+  // Parent call task: a non-human wait task held at the call node.
+  const callTaskId = randomUUID();
+
+  if (!childDef) {
+    // Misconfigured / inactive child definition: record + fail the parent
+    // instance rather than strand it silently.
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: node.nodeKey, action: "call_error", decision: null, actorId: msg.actorId,
+      detail: { reason: "child_definition_not_active", callDefinitionCode: childDefCode },
+    });
+    await completeInstance(tx, msg, instance, "reject");
+    return;
+  }
+
+  // map parent context -> child context (NULL map => pass through unchanged).
+  const parentCtx = normalizeContext(instance.context);
+  let childCtx: Record<string, unknown> = parentCtx;
+  if (node.callContextMap && typeof node.callContextMap === "object") {
+    childCtx = {};
+    for (const [parentPath, childKey] of Object.entries(node.callContextMap)) {
+      childCtx[childKey] = parentPath.split(".").reduce<unknown>(
+        (acc, k) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[k] : undefined),
+        parentCtx,
+      );
+    }
+  }
+
+  const childId = randomUUID();
+  const childStart = await defRepo.findFirstNodeTx(tx, childDef.id);
+
+  // create the parent call task FIRST so its id can be stored on the child.
+  await repo.insert(tx, {
+    id: callTaskId,
+    tenantId: instance.tenantId,
+    instanceId: instance.id,
+    name: `Call: ${node.name}`,
+    status: "pending",
+    roleRef: null,
+    nodeKey: node.nodeKey,
+    refType: instance.refType,
+    refId: instance.refId,
+    isCall: true,
+    childInstanceId: childId,
+    createdBy: msg.actorId,
+    updatedBy: msg.actorId,
+    version: 1,
+  });
+
+  // create the child instance, linked back to the parent + call task.
+  await instanceRepo.insert(tx, {
+    id: childId,
+    tenantId: instance.tenantId,
+    name: `${childDef.name} (child of ${instance.name})`,
+    status: "active",
+    definitionId: childDef.id,
+    definitionVersion: childDef.version,
+    refType: instance.refType ?? null,
+    refId: instance.refId ?? null,
+    currentNode: childStart?.nodeKey ?? null,
+    context: childCtx,
+    parentInstanceId: instance.id,
+    parentTaskId: callTaskId,
+    parentNodeKey: node.nodeKey,
+    createdBy: msg.actorId,
+    updatedBy: msg.actorId,
+    version: 1,
+  });
+
+  // spawn the child's first task so the child can make progress.
+  if (childStart) {
+    const childTaskId = randomUUID();
+    await repo.insert(tx, {
+      id: childTaskId,
+      tenantId: instance.tenantId,
+      instanceId: childId,
+      name: childStart.name,
+      status: "pending",
+      roleRef: childStart.roleRef,
+      nodeKey: childStart.nodeKey,
+      refType: instance.refType,
+      refId: instance.refId,
+      dueAt: computeDueAt(childStart.slaMinutes),
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+      version: 1,
+    });
+    await emit(tx, msg, EVENTS.taskAssigned, {
+      taskId: childTaskId, instanceId: childId, name: childStart.name, roleRef: childStart.roleRef,
+    }, "assign_task", childTaskId);
+  }
+
+  await historyRepo.record(tx, {
+    tenantId: instance.tenantId, instanceId: instance.id, taskId: callTaskId,
+    fromNode, toNode: node.nodeKey, action: "call", decision: null, actorId: msg.actorId,
+    detail: { childInstanceId: childId, callDefinitionCode: childDefCode, childVersion: childDef.version },
+  });
+  await emit(tx, msg, EVENTS.instanceCreated, {
+    instanceId: childId, name: `${childDef.name} (child)`, parentInstanceId: instance.id,
+  }, "create", childId);
+}
+
+/**
+ * Gap 1 — mark an instance terminal, and if it is a CHILD of a call node, RESUME
+ * the parent by auto-completing the waiting call task (carrying the child's
+ * outcome). For a non-child instance this is just markCompleted. Resuming the
+ * parent reuses the normal completeTask path so the parent advances along the
+ * call node's outgoing edge through the same engine (edge conditions etc.).
+ */
+async function completeInstance(
+  tx: Tx,
+  msg: CommandEnvelope,
+  instance: InstanceRow,
+  outcome: "approve" | "reject",
+): Promise<void> {
+  await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+
+  if (!instance.parentInstanceId || !instance.parentTaskId) return;
+
+  // resume the parent: complete the waiting call task with the child outcome.
+  const callTask = await repo.findByIdTx(tx, instance.parentTaskId);
+  if (!callTask || callTask.status !== "pending") return;
+
+  // mark the call task completed in-band (it's a system wait task; no SoD).
+  await repo.markCompleted(tx, callTask.id, callTask.tenantId, SYSTEM_ACTOR_ID, outcome, true);
+  await historyRepo.record(tx, {
+    tenantId: instance.tenantId, instanceId: instance.parentInstanceId, taskId: callTask.id,
+    fromNode: instance.parentNodeKey ?? null, toNode: null, action: "call_return", decision: outcome,
+    actorId: SYSTEM_ACTOR_ID,
+    detail: { childInstanceId: instance.id, outcome },
+  });
+
+  // advance the parent past the call node, in the same transaction.
+  const parent = await instanceRepo.lockByIdTx(tx, instance.parentInstanceId);
+  if (!parent || parent.status !== "active") return;
+
+  if (outcome === "reject") {
+    // propagate failure: reject closes the parent (mirrors a human reject).
+    await completeInstance(tx, msg, parent, "reject");
+    return;
+  }
+  if (parent.definitionId && instance.parentNodeKey) {
+    await advanceFrom(tx, { ...msg, actorId: SYSTEM_ACTOR_ID }, parent, instance.parentNodeKey, "advance");
+  }
 }
 
 async function spawnTask(
@@ -260,7 +458,11 @@ async function spawnTask(
   msg: CommandEnvelope,
   instance: InstanceRow,
   fromNode: string,
-  node: { nodeKey: string; name: string; roleRef: string | null; slaMinutes: number | null; nodeType?: string; timerMinutes?: number | null },
+  node: {
+    nodeKey: string; name: string; roleRef: string | null; slaMinutes: number | null;
+    nodeType?: string; timerMinutes?: number | null;
+    assignStrategy?: string | null; assignRef?: string | null;
+  },
   action: string,
 ): Promise<void> {
   await instanceRepo.updateCurrentNode(tx, instance.id, node.nodeKey, msg.actorId);
@@ -271,6 +473,12 @@ async function spawnTask(
   // sweeper auto-completes it (deemed approval), reusing the normal advance
   // path along the timer's outgoing edge.
   const isTimer = node.nodeType === "timer";
+  // Gap 4 — auto-assignment. If the node declares a strategy, resolve a specific
+  // assignee (round-robin / least-loaded / hierarchy) among the role-holders.
+  // null => leave unassigned (legacy role-pool; any role-holder may claim).
+  const assigneeId = (!isTimer && node.assignStrategy && node.assignStrategy !== "none")
+    ? await resolveAssignee(tx, instance.tenantId, node.roleRef ?? null, node.assignStrategy, node.assignRef ?? null)
+    : null;
   // SECURITY C-1b — enforce a minimum dwell at task creation: a timer fires no
   // sooner than now + max(timer_minutes, 1) minutes, so fire_at can never be in
   // the past (no instant deemed-approval). validateGraph already rejects
@@ -290,6 +498,7 @@ async function spawnTask(
     refId: instance.refId,
     dueAt,
     ...(fireAt ? { fireAt } : {}),
+    ...(assigneeId ? { assigneeId } : {}),
     createdBy: msg.actorId,
     updatedBy: msg.actorId,
     version: 1,
@@ -297,7 +506,9 @@ async function spawnTask(
   await historyRepo.record(tx, {
     tenantId: instance.tenantId, instanceId: instance.id, taskId: newTaskId,
     fromNode, toNode: node.nodeKey, action: isTimer ? "timer_wait" : action, decision: null, actorId: msg.actorId,
-    detail: isTimer ? { timerMinutes: node.timerMinutes ?? null, fireAt: fireAt?.toISOString() ?? null } : {},
+    detail: isTimer
+      ? { timerMinutes: node.timerMinutes ?? null, fireAt: fireAt?.toISOString() ?? null }
+      : (assigneeId ? { assignStrategy: node.assignStrategy, assignee: assigneeId } : {}),
   });
   await emit(tx, msg, EVENTS.taskAssigned, {
     taskId: newTaskId,
