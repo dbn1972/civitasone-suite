@@ -269,6 +269,14 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       remarks: z.string().max(2000).optional(),
     }).parse(req.body);
     await mustEmployee(ctx.tenantId, id);
+    // H1: at most one ACTIVE suspension per employee (deterministic subsistence%).
+    // Friendly pre-check; the DB partial unique index + repo 23505->409 handle races.
+    if (await repo.hasActiveSuspension(ctx.tenantId, id)) {
+      throw new HttpError(
+        409, "ACTIVE_SUSPENSION_EXISTS",
+        "employee already has an active suspension; revoke it before creating another",
+      );
+    }
     const suspId = randomUUID();
     await repo.insertSuspension(db, {
       id: suspId, tenantId: ctx.tenantId, employeeId: id,

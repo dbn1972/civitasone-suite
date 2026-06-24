@@ -8,7 +8,7 @@ export const createEmployeeBody = z.object({
   dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
   dateOfBirth:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   gender:        z.enum(["male", "female", "other"]).optional(),
-  pan:           z.string().max(16).optional(),
+  pan:           z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "must be a valid PAN (AAAAA9999A)").optional(),
   aadhaarRef:    z.string().optional(),
   mobile:        z.string().max(20).optional(),
   email:         z.string().email().optional(),

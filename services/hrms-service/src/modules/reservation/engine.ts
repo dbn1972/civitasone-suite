@@ -111,26 +111,53 @@ export function computeRoster(def: RosterDef, filled: FilledByCategory): RosterC
  */
 export function generateRosterPoints(def: Pick<RosterDef, "rosterSize" | "pctSc" | "pctSt" | "pctObc" | "pctEws">): Array<{ point: number; category: Exclude<Category, "PwD"> }> {
   const size = def.rosterSize;
+  // M4: validate Σ reserved pct ≤ 100 so the roster can never over-allocate.
+  const total = def.pctSc + def.pctSt + def.pctObc + def.pctEws;
+  if (total > 100) {
+    throw new Error(
+      `reserved percentages sum to ${total}% (> 100%): SC=${def.pctSc} ST=${def.pctSt} OBC=${def.pctObc} EWS=${def.pctEws}`,
+    );
+  }
+  // M4: the old if/else-if dropped a category's point whenever two categories
+  // would increment on the same point (undercount). We instead guarantee the
+  // exact per-category point total (floor(pct% of size)) and spread points by a
+  // deficit-greedy walk: at each point pick the category furthest behind its
+  // ideal cumulative share, so a collision-loser is simply placed at the next
+  // point rather than dropped. Priority on ties: SC, ST, OBC, EWS.
+  const ORDER = ["SC", "ST", "OBC", "EWS"] as const;
+  const pct: Record<typeof ORDER[number], number> = {
+    SC: def.pctSc, ST: def.pctSt, OBC: def.pctObc, EWS: def.pctEws,
+  };
+  // Exact target counts (floor); Σ targets ≤ size because Σpct ≤ 100.
+  const target: Record<typeof ORDER[number], number> = {
+    SC: Math.floor((size * def.pctSc) / 100),
+    ST: Math.floor((size * def.pctSt) / 100),
+    OBC: Math.floor((size * def.pctObc) / 100),
+    EWS: Math.floor((size * def.pctEws) / 100),
+  };
+  const placed: Record<typeof ORDER[number], number> = { SC: 0, ST: 0, OBC: 0, EWS: 0 };
   const out: Array<{ point: number; category: Exclude<Category, "PwD"> }> = [];
-  const prev = { SC: 0, ST: 0, OBC: 0, EWS: 0 };
   for (let n = 1; n <= size; n++) {
-    const cur = {
-      SC: Math.floor((n * def.pctSc) / 100),
-      ST: Math.floor((n * def.pctSt) / 100),
-      OBC: Math.floor((n * def.pctObc) / 100),
-      EWS: Math.floor((n * def.pctEws) / 100),
-    };
-    let cat: Exclude<Category, "PwD"> = "UR";
-    // Priority order when multiple categories would increment on the same point:
-    // SC, ST, OBC, EWS (then UR). Only the first incrementing category claims it
-    // so each reserved point is counted once; this keeps the per-category point
-    // total equal to round(pct% of size) for the common Govt-of-India ratios.
-    if (cur.SC > prev.SC) cat = "SC";
-    else if (cur.ST > prev.ST) cat = "ST";
-    else if (cur.OBC > prev.OBC) cat = "OBC";
-    else if (cur.EWS > prev.EWS) cat = "EWS";
-    out.push({ point: n, category: cat });
-    prev.SC = cur.SC; prev.ST = cur.ST; prev.OBC = cur.OBC; prev.EWS = cur.EWS;
+    // Among categories that still owe points, choose the one whose ideal
+    // cumulative count by point n most exceeds what we've placed (largest
+    // deficit). Ties broken by ORDER priority.
+    let best: typeof ORDER[number] | null = null;
+    let bestDeficit = 0;
+    for (const c of ORDER) {
+      if (placed[c] >= target[c]) continue;
+      const ideal = (n * pct[c]) / 100;
+      const deficit = ideal - placed[c];
+      if (best === null || deficit > bestDeficit + 1e-9) {
+        best = c;
+        bestDeficit = deficit;
+      }
+    }
+    if (best !== null && bestDeficit > 0) {
+      placed[best] += 1;
+      out.push({ point: n, category: best });
+    } else {
+      out.push({ point: n, category: "UR" });
+    }
   }
   return out;
 }
