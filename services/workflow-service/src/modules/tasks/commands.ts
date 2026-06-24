@@ -8,7 +8,13 @@ import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { tasks } from "./schema.js";
 import * as instanceRepo from "../instances/repo.js";
+import * as delegationRepo from "../delegations/repo.js";
 import type { TaskView } from "./schema.js";
+
+/** YYYY-MM-DD in UTC, used to bound active-delegation validity. */
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -24,6 +30,15 @@ export async function completeTask(
   const isSuperAdmin = ctx.roles.includes("super_admin");
   let sodOverride = false;
 
+  // L3 — active delegations naming the actor as delegate. An active delegation
+  // lets the delegate act on behalf of the delegator's role. We consult these
+  // both for the role-on-task gate (a delegate may pass the gate even without
+  // holding roleRef directly) and for SoD identity (the delegate stands in for
+  // the delegator, so a delegation from the submitter / a prior actor is itself
+  // a SoD conflict and is blocked).
+  const activeDelegations = await delegationRepo.activeForDelegate(ctx.tenantId, ctx.actorId, today());
+  const delegatorIds = new Set(activeDelegations.map((d) => d.delegatorId));
+
   // C1 — role-on-task authorization. The broad requireRole() gate at the route
   // only proves the actor holds *some* workflow role; it never checks the
   // actor's roles against THIS task's roleRef. Without this, any tenant user
@@ -31,7 +46,11 @@ export async function completeTask(
   // (the route's permission if-chain leaves estab_file/asset_disposal/etc with
   // no gate at all). Rule: unless super_admin (break-glass), the actor must
   // hold the task's roleRef. A task with no roleRef is unrestricted.
-  if (!isSuperAdmin && existing.roleRef && !ctx.roles.includes(existing.roleRef)) {
+  // A delegate holding an active delegation may act on behalf of the
+  // delegator's role, so the presence of any active delegation satisfies the
+  // role gate (the delegator is presumed to hold the task's role).
+  const hasActiveDelegation = activeDelegations.length > 0;
+  if (!isSuperAdmin && existing.roleRef && !ctx.roles.includes(existing.roleRef) && !hasActiveDelegation) {
     throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
   }
 
@@ -47,16 +66,22 @@ export async function completeTask(
   // obvious self-approval case early for a friendlier error.
   if (!isSuperAdmin) {
     const instance = await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId);
-    if (instance && instance.createdBy === ctx.actorId) {
+    // self-approval: by the actor directly, OR via a delegation whose delegator
+    // is the submitter (the delegate is standing in for that role).
+    if (instance && (instance.createdBy === ctx.actorId || delegatorIds.has(instance.createdBy))) {
       throw new HttpError(403, "SELF_APPROVAL_DENIED", "the submitter of a workflow may not approve their own request");
     }
-    const priorByActor = await db.select().from(tasks)
+    const priorTasks = await db.select().from(tasks)
       .where(and(
         eq(tasks.instanceId, existing.instanceId),
         eq(tasks.status, "completed"),
-        eq(tasks.completedBy, ctx.actorId),
       ));
-    if (priorByActor.length > 0) {
+    // repeat-actor: a prior step completed by the actor directly OR by a
+    // delegator the actor is now acting on behalf of (four-eyes via delegation).
+    const conflict = priorTasks.some(
+      (t) => t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
+    );
+    if (conflict) {
       throw new HttpError(403, "SOD_REPEAT_ACTOR", "you already acted on a prior step of this workflow");
     }
   } else {

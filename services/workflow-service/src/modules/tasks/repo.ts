@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, isNull, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 
@@ -40,14 +40,27 @@ export async function listPendingForRoles(
   limit: number,
   offset: number,
 ): Promise<TaskView[]> {
+  // L1 — filter by role in SQL (not in app code after a limit*3 fetch, which
+  // silently dropped matching tasks beyond the window). A task with no roleRef
+  // is unrestricted; super_admin sees every pending task.
+  const isSuperAdmin = roles.includes("super_admin");
+  const rolePredicate = isSuperAdmin
+    ? undefined
+    : roles.length > 0
+      ? or(isNull(tasks.roleRef), inArray(tasks.roleRef, roles))
+      : isNull(tasks.roleRef);
+
   const rows = await db.select().from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.status, "pending")))
+    .where(and(
+      eq(tasks.tenantId, tenantId),
+      eq(tasks.status, "pending"),
+      ...(rolePredicate ? [rolePredicate] : []),
+    ))
     .orderBy(desc(tasks.updatedAt))
-    .limit(limit * 3)
+    .limit(limit)
     .offset(offset);
 
-  const filtered = rows.filter((r) => !r.roleRef || roles.includes(r.roleRef) || roles.includes("super_admin"));
-  return filtered.slice(0, limit).map(toView);
+  return rows.map(toView);
 }
 
 export async function findByIdTx(tx: Writer, id: string): Promise<TaskRow | null> {
