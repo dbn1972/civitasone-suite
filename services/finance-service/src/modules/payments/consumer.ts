@@ -13,6 +13,18 @@ import { getPeriodStatus } from "../period-close/routes.js";
 import * as allocRepo from "../budget/allocation-repo.js";
 import { fyFromDate } from "../hoa/voucher.js";
 import type { Deduction } from "./schema.js";
+import { enqueueSpineJournal } from "../gl/spine.js";
+import type { JournalLine } from "../gl/schema.js";
+
+const AP_CONTROL_CODE = process.env.FINANCE_AP_CONTROL_CODE ?? "2050";
+const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
+
+/** Resolve a head code to its UUID within the tx; throws if the control head is missing. */
+async function headIdByCode(tx: unknown, tenantId: string, code: string, label: string): Promise<string> {
+  const head = await budgetRepo.findHeadByCodeTx(tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0], tenantId, code);
+  if (!head) throw new Error(`MISSING_CONTROL_HEAD: ${label} head code ${code} not found for tenant`);
+  return head.id;
+}
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -132,6 +144,17 @@ export function registerPaymentsConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { billId: p.id, vendorId: bill.vendorId, netMinor: bill.netMinor.toString() },
         });
+        // GL spine: bill passed -> Dr expense head / Cr Accounts-Payable control.
+        const apHeadId = await headIdByCode(tx, p.tenantId, AP_CONTROL_CODE, "accounts_payable");
+        const billDate = bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10);
+        const lines: JournalLine[] = [
+          { accountCode: bill.headId,  debitMinor: bill.netMinor, creditMinor: 0n },
+          { accountCode: apHeadId,     debitMinor: 0n,            creditMinor: bill.netMinor },
+        ];
+        await enqueueSpineJournal(tx, {
+          tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          sourceKey: `bill:${p.id}`, type: "bill", postingDate: billDate, lines,
+        });
       }
       await audit(tx, msg, "approve", "bill", p.id);
     });
@@ -184,6 +207,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
         topic: EVENTS.paymentMade, eventType: EVENTS.paymentMade,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { paymentId: p.id, billId: p.billId, amountMinor: p.amountMinor, mode: p.mode },
+      });
+      // GL spine: payment released -> Dr Accounts-Payable / Cr Bank.
+      const payApHeadId = await headIdByCode(tx, p.tenantId, AP_CONTROL_CODE, "accounts_payable");
+      const bankHeadId = await headIdByCode(tx, p.tenantId, BANK_CODE, "bank");
+      const payAmount = BigInt(p.amountMinor);
+      const payLines: JournalLine[] = [
+        { accountCode: payApHeadId, debitMinor: payAmount, creditMinor: 0n },
+        { accountCode: bankHeadId,  debitMinor: 0n,        creditMinor: payAmount },
+      ];
+      await enqueueSpineJournal(tx, {
+        tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        sourceKey: `payment:${p.id}`, type: "payment", postingDate: payDate, lines: payLines,
       });
       await audit(tx, msg, "initiate", "payment", p.id);
     });

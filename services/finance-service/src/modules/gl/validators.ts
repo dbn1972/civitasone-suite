@@ -30,3 +30,8 @@ export const ledgerQueryParams = z.object({
   limit:  z.coerce.number().int().positive().max(200).default(50),
 });
 export type LedgerQueryParams = z.infer<typeof ledgerQueryParams>;
+
+export const reverseParam = z.object({
+  id: z.string().uuid(),
+});
+export type ReverseParam = z.infer<typeof reverseParam>;

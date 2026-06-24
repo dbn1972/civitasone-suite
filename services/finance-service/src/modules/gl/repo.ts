@@ -18,6 +18,19 @@ export async function findJournalById(id: string): Promise<JournalRow | null> {
   return rows[0] ?? null;
 }
 
+/** Idempotency check inside a tx: has this journal id already been posted? */
+export async function findJournalByIdTx(tx: Writer, id: string): Promise<JournalRow | null> {
+  const rows = await (tx as typeof db).select().from(financeJournals).where(eq(financeJournals.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+/** Mark a journal reversed and link the reversing journal (controlled status transition). */
+export async function markJournalReversed(tx: Writer, id: string, reversedByUpdatedBy: string): Promise<void> {
+  await tx.update(financeJournals)
+    .set({ status: "reversed", updatedBy: reversedByUpdatedBy, updatedAt: new Date() })
+    .where(eq(financeJournals.id, id));
+}
+
 /** Resolve a headId that may be a UUID or a 4-digit account code. Returns the UUID or null. */
 export async function resolveHeadId(tenantId: string, headIdOrCode: string): Promise<string | null> {
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(headIdOrCode);

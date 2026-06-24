@@ -21,7 +21,7 @@ const CASH = process.env.FINANCE_CASH_CODE ?? "1100";
 
 type StandardJournal = {
   id: string; tenantId: string; voucherNo: string; type: string;
-  postingDate: string; lines: JournalLine[];
+  postingDate: string; lines: JournalLine[]; reversesId?: string;
 };
 
 async function postJournal(
@@ -50,10 +50,15 @@ async function postJournal(
     );
     voucherNo = allocated.voucherNo;
   }
+  // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
+  // the source doc). If it already exists, this is a redelivery — skip silently
+  // so bills/payments/receipts never double-post.
+  if (await repo.findJournalByIdTx(tx, journal.id)) return;
   await repo.insertJournal(tx, {
     id: journal.id, tenantId: journal.tenantId, voucherNo,
     type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
     status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
+    ...(journal.reversesId ? { reversesId: journal.reversesId } : {}),
   });
   for (const line of journal.lines) {
     await repo.insertLedgerLine(tx, {
@@ -148,6 +153,46 @@ export function registerGlConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await postJournal(tx, msg, p);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+  });
+
+  // P0-3: reversal = contra-as-creation. Post a NEW mirror journal (debits and
+  // credits swapped) linked to the original via reverses_id, then mark the
+  // original 'reversed' through the controlled status transition the DB trigger
+  // permits (posted -> reversed). The original's lines/amounts are never mutated.
+  queue.subscribe(COMMANDS.journalReverse, async (msg) => {
+    const raw = msg.payload as { id: string; tenantId: string; originalJournalId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const original = await repo.findJournalByIdTx(tx, raw.originalJournalId);
+      if (!original) throw new Error(`JOURNAL_NOT_FOUND: ${raw.originalJournalId}`);
+      if (original.tenantId !== msg.tenantId) throw new Error(`JOURNAL_TENANT_MISMATCH: ${raw.originalJournalId}`);
+      if (original.status === "reversed") return; // already reversed — idempotent no-op
+      if (original.status !== "posted") throw new Error(`JOURNAL_NOT_POSTED: cannot reverse status '${original.status}'`);
+      const origLines = (original.lines ?? []) as JournalLine[];
+      const mirrorLines: JournalLine[] = origLines.map((l) => ({
+        accountCode: l.accountCode,
+        // Serialise paise as decimal strings (jsonb cannot hold BigInt); the
+        // posting path rebuilds them with BigInt(...). Swap Dr<->Cr.
+        debitMinor: BigInt(l.creditMinor).toString(),
+        creditMinor: BigInt(l.debitMinor).toString(),
+        ...(l.narration ? { narration: `REVERSAL: ${l.narration}` } : {}),
+      }));
+      // Deterministic mirror id keyed off the original, so redelivery cannot
+      // create two mirror journals.
+      const mirrorId = raw.id;
+      const today = new Date().toISOString().slice(0, 10);
+      await postJournal(tx, msg, {
+        id: mirrorId,
+        tenantId: msg.tenantId,
+        voucherNo: "AUTO",
+        type: "contra",
+        postingDate: today,
+        lines: mirrorLines,
+        reversesId: original.id,
+      });
+      await repo.markJournalReversed(tx, original.id, msg.actorId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
   });

@@ -4,7 +4,7 @@ import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { postJournalBody, ledgerQueryParams } from "./validators.js";
+import { postJournalBody, ledgerQueryParams, reverseParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -17,6 +17,13 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = postJournalBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.postJournal(ctx, body));
+  });
+
+  app.post("/v1/finance/journals/:id/reverse", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = reverseParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reverseJournal(ctx, id));
   });
 
   app.get("/v1/finance/ledger", async (req, reply) => {

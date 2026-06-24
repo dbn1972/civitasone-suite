@@ -7,6 +7,7 @@ export const COMMANDS = {
   sanctionCreate:       "finance.sanction.create",
   // gl
   journalPost:          "finance.gl.post",
+  journalReverse:       "finance.gl.reverse",
   // treasury
   challanCreate:        "finance.challan.create",
   depositCreate:        "finance.deposit.create",

@@ -31,6 +31,7 @@ export const financeJournals = glSchema.table("finance_journals", {
   createdBy:   uuid("created_by").notNull(),
   updatedBy:   uuid("updated_by").notNull(),
   version:     integer("version").notNull().default(1),
+  reversesId:  uuid("reverses_id"),
 });
 
 export const financeLedger = glSchema.table("finance_ledger", {

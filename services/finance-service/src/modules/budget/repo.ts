@@ -87,6 +87,14 @@ export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | 
   return rows[0] ?? null;
 }
 
+/** Resolve a head by its account code within the current tx (for GL posting). */
+export async function findHeadByCodeTx(tx: Writer, tenantId: string, code: string): Promise<HeadRow | null> {
+  const rows = await (tx as typeof db).select().from(financeHeads)
+    .where(and(eq(financeHeads.tenantId, tenantId), eq(financeHeads.code, code)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateHead(tx: Writer, id: string, patch: Partial<HeadRow>): Promise<void> {
   await tx.update(financeHeads).set({ ...patch, updatedAt: new Date() }).where(eq(financeHeads.id, id));
 }
