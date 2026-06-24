@@ -1,4 +1,4 @@
-import { eq, desc, and, or, isNull, inArray } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, lte, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 
@@ -14,6 +14,7 @@ export function toView(r: TaskRow): TaskView {
     refType: r.refType,
     refId: r.refId,
     decision: r.decision,
+    assigneeId: r.assigneeId,
     version: r.version,
   };
 }
@@ -98,6 +99,32 @@ export async function priorActorTasksTx(tx: Writer, instanceId: string, actorId:
     .for("update");
 }
 
+/**
+ * P1-4 — remap pending tasks at `oldNode` to `newNode` during an in-flight
+ * version migration, refreshing name/roleRef from the target node so the task
+ * (and the edges resolved from it on completion) align with the new graph.
+ * Returns the number of tasks remapped.
+ */
+export async function remapOpenTaskNode(
+  tx: Writer,
+  instanceId: string,
+  oldNode: string,
+  newNode: string,
+  newName: string,
+  newRoleRef: string | null,
+  actorId: string,
+): Promise<number> {
+  const updated = await (tx as typeof db).update(tasks)
+    .set({ nodeKey: newNode, name: newName, roleRef: newRoleRef, updatedBy: actorId, updatedAt: new Date() })
+    .where(and(
+      eq(tasks.instanceId, instanceId),
+      eq(tasks.nodeKey, oldNode),
+      eq(tasks.status, "pending"),
+    ))
+    .returning({ id: tasks.id });
+  return updated.length;
+}
+
 /** Number of still-open (pending) tasks on an instance — used for join gating. */
 export async function countOpenTasks(tx: Writer, instanceId: string): Promise<number> {
   const rows = await (tx as typeof db).select().from(tasks)
@@ -159,4 +186,72 @@ export async function markCompleted(
     .returning({ id: tasks.id });
   if (updated.length === 0) return null; // conflict: already completed elsewhere
   return { ...existing, status: "completed", decision, version: existing.version + 1 };
+}
+
+/**
+ * P1-1 — claim an UNASSIGNED pending task for `actorId`. Guarded by
+ * `assignee_id IS NULL` + `status='pending'` + the version predicate so two
+ * concurrent claimers cannot both win; the loser gets 0 rows (null) and a 409.
+ */
+export async function claim(
+  id: string,
+  tenantId: string,
+  actorId: string,
+): Promise<TaskView | null> {
+  const existing = await findById(id, tenantId);
+  if (!existing) return null;
+  const updated = await db.update(tasks).set({
+    assigneeId: actorId,
+    updatedBy: actorId,
+    updatedAt: new Date(),
+    version: existing.version + 1,
+  })
+    .where(and(
+      eq(tasks.id, id),
+      eq(tasks.status, "pending"),
+      isNull(tasks.assigneeId),
+      eq(tasks.version, existing.version),
+    ))
+    .returning({ id: tasks.id });
+  if (updated.length === 0) return null;
+  return { ...existing, assigneeId: actorId, version: existing.version + 1 };
+}
+
+/** P1-1 — (re)assign a pending task to a specific user (admin / reassignment). */
+export async function assign(
+  id: string,
+  tenantId: string,
+  assigneeId: string,
+  actorId: string,
+): Promise<TaskView | null> {
+  const existing = await findById(id, tenantId);
+  if (!existing) return null;
+  const updated = await db.update(tasks).set({
+    assigneeId,
+    updatedBy: actorId,
+    updatedAt: new Date(),
+    version: existing.version + 1,
+  })
+    .where(and(
+      eq(tasks.id, id),
+      eq(tasks.status, "pending"),
+      eq(tasks.version, existing.version),
+    ))
+    .returning({ id: tasks.id });
+  if (updated.length === 0) return null;
+  return { ...existing, assigneeId, version: existing.version + 1 };
+}
+
+/**
+ * P1-2 — pending timer tasks whose fire_at has passed, for the deemed-approval
+ * sweeper. Batched; the sweeper re-locks each before advancing.
+ */
+export async function dueTimers(now: Date, batch: number): Promise<TaskRow[]> {
+  return db.select().from(tasks)
+    .where(and(
+      eq(tasks.status, "pending"),
+      isNotNull(tasks.fireAt),
+      lte(tasks.fireAt, now),
+    ))
+    .limit(batch);
 }

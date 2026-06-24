@@ -60,9 +60,17 @@ export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValida
 
   // terminal nodes: explicit "end" type OR a node with no outgoing edges.
   const hasOutgoing = new Set(edges.filter((e) => keySet.has(e.fromNode)).map((e) => e.fromNode));
-  const terminals = nodes.filter((n) => n.nodeType === "end" || !hasOutgoing.has(n.nodeKey));
+  // P1-2 — a `timer` node auto-advances along an outgoing edge; it is NEVER a
+  // terminal even with no outgoing edge — instead that's an error (it would
+  // strand the instance because nothing completes it).
+  const terminals = nodes.filter((n) => n.nodeType !== "timer" && (n.nodeType === "end" || !hasOutgoing.has(n.nodeKey)));
   if (terminals.length === 0) {
     errors.push("no terminal/end node: every node has an outgoing edge (workflow can never complete)");
+  }
+  for (const n of nodes) {
+    if (n.nodeType === "timer" && !hasOutgoing.has(n.nodeKey)) {
+      errors.push(`timer node '${n.nodeKey}' has no outgoing edge (it can never auto-advance)`);
+    }
   }
 
   // BFS reachability from start

@@ -62,6 +62,22 @@ export async function completeTask(
     throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
   }
 
+  // P1-1 — assignee lock. Once a task is claimed/assigned to a specific user it
+  // is completable ONLY by that assignee (or an admin break-glass: super_admin /
+  // workflow_admin). A delegate acting for the assignee also passes. This sits
+  // ON TOP of the role-on-task + SoD gates above — being the assignee never
+  // bypasses them. Unassigned tasks (assigneeId NULL) keep the legacy
+  // any-role-holder behaviour.
+  const isAdminOverride = isSuperAdmin || ctx.roles.includes("workflow_admin");
+  if (
+    !isAdminOverride &&
+    existing.assigneeId &&
+    existing.assigneeId !== ctx.actorId &&
+    !delegatorIds.has(existing.assigneeId)
+  ) {
+    throw new HttpError(403, "NOT_ASSIGNEE", "this task is assigned to another user");
+  }
+
   // Segregation of duties (NON-AUTHORITATIVE fast-fail for UX only):
   //  (a) submitter may not approve their own request (self-approval);
   //  (b) an actor who completed a PRIOR step on this instance may not act on
@@ -119,4 +135,78 @@ export async function completeTask(
   });
 
   return { id: taskId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * P1-1 — claim an UNASSIGNED task. The actor must be a role-holder for the
+ * task's roleRef (or hold an active delegation) — they could already see it —
+ * and the task must be pending and unclaimed. Claiming is synchronous (no
+ * queue) because it's a single-row CAS that the UI needs an immediate answer
+ * for. After this the task is assignee-locked to the actor.
+ */
+export async function claimTask(ctx: RequestContext, taskId: string): Promise<TaskView> {
+  const existing = await repo.findById(taskId, ctx.tenantId);
+  if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
+  if (existing.status !== "pending") throw new HttpError(409, "CONFLICT", "task is not pending");
+  if (existing.assigneeId) {
+    if (existing.assigneeId === ctx.actorId) return existing; // idempotent re-claim by self
+    throw new HttpError(409, "ALREADY_CLAIMED", "task already claimed by another user");
+  }
+
+  const isSuperAdmin = ctx.roles.includes("super_admin");
+  const activeDelegations = await delegationRepo.activeForDelegate(ctx.tenantId, ctx.actorId, today());
+  const hasActiveDelegation = activeDelegations.length > 0;
+  if (!isSuperAdmin && existing.roleRef && !ctx.roles.includes(existing.roleRef) && !hasActiveDelegation) {
+    throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
+  }
+
+  const claimed = await repo.claim(taskId, ctx.tenantId, ctx.actorId);
+  if (!claimed) throw new HttpError(409, "ALREADY_CLAIMED", "task already claimed by another user");
+  await cache.put(cache.makeKey(ctx.tenantId, TASK_RESOURCE, taskId), claimed);
+  await cache.invalidateResource(ctx.tenantId, TASK_RESOURCE);
+  return claimed;
+}
+
+/**
+ * P1-1 — assign a pending task to a specific user. Restricted to admins
+ * (super_admin / workflow_admin) at the route. Overwrites any prior assignee.
+ */
+export async function assignTask(ctx: RequestContext, taskId: string, assigneeId: string): Promise<TaskView> {
+  const existing = await repo.findById(taskId, ctx.tenantId);
+  if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
+  if (existing.status !== "pending") throw new HttpError(409, "CONFLICT", "task is not pending");
+  const assigned = await repo.assign(taskId, ctx.tenantId, assigneeId, ctx.actorId);
+  if (!assigned) throw new HttpError(409, "CONFLICT", "task could not be assigned (no longer pending)");
+  await cache.put(cache.makeKey(ctx.tenantId, TASK_RESOURCE, taskId), assigned);
+  await cache.invalidateResource(ctx.tenantId, TASK_RESOURCE);
+  return assigned;
+}
+
+export type BulkResult = { id: string; ok: boolean; status?: string; code?: string; message?: string };
+
+/**
+ * P1-3 — bulk-complete. Iterates the per-task completeTask command so EVERY
+ * existing gate (instance-active, role-on-task, SoD, assignee, optimistic lock)
+ * still applies per task. Returns a per-id result; one task's failure never
+ * aborts the others.
+ */
+export async function bulkComplete(
+  ctx: RequestContext,
+  taskIds: string[],
+  decision: "approve" | "reject" | "return" = "approve",
+): Promise<BulkResult[]> {
+  const results: BulkResult[] = [];
+  for (const id of taskIds) {
+    try {
+      const r = await completeTask(ctx, id, decision);
+      results.push({ id, ok: true, status: r.status });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        results.push({ id, ok: false, code: err.code, message: err.message });
+      } else {
+        results.push({ id, ok: false, code: "INTERNAL", message: "internal error" });
+      }
+    }
+  }
+  return results;
 }

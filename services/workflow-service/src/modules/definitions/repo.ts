@@ -50,6 +50,21 @@ export async function findByCodeTx(tx: Writer, tenantId: string, code: string) {
   return rows[0] ?? null;
 }
 
+/** P1-4 — a specific version of a definition code (any status), for migration. */
+export async function findByCodeVersionTx(tx: Writer, tenantId: string, code: string, version: number) {
+  const rows = await (tx as typeof db).select().from(definitions)
+    .where(and(eq(definitions.tenantId, tenantId), eq(definitions.code, code), eq(definitions.version, version)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** P1-4 — node keys present in a definition (for migration remap validation). */
+export async function listNodeKeysTx(tx: Writer, definitionId: string): Promise<string[]> {
+  const rows = await (tx as typeof db).select({ nodeKey: definitionNodes.nodeKey }).from(definitionNodes)
+    .where(eq(definitionNodes.definitionId, definitionId));
+  return rows.map((r) => r.nodeKey);
+}
+
 /** Lowest sort_order node = the start node. */
 export async function findFirstNodeTx(tx: Writer, definitionId: string) {
   const rows = await (tx as typeof db).select().from(definitionNodes)
@@ -103,6 +118,7 @@ export interface NodeSpec {
   roleRef?: string | null | undefined;
   nodeType?: string | undefined;
   slaMinutes?: number | null | undefined;
+  timerMinutes?: number | null | undefined;
   sortOrder?: number | undefined;
 }
 export interface EdgeSpec {
@@ -128,6 +144,7 @@ export async function insertGraphTx(
         ...(n.roleRef !== undefined && n.roleRef !== null ? { roleRef: n.roleRef } : {}),
         nodeType: n.nodeType ?? "task",
         ...(n.slaMinutes !== undefined && n.slaMinutes !== null ? { slaMinutes: n.slaMinutes } : {}),
+        ...(n.timerMinutes !== undefined && n.timerMinutes !== null ? { timerMinutes: n.timerMinutes } : {}),
         sortOrder: n.sortOrder ?? i + 1,
       })),
     );

@@ -13,6 +13,12 @@ const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
 const lifecycleBody = z.object({ reason: z.string().max(512).optional() });
 
+// P1-4 — in-flight version migration body.
+const migrateBody = z.object({
+  toVersion: z.number().int().positive(),
+  nodeRemap: z.record(z.string().max(64), z.string().max(64)).optional(),
+});
+
 export async function instanceRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/instances", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -61,6 +67,18 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = lifecycleBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.resumeInstance(ctx, id, body.reason));
+  });
+
+  // P1-4 — in-flight version migration. Admin-only. Rebinds a running instance
+  // to another version of the same definition code (with node-key remap
+  // validation + a transition_history entry). Synchronous (immediate result).
+  app.post("/v1/workflow/instances/:id/migrate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = migrateBody.parse(req.body ?? {});
+    const result = await commands.migrateInstanceVersion(ctx, id, body.toVersion, body.nodeRemap);
+    return reply.send({ data: result });
   });
 
   app.setErrorHandler((err, req, reply) => {
