@@ -6,11 +6,17 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { allocateDocNo } from "../../shared/numbering.js";
 import * as repo from "./repo.js";
-import { assertTenderTransition, assertCanOpenFinancial, determineL1, DomainError } from "./domain.js";
+import {
+  assertTenderTransition, assertCanOpenFinancial, determineL1,
+  assertDistinctMakerChecker, assertTechEvaluatorDistinct, DomainError,
+} from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+// C2: award value above this (Rs 1,000 in paise) must carry a sanctionRef,
+// matching po/consumer's SANCTION_REQUIRED_ABOVE_MINOR gate.
+const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
 
 export function registerTenderConsumers(queue: Queue): void {
   // 1. Create tender (draft)
@@ -18,6 +24,7 @@ export function registerTenderConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; title: string; scope?: string; eligibility?: string;
       type: string; estimatedMinor: number; emdAmountMinor: number; bidClosingDate: string;
+      sanctionRef?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -28,6 +35,7 @@ export function registerTenderConsumers(queue: Queue): void {
         type: p.type, estimatedMinor: BigInt(p.estimatedMinor),
         emdAmountMinor: BigInt(p.emdAmountMinor), currency: "INR",
         bidClosingDate: p.bidClosingDate, status: "draft",
+        sanctionRef: p.sanctionRef ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "tender", p.id);
@@ -71,6 +79,21 @@ export function registerTenderConsumers(queue: Queue): void {
       if (t.status !== "published") {
         throw new DomainError("BIDDING_CLOSED", `bids accepted only while tender is 'published' (is '${t.status}')`);
       }
+      // H2: reject late bids — the closing date is the last full day bids are
+      // accepted; anything after end-of-day on bidClosingDate is rejected.
+      // bidClosingDate is a DATE column ('YYYY-MM-DD'); compare against now (UTC).
+      if (t.bidClosingDate) {
+        const closeMs = Date.parse(`${t.bidClosingDate}T23:59:59.999Z`);
+        if (Number.isFinite(closeMs) && Date.now() > closeMs) {
+          throw new DomainError("BIDDING_CLOSED", `bid closing date ${t.bidClosingDate} has passed`);
+        }
+      }
+      // H3: one sealed bid per (tenant, tender, vendor). Friendly in-txn check in
+      // addition to the UNIQUE index (uq_tender_bids_tenant_tender_vendor).
+      const existing = await repo.findBidsByTenderTx(tx, p.tenderId, p.tenantId);
+      if (existing.some((b) => b.vendorId === p.vendorId)) {
+        throw new DomainError("DUPLICATE_BID", `vendor ${p.vendorId} has already submitted a bid for this tender`);
+      }
       const bidNo = await allocateDocNo(tx, p.tenantId, "bid");
       // Technical envelope row — NO financial value stored here.
       await repo.insertBid(tx, {
@@ -100,10 +123,18 @@ export function registerTenderConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const t = await repo.findTenderByIdTx(tx, p.id, p.tenantId);
       if (!t) throw new Error(`tender ${p.id} not found`);
+      // C1: persist the technical evaluator so award-stage SoD can reject when
+      // the award approver == technical evaluator.
       if (t.status === "published") {
         assertTenderTransition(t.status, "technical_evaluation");
-        await repo.updateTenderVersioned(tx, p.id, t.version, { status: "technical_evaluation", updatedBy: msg.actorId });
-      } else if (t.status !== "technical_evaluation") {
+        await repo.updateTenderVersioned(tx, p.id, t.version, {
+          status: "technical_evaluation", techEvaluatedBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      } else if (t.status === "technical_evaluation") {
+        await repo.updateTenderVersioned(tx, p.id, t.version, {
+          techEvaluatedBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      } else {
         throw new DomainError("INVALID_TRANSITION", `technical evaluation requires 'published'/'technical_evaluation' (is '${t.status}')`);
       }
       for (const r of p.results) {
@@ -170,12 +201,19 @@ export function registerTenderConsumers(queue: Queue): void {
 
   // 6. Award — L1 over qualified, non-blacklisted bidders → emit PO create.
   queue.subscribe(COMMANDS.tenderAward, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; sanctionRef?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const t = await repo.findTenderByIdTx(tx, p.id, p.tenantId);
       if (!t) throw new Error(`tender ${p.id} not found`);
       assertTenderTransition(t.status, "awarded");
+
+      // C1: Segregation of duties across the tender lifecycle. The award approver
+      // (this actor) must differ from the tender creator AND the technical
+      // evaluator. Mirrors po/consumer's assertDistinctMakerChecker; throws
+      // DomainError SOD_VIOLATION inside the txn so the award is NOT recorded.
+      assertDistinctMakerChecker(t.createdBy, msg.actorId);
+      if (t.techEvaluatedBy) assertTechEvaluatorDistinct(t.techEvaluatedBy, msg.actorId);
 
       const bids = await repo.findBidsByTenderTx(tx, p.id, p.tenantId);
       const fins = await repo.findFinancialBidsByTenderTx(tx, p.id, p.tenantId);
@@ -202,13 +240,27 @@ export function registerTenderConsumers(queue: Queue): void {
       });
       const ranked = determineL1(candidates);
 
-      // Clear, then set ranks.
-      for (const b of bids) {
-        await repo.updateBidVersioned(tx, b.id, b.version, { rank: null, isL1: false, updatedBy: msg.actorId });
+      const winner = ranked[0];
+      if (!winner) {
+        throw new DomainError("NO_QUALIFIED_BIDDER", "no qualified, non-blacklisted bidder with an opened financial envelope");
       }
-      // Re-read versions after the bump for the ranked subset.
-      const refreshed = await repo.findBidsByTenderTx(tx, p.id, p.tenantId);
-      const verByBid = new Map(refreshed.map((b) => [b.id, b.version]));
+
+      // C2: high-value award MUST carry a sanctionRef (tender-level, set at create
+      // or supplied at award). Without it the PO consumer would reject the
+      // resulting poCreate (SANCTION_REQUIRED) while the tender is already marked
+      // awarded → permanent divergence. Fail the award in-txn instead.
+      const sanctionRef = p.sanctionRef ?? t.sanctionRef ?? null;
+      if (!sanctionRef && winner.amountMinor > SANCTION_REQUIRED_ABOVE_MINOR) {
+        throw new DomainError(
+          "SANCTION_REQUIRED",
+          `award value ${winner.amountMinor} paise (> Rs 1,000) requires a sanctionRef; tender stays pre-award`,
+        );
+      }
+
+      // M3: single-pass rank keyed off freshly-read bid versions. determineL1
+      // only returns ranked (qualified+eligible) bids; bids not in `ranked` keep
+      // whatever rank they had (none, by construction in this lifecycle).
+      const verByBid = new Map(bids.map((b) => [b.id, b.version]));
       for (const r of ranked) {
         await repo.updateBidVersioned(tx, r.bidId, verByBid.get(r.bidId) ?? 1, {
           rank: r.rank, isL1: r.rank === 1,
@@ -217,24 +269,23 @@ export function registerTenderConsumers(queue: Queue): void {
         });
       }
 
-      const winner = ranked[0];
-      if (!winner) {
-        throw new DomainError("NO_QUALIFIED_BIDDER", "no qualified, non-blacklisted bidder with an opened financial envelope");
-      }
-
-      // Re-read tender version (unchanged by bid updates, but be explicit).
+      // C1: record the award approver alongside the award.
       await repo.updateTenderVersioned(tx, p.id, t.version, {
         status: "awarded", awardedBidId: winner.bidId, awardedVendorId: winner.vendorId,
+        awardedBy: msg.actorId,
+        ...(sanctionRef ? { sanctionRef } : {}),
         updatedBy: msg.actorId,
       });
 
       // Award → PO: emit po.create command (consumed by PO consumer, gapless PO no).
+      // C2: thread the sanctionRef so the PO consumer's sanction gate passes.
       await enqueue(tx, {
         topic: COMMANDS.poCreate, eventType: COMMANDS.poCreate,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           id: randomUUID(), tenantId: p.tenantId, poNo: "AUTO",
           vendorId: winner.vendorId, indentRef: `tender:${p.id}`,
+          ...(sanctionRef ? { sanctionRef } : {}),
           items: [{
             itemCode: t.tenderNo, description: `Award for tender ${t.tenderNo}`,
             quantity: 1, unit: "lot", unitPriceMinor: Number(winner.amountMinor),

@@ -8,8 +8,18 @@ export const createTenderBody = z.object({
   estimatedMinor: z.number().int().nonnegative().default(0),
   emdAmountMinor: z.number().int().nonnegative().default(0),
   bidClosingDate: z.string().min(1),
+  // C2: optional tender-level sanction reference. May also be supplied at award
+  // time. A high-value tender (> Rs 1,000) MUST carry one before it can award.
+  sanctionRef:    z.string().min(1).max(120).optional(),
 });
 export type CreateTenderBody = z.infer<typeof createTenderBody>;
+
+// C2: award may carry/override the tender-level sanction reference so a tender
+// created without one can still be sanctioned and awarded atomically.
+export const awardTenderBody = z.object({
+  sanctionRef: z.string().min(1).max(120).optional(),
+});
+export type AwardTenderBody = z.infer<typeof awardTenderBody>;
 
 // Two sealed envelopes submitted together: technical fields + a SEPARATE
 // financialAmountMinor that gets stored sealed.

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
-import { createTenderBody, submitBidBody, techEvaluateBody, idParam } from "./validators.js";
+import { createTenderBody, submitBidBody, techEvaluateBody, awardTenderBody, idParam } from "./validators.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -82,7 +82,8 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.awardTender(ctx, id));
+    const body = awardTenderBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.awardTender(ctx, id, body));
   });
 
   app.setErrorHandler(errorHandler);
