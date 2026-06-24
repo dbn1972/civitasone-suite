@@ -6,7 +6,7 @@ import type { FileRtiBody, RespondRtiBody, AppealRtiBody } from "./validators.js
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function fileRti(ctx: RequestContext, body: FileRtiBody): Promise<Accepted> {
+export async function fileRti(ctx: RequestContext, body: FileRtiBody & { citizenId: string }): Promise<Accepted> {
   const id = randomUUID();
   const rtiNo = `RTI/${new Date().getFullYear()}/${Date.now()}`;
   await queue.publish(COMMANDS.rtiFile, {
@@ -28,12 +28,13 @@ export async function respondRti(ctx: RequestContext, id: string, body: RespondR
   return { id: responseId, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function appealRti(ctx: RequestContext, id: string, body: AppealRtiBody): Promise<Accepted> {
+export async function appealRti(ctx: RequestContext, id: string, body: AppealRtiBody & { ownerCitizenId?: string | null }): Promise<Accepted> {
   const appealId = randomUUID();
   await queue.publish(COMMANDS.rtiAppeal, {
     messageId: appealId, type: COMMANDS.rtiAppeal,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id: appealId, rtiId: id, tenantId: ctx.tenantId, ...body },
+    // P0-1: bind to the owner verified at the route; the consumer re-asserts.
+    payload: { id: appealId, rtiId: id, tenantId: ctx.tenantId, appealType: body.appealType, grounds: body.grounds, ownerCitizenId: body.ownerCitizenId ?? null },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "rti", id));
   return { id: appealId, status: "accepted", correlationId: ctx.correlationId };

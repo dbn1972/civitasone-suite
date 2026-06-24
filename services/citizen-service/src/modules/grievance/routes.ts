@@ -3,7 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { CitizenRequestSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, resolveCitizenId, isOfficer, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import {
   idParam, citizenIdQuery, registerGrievanceBody, assignGrievanceBody,
   grievanceActionBody, resolveGrievanceBody, escalateGrievanceBody, reopenGrievanceBody,
@@ -72,7 +72,11 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = reopenGrievanceBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.reopenGrievance(ctx, id, body));
+    // P0-1: load + assert ownership so a citizen cannot reopen another's grievance.
+    const grievance = await queries.getGrievance(ctx.tenantId, id);
+    if (!grievance) throw new HttpError(404, "NOT_FOUND", "grievance not found");
+    assertOwnership(ctx, grievance.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reopenGrievance(ctx, id, { ...body, ownerCitizenId: grievance.citizenId }));
   });
 
   app.get("/v1/citizen/grievances/:id", async (req, reply) => {
@@ -81,6 +85,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const grievance = await queries.getGrievance(ctx.tenantId, id);
     if (!grievance) throw new HttpError(404, "NOT_FOUND", "grievance not found");
+    // P0-1: a citizen may only read their own grievance; officers may read any.
+    assertOwnership(ctx, grievance.citizenId);
     return reply.send(grievance);
   });
 

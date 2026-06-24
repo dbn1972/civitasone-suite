@@ -8,7 +8,10 @@ export const portalSchema = pgSchema("portal");
 export const citizenProfiles = portalSchema.table("citizen_profiles", {
   id:              uuid("id").primaryKey().defaultRandom(),
   tenantId:        uuid("tenant_id").notNull(),
-  name:            text("name").notNull(),
+  // P1-2 (DPDP): name is AES-256-GCM encrypted at rest (app-layer envelope).
+  // Column type stays `text` (encryptedText.dataType()) so no DDL migration is
+  // needed — only a one-off data backfill of pre-existing plaintext rows.
+  name:            encryptedText("name").notNull(),
   // P0-1 (DPDP): email/mobile/digilocker_token/address are AES-256-GCM encrypted
   // at rest (app-layer envelope). The column type is text; the application value
   // is cleartext (decrypted on read, encrypted on write). mobile widened from

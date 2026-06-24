@@ -24,6 +24,11 @@ function toSummary(row: TicketRow): HelpdeskTicketSummary {
   };
 }
 
+/** Cache JSON-roundtrips Date columns to ISO strings; coerce safely. */
+function toIso(v: Date | string): string {
+  return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+}
+
 function toDetail(row: TicketRow, notes: Awaited<ReturnType<typeof repo.listNotes>>): TicketDetail {
   const slaStatus = computeSlaStatus(row);
   const channels = ["web", "email", "phone", "walk_in"] as const;
@@ -41,14 +46,14 @@ function toDetail(row: TicketRow, notes: Awaited<ReturnType<typeof repo.listNote
     slaStatus,
     status: mapStatus(row.status),
     channel,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    ...(row.resolvedAt ? { resolvedAt: row.resolvedAt.toISOString() } : {}),
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+    ...(row.resolvedAt ? { resolvedAt: toIso(row.resolvedAt) } : {}),
     comments: notes.map((n) => ({
       id: n.id,
       author: n.authorId.slice(0, 8),
       content: n.body,
-      createdAt: n.createdAt.toISOString(),
+      createdAt: toIso(n.createdAt),
       isInternal: false,
     })),
   };
@@ -62,6 +67,17 @@ export async function getTicket(tenantId: string, id: string): Promise<TicketDet
   if (!ticket || ticket.tenantId !== tenantId) return null;
   const notes = await repo.listNotes(id);
   return toDetail(ticket, notes);
+}
+
+/** P0-1: ownership-aware fetch — returns the detail plus the owning citizenId. */
+export async function getTicketWithOwner(tenantId: string, id: string): Promise<{ detail: TicketDetail; citizenId: string } | null> {
+  const ticket = await cache.getOrLoad<TicketRow | null>(
+    cache.makeKey(tenantId, "ticket", id),
+    () => repo.findTicketById(id),
+  );
+  if (!ticket || ticket.tenantId !== tenantId) return null;
+  const notes = await repo.listNotes(id);
+  return { detail: toDetail(ticket, notes), citizenId: ticket.citizenId };
 }
 
 export async function listTickets(

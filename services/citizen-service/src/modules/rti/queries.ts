@@ -29,11 +29,14 @@ function mapRtiStatus(status: string): "received" | "forwarded" | "under_review"
   return "received";
 }
 
-export async function listRtiSummaries(tenantId: string, limit: number) {
-  const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "rti_list", `list:${limit}`),
-    () => repo.listRtiByTenant(tenantId, limit),
-  );
+export async function listRtiSummaries(tenantId: string, limit: number, citizenId?: string) {
+  // P0-1: a bare citizen only sees their own RTIs; officers see the tenant view.
+  const rows = citizenId
+    ? await repo.listRtiByCitizen(tenantId, citizenId, limit)
+    : await cache.getOrLoad(
+        cache.makeKey(tenantId, "rti_list", `list:${limit}`),
+        () => repo.listRtiByTenant(tenantId, limit),
+      );
   const now = new Date();
   return (rows ?? []).map((row) => ({
     id: row.id,

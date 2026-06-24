@@ -148,11 +148,13 @@ export function registerGrievanceConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.grievanceReopen, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    const p = msg.payload as { id: string; tenantId: string; reason: string; ownerCitizenId?: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const g = await repo.findGrievanceByIdTx(tx, p.id, msg.tenantId);
       if (!g) return;
+      // P0-1: re-assert ownership binding established at the route (defence in depth).
+      if (p.ownerCitizenId != null && g.citizenId !== p.ownerCitizenId) return;
       assertGrievanceTransition(g.status, "reopened");
       await repo.updateGrievance(tx, p.id, msg.tenantId, { status: "reopened", updatedBy: msg.actorId });
       await repo.insertAction(tx, {

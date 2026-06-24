@@ -46,7 +46,7 @@ export async function listRequests(tenantId: string, limit: number, offset: numb
     if (!profileMap.has(row.citizenId)) {
       const profile = await cache.getOrLoad(
         cache.makeKey(tenantId, "citizen_profile", row.citizenId),
-        () => portalRepo.findProfileById(row.citizenId),
+        () => portalRepo.findProfileById(row.citizenId, tenantId),
       );
       profileMap.set(row.citizenId, {
         name: profile?.name ?? row.citizenId,

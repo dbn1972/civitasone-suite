@@ -16,7 +16,10 @@ export function computeSlaDueAt(priority: string, createdAt: Date): Date {
 
 export function computeSlaStatus(row: TicketRow, now = new Date()): SlaStatus {
   if (row.status === "closed" || row.status === "resolved") return "within_sla";
-  const due = row.slaDueAt ?? computeSlaDueAt(row.priority, row.createdAt);
+  // Cache JSON-roundtrips Date columns to ISO strings; coerce so .getTime() is safe.
+  const createdAt = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt as unknown as string);
+  const dueRaw = row.slaDueAt ?? computeSlaDueAt(row.priority, createdAt);
+  const due = dueRaw instanceof Date ? dueRaw : new Date(dueRaw as unknown as string);
   const msLeft = due.getTime() - now.getTime();
   if (msLeft <= 0) return "breached";
   if (msLeft <= 4 * 60 * 60 * 1000) return "due_soon";

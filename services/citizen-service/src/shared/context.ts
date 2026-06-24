@@ -53,6 +53,20 @@ export function resolveCitizenId(ctx: RequestContext, supplied?: string): string
   return ctx.actorId;
 }
 
+/**
+ * P0-1..P0-5 cross-citizen authz. Assert the actor is permitted to read/mutate a
+ * record owned by `ownerCitizenId`. Officers may act on any record; a citizen may
+ * only act on a record they own (ownerCitizenId === ctx.actorId). A record whose
+ * owner is null/undefined is treated as not-owned-by-the-citizen (denied).
+ * Throws HttpError(404) for non-owners so existence is not leaked.
+ */
+export function assertOwnership(ctx: RequestContext, ownerCitizenId: string | null | undefined): void {
+  if (isOfficer(ctx)) return;
+  if (ownerCitizenId !== ctx.actorId) {
+    throw new HttpError(404, "NOT_FOUND", "not found");
+  }
+}
+
 export function resolvePublicContext(req: FastifyRequest, tenantId: string): RequestContext {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   return {
