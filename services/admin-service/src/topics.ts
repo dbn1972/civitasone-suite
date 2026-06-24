@@ -18,6 +18,7 @@ export const EVENTS = {
   tenantCreated:   "admin.tenant.created",
   tenantSuspended: "admin.tenant.suspended",
   breakGlassOpened:"admin.breakglass.opened",
+  breakGlassClosed:"admin.breakglass.closed",
 } as const;
 
 export const SERVICE = "admin";
