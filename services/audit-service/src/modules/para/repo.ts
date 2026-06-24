@@ -4,13 +4,13 @@ import { auditParas, auditDeptResponses, auditParaStatusHistory, type ParaRow, t
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findParaById(id: string): Promise<ParaRow | null> {
-  const rows = await db.select().from(auditParas).where(eq(auditParas.id, id)).limit(1);
+export async function findParaById(id: string, tenantId: string): Promise<ParaRow | null> {
+  const rows = await db.select().from(auditParas).where(and(eq(auditParas.id, id), eq(auditParas.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
-export async function findParaByIdTx(tx: Writer, id: string): Promise<ParaRow | null> {
-  const rows = await (tx as typeof db).select().from(auditParas).where(eq(auditParas.id, id)).limit(1);
+export async function findParaByIdTx(tx: Writer, id: string, tenantId: string): Promise<ParaRow | null> {
+  const rows = await (tx as typeof db).select().from(auditParas).where(and(eq(auditParas.id, id), eq(auditParas.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -18,8 +18,13 @@ export async function insertPara(tx: Writer, row: ParaInsert): Promise<void> {
   await tx.insert(auditParas).values(row);
 }
 
-export async function updatePara(tx: Writer, id: string, patch: Partial<ParaInsert>): Promise<void> {
-  await tx.update(auditParas).set({ ...patch, updatedAt: new Date() }).where(eq(auditParas.id, id));
+/** Optimistic-locked, tenant-scoped update. Returns rows affected (0 = stale version / not found). */
+export async function updateParaVersioned(tx: Writer, id: string, tenantId: string, expectedVersion: number, patch: Partial<ParaInsert>): Promise<number> {
+  const res = await tx.update(auditParas)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(auditParas.id, id), eq(auditParas.tenantId, tenantId), eq(auditParas.version, expectedVersion)))
+    .returning({ id: auditParas.id });
+  return res.length;
 }
 
 export async function insertStatusHistory(tx: Writer, row: typeof auditParaStatusHistory.$inferInsert): Promise<void> {

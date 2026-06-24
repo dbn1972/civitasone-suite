@@ -7,7 +7,9 @@ export const createObservationBody = z.object({
   finding:             z.string().min(1).max(4000),
   category:            z.enum(["performance", "compliance", "financial"]).default("compliance"),
   riskLevel:           z.enum(["low", "medium", "high"]).default("medium"),
-  amountInvolvedMinor: z.number().int().nonnegative().default(0),
+  // P0-3: money in PAISE carried as a decimal string to avoid float/Number truncation
+  // of amounts above 2^53. Validated as a non-negative integer string; BigInt()-parsed downstream.
+  amountInvolvedMinor: z.string().regex(/^\d+$/, "must be a non-negative integer string").default("0"),
 });
 export type CreateObservationBody = z.infer<typeof createObservationBody>;
 

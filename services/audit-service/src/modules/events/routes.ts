@@ -34,8 +34,13 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
       to: z.string().datetime().optional(),
       type: z.string().optional(),
     }).parse(req.query);
-    const tenantId = q.tenantScoped === false ? (q.tenantId ?? ctx.tenantId) : ctx.tenantId;
     requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
+    const tenantId = q.tenantScoped === false ? (q.tenantId ?? ctx.tenantId) : ctx.tenantId;
+    // P0-2: cross-tenant trail reads (tenantScoped=false, or an explicit foreign tenantId)
+    // require an admin/platform role — audit_officer must stay scoped to its own tenant.
+    if (tenantId !== ctx.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin", "audit_admin"].includes(r))) {
+      throw new HttpError(403, "FORBIDDEN", "cross-tenant audit access denied");
+    }
     const from = q.from ? new Date(q.from) : new Date(Date.now() - 7 * 86400 * 1000);
     const to = q.to ? new Date(q.to) : new Date();
     sendValidated(reply, TenantAuditEventListSchema, (await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset)).map((event) => ({

@@ -9,6 +9,15 @@ import { assertCanStart } from "./domain.js";
 
 const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
 
+/** Raised when an optimistic-locked update affects 0 rows (stale version / cross-tenant). */
+class StaleWriteError extends Error {
+  readonly status = 409;
+  readonly code = "VERSION_CONFLICT";
+  constructor(resource: string, id: string) {
+    super(`[VERSION_CONFLICT] ${resource} ${id} was modified concurrently`);
+  }
+}
+
 export function registerPlanConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.planCreate, async (msg) => {
     const p = msg.payload as {
@@ -48,10 +57,13 @@ export function registerPlanConsumers(queue: Queue): void {
     const p = msg.payload as { planId: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const plan = await repo.findPlanByIdTx(tx, p.planId);
+      const plan = await repo.findPlanByIdTx(tx, p.planId, p.tenantId);
       if (!plan) throw new Error(`plan ${p.planId} not found`);
       assertCanStart(plan.status ?? "draft");
-      await repo.updatePlan(tx, p.planId, { status: "active", updatedBy: msg.actorId, version: (plan.version ?? 1) + 1 });
+      const startedRows = await repo.updatePlanVersioned(tx, p.planId, p.tenantId, plan.version ?? 1, {
+        status: "active", updatedBy: msg.actorId, version: (plan.version ?? 1) + 1,
+      });
+      if (startedRows !== 1) throw new StaleWriteError("plan", p.planId);
       await audit(tx, msg, "start", "plan", p.planId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.planId));

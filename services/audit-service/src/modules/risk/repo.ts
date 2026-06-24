@@ -1,9 +1,9 @@
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { auditRisks, type RiskRow } from "./schema.js";
 
-export async function findById(id: string): Promise<RiskRow | null> {
-  const rows = await db.select().from(auditRisks).where(eq(auditRisks.id, id)).limit(1);
+export async function findById(id: string, tenantId: string): Promise<RiskRow | null> {
+  const rows = await db.select().from(auditRisks).where(and(eq(auditRisks.id, id), eq(auditRisks.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
