@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeThreeWayMatch, assertQtyValid } from "./domain.js";
+import { allocateDocNo } from "../../shared/numbering.js";
 import type { GrnItemInsert } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -36,8 +37,9 @@ export function registerGrnConsumers(queue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const grnNo = await allocateDocNo(tx, p.tenantId, "grn");
       await repo.insertGrn(tx, {
-        id: p.id, tenantId: p.tenantId, grnNo: p.grnNo, poRef: p.poRef,
+        id: p.id, tenantId: p.tenantId, grnNo, poRef: p.poRef,
         vendorId: p.vendorId,
         receivedDate: p.receivedDate ?? new Date().toISOString().slice(0, 10),
         threeWayMatch, status: threeWayMatch ? "accepted" : "rejected",
@@ -59,10 +61,31 @@ export function registerGrnConsumers(queue: Queue): void {
       });
       if (threeWayMatch) {
         const poId = p.poRef.replace(/^procurement_po:/, "");
-        const po = await import("../po/repo.js").then((m) => m.findPoById(poId));
-        const poItems = await import("../po/repo.js").then((m) => m.findPoItemsByPoId(poId));
+        const po = await import("../po/repo.js").then((m) => m.findPoById(poId, p.tenantId));
+        const poItems = await import("../po/repo.js").then((m) => m.findPoItemsByPoId(poId, p.tenantId));
         const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
         const grossMinor = po ? Number(po.totalMinor) : 0;
+
+        // Persist a server-DERIVED three-way match (PO vs GRN). Amounts come from
+        // the real PO line prices × GRN accepted qty — never from a caller. The
+        // payment gate reads this table.
+        if (po) {
+          const poAmountMinor = BigInt(po.totalMinor);
+          let grnAmountMinor = 0n;
+          for (const gi of p.items) {
+            const poItem = poItemMap.get(gi.poItemRef);
+            if (poItem) grnAmountMinor += BigInt(poItem.unitPriceMinor) * BigInt(gi.acceptedQty);
+          }
+          const variancePct = poAmountMinor > 0n
+            ? Number((poAmountMinor > grnAmountMinor ? poAmountMinor - grnAmountMinor : grnAmountMinor - poAmountMinor) * 10000n / poAmountMinor) / 100
+            : 0;
+          const matchStatus = variancePct <= 2 ? "matched" : variancePct <= 5 ? "matched" : "mismatch";
+          const { upsertDerivedMatch } = await import("../three-way-match/repo.js");
+          await upsertDerivedMatch(tx, {
+            tenantId: p.tenantId, poId, grnId: p.id,
+            poAmountMinor, grnAmountMinor, matchStatus,
+          });
+        }
         const enrichedItems = p.items.map((gi) => {
           const poItem = poItemMap.get(gi.poItemRef);
           const itemType = inferItemType(gi.itemCode, poItem?.itemType);

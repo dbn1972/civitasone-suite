@@ -5,7 +5,7 @@ import type { VendorRow } from "./schema.js";
 export async function getVendor(id: string, tenantId: string): Promise<VendorRow | null> {
   return cache.getOrLoad<VendorRow>(
     cache.makeKey(tenantId, "vendor", id),
-    () => repo.findVendorById(id)
+    () => repo.findVendorById(id, tenantId)
   );
 }
 

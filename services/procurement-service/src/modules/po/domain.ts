@@ -30,6 +30,13 @@ export function assertBudgetSufficient(available: bigint, requested: bigint): vo
   }
 }
 
+/** Segregation of duties: PO approver (checker) must differ from creator (maker). */
+export function assertDistinctMakerChecker(creatorId: string, approverId: string): void {
+  if (creatorId && approverId && creatorId === approverId) {
+    throw new DomainError("SOD_VIOLATION", "maker and checker must be different actors (self-approval rejected)");
+  }
+}
+
 export function assertCanDispatch(status: string): void {
   if (status !== "approved") {
     throw new DomainError("PO_NOT_APPROVED", `PO must be approved before dispatch, got '${status}'`);

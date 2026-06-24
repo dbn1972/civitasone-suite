@@ -5,8 +5,23 @@ import * as queries from "../po/queries.js";
 
 const READER_ROLES = ["procurement_officer", "procurement_admin", "super_admin", "finance_officer", "audit_officer"];
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// itemRows is pre-built trusted HTML; everything else is escaped.
+const RAW_KEYS = new Set(["itemRows"]);
+
 function renderTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const v = vars[key] ?? "";
+    return RAW_KEYS.has(key) ? v : escapeHtml(v);
+  });
 }
 
 const PO_TEMPLATE = `<!DOCTYPE html>
@@ -45,7 +60,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
     const itemRows = items.map((i) => {
       const amt = ((i.amountMinor ?? 0) / 100).toFixed(2);
       const rate = ((i.unitPriceMinor ?? 0) / 100).toFixed(2);
-      return `<tr><td>${i.description ?? "Item"}</td><td>${i.qty ?? 1}</td><td class="amount">${rate}</td><td class="amount">${amt}</td></tr>`;
+      return `<tr><td>${escapeHtml(String(i.description ?? "Item"))}</td><td>${i.qty ?? 1}</td><td class="amount">${rate}</td><td class="amount">${amt}</td></tr>`;
     }).join("") || "<tr><td colspan=\"4\">No line items</td></tr>";
     const html = renderTemplate(PO_TEMPLATE, {
       poNo: String(po.poNo ?? id.slice(0, 8)),
@@ -68,7 +83,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
     const itemRows = items.map((i) => {
       const amt = ((i.amountMinor ?? 0) / 100).toFixed(2);
       const rate = ((i.unitPriceMinor ?? 0) / 100).toFixed(2);
-      return `<tr><td>${i.description ?? "Item"}</td><td>${i.qty ?? 1}</td><td class="amount">${rate}</td><td class="amount">${amt}</td></tr>`;
+      return `<tr><td>${escapeHtml(String(i.description ?? "Item"))}</td><td>${i.qty ?? 1}</td><td class="amount">${rate}</td><td class="amount">${amt}</td></tr>`;
     }).join("") || "<tr><td colspan=\"4\">No line items</td></tr>";
     const poNo = String(po.poNo ?? id.slice(0, 8));
     const html = renderTemplate(PO_TEMPLATE, {
