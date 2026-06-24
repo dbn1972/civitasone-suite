@@ -29,6 +29,7 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
 
 export async function approveRun(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.runApprove, {
+    messageId: `payroll-approve:${id}`,
     type: COMMANDS.runApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId },
@@ -39,6 +40,7 @@ export async function approveRun(ctx: RequestContext, id: string): Promise<Accep
 
 export async function disburseRun(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.runDisburse, {
+    messageId: `payroll-disburse:${id}`,
     type: COMMANDS.runDisburse,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },

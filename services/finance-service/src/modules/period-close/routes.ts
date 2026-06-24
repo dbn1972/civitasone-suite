@@ -11,6 +11,10 @@ export async function isPeriodHardClosed(tenantId: string, period: string): Prom
   return periodRepo.isPeriodHardClosedDb(tenantId, period);
 }
 
+export async function getPeriodStatus(tenantId: string, period: string): Promise<string> {
+  return periodRepo.getPeriodStatusDb(tenantId, period);
+}
+
 export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/periods/:period/close", async (req, reply) => {
     const ctx = resolveContext(req);
