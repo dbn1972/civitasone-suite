@@ -2,11 +2,13 @@ import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { payrollTds, payrollNps } from "../statutory/schema.js";
+import { payrollTds, payrollNps, payrollTdsNonSalary } from "../statutory/schema.js";
+import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
 import { buildForm16, parseFy } from "../tax/form16.js";
 import { fetchPayrollInput, HrmsUnavailableError, type PayrollInputEmployee } from "../../shared/hrms-client.js";
+import { reconcilePeriod, reconcileNonSalaryPeriod, type Reconciliation } from "./challan-routes.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -86,6 +88,21 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
 
     const { startYear, endYear } = parseFyOr400(fy);
     const months = quarterMonths(startYear, q);
+
+    // P1: TRACES reconciliation gate. Sum TDS deducted (payroll_tds, finalised
+    // runs) vs deposited (challans) per month. Block 24Q when they do not match
+    // unless the caller explicitly passes ?force=1 (then we flag, not block).
+    const { force } = req.query as { force?: string };
+    const reconciliation: Reconciliation[] = [];
+    for (const mo of months) reconciliation.push(await reconcilePeriod(ctx.tenantId, mo, "24Q"));
+    const reconciled = reconciliation.every((r) => r.matched);
+    if (!reconciled && force !== "1") {
+      throw new HttpError(409, "TDS_RECONCILIATION_FAILED",
+        "24Q blocked: TDS deducted does not match deposited challans for " +
+        reconciliation.filter((r) => !r.matched).map((r) => `${r.period}(${r.status})`).join(", ") +
+        ". Ingest/correct challans or pass force=1 to generate a flagged return.");
+    }
+
     const byEmp = await deducteeWiseTds(ctx.tenantId, months);
 
     // Employee master for PAN + name. M4: HRMS-unreachable must FAIL the return
@@ -167,7 +184,14 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       totalTdsDeducted,
       totalTdsDeposited: challans.reduce((s, c) => s + c.tdsDeposited, 0),
       ...(annexureII ? { annexureII } : {}),
-      note: "Verify challan BSR/CIN references against TRACES before filing.",
+      reconciliation: {
+        matched: reconciled,
+        perPeriod: reconciliation,
+        ...(reconciled ? {} : { warning: "FILED WITH UNRECONCILED TDS (force=1)" }),
+      },
+      note: reconciled
+        ? "TDS deducted reconciled against deposited challans (BSR/CIN). Safe to file."
+        : "WARNING: TDS deducted does NOT match deposited challans; verify BSR/CIN against TRACES before filing.",
     };
 
     if (format !== "file") return reply.send(structured);
@@ -236,19 +260,51 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     }
 
     void startYear;
+
+    // P3: itemised perquisite components (Sec 17(2)) rendered per statutory 12BA line.
+    const comps = await db.select().from(perquisiteComponents)
+      .where(and(
+        eq(perquisiteComponents.tenantId, ctx.tenantId),
+        eq(perquisiteComponents.employeeId, employeeId),
+        eq(perquisiteComponents.fy, fy),
+      ));
+
+    let perquisites: Array<Record<string, unknown>>;
+    let totalPerqMinor: number;
+    let sourceNote: string;
+    if (comps.length > 0) {
+      perquisites = comps
+        .sort((a, b) => a.nature.localeCompare(b.nature))
+        .map((c, i) => ({
+          sl: i + 1,
+          nature: c.nature,
+          description: c.description,
+          valueByEmployerMinor: Number(c.valueByEmployerMinor),
+          amountRecoveredMinor: Number(c.amountRecoveredMinor),
+          taxableValueMinor: Number(c.taxableValueMinor),
+          value: Math.round(Number(c.taxableValueMinor) / 100),
+        }));
+      totalPerqMinor = comps.reduce((s, c) => s + Number(c.taxableValueMinor), 0);
+      sourceNote = "Per-component perquisite values (Sec 17(2)) from perquisite_components.";
+    } else {
+      // Fall back to the declaration aggregate when no itemised components exist.
+      perquisites = [
+        { sl: 1, nature: "Aggregate value of perquisites u/s 17(2)", description: "", taxableValueMinor: perqMinor, value: Math.round(perqMinor / 100) },
+      ];
+      totalPerqMinor = perqMinor;
+      sourceNote = "Aggregate perquisite from tax declaration (no itemised components ingested).";
+    }
+
     return reply.send({
       formType: "12BA",
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
       employer: employerIdentity(),
       employee: { employeeId, pan, name, panFlag: pan ? "" : "PANNOTAVBL" },
-      // Single aggregate line; component breakdown can be added when HRMS exposes it.
-      perquisites: [
-        { sl: 1, nature: "Aggregate value of perquisites u/s 17(2)", valueMinor: perqMinor, value: Math.round(perqMinor / 100) },
-      ],
-      totalPerquisitesMinor: perqMinor,
-      totalPerquisites: Math.round(perqMinor / 100),
-      note: "Perquisite value sourced from the employee tax declaration (Sec 17(2)).",
+      perquisites,
+      totalPerquisitesMinor: totalPerqMinor,
+      totalPerquisites: Math.round(totalPerqMinor / 100),
+      note: sourceNote,
     });
   });
 
@@ -340,6 +396,138 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     lines.push(["T", subscribers.length, totalEmployee.toFixed(2), totalEmployer.toFixed(2)].join("|"));
 
     const filename = `NPS_SCF_${month.replace("-", "")}.txt`;
+    return reply
+      .header("content-type", "text/plain; charset=utf-8")
+      .header("content-disposition", `attachment; filename="${filename}"`)
+      .send(lines.join("\r\n"));
+  });
+
+  /**
+   * POST /v1/payroll/statutory/perquisite-components
+   * Ingest/upsert an itemised perquisite component (Sec 17(2)) for a 12BA line.
+   * Body: { employeeId, fy, nature, description?, valueByEmployer, amountRecovered? }
+   */
+  app.post("/v1/payroll/statutory/perquisite-components", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, STATUTORY_ROLES);
+
+    const b = req.body as {
+      employeeId?: string; fy?: string; nature?: string; description?: string;
+      valueByEmployer?: number; amountRecovered?: number;
+    };
+    if (!b.employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId required");
+    if (!b.fy) throw new HttpError(400, "VALIDATION_FAILED", "fy required (e.g. 2026-27)");
+    parseFyOr400(b.fy);
+    if (!b.nature) throw new HttpError(400, "VALIDATION_FAILED", "nature required (e.g. accommodation, car)");
+    if (b.valueByEmployer == null || b.valueByEmployer < 0) throw new HttpError(400, "VALIDATION_FAILED", "valueByEmployer (rupees) required");
+
+    const paise = (v?: number): bigint => BigInt(Math.round((v ?? 0) * 100));
+    const valueMinor = paise(b.valueByEmployer);
+    const recoveredMinor = paise(b.amountRecovered);
+    const taxableMinor = valueMinor - recoveredMinor > 0n ? valueMinor - recoveredMinor : 0n;
+
+    await db.insert(perquisiteComponents).values({
+      tenantId: ctx.tenantId,
+      employeeId: b.employeeId,
+      fy: b.fy,
+      nature: b.nature,
+      description: b.description ?? "",
+      valueByEmployerMinor: valueMinor,
+      amountRecoveredMinor: recoveredMinor,
+      taxableValueMinor: taxableMinor,
+      createdBy: ctx.actorId,
+    }).onConflictDoUpdate({
+      target: [perquisiteComponents.tenantId, perquisiteComponents.employeeId, perquisiteComponents.fy, perquisiteComponents.nature],
+      set: {
+        description: b.description ?? "",
+        valueByEmployerMinor: valueMinor,
+        amountRecoveredMinor: recoveredMinor,
+        taxableValueMinor: taxableMinor,
+      },
+    });
+
+    return reply.code(201).send({
+      message: "perquisite component saved",
+      employeeId: b.employeeId, fy: b.fy, nature: b.nature,
+      taxableValueMinor: taxableMinor.toString(),
+    });
+  });
+
+  /**
+   * GET /v1/payroll/statutory/form26q?fy=2026-27&quarter=Q1[&format=file]
+   * Quarterly e-TDS return for NON-SALARY resident payments (194C/194J/194I...).
+   * Sourced from statutory.payroll_tds_nonsalary, which is populated by a
+   * non-salary deduction feed (AP/vendor/rent). When empty, returns a
+   * well-formed empty 26Q and flags that the feed has not populated the period.
+   */
+  app.get("/v1/payroll/statutory/form26q", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, RETURN_FILER_ROLES);
+
+    const { fy, quarter, format } = req.query as { fy?: string; quarter?: string; format?: string };
+    if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
+    const q = (quarter ?? "").toUpperCase() as Quarter;
+    if (!QUARTERS.includes(q)) throw new HttpError(400, "VALIDATION_FAILED", "quarter must be one of Q1,Q2,Q3,Q4");
+    const { startYear, endYear } = parseFyOr400(fy);
+    const months = quarterMonths(startYear, q);
+
+    const rows = await db.select().from(payrollTdsNonSalary)
+      .where(and(eq(payrollTdsNonSalary.tenantId, ctx.tenantId), inArray(payrollTdsNonSalary.period, months)));
+
+    // Deductee-wise aggregation (one row per deductee+section).
+    const byKey = new Map<string, { ref: string; name: string; pan: string; section: string; paid: bigint; tds: bigint; periods: Set<string> }>();
+    for (const r of rows) {
+      const k = `${r.deducteeRef}|${r.section}`;
+      const e = byKey.get(k) ?? { ref: r.deducteeRef, name: r.deducteeName, pan: r.deducteePan, section: r.section, paid: 0n, tds: 0n, periods: new Set<string>() };
+      e.paid += BigInt(r.paidAmountMinor);
+      e.tds += BigInt(r.tdsAmountMinor);
+      e.periods.add(r.period);
+      byKey.set(k, e);
+    }
+    const deductees = [...byKey.values()].map((d) => ({
+      deducteeRef: d.ref,
+      name: d.name,
+      pan: d.pan,
+      panFlag: d.pan ? "" : "PANNOTAVBL",
+      section: d.section,
+      amountPaidMinor: d.paid.toString(),
+      tdsDeductedMinor: d.tds.toString(),
+      periods: [...d.periods].sort(),
+    })).sort((a, b) => a.name.localeCompare(b.name) || a.section.localeCompare(b.section));
+
+    const totalTdsMinor = [...byKey.values()].reduce((s, d) => s + d.tds, 0n);
+
+    // Reconcile against 26Q challans for the quarter.
+    const challanReco: Reconciliation[] = [];
+    for (const mo of months) challanReco.push(await reconcileNonSalaryPeriod(ctx.tenantId, mo));
+
+    const structured = {
+      formType: "26Q",
+      fy,
+      assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
+      quarter: q,
+      deductor: employerIdentity(),
+      deducteeCount: deductees.length,
+      deductees,
+      totalTdsDeductedMinor: totalTdsMinor.toString(),
+      reconciliation: { perPeriod: challanReco, matched: challanReco.every((r) => r.matched || r.status === "no_challan") },
+      populated: rows.length > 0,
+      note: rows.length > 0
+        ? "Non-salary TDS sourced from payroll_tds_nonsalary. Verify challan BSR/CIN against TRACES before filing."
+        : "No non-salary TDS for this period. Population requires a non-salary deduction feed (AP/vendor/rent) writing to statutory.payroll_tds_nonsalary.",
+    };
+
+    if (format !== "file") return reply.send(structured);
+
+    const emp = employerIdentity();
+    const lines: string[] = [];
+    lines.push(["FH", "26Q", fy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
+    deductees.forEach((d, i) => {
+      lines.push(["DD", i + 1, pipeSafe(d.pan || d.panFlag), pipeSafe(d.name), pipeSafe(d.section),
+        (Number(d.amountPaidMinor) / 100).toFixed(2), (Number(d.tdsDeductedMinor) / 100).toFixed(2)].join("|"));
+    });
+    lines.push(["FT", lines.length + 1, (Number(totalTdsMinor) / 100).toFixed(2)].join("|"));
+    const filename = `26Q_${fy.replace("-", "")}_${q}.txt`;
     return reply
       .header("content-type", "text/plain; charset=utf-8")
       .header("content-disposition", `attachment; filename="${filename}"`)

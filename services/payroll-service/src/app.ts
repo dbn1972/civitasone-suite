@@ -15,6 +15,8 @@ import { payslipPdfRoutes } from "./modules/payslip-pdf/routes.js";
 import { payslipDownloadRoutes } from "./modules/payslip-pdf/pdf-route.js";
 import { taxRoutes } from "./modules/tax/routes.js";
 import { statutoryReturnsRoutes } from "./modules/statutory-returns/routes.js";
+import { challanRoutes } from "./modules/statutory-returns/challan-routes.js";
+import { loadTaxConfig } from "./modules/tax/config.js";
 import { bankTransferRoutes } from "./modules/bank-transfer/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -30,6 +32,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "payroll-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
+  await loadTaxConfig();
+
   await app.register(payrollRoutes);
   await app.register(loansRoutes);
   await app.register(statutoryRoutes);
@@ -38,6 +42,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(payslipDownloadRoutes);
   await app.register(taxRoutes);
   await app.register(statutoryReturnsRoutes);
+  await app.register(challanRoutes);
   await app.register(bankTransferRoutes);
   const { worldClassPayrollRoutes } = await import("./modules/payroll/world-class-routes.js");
   await app.register(worldClassPayrollRoutes);

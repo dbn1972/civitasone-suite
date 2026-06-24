@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, integer, bigint, char, varchar, numeric, timestamp,
+  pgSchema, uuid, integer, bigint, char, varchar, numeric, timestamp, date,
 } from "drizzle-orm/pg-core";
 
 export const statutorySchema = pgSchema("statutory");
@@ -117,4 +117,45 @@ export const payrollNps = statutorySchema.table("payroll_nps", {
   version:          integer("version").notNull().default(1),
 });
 
-export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps };
+
+export const payrollTdsChallan = statutorySchema.table("payroll_tds_challan", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  period:           char("period", { length: 7 }).notNull(),
+  section:          varchar("section", { length: 8 }).notNull().default("192"),
+  formType:         varchar("form_type", { length: 4 }).notNull().default("24Q"),
+  bsrCode:          varchar("bsr_code", { length: 7 }).notNull(),
+  challanSerial:    varchar("challan_serial", { length: 16 }).notNull(),
+  depositDate:      date("deposit_date").notNull(),
+  cin:              varchar("cin", { length: 32 }).notNull(),
+  tdsAmountMinor:   bigint("tds_amount_minor", { mode: "bigint" }).notNull().default(0n),
+  totalAmountMinor: bigint("total_amount_minor", { mode: "bigint" }).notNull().default(0n),
+  interestMinor:    bigint("interest_minor", { mode: "bigint" }).notNull().default(0n),
+  feeMinor:         bigint("fee_minor", { mode: "bigint" }).notNull().default(0n),
+  status:           varchar("status", { length: 16 }).notNull().default("ingested"),
+  currency:         char("currency", { length: 3 }).notNull().default("INR"),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:        uuid("created_by").notNull(),
+  version:          integer("version").notNull().default(1),
+});
+
+export const payrollTdsNonSalary = statutorySchema.table("payroll_tds_nonsalary", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  period:           char("period", { length: 7 }).notNull(),
+  deducteeRef:      varchar("deductee_ref", { length: 64 }).notNull(),
+  deducteeName:     varchar("deductee_name", { length: 255 }).notNull().default(""),
+  deducteePan:      varchar("deductee_pan", { length: 10 }).notNull().default(""),
+  section:          varchar("section", { length: 8 }).notNull(),
+  paidAmountMinor:  bigint("paid_amount_minor", { mode: "bigint" }).notNull().default(0n),
+  tdsRatePct:       numeric("tds_rate_pct", { precision: 5, scale: 2 }).notNull().default("0"),
+  tdsAmountMinor:   bigint("tds_amount_minor", { mode: "bigint" }).notNull().default(0n),
+  deductionDate:    date("deduction_date"),
+  currency:         char("currency", { length: 3 }).notNull().default("INR"),
+  sourceFeed:       varchar("source_feed", { length: 32 }).notNull().default("manual"),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:        uuid("created_by").notNull(),
+});
+
+export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollTdsChallan, payrollTdsNonSalary };

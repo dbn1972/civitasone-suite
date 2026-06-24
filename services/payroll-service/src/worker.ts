@@ -5,8 +5,11 @@ import { startRelay } from "./shared/outbox.js";
 import { registerPayrollConsumers } from "./modules/payroll/consumer.js";
 import { registerLoansConsumers }   from "./modules/loans/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
+import { loadTaxConfig } from "./modules/tax/config.js";
 
 const log = pino({ name: "payroll-worker" });
+
+await loadTaxConfig();
 
 registerPayrollConsumers(queue);
 registerLoansConsumers(queue);
