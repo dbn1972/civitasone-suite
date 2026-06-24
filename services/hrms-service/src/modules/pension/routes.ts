@@ -17,7 +17,8 @@ import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { computePension, elEncashment, type PensionResult } from "./engine.js";
+import { computePension, elEncashment, summariseNonQualifying, type PensionResult, type ServiceBookEvent } from "./engine.js";
+import * as serviceBookRepo from "../service-book/repo.js";
 import * as repo from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer", "payroll_admin"];
@@ -63,6 +64,18 @@ export async function pensionRoutes(app: FastifyInstance): Promise<void> {
     const emp = rows[0];
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
+    // P0-3: net qualifying service from the service book (non-qualifying spells:
+    // dies-non, EOL-without-QS, suspension-as-non-duty, boy/temporary service).
+    const sbEntries = await serviceBookRepo.listServiceBookEntries(ctx.tenantId, id);
+    const sbEvents: ServiceBookEvent[] = sbEntries.map((e) => ({
+      entryType: e.entryType,
+      effectiveDate: e.effectiveDate,
+      description: e.description,
+    }));
+    const nonQualifying = summariseNonQualifying(sbEvents);
+    // Field-level PII / sensitive-data access log (cheap, structured).
+    req.log.info({ event: "pension.read", employeeId: id, actorId: ctx.actorId, tenantId: ctx.tenantId }, "pension computed");
+
     const input: Parameters<typeof computePension>[0] = {
       pensionScheme: emp.pensionScheme,
       dateOfJoining: emp.dateOfJoining,
@@ -70,6 +83,7 @@ export async function pensionRoutes(app: FastifyInstance): Promise<void> {
       lastBasicMinor: emp.basicMinor,
       daRatePct: q.daRatePct,
       commutePct: q.commutePct,
+      nonQualifyingDays: nonQualifying.totalDays,
     };
     if (emp.dateOfBirth) input.dateOfBirth = emp.dateOfBirth;
     if (q.ageNextBirthday !== undefined) input.ageNextBirthday = q.ageNextBirthday;
@@ -121,6 +135,7 @@ export async function pensionRoutes(app: FastifyInstance): Promise<void> {
           elBalanceDays: q.elBalanceDays,
         },
         ...result,
+        nonQualifyingService: nonQualifying,
         elEncashment: {
           elBalanceDays: q.elBalanceDays,
           cappedDays: Math.min(q.elBalanceDays, 300),

@@ -83,6 +83,24 @@ const AWS_ENV = {
   AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
 };
 
+// -- PII at-rest encryption key (DPDP) ---------------------------------------
+// hrms-service encrypts sensitive PII (pan / aadhaar / bank) at the app layer
+// with AES-256-GCM. The 32-byte key is derived from this secret. Read from the
+// env if injected by the secret manager, else from a stable on-host key file so
+// the key survives restarts and is identical for the hrms svc + worker.
+const PII_ENC_KEY = (() => {
+  if (process.env.PII_ENC_KEY && process.env.PII_ENC_KEY.length >= 16) return process.env.PII_ENC_KEY;
+  try {
+    const fs = require("fs");
+    const p = require("path").join(process.env.HOME || "/home/ec2-user", ".civitasone-hrms-pii-key");
+    const v = fs.readFileSync(p, "utf8").trim();
+    if (v.length >= 16) return v;
+  } catch (e) { /* fall through */ }
+  if (IS_PROD) throw new Error("[ecosystem] PII_ENC_KEY required for hrms-service (inject from secret manager or provision the host key file). Refusing to start.");
+  return "civitasone-hrms-pii-dev-key-not-for-prod";
+})();
+
+
 function svc(name, port, dbUser, dbName, extra = {}) {
   return {
     name,
@@ -148,7 +166,7 @@ module.exports = {
     // ── Establishment & physical assets ───────────────────────────────────────
     svc("estab",        3010, "estab_svc",         "civitas_estab"),
     svc("stock",        3011, "stock_svc",         "civitas_stock"),
-    svc("hrms",         3012, "hrms_svc",          "civitas_hrms"),
+    svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY }),
     svc("payroll",      3013, "payroll_svc",       "civitas_payroll"),
     svc("project",      3014, "project_svc",       "civitas_project"),
     svc("asset",        3015, "asset_svc",         "civitas_asset"),
@@ -182,7 +200,7 @@ module.exports = {
     worker("procurement",  "procurement_svc",  "civitas_procurement"),
     worker("workflow",     "workflow_svc",     "civitas_workflow"),
     worker("payroll",      "payroll_svc",      "civitas_payroll"),
-    worker("hrms",         "hrms_svc",         "civitas_hrms"),
+    worker("hrms",         "hrms_svc",         "civitas_hrms", { PII_ENC_KEY }),
     worker("grant",        "grant_svc",        "civitas_grant"),
     worker("project",      "project_svc",      "civitas_project"),
     worker("estab",        "estab_svc",        "civitas_estab"),
