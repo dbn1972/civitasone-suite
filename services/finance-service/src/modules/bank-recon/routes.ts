@@ -76,8 +76,10 @@ export async function bankReconRoutes(app: FastifyInstance): Promise<void> {
 
     const matchedCount = await db.transaction(async (tx) => {
       const lines = (await repo.linesForStatement(tx, id)).filter((l) => !l.matched);
-      const payments = await repo.unreconciledPayments(ctx.tenantId);
-      const challans = await repo.unreconciledChallans(ctx.tenantId);
+      // H2: scope book-side candidates to this statement's bank account so a
+      // payment/challan tagged to a different account can never match here.
+      const payments = await repo.unreconciledPayments(ctx.tenantId, stmt.bankAccountId);
+      const challans = await repo.unreconciledChallans(ctx.tenantId, stmt.bankAccountId);
 
       const debitLines: StatementLine[] = lines.filter((l) => l.direction === "debit")
         .map((l) => ({ id: l.id, amountMinor: l.amountMinor, direction: "debit", date: l.lineDate, reference: l.reference }));
@@ -126,9 +128,9 @@ export async function bankReconRoutes(app: FastifyInstance): Promise<void> {
     const matched = lines.filter((l) => l.matched);
     const unreconciledInBank = lines.filter((l) => !l.matched);
 
-    // book side still unreconciled
-    const payments = await repo.unreconciledPayments(ctx.tenantId);
-    const challans = await repo.unreconciledChallans(ctx.tenantId);
+    // book side still unreconciled (H2: scoped to this statement's bank account)
+    const payments = await repo.unreconciledPayments(ctx.tenantId, stmt.bankAccountId);
+    const challans = await repo.unreconciledChallans(ctx.tenantId, stmt.bankAccountId);
 
     const signed = (l: typeof lines[number]) => (l.direction === "credit" ? l.amountMinor : -l.amountMinor);
 

@@ -39,6 +39,7 @@ export const initiateEftBody = z.object({
   amountMinor: z.number().int().positive(),
   currency:    z.string().length(3).default("INR"),
   eftRef:      z.string().optional(),
+  bankAccountId: z.string().uuid().optional(),
 });
 export type InitiateEftBody = z.infer<typeof initiateEftBody>;
 

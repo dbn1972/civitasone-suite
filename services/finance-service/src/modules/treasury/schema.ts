@@ -23,6 +23,7 @@ export const financeChallans = treasurySchema.table("finance_challans", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
   challanNo:     text("challan_no").notNull(),
+  bankAccountId: uuid("bank_account_id"),
   receiptHeadId: uuid("receipt_head_id").notNull(),
   depositor:     text("depositor").notNull(),
   amountMinor:   bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),

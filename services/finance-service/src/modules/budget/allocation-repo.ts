@@ -88,6 +88,29 @@ export async function addCommittedGuarded(tx: Exec, id: string, deltaMinor: bigi
 }
 
 /**
+ * M2: settle a committed appropriation into actual on payment release. Moves
+ * `amountMinor` from committed_minor to actual_minor in a single atomic guarded
+ * UPDATE — same locking discipline as addCommittedGuarded. The guard
+ * (committed_minor >= amount) makes the move idempotent under redelivery: once
+ * the commitment has been drained, a redelivered payment finds committed_minor
+ * below the amount and the rowcount is 0 (no double-move). available =
+ * allocated - (committed + actual) is invariant across the move. Returns true
+ * when the move was applied, false when the guard rejected it.
+ */
+export async function settleCommittedToActualGuarded(tx: Exec, id: string, amountMinor: bigint): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    UPDATE budget.finance_budget_allocation
+       SET committed_minor = committed_minor - ${amountMinor},
+           actual_minor    = actual_minor + ${amountMinor},
+           updated_at = now()
+     WHERE id = ${id}
+       AND committed_minor >= ${amountMinor}
+    RETURNING id
+  `);
+  return (rows as unknown as unknown[]).length > 0;
+}
+
+/**
  * Atomic re-appropriation move guarded against driving the source allocation
  * below its already-committed+actual usage. Decrements source and increments
  * target in a single statement pair under the surrounding tx. Returns false if
