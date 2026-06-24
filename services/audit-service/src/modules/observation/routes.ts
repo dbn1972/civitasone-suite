@@ -9,7 +9,7 @@ import * as queries from "./queries.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createObservationBody, draftParaBody, complianceReplyBody, reviewReplyBody, idParam } from "./validators.js";
+import { createObservationBody, draftParaBody, complianceReplyBody, reviewReplyBody, closeObservationBody, idParam } from "./validators.js";
 
 import * as commands from "./commands.js";
 
@@ -53,6 +53,18 @@ export async function observationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = reviewReplyBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.reviewComplianceReply(ctx, id, body));
+  });
+
+  /**
+   * P1-6: close or partially-close an observation.
+   * Allowed: audit_admin, super_admin (same authority as review/closure).
+   */
+  app.post("/v1/audit/observations/:id/close", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVIEW_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = closeObservationBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closeObservation(ctx, id, body));
   });
 
   app.post("/v1/audit/observations/:id/draft-para", async (req, reply) => {

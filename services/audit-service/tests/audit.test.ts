@@ -70,3 +70,55 @@ describe("audit-service route auth (inject)", () => {
     await app.close();
   });
 });
+
+// P1-5: bulk PII export is restricted to audit_admin+ (audit_officer must be rejected).
+describe("P1-5 export PII gating", () => {
+  const SECRET = "test_secret_for_civitasone_32chr";
+  const TENANT = "00000000-0000-0000-0000-000000000001";
+
+  async function token(roles: string[]): Promise<string> {
+    const { signToken } = await import("@civitasone/auth");
+    return signToken({ sub: "11111111-1111-1111-1111-111111111111", tid: TENANT, roles } as never, SECRET);
+  }
+
+  it("audit_officer requesting includePii → 403 PII_EXPORT_FORBIDDEN", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const jwt = await token(["audit_officer"]);
+    const res = await app.inject({
+      method: "POST", url: "/audit/exports",
+      headers: { authorization: `Bearer ${jwt}`, "x-tenant-id": TENANT, "content-type": "application/json" },
+      payload: { from: "2026-06-23T00:00:00Z", to: "2026-06-24T00:00:00Z", format: "json", includePii: true },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("PII_EXPORT_FORBIDDEN");
+    await app.close();
+  });
+
+  it("audit_admin requesting includePii → accepted", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const jwt = await token(["audit_admin"]);
+    const res = await app.inject({
+      method: "POST", url: "/audit/exports",
+      headers: { authorization: `Bearer ${jwt}`, "x-tenant-id": TENANT, "content-type": "application/json" },
+      payload: { from: "2026-06-23T00:00:00Z", to: "2026-06-24T00:00:00Z", format: "json", includePii: true },
+    });
+    expect(res.statusCode).toBe(202);
+    await app.close();
+  });
+
+  it("oversized window → 422 WINDOW_TOO_LARGE", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const jwt = await token(["audit_admin"]);
+    const res = await app.inject({
+      method: "POST", url: "/audit/exports",
+      headers: { authorization: `Bearer ${jwt}`, "x-tenant-id": TENANT, "content-type": "application/json" },
+      payload: { from: "2026-01-01T00:00:00Z", to: "2026-12-01T00:00:00Z", format: "json" },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("WINDOW_TOO_LARGE");
+    await app.close();
+  });
+});

@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const exportsSchema = pgSchema("exports");
 
@@ -10,6 +10,13 @@ export const auditExports = exportsSchema.table("exports", {
   format:         varchar("format", { length: 16 }).notNull().default("json"),
   signedUrl:      text("signed_url"),
   retentionUntil: timestamp("retention_until", { withTimezone: true }),
+  // P1-5 worker metadata
+  rowCount:       integer("row_count"),
+  includesPii:    boolean("includes_pii").notNull().default(false),
+  downloadToken:  text("download_token"),
+  expiresAt:      timestamp("expires_at", { withTimezone: true }),
+  error:          text("error"),
+  requestedRoles: text("requested_roles"),
   status:         varchar("status", { length: 24 }).notNull().default("pending"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

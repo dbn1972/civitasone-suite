@@ -36,4 +36,11 @@ export const reviewReplyBody = z.object({
 });
 export type ReviewReplyBody = z.infer<typeof reviewReplyBody>;
 
+/** P1-6: close or partially-close an observation. */
+export const closeObservationBody = z.object({
+  mode:           z.enum(["full", "partial"]).default("full"),
+  closureRemarks: z.string().min(1).max(2000),
+});
+export type CloseObservationBody = z.infer<typeof closeObservationBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });

@@ -16,6 +16,7 @@ import { complianceRoutes } from "./modules/compliance/routes.js";
 import { checklistRoutes } from "./modules/compliance/checklist-routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { adminRoutes } from "./modules/admin/routes.js";
+import { riskRoutes } from "./modules/risk/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -38,6 +39,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(checklistRoutes);
   await app.register(dashboardRoutes);
   await app.register(adminRoutes);
+  await app.register(riskRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

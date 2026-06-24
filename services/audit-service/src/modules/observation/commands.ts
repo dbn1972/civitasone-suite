@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateObservationBody, DraftParaBody, ComplianceReplyBody, ReviewReplyBody } from "./validators.js";
+import type { CreateObservationBody, DraftParaBody, ComplianceReplyBody, ReviewReplyBody, CloseObservationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -48,6 +48,20 @@ export async function reviewComplianceReply(ctx: RequestContext, observationId: 
   const id = randomUUID();
   await queue.publish(COMMANDS.observationReview, {
     messageId: id, type: COMMANDS.observationReview,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, observationId, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * P1-6: close or partially-close an observation.
+ * mode "full" → "closed"; mode "partial" → "partially_closed".
+ */
+export async function closeObservation(ctx: RequestContext, observationId: string, body: CloseObservationBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.observationClose, {
+    messageId: id, type: COMMANDS.observationClose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, observationId, tenantId: ctx.tenantId, ...body },
   });

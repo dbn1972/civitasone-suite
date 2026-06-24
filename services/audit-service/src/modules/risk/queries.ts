@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { HIGH_RISK_THRESHOLD } from "./domain.js";
 import type { RiskRow } from "./schema.js";
 
 function mapRiskRow(row: RiskRow) {
@@ -24,4 +25,15 @@ export async function listRisks(tenantId: string, limit: number) {
     () => repo.listByTenant(tenantId, limit),
   );
   return (rows ?? []).map(mapRiskRow);
+}
+
+/** P1-7: audit universe — open, high-score risks driving the plan. Not cached (planning view). */
+export async function listAuditUniverse(tenantId: string, limit: number) {
+  const rows = await repo.listHighRisk(tenantId, HIGH_RISK_THRESHOLD, limit);
+  return rows.map(mapRiskRow);
+}
+
+export async function listPlanRisks(tenantId: string, planId: string) {
+  const rows = await repo.listRisksForPlan(tenantId, planId);
+  return rows.map(mapRiskRow);
 }
