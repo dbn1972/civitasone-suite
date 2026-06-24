@@ -18,3 +18,15 @@ export async function postJournal(ctx: RequestContext, body: PostJournalBody): P
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export async function reverseJournal(ctx: RequestContext, journalId: string): Promise<Accepted> {
+  // Deterministic message + reversing-journal id keyed off the source journal,
+  // so a double-submit / redelivery cannot create two mirror journals.
+  const id = idempotentId({ idempotencyKey: `reverse:${journalId}` });
+  await queue.publish(COMMANDS.journalReverse, {
+    messageId: id, type: COMMANDS.journalReverse,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, originalJournalId: journalId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
