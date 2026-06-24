@@ -10,7 +10,7 @@ import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, assertRunStatusTransition, DomainError, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
+import { computeSlip, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
 /** Resolve the DA rate (basis points) effective for the run month (Iter1). */
@@ -88,6 +88,144 @@ async function resolveTdsYtdMinor(tenantId: string, employeeId: string, fyStart:
   return BigInt(rows[0]?.ytd ?? 0);
 }
 
+/** P3: configurable protected-net floor (paise) for the tenant; 0 if unset. */
+async function resolveProtectedNetFloorMinor(tenantId: string): Promise<bigint> {
+  const rows = (await db.execute(sql`
+    SELECT protected_net_floor_minor FROM payroll.payroll_settings
+    WHERE tenant_id = ${tenantId}::uuid LIMIT 1
+  `)) as unknown as Array<{ protected_net_floor_minor: string | number }>;
+  const v = rows[0]?.protected_net_floor_minor;
+  return v != null ? BigInt(v) : 0n;
+}
+
+/**
+ * P2: latest salary revision effective on/before the run month, if any.
+ * Drives the Basic the run pays (HRMS basic is the fallback when none exists).
+ */
+async function resolveLatestRevision(tenantId: string, employeeId: string, month: string): Promise<{ newBasicMinor: bigint; effectiveDate: string } | null> {
+  const rows = (await db.execute(sql`
+    SELECT new_basic_minor, effective_date::text AS effective_date
+    FROM payroll.payroll_salary_revisions
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND effective_date <= ${month + "-01"}::date
+    ORDER BY effective_date DESC, created_at DESC LIMIT 1
+  `)) as unknown as Array<{ new_basic_minor: string | number; effective_date: string }>;
+  const r = rows[0];
+  if (!r) return null;
+  return { newBasicMinor: BigInt(r.new_basic_minor), effectiveDate: r.effective_date };
+}
+
+/**
+ * P2: for every salary revision whose effective_date precedes the run month,
+ * generate month-by-month retro arrears for the (new basic - old basic) delta
+ * plus recomputed DA/HRA, from the effective month up to (but excluding) the
+ * run month. Idempotent: the unique partial index
+ * ux_payroll_arrears_revision_period(tenant,employee,component,from_period)
+ * WHERE source='revision' makes re-inserts a no-op.
+ */
+async function generateRetroArrears(
+  tx: typeof db,
+  tenantId: string,
+  employeeId: string,
+  runMonth: string,
+  daRateBps: bigint,
+  cityClass: CityClass,
+  actorId: string,
+): Promise<void> {
+  const revs = (await tx.execute(sql`
+    SELECT old_basic_minor, new_basic_minor, effective_date::text AS effective_date
+    FROM payroll.payroll_salary_revisions
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND to_char(effective_date,'YYYY-MM') < ${runMonth}
+    ORDER BY effective_date ASC
+  `)) as unknown as Array<{ old_basic_minor: string | number; new_basic_minor: string | number; effective_date: string }>;
+  const hraPct = hraSlabPct(cityClass, daRateBps);
+  for (const r of revs) {
+    const oldBasic = BigInt(r.old_basic_minor);
+    const newBasic = BigInt(r.new_basic_minor);
+    const effMonth = r.effective_date.slice(0, 7); // YYYY-MM
+    // Per-month delta = delta basic + delta DA + delta HRA on the basic delta.
+    const basicDelta = newBasic - oldBasic;
+    if (basicDelta === 0n) continue;
+    const daDelta  = roundRupee((basicDelta * daRateBps) / 10000n);
+    const hraDelta = roundRupee((basicDelta * hraPct) / 100n);
+    const perMonth = basicDelta + daDelta + hraDelta;
+    // Iterate effMonth .. runMonth-1 inclusive.
+    let [y, m] = effMonth.split("-").map(Number) as [number, number];
+    const [ry, rm] = runMonth.split("-").map(Number) as [number, number];
+    while (y < ry || (y === ry && m < rm)) {
+      const period = `${y}-${String(m).padStart(2, "0")}`;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_arrears
+          (tenant_id, employee_id, component_code, from_period, to_period,
+           old_amount_minor, new_amount_minor, difference_minor, reason, status, source, created_by)
+        VALUES
+          (${tenantId}::uuid, ${employeeId}::uuid, 'ARREAR', ${period}, ${period},
+           ${oldBasic.toString()}::bigint, ${newBasic.toString()}::bigint, ${perMonth.toString()}::bigint,
+           'salary revision retro arrears', 'approved', 'revision', ${actorId}::uuid)
+        ON CONFLICT (tenant_id, employee_id, component_code, from_period) WHERE source = 'revision'
+        DO NOTHING
+      `);
+      m += 1; if (m > 12) { m = 1; y += 1; }
+    }
+  }
+}
+
+/**
+ * P1: pull this employee's recorded-but-unpaid earnings (arrears, bonus,
+ * reimbursements) that are due in/by the run month, and return them as ad-hoc
+ * EARNING components plus the source row ids to mark consumed after the slip is
+ * persisted. Arrears: status in (pending,approved) up to run month; bonus:
+ * approved; reimbursements: approved up to run month.
+ */
+async function collectAdHocEarnings(
+  tx: typeof db,
+  tenantId: string,
+  employeeId: string,
+  runMonth: string,
+): Promise<{
+  components: Array<{ code: string; name: string; type: "earning"; amountMinor: bigint }>;
+  arrearIds: string[]; bonusIds: string[]; reimbIds: string[];
+}> {
+  const components: Array<{ code: string; name: string; type: "earning"; amountMinor: bigint }> = [];
+  const arrears = (await tx.execute(sql`
+    SELECT id, difference_minor FROM payroll.payroll_arrears
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND status IN ('pending','approved') AND run_id IS NULL
+      AND from_period <= ${runMonth}
+    ORDER BY from_period
+  `)) as unknown as Array<{ id: string; difference_minor: string | number }>;
+  for (const a of arrears) {
+    const amt = BigInt(a.difference_minor);
+    if (amt !== 0n) components.push({ code: "ARREAR", name: "Arrears", type: "earning", amountMinor: amt });
+  }
+  const bonus = (await tx.execute(sql`
+    SELECT id, bonus_amount_minor FROM payroll.payroll_bonus
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND status = 'approved' AND paid_in_run_id IS NULL
+  `)) as unknown as Array<{ id: string; bonus_amount_minor: string | number }>;
+  for (const b of bonus) {
+    const amt = BigInt(b.bonus_amount_minor);
+    if (amt !== 0n) components.push({ code: "BONUS", name: "Bonus", type: "earning", amountMinor: amt });
+  }
+  const reimb = (await tx.execute(sql`
+    SELECT id, amount_minor FROM payroll.payroll_reimbursements
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND status = 'approved' AND paid_in_run_id IS NULL
+      AND period <= ${runMonth}
+  `)) as unknown as Array<{ id: string; amount_minor: string | number }>;
+  for (const r of reimb) {
+    const amt = BigInt(r.amount_minor);
+    if (amt !== 0n) components.push({ code: "REIMB", name: "Reimbursement", type: "earning", amountMinor: amt });
+  }
+  return {
+    components,
+    arrearIds: arrears.map((a) => a.id),
+    bonusIds: bonus.map((b) => b.id),
+    reimbIds: reimb.map((r) => r.id),
+  };
+}
+
 const AUDIT = "audit.event.record";
 const EFT_INITIATE = "finance.payment.eft.initiate";
 
@@ -108,22 +246,31 @@ export function registerPayrollConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.runCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; runNo: string; month: string;
-      departmentId?: string; structureId: string;
+      departmentId?: string; structureId: string; runType?: string;
     };
+    const runType: "regular" | "supplementary" | "arrears" =
+      p.runType === "supplementary" || p.runType === "arrears" ? p.runType : "regular";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // Iter2: prevent a second (non-failed) regular run for the same tenant+month.
-      const dup = (await tx.execute(sql`
-        SELECT 1 FROM payroll.payroll_runs
-        WHERE tenant_id = ${p.tenantId}::uuid AND month = ${p.month} AND status <> 'failed'
-        LIMIT 1
-      `)) as unknown as Array<unknown>;
-      if (dup.length > 0) {
-        throw new DomainError("DUPLICATE_RUN_FOR_PERIOD", `a payroll run already exists for ${p.month}`);
+      // P3 (Iter2): the dup-guard blocks only a second *regular* run per
+      // tenant+month. Supplementary/arrears (off-cycle) runs are allowed
+      // alongside the regular run. The DB partial-unique index enforces the
+      // same rule as a belt-and-suspenders guard.
+      if (runType === "regular") {
+        const dup = (await tx.execute(sql`
+          SELECT 1 FROM payroll.payroll_runs
+          WHERE tenant_id = ${p.tenantId}::uuid AND month = ${p.month}
+            AND status <> 'failed' AND run_type = 'regular'
+          LIMIT 1
+        `)) as unknown as Array<unknown>;
+        if (dup.length > 0) {
+          throw new DomainError("DUPLICATE_RUN_FOR_PERIOD", `a regular payroll run already exists for ${p.month}`);
+        }
       }
       await repo.insertRun(tx, {
         id: p.id, tenantId: p.tenantId, runNo: p.runNo, month: p.month,
         departmentId: p.departmentId ?? null, structureId: p.structureId,
+        runType,
         totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -131,7 +278,7 @@ export function registerPayrollConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
     try {
-      await processPayrollRun(msg, p);
+      await processPayrollRun(msg, { ...p, runType });
     } catch (err) {
       await db.transaction(async (tx) => {
         await repo.updateRun(tx, p.id, { status: "failed", updatedBy: msg.actorId });
@@ -229,12 +376,13 @@ export function registerPayrollConsumers(queue: Queue): void {
 
 async function processPayrollRun(
   msg: { tenantId: string; actorId: string; correlationId: string },
-  p: { id: string; tenantId: string; month: string; structureId: string; departmentId?: string },
+  p: { id: string; tenantId: string; month: string; structureId: string; departmentId?: string; runType?: "regular" | "supplementary" | "arrears" },
 ): Promise<void> {
   const input = await fetchPayrollInput(p.tenantId, p.month);
   const structComps = await repo.listComponentsByStructure(p.structureId, p.tenantId);
   const daRateBps = await resolveDaRateBps(p.tenantId, p.month);
   const ptSlabs = await resolvePtSlabs(p.tenantId);
+  const protectedNetFloorMinor = await resolveProtectedNetFloorMinor(p.tenantId);
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
   let totalGross = 0n;
@@ -262,7 +410,18 @@ async function processPayrollRun(
       if (p.departmentId && emp.departmentId !== p.departmentId) continue;
       if (alreadyComputed.has(emp.id)) continue; // M1: skip already-computed employees
 
-      const basicMinor = BigInt(emp.basicMinor);
+      const cityClass = emp.cityClass ?? "X";
+      // P2: generate retro-arrears for any back-dated salary revision BEFORE
+      // collecting earnings, so this run pays them. Only the regular run
+      // generates them (idempotent index makes re-runs a no-op anyway).
+      if ((p.runType ?? "regular") === "regular") {
+        await generateRetroArrears(tx as unknown as typeof db, p.tenantId, emp.id, p.month, daRateBps, cityClass, msg.actorId);
+      }
+
+      // P2: source current Basic from the latest revision effective on/before the
+      // run month; fall back to the HRMS-provided basic when no revision exists.
+      const revision = await resolveLatestRevision(p.tenantId, emp.id, p.month);
+      const basicMinor = revision ? revision.newBasicMinor : BigInt(emp.basicMinor);
       const daMinor = (basicMinor * daRateBps) / 10000n;
       // M2 (LOP double-count): one authoritative source per (employee, month).
       // The local LOP ledger (fed by leave/attendance events) takes precedence
@@ -275,9 +434,14 @@ async function processPayrollRun(
       const dailyRate = (basicMinor + daMinor) / daysInMonth;
       const lopDeduction = dailyRate * BigInt(lopDays);
 
-      // Iter2: real loan recovery — split interest/principal, cap at outstanding,
-      // record a repayment, decrement outstanding, close the loan at zero.
+      // Iter2: real loan recovery — split interest/principal, cap at outstanding.
+      // P3: the actual EMI withheld may be capped by the protected-net floor, so
+      // we only COMPUTE candidate installments here and defer the ledger writes
+      // until AFTER computeSlip tells us how much recovery was actually applied.
+      // The carried-forward (unrecovered) portion must NOT reduce the loan
+      // outstanding — it is recovered in a future run.
       const loans = await loansRepo.findLoansByEmployee(p.tenantId, emp.id);
+      const loanPlans: Array<{ loanId: string; principal: bigint; interest: bigint; outstanding: bigint }> = [];
       let emiTotal = 0n;
       for (const l of loans) {
         if (l.status !== "disbursed" || l.outstandingMinor <= 0n) continue;
@@ -289,24 +453,19 @@ async function processPayrollRun(
         const deduction = principal + interest;
         if (deduction <= 0n) continue;
         emiTotal += deduction;
-        const newOutstanding = l.outstandingMinor - principal;
-        const installmentNo = (await loansRepo.countRepayments(tx, l.id)) + 1;
-        await loansRepo.insertRepayment(tx, {
-          id: randomUUID(), tenantId: p.tenantId, loanId: l.id, runId: p.id,
-          installmentNo, principalMinor: principal, interestMinor: interest, totalMinor: deduction,
-          currency: "INR", status: "paid", paidAt: new Date(),
-          createdBy: msg.actorId, updatedBy: msg.actorId,
-        });
-        await loansRepo.updateLoan(tx, l.id, {
-          outstandingMinor: newOutstanding,
-          status: newOutstanding <= 0n ? "closed" : "disbursed",
-          updatedBy: msg.actorId,
-        });
+        loanPlans.push({ loanId: l.id, principal, interest, outstanding: l.outstandingMinor });
       }
 
-      const adHoc = [];
+      const adHoc: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }> = [];
       if (lopDeduction > 0n) adHoc.push({ code: "LOP", name: "Loss of Pay", type: "deduction" as const, amountMinor: lopDeduction });
       if (emiTotal > 0n) adHoc.push({ code: "LOAN_EMI", name: "Loan EMI", type: "deduction" as const, amountMinor: emiTotal });
+
+      // P1: disburse recorded-but-dead earnings — pending/approved arrears,
+      // approved bonus, approved reimbursements due by this month — as ad-hoc
+      // EARNING components. Source rows are marked consumed after the slip is
+      // persisted so they pay exactly once.
+      const earned = await collectAdHocEarnings(tx as unknown as typeof db, p.tenantId, emp.id, p.month);
+      for (const c of earned.components) adHoc.push(c);
 
       const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
       const fyStr = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
@@ -325,16 +484,67 @@ async function processPayrollRun(
         month: p.month,
         pensionScheme: emp.pensionScheme ?? "NPS",
         daRateBps,
-        cityClass: emp.cityClass ?? "X",
+        cityClass,
         ptMinor: resolvePt(ptSlabs, basicMinor + daMinor),
         taxRegime: decl?.regime ?? emp.taxRegime ?? "new",
         fyStartYear: fyStart,
         tdsYtdMinor,
         monthsRemaining: 12 - monthIdxInFy,
+        protectedNetFloorMinor,
         ...(decl ? { declaration: { rentPaidAnnualMinor: decl.rentPaidAnnualMinor, ded80cMinor: decl.ded80cMinor, ded80dMinor: decl.ded80dMinor, otherDedMinor: decl.otherDedMinor, prevEmployerSalaryMinor: decl.prevEmployerSalaryMinor, otherSourcesIncomeMinor: decl.otherSourcesIncomeMinor, perquisitesMinor: decl.perquisitesMinor } } : {}),
         rawComponents,
         components: adHoc,
       });
+
+      // P3: record loan repayments for the EMI that was ACTUALLY withheld after
+      // the protected-net floor (computeSlip may have trimmed/dropped the EMI
+      // line). The unrecovered remainder stays on the loan outstanding and is
+      // carried forward to a future run.
+      const appliedEmi = result.deductions.find((d) => d.code === "LOAN_EMI")?.amountMinor ?? 0n;
+      let emiToAllocate = appliedEmi;
+      for (const plan of loanPlans) {
+        if (emiToAllocate <= 0n) break;
+        const planTotal = plan.principal + plan.interest;
+        const take = planTotal <= emiToAllocate ? planTotal : emiToAllocate;
+        emiToAllocate -= take;
+        // Interest is recovered first within an installment; the rest is principal.
+        const interestPaid  = take <= plan.interest ? take : plan.interest;
+        const principalPaid = take - interestPaid;
+        if (take <= 0n) continue;
+        const newOutstanding = plan.outstanding - principalPaid;
+        const installmentNo = (await loansRepo.countRepayments(tx, plan.loanId)) + 1;
+        await loansRepo.insertRepayment(tx, {
+          id: randomUUID(), tenantId: p.tenantId, loanId: plan.loanId, runId: p.id,
+          installmentNo, principalMinor: principalPaid, interestMinor: interestPaid, totalMinor: take,
+          currency: "INR", status: "paid", paidAt: new Date(),
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await loansRepo.updateLoan(tx, plan.loanId, {
+          outstandingMinor: newOutstanding,
+          status: newOutstanding <= 0n ? "closed" : "disbursed",
+          updatedBy: msg.actorId,
+        });
+      }
+
+      // P1: mark the consumed source rows so a second run does NOT pay them again.
+      if (earned.arrearIds.length > 0) {
+        await tx.execute(sql`
+          UPDATE payroll.payroll_arrears SET status = 'paid', run_id = ${p.id}::uuid
+          WHERE id = ANY(${sql`ARRAY[${sql.join(earned.arrearIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+        `);
+      }
+      if (earned.bonusIds.length > 0) {
+        await tx.execute(sql`
+          UPDATE payroll.payroll_bonus SET status = 'paid', paid_in_run_id = ${p.id}::uuid
+          WHERE id = ANY(${sql`ARRAY[${sql.join(earned.bonusIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+        `);
+      }
+      if (earned.reimbIds.length > 0) {
+        await tx.execute(sql`
+          UPDATE payroll.payroll_reimbursements SET status = 'paid', paid_in_run_id = ${p.id}::uuid
+          WHERE id = ANY(${sql`ARRAY[${sql.join(earned.reimbIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+        `);
+      }
 
       // Single source of truth: totals come from the same computed result.
       totalGross += result.grossMinor;
@@ -366,7 +576,7 @@ export async function computeAndInsertSlip(
     basicMinor: bigint; month: string; pensionScheme?: PensionScheme;
     daRateBps?: bigint; cityClass?: CityClass; ptMinor?: bigint;
     taxRegime?: "old" | "new"; fyStartYear?: number;
-    tdsYtdMinor?: bigint; monthsRemaining?: number;
+    tdsYtdMinor?: bigint; monthsRemaining?: number; protectedNetFloorMinor?: bigint;
     declaration?: { rentPaidAnnualMinor?: bigint; ded80cMinor?: bigint; ded80dMinor?: bigint; otherDedMinor?: bigint; prevEmployerSalaryMinor?: bigint; otherSourcesIncomeMinor?: bigint; perquisitesMinor?: bigint };
     rawComponents?: RawComponent[];
     components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }>;
@@ -381,6 +591,7 @@ export async function computeAndInsertSlip(
     fyStartYear: params.fyStartYear ?? 2025,
     ...(params.tdsYtdMinor != null ? { tdsYtdMinor: params.tdsYtdMinor } : {}),
     ...(params.monthsRemaining != null ? { monthsRemaining: params.monthsRemaining } : {}),
+    ...(params.protectedNetFloorMinor != null ? { protectedNetFloorMinor: params.protectedNetFloorMinor } : {}),
     ...(params.declaration ? { declaration: params.declaration } : {}),
     rawComponents: params.rawComponents ?? [],
     components: params.components ?? [],

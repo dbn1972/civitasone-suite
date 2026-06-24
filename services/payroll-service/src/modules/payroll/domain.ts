@@ -61,7 +61,16 @@ export interface SlipInput {
   /** Sec 192 true-up: TDS already deducted YTD this FY + months left (incl. this one). */
   tdsYtdMinor?: bigint;
   monthsRemaining?: number;
+  /**
+   * P3: protected-net floor (paise). Recovery deductions (LOP, loan EMI, arrears
+   * recovery) are capped so net pay never drops below this floor; the uncapped
+   * remainder is reported as `recoveryCarryForwardMinor` to be recovered later.
+   */
+  protectedNetFloorMinor?: bigint;
 }
+
+/** Deduction codes treated as "recovery" — subject to the protected-net floor. */
+const RECOVERY_CODES = new Set(["LOP", "LOAN_EMI", "ARREAR_RECOVERY"]);
 
 export interface SlipResult {
   grossMinor: bigint;
@@ -84,6 +93,8 @@ export interface SlipResult {
   npsEmployerMinor: bigint;
   annualTaxableMinor: bigint;
   negativeNet: boolean;
+  /** P3: recovery (LOP/EMI/arrears) deferred because it would breach the net floor. */
+  recoveryCarryForwardMinor: bigint;
 }
 
 const PF_PCT      = 12n;
@@ -130,6 +141,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     declaration = {},
     tdsYtdMinor,
     monthsRemaining,
+    protectedNetFloorMinor = 0n,
   } = input;
 
   const earnings: PayComponent[] = [];
@@ -220,15 +232,59 @@ export function computeSlip(input: SlipInput): SlipResult {
     ? trueUpTdsMinor(annualTaxMinor, tdsYtdMinor ?? 0n, monthsRemaining)         // Sec 192 true-up
     : (annualTaxMinor / 100n / 12n) * 100n;                                       // flat /12 fallback
 
-  const adHocDeductions = deductions.reduce((s, d) => s + d.amountMinor, 0n);
-  const totalDeductions = adHocDeductions + pfEmployeeMinor + esiMinor + tdsMinor + gpfMinor + npsEmployeeMinor;
+  // Statutory pension/insurance/tax deductions are never floored.
+  const statutoryDeductions = pfEmployeeMinor + esiMinor + tdsMinor + gpfMinor + npsEmployeeMinor;
+
+  // Split ad-hoc deductions into recovery (floor-capped) and fixed (e.g. PT, and
+  // any structure-defined deduction). Fixed deductions are not subject to the floor.
+  const recoveryRequested = deductions
+    .filter((d) => RECOVERY_CODES.has(d.code))
+    .reduce((s, d) => s + d.amountMinor, 0n);
+  const fixedAdHoc = deductions
+    .filter((d) => !RECOVERY_CODES.has(d.code))
+    .reduce((s, d) => s + d.amountMinor, 0n);
+
+  // Headroom available for recovery after gross less all non-recovery deductions,
+  // keeping net at or above the protected floor.
+  const nonRecovery   = statutoryDeductions + fixedAdHoc;
+  const headroom      = grossMinor - nonRecovery - protectedNetFloorMinor;
+  const recoveryCap   = headroom < 0n ? 0n : headroom;
+  const recoveryApplied = recoveryRequested > recoveryCap ? recoveryCap : recoveryRequested;
+  const recoveryCarryForwardMinor = recoveryRequested - recoveryApplied;
+
+  // If recovery was capped, scale down the recovery deduction line items so the
+  // persisted slip reflects what was actually withheld (carry the remainder).
+  if (recoveryCarryForwardMinor > 0n && recoveryRequested > 0n) {
+    let remainingToTrim = recoveryCarryForwardMinor;
+    // Trim from the largest recovery lines first (deterministic by amount desc).
+    const recoveryLines = deductions
+      .filter((d) => RECOVERY_CODES.has(d.code))
+      .sort((a, b) => (a.amountMinor < b.amountMinor ? 1 : -1));
+    for (const line of recoveryLines) {
+      if (remainingToTrim <= 0n) break;
+      const trim = line.amountMinor < remainingToTrim ? line.amountMinor : remainingToTrim;
+      line.amountMinor -= trim;
+      remainingToTrim -= trim;
+    }
+    // Drop fully-trimmed recovery lines.
+    for (let i = deductions.length - 1; i >= 0; i--) {
+      const d = deductions[i]!;
+      if (RECOVERY_CODES.has(d.code) && d.amountMinor === 0n) deductions.splice(i, 1);
+    }
+  }
+
+  const totalDeductions = nonRecovery + recoveryApplied;
   const netRaw          = grossMinor - totalDeductions;
+  // With the floor enforced, netRaw can still legitimately be 0 (no floor + full
+  // recovery). negativeNet now only ever true if floor is 0 and fixed/statutory
+  // alone exceed gross (an upstream data error worth flagging as an exception).
   const negativeNet     = netRaw < 0n;
 
   return {
     grossMinor,
     totalDeductionsMinor: totalDeductions,
     netPayMinor: negativeNet ? 0n : netRaw,
+    recoveryCarryForwardMinor,
     daMinor, hraMinor, earnings, deductions,
     pfEmployeeMinor, pfEmployerMinor, epsMinor, epfEmployerMinor,
     esiMinor, esiEmployerMinor, ptMinor: pt, tdsMinor,
