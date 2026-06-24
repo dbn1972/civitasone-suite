@@ -11,8 +11,9 @@ export async function insertUcStatement(tx: Writer, row: UcInsert): Promise<void
   await tx.insert(grantUcStatements).values(row);
 }
 
-export async function listUcByApplication(applicationId: string): Promise<UcRow[]> {
-  return db.select().from(grantUcStatements).where(eq(grantUcStatements.applicationId, applicationId));
+export async function listUcByApplication(applicationId: string, tenantId: string): Promise<UcRow[]> {
+  return db.select().from(grantUcStatements)
+    .where(and(eq(grantUcStatements.applicationId, applicationId), eq(grantUcStatements.tenantId, tenantId)));
 }
 
 export async function listUcByTenant(tenantId: string, limit: number): Promise<UcRow[]> {

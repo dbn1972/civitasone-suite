@@ -4,8 +4,9 @@ import { grantBeneficiaries, grantBankAccounts, grantAadhaarLinks, type Benefici
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findBeneficiaryById(id: string): Promise<BeneficiaryRow | null> {
-  const rows = await db.select().from(grantBeneficiaries).where(eq(grantBeneficiaries.id, id)).limit(1);
+export async function findBeneficiaryById(id: string, tenantId: string): Promise<BeneficiaryRow | null> {
+  const rows = await db.select().from(grantBeneficiaries)
+    .where(and(eq(grantBeneficiaries.id, id), eq(grantBeneficiaries.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 

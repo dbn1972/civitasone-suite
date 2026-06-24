@@ -1,16 +1,19 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { grantApplications, grantScores, type ApplicationRow, type ApplicationInsert, type ScoreRow, type ScoreInsert } from "./schema.js";
+import { sql } from "drizzle-orm";
+import { grantApplications, grantScores, grantSanctionCounters, type ApplicationRow, type ApplicationInsert, type ScoreRow, type ScoreInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findApplicationById(id: string): Promise<ApplicationRow | null> {
-  const rows = await db.select().from(grantApplications).where(eq(grantApplications.id, id)).limit(1);
+export async function findApplicationById(id: string, tenantId: string): Promise<ApplicationRow | null> {
+  const rows = await db.select().from(grantApplications)
+    .where(and(eq(grantApplications.id, id), eq(grantApplications.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
-export async function findApplicationByIdTx(tx: Writer, id: string): Promise<ApplicationRow | null> {
-  const rows = await (tx as typeof db).select().from(grantApplications).where(eq(grantApplications.id, id)).limit(1);
+export async function findApplicationByIdTx(tx: Writer, id: string, tenantId: string): Promise<ApplicationRow | null> {
+  const rows = await (tx as typeof db).select().from(grantApplications)
+    .where(and(eq(grantApplications.id, id), eq(grantApplications.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -37,4 +40,28 @@ export async function listApplicationsByTenant(tenantId: string, limit: number):
   return db.select().from(grantApplications)
     .where(eq(grantApplications.tenantId, tenantId))
     .limit(limit);
+}
+
+/**
+ * Gapless per-(tenant, FY) sanction number allocation. Runs INSIDE the consumer
+ * transaction: the atomic upsert below either seeds the counter (returning 1) or
+ * increments it and returns the value just consumed. Because it shares the caller
+ * transaction, a rolled-back insert releases the number — no gaps, no collisions.
+ * Returns a formatted sanction number e.g. GNT-2025-26-00001.
+ */
+export async function allocateSanctionNo(tx: Writer, tenantId: string, fy: string): Promise<string> {
+  const rows = await (tx as typeof db)
+    .insert(grantSanctionCounters)
+    .values({ tenantId, fy, nextVal: 2n })
+    .onConflictDoUpdate({
+      target: [grantSanctionCounters.tenantId, grantSanctionCounters.fy],
+      set: { nextVal: sql`${grantSanctionCounters.nextVal} + 1` },
+    })
+    .returning({ nextVal: grantSanctionCounters.nextVal });
+  // On insert, nextVal in DB is the seeded 2, allocated number is 1.
+  // On update, RETURNING gives the post-increment value; allocated number is that minus 1.
+  const stored = rows[0]!.nextVal;
+  const allocated = stored - 1n;
+  const seq = allocated.toString().padStart(5, "0");
+  return `GNT-${fy}-${seq}`;
 }

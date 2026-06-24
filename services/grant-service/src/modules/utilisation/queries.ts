@@ -15,7 +15,7 @@ function mapUcStatus(status: string): "pending" | "submitted" | "verified" | "re
 }
 
 export async function getUcStatements(tenantId: string, applicationId: string) {
-  return repo.listUcByApplication(applicationId);
+  return repo.listUcByApplication(applicationId, tenantId);
 }
 
 export async function listUtilizationCerts(tenantId: string, limit: number) {
@@ -25,8 +25,8 @@ export async function listUtilizationCerts(tenantId: string, limit: number) {
   );
   const summaries = [];
   for (const row of rows ?? []) {
-    const application = await applicationRepo.findApplicationById(row.applicationId);
-    const beneficiary = application ? await beneficiaryRepo.findBeneficiaryById(application.beneficiaryId) : null;
+    const application = await applicationRepo.findApplicationById(row.applicationId, tenantId);
+    const beneficiary = application ? await beneficiaryRepo.findBeneficiaryById(application.beneficiaryId, tenantId) : null;
     summaries.push({
       id: row.id,
       ucNo: row.ucRef ?? row.id.slice(0, 8).toUpperCase(),

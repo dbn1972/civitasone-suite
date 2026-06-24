@@ -4,22 +4,25 @@ import { grantInstallments, grantDisbursements, grantPfmsRecords, type Installme
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findInstallmentById(id: string): Promise<InstallmentRow | null> {
-  const rows = await db.select().from(grantInstallments).where(eq(grantInstallments.id, id)).limit(1);
+export async function findInstallmentById(id: string, tenantId: string): Promise<InstallmentRow | null> {
+  const rows = await db.select().from(grantInstallments)
+    .where(and(eq(grantInstallments.id, id), eq(grantInstallments.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
-export async function findInstallmentByIdTx(tx: Writer, id: string): Promise<InstallmentRow | null> {
-  const rows = await (tx as typeof db).select().from(grantInstallments).where(eq(grantInstallments.id, id)).limit(1);
+export async function findInstallmentByIdTx(tx: Writer, id: string, tenantId: string): Promise<InstallmentRow | null> {
+  const rows = await (tx as typeof db).select().from(grantInstallments)
+    .where(and(eq(grantInstallments.id, id), eq(grantInstallments.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
-export async function findInstallmentsByApplication(applicationId: string): Promise<InstallmentRow[]> {
-  return db.select().from(grantInstallments).where(eq(grantInstallments.applicationId, applicationId));
+export async function findInstallmentsByApplication(applicationId: string, tenantId: string): Promise<InstallmentRow[]> {
+  return db.select().from(grantInstallments)
+    .where(and(eq(grantInstallments.applicationId, applicationId), eq(grantInstallments.tenantId, tenantId)));
 }
 
-export async function findDisbursementsByApplicationId(applicationId: string): Promise<DisbursementRow[]> {
-  const installments = await findInstallmentsByApplication(applicationId);
+export async function findDisbursementsByApplicationId(applicationId: string, tenantId: string): Promise<DisbursementRow[]> {
+  const installments = await findInstallmentsByApplication(applicationId, tenantId);
   if (!installments.length) return [];
   const ids = installments.map((i) => i.id);
   const all: DisbursementRow[] = [];
