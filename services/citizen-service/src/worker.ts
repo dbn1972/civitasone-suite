@@ -7,6 +7,7 @@ import { registerApplicationConsumers } from "./modules/application/consumer.js"
 import { registerGrievanceConsumers }   from "./modules/grievance/consumer.js";
 import { registerRtiConsumers }         from "./modules/rti/consumer.js";
 import { registerHelpdeskConsumers }    from "./modules/helpdesk/consumer.js";
+import { startSlaSweep }                from "./modules/sla-sweep/scheduler.js";
 
 const log = pino({ name: "citizen-worker" });
 
@@ -18,11 +19,14 @@ registerHelpdeskConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
-log.info("citizen-service worker: consumers + outbox relay running");
+// P0-2: periodic SLA-breach sweep (grievances/applications/tickets/RTIs).
+const slaSweep = startSlaSweep(queue, log);
+log.info("citizen-service worker: consumers + outbox relay + sla sweep running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(relay);
+  if (slaSweep) clearInterval(slaSweep);
   await queue.stop();
   await sqlClient.end();
   log.info("shutdown complete");

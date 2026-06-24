@@ -3,7 +3,7 @@ import { z } from "zod";
 export const idParam = z.object({ id: z.string().uuid() });
 
 export const createTicketBody = z.object({
-  citizenId:   z.string().uuid(),
+  citizenId:   z.string().uuid().optional(),
   subject:     z.string().min(1),
   description: z.string().min(1),
   priority:    z.enum(["low", "medium", "high", "critical"]).optional(),

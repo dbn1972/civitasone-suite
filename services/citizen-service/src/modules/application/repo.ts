@@ -12,8 +12,10 @@ export async function findApplicationById(id: string): Promise<ApplicationRow | 
   return rows[0] ?? null;
 }
 
-export async function findApplicationByIdTx(tx: Writer, id: string): Promise<ApplicationRow | null> {
-  const rows = await (tx as typeof db).select().from(citizenApplications).where(eq(citizenApplications.id, id)).limit(1);
+/** P1-2: scope by (id AND tenantId) so a forged foreign id cannot be read/mutated. */
+export async function findApplicationByIdTx(tx: Writer, id: string, tenantId: string): Promise<ApplicationRow | null> {
+  const rows = await (tx as typeof db).select().from(citizenApplications)
+    .where(and(eq(citizenApplications.id, id), eq(citizenApplications.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -34,8 +36,10 @@ export async function insertApplication(tx: Writer, row: ApplicationInsert): Pro
   await tx.insert(citizenApplications).values(row);
 }
 
-export async function updateApplication(tx: Writer, id: string, patch: Partial<ApplicationInsert>): Promise<void> {
-  await tx.update(citizenApplications).set({ ...patch, updatedAt: new Date() }).where(eq(citizenApplications.id, id));
+export async function updateApplication(tx: Writer, id: string, tenantId: string, patch: Partial<ApplicationInsert>): Promise<void> {
+  // P1-2: tenant-scoped update prevents cross-tenant writes via a forged id.
+  await tx.update(citizenApplications).set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(citizenApplications.id, id), eq(citizenApplications.tenantId, tenantId)));
 }
 
 export async function insertDocument(tx: Writer, row: AppDocumentInsert): Promise<void> {

@@ -68,27 +68,33 @@ export async function listTickets(
   tenantId: string,
   limit: number,
   slaStatus?: string,
+  citizenId?: string,
 ): Promise<{ data: HelpdeskTicketSummary[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  const cacheKey = `list:${limit}:${slaStatus ?? "all"}`;
-  return cache.listOrLoad(tenantId, "ticket", cacheKey, async () => {
-    const rows = await repo.listTicketsByTenant(tenantId, undefined, limit, slaStatus);
-    return {
-      data: rows.map(toSummary),
-      pagination: {
-        hasMore: rows.length === limit,
-        pageSize: limit,
-        ...(rows.length > 0 ? { cursor: rows[rows.length - 1]!.id } : {}),
-      },
-    };
+  const build = (rows: TicketRow[]) => ({
+    data: rows.map(toSummary),
+    pagination: {
+      hasMore: rows.length === limit,
+      pageSize: limit,
+      ...(rows.length > 0 ? { cursor: rows[rows.length - 1]!.id } : {}),
+    },
   });
+  // P0-3: citizen-scoped listing bypasses the shared tenant cache key.
+  if (citizenId) {
+    return build(await repo.listTicketsByTenant(tenantId, undefined, limit, slaStatus, citizenId));
+  }
+  const cacheKey = `list:${limit}:${slaStatus ?? "all"}`;
+  return cache.listOrLoad(tenantId, "ticket", cacheKey, async () =>
+    build(await repo.listTicketsByTenant(tenantId, undefined, limit, slaStatus)),
+  );
 }
 
 export async function listTicketDetails(
   tenantId: string,
   limit: number,
   slaStatus?: string,
+  citizenId?: string,
 ): Promise<TicketDetail[]> {
-  const rows = await repo.listTicketsByTenant(tenantId, undefined, limit, slaStatus);
+  const rows = await repo.listTicketsByTenant(tenantId, undefined, limit, slaStatus, citizenId);
   const details: TicketDetail[] = [];
   for (const row of rows) {
     const notes = await repo.listNotes(row.id);

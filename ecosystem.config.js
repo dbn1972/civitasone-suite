@@ -116,6 +116,23 @@ const MFA_ENC_KEY = (() => {
   return "civitasone-identity-mfa-dev-key-not-for-prod";
 })();
 
+// -- Citizen PII at-rest encryption key (P0-1, DPDP) --------------------------
+// citizen-service encrypts portal.citizen_profiles PII (email / mobile /
+// digilocker_token / address) AES-256-GCM at rest. The 32-byte key is derived
+// from this secret. Same injection contract as PII_ENC_KEY / MFA_ENC_KEY:
+// env -> on-host key file -> dev fallback; fail closed in prod. NO secret literal.
+const CITIZEN_PII_KEY = (() => {
+  if (process.env.CITIZEN_PII_KEY && process.env.CITIZEN_PII_KEY.length >= 16) return process.env.CITIZEN_PII_KEY;
+  try {
+    const fs = require("fs");
+    const p = require("path").join(process.env.HOME || "/home/ec2-user", ".civitasone-citizen-pii-key");
+    const v = fs.readFileSync(p, "utf8").trim();
+    if (v.length >= 16) return v;
+  } catch (e) { /* fall through */ }
+  if (IS_PROD) throw new Error("[ecosystem] CITIZEN_PII_KEY required for citizen-service (inject from secret manager or provision the host key file). Refusing to start.");
+  return "civitasone-citizen-pii-dev-key-not-for-prod";
+})();
+
 // -- CRM PII at-rest encryption key (P1-2 / DPDP) -----------------------------
 // crm-service encrypts contact email/phone AES-256-GCM at rest. Same injection
 // contract as PII_ENC_KEY: env -> on-host key file -> dev fallback; fail closed
@@ -210,7 +227,7 @@ module.exports = {
 
     // ── Government-specific ────────────────────────────────────────────────────
     svc("grant",        3019, "grant_svc",         "civitas_grant"),
-    svc("citizen",      3020, "citizen_svc",       "civitas_citizen"),
+    svc("citizen",      3020, "citizen_svc",       "civitas_citizen", { CITIZEN_PII_KEY }),
     svc("legal",        3021, "legal_svc",         "civitas_legal"),
 
     // ── Admin & billing ────────────────────────────────────────────────────────
@@ -238,7 +255,7 @@ module.exports = {
     worker("estab",        "estab_svc",        "civitas_estab"),
     worker("asset",        "asset_svc",        "civitas_asset"),
     worker("stock",        "stock_svc",        "civitas_stock"),
-    worker("citizen",      "citizen_svc",      "civitas_citizen"),
+    worker("citizen",      "citizen_svc",      "civitas_citizen", { CITIZEN_PII_KEY }),
     worker("helpdesk",     "helpdesk_svc",     "civitas_helpdesk"),
     worker("audit",        "audit_svc",        "civitas_audit"),
     worker("legal",        "legal_svc",        "civitas_legal"),

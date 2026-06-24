@@ -3,6 +3,7 @@ import { ZodError, z } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { ticketsListSchema, metricsListResponseSchema, slaListResponseSchema, TicketAnalyticsSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   idParam, createTicketBody, ticketNoteBody, closeTicketBody,
@@ -17,6 +18,18 @@ const STAFF_ROLES = [
 ];
 const CITIZEN_ROLES = ["citizen", ...STAFF_ROLES];
 
+/**
+ * P0-3: in helpdesk, staff (helpdesk_* + citizen officer-tier) may act for any
+ * citizen; a bare `citizen` is constrained to their own actorId.
+ */
+function resolveTicketCitizenId(ctx: { actorId: string; roles: string[]; tenantId: string; actorType: "user" | "service_account"; correlationId: string }, supplied?: string): string {
+  if (hasAnyRole(ctx, STAFF_ROLES)) return supplied ?? ctx.actorId;
+  if (supplied !== undefined && supplied !== ctx.actorId) {
+    throw new HttpError(403, "FORBIDDEN", "citizens may only act on their own records");
+  }
+  return ctx.actorId;
+}
+
 const ticketListQuerySchema = z.object({
   limit:     z.coerce.number().int().min(1).max(500).default(50),
   offset:    z.coerce.number().int().min(0).default(0),
@@ -28,11 +41,13 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const q = ticketListQuerySchema.parse(req.query);
+    // P0-3: a bare citizen only sees their own tickets; staff see the tenant view.
+    const ownCitizenId = hasAnyRole(ctx, STAFF_ROLES) ? undefined : ctx.actorId;
     if (q.slaStatus) {
-      const data = await queries.listTicketDetails(ctx.tenantId, q.limit, q.slaStatus);
+      const data = await queries.listTicketDetails(ctx.tenantId, q.limit, q.slaStatus, ownCitizenId);
       return reply.send({ data, pagination: { hasMore: data.length === q.limit, pageSize: q.limit } });
     }
-    sendValidated(reply, ticketsListSchema, await queries.listTickets(ctx.tenantId, q.limit, q.slaStatus));
+    sendValidated(reply, ticketsListSchema, await queries.listTickets(ctx.tenantId, q.limit, q.slaStatus, ownCitizenId));
   });
 
   app.get("/v1/citizen/analytics/metrics", async (req, reply) => {
@@ -51,7 +66,9 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = createTicketBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createTicket(ctx, body));
+    // P0-3: constrain citizenId to the actor unless staff specify another.
+    const citizenId = resolveTicketCitizenId(ctx, body.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createTicket(ctx, { ...body, citizenId }));
   });
 
   app.get("/v1/citizen/tickets/analytics", async (req, reply) => {

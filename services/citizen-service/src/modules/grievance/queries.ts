@@ -22,6 +22,11 @@ export async function listGrievances(tenantId: string, citizenId: string): Promi
   return rows ?? [];
 }
 
+/** Officer-only: list grievances across the whole tenant (no citizen scoping). */
+export async function listAllGrievances(tenantId: string): Promise<GrievanceRow[]> {
+  return repo.listGrievancesByTenant(tenantId, 500, 0);
+}
+
 function mapRequestStatus(status: string): CitizenRequestSummary["status"] {
   if (status === "registered") return "submitted";
   if (status === "assigned") return "under_review";

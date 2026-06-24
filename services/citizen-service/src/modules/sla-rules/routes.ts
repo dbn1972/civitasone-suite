@@ -1,20 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
 
 const CITIZEN_ADMIN_ROLES = ["citizen_admin", "super_admin", "admin", "tenant_admin"];
-
-interface SlaRule {
-  id: string;
-  tenantId: string;
-  priority: string;
-  escalationHours: number;
-  escalateTo: string;
-  isActive: boolean;
-  createdAt: string;
-}
-
-const store: SlaRule[] = [];
 
 const createBody = z.object({
   priority: z.string().min(1).max(16),
@@ -28,17 +17,14 @@ export async function slaRulesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ADMIN_ROLES);
     const body = createBody.parse(req.body);
-
-    const record: SlaRule = {
-      id: crypto.randomUUID(),
+    // P1-1: persisted (was an in-memory store) — survives restart, feeds the SLA sweep.
+    const record = await repo.upsertRule({
       tenantId: ctx.tenantId,
       priority: body.priority,
       escalationHours: body.escalationHours,
       escalateTo: body.escalateTo,
       isActive: body.isActive,
-      createdAt: new Date().toISOString(),
-    };
-    store.push(record);
+    });
     return reply.code(201).send({ data: record });
   });
 
@@ -49,8 +35,11 @@ export async function slaRulesRoutes(app: FastifyInstance): Promise<void> {
       limit: z.coerce.number().int().min(1).max(200).default(50),
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
-    const rows = store.filter((r) => r.tenantId === ctx.tenantId && r.isActive);
-    return reply.send({ data: rows.slice(q.offset, q.offset + q.limit), total: rows.length });
+    const [rows, total] = await Promise.all([
+      repo.listActiveRules(ctx.tenantId, q.limit, q.offset),
+      repo.countActiveRules(ctx.tenantId),
+    ]);
+    return reply.send({ data: rows, total });
   });
 
   app.setErrorHandler((err, req, reply) => {

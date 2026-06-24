@@ -9,9 +9,13 @@ export async function insertProfile(tx: Writer, row: ProfileInsert): Promise<voi
   await tx.insert(citizenProfiles).values(row);
 }
 
-/** DPDP §12: anonymise PII fields instead of hard-delete to preserve audit trail. */
-export async function anonymiseProfile(tx: Writer, id: string, updatedBy: string): Promise<void> {
-  await (tx as typeof db).update(citizenProfiles)
+/**
+ * DPDP §12: anonymise PII fields instead of hard-delete to preserve audit trail.
+ * P0-4: scoped by (id AND tenantId) so a cross-tenant erasure touches no rows.
+ * Returns the number of rows affected (0 = not found / wrong tenant).
+ */
+export async function anonymiseProfile(tx: Writer, id: string, tenantId: string, updatedBy: string): Promise<number> {
+  const updated = await (tx as typeof db).update(citizenProfiles)
     .set({
       name:            "[DELETED]",
       email:           null,
@@ -21,7 +25,9 @@ export async function anonymiseProfile(tx: Writer, id: string, updatedBy: string
       updatedAt:       new Date(),
       updatedBy,
     })
-    .where(eq(citizenProfiles.id, id));
+    .where(and(eq(citizenProfiles.id, id), eq(citizenProfiles.tenantId, tenantId)))
+    .returning({ id: citizenProfiles.id });
+  return updated.length;
 }
 
 export async function findProfileById(id: string): Promise<ProfileRow | null> {

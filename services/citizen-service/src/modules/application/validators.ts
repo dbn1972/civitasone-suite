@@ -2,10 +2,11 @@ import { z } from "zod";
 
 export const idParam = z.object({ id: z.string().uuid() });
 
-export const citizenIdQuery = z.object({ citizenId: z.string().uuid() });
+/** P0-3: citizenId is optional in input — resolved/constrained from the actor. */
+export const citizenIdQuery = z.object({ citizenId: z.string().uuid().optional() });
 
 export const submitApplicationBody = z.object({
-  citizenId: z.string().uuid(),
+  citizenId: z.string().uuid().optional(),
   serviceId: z.string().uuid(),
   serviceType: z.string().min(1),
   documentTypes: z.array(z.string().min(1)).default([]),

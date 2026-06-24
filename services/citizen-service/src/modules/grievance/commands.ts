@@ -9,7 +9,7 @@ import type {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function registerGrievance(ctx: RequestContext, body: RegisterGrievanceBody): Promise<Accepted> {
+export async function registerGrievance(ctx: RequestContext, body: RegisterGrievanceBody & { citizenId: string }): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.grievanceRegister, {
     messageId: id, type: COMMANDS.grievanceRegister,
@@ -21,7 +21,7 @@ export async function registerGrievance(ctx: RequestContext, body: RegisterGriev
 
 export async function assignGrievance(ctx: RequestContext, id: string, body: AssignGrievanceBody): Promise<Accepted> {
   await queue.publish(COMMANDS.grievanceAssign, {
-    type: COMMANDS.grievanceAssign,
+    messageId: randomUUID(), type: COMMANDS.grievanceAssign,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
@@ -42,7 +42,7 @@ export async function addAction(ctx: RequestContext, id: string, body: Grievance
 
 export async function resolveGrievance(ctx: RequestContext, id: string, body: ResolveGrievanceBody): Promise<Accepted> {
   await queue.publish(COMMANDS.grievanceResolve, {
-    type: COMMANDS.grievanceResolve,
+    messageId: randomUUID(), type: COMMANDS.grievanceResolve,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
@@ -63,7 +63,7 @@ export async function escalateGrievance(ctx: RequestContext, id: string, body: E
 
 export async function reopenGrievance(ctx: RequestContext, id: string, body: ReopenGrievanceBody): Promise<Accepted> {
   await queue.publish(COMMANDS.grievanceReopen, {
-    type: COMMANDS.grievanceReopen,
+    messageId: randomUUID(), type: COMMANDS.grievanceReopen,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, reason: body.reason },
   });

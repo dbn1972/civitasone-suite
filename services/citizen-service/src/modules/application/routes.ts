@@ -2,7 +2,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, resolveCitizenId, isOfficer, HttpError } from "../../shared/context.js";
 import { idParam, citizenIdQuery, submitApplicationBody, statusUpdateBody, docUploadBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -15,7 +15,9 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = submitApplicationBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.submitApplication(ctx, body));
+    // P0-3: constrain citizenId to the actor unless an officer specifies another.
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitApplication(ctx, { ...body, citizenId }));
   });
 
   app.patch("/v1/citizen/applications/:id/status", async (req, reply) => {
@@ -47,7 +49,12 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { citizenId } = citizenIdQuery.parse(req.query);
-    return reply.send(await queries.listApplications(ctx.tenantId, citizenId));
+    // P0-3: citizen constrained to self; officers may filter by any id or list all.
+    if (isOfficer(ctx) && citizenId === undefined) {
+      return reply.send(await queries.listAllApplications(ctx.tenantId));
+    }
+    const scopedCitizenId = resolveCitizenId(ctx, citizenId);
+    return reply.send(await queries.listApplications(ctx.tenantId, scopedCitizenId));
   });
 
   app.setErrorHandler((err, req, reply) => {

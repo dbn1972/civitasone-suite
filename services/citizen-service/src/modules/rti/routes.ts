@@ -42,6 +42,15 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, RTISummaryListSchema, await queries.listRtiSummaries(ctx.tenantId, q.limit));
   });
 
+  /** RTI Act 2005 §7: list RTIs that have breached the 30-day deadline without response (officer view).
+   * P1-3: MUST be registered before GET /rti/:id so the static path is not
+   * swallowed by the :id param route (which would 400 on "overdue"). */
+  app.get("/v1/citizen/rti/overdue", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    return reply.send(await queries.listOverdueRti(ctx.tenantId));
+  });
+
   app.get("/v1/citizen/rti/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
@@ -49,13 +58,6 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const rti = await queries.getRti(ctx.tenantId, id);
     if (!rti) throw new HttpError(404, "NOT_FOUND", "rti request not found");
     return reply.send(rti);
-  });
-
-  /** RTI Act 2005 §7: list RTIs that have breached the 30-day deadline without response (officer view) */
-  app.get("/v1/citizen/rti/overdue", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, OFFICER_ROLES);
-    return reply.send(await queries.listOverdueRti(ctx.tenantId));
   });
 
   app.setErrorHandler((err, req, reply) => {

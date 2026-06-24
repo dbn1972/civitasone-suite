@@ -12,8 +12,10 @@ export async function findGrievanceById(id: string): Promise<GrievanceRow | null
   return rows[0] ?? null;
 }
 
-export async function findGrievanceByIdTx(tx: Writer, id: string): Promise<GrievanceRow | null> {
-  const rows = await (tx as typeof db).select().from(citizenGrievances).where(eq(citizenGrievances.id, id)).limit(1);
+/** P1-2: scope by (id AND tenantId) so a forged foreign id cannot be read/mutated. */
+export async function findGrievanceByIdTx(tx: Writer, id: string, tenantId: string): Promise<GrievanceRow | null> {
+  const rows = await (tx as typeof db).select().from(citizenGrievances)
+    .where(and(eq(citizenGrievances.id, id), eq(citizenGrievances.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -37,8 +39,10 @@ export async function insertGrievance(tx: Writer, row: GrievanceInsert): Promise
   await tx.insert(citizenGrievances).values(row);
 }
 
-export async function updateGrievance(tx: Writer, id: string, patch: Partial<GrievanceInsert>): Promise<void> {
-  await tx.update(citizenGrievances).set({ ...patch, updatedAt: new Date() }).where(eq(citizenGrievances.id, id));
+export async function updateGrievance(tx: Writer, id: string, tenantId: string, patch: Partial<GrievanceInsert>): Promise<void> {
+  // P1-2: tenant-scoped update prevents cross-tenant writes via a forged id.
+  await tx.update(citizenGrievances).set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(citizenGrievances.id, id), eq(citizenGrievances.tenantId, tenantId)));
 }
 
 export async function insertAction(tx: Writer, row: GrievanceActionInsert): Promise<void> {

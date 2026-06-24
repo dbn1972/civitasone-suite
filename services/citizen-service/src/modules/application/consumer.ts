@@ -50,10 +50,10 @@ export function registerApplicationConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; status: string; note?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const app = await repo.findApplicationByIdTx(tx, p.id);
+      const app = await repo.findApplicationByIdTx(tx, p.id, msg.tenantId);
       if (!app) return;
       assertStatusTransition(app.status, p.status as any);
-      await repo.updateApplication(tx, p.id, { status: p.status, updatedBy: msg.actorId });
+      await repo.updateApplication(tx, p.id, msg.tenantId, { status: p.status, updatedBy: msg.actorId });
       await repo.insertStatusHistory(tx, {
         tenantId: p.tenantId, applicationId: p.id,
         fromStatus: app.status, toStatus: p.status, note: p.note ?? null,
@@ -100,7 +100,7 @@ export function registerApplicationConsumers(queue: Queue): void {
     const p = msg.payload as { tenantId: string; applicationId: string; serviceType: string; maxDays: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const app = await repo.findApplicationByIdTx(tx, p.applicationId);
+      const app = await repo.findApplicationByIdTx(tx, p.applicationId, msg.tenantId);
       if (!app) return;
       if (!isSlaBreached(app.createdAt, p.maxDays, app.status)) return;
       await enqueue(tx, {

@@ -49,9 +49,9 @@ export function registerHelpdeskConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; note?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ticket = await repo.findTicketByIdTx(tx, p.id);
+      const ticket = await repo.findTicketByIdTx(tx, p.id, msg.tenantId);
       if (!ticket) return;
-      await repo.updateTicket(tx, p.id, { status: "closed", updatedBy: msg.actorId });
+      await repo.updateTicket(tx, p.id, msg.tenantId, { status: "closed", updatedBy: msg.actorId });
       if (p.note) {
         await repo.insertNote(tx, {
           tenantId: p.tenantId, ticketId: p.id, authorId: msg.actorId, body: p.note,
@@ -67,9 +67,9 @@ export function registerHelpdeskConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; assigneeId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId ?? p.id))) return;
-      const ticket = await repo.findTicketByIdTx(tx, p.id);
+      const ticket = await repo.findTicketByIdTx(tx, p.id, msg.tenantId);
       if (!ticket) return;
-      await repo.updateTicket(tx, p.id, {
+      await repo.updateTicket(tx, p.id, msg.tenantId, {
         assigneeId: p.assigneeId,
         status: ticket.status === "open" ? "in_progress" : ticket.status,
         updatedBy: msg.actorId,
@@ -84,9 +84,9 @@ export function registerHelpdeskConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; note?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId ?? p.id))) return;
-      const ticket = await repo.findTicketByIdTx(tx, p.id);
+      const ticket = await repo.findTicketByIdTx(tx, p.id, msg.tenantId);
       if (!ticket) return;
-      await repo.updateTicket(tx, p.id, {
+      await repo.updateTicket(tx, p.id, msg.tenantId, {
         status: "resolved",
         resolvedAt: new Date(),
         updatedBy: msg.actorId,
@@ -106,7 +106,7 @@ export function registerHelpdeskConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; ticketId: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ticket = await repo.findTicketByIdTx(tx, p.ticketId);
+      const ticket = await repo.findTicketByIdTx(tx, p.ticketId, msg.tenantId);
       if (!ticket) return;
       const level = (await repo.countEscalationsForTicket(p.tenantId, p.ticketId)) + 1;
       await repo.insertEscalation(tx, {
@@ -117,9 +117,35 @@ export function registerHelpdeskConsumers(queue: Queue): void {
         reason: p.reason,
         level,
       });
-      await repo.updateTicket(tx, p.ticketId, { priority: "high", updatedBy: msg.actorId });
+      await repo.updateTicket(tx, p.ticketId, msg.tenantId, { priority: "high", updatedBy: msg.actorId });
       await notifyIfBreached(tx, msg, ticket);
       await audit(tx, msg, "escalate", "citizen_ticket", p.ticketId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "ticket", p.ticketId));
+  });
+
+  /**
+   * P0-2: SLA sweep tick for tickets. Published by the scheduler with a
+   * deterministic messageId so a given overdue ticket only breaches once.
+   * Re-validates the SLA inside the tx, records an escalation, bumps priority,
+   * and emits the breach notification.
+   */
+  queue.subscribe(COMMANDS.ticketSlaCheck, async (msg) => {
+    const p = msg.payload as { tenantId: string; ticketId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const ticket = await repo.findTicketByIdTx(tx, p.ticketId, msg.tenantId);
+      if (!ticket) return;
+      if (computeSlaStatus(ticket) !== "breached") return;
+      if (ticket.status === "closed" || ticket.status === "resolved") return;
+      const level = (await repo.countEscalationsForTicket(p.tenantId, p.ticketId)) + 1;
+      await repo.insertEscalation(tx, {
+        tenantId: p.tenantId, ticketId: p.ticketId, escalatedBy: msg.actorId,
+        reason: "auto_escalation: SLA breached", level,
+      });
+      await repo.updateTicket(tx, p.ticketId, msg.tenantId, { priority: "high", updatedBy: msg.actorId });
+      await notifyIfBreached(tx, msg, ticket);
+      await audit(tx, msg, "sla_breached", "citizen_ticket", p.ticketId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "ticket", p.ticketId));
   });
