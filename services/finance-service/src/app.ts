@@ -53,6 +53,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(subLedgerRoutes);
   const { recurringRoutes } = await import("./modules/recurring/routes.js");
   await app.register(recurringRoutes);
+  const { hoaRoutes } = await import("./modules/hoa/routes.js");
+  await app.register(hoaRoutes);
+  const { mastersRoutes } = await import("./modules/masters/routes.js");
+  await app.register(mastersRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

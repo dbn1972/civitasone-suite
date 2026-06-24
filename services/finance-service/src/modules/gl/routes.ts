@@ -41,6 +41,15 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
+  app.get("/v1/finance/statements/trial-balance/balanced", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = req.query as { period?: string };
+    const period = typeof q.period === "string" && /^\d{4}-\d{2}$/.test(q.period) ? q.period : undefined;
+    const result = await queries.getTrialBalanceBalanced(ctx.tenantId, period);
+    return reply.send(result);
+  });
+
   app.get("/v1/finance/statements", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

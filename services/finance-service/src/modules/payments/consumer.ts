@@ -6,8 +6,10 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertThreeWayMatchPresent, assertBillPassed, assertValidPaymentMode, nextStage } from "./domain.js";
-import { assertSanctionNotExhausted, assertValidPfmsHoA } from "../budget/domain.js";
+import { assertSanctionNotExhausted } from "../budget/domain.js";
 import { assertValidDdoCode } from "../../shared/pfms.js";
+import { assertValidHoAWithMaster } from "../hoa/domain.js";
+import { ddoExists, paoExists } from "../masters/repo.js";
 import type { Deduction } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -16,7 +18,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.billCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
-      ddoCode: string;
+      ddoCode: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
       netMinor: number; poRef?: string; grnRef?: string;
     };
@@ -25,7 +27,16 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const head = await budgetRepo.findHeadByIdTx(tx, p.headId);
-      if (head) assertValidPfmsHoA(head.hoaCode);
+      const reader = tx as unknown as Parameters<typeof ddoExists>[2];
+      // HoA: well-formed 18-digit segmentation + major head exists in master
+      if (head) await assertValidHoAWithMaster(head.hoaCode, reader);
+      // DDO/PAO must exist in the per-tenant master (when provided)
+      if (!(await ddoExists(p.tenantId, p.ddoCode.toUpperCase(), reader))) {
+        throw new Error(`UNKNOWN_DDO: ${p.ddoCode} not found in DDO master`);
+      }
+      if (p.paoCode && !(await paoExists(p.tenantId, p.paoCode.toUpperCase(), reader))) {
+        throw new Error(`UNKNOWN_PAO: ${p.paoCode} not found in PAO master`);
+      }
       // P0 fix: enforce sanction balance before inserting the bill
       if (p.sanctionRef) {
         const sanction = await budgetRepo.findSanctionByIdTx(tx, p.sanctionRef);
@@ -38,7 +49,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo: p.billNo, vendorId: p.vendorId,
-        headId: p.headId, ddoCode: p.ddoCode.toUpperCase(), sanctionRef: p.sanctionRef ?? null,
+        headId: p.headId, ddoCode: p.ddoCode.toUpperCase(),
+        ...(p.paoCode ? { paoCode: p.paoCode.toUpperCase() } : {}),
+        sanctionRef: p.sanctionRef ?? null,
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
         deductions: p.deductions, netMinor: BigInt(p.netMinor),
         poRef: p.poRef ?? null, grnRef: p.grnRef ?? null,

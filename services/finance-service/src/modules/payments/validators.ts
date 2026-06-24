@@ -14,6 +14,7 @@ export const createBillBody = z.object({
   vendorId:    z.string().uuid(),
   headId:      z.string().uuid(),
   ddoCode:     ddoCodeField,
+  paoCode:     z.string().regex(/^[A-Za-z0-9]{4,12}$/, "PAO code 4–12 alphanumeric").optional(),
   agencyCode:  z.string().regex(PFMS_AGENCY_REGEX, "agency code 4–12 alphanumeric").optional(),
   schemeCode:  z.string().regex(PFMS_SCHEME_REGEX, "scheme code 4–20 alphanumeric").optional(),
   sanctionRef: z.string().uuid().optional(),

@@ -54,3 +54,22 @@ export async function listJournalsByTenant(tenantId: string, limit: number): Pro
     .where(eq(financeJournals.tenantId, tenantId))
     .limit(limit);
 }
+
+/**
+ * Trial balance summed per period (YYYY-MM from posting_date), with the
+ * balanced check: sum(debit) must equal sum(credit) for every period.
+ */
+export async function getTrialBalanceByPeriod(tenantId: string, period?: string) {
+  const conditions = [eq(financeLedger.tenantId, tenantId)];
+  if (period) conditions.push(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM') = ${period}`);
+  return db
+    .select({
+      period:      sql<string>`to_char(${financeLedger.postingDate}, 'YYYY-MM')`,
+      totalDebit:  sql<bigint>`sum(${financeLedger.debitMinor})`.mapWith(BigInt),
+      totalCredit: sql<bigint>`sum(${financeLedger.creditMinor})`.mapWith(BigInt),
+    })
+    .from(financeLedger)
+    .where(and(...conditions))
+    .groupBy(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM')`)
+    .orderBy(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM')`);
+}

@@ -29,6 +29,25 @@ export async function getTrialBalance(tenantId: string) {
   );
 }
 
+export async function getTrialBalanceBalanced(tenantId: string, period?: string) {
+  const rows = await repo.getTrialBalanceByPeriod(tenantId, period);
+  const periods = rows.map((r) => {
+    const debit = r.totalDebit ?? 0n;
+    const credit = r.totalCredit ?? 0n;
+    return {
+      period: r.period,
+      totalDebitMinor: Number(debit),
+      totalCreditMinor: Number(credit),
+      differenceMinor: Number(debit - credit),
+      isBalanced: debit === credit,
+    };
+  });
+  return {
+    periods,
+    isBalanced: periods.every((p) => p.isBalanced),
+  };
+}
+
 export async function listJournalEntries(tenantId: string, limit: number) {
   const journals = await cache.getOrLoad(
     cache.makeKey(tenantId, "journals", `list:${limit}`),

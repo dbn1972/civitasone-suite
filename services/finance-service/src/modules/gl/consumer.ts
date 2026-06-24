@@ -7,6 +7,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertJournalBalances } from "./domain.js";
 import { getPeriodStatus } from "../period-close/routes.js";
+import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
 import type { JournalLine } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -37,8 +38,20 @@ async function postJournal(
   if (periodStatus === "soft_close" && !(["adjustment", "closing"].includes(journal.type))) {
     throw new Error(`PERIOD_SOFT_CLOSED: only adjustment/closing journals allowed in soft-closed period ${period}`);
   }
+  // Gapless voucher numbering: if the caller did not supply a voucher number
+  // (or asked for AUTO), allocate a strictly-sequential one under a row lock.
+  let voucherNo = journal.voucherNo;
+  if (!voucherNo || voucherNo.trim() === "" || voucherNo.toUpperCase() === "AUTO") {
+    const fy = fyFromDate(journal.postingDate);
+    const series = (journal.type || "JV").slice(0, 8).toUpperCase();
+    const allocated = await nextVoucherNo(
+      tx as unknown as Parameters<typeof nextVoucherNo>[0],
+      journal.tenantId, fy, series,
+    );
+    voucherNo = allocated.voucherNo;
+  }
   await repo.insertJournal(tx, {
-    id: journal.id, tenantId: journal.tenantId, voucherNo: journal.voucherNo,
+    id: journal.id, tenantId: journal.tenantId, voucherNo,
     type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
     status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
   });
@@ -48,14 +61,14 @@ async function postJournal(
       headId: line.accountCode,
       debitMinor: BigInt(line.debitMinor), creditMinor: BigInt(line.creditMinor),
       balanceMinor: BigInt(line.debitMinor) - BigInt(line.creditMinor),
-      voucherNo: journal.voucherNo, postingDate: journal.postingDate,
+      voucherNo, postingDate: journal.postingDate,
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });
   }
   await enqueue(tx, {
     topic: EVENTS.glPosted, eventType: EVENTS.glPosted,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { journalId: journal.id, voucherNo: journal.voucherNo },
+    payload: { journalId: journal.id, voucherNo },
   });
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
