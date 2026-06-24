@@ -9,6 +9,8 @@ import { registerGrnConsumers }      from "./modules/grn/consumer.js";
 import { registerAuctionConsumers }  from "./modules/auction/consumer.js";
 import { registerPaymentsConsumers } from "./modules/payments/consumer.js";
 import { registerClearanceConsumers } from "./modules/clearance/consumer.js";
+import { registerTenderConsumers }   from "./modules/tender/consumer.js";
+import { registerSecurityConsumers } from "./modules/security/consumer.js";
 
 const log = pino({ name: "procurement-worker" });
 
@@ -19,6 +21,8 @@ registerGrnConsumers(queue);
 registerAuctionConsumers(queue);
 registerPaymentsConsumers(queue);
 registerClearanceConsumers(queue);
+registerTenderConsumers(queue);
+registerSecurityConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

@@ -19,6 +19,7 @@ import { rfqRoutes }      from "./modules/rfq/routes.js";
 import { tenderRoutes }   from "./modules/tender/routes.js";
 import { threeWayMatchRoutes } from "./modules/three-way-match/routes.js";
 import { vendorBlacklistRoutes } from "./modules/vendor-blacklist/routes.js";
+import { securityRoutes } from "./modules/security/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -45,6 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(tenderRoutes);
   await app.register(threeWayMatchRoutes);
   await app.register(vendorBlacklistRoutes);
+  await app.register(securityRoutes);
   await app.register((await import("./modules/po-print/routes.js")).poPrintRoutes);
 
   registerSchemaErrorHandler(app, HttpError);

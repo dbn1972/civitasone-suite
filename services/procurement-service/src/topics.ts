@@ -14,6 +14,20 @@ export const COMMANDS = {
   auctionClose:    "procurement.auction.close",
   advanceCreate:   "procurement.advance.create",
   debitNoteCreate: "procurement.debit_note.create",
+  // Competitive two-bid tender lifecycle (wave 2)
+  tenderCreate:        "procurement.tender.create",
+  tenderPublish:       "procurement.tender.publish",
+  tenderBidSubmit:     "procurement.tender.bid.submit",
+  tenderTechEvaluate:  "procurement.tender.tech_evaluate",
+  tenderFinancialOpen: "procurement.tender.financial_open",
+  tenderAward:         "procurement.tender.award",
+  // EMD / bid-security + performance-security (PBG)
+  emdCollect:  "procurement.emd.collect",
+  emdForfeit:  "procurement.emd.forfeit",
+  emdRefund:   "procurement.emd.refund",
+  pbgCollect:  "procurement.pbg.collect",
+  pbgForfeit:  "procurement.pbg.forfeit",
+  pbgRelease:  "procurement.pbg.release",
 } as const;
 
 export const EVENTS = {
@@ -27,7 +41,22 @@ export const EVENTS = {
   grnRejected:         "procurement.grn.rejected",
   vendorBlacklisted:   "procurement.vendor.blacklisted",
   auctionClosed:       "procurement.auction.closed",
+  // Tender lifecycle events
+  tenderPublished:     "procurement.tender.published",
+  tenderTechEvaluated: "procurement.tender.tech_evaluated",
+  tenderFinancialOpened: "procurement.tender.financial_opened",
+  tenderAwarded:       "procurement.tender.awarded",
+  // EMD / PBG events
+  emdCollected:  "procurement.emd.collected",
+  emdForfeited:  "procurement.emd.forfeited",
+  emdRefunded:   "procurement.emd.refunded",
+  pbgCollected:  "procurement.pbg.collected",
+  pbgForfeited:  "procurement.pbg.forfeited",
+  pbgReleased:   "procurement.pbg.released",
 } as const;
+
+/** Finance accounting (GL) post — paise as strings. */
+export const FINANCE_GL_POST = "finance.gl.post";
 
 /** Topics consumed from other services */
 export const CONSUMED_EVENTS = {
