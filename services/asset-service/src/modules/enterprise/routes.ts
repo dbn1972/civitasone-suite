@@ -8,6 +8,7 @@ import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
 import { makeBarcode } from "../register/consumer.js";
@@ -16,6 +17,11 @@ const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 const READER_ROLES = [...ASSET_ROLES, "audit_officer", "finance_officer"];
 const WORKFLOW_CREATE = "workflow.instance.create";
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
+const GL_TOPIC = "finance.gl.post";
+// 4-digit finance head CODES (resolved by finance via findHeadByCodeTx).
+const FIXED_ASSET_CODE  = process.env.ASSET_FIXED_ASSET_CODE ?? "1200";
+const IMPAIRMENT_CODE   = process.env.ASSET_IMPAIRMENT_CODE ?? "5200";
+const REVAL_RESERVE_CODE = process.env.ASSET_REVAL_RESERVE_CODE ?? "3100";
 
 export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/assets/scan/:barcode", async (req, reply) => {
@@ -132,14 +138,39 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const after = before - BigInt(body.amountMinor);
     if (after < 0n) throw new HttpError(400, "INVALID", "impairment exceeds book value");
     const evId = randomUUID();
+    const eventDate = body.eventDate ?? new Date().toISOString().slice(0, 10);
+    const amountMinor = BigInt(body.amountMinor);
     await db.transaction(async (tx) => {
       await repo.insertImpairment(tx, {
         id: evId, tenantId: ctx.tenantId, assetId: id, eventType: "impairment",
-        amountMinor: BigInt(body.amountMinor), bookValueBefore: before, bookValueAfter: after,
-        reason: body.reason ?? null, eventDate: body.eventDate ?? new Date().toISOString().slice(0, 10),
+        amountMinor, bookValueBefore: before, bookValueAfter: after,
+        reason: body.reason ?? null, eventDate,
         createdBy: ctx.actorId,
       });
-      await registerRepo.updateAssetBookValue(tx, id, ctx.tenantId, after, asset.accumulatedDep + BigInt(body.amountMinor), ctx.actorId);
+      // P0-4: an impairment is a loss against the carrying amount, NOT depreciation.
+      // The old code wrongly bumped accumulatedDep by the impairment amount —
+      // accumulatedDep stays UNCHANGED; only bookValue drops.
+      await registerRepo.updateAssetBookValue(tx, id, ctx.tenantId, after, asset.accumulatedDep, ctx.actorId);
+      // P0-4: emit a balanced StandardJournal Dr Impairment Loss (5200) /
+      // Cr Fixed Asset (1200). Deterministic id so a retried request no-ops in
+      // finance instead of double-posting.
+      await enqueue(tx, {
+        topic: GL_TOPIC, eventType: GL_TOPIC,
+        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+        payload: {
+          // uuidV5 so finance's uuid journal id column accepts it and a retry
+          // dedupes on the PK (evId is already unique per impairment event).
+          id: uuidV5(`impairment:${evId}`),
+          tenantId: ctx.tenantId,
+          type: "asset_impairment",
+          voucherNo: `IMP/${eventDate}/${id.slice(0, 8)}`,
+          postingDate: eventDate,
+          lines: [
+            { accountCode: IMPAIRMENT_CODE, debitMinor: amountMinor.toString(), creditMinor: "0" },
+            { accountCode: FIXED_ASSET_CODE, debitMinor: "0", creditMinor: amountMinor.toString() },
+          ],
+        },
+      });
     });
     return sendAccepted(reply, acceptedResponseSchema, { id: evId, status: "accepted", correlationId: ctx.correlationId });
   });
@@ -153,16 +184,45 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     if (!asset) throw new HttpError(404, "NOT_FOUND", "asset not found");
     const before = asset.bookValue;
     const after = BigInt(body.newBookValueMinor);
-    const delta = after > before ? after - before : before - after;
+    const isUpward = after > before;
+    const delta = isUpward ? after - before : before - after;
     const evId = randomUUID();
+    const eventDate = new Date().toISOString().slice(0, 10);
     await db.transaction(async (tx) => {
       await repo.insertImpairment(tx, {
         id: evId, tenantId: ctx.tenantId, assetId: id, eventType: "revaluation",
         amountMinor: delta, bookValueBefore: before, bookValueAfter: after,
-        reason: body.reason ?? null, eventDate: new Date().toISOString().slice(0, 10),
+        reason: body.reason ?? null, eventDate,
         createdBy: ctx.actorId,
       });
       await registerRepo.updateAssetBookValue(tx, id, ctx.tenantId, after, asset.accumulatedDep, ctx.actorId);
+      // P0-4: revaluation hits the Revaluation Reserve (equity), not P&L.
+      // Upward: Dr Fixed Asset (1200) / Cr Reval Reserve (3100).
+      // Downward: Dr Reval Reserve (3100) / Cr Fixed Asset (1200). Skip a no-op
+      // (delta == 0) so finance never sees a zero-total journal. Deterministic id.
+      if (delta > 0n) {
+        const lines = isUpward
+          ? [
+              { accountCode: FIXED_ASSET_CODE, debitMinor: delta.toString(), creditMinor: "0" },
+              { accountCode: REVAL_RESERVE_CODE, debitMinor: "0", creditMinor: delta.toString() },
+            ]
+          : [
+              { accountCode: REVAL_RESERVE_CODE, debitMinor: delta.toString(), creditMinor: "0" },
+              { accountCode: FIXED_ASSET_CODE, debitMinor: "0", creditMinor: delta.toString() },
+            ];
+        await enqueue(tx, {
+          topic: GL_TOPIC, eventType: GL_TOPIC,
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+          payload: {
+            id: uuidV5(`revaluation:${evId}`),
+            tenantId: ctx.tenantId,
+            type: "asset_revaluation",
+            voucherNo: `REVAL/${eventDate}/${id.slice(0, 8)}`,
+            postingDate: eventDate,
+            lines,
+          },
+        });
+      }
     });
     return sendAccepted(reply, acceptedResponseSchema, { id: evId, status: "accepted", correlationId: ctx.correlationId });
   });
