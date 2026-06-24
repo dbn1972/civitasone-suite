@@ -41,6 +41,7 @@ import { claimsRoutes } from "./modules/claims/routes.js";
 import { schedulerRoutes } from "./modules/scheduler/routes.js";
 import { disciplinaryRoutes } from "./modules/disciplinary/routes.js";
 import { reservationRoutes } from "./modules/reservation/routes.js";
+import { rtiRoutes } from "./modules/rti/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -89,6 +90,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(schedulerRoutes);
   await app.register(disciplinaryRoutes);
   await app.register(reservationRoutes);
+  await app.register(rtiRoutes);
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
   await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
 

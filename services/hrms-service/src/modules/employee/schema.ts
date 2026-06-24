@@ -39,6 +39,7 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   fullName:         text("full_name").notNull(),
   departmentId:     uuid("department_id").notNull(),
   designationId:    uuid("designation_id").notNull(),
+  station:          varchar("station", { length: 128 }),
   dateOfJoining:    date("date_of_joining").notNull(),
   dateOfBirth:      date("date_of_birth"),
   gender:           varchar("gender", { length: 16 }),

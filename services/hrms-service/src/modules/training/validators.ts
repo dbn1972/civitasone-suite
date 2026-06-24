@@ -15,3 +15,11 @@ export const createNominationBody = z.object({
   employeeId: z.string().uuid(),
 });
 export type CreateNominationBody = z.infer<typeof createNominationBody>;
+
+export const completeNominationBody = z.object({
+  completedDate:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  result:         z.enum(["pass", "fail"]).default("pass"),
+  score:          z.number().int().min(0).max(100).optional(),
+  certificateRef: z.string().max(256).optional(),
+});
+export type CompleteNominationBody = z.infer<typeof completeNominationBody>;

@@ -41,6 +41,36 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ id: entryId });
   });
 
+  // Edit an entry — refused once the entry has been attested (immutable).
+  app.patch("/v1/hrms/service-book/entries/:entryId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { entryId } = z.object({ entryId: z.string().uuid() }).parse(req.params);
+    const body = z.object({
+      description: z.string().min(1),
+      documentRef: z.string().optional(),
+    }).parse(req.body);
+    const entry = await repo.getEntry(ctx.tenantId, entryId);
+    if (!entry) throw new HttpError(404, "NOT_FOUND", "service book entry not found");
+    if (entry.attested) throw new HttpError(409, "ATTESTED_IMMUTABLE", "entry is attested and cannot be edited");
+    await repo.updateEntryDescription(ctx.tenantId, entryId, body.description, body.documentRef ?? null);
+    return reply.send({ id: entryId, updated: true });
+  });
+
+  // Attestation: competent-authority sign-off, immutable thereafter.
+  app.post("/v1/hrms/service-book/entries/:entryId/attest", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { entryId } = z.object({ entryId: z.string().uuid() }).parse(req.params);
+    const body = z.object({ remarks: z.string().max(1000).optional() }).parse(req.body ?? {});
+    const entry = await repo.getEntry(ctx.tenantId, entryId);
+    if (!entry) throw new HttpError(404, "NOT_FOUND", "service book entry not found");
+    if (entry.attested) throw new HttpError(409, "ALREADY_ATTESTED", "entry is already attested");
+    const row = await repo.attestEntry(ctx.tenantId, entryId, ctx.actorId, body.remarks ?? null);
+    if (!row) throw new HttpError(409, "ALREADY_ATTESTED", "entry is already attested");
+    return reply.send({ id: entryId, attested: true, attestedBy: row.attestedBy, attestedAt: row.attestedAt });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId });
