@@ -17,7 +17,7 @@ function hydrateBookValue(row: AssetRow): AssetRow {
 export async function getAsset(tenantId: string, id: string): Promise<AssetRow | null> {
   const row = await cache.getOrLoad(
     cache.makeKey(tenantId, "asset", id),
-    () => repo.findAssetById(id)
+    () => repo.findAssetById(id, tenantId)
   );
   return row ? hydrateBookValue(row) : null;
 }

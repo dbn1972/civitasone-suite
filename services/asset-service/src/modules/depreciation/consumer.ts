@@ -7,6 +7,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
 import { computeMonthlyDep, generatePeriods } from "./domain.js";
+import { uuidV5 } from "../../shared/ids.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC    = "finance.gl.post";
@@ -21,7 +22,7 @@ export function registerDepreciationConsumers(queue: Queue): void {
     const method = p.method as "SLM" | "WDV";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const asset = await registerRepo.findAssetById(p.assetId);
+      const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
       if (!asset) return;
       const usefulLifeYears = asset.usefulLifeYears;
       const ratePercent = depBook === "statutory" ? 25 : Number(asset.depRate);
@@ -43,16 +44,36 @@ export function registerDepreciationConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
 
+      // P1-2 rounding true-up: bigint truncating division means sum(monthly dep)
+      // drifts below (cost - salvage) over the asset's life (SLM), and WDV's
+      // geometric decay never reaches salvage exactly. We carry the running book
+      // value and, on the FINAL period, post a plug = (bookValue - salvage) so the
+      // schedule reconciles exactly: sum(amountMinor) === cost - salvage, and the
+      // last bookValueAfterMinor === salvage. Per-period amounts are clamped so we
+      // never depreciate below salvage before the end.
       const periods = generatePeriods(startDate, endDate);
+      const salvage = asset.salvageValue;
       let bookValue = asset.acquisitionCost;
-      for (const period of periods) {
-        const amount = computeMonthlyDep(
-          method,
-          asset.acquisitionCost, asset.salvageValue,
-          bookValue, usefulLifeYears, ratePercent
-        );
+      for (let i = 0; i < periods.length; i++) {
+        const period = periods[i]!;
+        const isLast = i === periods.length - 1;
+        let amount: bigint;
+        if (isLast) {
+          // final-period plug: depreciate whatever remains down to salvage
+          amount = bookValue - salvage;
+          if (amount < 0n) amount = 0n;
+        } else {
+          amount = computeMonthlyDep(
+            method,
+            asset.acquisitionCost, salvage,
+            bookValue, usefulLifeYears, ratePercent
+          );
+          // never let a mid-schedule period push book value below salvage
+          const maxAmount = bookValue - salvage;
+          if (amount > maxAmount) amount = maxAmount > 0n ? maxAmount : 0n;
+        }
         bookValue = bookValue - amount;
-        if (bookValue < asset.salvageValue) bookValue = asset.salvageValue;
+        if (bookValue < salvage) bookValue = salvage;
         await repo.upsertEntry(tx, {
           id: randomUUID(), tenantId: p.tenantId, assetId: p.assetId,
           scheduleId: p.id, period, depBook,
@@ -68,17 +89,20 @@ export function registerDepreciationConsumers(queue: Queue): void {
 
   queue.subscribe(COMMANDS.depRun, async (msg) => {
     const p = msg.payload as { tenantId: string; period: string; depBook?: string };
-    const dueEntries = await repo.findDueEntries(p.period, p.depBook);
+    const dueEntries = await repo.findDueEntries(p.tenantId, p.period, p.depBook);
     for (const entry of dueEntries) {
       await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, `${msg.messageId}:${entry.id}`))) return;
+        // Per-entry idempotency key must be a UUID (the _inbox.processed.message_id
+        // column is typed uuid). Derive a deterministic UUIDv5 from the outer
+        // messageId + entry id so redeliveries dedupe without a malformed cast.
+        if (!(await markProcessed(tx, uuidV5(`${msg.messageId}:${entry.id}`)))) return;
         const glRef = `dep:${entry.depBook}:${entry.assetId}:${entry.period}`;
-        await repo.markEntryPosted(tx, entry.id, glRef, msg.actorId);
+        await repo.markEntryPosted(tx, entry.id, p.tenantId, glRef, msg.actorId);
         if (entry.depBook === "company") {
           await registerRepo.updateAssetBookValue(
-            tx, entry.assetId,
+            tx, entry.assetId, p.tenantId,
             entry.bookValueAfterMinor,
-            ((await registerRepo.findAssetById(entry.assetId))?.accumulatedDep ?? 0n) + entry.amountMinor,
+            ((await registerRepo.findAssetById(entry.assetId, p.tenantId))?.accumulatedDep ?? 0n) + entry.amountMinor,
             msg.actorId
           );
         }

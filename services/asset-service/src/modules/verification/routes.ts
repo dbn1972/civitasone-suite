@@ -5,6 +5,10 @@ import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
+// P0-2: write-off approval is a committee/senior-approver action, a strict
+// subset of who can REQUEST one. Combined with the requester != approver check
+// in commands.ts this enforces segregation of duties.
+const WRITEOFF_APPROVER_ROLES = ["asset_admin", "super_admin", "finance_officer"];
 
 export async function verificationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/verifications", async (req, reply) => {
@@ -64,7 +68,7 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/assets/writeoff-requests/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ASSET_ROLES);
+    requireRole(ctx, WRITEOFF_APPROVER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     return reply.send({ data: await commands.approveWriteoffRequest(ctx, id) });
   });

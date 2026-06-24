@@ -1,4 +1,4 @@
-import { eq, and, isNull, SQL } from "drizzle-orm";
+import { eq, and, isNull, lte, SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { assetDepSchedules, assetDepEntries, type DepScheduleInsert, type DepEntryInsert, type DepScheduleRow, type DepEntryRow } from "./schema.js";
 
@@ -16,8 +16,10 @@ export async function findEntriesByAsset(assetId: string, tenantId: string): Pro
     .where(and(eq(assetDepEntries.assetId, assetId), eq(assetDepEntries.tenantId, tenantId)));
 }
 
-export async function findDueEntries(period: string, depBook?: string): Promise<DepEntryRow[]> {
-  const conditions: SQL[] = [eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt)];
+export async function findDueEntries(tenantId: string, period: string, depBook?: string): Promise<DepEntryRow[]> {
+  // P0-3: filter by tenantId. Without it, a depRun for one tenant posts GL for
+  // EVERY tenant due in that period.
+  const conditions: SQL[] = [eq(assetDepEntries.tenantId, tenantId), eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt)];
   if (depBook) conditions.push(eq(assetDepEntries.depBook, depBook));
   return db.select().from(assetDepEntries).where(and(...conditions));
 }
@@ -30,8 +32,19 @@ export async function upsertEntry(tx: Writer, row: DepEntryInsert): Promise<void
   await tx.insert(assetDepEntries).values(row);
 }
 
-export async function markEntryPosted(tx: Writer, id: string, glRef: string, actorId: string): Promise<void> {
+export async function markEntryPosted(tx: Writer, id: string, tenantId: string, glRef: string, actorId: string): Promise<void> {
   await (tx as typeof db).update(assetDepEntries)
     .set({ postedAt: new Date(), glRef, updatedAt: new Date(), updatedBy: actorId })
-    .where(eq(assetDepEntries.id, id));
+    .where(and(eq(assetDepEntries.id, id), eq(assetDepEntries.tenantId, tenantId)));
+}
+
+// P1-1 scheduler support: list (tenantId, period) pairs that still have unposted
+// dep entries up to and including the given period. Drives the worker tick so
+// monthly depreciation posts automatically, per tenant, without a manual call.
+export async function findDueTenantPeriods(uptoPeriod: string): Promise<Array<{ tenantId: string; period: string }>> {
+  const rows = await db
+    .selectDistinct({ tenantId: assetDepEntries.tenantId, period: assetDepEntries.period })
+    .from(assetDepEntries)
+    .where(and(isNull(assetDepEntries.postedAt), lte(assetDepEntries.period, uptoPeriod)));
+  return rows.map((r) => ({ tenantId: r.tenantId, period: r.period }));
 }
