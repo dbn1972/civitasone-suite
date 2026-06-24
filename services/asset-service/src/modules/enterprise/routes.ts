@@ -126,7 +126,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ amountMinor: z.number().int().positive(), reason: z.string().optional(), eventDate: z.string().optional() }).parse(req.body);
-    const asset = await registerRepo.findAssetById(id);
+    const asset = await registerRepo.findAssetById(id, ctx.tenantId);
     if (!asset) throw new HttpError(404, "NOT_FOUND", "asset not found");
     const before = asset.bookValue;
     const after = before - BigInt(body.amountMinor);
@@ -139,7 +139,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
         reason: body.reason ?? null, eventDate: body.eventDate ?? new Date().toISOString().slice(0, 10),
         createdBy: ctx.actorId,
       });
-      await registerRepo.updateAssetBookValue(tx, id, after, asset.accumulatedDep + BigInt(body.amountMinor), ctx.actorId);
+      await registerRepo.updateAssetBookValue(tx, id, ctx.tenantId, after, asset.accumulatedDep + BigInt(body.amountMinor), ctx.actorId);
     });
     return sendAccepted(reply, acceptedResponseSchema, { id: evId, status: "accepted", correlationId: ctx.correlationId });
   });
@@ -149,7 +149,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ newBookValueMinor: z.number().int().positive(), reason: z.string().optional() }).parse(req.body);
-    const asset = await registerRepo.findAssetById(id);
+    const asset = await registerRepo.findAssetById(id, ctx.tenantId);
     if (!asset) throw new HttpError(404, "NOT_FOUND", "asset not found");
     const before = asset.bookValue;
     const after = BigInt(body.newBookValueMinor);
@@ -162,7 +162,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
         reason: body.reason ?? null, eventDate: new Date().toISOString().slice(0, 10),
         createdBy: ctx.actorId,
       });
-      await registerRepo.updateAssetBookValue(tx, id, after, asset.accumulatedDep, ctx.actorId);
+      await registerRepo.updateAssetBookValue(tx, id, ctx.tenantId, after, asset.accumulatedDep, ctx.actorId);
     });
     return sendAccepted(reply, acceptedResponseSchema, { id: evId, status: "accepted", correlationId: ctx.correlationId });
   });
@@ -237,7 +237,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
         fromOrg: body.fromOrg, toOrg: body.toOrg, transferDate: body.transferDate,
         notes: body.notes ?? null, createdBy: ctx.actorId,
       });
-      await registerRepo.updateAssetLocation(tx, assetId, `${body.toOrg}`, ctx.actorId);
+      await registerRepo.updateAssetLocation(tx, assetId, ctx.tenantId, String(body.toOrg), ctx.actorId);
     });
     return sendAccepted(reply, acceptedResponseSchema, { id: transferId, status: "accepted", correlationId: ctx.correlationId });
   });

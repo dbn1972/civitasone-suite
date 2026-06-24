@@ -20,14 +20,15 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const asset = await registerRepo.findAssetById(p.assetId);
-      if (asset) assertAssetTransferable(asset.status);
+      const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
+      if (!asset) throw new Error("ASSET_NOT_FOUND_OR_CROSS_TENANT: cannot transfer a missing or cross-tenant asset");
+      assertAssetTransferable(asset.status);
       await repo.insertTransfer(tx, {
         id: p.id, tenantId: p.tenantId, assetId: p.assetId,
         fromLocation: p.fromLocation, toLocation: p.toLocation, transferDate: p.transferDate,
         notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await registerRepo.updateAssetLocation(tx, p.assetId, p.toLocation, msg.actorId);
+      await registerRepo.updateAssetLocation(tx, p.assetId, p.tenantId, p.toLocation, msg.actorId);
       await enqueue(tx, {
         topic: EVENTS.assetTransferred, eventType: EVENTS.assetTransferred,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -46,15 +47,19 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const asset = await registerRepo.findAssetById(p.assetId);
-      if (asset) assertAssetDisposable(asset.status);
+      const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
+      // P1-5: hard-fail (do NOT post GL) when the asset is missing or cross-tenant.
+      // Previously `if (asset)` SKIPPED the guard on null and still emitted a
+      // malformed disposal journal with cost/accumDep defaulting to "0".
+      if (!asset) throw new Error("ASSET_NOT_FOUND_OR_CROSS_TENANT: cannot dispose a missing or cross-tenant asset");
+      assertAssetDisposable(asset.status);
       const approval = await verificationRepo.findApprovedWriteoff(p.tenantId, p.assetId);
       if (!approval) {
         throw new Error("COMMITTEE_APPROVAL_REQUIRED: Asset write-off requires committee approval per GFR Rule 173.");
       }
       const gainLoss = computeDisposalGainLoss(
         BigInt(p.proceedsMinor),
-        asset?.bookValue ?? 0n
+        asset.bookValue
       );
       await repo.insertDisposal(tx, {
         id: p.id, tenantId: p.tenantId, assetId: p.assetId,
@@ -63,14 +68,14 @@ export function registerLifecycleConsumers(queue: Queue): void {
         gainLossMinor: gainLoss,
         notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await registerRepo.updateAssetStatus(tx, p.assetId, "disposed", msg.actorId);
+      await registerRepo.updateAssetStatus(tx, p.assetId, p.tenantId, "disposed", msg.actorId);
       await enqueue(tx, {
         topic: GL_TOPIC, eventType: GL_TOPIC,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           assetId: p.assetId,
-          acquisitionCost: asset?.acquisitionCost?.toString() ?? "0",
-          accumulatedDep:  asset?.accumulatedDep?.toString()  ?? "0",
+          acquisitionCost: asset.acquisitionCost.toString(),
+          accumulatedDep:  asset.accumulatedDep.toString(),
           proceeds:        p.proceedsMinor,
           gainLoss:        gainLoss.toString(),
           currency:        p.currency,

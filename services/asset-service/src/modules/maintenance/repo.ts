@@ -15,15 +15,15 @@ export async function insertWorkOrder(tx: Writer, row: WorkOrderInsert): Promise
   await tx.insert(assetWorkOrders).values(row);
 }
 
-export async function findWorkOrderById(id: string): Promise<WorkOrderRow | null> {
-  const rows = await db.select().from(assetWorkOrders).where(eq(assetWorkOrders.id, id)).limit(1);
+export async function findWorkOrderById(id: string, tenantId: string): Promise<WorkOrderRow | null> {
+  const rows = await db.select().from(assetWorkOrders).where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
-export async function completeWorkOrder(tx: Writer, id: string, completedDate: string, costMinor: bigint, actorId: string): Promise<void> {
+export async function completeWorkOrder(tx: Writer, id: string, tenantId: string, completedDate: string, costMinor: bigint, actorId: string): Promise<void> {
   await (tx as typeof db).update(assetWorkOrders)
     .set({ status: "completed", completedDate, costMinor, updatedAt: new Date(), updatedBy: actorId })
-    .where(eq(assetWorkOrders.id, id));
+    .where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId)));
 }
 
 export async function listMaintenanceByAsset(tenantId: string, assetId: string) {

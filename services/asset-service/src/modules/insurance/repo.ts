@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { assetPolicies, assetClaims, type PolicyInsert, type ClaimInsert, type PolicyRow } from "./schema.js";
 
@@ -12,7 +12,7 @@ export async function insertClaim(tx: Writer, row: ClaimInsert): Promise<void> {
   await tx.insert(assetClaims).values(row);
 }
 
-export async function findPolicyById(id: string): Promise<PolicyRow | null> {
-  const rows = await db.select().from(assetPolicies).where(eq(assetPolicies.id, id)).limit(1);
+export async function findPolicyById(id: string, tenantId: string): Promise<PolicyRow | null> {
+  const rows = await db.select().from(assetPolicies).where(and(eq(assetPolicies.id, id), eq(assetPolicies.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }

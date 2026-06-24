@@ -8,6 +8,7 @@ import { registerDepreciationConsumers } from "./modules/depreciation/consumer.j
 import { registerMaintenanceConsumers }  from "./modules/maintenance/consumer.js";
 import { registerInsuranceConsumers }    from "./modules/insurance/consumer.js";
 import { registerEnterpriseConsumers }   from "./modules/enterprise/consumer.js";
+import { startDepScheduler }            from "./modules/depreciation/scheduler.js";
 
 const log = pino({ name: "asset-worker" });
 
@@ -20,11 +21,13 @@ registerEnterpriseConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
+const depScheduler = startDepScheduler(queue);
 log.info("asset-service worker: consumers + outbox relay running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(relay);
+  clearInterval(depScheduler);
   await queue.stop();
   await sqlClient.end();
   log.info("shutdown complete");

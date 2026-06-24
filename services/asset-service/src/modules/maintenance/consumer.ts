@@ -45,7 +45,7 @@ export function registerMaintenanceConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.completeWorkOrder(tx, p.id, p.completedDate, BigInt(p.costMinor), msg.actorId);
+      await repo.completeWorkOrder(tx, p.id, p.tenantId, p.completedDate, BigInt(p.costMinor), msg.actorId);
       await audit(tx, msg, "complete", "work_order", p.id);
     });
   });

@@ -20,7 +20,7 @@ export async function createAsset(ctx: RequestContext, body: CreateAssetBody): P
 
 export async function tagBarcode(ctx: RequestContext, assetId: string, barcode: string): Promise<Accepted> {
   await db.transaction(async (tx) => {
-    await repo.updateAssetBarcode(tx, assetId, barcode, ctx.actorId);
+    await repo.updateAssetBarcode(tx, assetId, ctx.tenantId, barcode, ctx.actorId);
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "asset", assetId));
   return { id: assetId, status: "accepted", correlationId: ctx.correlationId };

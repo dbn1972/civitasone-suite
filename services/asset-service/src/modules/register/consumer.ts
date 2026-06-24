@@ -7,6 +7,7 @@ import { COMMANDS, CONSUMED, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+const GL_TOPIC    = "finance.gl.post";
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 const DEFAULT_VEHICLE_CATEGORY = "77777777-0001-0000-0000-000000000002";
 
@@ -90,6 +91,25 @@ export function registerRegisterConsumers(queue: Queue): void {
           topic: EVENTS.assetCreated, eventType: EVENTS.assetCreated,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { assetId, code: item.itemCode, acquisitionCost: Number(totalCost), grnId: p.grnId },
+        });
+        // P1-3: acquisition GL on capitalization. Balanced, string-paise journal
+        // Dr Fixed Asset / Cr GRN-Clearing. Deterministic id (acq:<assetId>) makes
+        // it idempotent so a redelivered GRN cannot double-post. The GRN-Clearing
+        // credit is the known counterpart of the procurement GRN receipt; finance
+        // owns clearing that suspense against the vendor payable.
+        await enqueue(tx, {
+          topic: GL_TOPIC, eventType: GL_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            id: `acq:`,
+            assetId,
+            type: "asset_acquisition",
+            amountMinor: totalCost.toString(),
+            currency: item.currency ?? "INR",
+            grnId: p.grnId, poRef: p.poRef,
+            debitAccount: "fixed_asset",
+            creditAccount: "grn_clearing",
+          },
         });
         await audit(tx, msg, "create_from_grn", "asset", assetId);
         await enqueueDualDepSchedules(tx, msg, assetId, msg.tenantId, new Date().toISOString().slice(0, 10));

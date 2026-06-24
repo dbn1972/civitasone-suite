@@ -20,7 +20,7 @@ export function registerEnterpriseConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const pending = await pendingRepo.findPendingDisposal(p.pendingId, p.tenantId);
       if (!pending || pending.workflowStatus === "completed") return;
-      const asset = await registerRepo.findAssetById(pending.assetId);
+      const asset = await registerRepo.findAssetById(pending.assetId, p.tenantId);
       if (!asset) return;
       disposedAssetId = pending.assetId;
       const gainLoss = computeDisposalGainLoss(pending.proceedsMinor, asset.bookValue);
@@ -32,7 +32,7 @@ export function registerEnterpriseConsumers(queue: Queue): void {
         gainLossMinor: gainLoss, notes: pending.notes ?? "Workflow approved disposal",
         createdBy: p.approvedBy, updatedBy: p.approvedBy,
       });
-      await registerRepo.updateAssetStatus(tx, pending.assetId, "disposed", p.approvedBy);
+      await registerRepo.updateAssetStatus(tx, pending.assetId, p.tenantId, "disposed", p.approvedBy);
       await pendingRepo.updatePendingDisposal(tx, pending.id, "completed");
       await enqueue(tx, {
         topic: GL_TOPIC, eventType: GL_TOPIC,
