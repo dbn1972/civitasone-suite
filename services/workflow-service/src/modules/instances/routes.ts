@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createInstanceBody, instancesListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as historyRepo from "../history/repo.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin"];
 
@@ -22,6 +23,14 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, instancesListSchema, await queries.listInstances(ctx.tenantId, q.limit, q.offset));
+  });
+
+  app.get("/v1/workflow/instances/:id/history", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const rows = await historyRepo.listForInstance(id, ctx.tenantId);
+    return reply.send({ data: rows });
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("workflow");
 
@@ -8,9 +8,11 @@ export const instances = domainSchema.table("instances", {
   name: varchar("name", { length: 200 }).notNull(),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   definitionId: uuid("definition_id"),
+  definitionVersion: integer("definition_version"),
   refType: varchar("ref_type", { length: 64 }),
   refId: uuid("ref_id"),
   currentNode: varchar("current_node", { length: 64 }),
+  context: jsonb("context").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

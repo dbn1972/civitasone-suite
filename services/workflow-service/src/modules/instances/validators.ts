@@ -3,6 +3,10 @@ import { paginatedSchema } from "@civitasone/schemas/common";
 
 export const createInstanceBody = z.object({
   name: z.string().min(1).max(200),
+  definitionCode: z.string().min(1).max(64).optional(),
+  refType: z.string().min(1).max(64).optional(),
+  refId: z.string().uuid().optional(),
+  context: z.record(z.unknown()).optional(),
 });
 export type CreateInstanceBody = z.infer<typeof createInstanceBody>;
 

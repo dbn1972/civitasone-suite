@@ -61,3 +61,9 @@ export async function updateCurrentNode(tx: Writer, id: string, nodeKey: string,
     .set({ currentNode: nodeKey, updatedBy: actorId, updatedAt: new Date() })
     .where(eq(instances.id, id));
 }
+
+export async function markStatus(tx: Writer, id: string, status: string, actorId: string): Promise<void> {
+  await tx.update(instances)
+    .set({ status, updatedBy: actorId, updatedAt: new Date() })
+    .where(eq(instances.id, id));
+}

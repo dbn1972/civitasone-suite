@@ -3,10 +3,13 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { computeDueAt } from "../../shared/sla.js";
+import { normalizeContext } from "../../shared/condition.js";
 import { COMMANDS, EVENTS, INSTANCE_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as taskRepo from "../tasks/repo.js";
 import * as defRepo from "../definitions/repo.js";
+import * as historyRepo from "../history/repo.js";
 import type { CreateInstancePayload } from "./commands.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -19,6 +22,7 @@ export function registerInstancesConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
+      const context = normalizeContext(p.context);
       const def = p.definitionCode
         ? await defRepo.findByCodeTx(tx, p.tenantId, p.definitionCode)
         : null;
@@ -28,15 +32,20 @@ export function registerInstancesConsumers(queue: Queue): void {
         startNode = await defRepo.findNodeByKeyTx(tx, def.id, p.startNodeKey) ?? startNode;
       }
 
+      const dueAt = computeDueAt(startNode?.slaMinutes);
+
       await repo.insert(tx, {
         id: p.id,
         tenantId: p.tenantId,
         name: p.name,
         status: p.status,
         definitionId: def?.id ?? null,
+        // version pinning: in-flight instances are unaffected by later edits
+        definitionVersion: def?.version ?? null,
         refType: p.refType ?? null,
         refId: p.refId ?? null,
         currentNode: startNode?.nodeKey ?? null,
+        context,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
@@ -50,11 +59,25 @@ export function registerInstancesConsumers(queue: Queue): void {
         name: startNode?.name ?? p.initialTaskName,
         status: "pending",
         roleRef: startNode?.roleRef ?? null,
+        nodeKey: startNode?.nodeKey ?? null,
         refType: p.refType ?? null,
         refId: p.refId ?? null,
+        dueAt,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
+      });
+
+      await historyRepo.record(tx, {
+        tenantId: p.tenantId,
+        instanceId: p.id,
+        taskId,
+        fromNode: null,
+        toNode: startNode?.nodeKey ?? null,
+        action: "create",
+        decision: null,
+        actorId: msg.actorId,
+        detail: { name: p.name, definitionVersion: def?.version ?? null },
       });
 
       await emit(tx, msg, EVENTS.instanceCreated, { instanceId: p.id, name: p.name, taskId, refType: p.refType, refId: p.refId }, "create", p.id);
