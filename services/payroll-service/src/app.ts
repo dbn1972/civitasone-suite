@@ -14,6 +14,7 @@ import { ecrRoutes } from "./modules/statutory/ecr-routes.js";
 import { payslipPdfRoutes } from "./modules/payslip-pdf/routes.js";
 import { payslipDownloadRoutes } from "./modules/payslip-pdf/pdf-route.js";
 import { taxRoutes } from "./modules/tax/routes.js";
+import { statutoryReturnsRoutes } from "./modules/statutory-returns/routes.js";
 import { bankTransferRoutes } from "./modules/bank-transfer/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -36,6 +37,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(payslipPdfRoutes);
   await app.register(payslipDownloadRoutes);
   await app.register(taxRoutes);
+  await app.register(statutoryReturnsRoutes);
   await app.register(bankTransferRoutes);
   const { worldClassPayrollRoutes } = await import("./modules/payroll/world-class-routes.js");
   await app.register(worldClassPayrollRoutes);

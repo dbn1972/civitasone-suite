@@ -229,6 +229,10 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       hraClaimed?: number;
       rentPaid?: number;
       otherDeductions?: number;
+      prevEmployerSalary?: number;
+      prevEmployerTds?: number;
+      otherSourcesIncome?: number;
+      perquisites?: number;
     };
 
     if (!body.employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
@@ -236,30 +240,31 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     const regime = body.regime === "old" ? "old" : "new";
 
+    const paise = (v?: number): bigint => BigInt(Math.round((v ?? 0) * 100));
+    const fields = {
+      regime,
+      section80c: paise(body.section80c),
+      section80d: paise(body.section80d),
+      hraClaimed: paise(body.hraClaimed),
+      rentPaidMinor: paise(body.rentPaid),
+      otherDeductions: paise(body.otherDeductions),
+      prevEmployerSalaryMinor: paise(body.prevEmployerSalary),
+      prevEmployerTdsMinor: paise(body.prevEmployerTds),
+      otherSourcesIncomeMinor: paise(body.otherSourcesIncome),
+      perquisitesMinor: paise(body.perquisites),
+    };
+
     // Upsert declaration
     await db.insert(taxDeclarations).values({
       tenantId: ctx.tenantId,
       employeeId: body.employeeId,
       fy: body.fy,
-      regime,
-      section80c: BigInt(Math.round((body.section80c ?? 0) * 100)),
-      section80d: BigInt(Math.round((body.section80d ?? 0) * 100)),
-      hraClaimed: BigInt(Math.round((body.hraClaimed ?? 0) * 100)),
-      rentPaidMinor: BigInt(Math.round((body.rentPaid ?? 0) * 100)),
-      otherDeductions: BigInt(Math.round((body.otherDeductions ?? 0) * 100)),
+      ...fields,
       status: "submitted",
       createdBy: ctx.actorId,
     }).onConflictDoUpdate({
       target: [taxDeclarations.tenantId, taxDeclarations.employeeId, taxDeclarations.fy],
-      set: {
-        regime,
-        section80c: BigInt(Math.round((body.section80c ?? 0) * 100)),
-        section80d: BigInt(Math.round((body.section80d ?? 0) * 100)),
-        hraClaimed: BigInt(Math.round((body.hraClaimed ?? 0) * 100)),
-        rentPaidMinor: BigInt(Math.round((body.rentPaid ?? 0) * 100)),
-        otherDeductions: BigInt(Math.round((body.otherDeductions ?? 0) * 100)),
-        status: "submitted",
-      },
+      set: { ...fields, status: "submitted" },
     });
 
     return reply.code(201).send({ message: "declaration saved", employeeId: body.employeeId, fy: body.fy, regime });
