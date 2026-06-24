@@ -66,8 +66,8 @@ export async function listJournalEntries(tenantId: string, limit: number) {
         date: journal.postingDate,
         accountCode: line.accountCode,
         accountName: line.accountCode,
-        debit: line.debitMinor / 100,
-        credit: line.creditMinor / 100,
+        debit: Number(line.debitMinor) / 100,
+        credit: Number(line.creditMinor) / 100,
         referenceNo: journal.voucherNo,
         type: journal.type as "payment" | "receipt" | "journal" | "budget",
       });

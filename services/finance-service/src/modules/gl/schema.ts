@@ -4,10 +4,18 @@ import {
 
 export const glSchema = pgSchema("gl");
 
+/**
+ * H3: amounts are paise and may exceed 2^53, so they are carried as bigint
+ * (or a string/number that converts to bigint without loss). Convert with
+ * BigInt(...) before arithmetic or persistence — never Number().
+ */
+export type MinorAmount = bigint | number | string;
+
 export type JournalLine = {
   accountCode: string;
-  debitMinor:  number;
-  creditMinor: number;
+  debitMinor:  MinorAmount;
+  creditMinor: MinorAmount;
+  narration?:  string;
 };
 
 export const financeJournals = glSchema.table("finance_journals", {

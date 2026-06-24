@@ -105,9 +105,37 @@ export function registerIntegrationConsumers(queue: Queue): void {
     };
     const gross = BigInt(p.totalGrossMinor);
     const net = BigInt(p.totalNetMinor);
+    // H2: the statutory leg is DERIVED as (gross - net) so the employee side is
+    // provably balanced: Dr gross == Cr net + Cr statutory == gross, regardless
+    // of how net was clamped (negative-net employees forced to 0). We never clamp
+    // the statutory amount; if it would be negative (net > gross, pathological)
+    // we book it on the opposite side so the journal still nets to zero.
     const statutory = gross - net;
+    // H3: keep all paise as bigint (no Number() on aggregate paise) so amounts
+    // above 2^53 do not silently lose precision in the GL legs.
     const employer = BigInt(p.totalEmployerContribMinor ?? "0");
     const journalId = randomUUID();
+    // Employee-side legs: Dr salary expense (gross); Cr net payable; Cr statutory.
+    const lines: Array<{ accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }> = [
+      { accountCode: "5001", debitMinor: gross, creditMinor: 0n, narration: "Salary expense" },
+      { accountCode: "2101", debitMinor: 0n, creditMinor: net, narration: "Net salary payable" },
+      statutory >= 0n
+        ? { accountCode: "2102", debitMinor: 0n, creditMinor: statutory, narration: "Statutory deductions payable" }
+        : { accountCode: "2102", debitMinor: -statutory, creditMinor: 0n, narration: "Statutory deductions payable" },
+    ];
+    // Employer statutory contributions (PF/EPS, ESI, NPS) are an additional
+    // expense + liability, separate from the employee-side gross above. The two
+    // legs are equal and opposite, so they keep the voucher balanced.
+    if (employer > 0n) {
+      lines.push({ accountCode: "5002", debitMinor: employer, creditMinor: 0n, narration: "Employer contributions expense" });
+      lines.push({ accountCode: "2103", debitMinor: 0n, creditMinor: employer, narration: "Employer contributions payable" });
+    }
+    // Defensive: assert the voucher balances before we publish it.
+    const totalDr = lines.reduce((s, l) => s + l.debitMinor, 0n);
+    const totalCr = lines.reduce((s, l) => s + l.creditMinor, 0n);
+    if (totalDr !== totalCr) {
+      throw new Error(`PAYROLL_ACCRUAL_UNBALANCED: debit ${totalDr} != credit ${totalCr} for run ${p.runId}`);
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await enqueue(tx, {
@@ -119,17 +147,13 @@ export function registerIntegrationConsumers(queue: Queue): void {
           voucherNo: `PAY/${p.month}/${p.runId.slice(0, 8)}`,
           type: "payroll_accrual",
           postingDate: new Date().toISOString().slice(0, 10),
-          lines: [
-            { accountCode: "5001", debitMinor: Number(gross), creditMinor: 0, narration: "Salary expense" },
-            { accountCode: "2101", debitMinor: 0, creditMinor: Number(net), narration: "Net salary payable" },
-            { accountCode: "2102", debitMinor: 0, creditMinor: Number(statutory > 0n ? statutory : 0n), narration: "Statutory deductions payable" },
-            // Employer statutory contributions (PF/EPS, ESI, NPS) are an additional
-            // expense + liability, separate from the employee-side gross above.
-            ...(employer > 0n ? [
-              { accountCode: "5002", debitMinor: Number(employer), creditMinor: 0, narration: "Employer contributions expense" },
-              { accountCode: "2103", debitMinor: 0, creditMinor: Number(employer), narration: "Employer contributions payable" },
-            ] : []),
-          ],
+          // H3: paise passed as bigint strings so > 2^53 paise stays exact.
+          lines: lines.map((l) => ({
+            accountCode: l.accountCode,
+            debitMinor: l.debitMinor.toString(),
+            creditMinor: l.creditMinor.toString(),
+            narration: l.narration,
+          })),
         },
       });
       await audit(tx, msg, "payroll_gl_accrual", "payroll_run", p.runId);

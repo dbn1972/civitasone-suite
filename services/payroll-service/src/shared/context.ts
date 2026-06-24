@@ -37,3 +37,41 @@ export async function requirePermissionKey(ctx: RequestContext, permissionKey: s
     throw err;
   }
 }
+
+/** Roles that may read/act on ANY employee's payroll/tax data (cross-employee). */
+const PRIVILEGED_PAYROLL_ROLES = [
+  "payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer",
+];
+
+/**
+ * True when the caller is acting purely as an `employee` (self-service) — i.e.
+ * holds the `employee` role but none of the privileged payroll/admin/officer
+ * roles, and is a real user (not an internal service account). Such a caller
+ * must be confined to their OWN employee record.
+ */
+export function isSelfServiceEmployee(ctx: RequestContext): boolean {
+  if (ctx.actorType === "service_account") return false;
+  const privileged = PRIVILEGED_PAYROLL_ROLES.some((r) => ctx.roles.includes(r));
+  return !privileged && ctx.roles.includes("employee");
+}
+
+/**
+ * Ownership guard for self-service employees. For a self-service `employee`
+ * caller, forces the effective employeeId to their own actorId and rejects any
+ * request that names a different employee (403). Privileged roles / service
+ * accounts pass through the requested id unchanged (act-on-behalf).
+ *
+ * Returns the effective employeeId the caller is authorised to access.
+ */
+export function enforceEmployeeOwnership(ctx: RequestContext, requestedEmployeeId: string | undefined): string {
+  if (isSelfServiceEmployee(ctx)) {
+    if (requestedEmployeeId && requestedEmployeeId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "employees may only access their own records");
+    }
+    return ctx.actorId;
+  }
+  if (!requestedEmployeeId) {
+    throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
+  }
+  return requestedEmployeeId;
+}

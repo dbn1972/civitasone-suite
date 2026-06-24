@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
@@ -120,8 +120,9 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
-    const { employeeId, fy, regime } = req.query as { employeeId?: string; fy?: string; regime?: string };
-    if (!employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
+    const { employeeId: reqEmployeeId, fy, regime } = req.query as { employeeId?: string; fy?: string; regime?: string };
+    // C1: a self-service employee may only read their OWN computation.
+    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2025-26)");
     const selectedRegime = regime === "old" ? "old" : "new";
 
@@ -205,8 +206,9 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
-    const { employeeId, fy } = req.query as { employeeId?: string; fy?: string };
-    if (!employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
+    const { employeeId: reqEmployeeId, fy } = req.query as { employeeId?: string; fy?: string };
+    // C1: a self-service employee may only read their OWN Form 16.
+    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2025-26)");
 
     return reply.send(await buildForm16(ctx.tenantId, employeeId, fy));
@@ -235,7 +237,8 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       perquisites?: number;
     };
 
-    if (!body.employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
+    // C2: a self-service employee may only file a declaration for THEMSELVES.
+    const employeeId = enforceEmployeeOwnership(ctx, body.employeeId);
     if (!body.fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required");
 
     const regime = body.regime === "old" ? "old" : "new";
@@ -257,7 +260,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     // Upsert declaration
     await db.insert(taxDeclarations).values({
       tenantId: ctx.tenantId,
-      employeeId: body.employeeId,
+      employeeId,
       fy: body.fy,
       ...fields,
       status: "submitted",
@@ -267,6 +270,6 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       set: { ...fields, status: "submitted" },
     });
 
-    return reply.code(201).send({ message: "declaration saved", employeeId: body.employeeId, fy: body.fy, regime });
+    return reply.code(201).send({ message: "declaration saved", employeeId, fy: body.fy, regime });
   });
 }
