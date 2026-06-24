@@ -8,6 +8,8 @@ export type PayrollInputEmployee = {
   payStructureId: string | null;
   bankAccountNo: string | null;
   bankIfsc: string | null;
+  pan: string | null;
+  uan: string | null;
   departmentId: string;
   pensionScheme: "GPF" | "NPS" | "EPF";
 };

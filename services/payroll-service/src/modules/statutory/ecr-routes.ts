@@ -3,14 +3,20 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { payrollPf } from "./schema.js";
-import { payrollSlips, payrollRuns } from "../payroll/schema.js";
+import { payrollSlips } from "../payroll/schema.js";
+import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 /**
  * EPFO ECR (Electronic Challan cum Return) file generation.
  * Format: pipe-delimited text file as per EPFO specification.
- * Columns: UAN|Member Name|Gross Wages|EPF Wages|EPS Wages|EDLI Wages|EPF Contribution(EE)|EPS Contribution(ER)|EPF Contribution(ER)|NCP Days|Refund of Advances
+ * Columns: UAN|Member Name|Gross Wages|EPF Wages|EPS Wages|EDLI Wages|
+ *          EPF Contribution(EE)|EPS Contribution(ER)|EPF Contribution(ER)|NCP Days|Refund of Advances
+ *
+ * UAN and member name are sourced from the HRMS employee master; the employer
+ * EPS/EPF split is read from the persisted PF record (computed at run time with
+ * the Rs 1,250 EPS cap) rather than re-derived here.
  */
 export async function ecrRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/statutory/ecr", async (req, reply) => {
@@ -30,29 +36,36 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", `No PF records found for period ${month}`);
     }
 
-    // For each PF record, get the slip to access employee info and gross wages
+    // Employee master (UAN + name), keyed by employee id.
+    const input = await fetchPayrollInput(ctx.tenantId, month);
+    const master = new Map(input.employees.map((e) => [e.id, e]));
+
     const lines: string[] = [];
     for (const pf of pfRecords) {
       const slipRows = await db.select().from(payrollSlips)
         .where(and(eq(payrollSlips.id, pf.slipId), eq(payrollSlips.tenantId, ctx.tenantId)))
         .limit(1);
       const slip = slipRows[0];
+      const emp = master.get(pf.employeeId);
 
       const grossWages = slip ? Math.round(Number(slip.grossMinor) / 100) : 0;
       const basicWages = slip ? Math.round(Number(slip.basicMinor) / 100) : 0;
-      const epfWages = basicWages; // EPF wages = basic (capped at 15000 by employer in practice)
-      const epsWages = Math.min(basicWages, 15000); // EPS capped at ₹15,000
-      const edliWages = Math.min(basicWages, 15000); // EDLI capped at ₹15,000
-      const epfEE = Math.round(Number(pf.empContribMinor) / 100); // Employee 12%
-      const epsER = Math.round(epsWages * 0.0833); // 8.33% of EPS wages
-      const epfER = epfEE - epsER; // Remaining ER contribution to EPF
+      // EPF/EPS/EDLI wages are pensionable wages capped at the Rs 15,000 ceiling.
+      const epfWages = Math.min(basicWages, 15000);
+      const epsWages = Math.min(basicWages, 15000);
+      const edliWages = Math.min(basicWages, 15000);
+
+      const epfEE = Math.round(Number(pf.empContribMinor) / 100);          // Employee 12%
+      // Employer split from the persisted record (EPS capped at Rs 1,250).
+      const epsER = Math.round(Number(pf.epsContribMinor) / 100);
+      const epfER = Math.round(Number(pf.epfErContribMinor) / 100);
       const ncpDays = 0;
       const refundAdvances = 0;
 
-      // UAN|Member Name|Gross Wages|EPF Wages|EPS Wages|EDLI Wages|EPF(EE)|EPS(ER)|EPF(ER)|NCP Days|Refund
-      const memberName = slip?.employeeNo ?? "";
+      const uan = emp?.uan ?? "";
+      const memberName = emp?.fullName ?? slip?.employeeNo ?? "";
       const line = [
-        "", // UAN — would come from employee master
+        uan,
         memberName,
         grossWages,
         epfWages,
