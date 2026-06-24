@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateDealBody, UpdateDealStageBody } from "./validators.js";
+import type { CreateDealBody, UpdateDealStageBody, UpdateDealBody } from "./validators.js";
 import type { DealView } from "./schema.js";
 
 const RESOURCE = "deal";
@@ -51,7 +51,33 @@ export async function updateDealStage(ctx: RequestContext, id: string, body: Upd
   await queue.publish(COMMANDS.updateDealStage, {
     messageId: msgId, type: COMMANDS.updateDealStage,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, stage: body.stage },
+    payload: { id, tenantId: ctx.tenantId, stage: body.stage, ...(body.probability !== undefined ? { probability: body.probability } : {}) },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
+  await cache.invalidateResource(ctx.tenantId, RESOURCE);
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+// P1-1: edit deal fields.
+export async function updateDeal(ctx: RequestContext, id: string, body: UpdateDealBody): Promise<Accepted> {
+  const msgId = randomUUID();
+  await queue.publish(COMMANDS.updateDeal, {
+    messageId: msgId, type: COMMANDS.updateDeal,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
+  await cache.invalidateResource(ctx.tenantId, RESOURCE);
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+// P1-1: soft-delete a deal.
+export async function deleteDeal(ctx: RequestContext, id: string): Promise<Accepted> {
+  const msgId = randomUUID();
+  await queue.publish(COMMANDS.deleteDeal, {
+    messageId: msgId, type: COMMANDS.deleteDeal,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
   await cache.invalidateResource(ctx.tenantId, RESOURCE);

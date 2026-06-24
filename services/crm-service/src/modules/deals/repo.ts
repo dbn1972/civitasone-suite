@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { deals, type DealRow, type DealInsert, type DealView } from "./schema.js";
 import { contacts } from "../contacts/schema.js";
@@ -69,7 +69,7 @@ export async function findById(id: string, tenantId: string): Promise<DealView |
   const rows = await db.select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
-    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)))
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
@@ -80,7 +80,7 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   const rows = await db.select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
-    .where(eq(deals.tenantId, tenantId))
+    .where(and(eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`))
     .orderBy(desc(deals.updatedAt))
     .limit(limit)
     .offset(offset);
@@ -93,9 +93,55 @@ export async function insert(tx: Writer, row: DealInsert): Promise<void> {
   await tx.insert(deals).values(row);
 }
 
-export async function updateStage(tx: Writer, id: string, tenantId: string, stage: string, actorId: string): Promise<void> {
+export async function updateStage(tx: Writer, id: string, tenantId: string, stage: string, actorId: string, probability?: number): Promise<void> {
   const status = stage === "Won" ? "won" : stage === "Lost" ? "lost" : "active";
+  // P1-2: persist probability. Won pins to 100, Lost to 0; otherwise honour an
+  // explicit value when supplied, else leave the existing probability intact.
+  const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
+  const patch: Record<string, unknown> = { stage, status, updatedAt: new Date(), updatedBy: actorId };
+  if (prob !== undefined) patch.probability = prob;
   await (tx as typeof db).update(deals)
-    .set({ stage, status, updatedAt: new Date(), updatedBy: actorId })
+    .set(patch)
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
+}
+
+/** Tenant-scoped existence check for a deal (cross-tenant FK guard). */
+export async function dealExists(tenantId: string, dealId: string): Promise<boolean> {
+  const rows = await db.select({ one: sql`1` }).from(deals)
+    .where(and(eq(deals.tenantId, tenantId), eq(deals.id, dealId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** Tenant-scoped existence check for a contact (cross-tenant FK guard). */
+export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
+  const rows = await db.select({ one: sql`1` }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** P1-1: patch editable deal fields (value/owner/closeDate/contactId). */
+export async function updateDeal(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  fields: { valueMinor?: bigint; ownerId?: string | null; closeDate?: string | null; contactId?: string | null },
+  actorId: string,
+): Promise<void> {
+  const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1` };
+  if (fields.valueMinor !== undefined) patch.valueMinor = fields.valueMinor;
+  if (fields.ownerId !== undefined) patch.ownerId = fields.ownerId;
+  if (fields.closeDate !== undefined) patch.closeDate = fields.closeDate;
+  if (fields.contactId !== undefined) patch.contactId = fields.contactId;
+  await (tx as typeof db).update(deals)
+    .set(patch)
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`));
+}
+
+/** P1-1: soft-delete a deal (status='deleted'); excluded from find/list. */
+export async function softDelete(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {
+  await (tx as typeof db).update(deals)
+    .set({ status: "deleted", updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1` })
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
 }

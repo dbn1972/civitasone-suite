@@ -15,7 +15,7 @@ export async function getDashboard(tenantId: string) {
       const [contactRow] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(contacts)
-        .where(eq(contacts.tenantId, tenantId));
+        .where(and(eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`));
 
       const [openDeals] = await db
         .select({ count: sql<number>`count(*)::int` })

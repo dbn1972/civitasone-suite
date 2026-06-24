@@ -21,6 +21,11 @@ export function registerContactConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
+      // P0-1 cross-tenant FK guard: a referenced account must live in this tenant.
+      if (p.accountId && !(await repo.accountExists(p.tenantId, p.accountId))) {
+        await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
+        return;
+      }
       await repo.insert(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name,
         email: p.email, phone: p.phone, company: p.company,
@@ -41,6 +46,11 @@ export function registerContactConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string } & Partial<ContactView>;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // P0-1 cross-tenant FK guard: a (re)assigned account must live in this tenant.
+      if (p.accountId && !(await repo.accountExists(p.tenantId, p.accountId))) {
+        await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_account");
+        return;
+      }
       const patch: Parameters<typeof repo.update>[3] = {};
       if (p.name !== undefined) patch.name = p.name;
       if (p.email !== undefined) patch.email = p.email;

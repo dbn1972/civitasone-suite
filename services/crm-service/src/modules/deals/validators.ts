@@ -17,8 +17,18 @@ export type CreateDealBody = z.infer<typeof createDealBody>;
 
 export const updateDealStageBody = z.object({
   stage: dealStage,
+  probability: z.number().int().min(0).max(100).optional(),
 });
 export type UpdateDealStageBody = z.infer<typeof updateDealStageBody>;
+
+// P1-1 deal edit: value/owner/closeDate/contactId. At least one field required.
+export const updateDealBody = z.object({
+  valueMinor: z.number().int().nonnegative().optional(),
+  ownerId: z.string().uuid().nullable().optional(),
+  closeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  contactId: z.string().uuid().nullable().optional(),
+}).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
+export type UpdateDealBody = z.infer<typeof updateDealBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 

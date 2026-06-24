@@ -94,6 +94,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       if (existing.ownerId && existing.ownerId !== ctx.actorId) {
         throw new HttpError(403, "FORBIDDEN", "only the owner or an admin may modify this contact");
       }
+      // P1-5: a non-admin may not reassign ownership or change lifecycle status.
+      delete body.ownerId;
+      delete body.status;
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateContact(ctx, id, body));
   });
