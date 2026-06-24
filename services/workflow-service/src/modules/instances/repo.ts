@@ -28,6 +28,20 @@ export async function findByIdTx(tx: Writer, id: string): Promise<InstanceRow | 
   return rows[0] ?? null;
 }
 
+/**
+ * H1 — serialize per-instance branch closes. Acquire a FOR UPDATE row lock on
+ * the instance so concurrent sibling-branch completions cannot both read the
+ * open-task count at the same time (which would either double-advance a join or
+ * leave the instance stuck). Every completion transaction locks this row before
+ * counting open tasks / advancing, forcing them to run one at a time per
+ * instance. Returns the locked row.
+ */
+export async function lockByIdTx(tx: Writer, id: string): Promise<InstanceRow | null> {
+  const rows = await (tx as typeof db).select().from(instances)
+    .where(eq(instances.id, id)).limit(1).for("update");
+  return rows[0] ?? null;
+}
+
 /** Returns the full row including createdBy for segregation-of-duties checks. */
 export async function findByIdFull(id: string, tenantId: string): Promise<InstanceRow | null> {
   const rows = await db.select().from(instances).where(eq(instances.id, id)).limit(1);
