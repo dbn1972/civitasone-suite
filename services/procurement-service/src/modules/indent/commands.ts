@@ -5,11 +5,27 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertDistinctMakerChecker, DomainError } from "./domain.js";
+import { assertModeAllowedForValue, GfrModeError, type ProcurementMode } from "../gfr/mode-bands.js";
 import type { CreateIndentBody, ApproveIndentBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createIndent(ctx: RequestContext, body: CreateIndentBody): Promise<Accepted> {
+  // GFR mode-bands: if the requisitioner names a procurement mode, reject a mode
+  // that violates the value band for the indent's estimated value (paise) with a
+  // synchronous 400. Estimated value = sum(unitPriceMinor * quantity).
+  if (body.procurementMode) {
+    const estimatedMinor = body.items.reduce(
+      (s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n,
+    );
+    try {
+      assertModeAllowedForValue(body.procurementMode as ProcurementMode, estimatedMinor);
+    } catch (err) {
+      if (err instanceof GfrModeError) throw new HttpError(400, err.code, err.message);
+      throw err;
+    }
+  }
+
   const id = randomUUID();
   await queue.publish(COMMANDS.indentCreate, {
     messageId: id, type: COMMANDS.indentCreate,

@@ -13,7 +13,11 @@ import { allocateDocNo } from "../../shared/numbering.js";
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const PO_WORKFLOW_NAME = "Procurement PO Approval";
-const FINANCE_URL = process.env.FINANCE_SERVICE_URL ?? "http://finance-service:3007";
+const FINANCE_URL = process.env.FINANCE_SERVICE_URL ?? "http://localhost:3007";
+// Internal service-to-service secret. finance-service's resolveServiceContext
+// rejects an x-internal call (401 UNAUTHENTICATED) unless x-service-secret
+// matches this AND x-tenant-id is present. Injected via ecosystem env.
+const INTERNAL_SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET ?? "";
 
 /** Finance service unreachable / errored — distinct from a budget shortfall. */
 class FinanceUnavailableError extends Error {
@@ -23,12 +27,19 @@ class FinanceUnavailableError extends Error {
 // PO value above this (Rs 1,000 in paise) must carry a sanctionRef (#14).
 const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
 
-async function checkSanctionAvailable(sanctionRef: string, required: bigint): Promise<void> {
+async function checkSanctionAvailable(sanctionRef: string, required: bigint, tenantId: string): Promise<void> {
   const sanctionId = sanctionRef.replace(/^.*:/, "");
   let res: Response;
   try {
     res = await fetch(`${FINANCE_URL}/v1/finance/sanctions/${sanctionId}/available`, {
-      headers: { "x-internal": "1" },
+      // finance-call header fix: an internal call MUST carry x-internal +
+      // x-service-secret + x-tenant-id or finance returns 401 (and never posts
+      // under the wrong tenant). x-tenant-id scopes the sanction lookup.
+      headers: {
+        "x-internal": "1",
+        "x-service-secret": INTERNAL_SERVICE_SECRET,
+        "x-tenant-id": tenantId,
+      },
       signal: AbortSignal.timeout(5000),
     });
   } catch (err) {
@@ -68,7 +79,7 @@ export function registerPoConsumers(queue: Queue): void {
     // Budget check: call finance-service BEFORE any DB write (no DB call inside txn)
     if (p.sanctionRef) {
       try {
-        await checkSanctionAvailable(p.sanctionRef, totalMinor);
+        await checkSanctionAvailable(p.sanctionRef, totalMinor, p.tenantId);
       } catch (err) {
         if (err instanceof FinanceUnavailableError) {
           // #14: finance unreachable is RETRYABLE — rethrow so the queue redelivers.
