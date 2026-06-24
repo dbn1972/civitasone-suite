@@ -12,6 +12,7 @@ export const createRunBody = z.object({
   month:        z.string().regex(/^\d{4}-\d{2}$/, "must be YYYY-MM"),
   departmentId: z.string().uuid().optional(),
   structureId:  z.string().uuid(),
+  runType:      z.enum(["regular", "supplementary", "arrears"]).optional(),
 });
 export type CreateRunBody = z.infer<typeof createRunBody>;
 
