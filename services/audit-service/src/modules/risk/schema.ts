@@ -22,6 +22,18 @@ export const auditRisks = riskSchema.table("audit_risks", {
   version:          integer("version").notNull().default(1),
 });
 
+// P1-7: risk-driven audit planning — many-to-many link between an audit plan and the
+// risk-register entities that justify auditing it. Drives the "audit universe".
+export const auditPlanRisks = riskSchema.table("audit_plan_risks", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull(),
+  planId:    uuid("plan_id").notNull(),
+  riskId:    uuid("risk_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+});
+
 export type RiskRow    = typeof auditRisks.$inferSelect;
 export type RiskInsert = typeof auditRisks.$inferInsert;
-export const schema = { auditRisks };
+export type PlanRiskRow = typeof auditPlanRisks.$inferSelect;
+export const schema = { auditRisks, auditPlanRisks };

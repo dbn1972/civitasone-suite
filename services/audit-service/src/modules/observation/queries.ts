@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { toReadModelStatus } from "./domain.js";
 import type { ObservationRow } from "./schema.js";
 
 function mapObservationType(category: string): "internal" | "cag" | "statutory" | "concurrent" {
@@ -16,14 +17,6 @@ function mapSeverity(riskLevel: string): "critical" | "major" | "minor" | "obser
   return "observation";
 }
 
-function mapObservationStatus(status: string): "open" | "replied" | "partially_closed" | "closed" | "compliance_pending" {
-  if (status === "replied") return "replied";
-  if (status === "partially_closed") return "partially_closed";
-  if (status === "closed") return "closed";
-  if (status === "compliance_pending") return "compliance_pending";
-  return "open";
-}
-
 function mapObservationRow(row: ObservationRow) {
   return {
     id: row.id,
@@ -33,7 +26,7 @@ function mapObservationRow(row: ObservationRow) {
     severity: mapSeverity(row.riskLevel),
     department: row.auditeeRef,
     raisedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
-    status: mapObservationStatus(row.status),
+    status: toReadModelStatus(row.status),
   };
 }
 

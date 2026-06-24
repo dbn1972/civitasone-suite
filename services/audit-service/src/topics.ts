@@ -11,6 +11,12 @@ export const COMMANDS = {
   // AU-01: auditee reply and auditor review commands
   observationReply:      "audit.observation.reply",
   observationReview:     "audit.observation.review",
+  // P1-6: observation closure (full / partial)
+  observationClose:      "audit.observation.close",
+  // P1-7: risk register + risk-driven planning
+  riskCreate:            "audit.risk.create",
+  riskUpdate:            "audit.risk.update",
+  riskLinkPlan:          "audit.risk.link_plan",
   paraDraft:             "audit.para.draft",
   paraIssue:             "audit.para.issue",
   paraDeptResponse:      "audit.para.dept_response",
@@ -33,4 +39,5 @@ export const RESOURCE = {
   export: "export",
   plan:   "plan",
   para:   "para",
+  risk:   "risk",
 };

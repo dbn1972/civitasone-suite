@@ -4,6 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUME_TOPICS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { assertCanTransition } from "./domain.js";
 
 const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
 
@@ -97,6 +98,32 @@ export function registerObservationConsumers(queue: Queue): void {
       });
       if (reviewRows !== 1) throw new StaleWriteError("observation", p.observationId);
       await audit(tx, msg, p.decision === "accepted" ? "reply_accepted" : "reply_rejected", "observation", p.observationId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "observation", p.observationId));
+    await cache.invalidate(cache.makeKey(msg.tenantId, "observations", `list:50`));
+  });
+
+  /**
+   * P1-6: closure transition — moves an observation to "closed" (full) or
+   * "partially_closed" (partial). Allowed source states are governed by the
+   * lifecycle graph in domain.ts (compliance_pending / partially_closed / para_drafted / open).
+   */
+  queue.subscribe(COMMANDS.observationClose, async (msg) => {
+    const p = msg.payload as {
+      id: string; observationId: string; tenantId: string;
+      mode: "full" | "partial"; closureRemarks: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const obs = await repo.findObservationByIdTx(tx, p.observationId, p.tenantId);
+      if (!obs) throw new Error(`observation ${p.observationId} not found`);
+      const target = p.mode === "partial" ? "partially_closed" : "closed";
+      assertCanTransition(obs.status ?? "open", target);
+      const rows = await repo.updateObservationVersioned(tx, p.observationId, p.tenantId, obs.version ?? 1, {
+        status: target, updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
+      });
+      if (rows !== 1) throw new StaleWriteError("observation", p.observationId);
+      await audit(tx, msg, p.mode === "partial" ? "partial_close" : "close", "observation", p.observationId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "observation", p.observationId));
     await cache.invalidate(cache.makeKey(msg.tenantId, "observations", `list:50`));

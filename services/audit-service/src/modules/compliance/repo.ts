@@ -1,8 +1,25 @@
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql, lt } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { auditPendingRegister, auditChecklists, type PendingRegisterRow, type ChecklistRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * P2-4: ageing sweep — flip 'pending' register items whose due_date is strictly in the
+ * past to 'overdue'. Returns the rows that transitioned (for auditing). Cross-tenant safe
+ * (no tenant filter: this is the system-wide scheduled tick), bumps version + updated_at.
+ */
+export async function sweepOverdue(now: Date): Promise<{ id: string; tenantId: string }[]> {
+  const res = await db.update(auditPendingRegister)
+    .set({ status: "overdue", updatedAt: new Date(), version: sql`${auditPendingRegister.version} + 1` })
+    .where(and(
+      eq(auditPendingRegister.status, "pending"),
+      sql`${auditPendingRegister.dueDate} IS NOT NULL`,
+      lt(auditPendingRegister.dueDate, now.toISOString().slice(0, 10)),
+    ))
+    .returning({ id: auditPendingRegister.id, tenantId: auditPendingRegister.tenantId });
+  return res;
+}
 
 export async function insertPendingRegister(tx: Writer, row: typeof auditPendingRegister.$inferInsert): Promise<void> {
   await tx.insert(auditPendingRegister).values(row);
