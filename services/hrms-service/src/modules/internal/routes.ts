@@ -5,6 +5,7 @@ import * as employeeRepo from "../employee/repo.js";
 import * as leaveRepo from "../leave/repo.js";
 import * as attendanceRepo from "../attendance/repo.js";
 import { countWorkingDays } from "../leave/holidays.js";
+import { activePaySuspendedEmployeeIds } from "../disciplinary/repo.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
@@ -17,6 +18,9 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
     const active = employees.filter((e) => e.status !== "separated");
     const approvedLeaves = await leaveRepo.findApprovedLeaveInMonth(ctx.tenantId, q.month);
+    // Pay-suspension flag from the Disciplinary module: active suspensions with
+    // pay_suspended=true. Payroll applies subsistence allowance / withholds pay.
+    const paySuspended = await activePaySuspendedEmployeeIds(ctx.tenantId);
 
     const lopByEmployee = new Map<string, number>();
     for (const leave of approvedLeaves) {
@@ -52,6 +56,8 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         taxRegime: (e.taxRegime ?? "new") as "old" | "new",
         departmentId: e.departmentId,
         pensionScheme: (e.pensionScheme ?? "NPS") as "GPF" | "NPS" | "EPF",
+        paySuspended: paySuspended.has(e.id),
+        ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),
       })),
       lopDays: Object.fromEntries(lopByEmployee.entries()),
     });
