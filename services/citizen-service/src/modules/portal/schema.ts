@@ -1,6 +1,7 @@
 import {
-  pgSchema, uuid, text, varchar, integer, timestamp, boolean, jsonb,
+  pgSchema, uuid, text, integer, timestamp, boolean, jsonb,
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const portalSchema = pgSchema("portal");
 
@@ -8,10 +9,14 @@ export const citizenProfiles = portalSchema.table("citizen_profiles", {
   id:              uuid("id").primaryKey().defaultRandom(),
   tenantId:        uuid("tenant_id").notNull(),
   name:            text("name").notNull(),
-  email:           text("email"),
-  mobile:          varchar("mobile", { length: 16 }),
-  digilockerToken: text("digilocker_token"),
-  address:         text("address"),
+  // P0-1 (DPDP): email/mobile/digilocker_token/address are AES-256-GCM encrypted
+  // at rest (app-layer envelope). The column type is text; the application value
+  // is cleartext (decrypted on read, encrypted on write). mobile widened from
+  // varchar(16) to text to hold ciphertext (migration 0006).
+  email:           encryptedText("email"),
+  mobile:          encryptedText("mobile"),
+  digilockerToken: encryptedText("digilocker_token"),
+  address:         encryptedText("address"),
   ward:            text("ward"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -23,6 +23,8 @@ export const COMMANDS = {
   ticketEscalate:          "citizen.ticket.escalate",
   applicationSlaCheck:     "citizen.application.sla_check",
   grievanceSlaCheck:       "citizen.grievance.sla_check",
+  ticketSlaCheck:          "citizen.ticket.sla_check",
+  rtiSlaCheck:             "citizen.rti.sla_check",
 } as const;
 
 export const EVENTS = {
@@ -34,6 +36,7 @@ export const EVENTS = {
   grievanceEscalated:     "citizen.grievance.escalated",
   profileDeleted:         "citizen.profile.deleted",
   ticketSlaBreached:      "citizen.ticket.sla_breached",
+  rtiSlaBreached:         "citizen.rti.sla_breached",
 } as const;
 
 export const CONSUMED_EVENTS = {

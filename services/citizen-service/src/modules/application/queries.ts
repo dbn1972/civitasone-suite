@@ -24,6 +24,11 @@ export async function listApplications(tenantId: string, citizenId: string): Pro
   return rows ?? [];
 }
 
+/** Officer-only: list applications across the whole tenant (no citizen scoping). */
+export async function listAllApplications(tenantId: string): Promise<ApplicationRow[]> {
+  return repo.listApplicationsByTenant(tenantId, 500);
+}
+
 function mapRequestStatus(status: string): "submitted" | "under_review" | "in_progress" | "resolved" | "rejected" {
   if (status === "under_review") return "under_review";
   if (status === "in_progress") return "in_progress";

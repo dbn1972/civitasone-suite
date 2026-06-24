@@ -26,6 +26,33 @@ export function requireRole(ctx: RequestContext, roles: string[]): void {
   }
 }
 
+/** Officer-tier roles that may act on behalf of an arbitrary citizenId. */
+export const OFFICER_TIER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
+
+/** True if the actor holds any officer-tier role (may specify an arbitrary citizenId). */
+export function isOfficer(ctx: RequestContext): boolean {
+  return hasAnyRole(ctx, OFFICER_TIER_ROLES);
+}
+
+/**
+ * P0-3 cross-citizen authz. Resolve the citizenId an actor is allowed to act on.
+ *
+ * Identity contract: a citizen actor IS identified by ctx.actorId (the JWT sub),
+ * and their own citizen profile id equals that actorId (see portal create, which
+ * sets profile.id = actorId for citizen-role callers). Therefore:
+ *   - citizen role: the effective citizenId is ALWAYS ctx.actorId. A supplied id
+ *     that differs from ctx.actorId is rejected (cannot act as another citizen).
+ *   - officer-tier role: may target any citizenId; a supplied value is honoured,
+ *     else falls back to ctx.actorId.
+ */
+export function resolveCitizenId(ctx: RequestContext, supplied?: string): string {
+  if (isOfficer(ctx)) return supplied ?? ctx.actorId;
+  if (supplied !== undefined && supplied !== ctx.actorId) {
+    throw new HttpError(403, "FORBIDDEN", "citizens may only act on their own records");
+  }
+  return ctx.actorId;
+}
+
 export function resolvePublicContext(req: FastifyRequest, tenantId: string): RequestContext {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   return {

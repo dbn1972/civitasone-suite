@@ -6,10 +6,13 @@ import type { CreateProfileBody, DeleteProfileBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function createProfile(ctx: RequestContext, body: CreateProfileBody): Promise<Accepted> {
-  const id = randomUUID();
+export async function createProfile(ctx: RequestContext, body: CreateProfileBody & { citizenId: string }): Promise<Accepted> {
+  // P0-3/P0-4 identity contract: a citizen's own profile id IS their actorId so
+  // self-scoping (list/file) and erasure ownership are enforceable without a
+  // separate profile->actor link. Officer-created profiles use a fresh id.
+  const id = body.citizenId;
   await queue.publish(COMMANDS.profileCreate, {
-    messageId: id, type: COMMANDS.profileCreate,
+    messageId: randomUUID(), type: COMMANDS.profileCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     // Strip consentGranted from payload — it is gate-checked at route layer, not stored as-is
     payload: { id, tenantId: ctx.tenantId, name: body.name, email: body.email, mobile: body.mobile,

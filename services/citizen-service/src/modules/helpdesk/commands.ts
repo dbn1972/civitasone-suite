@@ -9,7 +9,7 @@ import type {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function createTicket(ctx: RequestContext, body: CreateTicketBody): Promise<Accepted> {
+export async function createTicket(ctx: RequestContext, body: CreateTicketBody & { citizenId: string }): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.ticketCreate, {
     messageId: id, type: COMMANDS.ticketCreate,
@@ -31,8 +31,9 @@ export async function addNote(ctx: RequestContext, id: string, body: TicketNoteB
 }
 
 export async function closeTicket(ctx: RequestContext, id: string, body: CloseTicketBody): Promise<Accepted> {
+  // P1-5: stable messageId so a redelivered close dedupes idempotently.
   await queue.publish(COMMANDS.ticketClose, {
-    type: COMMANDS.ticketClose,
+    messageId: randomUUID(), type: COMMANDS.ticketClose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
@@ -41,8 +42,9 @@ export async function closeTicket(ctx: RequestContext, id: string, body: CloseTi
 }
 
 export async function assignTicket(ctx: RequestContext, id: string, body: AssignTicketBody): Promise<Accepted> {
+  // P1-5: stable messageId so a redelivered assign dedupes idempotently.
   await queue.publish(COMMANDS.ticketAssign, {
-    type: COMMANDS.ticketAssign,
+    messageId: randomUUID(), type: COMMANDS.ticketAssign,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, assigneeId: body.assigneeId },
   });
@@ -51,8 +53,9 @@ export async function assignTicket(ctx: RequestContext, id: string, body: Assign
 }
 
 export async function resolveTicket(ctx: RequestContext, id: string, body: ResolveTicketBody): Promise<Accepted> {
+  // P1-5: stable messageId so a redelivered resolve dedupes idempotently.
   await queue.publish(COMMANDS.ticketResolve, {
-    type: COMMANDS.ticketResolve,
+    messageId: randomUUID(), type: COMMANDS.ticketResolve,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });

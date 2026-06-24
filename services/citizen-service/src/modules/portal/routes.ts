@@ -2,7 +2,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, resolvePublicContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, resolvePublicContext, requireRole, resolveCitizenId, HttpError } from "../../shared/context.js";
 import { idParam, tenantQuery, createProfileBody, deleteProfileBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -14,7 +14,9 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = createProfileBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createProfile(ctx, body));
+    // P0-3: a citizen's profile id is forced to their actorId; officers may name one.
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createProfile(ctx, { ...body, citizenId }));
   });
 
   /** DPDP §12: right to erasure — citizen requests deletion of their profile and PII */
@@ -23,7 +25,10 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = deleteProfileBody.parse(req.body ?? {});
-    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteProfile(ctx, id, body));
+    // P0-4: a citizen may only erase their own profile (id must equal actorId);
+    // officers may erase any. The actual UPDATE is also tenant-scoped (repo).
+    const targetId = resolveCitizenId(ctx, id);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteProfile(ctx, targetId, body));
   });
 
   app.get("/v1/citizen/services", { config: { public: true } }, async (req, reply) => {

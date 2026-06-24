@@ -5,6 +5,9 @@ export const idParam = z.object({ id: z.string().uuid() });
 export const tenantQuery = z.object({ tenantId: z.string().uuid() });
 
 export const createProfileBody = z.object({
+  /** P0-3/P0-4: officer-tier may create a profile for a given citizenId; a bare
+   * citizen's id is forced to their own actorId at the route. */
+  citizenId:       z.string().uuid().optional(),
   name:            z.string().min(1),
   email:           z.string().email().optional(),
   mobile:          z.string().min(10).max(16).optional(),
@@ -20,7 +23,9 @@ export type CreateProfileBody = z.infer<typeof createProfileBody>;
 
 /** DPDP §12: right to erasure — citizen requests account deletion */
 export const deleteProfileBody = z.object({
-  citizenId: z.string().uuid(),
+  /** Optional/ignored: the profile to erase is taken from the :id path param and
+   * constrained to the caller (P0-4). Kept for backward-compat. */
+  citizenId: z.string().uuid().optional(),
   reason:    z.string().min(1).optional(),
 });
 export type DeleteProfileBody = z.infer<typeof deleteProfileBody>;

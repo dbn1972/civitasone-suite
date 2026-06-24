@@ -13,8 +13,10 @@ export async function findTicketById(id: string): Promise<TicketRow | null> {
   return rows[0] ?? null;
 }
 
-export async function findTicketByIdTx(tx: Writer, id: string): Promise<TicketRow | null> {
-  const rows = await (tx as typeof db).select().from(citizenTickets).where(eq(citizenTickets.id, id)).limit(1);
+/** P1-2: scope by (id AND tenantId) so a forged foreign id cannot be read/mutated. */
+export async function findTicketByIdTx(tx: Writer, id: string, tenantId: string): Promise<TicketRow | null> {
+  const rows = await (tx as typeof db).select().from(citizenTickets)
+    .where(and(eq(citizenTickets.id, id), eq(citizenTickets.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -27,9 +29,12 @@ export async function listTicketsByTenant(
   status?: string,
   limit = 100,
   slaStatus?: string,
+  citizenId?: string,
 ): Promise<TicketRow[]> {
   const now = new Date();
   const conditions = [eq(citizenTickets.tenantId, tenantId)];
+  // P0-3: a bare citizen is scoped to their own tickets.
+  if (citizenId) conditions.push(eq(citizenTickets.citizenId, citizenId));
   if (status) conditions.push(eq(citizenTickets.status, status));
   if (slaStatus === "breached") {
     conditions.push(or(eq(citizenTickets.status, "open"), eq(citizenTickets.status, "in_progress"))!);
@@ -80,8 +85,10 @@ export async function insertTicket(tx: Writer, row: TicketInsert): Promise<void>
   await tx.insert(citizenTickets).values({ ...row, slaDueAt });
 }
 
-export async function updateTicket(tx: Writer, id: string, patch: Partial<TicketInsert>): Promise<void> {
-  await tx.update(citizenTickets).set({ ...patch, updatedAt: new Date() }).where(eq(citizenTickets.id, id));
+export async function updateTicket(tx: Writer, id: string, tenantId: string, patch: Partial<TicketInsert>): Promise<void> {
+  // P1-2: tenant-scoped update prevents cross-tenant writes via a forged id.
+  await tx.update(citizenTickets).set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(citizenTickets.id, id), eq(citizenTickets.tenantId, tenantId)));
 }
 
 export async function insertNote(tx: Writer, row: TicketNoteInsert): Promise<void> {

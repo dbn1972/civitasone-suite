@@ -29,7 +29,10 @@ export function registerPortalConsumers(queue: Queue): void {
     const p = msg.payload as { requestId: string; tenantId: string; citizenId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.anonymiseProfile(tx, p.citizenId, msg.actorId);
+      // P0-4: tenant-scoped erasure; if nothing matched (wrong tenant / not found)
+      // do not emit a deletion event.
+      const affected = await repo.anonymiseProfile(tx, p.citizenId, p.tenantId, msg.actorId);
+      if (affected === 0) return;
       await enqueue(tx, {
         topic: EVENTS.profileDeleted, eventType: EVENTS.profileDeleted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

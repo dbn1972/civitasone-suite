@@ -6,6 +6,7 @@ import { schema as grievanceModule }   from "../modules/grievance/schema.js";
 import { schema as rtiModule }         from "../modules/rti/schema.js";
 import { schema as helpdeskModule }    from "../modules/helpdesk/schema.js";
 import { schema as analyticsModule }   from "../modules/analytics/schema.js";
+import { schema as slaRulesModule }    from "../modules/sla-rules/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -21,6 +22,7 @@ export const db = drizzle(sqlClient, {
     ...rtiModule,
     ...helpdeskModule,
     ...analyticsModule,
+    ...slaRulesModule,
     ...outboxSchema,
   },
 });

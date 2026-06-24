@@ -55,7 +55,7 @@ export function registerRtiConsumers(queue: Queue): void {
         responseUrl: p.responseUrl, respondedBy: msg.actorId,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await repo.updateRti(tx, p.rtiId, { status: "responded", updatedBy: msg.actorId });
+      await repo.updateRti(tx, p.rtiId, msg.tenantId, { status: "responded", updatedBy: msg.actorId });
       await audit(tx, msg, "respond", "citizen_rti", p.rtiId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
@@ -70,7 +70,7 @@ export function registerRtiConsumers(queue: Queue): void {
         appealType: p.appealType, grounds: p.grounds, status: "filed",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await repo.updateRti(tx, p.rtiId, { status: "appealed", updatedBy: msg.actorId });
+      await repo.updateRti(tx, p.rtiId, msg.tenantId, { status: "appealed", updatedBy: msg.actorId });
       await audit(tx, msg, "appeal", "citizen_rti", p.rtiId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
@@ -80,14 +80,49 @@ export function registerRtiConsumers(queue: Queue): void {
     const p = msg.payload as { rtiId: string; tenantId: string; responseUrl: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const rti = await repo.findRtiByIdTx(tx, p.rtiId);
+      const rti = await repo.findRtiByIdTx(tx, p.rtiId, msg.tenantId);
       if (!rti) return;
       await repo.insertResponse(tx, {
         tenantId: p.tenantId, rtiId: p.rtiId,
         responseUrl: p.responseUrl, respondedBy: msg.actorId,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await repo.updateRti(tx, p.rtiId, { status: "responded", updatedBy: msg.actorId });
+      await repo.updateRti(tx, p.rtiId, msg.tenantId, { status: "responded", updatedBy: msg.actorId });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
+  });
+
+  /**
+   * P0-2: SLA sweep tick for RTIs (RTI Act 2005 §7, 30-day deadline). Published
+   * by the scheduler with a deterministic messageId so a given overdue RTI only
+   * breaches once. Re-validates the deadline inside the tx and emits a breach +
+   * escalation notification to the CPIO.
+   */
+  queue.subscribe(COMMANDS.rtiSlaCheck, async (msg) => {
+    const p = msg.payload as { tenantId: string; rtiId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rti = await repo.findRtiByIdTx(tx, p.rtiId, msg.tenantId);
+      if (!rti) return;
+      if (rti.status === "responded" || rti.status === "appealed") return;
+      const deadline = new Date(rti.deadline.toString());
+      if (new Date() <= deadline) return;
+      await enqueue(tx, {
+        topic: EVENTS.rtiSlaBreached, eventType: EVENTS.rtiSlaBreached,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { rtiId: p.rtiId, rtiNo: rti.rtiNo, cpioRef: rti.cpioRef, deadline: rti.deadline.toString() },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: EVENTS.rtiSlaBreached,
+          recipient: rti.cpioRef,
+          recipientId: rti.cpioRef,
+          variables: { rtiId: p.rtiId, rtiNo: rti.rtiNo, deadline: rti.deadline.toString() },
+        }),
+      });
+      await audit(tx, msg, "sla_breached", "citizen_rti", p.rtiId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
   });

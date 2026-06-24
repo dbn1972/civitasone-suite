@@ -3,7 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { CitizenRequestSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, resolveCitizenId, isOfficer, HttpError } from "../../shared/context.js";
 import {
   idParam, citizenIdQuery, registerGrievanceBody, assignGrievanceBody,
   grievanceActionBody, resolveGrievanceBody, escalateGrievanceBody, reopenGrievanceBody,
@@ -29,7 +29,9 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = registerGrievanceBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.registerGrievance(ctx, body));
+    // P0-3: constrain citizenId to the actor unless an officer specifies another.
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.registerGrievance(ctx, { ...body, citizenId }));
   });
 
   app.patch("/v1/citizen/grievances/:id/assign", async (req, reply) => {
@@ -86,7 +88,13 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { citizenId } = citizenIdQuery.parse(req.query);
-    return reply.send(await queries.listGrievances(ctx.tenantId, citizenId));
+    // P0-3: a citizen is constrained to their own records; officers may filter
+    // by an arbitrary citizenId, or omit it to list across the tenant.
+    if (isOfficer(ctx) && citizenId === undefined) {
+      return reply.send(await queries.listAllGrievances(ctx.tenantId));
+    }
+    const scopedCitizenId = resolveCitizenId(ctx, citizenId);
+    return reply.send(await queries.listGrievances(ctx.tenantId, scopedCitizenId));
   });
 
   app.get("/v1/citizen/requests", async (req, reply) => {

@@ -7,7 +7,7 @@ import { buildPresignedUploadUrl } from "./domain.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function submitApplication(ctx: RequestContext, body: SubmitApplicationBody): Promise<Accepted> {
+export async function submitApplication(ctx: RequestContext, body: SubmitApplicationBody & { citizenId: string }): Promise<Accepted> {
   const id = randomUUID();
   const refNo = `APP-${Date.now()}`;
   await queue.publish(COMMANDS.applicationSubmit, {
@@ -20,7 +20,7 @@ export async function submitApplication(ctx: RequestContext, body: SubmitApplica
 
 export async function updateStatus(ctx: RequestContext, id: string, body: StatusUpdateBody): Promise<Accepted> {
   await queue.publish(COMMANDS.applicationStatusUpdate, {
-    type: COMMANDS.applicationStatusUpdate,
+    messageId: randomUUID(), type: COMMANDS.applicationStatusUpdate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });

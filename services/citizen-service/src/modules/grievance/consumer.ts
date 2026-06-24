@@ -41,10 +41,10 @@ export function registerGrievanceConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; assignedTo: string; departmentRef?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const g = await repo.findGrievanceByIdTx(tx, p.id);
+      const g = await repo.findGrievanceByIdTx(tx, p.id, msg.tenantId);
       if (!g) return;
       assertGrievanceTransition(g.status, "assigned");
-      await repo.updateGrievance(tx, p.id, {
+      await repo.updateGrievance(tx, p.id, msg.tenantId, {
         status: "assigned", assignedTo: p.assignedTo,
         departmentRef: p.departmentRef ?? g.departmentRef,
         updatedBy: msg.actorId,
@@ -66,7 +66,7 @@ export function registerGrievanceConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const g = await repo.findGrievanceByIdTx(tx, p.grievanceId);
+      const g = await repo.findGrievanceByIdTx(tx, p.grievanceId, msg.tenantId);
       if (!g) return;
       if (p.status) assertGrievanceTransition(g.status, p.status);
       await repo.insertAction(tx, {
@@ -75,7 +75,7 @@ export function registerGrievanceConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       if (p.status) {
-        await repo.updateGrievance(tx, p.grievanceId, { status: p.status, updatedBy: msg.actorId });
+        await repo.updateGrievance(tx, p.grievanceId, msg.tenantId, { status: p.status, updatedBy: msg.actorId });
       }
       await audit(tx, msg, "action", "citizen_grievance", p.grievanceId);
     });
@@ -86,10 +86,10 @@ export function registerGrievanceConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; note?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const g = await repo.findGrievanceByIdTx(tx, p.id);
+      const g = await repo.findGrievanceByIdTx(tx, p.id, msg.tenantId);
       if (!g) return;
       assertGrievanceTransition(g.status, "resolved");
-      await repo.updateGrievance(tx, p.id, { status: "resolved", updatedBy: msg.actorId });
+      await repo.updateGrievance(tx, p.id, msg.tenantId, { status: "resolved", updatedBy: msg.actorId });
       await repo.insertAction(tx, {
         tenantId: p.tenantId, grievanceId: p.id, officerId: msg.actorId,
         actionType: "resolve", note: p.note ?? null,
@@ -121,7 +121,7 @@ export function registerGrievanceConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const g = await repo.findGrievanceByIdTx(tx, p.grievanceId);
+      const g = await repo.findGrievanceByIdTx(tx, p.grievanceId, msg.tenantId);
       if (!g) return;
       await repo.insertEscalation(tx, {
         id: p.id, tenantId: p.tenantId, grievanceId: p.grievanceId,
@@ -151,10 +151,10 @@ export function registerGrievanceConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const g = await repo.findGrievanceByIdTx(tx, p.id);
+      const g = await repo.findGrievanceByIdTx(tx, p.id, msg.tenantId);
       if (!g) return;
       assertGrievanceTransition(g.status, "reopened");
-      await repo.updateGrievance(tx, p.id, { status: "reopened", updatedBy: msg.actorId });
+      await repo.updateGrievance(tx, p.id, msg.tenantId, { status: "reopened", updatedBy: msg.actorId });
       await repo.insertAction(tx, {
         tenantId: p.tenantId, grievanceId: p.id, officerId: msg.actorId,
         actionType: "reopen", note: p.reason,
@@ -175,7 +175,7 @@ export function registerGrievanceConsumers(queue: Queue): void {
     const slaDays = p.slaDays ?? GRIEVANCE_ESCALATION_SLA_DAYS;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const g = await repo.findGrievanceByIdTx(tx, p.grievanceId);
+      const g = await repo.findGrievanceByIdTx(tx, p.grievanceId, msg.tenantId);
       if (!g || !shouldAutoEscalate(g.status, g.updatedAt, slaDays)) return;
       const escalationId = randomUUID();
       await repo.insertEscalation(tx, {
