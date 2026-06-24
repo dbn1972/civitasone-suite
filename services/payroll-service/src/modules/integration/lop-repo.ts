@@ -40,3 +40,29 @@ export async function sumLopDays(tenantId: string, employeeId: string, month: st
     ));
   return row?.total ?? 0;
 }
+
+/**
+ * M2 (LOP double-count): return both the count of local ledger rows and the
+ * summed LOP days for an (employee, month). The caller uses `hasLedger` to pick
+ * an authoritative source: when a local ledger entry exists for the month, the
+ * ledger is authoritative and the HRMS feed (`input.lopDays`) is ignored for
+ * that employee; otherwise the HRMS feed is used. This guarantees the same LOP
+ * is never deducted twice (once from each source).
+ */
+export async function getLopForMonth(
+  tenantId: string,
+  employeeId: string,
+  month: string,
+): Promise<{ hasLedger: boolean; days: number }> {
+  const [row] = await db.select({
+    cnt: sql<number>`count(*)::int`,
+    total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int`,
+  })
+    .from(payrollLopLedger)
+    .where(and(
+      eq(payrollLopLedger.tenantId, tenantId),
+      eq(payrollLopLedger.employeeId, employeeId),
+      eq(payrollLopLedger.month, month),
+    ));
+  return { hasLedger: (row?.cnt ?? 0) > 0, days: row?.total ?? 0 };
+}

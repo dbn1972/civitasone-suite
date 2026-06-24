@@ -71,13 +71,19 @@ async function resolveDeclaration(tenantId: string, employeeId: string, fy: stri
   };
 }
 
-/** TDS already deducted this FY before the given run month (for Sec 192 true-up). */
+/**
+ * TDS already deducted this FY before the given run month (for Sec 192 true-up).
+ * M3: only count TDS whose source run is approved/disbursed. A draft/processing/
+ * failed (or out-of-order/abandoned) run must not corrupt the YTD true-up.
+ */
 async function resolveTdsYtdMinor(tenantId: string, employeeId: string, fyStart: number, beforeMonth: string): Promise<bigint> {
   const rows = (await db.execute(sql`
-    SELECT COALESCE(SUM(tds_minor), 0)::text AS ytd
-    FROM statutory.payroll_tds
-    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
-      AND period >= ${`${fyStart}-04`} AND period < ${beforeMonth}
+    SELECT COALESCE(SUM(t.tds_minor), 0)::text AS ytd
+    FROM statutory.payroll_tds t
+    JOIN payroll.payroll_runs r ON r.id = t.run_id
+    WHERE t.tenant_id = ${tenantId}::uuid AND t.employee_id = ${employeeId}::uuid
+      AND t.period >= ${`${fyStart}-04`} AND t.period < ${beforeMonth}
+      AND r.status IN ('approved', 'disbursed')
   `)) as unknown as Array<{ ytd: string | number }>;
   return BigInt(rows[0]?.ytd ?? 0);
 }
@@ -242,14 +248,29 @@ async function processPayrollRun(
     pctOfBasic: c.pctOfBasic != null ? Number(c.pctOfBasic) : null,
   }));
 
+  // M1 (idempotency/resume): a run can wedge in `processing` if slip computation
+  // was interrupted (e.g. process crash after markProcessed committed). On
+  // re-processing we skip employees that already have a slip for this run, so we
+  // never duplicate slips/statutory rows and we resume a partially-computed run.
+  // The DB also enforces UNIQUE(tenant_id, run_id, employee_id) on slips as a
+  // belt-and-suspenders guard.
+  const existingSlips = await repo.listSlipsByRun(p.id, p.tenantId);
+  const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
+
   await db.transaction(async (tx) => {
     for (const emp of input.employees) {
       if (p.departmentId && emp.departmentId !== p.departmentId) continue;
+      if (alreadyComputed.has(emp.id)) continue; // M1: skip already-computed employees
 
       const basicMinor = BigInt(emp.basicMinor);
       const daMinor = (basicMinor * daRateBps) / 10000n;
-      const lopDays =
-        (input.lopDays[emp.id] ?? 0) + await lopRepo.sumLopDays(p.tenantId, emp.id, p.month);
+      // M2 (LOP double-count): one authoritative source per (employee, month).
+      // The local LOP ledger (fed by leave/attendance events) takes precedence
+      // when any ledger row exists for the month; otherwise we fall back to the
+      // HRMS payroll-input feed. We never add the two together — that deducted
+      // the same LOP twice.
+      const ledgerLop = await lopRepo.getLopForMonth(p.tenantId, emp.id, p.month);
+      const lopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
       // LOP daily rate on (Basic + DA) over actual days in month.
       const dailyRate = (basicMinor + daMinor) / daysInMonth;
       const lopDeduction = dailyRate * BigInt(lopDays);
@@ -320,9 +341,17 @@ async function processPayrollRun(
       totalNet += result.netPayMinor;
     }
 
+    // M1: totals must reflect ALL slips of the run (newly computed + any from a
+    // prior partial pass), not just this pass's accumulator. Read back the
+    // authoritative slip set inside the same transaction.
+    void totalGross; void totalNet;
+    const allSlips = await repo.listSlipsByRunTx(tx, p.id, p.tenantId);
+    const runGross = allSlips.reduce((s, sl) => s + sl.grossMinor, 0n);
+    const runNet = allSlips.reduce((s, sl) => s + sl.netPayMinor, 0n);
+
     await repo.updateRun(tx, p.id, {
-      totalGrossMinor: totalGross,
-      totalNetMinor: totalNet,
+      totalGrossMinor: runGross,
+      totalNetMinor: runNet,
       status: "processing",
       updatedBy: msg.actorId,
     });

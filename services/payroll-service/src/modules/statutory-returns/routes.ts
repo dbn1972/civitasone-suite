@@ -6,7 +6,7 @@ import { payrollTds, payrollNps } from "../statutory/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
 import { buildForm16, parseFy } from "../tax/form16.js";
-import { fetchPayrollInput, type PayrollInputEmployee } from "../../shared/hrms-client.js";
+import { fetchPayrollInput, HrmsUnavailableError, type PayrollInputEmployee } from "../../shared/hrms-client.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -16,6 +16,12 @@ const RETURN_FILER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer"];
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 const QUARTERS: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
+
+/** M5: strict-parse FY and surface malformed input as a 400 (not a 500). */
+function parseFyOr400(fy: string): { startYear: number; endYear: number } {
+  try { return parseFy(fy); }
+  catch (e) { throw new HttpError(400, "VALIDATION_FAILED", (e as Error).message); }
+}
 
 /** Apr–Mar months belonging to a 24Q quarter of the FY starting `startYear`. */
 function quarterMonths(startYear: number, q: Quarter): string[] {
@@ -78,16 +84,22 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const q = (quarter ?? "").toUpperCase() as Quarter;
     if (!QUARTERS.includes(q)) throw new HttpError(400, "VALIDATION_FAILED", "quarter must be one of Q1,Q2,Q3,Q4");
 
-    const { startYear, endYear } = parseFy(fy);
+    const { startYear, endYear } = parseFyOr400(fy);
     const months = quarterMonths(startYear, q);
     const byEmp = await deducteeWiseTds(ctx.tenantId, months);
 
-    // Employee master for PAN + name.
+    // Employee master for PAN + name. M4: HRMS-unreachable must FAIL the return
+    // (502) rather than emit blank PANs that look like genuine PANNOTAVBL flags.
     let master = new Map<string, PayrollInputEmployee>();
     try {
       const input = await fetchPayrollInput(ctx.tenantId, months[months.length - 1] ?? `${endYear}-03`);
       master = new Map(input.employees.map((e) => [e.id, e]));
-    } catch { /* HRMS unavailable — PAN/name blank */ }
+    } catch (err) {
+      if (err instanceof HrmsUnavailableError) {
+        throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate Form 24Q: HRMS identity source unreachable");
+      }
+      throw err;
+    }
 
     const deductees = [...byEmp.entries()].map(([employeeId, agg]) => {
       const emp = master.get(employeeId);
@@ -133,7 +145,13 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
             name: f16.form16PartA.deductee.name,
             ...f16.form16PartB,
           });
-        } catch { /* skip employees that cannot be built */ }
+        } catch (err) {
+          // M4: never silently drop a deductee because HRMS is down — fail the export.
+          if (err instanceof HrmsUnavailableError) {
+            throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate Form 24Q Annexure II: HRMS identity source unreachable");
+          }
+          /* other errors: skip employees that genuinely cannot be built */
+        }
       }
     }
 
@@ -196,7 +214,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     // C1: a self-service employee may only read their OWN Form 12BA.
     const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
-    const { startYear, endYear } = parseFy(fy);
+    const { startYear, endYear } = parseFyOr400(fy);
 
     const decRows = await db.select().from(taxDeclarations)
       .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
@@ -208,8 +226,14 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     try {
       const input = await fetchPayrollInput(ctx.tenantId, `${endYear}-03`);
       const emp = input.employees.find((e) => e.id === employeeId);
-      pan = emp?.pan ?? ""; name = emp?.fullName ?? "";
-    } catch { /* HRMS unavailable */ }
+      pan = emp?.pan ?? ""; name = emp?.fullName ?? ""; // reachable + no PAN → genuine blank
+    } catch (err) {
+      // M4: HRMS unreachable → fail (502), don't emit a blank-identity 12BA.
+      if (err instanceof HrmsUnavailableError) {
+        throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate Form 12BA: HRMS identity source unreachable");
+      }
+      throw err;
+    }
 
     void startYear;
     return reply.send({
@@ -217,7 +241,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
       employer: employerIdentity(),
-      employee: { employeeId, pan, name },
+      employee: { employeeId, pan, name, panFlag: pan ? "" : "PANNOTAVBL" },
       // Single aggregate line; component breakdown can be added when HRMS exposes it.
       perquisites: [
         { sl: 1, nature: "Aggregate value of perquisites u/s 17(2)", valueMinor: perqMinor, value: Math.round(perqMinor / 100) },
@@ -248,11 +272,18 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       throw new HttpError(404, "NOT_FOUND", `No NPS records found for period ${month}`);
     }
 
+    // M4: HRMS-unreachable must FAIL the SCF (502) rather than emit blank PRANs
+    // that look like genuine PRANNOTAVBL flags.
     let master = new Map<string, PayrollInputEmployee>();
     try {
       const input = await fetchPayrollInput(ctx.tenantId, month);
       master = new Map(input.employees.map((e) => [e.id, e]));
-    } catch { /* HRMS unavailable — PRAN/name blank */ }
+    } catch (err) {
+      if (err instanceof HrmsUnavailableError) {
+        throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate NPS-SCF: HRMS PRAN source unreachable");
+      }
+      throw err;
+    }
 
     // Dedup per employee (multiple slips per FY possible); keep latest record per employee.
     const seen = new Set<string>();
