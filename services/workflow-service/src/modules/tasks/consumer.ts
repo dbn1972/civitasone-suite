@@ -28,10 +28,42 @@ export function registerTasksConsumers(queue: Queue): void {
       const p = msg.payload;
       const decision = p.decision ?? "approve";
       const sodOverride = p.sodOverride ?? false;
+
+      // H1 — serialize all branch closes / advances on this instance: take the
+      // instance row lock FIRST, before any SoD read, completion, or join count,
+      // so concurrent sibling completions run strictly one at a time per
+      // instance. The locked row is the authoritative instance state below.
+      const instance = await instanceRepo.lockByIdTx(tx, p.instanceId);
+
+      // C2 — DURABLE SoD enforcement (the HTTP-handler pre-check is racy because
+      // completed_by is only written here). Now that we hold the instance lock
+      // and read prior completions FOR UPDATE, two back-to-back completions by
+      // the same actor serialize and the second observes the first's completed
+      // row. On violation: record an audit row and DO NOT complete/advance.
+      if (!sodOverride && instance) {
+        const selfApproval = instance.createdBy === msg.actorId;
+        const priorByActor = await repo.priorActorTasksTx(tx, p.instanceId, msg.actorId);
+        if (selfApproval || priorByActor.length > 0) {
+          await historyRepo.record(tx, {
+            tenantId: p.tenantId,
+            instanceId: p.instanceId,
+            taskId: p.id,
+            fromNode: p.nodeKey ?? instance.currentNode ?? null,
+            toNode: null,
+            action: "sod_violation",
+            decision,
+            actorId: msg.actorId,
+            detail: selfApproval
+              ? { sodViolation: "self_approval" }
+              : { sodViolation: "repeat_actor" },
+          });
+          return; // do not mark complete, do not advance
+        }
+      }
+
+      // H2 — optimistic-locked completion (no-op on already-completed task).
       const updated = await repo.markCompleted(tx, p.id, p.tenantId, msg.actorId, decision, sodOverride);
       if (!updated) return;
-
-      const instance = await instanceRepo.findByIdTx(tx, p.instanceId);
 
       // ---- audit: this task's transition (with SoD override flagged) ----
       await historyRepo.record(tx, {
@@ -93,12 +125,12 @@ export function registerTasksConsumers(queue: Queue): void {
 }
 
 /**
- * Edge-driven forward progression from the just-completed node. Resolves
- * successor node(s) from the edge table evaluated against the instance context,
- * then enters each successor (see enterNode):
- *  - 0 matching edges  -> terminal: dispatch domain approval / complete.
- *  - 1 matching edge    -> XOR/linear advance.
- *  - N matching edges    -> parallel split (every matching branch fires).
+ * Edge-driven forward progression from the just-completed node. Branch
+ * semantics are decided by the SOURCE node's nodeType (see advanceFrom), NOT by
+ * the number of matching edges:
+ *  - xor/exclusive -> at most ONE successor (lowest sort_order matching edge).
+ *  - split/parallel -> fan out to EVERY matching edge.
+ *  - 0 matching edges -> terminal: dispatch domain approval / complete.
  */
 async function handleAdvance(
   tx: Tx,
@@ -107,8 +139,9 @@ async function handleAdvance(
   p: CompletePayload,
 ): Promise<void> {
   const fromNode = p.nodeKey ?? instance.currentNode!;
-  const isBranch = (await defRepo.findEdgesFromTx(tx, instance.definitionId!, fromNode)).length > 1;
-  await advanceFrom(tx, msg, instance, fromNode, isBranch ? "branch" : "advance");
+  const srcNode = await defRepo.findNodeByKeyTx(tx, instance.definitionId!, fromNode);
+  const isParallel = srcNode?.nodeType === "split" || srcNode?.nodeType === "parallel";
+  await advanceFrom(tx, msg, instance, fromNode, isParallel ? "branch" : "advance");
 }
 
 /**
@@ -124,7 +157,17 @@ async function advanceFrom(
   action: string,
 ): Promise<void> {
   const context = normalizeContext(instance.context);
-  const targets = await defRepo.resolveNextNodesTx(tx, instance.definitionId!, fromNode, context);
+  const matched = await defRepo.resolveNextNodesTx(tx, instance.definitionId!, fromNode, context);
+
+  // M1 — branch fan-out is governed by the SOURCE node type, not edge count.
+  // A split/parallel node fans out to every matching edge; any other node type
+  // (xor/exclusive/task/linear) is exclusive and advances to exactly ONE
+  // successor — the matching edge with the lowest sort_order. Without this an
+  // xor node with overlapping conditions (or an always-true default edge) would
+  // wrongly spawn multiple branches.
+  const srcNode = await defRepo.findNodeByKeyTx(tx, instance.definitionId!, fromNode);
+  const isParallel = srcNode?.nodeType === "split" || srcNode?.nodeType === "parallel";
+  const targets = isParallel ? matched : matched.slice(0, 1);
 
   if (targets.length === 0) {
     if (instance.refType && instance.refId) {
@@ -134,7 +177,7 @@ async function advanceFrom(
     return;
   }
 
-  const splitAction = targets.length > 1 ? "split" : action;
+  const splitAction = isParallel && targets.length > 1 ? "split" : action;
   for (const targetKey of targets) {
     await enterNode(tx, msg, instance, fromNode, targetKey, splitAction);
   }

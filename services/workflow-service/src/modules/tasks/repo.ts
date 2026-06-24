@@ -68,6 +68,23 @@ export async function priorActorTasks(tx: Writer, instanceId: string, actorId: s
     ));
 }
 
+/**
+ * C2 — DURABLE SoD: prior tasks on this instance already completed by `actorId`,
+ * read with FOR UPDATE so concurrent completion transactions serialize on the
+ * same instance's completed rows. Run inside the consumer transaction (which
+ * also holds the instance row lock) so the repeat-actor check sees committed
+ * completions rather than racing past them.
+ */
+export async function priorActorTasksTx(tx: Writer, instanceId: string, actorId: string): Promise<TaskRow[]> {
+  return (tx as typeof db).select().from(tasks)
+    .where(and(
+      eq(tasks.instanceId, instanceId),
+      eq(tasks.status, "completed"),
+      eq(tasks.completedBy, actorId),
+    ))
+    .for("update");
+}
+
 /** Number of still-open (pending) tasks on an instance — used for join gating. */
 export async function countOpenTasks(tx: Writer, instanceId: string): Promise<number> {
   const rows = await (tx as typeof db).select().from(tasks)
@@ -108,7 +125,11 @@ export async function markCompleted(
 ): Promise<TaskView | null> {
   const existing = await findById(id, tenantId);
   if (!existing || existing.status === "completed") return null;
-  await tx.update(tasks).set({
+  // H2 — optimistic lock. Guard the UPDATE with `status='pending'` and a
+  // version predicate so a second completeTask message for the same task (or a
+  // concurrent worker) cannot re-complete it. `returning()` lets us detect the
+  // 0-rows-affected conflict and skip advancing the instance.
+  const updated = await tx.update(tasks).set({
     status: "completed",
     decision,
     completedBy: actorId,
@@ -116,6 +137,13 @@ export async function markCompleted(
     updatedBy: actorId,
     updatedAt: new Date(),
     version: existing.version + 1,
-  }).where(eq(tasks.id, id));
+  })
+    .where(and(
+      eq(tasks.id, id),
+      eq(tasks.status, "pending"),
+      eq(tasks.version, existing.version),
+    ))
+    .returning({ id: tasks.id });
+  if (updated.length === 0) return null; // conflict: already completed elsewhere
   return { ...existing, status: "completed", decision, version: existing.version + 1 };
 }

@@ -24,11 +24,27 @@ export async function completeTask(
   const isSuperAdmin = ctx.roles.includes("super_admin");
   let sodOverride = false;
 
-  // Segregation of duties:
+  // C1 — role-on-task authorization. The broad requireRole() gate at the route
+  // only proves the actor holds *some* workflow role; it never checks the
+  // actor's roles against THIS task's roleRef. Without this, any tenant user
+  // with any workflow role could complete any task regardless of refType
+  // (the route's permission if-chain leaves estab_file/asset_disposal/etc with
+  // no gate at all). Rule: unless super_admin (break-glass), the actor must
+  // hold the task's roleRef. A task with no roleRef is unrestricted.
+  if (!isSuperAdmin && existing.roleRef && !ctx.roles.includes(existing.roleRef)) {
+    throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
+  }
+
+  // Segregation of duties (NON-AUTHORITATIVE fast-fail for UX only):
   //  (a) submitter may not approve their own request (self-approval);
   //  (b) an actor who completed a PRIOR step on this instance may not act on
   //      the current step (repeat-actor / four-eyes).
   // super_admin is exempt (break-glass) and the override is recorded + audited.
+  // C2 — this pre-check is racy (completed_by is written later, by the consumer
+  // transaction), so two concurrent completions both pass here. The DURABLE,
+  // authoritative SoD enforcement now lives inside the consumer transaction
+  // under a row lock (see consumer.ts). This block only short-circuits the
+  // obvious self-approval case early for a friendlier error.
   if (!isSuperAdmin) {
     const instance = await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId);
     if (instance && instance.createdBy === ctx.actorId) {
