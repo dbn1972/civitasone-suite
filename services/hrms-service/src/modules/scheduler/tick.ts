@@ -33,11 +33,21 @@ export interface TickOptions {
   probationMonths?: number;
 }
 
+export interface TenantOutcome {
+  tenantId: string;
+  ok: boolean;
+  superannuationRows: number;
+  probationRows: number;
+  error?: string;
+}
+
 export interface TickResult {
   runDate: string;
   tenantsSeen: number;
   superannuationRows: number;
   probationRows: number;
+  tenantsFailed: number;
+  outcomes: TenantOutcome[];
 }
 
 function todayISO(): string {
@@ -74,22 +84,25 @@ async function listEmployees(db: Db, tenantId: string): Promise<EmpRow[]> {
 async function upsertDueRows(
   db: Db, tenantId: string, listKind: string, runDate: string, rows: readonly DueRow[],
 ): Promise<void> {
-  for (const r of rows) {
-    await db.execute(sql`
-      INSERT INTO scheduler.hrms_due_list
-        (tenant_id, list_kind, run_date, employee_id, employee_no, full_name,
-         due_date, days_remaining, details)
-      VALUES
-        (${tenantId}, ${listKind}, ${runDate}, ${r.employeeId}, ${r.employeeNo},
-         ${r.fullName}, ${r.dueDateISO}, ${r.daysRemaining}, ${JSON.stringify(r.details)}::jsonb)
-      ON CONFLICT (tenant_id, list_kind, run_date, employee_id) DO UPDATE
-        SET employee_no = EXCLUDED.employee_no,
-            full_name   = EXCLUDED.full_name,
-            due_date    = EXCLUDED.due_date,
-            days_remaining = EXCLUDED.days_remaining,
-            details     = EXCLUDED.details,
-            created_at  = now()`);
-  }
+  if (rows.length === 0) return;
+  // M5: batch all rows into a single multi-row INSERT ... ON CONFLICT instead of
+  // one round-trip per row. Idempotent re-runs still refresh in place.
+  const values = sql.join(
+    rows.map((r) => sql`(${tenantId}, ${listKind}, ${runDate}, ${r.employeeId}, ${r.employeeNo}, ${r.fullName}, ${r.dueDateISO}, ${r.daysRemaining}, ${JSON.stringify(r.details)}::jsonb)`),
+    sql`, `,
+  );
+  await db.execute(sql`
+    INSERT INTO scheduler.hrms_due_list
+      (tenant_id, list_kind, run_date, employee_id, employee_no, full_name,
+       due_date, days_remaining, details)
+    VALUES ${values}
+    ON CONFLICT (tenant_id, list_kind, run_date, employee_id) DO UPDATE
+      SET employee_no = EXCLUDED.employee_no,
+          full_name   = EXCLUDED.full_name,
+          due_date    = EXCLUDED.due_date,
+          days_remaining = EXCLUDED.days_remaining,
+          details     = EXCLUDED.details,
+          created_at  = now()`);
 }
 
 export const SCHEDULER_JOB_NAME = "hr_due_lists";
@@ -111,40 +124,59 @@ export async function runSchedulerOnce(db: Db, opts: TickOptions = {}): Promise<
   let tenantsSeen = 0;
   let supRows = 0;
   let probRows = 0;
+  const outcomes: TenantOutcome[] = [];
 
   try {
     const tenants = await listTenantIds(db);
     for (const tenantId of tenants) {
       tenantsSeen += 1;
-      const emps = await listEmployees(db, tenantId);
+      // M5: isolate each tenant so one bad tenant cannot poison the whole tick.
+      try {
+        const emps = await listEmployees(db, tenantId);
 
-      const supCandidates: SuperannuationCandidate[] = emps
-        .filter((e) => e.date_of_birth)
-        .map((e) => ({
+        const supCandidates: SuperannuationCandidate[] = emps
+          .filter((e) => e.date_of_birth)
+          .map((e) => ({
+            employeeId: e.id, employeeNo: e.employee_no, fullName: e.full_name,
+            dateOfBirthISO: e.date_of_birth as string,
+          }));
+        const supDue = computeSuperannuationDue(supCandidates, runDate, supWindow, supAge);
+        await upsertDueRows(db, tenantId, "superannuation", runDate, supDue);
+
+        const probCandidates: ProbationCandidate[] = emps.map((e) => ({
           employeeId: e.id, employeeNo: e.employee_no, fullName: e.full_name,
-          dateOfBirthISO: e.date_of_birth as string,
+          status: e.status, dateOfJoiningISO: e.date_of_joining,
+          confirmationDateISO: e.confirmation_date,
         }));
-      const supDue = computeSuperannuationDue(supCandidates, runDate, supWindow, supAge);
-      await upsertDueRows(db, tenantId, "superannuation", runDate, supDue);
-      supRows += supDue.length;
+        const probDue = computeProbationDue(probCandidates, runDate, probWindow, probMonths);
+        await upsertDueRows(db, tenantId, "probation", runDate, probDue);
 
-      const probCandidates: ProbationCandidate[] = emps.map((e) => ({
-        employeeId: e.id, employeeNo: e.employee_no, fullName: e.full_name,
-        status: e.status, dateOfJoiningISO: e.date_of_joining,
-        confirmationDateISO: e.confirmation_date,
-      }));
-      const probDue = computeProbationDue(probCandidates, runDate, probWindow, probMonths);
-      await upsertDueRows(db, tenantId, "probation", runDate, probDue);
-      probRows += probDue.length;
+        supRows += supDue.length;
+        probRows += probDue.length;
+        outcomes.push({
+          tenantId, ok: true,
+          superannuationRows: supDue.length, probationRows: probDue.length,
+        });
+      } catch (tenantErr) {
+        outcomes.push({
+          tenantId, ok: false, superannuationRows: 0, probationRows: 0,
+          error: String(tenantErr),
+        });
+      }
     }
 
+    const failed = outcomes.filter((o) => !o.ok).length;
+    // The run-marker status check constraint allows only running/ok/error; a tick
+    // that completed (even with some per-tenant failures) is 'ok' here, with the
+    // failure count surfaced in `detail` and the structured `outcomes` return.
     await db.execute(sql`
       UPDATE scheduler.hrms_scheduler_runs
       SET finished_at = now(), status = 'ok',
           tenants_seen = ${tenantsSeen}, rows_produced = ${supRows + probRows},
-          detail = ${`superannuation=${supRows}, probation=${probRows}`}
+          detail = ${`superannuation=${supRows}, probation=${probRows}, tenantsFailed=${failed}`}
       WHERE job_name = ${SCHEDULER_JOB_NAME} AND run_date = ${runDate}`);
   } catch (err) {
+    // Only reached for tick-wide failures (tenant discovery / run-marker update).
     await db.execute(sql`
       UPDATE scheduler.hrms_scheduler_runs
       SET finished_at = now(), status = 'error', detail = ${String(err)}
@@ -152,5 +184,10 @@ export async function runSchedulerOnce(db: Db, opts: TickOptions = {}): Promise<
     throw err;
   }
 
-  return { runDate, tenantsSeen, superannuationRows: supRows, probationRows: probRows };
+  return {
+    runDate, tenantsSeen,
+    superannuationRows: supRows, probationRows: probRows,
+    tenantsFailed: outcomes.filter((o) => !o.ok).length,
+    outcomes,
+  };
 }

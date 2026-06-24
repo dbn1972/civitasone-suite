@@ -55,8 +55,38 @@ export async function listEvents(tenantId: string, caseId: string) {
 }
 
 // ---------------- suspensions ----------------
+
+/** True if the employee already has an ACTIVE suspension in this tenant. */
+export async function hasActiveSuspension(tenantId: string, employeeId: string): Promise<boolean> {
+  const rows = await db.select({ id: hrmsSuspensions.id }).from(hrmsSuspensions)
+    .where(and(
+      eq(hrmsSuspensions.tenantId, tenantId),
+      eq(hrmsSuspensions.employeeId, employeeId),
+      eq(hrmsSuspensions.status, "active")))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Insert a suspension. H1: an employee may have at most ONE active suspension
+ * (deterministic subsistence%). The DB partial unique index
+ * `hrms_susp_one_active_uq` is the backstop; a 23505 (unique violation) is
+ * surfaced as a 409 so a racing duplicate is rejected rather than silently
+ * creating nondeterministic state.
+ */
 export async function insertSuspension(tx: Writer, row: SuspensionInsert): Promise<void> {
-  await tx.insert(hrmsSuspensions).values(row);
+  try {
+    await tx.insert(hrmsSuspensions).values(row);
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "23505") {
+      throw new HttpError(
+        409, "ACTIVE_SUSPENSION_EXISTS",
+        "employee already has an active suspension; revoke it before creating another",
+      );
+    }
+    throw e;
+  }
 }
 
 export async function findSuspension(tenantId: string, id: string): Promise<SuspensionRow | null> {
@@ -98,7 +128,11 @@ export async function activePaySuspendedEmployeeIds(tenantId: string): Promise<M
     .where(and(
       eq(hrmsSuspensions.tenantId, tenantId),
       eq(hrmsSuspensions.status, "active"),
-      eq(hrmsSuspensions.paySuspended, true)));
+      eq(hrmsSuspensions.paySuspended, true)))
+    // Deterministic regardless of any (now-prevented) duplicate active rows:
+    // order by employee then most-recent fromDate, then id, so the Map's
+    // last-write-wins picks a stable subsistence% even as a defensive backstop.
+    .orderBy(asc(hrmsSuspensions.employeeId), asc(hrmsSuspensions.fromDate), asc(hrmsSuspensions.id));
   const m = new Map<string, { subsistencePct: string }>();
   for (const r of rows) m.set(r.employeeId, { subsistencePct: r.subsistencePct });
   return m;

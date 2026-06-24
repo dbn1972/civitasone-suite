@@ -4,6 +4,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { PiiDecryptError } from "../../shared/pii-crypto.js";
 import { createEmployeeBody, confirmEmployeeBody, idParam } from "./validators.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
@@ -71,6 +72,13 @@ function errorHandler(err: unknown, req: any, reply: any): void {
   }
   if (err instanceof HttpError) {
     void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    return;
+  }
+  if (err instanceof PiiDecryptError) {
+    // M2: a tampered / undecryptable PII field fails closed as a typed 422,
+    // not a raw retryable 500.
+    req.log.error({ err }, "PII decrypt failed");
+    void reply.code(422).send({ code: err.code, message: "stored PII could not be decrypted", correlationId, retryable: false });
     return;
   }
   req.log.error({ err }, "unhandled error");
