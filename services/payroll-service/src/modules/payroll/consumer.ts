@@ -43,14 +43,19 @@ function resolvePt(slabs: Array<{ from: bigint; to: bigint; amount: bigint }>, i
 /** Employee's submitted tax declaration for the FY (drives old-regime TDS exemptions). */
 async function resolveDeclaration(tenantId: string, employeeId: string, fy: string): Promise<{
   regime: "old" | "new"; rentPaidAnnualMinor: bigint; ded80cMinor: bigint; ded80dMinor: bigint; otherDedMinor: bigint;
+  prevEmployerSalaryMinor: bigint; prevEmployerTdsMinor: bigint; otherSourcesIncomeMinor: bigint; perquisitesMinor: bigint;
 } | null> {
   const rows = (await db.execute(sql`
     SELECT regime, section_80c, section_80d, other_deductions,
-           COALESCE(rent_paid_minor, 0) AS rent_paid_minor
+           COALESCE(rent_paid_minor, 0) AS rent_paid_minor,
+           COALESCE(prev_employer_salary_minor, 0) AS prev_employer_salary_minor,
+           COALESCE(prev_employer_tds_minor, 0)    AS prev_employer_tds_minor,
+           COALESCE(other_sources_income_minor, 0) AS other_sources_income_minor,
+           COALESCE(perquisites_minor, 0)          AS perquisites_minor
     FROM payroll.payroll_tax_declarations
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid AND fy = ${fy}
     ORDER BY created_at DESC LIMIT 1
-  `)) as unknown as Array<{ regime: string; section_80c: string | number; section_80d: string | number; other_deductions: string | number; rent_paid_minor: string | number }>;
+  `)) as unknown as Array<{ regime: string; section_80c: string | number; section_80d: string | number; other_deductions: string | number; rent_paid_minor: string | number; prev_employer_salary_minor: string | number; prev_employer_tds_minor: string | number; other_sources_income_minor: string | number; perquisites_minor: string | number }>;
   const d = rows[0];
   if (!d) return null;
   return {
@@ -59,6 +64,10 @@ async function resolveDeclaration(tenantId: string, employeeId: string, fy: stri
     ded80cMinor: BigInt(d.section_80c),
     ded80dMinor: BigInt(d.section_80d),
     otherDedMinor: BigInt(d.other_deductions),
+    prevEmployerSalaryMinor: BigInt(d.prev_employer_salary_minor),
+    prevEmployerTdsMinor: BigInt(d.prev_employer_tds_minor),
+    otherSourcesIncomeMinor: BigInt(d.other_sources_income_minor),
+    perquisitesMinor: BigInt(d.perquisites_minor),
   };
 }
 
@@ -280,7 +289,9 @@ async function processPayrollRun(
       const fyStr = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
       const decl = await resolveDeclaration(p.tenantId, emp.id, fyStr);
       const monthIdxInFy = (Number(p.month.slice(5, 7)) - 4 + 12) % 12; // Apr=0..Mar=11
-      const tdsYtdMinor = await resolveTdsYtdMinor(p.tenantId, emp.id, fyStart, p.month);
+      // Sec 192 true-up: prev-employer TDS counts toward tax already deducted this FY.
+      const tdsYtdMinor = (await resolveTdsYtdMinor(p.tenantId, emp.id, fyStart, p.month))
+        + (decl?.prevEmployerTdsMinor ?? 0n);
 
       const result = await computeAndInsertSlip(tx, msg, {
         runId: p.id,
@@ -297,7 +308,7 @@ async function processPayrollRun(
         fyStartYear: fyStart,
         tdsYtdMinor,
         monthsRemaining: 12 - monthIdxInFy,
-        ...(decl ? { declaration: { rentPaidAnnualMinor: decl.rentPaidAnnualMinor, ded80cMinor: decl.ded80cMinor, ded80dMinor: decl.ded80dMinor, otherDedMinor: decl.otherDedMinor } } : {}),
+        ...(decl ? { declaration: { rentPaidAnnualMinor: decl.rentPaidAnnualMinor, ded80cMinor: decl.ded80cMinor, ded80dMinor: decl.ded80dMinor, otherDedMinor: decl.otherDedMinor, prevEmployerSalaryMinor: decl.prevEmployerSalaryMinor, otherSourcesIncomeMinor: decl.otherSourcesIncomeMinor, perquisitesMinor: decl.perquisitesMinor } } : {}),
         rawComponents,
         components: adHoc,
       });
@@ -325,7 +336,7 @@ export async function computeAndInsertSlip(
     daRateBps?: bigint; cityClass?: CityClass; ptMinor?: bigint;
     taxRegime?: "old" | "new"; fyStartYear?: number;
     tdsYtdMinor?: bigint; monthsRemaining?: number;
-    declaration?: { rentPaidAnnualMinor?: bigint; ded80cMinor?: bigint; ded80dMinor?: bigint; otherDedMinor?: bigint };
+    declaration?: { rentPaidAnnualMinor?: bigint; ded80cMinor?: bigint; ded80dMinor?: bigint; otherDedMinor?: bigint; prevEmployerSalaryMinor?: bigint; otherSourcesIncomeMinor?: bigint; perquisitesMinor?: bigint };
     rawComponents?: RawComponent[];
     components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }>;
   },

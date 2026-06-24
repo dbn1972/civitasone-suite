@@ -10,6 +10,7 @@ export type PayrollInputEmployee = {
   bankIfsc: string | null;
   pan: string | null;
   uan: string | null;
+  pran?: string | null;
   cityClass: "X" | "Y" | "Z";
   taxRegime: "old" | "new";
   departmentId: string;

@@ -6,6 +6,12 @@ export interface TaxDeclarationInput {
   ded80cMinor?: bigint;
   ded80dMinor?: bigint;
   otherDedMinor?: bigint;
+  /** Previous-employer taxable salary for this FY (Sec 192(2), both regimes). */
+  prevEmployerSalaryMinor?: bigint;
+  /** Income reported under "income from other sources" (both regimes). */
+  otherSourcesIncomeMinor?: bigint;
+  /** Perquisites value, Sec 17(2) — added to salary income (both regimes). */
+  perquisitesMinor?: bigint;
 }
 
 export class DomainError extends Error {
@@ -187,6 +193,14 @@ export function computeSlip(input: SlipInput): SlipResult {
   // Monthly TDS (Sec 192) on real annual TAXABLE income: regime-aware, with
   // Sec 16 std deduction + PT, Sec 10(13A) HRA exemption, and Chapter VI-A (old regime).
   const annualGross = grossMinor * 12n;
+  // Additions taxed under BOTH regimes (added before slabs):
+  //  - perquisites Sec 17(2) (current employer, not part of cash gross),
+  //  - previous-employer taxable salary for the FY (Sec 192(2)),
+  //  - income from other sources.
+  const perqMinor       = declaration.perquisitesMinor ?? 0n;
+  const prevEmpSalMinor = declaration.prevEmployerSalaryMinor ?? 0n;
+  const otherSrcMinor   = declaration.otherSourcesIncomeMinor ?? 0n;
+  const extraIncome     = perqMinor + prevEmpSalMinor + otherSrcMinor;
   let annualTaxableMinor: bigint;
   if (taxRegime === "old") {
     const salaryHraAnnual   = (basicMinor + daMinor) * 12n;
@@ -196,9 +210,9 @@ export function computeSlip(input: SlipInput): SlipResult {
     const d80c = declaration.ded80cMinor ?? 0n; const c80c = d80c > 15_000_000n ? 15_000_000n : d80c;
     const d80d = declaration.ded80dMinor ?? 0n; const c80d = d80d > 7_500_000n ? 7_500_000n : d80d;
     const other = declaration.otherDedMinor ?? 0n;
-    annualTaxableMinor = annualGross - 5_000_000n - hraExempt - c80c - c80d - other - pt * 12n;
+    annualTaxableMinor = annualGross + extraIncome - 5_000_000n - hraExempt - c80c - c80d - other - pt * 12n;
   } else {
-    annualTaxableMinor = annualGross - 7_500_000n; // new regime: standard deduction only
+    annualTaxableMinor = annualGross + extraIncome - 7_500_000n; // new regime: standard deduction only
   }
   if (annualTaxableMinor < 0n) annualTaxableMinor = 0n;
   const annualTaxMinor = annualTaxFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear);

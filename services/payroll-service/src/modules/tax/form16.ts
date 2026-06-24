@@ -36,10 +36,11 @@ export interface Form16 {
     note: string;
   };
   form16PartB: {
-    grossSalary: number; standardDeduction: number; hraExempt: number;
+    grossSalary: number; perquisites: number; prevEmployerSalary: number; otherSourcesIncome: number;
+    standardDeduction: number; hraExempt: number;
     section80c: number; section80d: number; otherDeductions: number; totalChapterViA: number;
     taxableIncome: number; taxOnIncome: number; rebate87A: number; surcharge: number; cess: number;
-    totalTaxLiability: number; totalTdsDeducted: number;
+    totalTaxLiability: number; totalTdsDeducted: number; prevEmployerTds: number;
     balanceTaxPayable: number; refundDue: number; regime: "old" | "new";
   };
 }
@@ -94,10 +95,20 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   const otherDeductions = regime === "old" && dec ? Number(dec.otherDeductions) / 100 : 0;
   const totalChapterViA = section80c + section80d + otherDeductions;
 
-  const taxableIncome = Math.max(0, Math.round((grossSalary - standardDeduction - hraExempt - totalChapterViA) / 10) * 10);
+  // Additions taxed under both regimes (Sec 17(2) perquisites, prev-employer
+  // salary Sec 192(2), income from other sources).
+  const perquisites        = dec ? Number(dec.perquisitesMinor) / 100 : 0;
+  const prevEmployerSalary = dec ? Number(dec.prevEmployerSalaryMinor) / 100 : 0;
+  const otherSourcesIncome = dec ? Number(dec.otherSourcesIncomeMinor) / 100 : 0;
+  const prevEmployerTds    = dec ? Number(dec.prevEmployerTdsMinor) / 100 : 0;
+  const extraIncome        = perquisites + prevEmployerSalary + otherSourcesIncome;
+
+  const taxableIncome = Math.max(0, Math.round((grossSalary + extraIncome - standardDeduction - hraExempt - totalChapterViA) / 10) * 10);
   const tax = computeTax(taxableIncome, regime, startYear);
   const totalTaxLiability = tax.totalTax;
-  const balance = Math.round(totalTaxLiability - totalTdsDeducted);
+  // Total TDS credited = deducted by this employer + reported prev-employer TDS.
+  const totalTdsCredited = Math.round(totalTdsDeducted) + Math.round(prevEmployerTds);
+  const balance = Math.round(totalTaxLiability - totalTdsCredited);
 
   let deducteePan = ""; let deducteeName = "";
   try {
@@ -123,9 +134,10 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
       note: "Verify challan/TRACES references before issuing Part A.",
     },
     form16PartB: {
-      grossSalary, standardDeduction, hraExempt, section80c, section80d, otherDeductions, totalChapterViA,
+      grossSalary, perquisites, prevEmployerSalary, otherSourcesIncome,
+      standardDeduction, hraExempt, section80c, section80d, otherDeductions, totalChapterViA,
       taxableIncome, taxOnIncome: tax.baseTax, rebate87A: tax.rebate, surcharge: tax.surcharge, cess: tax.cess,
-      totalTaxLiability, totalTdsDeducted: Math.round(totalTdsDeducted),
+      totalTaxLiability, totalTdsDeducted: Math.round(totalTdsDeducted), prevEmployerTds: Math.round(prevEmployerTds),
       balanceTaxPayable: balance > 0 ? balance : 0, refundDue: balance < 0 ? -balance : 0, regime,
     },
   };
