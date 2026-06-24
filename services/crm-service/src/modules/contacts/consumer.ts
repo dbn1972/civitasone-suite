@@ -81,11 +81,52 @@ export function registerContactConsumers(queue: Queue): void {
     const p = msg.payload as { primaryId: string; duplicateId: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      if (p.primaryId === p.duplicateId) {
+        await emitAudit(tx, msg, "merge", p.primaryId, "rejected_same_id");
+        return;
+      }
+      // Both contacts must exist, be active, and belong to the caller's tenant.
+      const primary = await repo.findActiveRow(p.primaryId, p.tenantId);
+      const duplicate = await repo.findActiveRow(p.duplicateId, p.tenantId);
+      if (!primary || !duplicate) {
+        await emitAudit(tx, msg, "merge", p.primaryId, "rejected_not_found_or_cross_tenant");
+        return;
+      }
+
+      // Field merge: carry non-null fields from the duplicate onto the primary
+      // ONLY where the primary is currently null (never overwrite primary data).
+      const patch: Parameters<typeof repo.update>[3] = {};
+      const carry = [
+        "email", "phone", "company", "designation", "city", "country",
+        "leadSource", "ownerId", "accountId",
+      ] as const;
+      for (const f of carry) {
+        if ((primary[f] === null || primary[f] === undefined) && duplicate[f] != null) {
+          (patch as Record<string, unknown>)[f] = duplicate[f];
+        }
+      }
+      // Union tags.
+      const pTags = (primary.tags as string[]) ?? [];
+      const dTags = (duplicate.tags as string[]) ?? [];
+      const mergedTags = Array.from(new Set([...pTags, ...dTags]));
+      if (mergedTags.length !== pTags.length) patch.tags = mergedTags;
+      // Preserve consent: if either granted, keep granted with the duplicate's date.
+      if (duplicate.marketingConsent && !primary.marketingConsent) {
+        patch.marketingConsent = true;
+        if (duplicate.consentDate) patch.consentDate = duplicate.consentDate;
+      }
+
+      if (Object.keys(patch).length > 0) {
+        await repo.update(tx, p.primaryId, p.tenantId, patch, msg.actorId);
+      }
       await repo.reassignDeals(tx, p.duplicateId, p.primaryId, p.tenantId);
       await repo.reassignActivities(tx, p.duplicateId, p.primaryId, p.tenantId);
       await repo.softDelete(tx, p.duplicateId, p.tenantId, msg.actorId);
       await emit(tx, msg, EVENTS.contactUpdated, { contactId: p.primaryId, mergedFrom: p.duplicateId }, "merge", p.primaryId);
     });
+    await cache.invalidate(keyFor(msg.tenantId, p.primaryId));
+    await cache.invalidate(keyFor(msg.tenantId, p.duplicateId));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
 
@@ -94,10 +135,18 @@ export function registerContactConsumers(queue: Queue): void {
     const ctx = { tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId } as RequestContext;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const rows = p.contacts.map((c) => {
+      let inserted = 0;
+      let skipped = 0;
+      let errored = 0;
+      const skippedRows: Array<{ index: number; email: string | null; reason: string }> = [];
+      // Per-row so one duplicate email (unique tenant,email_idx) skips that row
+      // only, instead of aborting the whole batch. A savepoint isolates each
+      // row's failure from the surrounding transaction.
+      for (let i = 0; i < p.contacts.length; i++) {
+        const c = p.contacts[i]!;
         const id = randomUUID();
         const view = buildView(id, ctx, c);
-        return {
+        const row = {
           id, tenantId: p.tenantId, name: view.name,
           email: view.email, phone: view.phone, company: view.company,
           designation: view.designation, city: view.city, country: view.country,
@@ -107,9 +156,29 @@ export function registerContactConsumers(queue: Queue): void {
           consentDate: view.consentDate, lastActivityAt: null,
           status: "active", createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
         };
-      });
-      await repo.bulkInsert(tx, rows);
-      await emit(tx, msg, EVENTS.contactCreated, { batchId: p.batchId, count: rows.length }, "bulk_import", p.batchId);
+        try {
+          // Savepoint per row so an unexpected error rolls back only this row,
+          // not the whole batch. onConflictDoNothing handles the dup case
+          // without raising, so the common path needs no rollback.
+          const outcome = await tx.transaction((sp) => repo.bulkInsertRow(sp, row));
+          if (outcome === "inserted") inserted++;
+          else {
+            skipped++;
+            skippedRows.push({ index: i, email: view.email, reason: "duplicate_email" });
+          }
+        } catch (err) {
+          errored++;
+          skippedRows.push({ index: i, email: view.email, reason: "error" });
+          (msg as { log?: { warn?: (o: unknown, m: string) => void } }).log?.warn?.(
+            { err, index: i }, "bulk import row failed",
+          );
+        }
+      }
+      await emit(
+        tx, msg, EVENTS.contactCreated,
+        { batchId: p.batchId, total: p.contacts.length, inserted, skipped, errored, skippedRows },
+        "bulk_import", p.batchId,
+      );
     });
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
@@ -146,5 +215,21 @@ async function emit(
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
     payload: { service: "crm", action, resourceType: "contact", resourceId, outcome: "success" },
+  });
+}
+
+/** Audit-only emit (no domain event) — used for rejected/validation outcomes. */
+async function emitAudit(
+  tx: unknown,
+  msg: CommandEnvelope,
+  action: string,
+  resourceId: string,
+  outcome: string,
+): Promise<void> {
+  const t = tx as Parameters<typeof enqueue>[0];
+  await enqueue(t, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "crm", action, resourceType: "contact", resourceId, outcome },
   });
 }

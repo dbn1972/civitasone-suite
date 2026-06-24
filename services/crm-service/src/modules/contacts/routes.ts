@@ -13,6 +13,10 @@ import * as queries from "./queries.js";
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin"];
 
+function isAdmin(roles: string[]): boolean {
+  return roles.some((r) => ADMIN_ROLES.includes(r));
+}
+
 export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/contacts", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -31,13 +35,16 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       ...(q.ownerId ? { ownerId: q.ownerId } : {}),
       segment: q.segment,
       actorId: ctx.actorId,
-    }));
+    }, isAdmin(ctx.roles)));
   });
 
   app.get("/v1/crm/contacts/export", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
-    const rows = await queries.exportContacts(ctx.tenantId);
+    const admin = isAdmin(ctx.roles);
+    const rows = await queries.exportContacts(ctx.tenantId, admin);
+    // Dedicated audit for a bulk PII export (DPDP accountability).
+    await commands.auditBulkExport(ctx, rows.length, admin);
     return reply.send({ data: rows, exportedAt: new Date().toISOString() });
   });
 
@@ -59,7 +66,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
-    const detail = await queries.getContactDetail(id, ctx.tenantId);
+    const detail = await queries.getContactDetail(id, ctx.tenantId, isAdmin(ctx.roles));
     if (!detail) throw new HttpError(404, "NOT_FOUND", "contact not found");
     return reply.send(detail);
   });
@@ -68,7 +75,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
-    const contact = await queries.getContact(id, ctx.tenantId);
+    const contact = await queries.getContact(id, ctx.tenantId, isAdmin(ctx.roles));
     if (!contact || contact.status === "deleted") throw new HttpError(404, "NOT_FOUND", "contact not found");
     return reply.send(contact);
   });
@@ -78,6 +85,16 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateContactBody.parse(req.body);
+    // P1-3 ownership authz: a non-admin may only modify contacts they own.
+    if (!isAdmin(ctx.roles)) {
+      const existing = await queries.getContact(id, ctx.tenantId, true);
+      if (!existing || existing.status === "deleted") {
+        throw new HttpError(404, "NOT_FOUND", "contact not found");
+      }
+      if (existing.ownerId && existing.ownerId !== ctx.actorId) {
+        throw new HttpError(403, "FORBIDDEN", "only the owner or an admin may modify this contact");
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateContact(ctx, id, body));
   });
 

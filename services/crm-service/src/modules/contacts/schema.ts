@@ -1,7 +1,8 @@
 /**
  * contacts module — Drizzle schema. Lives in its OWN Postgres schema `crm`.
  */
-import { pgSchema, uuid, varchar, integer, timestamp, boolean, date, jsonb } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean, date, jsonb, text } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const crmSchema = pgSchema("crm");
 
@@ -23,8 +24,12 @@ export const contacts = crmSchema.table("contacts", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
   name: varchar("name", { length: 200 }).notNull(),
-  email: varchar("email", { length: 320 }),
-  phone: varchar("phone", { length: 32 }),
+  // PII at rest: AES-256-GCM ciphertext (cleartext in app via customType).
+  email: encryptedText("email"),
+  phone: encryptedText("phone"),
+  // Deterministic blind index over normalized email — backs the per-tenant
+  // unique constraint + bulk-import de-dup while email itself is ciphertext.
+  emailIdx: text("email_idx"),
   company: varchar("company", { length: 200 }),
   designation: varchar("designation", { length: 120 }),
   city: varchar("city", { length: 100 }),
