@@ -61,6 +61,11 @@ export async function relayOnce(db: any, queue: Queue, batch = 100, service = pr
   for (const row of rows) {
     try {
       await queue.publish(row.topic, {
+        // SEC C1: forward the stable outbox row id as the messageId so a relay
+        // re-publish (after a crash between publish and mark-published) reuses the
+        // same id and the consumer dedupes it via markProcessed, instead of the bus
+        // minting a fresh random id every cycle (which defeated idempotency).
+        messageId: row.id,
         type: row.eventType, tenantId: row.tenantId, actorId: row.actorId,
         correlationId: row.correlationId, schemaVersion: "1.0", payload: row.payload,
       });
@@ -91,10 +96,11 @@ export function startRelay(db: any, queue: Queue, intervalMs = 500, service = pr
 
 /** Mark a consumed message processed (idempotency). Returns false if already seen. */
 export async function markProcessed(tx: any, messageId: string): Promise<boolean> {
-  const existing = await tx.select().from(processed).where(eq(processed.messageId, messageId)).limit(1);
-  if (existing.length) return false;
-  await tx.insert(processed).values({ messageId });
-  return true;
+  // Atomic claim: ON CONFLICT DO NOTHING + RETURNING is race-free (the old
+  // SELECT-then-INSERT could let two concurrent deliveries both pass the check,
+  // then one aborts on the PK). Empty return means already processed.
+  const inserted = await tx.insert(processed).values({ messageId }).onConflictDoNothing().returning();
+  return inserted.length > 0;
 }
 
 export { and, eq, isNull };
