@@ -184,10 +184,16 @@ async function depositDisposition(
   const amount = BigInt(p.amountMinor);
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
-    const dep = await repo.findDepositByIdTx(tx, p.depositId);
+    // C2: lock the deposit row FOR UPDATE so concurrent refund/forfeit/adjust
+    // serialise on it. The balance change is then applied via a guarded UPDATE
+    // (balance_minor >= amount) so a double-spend can never relieve the
+    // liability twice even under interleaving.
+    const dep = await repo.findDepositByIdForUpdateTx(tx, p.depositId);
     if (!dep || dep.tenantId !== p.tenantId) throw new Error(`UNKNOWN_DEPOSIT: ${p.depositId} not found for tenant`);
     if (amount <= 0n) throw new Error(`INVALID_AMOUNT: deposit ${event} amount must be positive`);
-    if (amount > dep.balanceMinor) {
+    // C2: atomic guarded debit FIRST — reject (rowcount 0) before posting any GL.
+    const applied = await repo.applyDepositDispositionGuarded(tx, p.depositId, event, amount, msg.actorId);
+    if (!applied) {
       throw new Error(`DEPOSIT_OVERDRAW: ${event} ${amount} exceeds held balance ${dep.balanceMinor} for ${p.depositId}`);
     }
     const lines = await buildLines(tx, dep, amount, today);
@@ -201,8 +207,6 @@ async function depositDisposition(
       amountMinor: amount, journalId,
       reference: reference ?? `deposit_${event}:${p.id}`, createdBy: msg.actorId,
     });
-    const newBalance = dep.balanceMinor - amount;
-    await repo.applyDepositDisposition(tx, p.depositId, event, amount, newBalance, msg.actorId);
     await audit(tx, msg, event, "deposit", p.depositId);
   });
 }

@@ -51,7 +51,10 @@ export async function getTenantConfig(tenantId: string) {
  * so it is emitted blank rather than fabricated — see route documentation.
  * Only releasable payments are listed (status in initiated/released/completed).
  */
-export async function listRealBeneficiaries(tenantId: string, limit = 500): Promise<BeneficiaryRow[]> {
+export async function listRealBeneficiaries(tenantId: string, pfmsId: string, limit = 500): Promise<BeneficiaryRow[]> {
+  // H1: scope strictly to the batch's own payment set (p.pfms_id = the batch's
+  // pfms_id) instead of every tenant payment. Also tenant-scope the bank/bill
+  // joins so a payment can never resolve another tenant's bank/bill row.
   const rows = await db.execute<{
     beneficiary: string | null; account: string | null; amount_minor: string;
     ref: string; ddo_code: string | null;
@@ -63,9 +66,10 @@ export async function listRealBeneficiaries(tenantId: string, limit = 500): Prom
       COALESCE(p.utr, p.eft_ref, p.id::text) AS ref,
       COALESCE(p.ddo_code, b.ddo_code) AS ddo_code
     FROM payments.finance_payments p
-    LEFT JOIN payments.finance_bills b ON b.id = p.bill_id
-    LEFT JOIN treasury.finance_banks bk ON bk.id = p.bank_account_id
+    LEFT JOIN payments.finance_bills b ON b.id = p.bill_id AND b.tenant_id = p.tenant_id
+    LEFT JOIN treasury.finance_banks bk ON bk.id = p.bank_account_id AND bk.tenant_id = p.tenant_id
     WHERE p.tenant_id = ${tenantId}::uuid
+      AND p.pfms_id = ${pfmsId}
       AND p.status IN ('initiated','released','completed')
     ORDER BY p.created_at DESC
     LIMIT ${limit}

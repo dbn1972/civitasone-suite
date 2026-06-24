@@ -9,6 +9,7 @@ import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances } from "./domain.js";
 import { getPeriodStatus } from "../period-close/routes.js";
 import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
+import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -51,6 +52,20 @@ async function postJournal(
   journal: StandardJournal,
 ): Promise<void> {
   assertJournalBalances(journal.lines);
+  // M2: lines must be non-negative and the journal must move money. A balanced
+  // 0==0 journal (or negative legs) posts an empty / nonsensical voucher — reject.
+  let totalDebit = 0n;
+  for (const l of journal.lines) {
+    const dr = BigInt(l.debitMinor);
+    const cr = BigInt(l.creditMinor);
+    if (dr < 0n || cr < 0n) {
+      throw new Error("JOURNAL_NEGATIVE_LINE: debit/credit amounts must be non-negative");
+    }
+    totalDebit += dr;
+  }
+  if (totalDebit === 0n) {
+    throw new Error("JOURNAL_ZERO_TOTAL: a journal must have a non-zero total debit");
+  }
   const period = journal.postingDate.slice(0, 7);
   const periodStatus = await getPeriodStatus(journal.tenantId, period);
   if (periodStatus === "hard_close") {
@@ -114,9 +129,13 @@ export function registerGlConsumers(queue: Queue): void {
       const dep = raw as {
         assetId: string; period: string; depAmountMinor: string; currency?: string; depBook?: string;
       };
-      const amount = Number(dep.depAmountMinor);
+      // M1: carry paise as a decimal string -> BigInt (no Number() on aggregate paise).
+      const amount = BigInt(dep.depAmountMinor);
       const expenseCode = dep.depBook === "statutory" ? DEP_EXPENSE_STAT : DEP_EXPENSE;
-      const journalId = randomUUID();
+      // C1: deterministic journal id keyed off the depreciation source so an
+      // outbox redelivery hits the journal PK and no-ops (mirrors the GL spine).
+      const depKey = `depreciation:${dep.assetId}:${dep.period}:${dep.depBook ?? "company"}`;
+      const journalId = deterministicId(depKey);
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await postJournal(tx, msg, {
@@ -126,8 +145,8 @@ export function registerGlConsumers(queue: Queue): void {
           type: "depreciation",
           postingDate: `${dep.period}-28`,
           lines: [
-            { accountCode: expenseCode, debitMinor: amount, creditMinor: 0 },
-            { accountCode: ACCUM_DEP, debitMinor: 0, creditMinor: amount },
+            { accountCode: expenseCode, debitMinor: amount.toString(), creditMinor: "0" },
+            { accountCode: ACCUM_DEP, debitMinor: "0", creditMinor: amount.toString() },
           ],
         });
       });
@@ -140,23 +159,26 @@ export function registerGlConsumers(queue: Queue): void {
         assetId: string; acquisitionCost: string; accumulatedDep: string;
         proceeds: number; gainLoss: string; currency?: string;
       };
-      const acq = Number(d.acquisitionCost);
-      const accum = Number(d.accumulatedDep);
-      const proceeds = Number(d.proceeds ?? 0);
-      const gainLoss = Number(d.gainLoss);
-      const journalId = randomUUID();
+      // M1: carry paise as decimal strings -> BigInt (no Number() on paise).
+      const acq = BigInt(d.acquisitionCost);
+      const accum = BigInt(d.accumulatedDep);
+      const proceeds = BigInt(d.proceeds ?? 0);
+      const gainLoss = BigInt(d.gainLoss);
+      // C1: deterministic journal id keyed off the asset disposal so redelivery
+      // hits the journal PK and no-ops (mirrors the GL spine).
+      const journalId = deterministicId(`asset_disposal:${d.assetId}`);
       const today = new Date().toISOString().slice(0, 10);
       const lines: JournalLine[] = [
-        { accountCode: ACCUM_DEP, debitMinor: accum, creditMinor: 0 },
-        { accountCode: FIXED_ASSET, debitMinor: 0, creditMinor: acq },
+        { accountCode: ACCUM_DEP, debitMinor: accum.toString(), creditMinor: "0" },
+        { accountCode: FIXED_ASSET, debitMinor: "0", creditMinor: acq.toString() },
       ];
-      if (proceeds > 0) {
-        lines.push({ accountCode: CASH, debitMinor: proceeds, creditMinor: 0 });
+      if (proceeds > 0n) {
+        lines.push({ accountCode: CASH, debitMinor: proceeds.toString(), creditMinor: "0" });
       }
-      if (gainLoss > 0) {
-        lines.push({ accountCode: GAIN_LOSS, debitMinor: 0, creditMinor: gainLoss });
-      } else if (gainLoss < 0) {
-        lines.push({ accountCode: GAIN_LOSS, debitMinor: Math.abs(gainLoss), creditMinor: 0 });
+      if (gainLoss > 0n) {
+        lines.push({ accountCode: GAIN_LOSS, debitMinor: "0", creditMinor: gainLoss.toString() });
+      } else if (gainLoss < 0n) {
+        lines.push({ accountCode: GAIN_LOSS, debitMinor: (-gainLoss).toString(), creditMinor: "0" });
       }
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;

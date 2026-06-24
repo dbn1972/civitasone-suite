@@ -29,7 +29,15 @@ function buildBankFile(rows: Array<{
   agency?: string; scheme?: string; ddo?: string;
 }>): string {
   const header = "Beneficiary Name,Account Number,IFSC,Amount,Payment Ref,Agency,Scheme,DDO";
-  const csvCell = (v: string): string => (v.includes(",") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v);
+  // H2: CSV / formula-injection defence. A cell whose first char is one of
+  // = + - @ TAB CR is interpreted as a formula by spreadsheet apps; prefix it
+  // with a single quote to neutralise it, then apply normal CSV quoting.
+  const csvCell = (v: string): string => {
+    const neutralised = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+    return /[",\r\n]/.test(neutralised)
+      ? `"${neutralised.replace(/"/g, '""')}"`
+      : neutralised;
+  };
   const lines = rows.map((r) =>
     [r.beneficiary, r.account, r.ifsc, r.amount, r.ref, r.agency ?? "", r.scheme ?? "", r.ddo ?? ""]
       .map(csvCell).join(","),
@@ -62,7 +70,9 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
         id: r.id,
         pfmsId: r.pfmsId,
         type: r.type,
-        amountMinor: Number(r.amountMinor),
+        // M1: emit paise as an exact decimal string (no Number() precision loss
+        // on aggregate paise > 2^53).
+        amountMinor: r.amountMinor.toString(),
         agencyCode: r.agencyCode,
         schemeCode: r.schemeCode,
         ddoCode: r.ddoCode,
@@ -85,7 +95,7 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     // (real amount / account / ref / DDO), not a hardcoded stub. Account/IFSC
     // are emitted from captured data; IFSC is blank where no beneficiary bank
     // master exists in this service (documented gap — not fabricated).
-    const beneficiaries = await repo.listRealBeneficiaries(ctx.tenantId);
+    const beneficiaries = await repo.listRealBeneficiaries(ctx.tenantId, batch.pfmsId);
     const rows = beneficiaries.map((b) => ({
       beneficiary: VENDOR_NAMES[b.beneficiary] ?? (b.beneficiary || "Unknown beneficiary"),
       account: b.account,
