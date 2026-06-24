@@ -17,6 +17,7 @@ export function toView(r: TaskRow): TaskView {
     refId: r.refId,
     decision: r.decision,
     assigneeId: r.assigneeId,
+    isCall: r.isCall,
     version: r.version,
   };
 }
@@ -57,6 +58,7 @@ export async function listPendingForRoles(
     .where(and(
       eq(tasks.tenantId, tenantId),
       eq(tasks.status, "pending"),
+      eq(tasks.isCall, false),
       ...(rolePredicate ? [rolePredicate] : []),
     ))
     .orderBy(desc(tasks.updatedAt))

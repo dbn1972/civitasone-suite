@@ -15,13 +15,19 @@ const nodeSchema = z.object({
   nodeKey: z.string().min(1).max(64),
   name: z.string().min(1).max(200),
   roleRef: z.string().max(128).optional(),
-  nodeType: z.enum(["task", "split", "join", "start", "end", "timer"]).default("task"),
+  nodeType: z.enum(["task", "split", "parallel", "join", "start", "end", "timer", "xor", "exclusive", "call"]).default("task"),
   slaMinutes: z.number().int().positive().optional(),
   // SECURITY C-1b — deemed-approval dwell floor is enforced in validateGraph
   // (timer_minutes must be >= 1). We accept >= 1 here too for a clear 400.
   timerMinutes: z.number().int().positive().optional(),
   // SECURITY C-1/C-3 — explicit opt-in for deemed-approval auto-completion.
   deemedApproval: z.boolean().optional(),
+  // Gap 1 — sub-workflow / call-activity.
+  callDefinitionCode: z.string().min(1).max(64).optional(),
+  callContextMap: z.record(z.string().max(128), z.string().max(128)).optional(),
+  // Gap 4 — auto-assignment strategy.
+  assignStrategy: z.enum(["none", "round_robin", "least_loaded", "hierarchy"]).optional(),
+  assignRef: z.string().max(128).optional(),
   sortOrder: z.number().int().optional(),
 });
 const edgeSchema = z.object({
@@ -123,9 +129,11 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
           nodeType: n.nodeType,
           timerMinutes: n.timerMinutes,
           deemedApproval: n.deemedApproval,
+          callDefinitionCode: n.callDefinitionCode,
+          assignStrategy: n.assignStrategy,
           sortOrder: n.sortOrder,
         })),
-        edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, sortOrder: e.sortOrder })),
+        edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
       );
       if (!v.valid) {
         throw new HttpError(400, "INVALID_GRAPH", `cannot deploy: ${v.errors.join("; ")}`);
@@ -142,6 +150,79 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
       data: result.def,
       message: "definition deployed",
       ...(result.warnings.length ? { warnings: result.warnings } : {}),
+    });
+  });
+
+  // Gap 7 — list platform/global templates (definitions flagged is_template).
+  app.get("/v1/workflow/templates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+    const rows = await repo.listTemplates(q.limit, q.offset);
+    return reply.send({ data: rows.map((r) => ({ id: r.id, code: r.code, name: r.name, version: r.version, isTemplate: r.isTemplate })) });
+  });
+
+  // Gap 7 — clone a template into the caller's tenant as a NEW draft definition
+  // (definition + nodes + edges copied). The clone is tenant-scoped, editable,
+  // and NOT a template. Optional code override (defaults to the template code);
+  // versioned like any new definition for that code in the tenant.
+  app.post("/v1/workflow/templates/:id/clone", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({
+      code: z.string().min(1).max(64).optional(),
+      name: z.string().min(1).max(200).optional(),
+    }).parse(req.body ?? {});
+
+    const tpl = await repo.findTemplateById(id);
+    if (!tpl) throw new HttpError(404, "NOT_FOUND", "template not found");
+
+    const code = body.code ?? tpl.code;
+    const newId = randomUUID();
+    const result = await db.transaction(async (tx) => {
+      const latest = await repo.findLatestVersionTx(tx, ctx.tenantId, code);
+      const version = latest ? latest.version + 1 : 1;
+      await tx.insert(definitions).values({
+        id: newId,
+        tenantId: ctx.tenantId,
+        code,
+        name: body.name ?? tpl.name,
+        ...(tpl.description !== null ? { description: tpl.description } : {}),
+        version,
+        status: "draft",
+        isTemplate: false,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
+      const [srcNodes, srcEdges] = await Promise.all([repo.listNodeRows(tpl.id), repo.listEdges(tpl.id)]);
+      await repo.insertGraphTx(
+        tx,
+        newId,
+        srcNodes.map((n) => ({
+          nodeKey: n.nodeKey,
+          name: n.name,
+          roleRef: n.roleRef,
+          nodeType: n.nodeType,
+          slaMinutes: n.slaMinutes,
+          timerMinutes: n.timerMinutes,
+          deemedApproval: n.deemedApproval,
+          callDefinitionCode: n.callDefinitionCode,
+          callContextMap: n.callContextMap,
+          assignStrategy: n.assignStrategy,
+          assignRef: n.assignRef,
+          sortOrder: n.sortOrder,
+        })),
+        srcEdges.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
+      );
+      return { version };
+    });
+
+    return reply.code(201).send({
+      data: { id: newId, code, name: body.name ?? tpl.name, version: result.version, status: "draft", clonedFrom: tpl.id },
     });
   });
 

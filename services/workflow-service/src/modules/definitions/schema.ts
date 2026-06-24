@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("workflow");
 
@@ -14,6 +14,9 @@ export const definitions = domainSchema.table("definitions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
   updatedBy: uuid("updated_by").notNull(),
+  // Gap 7 — a platform/global template definition that can be cloned into a
+  // tenant as a new draft.
+  isTemplate: boolean("is_template").notNull().default(false),
 });
 
 export const definitionNodes = domainSchema.table("definition_nodes", {
@@ -31,6 +34,17 @@ export const definitionNodes = domainSchema.table("definition_nodes", {
   // approval) ONLY when this is true. Default false => a due timer escalates/
   // notifies but never auto-completes with sodOverride.
   deemedApproval: boolean("deemed_approval").notNull().default(false),
+  // Gap 1 — sub-workflow / call-activity. A node_type='call' instantiates a
+  // CHILD instance of this active definition code on entry and waits.
+  callDefinitionCode: varchar("call_definition_code", { length: 64 }),
+  // optional map of parent-context paths -> child-context keys (NULL = pass
+  // parent context through unchanged).
+  callContextMap: jsonb("call_context_map").$type<Record<string, string>>(),
+  // Gap 4 — auto-assignment strategy for a task node: round_robin |
+  // least_loaded | hierarchy. NULL/'none' = legacy role-pool (anyone claims).
+  assignStrategy: varchar("assign_strategy", { length: 24 }),
+  // for 'hierarchy': a reference user whose reporting line we resolve against.
+  assignRef: varchar("assign_ref", { length: 128 }),
   sortOrder: integer("sort_order").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

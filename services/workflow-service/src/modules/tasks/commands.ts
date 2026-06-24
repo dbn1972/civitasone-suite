@@ -27,6 +27,9 @@ export async function completeTask(
   const existing = await repo.findById(taskId, ctx.tenantId);
   if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
   if (existing.status === "completed") throw new HttpError(409, "CONFLICT", "task already completed");
+  // Gap 1 — a call task is a system wait task held until its child instance
+  // completes; it is auto-resolved by the engine, never by a human.
+  if (existing.isCall) throw new HttpError(409, "CALL_TASK", "this is a sub-workflow call task; it completes when its child instance finishes");
 
   // P0-2 — a task may only be completed while its instance is active. Suspended
   // or cancelled instances block task completion (409); resuming re-enables it.

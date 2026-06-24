@@ -12,6 +12,7 @@ import { taskRoutes } from "./modules/tasks/routes.js";
 import { definitionRoutes } from "./modules/definitions/routes.js";
 import { delegationRoutes } from "./modules/delegations/routes.js";
 import { analyticsRoutes } from "./modules/analytics/routes.js";
+import { adminRoutes } from "./modules/admin/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -26,6 +27,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(taskRoutes);
   await app.register(delegationRoutes);
   await app.register(analyticsRoutes);
+  await app.register(adminRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

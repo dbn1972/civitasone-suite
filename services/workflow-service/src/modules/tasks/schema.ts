@@ -17,6 +17,13 @@ export const tasks = domainSchema.table("tasks", {
   assigneeId: uuid("assignee_id"),
   // P1-2 — deemed-approval fire time for timer-node tasks (NULL = not a timer).
   fireAt: timestamp("fire_at", { withTimezone: true }),
+  // Gap 1 — a call task waits at a sub-workflow node until child_instance_id
+  // reaches terminal. is_call marks it so humans never complete it.
+  childInstanceId: uuid("child_instance_id"),
+  isCall: boolean("is_call").notNull().default(false),
+  // Gap 5 — pre-breach reminders (distinct from escalation_count).
+  reminderCount: integer("reminder_count").notNull().default(0),
+  lastReminderAt: timestamp("last_reminder_at", { withTimezone: true }),
   dueAt: timestamp("due_at", { withTimezone: true }),
   escalatedAt: timestamp("escalated_at", { withTimezone: true }),
   escalationCount: integer("escalation_count").notNull().default(0),
@@ -44,6 +51,7 @@ export type TaskView = {
   refId?: string | null;
   decision?: string | null;
   assigneeId?: string | null;
+  isCall?: boolean | null;
   version: number;
 };
 

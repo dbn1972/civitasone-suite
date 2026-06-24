@@ -12,6 +12,11 @@ export const instances = domainSchema.table("instances", {
   refType: varchar("ref_type", { length: 64 }),
   refId: uuid("ref_id"),
   currentNode: varchar("current_node", { length: 64 }),
+  // Gap 1 — sub-workflow linkage: a CHILD instance records its parent so the
+  // child reaching a terminal state can resume the parent.
+  parentInstanceId: uuid("parent_instance_id"),
+  parentTaskId: uuid("parent_task_id"),
+  parentNodeKey: varchar("parent_node_key", { length: 64 }),
   context: jsonb("context").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
