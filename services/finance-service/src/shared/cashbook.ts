@@ -33,6 +33,13 @@ export type CashBookEntry = {
 export async function postCashBook(tx: Executor, e: CashBookEntry): Promise<void> {
   const receipt = e.receiptMinor.toString();
   const payment = e.paymentMinor.toString();
+  // C3: serialise the per-(tenant, bank_or_cash) running-balance stream with a
+  // transaction-scoped advisory lock so two concurrent payments on the same
+  // stream cannot both read the same prior balance (lost update). The lock is
+  // released automatically at tx commit/rollback. hashtextextended -> bigint so
+  // it fits pg_advisory_xact_lock(bigint).
+  const streamKey = `cashbook:${e.tenantId}:${e.bankOrCash}`;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${streamKey}, 0))`);
   await tx.execute(sql`
     INSERT INTO gl.finance_cash_book
       (tenant_id, entry_date, voucher_type, voucher_no, particulars,

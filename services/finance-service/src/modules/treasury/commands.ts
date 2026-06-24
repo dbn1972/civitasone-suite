@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateChallanBody, CreateDepositBody, DepositDispositionBody } from "./validators.js";
@@ -30,7 +31,12 @@ export async function createDeposit(ctx: RequestContext, body: CreateDepositBody
 async function publishDisposition(
   topic: string, ctx: RequestContext, depositId: string, body: DepositDispositionBody,
 ): Promise<Accepted> {
-  const id = randomUUID();
+  // M3: derive a stable command id from the client idempotency key (scoped to
+  // the topic + deposit) so a double-submit dedupes at the consumer instead of
+  // creating a second disposition. Falls back to random when no key is supplied.
+  const id = idempotentId(
+    ctx.idempotencyKey ? { idempotencyKey: `${topic}:${depositId}:${ctx.idempotencyKey}` } : {},
+  );
   await queue.publish(topic, {
     messageId: id, type: topic,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
