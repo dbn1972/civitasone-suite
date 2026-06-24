@@ -23,7 +23,7 @@ export async function getDashboard(tenantId: string) {
         .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
 
       const [pipeline] = await db
-        .select({ total: sql<number>`coalesce(sum(${deals.valueMinor}), 0)::bigint` })
+        .select({ total: sql<string>`coalesce(sum(${deals.valueMinor}), 0)::bigint` })
         .from(deals)
         .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
 
@@ -32,11 +32,17 @@ export async function getDashboard(tenantId: string) {
         .from(activities)
         .where(and(eq(activities.tenantId, tenantId), gte(activities.createdAt, todayUtc)));
 
+      // Keep the pipeline sum exact as paise (bigint). Postgres returns the
+      // ::bigint sum as a string; never coerce the full paise total through
+      // float. Convert to rupees from the exact integer paise components.
+      const pipelinePaise = BigInt(pipeline?.total ?? "0");
+      const rupees = pipelinePaise / 100n;
+      const paise = (pipelinePaise % 100n).toString().padStart(2, "0");
       return {
         totalContacts: contactRow?.count ?? 0,
         openDeals: openDeals?.count ?? 0,
         activitiesToday: todayActs?.count ?? 0,
-        pipelineValue: Number(pipeline?.total ?? 0) / 100,
+        pipelineValue: Number(`${rupees}.${paise}`),
       };
     },
   );

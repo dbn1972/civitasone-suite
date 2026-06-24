@@ -3,6 +3,7 @@ import { db } from "../../shared/db.js";
 import { contacts, accounts, type ContactRow, type ContactInsert, type ContactView, type ContactDetailView, type AccountInsert } from "./schema.js";
 import { deals } from "../deals/schema.js";
 import { activities } from "../activities/schema.js";
+import { blindIndex } from "../../shared/pii-crypto.js";
 
 function toView(r: ContactRow): ContactView {
   return {
@@ -92,11 +93,11 @@ export async function listByTenant(
   const conditions: SQL[] = [eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`];
   if (filters.search) {
     const q = `%${filters.search}%`;
+    // email/phone are AES-GCM ciphertext at rest and cannot be ILIKE-matched;
+    // search over name + company only. Exact email lookup uses the blind index.
     conditions.push(or(
       ilike(contacts.name, q),
-      ilike(contacts.email, q),
       ilike(contacts.company, q),
-      ilike(contacts.phone, q),
     )!);
   }
   if (filters.leadStatus) conditions.push(eq(contacts.leadStatus, filters.leadStatus));
@@ -123,18 +124,46 @@ export async function exportAll(tenantId: string): Promise<ContactView[]> {
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function insert(tx: Writer, row: ContactInsert): Promise<void> {
-  await tx.insert(contacts).values(row);
+/** Derive the blind index for the (optional) email on a write payload. */
+function withEmailIdx<T extends { email?: string | null; emailIdx?: string | null }>(row: T): T {
+  if (row.email) return { ...row, emailIdx: blindIndex(row.email) };
+  if (row.email === null) return { ...row, emailIdx: null };
+  return row;
 }
 
-export async function bulkInsert(tx: Writer, rows: ContactInsert[]): Promise<void> {
-  if (rows.length) await tx.insert(contacts).values(rows);
+export async function insert(tx: Writer, row: ContactInsert): Promise<void> {
+  await tx.insert(contacts).values(withEmailIdx(row));
+}
+
+/**
+ * Per-row insert for bulk import. onConflict (tenant_id, email_idx) does
+ * nothing, so a duplicate email is skipped instead of aborting the batch.
+ * Returns "inserted" | "skipped" (duplicate).
+ */
+export async function bulkInsertRow(tx: Writer, row: ContactInsert): Promise<"inserted" | "skipped"> {
+  // Bare onConflictDoNothing: the only constraint that can fire is the
+  // partial unique index uq_contacts_tenant_email_idx (the PK is a fresh
+  // random UUID). A duplicate (tenant_id, email_idx) is silently skipped.
+  const res = await (tx as typeof db)
+    .insert(contacts)
+    .values(withEmailIdx(row))
+    .onConflictDoNothing()
+    .returning({ id: contacts.id });
+  return res.length > 0 ? "inserted" : "skipped";
 }
 
 export async function update(tx: Writer, id: string, tenantId: string, patch: Partial<ContactInsert>, actorId: string): Promise<void> {
   await (tx as typeof db).update(contacts)
-    .set({ ...patch, updatedAt: new Date(), updatedBy: actorId, version: sql`${contacts.version} + 1` })
+    .set({ ...withEmailIdx(patch), updatedAt: new Date(), updatedBy: actorId, version: sql`${contacts.version} + 1` })
     .where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId)));
+}
+
+/** Tenant-scoped, non-deleted fetch of the raw row (for merge field-copy). */
+export async function findActiveRow(id: string, tenantId: string): Promise<ContactRow | null> {
+  const rows = await db.select().from(contacts)
+    .where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function softDelete(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {

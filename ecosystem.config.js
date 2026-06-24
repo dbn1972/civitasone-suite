@@ -116,6 +116,22 @@ const MFA_ENC_KEY = (() => {
   return "civitasone-identity-mfa-dev-key-not-for-prod";
 })();
 
+// -- CRM PII at-rest encryption key (P1-2 / DPDP) -----------------------------
+// crm-service encrypts contact email/phone AES-256-GCM at rest. Same injection
+// contract as PII_ENC_KEY: env -> on-host key file -> dev fallback; fail closed
+// in prod. NO secret literal in the prod path.
+const CRM_PII_KEY = (() => {
+  if (process.env.CRM_PII_KEY && process.env.CRM_PII_KEY.length >= 16) return process.env.CRM_PII_KEY;
+  try {
+    const fs = require("fs");
+    const p = require("path").join(process.env.HOME || "/home/ec2-user", ".civitasone-crm-pii-key");
+    const v = fs.readFileSync(p, "utf8").trim();
+    if (v.length >= 16) return v;
+  } catch (e) { /* fall through */ }
+  if (IS_PROD) throw new Error("[ecosystem] CRM_PII_KEY required for crm-service (inject from secret manager or provision the host key file). Refusing to start.");
+  return "civitasone-crm-pii-dev-key-not-for-prod";
+})();
+
 
 function svc(name, port, dbUser, dbName, extra = {}) {
   return {
@@ -202,7 +218,7 @@ module.exports = {
     svc("billing",      3023, "billing_svc",       "civitas_billing"),
 
     // ── CRM & operations ───────────────────────────────────────────────────────
-    svc("crm",          3024, "crm_svc",           "civitas_crm"),
+    svc("crm",          3024, "crm_svc",           "civitas_crm", { CRM_PII_KEY }),
     svc("inventory",    3025, "inventory_svc",     "civitas_inventory"),
     svc("telephony",    3026, "telephony_svc",     "civitas_telephony"),
     svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk"),
@@ -226,7 +242,7 @@ module.exports = {
     worker("helpdesk",     "helpdesk_svc",     "civitas_helpdesk"),
     worker("audit",        "audit_svc",        "civitas_audit"),
     worker("legal",        "legal_svc",        "civitas_legal"),
-    worker("crm",          "crm_svc",          "civitas_crm"),
+    worker("crm",          "crm_svc",          "civitas_crm", { CRM_PII_KEY }),
     worker("admin",        "admin_svc",        "civitas_admin"),
     worker("billing",      "billing_svc",      "civitas_billing"),
     worker("contract",     "contract_svc",     "civitas_contract"),

@@ -3,11 +3,47 @@ import { db } from "../../shared/db.js";
 import { deals, type DealRow, type DealInsert, type DealView } from "./schema.js";
 import { contacts } from "../contacts/schema.js";
 
+/** Exact paise(bigint) -> "12,34,567.89" rupee string (Indian grouping). */
+function rupeesFromPaise(minor: bigint): string {
+  const neg = minor < 0n;
+  const abs = neg ? -minor : minor;
+  const rupees = abs / 100n;
+  const paise = abs % 100n;
+  // Indian digit grouping on the integer rupee part.
+  const digits = rupees.toString();
+  let grouped: string;
+  if (digits.length <= 3) {
+    grouped = digits;
+  } else {
+    const last3 = digits.slice(-3);
+    let rest = digits.slice(0, -3);
+    const parts: string[] = [];
+    while (rest.length > 2) {
+      parts.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest.length) parts.unshift(rest);
+    grouped = `${parts.join(",")},${last3}`;
+  }
+  const frac = paise.toString().padStart(2, "0");
+  return `${neg ? "-" : ""}${grouped}.${frac}`;
+}
+
 function formatValue(minor: bigint, currency: string): string {
-  const major = Number(minor) / 100;
-  if (major >= 1_00_00_000) return `Rs ${(major / 1_00_00_000).toFixed(1)} Cr`;
-  if (major >= 1_00_000) return `Rs ${(major / 1_00_000).toFixed(0)} L`;
-  return `${currency} ${major.toLocaleString("en-IN")}`;
+  // Thresholds in paise to keep comparisons exact (no float).
+  const CR = 1_00_00_000_00n; // 1 crore rupees in paise
+  const L = 1_00_000_00n;     // 1 lakh rupees in paise
+  const abs = minor < 0n ? -minor : minor;
+  if (abs >= CR) {
+    // one decimal place of crores, computed in integer paise
+    const tenths = (minor * 10n) / CR;
+    return `Rs ${(Number(tenths) / 10).toFixed(1)} Cr`;
+  }
+  if (abs >= L) {
+    const lakhs = minor / L;
+    return `Rs ${lakhs.toString()} L`;
+  }
+  return `${currency} ${rupeesFromPaise(minor)}`;
 }
 
 export function toView(r: DealRow, contactName?: string | null): DealView {
@@ -33,10 +69,10 @@ export async function findById(id: string, tenantId: string): Promise<DealView |
   const rows = await db.select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
-    .where(eq(deals.id, id))
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)))
     .limit(1);
   const row = rows[0];
-  if (!row || row.deal.tenantId !== tenantId) return null;
+  if (!row) return null;
   return toView(row.deal, row.contactName);
 }
 

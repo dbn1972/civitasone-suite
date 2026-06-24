@@ -90,6 +90,22 @@ export async function bulkImportContacts(ctx: RequestContext, body: BulkImportBo
   return { id: batchId, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * Emit a dedicated audit event for a bulk PII export (DPDP accountability).
+ * Read paths have no transaction, so publish the audit record directly.
+ */
+export async function auditBulkExport(ctx: RequestContext, count: number, admin: boolean): Promise<void> {
+  await queue.publish("audit.event.record", {
+    messageId: randomUUID(), type: "audit.event.record",
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: {
+      service: "crm", action: "contacts_bulk_export", resourceType: "contact",
+      resourceId: ctx.tenantId, outcome: "success",
+      metadata: { recordCount: count, masked: !admin },
+    },
+  });
+}
+
 export async function createAccount(ctx: RequestContext, body: CreateAccountBody): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.createAccount, {
