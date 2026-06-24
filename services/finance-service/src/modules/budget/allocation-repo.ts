@@ -67,3 +67,45 @@ export async function listAllocations(tenantId: string, fy: string | undefined, 
   if (fy) conditions.push(eq(financeBudgetAllocation.fy, fy));
   return db.select().from(financeBudgetAllocation).where(and(...conditions)).limit(limit);
 }
+
+/** Executor that can run raw SQL (drizzle db or tx). */
+type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
+
+/**
+ * Atomic, race-safe commitment registration. Increments committed_minor only if
+ * the row is enforce=false OR there is still enough headroom. Returns true when a
+ * row was updated, false when the guard rejected it (caller must reject the bill).
+ */
+export async function addCommittedGuarded(tx: Exec, id: string, deltaMinor: bigint): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    UPDATE budget.finance_budget_allocation
+       SET committed_minor = committed_minor + ${deltaMinor}, updated_at = now()
+     WHERE id = ${id}
+       AND (enforce = false OR allocated_minor - committed_minor - actual_minor >= ${deltaMinor})
+    RETURNING id
+  `);
+  return (rows as unknown as unknown[]).length > 0;
+}
+
+/**
+ * Atomic re-appropriation move guarded against driving the source allocation
+ * below its already-committed+actual usage. Decrements source and increments
+ * target in a single statement pair under the surrounding tx. Returns false if
+ * the source guard rejected the move.
+ */
+export async function moveAllocationGuarded(tx: Exec, fromId: string, toId: string, amountMinor: bigint): Promise<boolean> {
+  const dec = await tx.execute(sql`
+    UPDATE budget.finance_budget_allocation
+       SET allocated_minor = allocated_minor - ${amountMinor}, updated_at = now()
+     WHERE id = ${fromId}
+       AND allocated_minor - committed_minor - actual_minor >= ${amountMinor}
+    RETURNING id
+  `);
+  if ((dec as unknown as unknown[]).length === 0) return false;
+  await tx.execute(sql`
+    UPDATE budget.finance_budget_allocation
+       SET allocated_minor = allocated_minor + ${amountMinor}, updated_at = now()
+     WHERE id = ${toId}
+  `);
+  return true;
+}

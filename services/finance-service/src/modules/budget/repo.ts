@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { financeBudgets, financeSanctions, financeHeads, type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow } from "./schema.js";
 
@@ -89,4 +89,24 @@ export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | 
 
 export async function updateHead(tx: Writer, id: string, patch: Partial<HeadRow>): Promise<void> {
   await tx.update(financeHeads).set({ ...patch, updatedAt: new Date() }).where(eq(financeHeads.id, id));
+}
+
+/** Executor that can run raw SQL (drizzle db or tx). */
+type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
+
+/**
+ * Atomic, race-safe sanction utilisation. Increments utilised_minor by net only
+ * if balance remains (amount_minor - utilised_minor >= net). Returns true on
+ * success, false when the sanction is exhausted (caller must reject the bill).
+ * Avoids the read-then-set lost-update bug.
+ */
+export async function incrementSanctionUtilisedGuarded(tx: Exec, id: string, netMinor: bigint, updatedBy: string): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    UPDATE budget.finance_sanctions
+       SET utilised_minor = utilised_minor + ${netMinor}, updated_by = ${updatedBy}, updated_at = now()
+     WHERE id = ${id}
+       AND amount_minor - utilised_minor >= ${netMinor}
+    RETURNING id
+  `);
+  return (rows as unknown as unknown[]).length > 0;
 }

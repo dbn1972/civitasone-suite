@@ -70,7 +70,7 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/finance/periods/:period/reopen", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, ["finance_admin", "super_admin"]);
     const { period } = z.object({ period: z.string().min(1) }).parse(req.params);
     const body = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
 

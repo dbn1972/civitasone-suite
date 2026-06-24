@@ -61,16 +61,33 @@ export async function markLineMatched(tx: Writer, lineId: string, matchType: str
     .where(eq(bankStatementLines.id, lineId));
 }
 
-export async function markPaymentReconciled(tx: Writer, id: string, lineId: string): Promise<void> {
-  await tx.update(financePayments)
-    .set({ reconciled: true, reconciledLineId: lineId, reconciledAt: new Date() })
-    .where(eq(financePayments.id, id));
+/** Executor that can run raw SQL (drizzle db or tx). */
+type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
+
+/**
+ * H1: reconcile a payment exactly once. Guarded on reconciled=false so two
+ * concurrent /reconcile calls cannot both match the same payment to two
+ * different statement lines. Returns true if this caller won the match.
+ */
+export async function markPaymentReconciled(tx: Exec, id: string, lineId: string): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    UPDATE payments.finance_payments
+       SET reconciled = true, reconciled_line_id = ${lineId}, reconciled_at = now()
+     WHERE id = ${id} AND reconciled = false
+    RETURNING id
+  `);
+  return (rows as unknown as unknown[]).length > 0;
 }
 
-export async function markChallanReconciled(tx: Writer, id: string, lineId: string): Promise<void> {
-  await tx.update(financeChallans)
-    .set({ reconciled: true, reconciledLineId: lineId, reconciledAt: new Date() })
-    .where(eq(financeChallans.id, id));
+/** H1: reconcile a challan exactly once (guarded on reconciled=false). */
+export async function markChallanReconciled(tx: Exec, id: string, lineId: string): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    UPDATE treasury.finance_challans
+       SET reconciled = true, reconciled_line_id = ${lineId}, reconciled_at = now()
+     WHERE id = ${id} AND reconciled = false
+    RETURNING id
+  `);
+  return (rows as unknown as unknown[]).length > 0;
 }
 
 /** All lines for a statement (no tx). */

@@ -6,13 +6,11 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertThreeWayMatchPresent, assertBillPassed, assertValidPaymentMode, nextStage } from "./domain.js";
-import { assertSanctionNotExhausted } from "../budget/domain.js";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists } from "../masters/repo.js";
 import { getPeriodStatus } from "../period-close/routes.js";
 import * as allocRepo from "../budget/allocation-repo.js";
-import { assertWithinAppropriation } from "../budget/allocation-domain.js";
 import { fyFromDate } from "../hoa/voucher.js";
 import type { Deduction } from "./schema.js";
 
@@ -24,16 +22,29 @@ export function registerPaymentsConsumers(queue: Queue): void {
       id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
       ddoCode: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
-      netMinor: number; poRef?: string; grnRef?: string;
+      netMinor: number; poRef?: string; grnRef?: string; billDate?: string;
     };
     assertValidDdoCode(p.ddoCode);
     const hasMismatch = !p.poRef || !p.grnRef;
+    // C3: derive the period from the bill's OWN posting/value date, not wall-clock.
+    // The bill carries an optional billDate (YYYY-MM-DD); when absent we fall back
+    // to today (the create date), mirroring gl/consumer.ts which uses the document date.
+    const billDate = (p.billDate && /^\d{4}-\d{2}-\d{2}$/.test(p.billDate))
+      ? p.billDate
+      : new Date().toISOString().slice(0, 10);
+    const billPeriod = billDate.slice(0, 7);
+    const netMinor = BigInt(p.netMinor);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const head = await budgetRepo.findHeadByIdTx(tx, p.headId);
       const reader = tx as unknown as Parameters<typeof ddoExists>[2];
+      // M3: a referenced head that does not resolve for this tenant is a hard error,
+      // not a silently-skipped control. (headId is always referenced on a bill.)
+      if (!head || head.tenantId !== p.tenantId) {
+        throw new Error(`UNKNOWN_HEAD: ${p.headId} not found in budget head master for tenant`);
+      }
       // HoA: well-formed 18-digit segmentation + major head exists in master
-      if (head) await assertValidHoAWithMaster(head.hoaCode, reader);
+      await assertValidHoAWithMaster(head.hoaCode, reader);
       // DDO/PAO must exist in the per-tenant master (when provided)
       if (!(await ddoExists(p.tenantId, p.ddoCode.toUpperCase(), reader))) {
         throw new Error(`UNKNOWN_DDO: ${p.ddoCode} not found in DDO master`);
@@ -41,53 +52,49 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (p.paoCode && !(await paoExists(p.tenantId, p.paoCode.toUpperCase(), reader))) {
         throw new Error(`UNKNOWN_PAO: ${p.paoCode} not found in PAO master`);
       }
-      // P0 fix: enforce sanction balance before inserting the bill
+      // M3: if a sanction is REFERENCED, it must resolve for this tenant. A bill
+      // citing a bogus/other-tenant sanctionRef must NOT bypass the balance check.
+      let sanction: Awaited<ReturnType<typeof budgetRepo.findSanctionByIdTx>> = null;
       if (p.sanctionRef) {
-        const sanction = await budgetRepo.findSanctionByIdTx(tx, p.sanctionRef);
-        if (sanction) {
-          assertSanctionNotExhausted(
-            { amountMinor: sanction.amountMinor, utilisedMinor: sanction.utilisedMinor },
-            BigInt(p.netMinor),
-          );
+        sanction = await budgetRepo.findSanctionByIdTx(tx, p.sanctionRef);
+        if (!sanction || sanction.tenantId !== p.tenantId) {
+          throw new Error(`UNKNOWN_SANCTION: ${p.sanctionRef} not found for tenant`);
         }
       }
-      // Period hard-close: block bill posting into a hard-closed period (current month)
-      const billPeriod = new Date().toISOString().slice(0, 7);
+      // Period hard-close: block bill posting into a hard-closed period (bill's own date).
       if ((await getPeriodStatus(p.tenantId, billPeriod)) === "hard_close") {
         throw new Error(`PERIOD_CLOSED: cannot post bill into hard-closed period ${billPeriod}`);
       }
-      // Budget appropriation control: block over-appropriation against the head allocation
-      const billFy = fyFromDate(`${billPeriod}-01`);
+      // Budget appropriation control: locate the head allocation for the bill's FY.
+      const billFy = fyFromDate(billDate);
       const alloc = await allocRepo.findAllocationTx(tx, p.tenantId, p.headId, billFy);
-      if (alloc) {
-        assertWithinAppropriation(
-          { allocatedMinor: alloc.allocatedMinor, committedMinor: alloc.committedMinor, actualMinor: alloc.actualMinor, enforce: alloc.enforce },
-          BigInt(p.netMinor),
-        );
-      }
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo: p.billNo, vendorId: p.vendorId,
         headId: p.headId, ddoCode: p.ddoCode.toUpperCase(),
         ...(p.paoCode ? { paoCode: p.paoCode.toUpperCase() } : {}),
         sanctionRef: p.sanctionRef ?? null,
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
-        deductions: p.deductions, netMinor: BigInt(p.netMinor),
+        deductions: p.deductions, netMinor,
         poRef: p.poRef ?? null, grnRef: p.grnRef ?? null,
+        billDate,
         stage: "section", status: hasMismatch ? "on_hold" : "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      // Budget control: register the bill as a committed appropriation against the head
+      // C1: register the commitment with a single atomic guarded UPDATE. Two
+      // concurrent bills can no longer both pass a stale read — the conditional
+      // WHERE serialises them; the loser gets rowcount=0 and is rejected.
       if (alloc) {
-        await allocRepo.addCommitted(tx, alloc.id, BigInt(p.netMinor));
+        const ok = await allocRepo.addCommittedGuarded(tx, alloc.id, netMinor);
+        if (!ok) {
+          throw new Error(`OVER_APPROPRIATION: bill ${netMinor} paise exceeds available appropriation for head ${p.headId} (${billFy})`);
+        }
       }
-      // Sanction lifecycle: increment utilised on the backing sanction (already balance-checked above)
-      if (p.sanctionRef) {
-        const sanction = await budgetRepo.findSanctionByIdTx(tx, p.sanctionRef);
-        if (sanction) {
-          await budgetRepo.updateSanction(tx, sanction.id, {
-            utilisedMinor: sanction.utilisedMinor + BigInt(p.netMinor),
-            updatedBy: msg.actorId,
-          });
+      // C2: increment sanction utilised via guarded SQL expression (no read-then-set,
+      // no lost update). Loser of a concurrent race gets rowcount=0 → rejected.
+      if (sanction) {
+        const ok = await budgetRepo.incrementSanctionUtilisedGuarded(tx, sanction.id, netMinor, msg.actorId);
+        if (!ok) {
+          throw new Error(`SANCTION_EXHAUSTED: bill ${netMinor} paise exceeds sanction balance for ${p.sanctionRef}`);
         }
       }
       if (hasMismatch) {
@@ -146,8 +153,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       assertBillPassed(bill.status ?? "pending");
       assertValidPaymentMode(p.mode);
-      // Period hard-close: block payment posting into a hard-closed period (current month)
-      const payPeriod = new Date().toISOString().slice(0, 7);
+      // C3: derive the period from the underlying bill's own value/posting date,
+      // not wall-clock. Falls back to the bill's create date if no billDate set.
+      const payDate = (bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10));
+      const payPeriod = payDate.slice(0, 7);
       if ((await getPeriodStatus(p.tenantId, payPeriod)) === "hard_close") {
         throw new Error(`PERIOD_CLOSED: cannot post payment into hard-closed period ${payPeriod}`);
       }
