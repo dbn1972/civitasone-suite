@@ -271,7 +271,13 @@ async function spawnTask(
   // sweeper auto-completes it (deemed approval), reusing the normal advance
   // path along the timer's outgoing edge.
   const isTimer = node.nodeType === "timer";
-  const fireAt = isTimer ? computeDueAt(node.timerMinutes ?? 0.0001) ?? new Date() : null;
+  // SECURITY C-1b — enforce a minimum dwell at task creation: a timer fires no
+  // sooner than now + max(timer_minutes, 1) minutes, so fire_at can never be in
+  // the past (no instant deemed-approval). validateGraph already rejects
+  // timer_minutes < 1 at deploy; this is the runtime backstop.
+  const fireAt = isTimer
+    ? (computeDueAt(Math.max(node.timerMinutes ?? 1, 1)) ?? new Date(Date.now() + 60_000))
+    : null;
   await repo.insert(tx, {
     id: newTaskId,
     tenantId: instance.tenantId,

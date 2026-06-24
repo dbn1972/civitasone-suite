@@ -6,6 +6,7 @@ import { COMMANDS, INSTANCE_RESOURCE } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as defRepo from "../definitions/repo.js";
+import { validateGraph } from "../definitions/graph.js";
 import * as taskRepo from "../tasks/repo.js";
 import * as historyRepo from "../history/repo.js";
 import type { CreateInstanceBody } from "./validators.js";
@@ -160,6 +161,31 @@ export async function migrateInstanceVersion(
     }
     if (target.id === instance.definitionId) {
       throw new HttpError(409, "SAME_VERSION", "instance is already on that version");
+    }
+
+    // SECURITY H-1 — only migrate ONTO a validated, ACTIVE target version. A
+    // draft or archived version may be incomplete / unvalidated; rebinding a
+    // live instance to it could strand or mis-route the instance. Require
+    // status === 'active' AND re-run structural validation on the target graph
+    // (defence-in-depth: a version could have been activated under older,
+    // weaker rules) before rebinding.
+    if (target.status !== "active") {
+      throw new HttpError(409, "TARGET_NOT_ACTIVE", `version ${toVersion} of '${currentDef.code}' is ${target.status}; can only migrate onto an active version`);
+    }
+    const [tNodes, tEdges] = await Promise.all([defRepo.listNodes(target.id), defRepo.listEdges(target.id)]);
+    const gv = validateGraph(
+      tNodes.map((n) => ({
+        nodeKey: n.nodeKey,
+        name: n.name,
+        nodeType: n.nodeType,
+        timerMinutes: n.timerMinutes,
+        deemedApproval: n.deemedApproval,
+        sortOrder: n.sortOrder,
+      })),
+      tEdges.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, sortOrder: e.sortOrder })),
+    );
+    if (!gv.valid) {
+      throw new HttpError(409, "TARGET_INVALID_GRAPH", `cannot migrate onto version ${toVersion}: ${gv.errors.join("; ")}`);
     }
 
     // node-key remap validation against the target version's node set.

@@ -67,9 +67,44 @@ export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValida
   if (terminals.length === 0) {
     errors.push("no terminal/end node: every node has an outgoing edge (workflow can never complete)");
   }
+  // adjacency by source node (used for timer/deemed checks + reachability below).
+  const outBySrc = new Map<string, string[]>();
+  for (const e of edges) {
+    if (!keySet.has(e.fromNode) || !keySet.has(e.toNode)) continue;
+    const l = outBySrc.get(e.fromNode) ?? [];
+    l.push(e.toNode);
+    outBySrc.set(e.fromNode, l);
+  }
+  const nodeByKey = new Map(nodes.map((n) => [n.nodeKey, n]));
+  const terminalKeys = new Set(terminals.map((t) => t.nodeKey));
+
   for (const n of nodes) {
-    if (n.nodeType === "timer" && !hasOutgoing.has(n.nodeKey)) {
+    if (n.nodeType !== "timer") continue;
+    if (!hasOutgoing.has(n.nodeKey)) {
       errors.push(`timer node '${n.nodeKey}' has no outgoing edge (it can never auto-advance)`);
+    }
+    // SECURITY C-1b — minimum dwell. A timer's deemed-approval window must be at
+    // least 1 minute; timer_minutes = 0 (or negative) would let a due timer be
+    // "deemed approved" on the very next sweep tick with effectively no dwell,
+    // which launders an instant auto-approval. Reject < 1.
+    const tm = n.timerMinutes;
+    if (tm !== undefined && tm !== null && tm < 1) {
+      errors.push(`timer node '${n.nodeKey}' timer_minutes must be >= 1 (got ${tm}); a zero/negative dwell is not allowed`);
+    }
+    // SECURITY C-1c — a deemed-approval timer must NOT feed a terminal node. A
+    // terminal completion triggers domain dispatch (dispatchDomainApprove) with
+    // no further human step, so an opted-in timer that points straight at a
+    // terminal would auto-dispatch a money/HR approval. Require a human step
+    // between a deemed-approval timer and any terminal.
+    if (n.deemedApproval === true) {
+      const successors = outBySrc.get(n.nodeKey) ?? [];
+      const badTargets = successors.filter((t) => {
+        const tn = nodeByKey.get(t);
+        return terminalKeys.has(t) || tn?.nodeType === "end";
+      });
+      if (badTargets.length) {
+        errors.push(`deemed-approval timer '${n.nodeKey}' has an outgoing edge directly to terminal/end node(s) (${badTargets.join(", ")}); a human step is required before completion (it would auto-dispatch a domain approval)`);
+      }
     }
   }
 
@@ -126,6 +161,36 @@ export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValida
     for (const n of nodes) {
       if ((adj.get(n.nodeKey) ?? []).includes(n.nodeKey)) {
         warnings.push(`self-loop on node '${n.nodeKey}'`);
+      }
+    }
+
+    // SECURITY M-2 — a non-terminal node that can ONLY loop (every outgoing
+    // path eventually returns to itself with no escape to any terminal) would
+    // strand an instance forever. Compute, for each node, whether SOME terminal
+    // is reachable from it; a non-terminal node with outgoing edges from which
+    // no terminal is reachable is an ERROR (previously only a cycle warning).
+    const canReachTerminal = new Map<string, boolean>();
+    const visiting = new Set<string>();
+    const reachTerm = (u: string): boolean => {
+      if (canReachTerminal.has(u)) return canReachTerminal.get(u)!;
+      if (terminals.some((t) => t.nodeKey === u)) { canReachTerminal.set(u, true); return true; }
+      if (visiting.has(u)) return false; // on the current DFS stack: no escape via this path
+      visiting.add(u);
+      let ok = false;
+      for (const v of adj.get(u) ?? []) {
+        if (reachTerm(v)) { ok = true; break; }
+      }
+      visiting.delete(u);
+      canReachTerminal.set(u, ok);
+      return ok;
+    };
+    for (const n of nodes) {
+      const isTerminal = terminals.some((t) => t.nodeKey === n.nodeKey);
+      if (isTerminal) continue;
+      const outs = adj.get(n.nodeKey) ?? [];
+      if (outs.length === 0) continue; // handled by the no-terminal check above
+      if (reachable.has(n.nodeKey) && !reachTerm(n.nodeKey)) {
+        errors.push(`node '${n.nodeKey}' can only loop: no path from it reaches a terminal/end node (instance would be stranded)`);
       }
     }
   }

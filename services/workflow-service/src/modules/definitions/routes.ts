@@ -17,8 +17,11 @@ const nodeSchema = z.object({
   roleRef: z.string().max(128).optional(),
   nodeType: z.enum(["task", "split", "join", "start", "end", "timer"]).default("task"),
   slaMinutes: z.number().int().positive().optional(),
-  // 0 = "deemed approved on the next timer tick" (fire immediately).
-  timerMinutes: z.number().int().nonnegative().optional(),
+  // SECURITY C-1b — deemed-approval dwell floor is enforced in validateGraph
+  // (timer_minutes must be >= 1). We accept >= 1 here too for a clear 400.
+  timerMinutes: z.number().int().positive().optional(),
+  // SECURITY C-1/C-3 — explicit opt-in for deemed-approval auto-completion.
+  deemedApproval: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });
 const edgeSchema = z.object({
@@ -114,7 +117,14 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
       // (400) so it can never be activated and strand instances.
       const [nodeRows, edgeRows] = await Promise.all([repo.listNodes(id), repo.listEdges(id)]);
       const v = validateGraph(
-        nodeRows.map((n) => ({ nodeKey: n.nodeKey, name: n.name, nodeType: n.nodeType, sortOrder: n.sortOrder })),
+        nodeRows.map((n) => ({
+          nodeKey: n.nodeKey,
+          name: n.name,
+          nodeType: n.nodeType,
+          timerMinutes: n.timerMinutes,
+          deemedApproval: n.deemedApproval,
+          sortOrder: n.sortOrder,
+        })),
         edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, sortOrder: e.sortOrder })),
       );
       if (!v.valid) {

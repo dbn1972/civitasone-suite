@@ -9,6 +9,7 @@ import * as repo from "./repo.js";
 import { tasks } from "./schema.js";
 import * as instanceRepo from "../instances/repo.js";
 import * as delegationRepo from "../delegations/repo.js";
+import * as historyRepo from "../history/repo.js";
 import type { TaskView } from "./schema.js";
 
 /** YYYY-MM-DD in UTC, used to bound active-delegation validity. */
@@ -171,12 +172,38 @@ export async function claimTask(ctx: RequestContext, taskId: string): Promise<Ta
  * P1-1 — assign a pending task to a specific user. Restricted to admins
  * (super_admin / workflow_admin) at the route. Overwrites any prior assignee.
  */
-export async function assignTask(ctx: RequestContext, taskId: string, assigneeId: string): Promise<TaskView> {
+export async function assignTask(
+  ctx: RequestContext,
+  taskId: string,
+  assigneeId: string,
+  reassign = false,
+): Promise<TaskView> {
   const existing = await repo.findById(taskId, ctx.tenantId);
   if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
   if (existing.status !== "pending") throw new HttpError(409, "CONFLICT", "task is not pending");
-  const assigned = await repo.assign(taskId, ctx.tenantId, assigneeId, ctx.actorId);
-  if (!assigned) throw new HttpError(409, "CONFLICT", "task could not be assigned (no longer pending)");
+  // SECURITY M-1 — do not silently overwrite an existing assignee. Overwriting a
+  // non-null, different assignee requires an explicit reassign flag.
+  if (existing.assigneeId && existing.assigneeId !== assigneeId && !reassign) {
+    throw new HttpError(409, "ALREADY_ASSIGNED", "task already assigned; pass reassign=true to override");
+  }
+  const assigned = await db.transaction(async (tx) => {
+    const res = await repo.assignTx(tx, taskId, ctx.tenantId, assigneeId, ctx.actorId);
+    if (!res) throw new HttpError(409, "CONFLICT", "task could not be assigned (no longer pending)");
+    // SECURITY M-1 — durable audit of every (re)assignment: actor + from->to
+    // assignee, committed atomically with the assignment in the same tx.
+    await historyRepo.record(tx, {
+      tenantId: ctx.tenantId,
+      instanceId: existing.instanceId,
+      taskId,
+      fromNode: existing.nodeKey ?? null,
+      toNode: existing.nodeKey ?? null,
+      action: res.priorAssigneeId ? "reassign" : "assign",
+      decision: null,
+      actorId: ctx.actorId,
+      detail: { fromAssignee: res.priorAssigneeId, toAssignee: assigneeId },
+    });
+    return res.view;
+  });
   await cache.put(cache.makeKey(ctx.tenantId, TASK_RESOURCE, taskId), assigned);
   await cache.invalidateResource(ctx.tenantId, TASK_RESOURCE);
   return assigned;
