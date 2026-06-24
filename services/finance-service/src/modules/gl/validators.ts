@@ -7,7 +7,8 @@ const journalLine = z.object({
 });
 
 export const postJournalBody = z.object({
-  voucherNo:   z.string().min(1).max(64),
+  // Pass "AUTO" (or omit) to allocate a gapless, FY-sequential voucher number.
+  voucherNo:   z.string().min(1).max(64).default("AUTO"),
   type:        z.enum(["journal", "payment", "receipt", "contra"]),
   postingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "postingDate must be YYYY-MM-DD"),
   lines:       z.array(journalLine).min(2),
