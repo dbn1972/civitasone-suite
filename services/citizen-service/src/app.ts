@@ -4,6 +4,7 @@ import { cache, queue } from "./shared/infra.js";
 import { sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
+import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
@@ -17,6 +18,9 @@ import { escalationRoutes } from "./modules/escalation/routes.js";
 import { slaRulesRoutes } from "./modules/sla-rules/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
+  // P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so we never boot fail-open.
+  assertPiiKeyConfigured();
+
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),

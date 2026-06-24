@@ -62,9 +62,13 @@ export function registerRtiConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.rtiAppeal, async (msg) => {
-    const p = msg.payload as { id: string; rtiId: string; tenantId: string; appealType: string; grounds: string };
+    const p = msg.payload as { id: string; rtiId: string; tenantId: string; appealType: string; grounds: string; ownerCitizenId?: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // P0-1: re-assert ownership binding established at the route (defence in depth).
+      const rti = await repo.findRtiByIdTx(tx, p.rtiId, msg.tenantId);
+      if (!rti) return;
+      if (p.ownerCitizenId != null && rti.citizenId !== p.ownerCitizenId) return;
       await repo.insertAppeal(tx, {
         id: p.id, tenantId: p.tenantId, rtiId: p.rtiId,
         appealType: p.appealType, grounds: p.grounds, status: "filed",

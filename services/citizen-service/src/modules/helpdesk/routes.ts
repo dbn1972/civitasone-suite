@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { ticketsListSchema, metricsListResponseSchema, slaListResponseSchema, TicketAnalyticsSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { hasAnyRole } from "@civitasone/auth";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, assertOwnership, HttpError } from "../../shared/context.js";
 import {
   idParam, createTicketBody, ticketNoteBody, closeTicketBody,
   assignTicketBody, resolveTicketBody,
@@ -113,9 +113,11 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
-    const ticket = await queries.getTicket(ctx.tenantId, id);
+    const ticket = await queries.getTicketWithOwner(ctx.tenantId, id);
     if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
-    return reply.send(ticket);
+    // P0-1: staff (officer-tier) may read any ticket; a bare citizen only their own.
+    if (!hasAnyRole(ctx, STAFF_ROLES)) assertOwnership(ctx, ticket.citizenId);
+    return reply.send(ticket.detail);
   });
 
   app.setErrorHandler((err, req, reply) => {

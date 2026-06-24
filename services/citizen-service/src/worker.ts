@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { registerPortalConsumers }      from "./modules/portal/consumer.js";
 import { registerApplicationConsumers } from "./modules/application/consumer.js";
 import { registerGrievanceConsumers }   from "./modules/grievance/consumer.js";
@@ -10,6 +11,9 @@ import { registerHelpdeskConsumers }    from "./modules/helpdesk/consumer.js";
 import { startSlaSweep }                from "./modules/sla-sweep/scheduler.js";
 
 const log = pino({ name: "citizen-worker" });
+
+// P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so the worker never runs fail-open.
+assertPiiKeyConfigured();
 
 registerPortalConsumers(queue);
 registerApplicationConsumers(queue);

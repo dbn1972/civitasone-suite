@@ -30,8 +30,11 @@ export async function anonymiseProfile(tx: Writer, id: string, tenantId: string,
   return updated.length;
 }
 
-export async function findProfileById(id: string): Promise<ProfileRow | null> {
-  const rows = await db.select().from(citizenProfiles).where(eq(citizenProfiles.id, id)).limit(1);
+export async function findProfileById(id: string, tenantId: string): Promise<ProfileRow | null> {
+  // P1-6: scope by (id AND tenantId) so an officer summary cannot leak a
+  // cross-tenant profile via a citizenId that exists under another tenant.
+  const rows = await db.select().from(citizenProfiles)
+    .where(and(eq(citizenProfiles.id, id), eq(citizenProfiles.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 

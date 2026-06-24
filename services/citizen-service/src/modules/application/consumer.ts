@@ -82,10 +82,14 @@ export function registerApplicationConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.applicationDocUpload, async (msg) => {
-    const p = msg.payload as { id: string; applicationId: string; tenantId: string; docType: string };
+    const p = msg.payload as { id: string; applicationId: string; tenantId: string; docType: string; ownerCitizenId?: string | null };
     const docUrl = buildPresignedUploadUrl(p.tenantId, p.applicationId, p.docType);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // P0-1: re-assert that the target application belongs to the verified owner.
+      const app = await repo.findApplicationByIdTx(tx, p.applicationId, msg.tenantId);
+      if (!app) return;
+      if (p.ownerCitizenId != null && app.citizenId !== p.ownerCitizenId) return;
       await repo.insertDocument(tx, {
         id: p.id, tenantId: p.tenantId, applicationId: p.applicationId,
         docType: p.docType, docUrl,

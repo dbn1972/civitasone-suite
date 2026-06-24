@@ -3,7 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { RTISummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import { idParam, fileRtiBody, respondRtiBody, appealRtiBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -16,7 +16,9 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = fileRtiBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.fileRti(ctx, body));
+    // P0-1: constrain citizenId to the actor unless an officer specifies another.
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.fileRti(ctx, { ...body, citizenId }));
   });
 
   app.post("/v1/citizen/rti/:id/respond", async (req, reply) => {
@@ -32,14 +34,20 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = appealRtiBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.appealRti(ctx, id, body));
+    // P0-1: load + assert ownership so a citizen cannot appeal another's RTI.
+    const owner = await queries.getRti(ctx.tenantId, id);
+    if (!owner) throw new HttpError(404, "NOT_FOUND", "rti request not found");
+    assertOwnership(ctx, owner.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.appealRti(ctx, id, { ...body, ownerCitizenId: owner.citizenId }));
   });
 
   app.get("/v1/citizen/rti", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, RTISummaryListSchema, await queries.listRtiSummaries(ctx.tenantId, q.limit));
+    // P0-1: a bare citizen only sees their own RTIs; officers see the tenant view.
+    const ownCitizenId = isOfficer(ctx) ? undefined : ctx.actorId;
+    sendValidated(reply, RTISummaryListSchema, await queries.listRtiSummaries(ctx.tenantId, q.limit, ownCitizenId));
   });
 
   /** RTI Act 2005 §7: list RTIs that have breached the 30-day deadline without response (officer view).
@@ -57,6 +65,8 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const rti = await queries.getRti(ctx.tenantId, id);
     if (!rti) throw new HttpError(404, "NOT_FOUND", "rti request not found");
+    // P0-1: a citizen may only read their own RTI; officers may read any.
+    assertOwnership(ctx, rti.citizenId);
     return reply.send(rti);
   });
 

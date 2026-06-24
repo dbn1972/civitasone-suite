@@ -48,3 +48,10 @@ export async function listAppeals(rtiId: string) {
 export async function listRtiByTenant(tenantId: string, limit: number): Promise<RtiRow[]> {
   return db.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.tenantId, tenantId)).limit(limit);
 }
+
+/** P0-1: citizen-scoped RTI list so a citizen only sees their own requests. */
+export async function listRtiByCitizen(tenantId: string, citizenId: string, limit: number): Promise<RtiRow[]> {
+  return db.select().from(citizenRtiRequests)
+    .where(and(eq(citizenRtiRequests.tenantId, tenantId), eq(citizenRtiRequests.citizenId, citizenId)))
+    .limit(limit);
+}

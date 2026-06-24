@@ -61,11 +61,12 @@ export async function escalateGrievance(ctx: RequestContext, id: string, body: E
   return { id: escId, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function reopenGrievance(ctx: RequestContext, id: string, body: ReopenGrievanceBody): Promise<Accepted> {
+export async function reopenGrievance(ctx: RequestContext, id: string, body: ReopenGrievanceBody & { ownerCitizenId?: string | null }): Promise<Accepted> {
   await queue.publish(COMMANDS.grievanceReopen, {
     messageId: randomUUID(), type: COMMANDS.grievanceReopen,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, reason: body.reason },
+    // P0-1: bind the command to the owner verified at the route; the consumer re-asserts.
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason, ownerCitizenId: body.ownerCitizenId ?? null },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "grievance", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

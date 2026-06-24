@@ -14,15 +14,15 @@
  * KEYRING / ROTATION SAFETY (M1+M2):
  *   - Each key has a string KEY ID and a 32-byte AES key.
  *   - v2 envelopes embed the key id, so old ciphertext stays decryptable after
- *     PII_ENC_KEY rotation: decrypt looks the key id up in the keyring.
+ *     CITIZEN_PII_KEY rotation: decrypt looks the key id up in the keyring.
  *   - v1 envelopes carry NO key id; they are decrypted with a dedicated v1 key
- *     derived exactly as the original code did — unsalted SHA-256(PII_ENC_KEY) —
+ *     derived exactly as the original code did — unsalted SHA-256(CITIZEN_PII_KEY) —
  *     so EXISTING enc:v1 rows keep decrypting unchanged. (This requires the
- *     CURRENT PII_ENC_KEY to be the one that wrote those rows; that is exactly
+ *     CURRENT CITIZEN_PII_KEY to be the one that wrote those rows; that is exactly
  *     the production secret we preserve across deploys.)
  *
  * KEY DERIVATION (M1):
- *   - v2 keys are derived with scrypt (a real KDF) over PII_ENC_KEY + a salt.
+ *   - v2 keys are derived with scrypt (a real KDF) over CITIZEN_PII_KEY + a salt.
  *   - The salt is read from CITIZEN_PII_SALT when configured (recommended); a fixed,
  *     documented application salt is used as a fallback so the cut-over needs no
  *     new env var. The fixed salt is acceptable because the master secret is
@@ -130,6 +130,15 @@ function keyring(): Keyring {
 /** Test/maintenance hook: drop the cached keyring (e.g. after env change). */
 export function resetPiiKeyCache(): void {
   cachedRing = null;
+}
+
+/**
+ * P0-6: fail-fast PII key validation. Eagerly builds the keyring so a missing or
+ * too-short CITIZEN_PII_KEY throws at boot (fail-closed) instead of letting the
+ * service start green and silently fail-open. Call from buildApp() and worker.ts.
+ */
+export function assertPiiKeyConfigured(): void {
+  keyring();
 }
 
 /** Encrypt a UTF-8 string -> "enc:v2:<keyid>:<base64>" using the active key. */

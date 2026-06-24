@@ -28,13 +28,14 @@ export async function updateStatus(ctx: RequestContext, id: string, body: Status
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function uploadDocument(ctx: RequestContext, id: string, body: DocUploadBody): Promise<Accepted & { uploadUrl: string }> {
+export async function uploadDocument(ctx: RequestContext, id: string, body: DocUploadBody & { ownerCitizenId?: string | null }): Promise<Accepted & { uploadUrl: string }> {
   const docId = randomUUID();
   const uploadUrl = buildPresignedUploadUrl(ctx.tenantId, id, body.docType);
   await queue.publish(COMMANDS.applicationDocUpload, {
     messageId: docId, type: COMMANDS.applicationDocUpload,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id: docId, applicationId: id, tenantId: ctx.tenantId, ...body },
+    // P0-1: bind to the owner verified at the route; the consumer re-asserts.
+    payload: { id: docId, applicationId: id, tenantId: ctx.tenantId, docType: body.docType, ownerCitizenId: body.ownerCitizenId ?? null },
   });
   return { id: docId, status: "accepted", correlationId: ctx.correlationId, uploadUrl };
 }

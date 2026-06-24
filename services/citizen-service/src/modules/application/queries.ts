@@ -47,7 +47,7 @@ export async function listCitizenRequestSummaries(tenantId: string, limit: numbe
     if (!profileMap.has(row.citizenId)) {
       const profile = await cache.getOrLoad(
         cache.makeKey(row.tenantId, "citizen_profile", row.citizenId),
-        () => portalRepo.findProfileById(row.citizenId),
+        () => portalRepo.findProfileById(row.citizenId, row.tenantId),
       );
       profileMap.set(row.citizenId, {
         name: profile?.name ?? row.citizenId,

@@ -2,7 +2,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, resolveCitizenId, isOfficer, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import { idParam, citizenIdQuery, submitApplicationBody, statusUpdateBody, docUploadBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -33,7 +33,11 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = docUploadBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.uploadDocument(ctx, id, body));
+    // P0-1: load + assert ownership so a citizen cannot attach docs to another's application.
+    const owner = await queries.getApplication(ctx.tenantId, id);
+    if (!owner) throw new HttpError(404, "NOT_FOUND", "application not found");
+    assertOwnership(ctx, owner.citizenId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.uploadDocument(ctx, id, { ...body, ownerCitizenId: owner.citizenId }));
   });
 
   app.get("/v1/citizen/applications/:id", async (req, reply) => {
@@ -42,6 +46,8 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const app = await queries.getApplication(ctx.tenantId, id);
     if (!app) throw new HttpError(404, "NOT_FOUND", "application not found");
+    // P0-1: a citizen may only read their own application (incl. history/documents).
+    assertOwnership(ctx, app.citizenId);
     return reply.send(app);
   });
 

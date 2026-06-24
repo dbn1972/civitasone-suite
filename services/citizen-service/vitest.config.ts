@@ -8,6 +8,8 @@ export default defineConfig({
       DATABASE_URL: process.env.DATABASE_URL ?? "postgres://citizen_svc:citizen_dev_pw@localhost:5435/civitas_citizen",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      CITIZEN_PII_KEY: "test_pii_master_key_for_vitest_32",
+      CITIZEN_PII_SALT: "civitas-citizen-pii",
     },
   },
 });
