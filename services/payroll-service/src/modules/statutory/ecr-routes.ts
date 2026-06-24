@@ -62,8 +62,11 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
       const ncpDays = 0;
       const refundAdvances = 0;
 
-      const uan = emp?.uan ?? "";
-      const memberName = emp?.fullName ?? slip?.employeeNo ?? "";
+      // H4: pipe-delimited flat file — strip the field separator and CR/LF from
+      // free-text fields so a crafted name/UAN cannot inject or misalign records.
+      const pipeSafe = (v: string): string => (v ?? "").replace(/[|\r\n]/g, " ").trim();
+      const uan = pipeSafe(emp?.uan ?? "");
+      const memberName = pipeSafe(emp?.fullName ?? slip?.employeeNo ?? "");
       const line = [
         uan,
         memberName,

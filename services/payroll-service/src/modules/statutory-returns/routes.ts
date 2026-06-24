@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { payrollTds, payrollNps } from "../statutory/schema.js";
@@ -10,6 +10,9 @@ import { fetchPayrollInput, type PayrollInputEmployee } from "../../shared/hrms-
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employee"];
+// C1: Form 24Q is a deductor-wide e-TDS return exposing every deductee's PAN/TDS.
+// It must NOT be readable by the self-service `employee` role — admins/officers only.
+const RETURN_FILER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer"];
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 const QUARTERS: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
@@ -31,6 +34,13 @@ const employerIdentity = () => ({
   tan: process.env.EMPLOYER_TAN ?? "<TAN — configure EMPLOYER_TAN>",
   pan: process.env.EMPLOYER_PAN ?? "<PAN — configure EMPLOYER_PAN>",
 });
+
+/**
+ * H4: pipe-delimited flat-file safety. Strip the field separator and CR/LF from
+ * any free-text field (name/PAN/PRAN) so a crafted value cannot inject a new
+ * record or misalign columns in 24Q / NPS-SCF files.
+ */
+const pipeSafe = (v: unknown): string => String(v ?? "").replace(/[|\r\n]/g, " ").trim();
 
 /** Deductee-wise TDS aggregate for a set of months (one row per employee). */
 async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<string, { tds: number; periods: Set<string> }>> {
@@ -61,7 +71,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
    */
   app.get("/v1/payroll/statutory/form24q", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, RETURN_FILER_ROLES);
 
     const { fy, quarter, format } = req.query as { fy?: string; quarter?: string; format?: string };
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
@@ -148,18 +158,18 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const emp = employerIdentity();
     const lines: string[] = [];
     // File Header (FH)
-    lines.push(["FH", "24Q", fy, q, emp.tan, emp.pan, emp.name, deductees.length].join("|"));
+    lines.push(["FH", "24Q", fy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
     // Challan records (CD): batch, month, deposited amount
     challans.forEach((c, i) => {
       lines.push(["CD", i + 1, c.month, c.tdsDeposited.toFixed(2)].join("|"));
     });
     // Deductee records (DD): challan-linked deductee detail
     deductees.forEach((d, i) => {
-      lines.push(["DD", i + 1, d.pan || d.panFlag, d.name, d.tdsDeducted.toFixed(2), d.tdsDeposited.toFixed(2)].join("|"));
+      lines.push(["DD", i + 1, pipeSafe(d.pan || d.panFlag), pipeSafe(d.name), d.tdsDeducted.toFixed(2), d.tdsDeposited.toFixed(2)].join("|"));
     });
     if (annexureII) {
       annexureII.forEach((a, i) => {
-        lines.push(["A2", i + 1, String(a.pan ?? ""), String(a.name ?? ""),
+        lines.push(["A2", i + 1, pipeSafe(a.pan), pipeSafe(a.name),
           Number(a.grossSalary ?? 0).toFixed(2), Number(a.taxableIncome ?? 0).toFixed(2),
           Number(a.totalTaxLiability ?? 0).toFixed(2)].join("|"));
       });
@@ -182,8 +192,9 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
-    const { employeeId, fy } = req.query as { employeeId?: string; fy?: string };
-    if (!employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
+    const { employeeId: reqEmployeeId, fy } = req.query as { employeeId?: string; fy?: string };
+    // C1: a self-service employee may only read their OWN Form 12BA.
+    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
     const { startYear, endYear } = parseFy(fy);
 
@@ -290,7 +301,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     lines.push(["H", "SCF", month, subscribers.length].join("|"));
     // Subscriber Contribution Records (SCR)
     subscribers.forEach((s, i) => {
-      lines.push(["S", i + 1, s.pran || s.pranFlag, s.name,
+      lines.push(["S", i + 1, pipeSafe(s.pran || s.pranFlag), pipeSafe(s.name),
         s.employeeContribution.toFixed(2), s.employerContribution.toFixed(2),
         s.totalContribution.toFixed(2)].join("|"));
     });

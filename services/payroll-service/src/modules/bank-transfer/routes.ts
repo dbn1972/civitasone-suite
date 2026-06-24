@@ -43,7 +43,16 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
     const input = await fetchPayrollInput(ctx.tenantId, run.month);
     const master = new Map(input.employees.map((e) => [e.id, e]));
 
-    const escapeCsv = (val: string) => (val.includes(",") ? `"${val}"` : val);
+    // H4: CSV injection + delimiter safety. Neutralise spreadsheet formula
+    // triggers (= + - @, and TAB/CR which Excel also treats as leading) by
+    // prefixing with a single quote, then quote/escape per RFC 4180 if the
+    // value contains a comma, quote, CR or LF.
+    const escapeCsv = (raw: string): string => {
+      let val = raw ?? "";
+      if (/^[=+\-@\t\r]/.test(val)) val = `'${val}`;
+      if (/[",\r\n]/.test(val)) val = `"${val.replace(/"/g, '""')}"`;
+      return val;
+    };
     const ifscRe = /^[A-Z]{4}0[A-Z0-9]{6}$/; // RBI IFSC format
     const missing: string[] = [];
     let totalNetMinor = 0n;

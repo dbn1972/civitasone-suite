@@ -53,9 +53,11 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
     let totalDebit = 0;
     let totalCredit = 0;
     const lineRows = lines.map((l) => {
-      totalDebit += l.debitMinor;
-      totalCredit += l.creditMinor;
-      return `<tr><td>${l.accountCode}</td><td class="amount">${fmt(l.debitMinor)}</td><td class="amount">${fmt(l.creditMinor)}</td><td></td></tr>`;
+      const dr = Number(l.debitMinor);
+      const cr = Number(l.creditMinor);
+      totalDebit += dr;
+      totalCredit += cr;
+      return `<tr><td>${l.accountCode}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
     }).join("");
     const html = renderTemplate(VOUCHER_TEMPLATE, {
       orgName: "CivitasOne Government ERP",
@@ -82,9 +84,11 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
     let totalDebit = 0;
     let totalCredit = 0;
     const lineRows = lines.map((l) => {
-      totalDebit += l.debitMinor;
-      totalCredit += l.creditMinor;
-      return `<tr><td>${l.accountCode}</td><td class="amount">${fmt(l.debitMinor)}</td><td class="amount">${fmt(l.creditMinor)}</td><td></td></tr>`;
+      const dr = Number(l.debitMinor);
+      const cr = Number(l.creditMinor);
+      totalDebit += dr;
+      totalCredit += cr;
+      return `<tr><td>${l.accountCode}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
     }).join("");
     const html = renderTemplate(VOUCHER_TEMPLATE, {
       orgName: "CivitasOne Government ERP",
