@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
@@ -39,9 +39,22 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "no salary slips found for this run");
     }
 
-    // Beneficiary bank details from the HRMS employee master, keyed by employee id.
-    const input = await fetchPayrollInput(ctx.tenantId, run.month);
-    const master = new Map(input.employees.map((e) => [e.id, e]));
+    // Beneficiary bank details. Salary runs source the HRMS employee master;
+    // pensioner runs source the pensioner master (keyed by pensioner id, which
+    // is the slip's employeeId). Both expose { fullName, bankAccountNo, bankIfsc }.
+    type Beneficiary = { fullName: string; bankAccountNo: string | null; bankIfsc: string | null };
+    const master = new Map<string, Beneficiary>();
+    if (run.runType === "pensioner") {
+      const pens = (await db.execute(sql`
+        SELECT id, full_name, bank_account_no, bank_ifsc
+        FROM payroll.payroll_pensioners
+        WHERE tenant_id = ${ctx.tenantId}::uuid
+      `)) as unknown as Array<{ id: string; full_name: string; bank_account_no: string | null; bank_ifsc: string | null }>;
+      for (const p of pens) master.set(p.id, { fullName: p.full_name, bankAccountNo: p.bank_account_no, bankIfsc: p.bank_ifsc });
+    } else {
+      const input = await fetchPayrollInput(ctx.tenantId, run.month);
+      for (const e of input.employees) master.set(e.id, { fullName: e.fullName, bankAccountNo: e.bankAccountNo, bankIfsc: e.bankIfsc });
+    }
 
     // H4: CSV injection + delimiter safety. Neutralise spreadsheet formula
     // triggers (= + - @, and TAB/CR which Excel also treats as leading) by

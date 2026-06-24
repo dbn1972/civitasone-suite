@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, boolean, numeric, jsonb, timestamp,
+  pgSchema, uuid, text, integer, bigint, char, varchar, boolean, numeric, jsonb, timestamp, date,
 } from "drizzle-orm/pg-core";
 
 export const payrollSchema = pgSchema("payroll");
@@ -45,6 +45,7 @@ export const payrollRuns = payrollSchema.table("payroll_runs", {
   departmentId:    uuid("department_id"),
   structureId:     uuid("structure_id").notNull(),
   runType:         varchar("run_type", { length: 16 }).notNull().default("regular"),
+  ddoCode:         varchar("ddo_code", { length: 32 }),
   totalGrossMinor: bigint("total_gross_minor", { mode: "bigint" }).notNull().default(0n),
   totalNetMinor:   bigint("total_net_minor", { mode: "bigint" }).notNull().default(0n),
   currency:        char("currency", { length: 3 }).notNull().default("INR"),
@@ -86,8 +87,52 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   version:               integer("version").notNull().default(1),
 });
 
+/** DDO (Drawing & Disbursing Officer) registry — a run is scoped to one DDO. */
+export const payrollDdos = payrollSchema.table("payroll_ddos", {
+  tenantId:  uuid("tenant_id").notNull(),
+  ddoCode:   varchar("ddo_code", { length: 32 }).notNull(),
+  name:      text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Department -> DDO mapping; resolves each employee's department to one DDO. */
+export const payrollDdoDepartments = payrollSchema.table("payroll_ddo_departments", {
+  tenantId:     uuid("tenant_id").notNull(),
+  departmentId: uuid("department_id").notNull(),
+  ddoCode:      varchar("ddo_code", { length: 32 }).notNull(),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Pensioner master — monthly pension computation inputs. Money is PAISE bigint. */
+export const payrollPensioners = payrollSchema.table("payroll_pensioners", {
+  id:                    uuid("id").primaryKey().defaultRandom(),
+  tenantId:              uuid("tenant_id").notNull(),
+  ppoNo:                 text("ppo_no").notNull(),
+  fullName:              text("full_name").notNull(),
+  dateOfBirth:           date("date_of_birth").notNull(),
+  basicPensionMinor:     bigint("basic_pension_minor", { mode: "bigint" }).notNull(),
+  commutedPensionMinor:  bigint("commuted_pension_minor", { mode: "bigint" }).notNull().default(0n),
+  commutationDate:       date("commutation_date"),
+  medicalAllowanceMinor: bigint("medical_allowance_minor", { mode: "bigint" }).notNull().default(0n),
+  ddoCode:               varchar("ddo_code", { length: 32 }),
+  bankAccountNo:         text("bank_account_no"),
+  bankIfsc:              text("bank_ifsc"),
+  pan:                   text("pan"),
+  taxRegime:             varchar("tax_regime", { length: 8 }).notNull().default("new"),
+  status:                varchar("status", { length: 16 }).notNull().default("active"),
+  createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:             timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:             uuid("created_by").notNull(),
+  updatedBy:             uuid("updated_by").notNull(),
+});
+
 export type PayrollRunRow = typeof payrollRuns.$inferSelect;
 export type PayrollRunInsert = typeof payrollRuns.$inferInsert;
 export type PayrollSlipRow = typeof payrollSlips.$inferSelect;
+export type PayrollPensionerRow = typeof payrollPensioners.$inferSelect;
 
-export const schema = { payrollStructures, payrollComponents, payrollRuns, payrollSlips };
+export const schema = {
+  payrollStructures, payrollComponents, payrollRuns, payrollSlips,
+  payrollDdos, payrollDdoDepartments, payrollPensioners,
+};

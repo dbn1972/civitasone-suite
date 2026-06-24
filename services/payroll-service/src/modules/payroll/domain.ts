@@ -292,6 +292,147 @@ export function computeSlip(input: SlipInput): SlipResult {
   };
 }
 
+// ============================ Pensioner payroll ============================
+
+/**
+ * CCS (Pension) additional-pension (quantum of pension) age bands. From the age
+ * the pensioner attains in the run month, an extra % of basic pension is paid:
+ *   80–84: 20%, 85–89: 30%, 90–94: 40%, 95–99: 50%, 100+: 100%.
+ */
+export function additionalPensionPct(ageYears: number): bigint {
+  if (ageYears >= 100) return 100n;
+  if (ageYears >= 95)  return 50n;
+  if (ageYears >= 90)  return 40n;
+  if (ageYears >= 85)  return 30n;
+  if (ageYears >= 80)  return 20n;
+  return 0n;
+}
+
+/** Whole years attained on/before the last day of the run month (YYYY-MM). */
+export function ageAtMonth(dobIso: string, month: string): number {
+  const dob = new Date(`${dobIso.slice(0, 10)}T00:00:00Z`);
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  // Reference = last day of run month.
+  const ref = new Date(Date.UTC(y, m, 0));
+  let age = ref.getUTCFullYear() - dob.getUTCFullYear();
+  const mo = ref.getUTCMonth() - dob.getUTCMonth();
+  if (mo < 0 || (mo === 0 && ref.getUTCDate() < dob.getUTCDate())) age -= 1;
+  return age < 0 ? 0 : age;
+}
+
+export interface PensionInput {
+  basicPensionMinor: bigint;
+  /** Dearness Relief rate in basis points (same series as DA, e.g. 5000 = 50%). */
+  drRateBps?: bigint;
+  /** Portion of basic pension that was commuted (deducted until restoration). */
+  commutedPensionMinor?: bigint;
+  /** Commutation date — commuted portion is restored 15 years after it. */
+  commutationDate?: string | null;
+  /** Fixed monthly medical allowance (paise). */
+  medicalAllowanceMinor?: bigint;
+  /** Pensioner date of birth (drives additional-pension age band). */
+  dateOfBirth: string;
+  /** Run month YYYY-MM. */
+  month: string;
+  /** Monthly TDS on pension (pension is taxable as salary). 0 if none. */
+  tdsMinor?: bigint;
+}
+
+export interface PensionResult {
+  grossMinor: bigint;
+  totalDeductionsMinor: bigint;
+  netPayMinor: bigint;
+  basicPensionMinor: bigint;
+  /** Net basic pension actually disbursed (basic less un-restored commutation). */
+  payableBasicPensionMinor: bigint;
+  drMinor: bigint;
+  additionalPensionMinor: bigint;
+  additionalPensionPct: bigint;
+  medicalAllowanceMinor: bigint;
+  commutationDeductionMinor: bigint;
+  commutationRestored: boolean;
+  tdsMinor: bigint;
+  ageYears: number;
+  earnings: PayComponent[];
+  deductions: PayComponent[];
+}
+
+/**
+ * Monthly pension computation (distinct from the salary slip):
+ *   gross = basic pension + additional pension (age band % of basic)
+ *           + DR on (basic + additional) + fixed medical allowance.
+ * The commuted portion is withheld from basic until it is restored 15 years
+ * after the commutation date (CCS rule), after which the full basic is paid.
+ * DR (Dearness Relief) is computed on basic + additional pension.
+ */
+export function computePension(input: PensionInput): PensionResult {
+  const {
+    basicPensionMinor,
+    drRateBps = 0n,
+    commutedPensionMinor = 0n,
+    commutationDate = null,
+    medicalAllowanceMinor = 0n,
+    dateOfBirth,
+    month,
+    tdsMinor = 0n,
+  } = input;
+
+  const ageYears = ageAtMonth(dateOfBirth, month);
+  const addlPct = additionalPensionPct(ageYears);
+  const additionalPensionMinor = pct(basicPensionMinor, addlPct);
+
+  // Restoration: 15 years after commutation date the commuted portion is restored.
+  let commutationRestored = true;
+  if (commutedPensionMinor > 0n && commutationDate) {
+    const cd = new Date(`${commutationDate.slice(0, 10)}T00:00:00Z`);
+    const restoreOn = new Date(Date.UTC(cd.getUTCFullYear() + 15, cd.getUTCMonth(), cd.getUTCDate()));
+    const [y, m] = month.split("-").map(Number) as [number, number];
+    const runEnd = new Date(Date.UTC(y, m, 0));
+    commutationRestored = runEnd >= restoreOn;
+  } else if (commutedPensionMinor > 0n) {
+    // Commuted but no date provided — treat as not yet restored.
+    commutationRestored = false;
+  }
+  const commutationDeductionMinor = commutationRestored ? 0n : commutedPensionMinor;
+  const payableBasicPensionMinor = basicPensionMinor - commutationDeductionMinor;
+
+  // DR is on basic + additional pension (full basic, not reduced by commutation).
+  const drBase = basicPensionMinor + additionalPensionMinor;
+  const drMinor = roundRupee((drBase * drRateBps) / 10000n);
+  const medical = roundRupee(medicalAllowanceMinor);
+
+  const earnings: PayComponent[] = [];
+  earnings.push({ code: "BASIC_PENSION", name: "Basic Pension", type: "earning", amountMinor: basicPensionMinor });
+  if (additionalPensionMinor > 0n)
+    earnings.push({ code: "ADDL_PENSION", name: `Additional Pension (${addlPct}%)`, type: "earning", amountMinor: additionalPensionMinor });
+  if (drMinor > 0n)
+    earnings.push({ code: "DR", name: "Dearness Relief", type: "earning", amountMinor: drMinor });
+  if (medical > 0n)
+    earnings.push({ code: "FMA", name: "Medical Allowance", type: "earning", amountMinor: medical });
+
+  // Gross is the full entitlement; commutation withholding and TDS are deductions.
+  const grossMinor = basicPensionMinor + additionalPensionMinor + drMinor + medical;
+
+  const deductions: PayComponent[] = [];
+  if (commutationDeductionMinor > 0n)
+    deductions.push({ code: "COMMUTATION", name: "Commuted Pension", type: "deduction", amountMinor: commutationDeductionMinor });
+  const tds = roundRupee(tdsMinor);
+  if (tds > 0n)
+    deductions.push({ code: "TDS", name: "Income Tax (TDS)", type: "deduction", amountMinor: tds });
+
+  const totalDeductionsMinor = commutationDeductionMinor + tds;
+  const netPayMinor = grossMinor - totalDeductionsMinor;
+
+  return {
+    grossMinor, totalDeductionsMinor, netPayMinor,
+    basicPensionMinor, payableBasicPensionMinor,
+    drMinor, additionalPensionMinor, additionalPensionPct: addlPct,
+    medicalAllowanceMinor: medical,
+    commutationDeductionMinor, commutationRestored,
+    tdsMinor: tds, ageYears, earnings, deductions,
+  };
+}
+
 export function assertRunStatusTransition(current: string, next: string): void {
   const allowed: Record<string, string[]> = {
     draft:      ["processing"],
