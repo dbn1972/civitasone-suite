@@ -1,4 +1,4 @@
-import { hraExemptionMinor, monthlyTdsFromTaxableMinor, type Regime } from "../tax/engine.js";
+import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, type Regime } from "../tax/engine.js";
 
 /** Employee tax declaration inputs for old-regime exemptions (annual paise). */
 export interface TaxDeclarationInput {
@@ -52,6 +52,9 @@ export interface SlipInput {
   fyStartYear?: number;
   /** Old-regime declaration (HRA rent, 80C, 80D, other Chapter VI-A). */
   declaration?: TaxDeclarationInput;
+  /** Sec 192 true-up: TDS already deducted YTD this FY + months left (incl. this one). */
+  tdsYtdMinor?: bigint;
+  monthsRemaining?: number;
 }
 
 export interface SlipResult {
@@ -119,6 +122,8 @@ export function computeSlip(input: SlipInput): SlipResult {
     taxRegime = "new",
     fyStartYear = 2025,
     declaration = {},
+    tdsYtdMinor,
+    monthsRemaining,
   } = input;
 
   const earnings: PayComponent[] = [];
@@ -196,7 +201,10 @@ export function computeSlip(input: SlipInput): SlipResult {
     annualTaxableMinor = annualGross - 7_500_000n; // new regime: standard deduction only
   }
   if (annualTaxableMinor < 0n) annualTaxableMinor = 0n;
-  const tdsMinor = monthlyTdsFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear);
+  const annualTaxMinor = annualTaxFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear);
+  const tdsMinor = monthsRemaining != null
+    ? trueUpTdsMinor(annualTaxMinor, tdsYtdMinor ?? 0n, monthsRemaining)         // Sec 192 true-up
+    : (annualTaxMinor / 100n / 12n) * 100n;                                       // flat /12 fallback
 
   const adHocDeductions = deductions.reduce((s, d) => s + d.amountMinor, 0n);
   const totalDeductions = adHocDeductions + pfEmployeeMinor + esiMinor + tdsMinor + gpfMinor + npsEmployeeMinor;

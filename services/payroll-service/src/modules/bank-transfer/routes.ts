@@ -3,12 +3,15 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
+import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 /**
- * Bank transfer file generation for NEFT/RTGS disbursement.
- * Generates CSV with: Employee No, Name, Bank Account, IFSC, Net Pay Amount, Narration
+ * NEFT/RTGS bank-transfer file for salary disbursement. Beneficiary account,
+ * IFSC and name are sourced from the HRMS employee master (via payroll-input),
+ * keyed by employee id; a control-total trailer (record count + total net) is
+ * appended so the bank can reconcile the batch before processing.
  */
 export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/runs/:id/bank-file", async (req, reply) => {
@@ -36,19 +39,25 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "no salary slips found for this run");
     }
 
-    // Build CSV
-    const csvHeader = "Employee No,Name,Bank Account,IFSC,Net Pay Amount,Narration";
+    // Beneficiary bank details from the HRMS employee master, keyed by employee id.
+    const input = await fetchPayrollInput(ctx.tenantId, run.month);
+    const master = new Map(input.employees.map((e) => [e.id, e]));
+
+    const escapeCsv = (val: string) => (val.includes(",") ? `"${val}"` : val);
+    const ifscRe = /^[A-Z]{4}0[A-Z0-9]{6}$/; // RBI IFSC format
+    const missing: string[] = [];
+    let totalNetMinor = 0n;
+
     const csvRows = slips.map((slip) => {
+      const emp = master.get(slip.employeeId);
+      const bankAccount = (emp?.bankAccountNo ?? "").trim();
+      const ifsc = (emp?.bankIfsc ?? "").trim().toUpperCase();
+      const name = emp?.fullName ?? slip.employeeNo;
+      if (!bankAccount || !ifscRe.test(ifsc)) missing.push(slip.employeeNo);
+      totalNetMinor += slip.netPayMinor;
+
       const netPay = (Number(slip.netPayMinor) / 100).toFixed(2);
       const narration = `Salary ${run.month} ${slip.employeeNo}`;
-      // Bank account and IFSC would come from employee master — placeholder from components metadata
-      const bankAccount = "";
-      const ifsc = "";
-      const name = slip.employeeNo; // Employee name from HR service lookup
-
-      // Escape CSV fields containing commas
-      const escapeCsv = (val: string) => val.includes(",") ? `"${val}"` : val;
-
       return [
         escapeCsv(slip.employeeNo),
         escapeCsv(name),
@@ -59,7 +68,16 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       ].join(",");
     });
 
-    const csvContent = [csvHeader, ...csvRows].join("\r\n");
+    // Refuse to emit a file with unusable beneficiary rows — the bank would
+    // reject the whole batch, and a partial file risks silent under-payment.
+    if (missing.length > 0) {
+      throw new HttpError(422, "BANK_DETAILS_MISSING",
+        `missing or invalid bank account/IFSC for: ${missing.join(", ")}`);
+    }
+
+    const csvHeader = "Employee No,Name,Bank Account,IFSC,Net Pay Amount,Narration";
+    const trailer = `TRAILER,${slips.length},,,${(Number(totalNetMinor) / 100).toFixed(2)},Control total`;
+    const csvContent = [csvHeader, ...csvRows, trailer].join("\r\n");
     const filename = `bank_transfer_${run.runNo}_${run.month}.csv`;
 
     return reply

@@ -42,6 +42,7 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   dateOfBirth:      date("date_of_birth"),
   gender:           varchar("gender", { length: 16 }),
   pan:              varchar("pan", { length: 16 }),
+  uanNumber:        varchar("uan_number", { length: 12 }),
   aadhaarRef:       text("aadhaar_ref"),
   mobile:           varchar("mobile", { length: 20 }),
   email:            text("email"),

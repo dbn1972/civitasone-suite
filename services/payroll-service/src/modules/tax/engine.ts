@@ -99,11 +99,28 @@ export function hraExemptionMinor(salaryAnnualMinor: bigint, hraReceivedAnnualMi
   return [a, b, c].reduce((m, x) => (x < m ? x : m));
 }
 
-/** Monthly TDS (paise) from a precomputed ANNUAL TAXABLE income (after all exemptions/deductions). */
-export function monthlyTdsFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number): bigint {
+/** Full annual income tax (paise) from a precomputed ANNUAL TAXABLE income. */
+export function annualTaxFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number): bigint {
   const taxableRupees = Math.round(Math.max(0, Number(annualTaxableMinor) / 100) / 10) * 10; // Sec 288A
-  const annualTax = computeTax(taxableRupees, regime, startYear).totalTax;
-  return BigInt(Math.round(annualTax / 12)) * 100n;
+  return BigInt(computeTax(taxableRupees, regime, startYear).totalTax) * 100n;
+}
+
+/** Monthly TDS (paise) from a precomputed ANNUAL TAXABLE income (flat /12). */
+export function monthlyTdsFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number): bigint {
+  return annualTaxFromTaxableMinor(annualTaxableMinor, regime, startYear) / 100n / 12n * 100n;
+}
+
+/**
+ * Sec 192 monthly TDS with YTD true-up: spread the balance of the estimated
+ * annual tax over the remaining months; the final month deducts the full residual.
+ */
+export function trueUpTdsMinor(annualTaxMinor: bigint, tdsDeductedYtdMinor: bigint, monthsRemaining: number): bigint {
+  const balance = annualTaxMinor - tdsDeductedYtdMinor;
+  if (balance <= 0n) return 0n;
+  const m = monthsRemaining < 1 ? 1 : monthsRemaining;
+  if (m === 1) return balance; // final month: full residual
+  const perMonthRupees = Math.round(Number(balance) / 100 / m);
+  return BigInt(perMonthRupees) * 100n;
 }
 
 export function fyStartYearForMonth(month: string): number {

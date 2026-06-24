@@ -62,6 +62,17 @@ async function resolveDeclaration(tenantId: string, employeeId: string, fy: stri
   };
 }
 
+/** TDS already deducted this FY before the given run month (for Sec 192 true-up). */
+async function resolveTdsYtdMinor(tenantId: string, employeeId: string, fyStart: number, beforeMonth: string): Promise<bigint> {
+  const rows = (await db.execute(sql`
+    SELECT COALESCE(SUM(tds_minor), 0)::text AS ytd
+    FROM statutory.payroll_tds
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND period >= ${`${fyStart}-04`} AND period < ${beforeMonth}
+  `)) as unknown as Array<{ ytd: string | number }>;
+  return BigInt(rows[0]?.ytd ?? 0);
+}
+
 const AUDIT = "audit.event.record";
 const EFT_INITIATE = "finance.payment.eft.initiate";
 
@@ -268,6 +279,8 @@ async function processPayrollRun(
       const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
       const fyStr = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
       const decl = await resolveDeclaration(p.tenantId, emp.id, fyStr);
+      const monthIdxInFy = (Number(p.month.slice(5, 7)) - 4 + 12) % 12; // Apr=0..Mar=11
+      const tdsYtdMinor = await resolveTdsYtdMinor(p.tenantId, emp.id, fyStart, p.month);
 
       const result = await computeAndInsertSlip(tx, msg, {
         runId: p.id,
@@ -282,6 +295,8 @@ async function processPayrollRun(
         ptMinor: resolvePt(ptSlabs, basicMinor + daMinor),
         taxRegime: decl?.regime ?? ((emp as { taxRegime?: "old" | "new" }).taxRegime) ?? "new",
         fyStartYear: fyStart,
+        tdsYtdMinor,
+        monthsRemaining: 12 - monthIdxInFy,
         ...(decl ? { declaration: { rentPaidAnnualMinor: decl.rentPaidAnnualMinor, ded80cMinor: decl.ded80cMinor, ded80dMinor: decl.ded80dMinor, otherDedMinor: decl.otherDedMinor } } : {}),
         rawComponents,
         components: adHoc,
@@ -309,6 +324,7 @@ export async function computeAndInsertSlip(
     basicMinor: bigint; month: string; pensionScheme?: PensionScheme;
     daRateBps?: bigint; cityClass?: CityClass; ptMinor?: bigint;
     taxRegime?: "old" | "new"; fyStartYear?: number;
+    tdsYtdMinor?: bigint; monthsRemaining?: number;
     declaration?: { rentPaidAnnualMinor?: bigint; ded80cMinor?: bigint; ded80dMinor?: bigint; otherDedMinor?: bigint };
     rawComponents?: RawComponent[];
     components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }>;
@@ -321,6 +337,8 @@ export async function computeAndInsertSlip(
     ptMinor: params.ptMinor ?? 0n,
     taxRegime: params.taxRegime ?? "new",
     fyStartYear: params.fyStartYear ?? 2025,
+    ...(params.tdsYtdMinor != null ? { tdsYtdMinor: params.tdsYtdMinor } : {}),
+    ...(params.monthsRemaining != null ? { monthsRemaining: params.monthsRemaining } : {}),
     ...(params.declaration ? { declaration: params.declaration } : {}),
     rawComponents: params.rawComponents ?? [],
     components: params.components ?? [],
