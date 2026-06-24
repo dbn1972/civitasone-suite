@@ -150,6 +150,18 @@ async function generateRetroArrears(
     const daDelta  = roundRupee((basicDelta * daRateBps) / 10000n);
     const hraDelta = roundRupee((basicDelta * hraPct) / 100n);
     const perMonth = basicDelta + daDelta + hraDelta;
+    // H1: a back-dated pay DECREASE (negative delta) is an overpayment that must
+    // be RECOVERED, not paid as a negative earning. A negative EARNING bypasses
+    // the protected-net floor (ARREAR is not a RECOVERY_CODE) and can silently
+    // clamp net to 0. Route the absolute overpayment as an ARREAR_RECOVERY
+    // *deduction* row (component_code='ARREAR_RECOVERY'), which IS floor-protected
+    // and carry-forward-eligible in computeSlip. Positive deltas stay 'ARREAR'.
+    const isRecovery = perMonth < 0n;
+    const componentCode = isRecovery ? "ARREAR_RECOVERY" : "ARREAR";
+    const storedDiff = isRecovery ? -perMonth : perMonth; // store positive magnitude
+    const reason = isRecovery
+      ? "salary revision overpayment recovery"
+      : "salary revision retro arrears";
     // Iterate effMonth .. runMonth-1 inclusive.
     let [y, m] = effMonth.split("-").map(Number) as [number, number];
     const [ry, rm] = runMonth.split("-").map(Number) as [number, number];
@@ -160,9 +172,9 @@ async function generateRetroArrears(
           (tenant_id, employee_id, component_code, from_period, to_period,
            old_amount_minor, new_amount_minor, difference_minor, reason, status, source, created_by)
         VALUES
-          (${tenantId}::uuid, ${employeeId}::uuid, 'ARREAR', ${period}, ${period},
-           ${oldBasic.toString()}::bigint, ${newBasic.toString()}::bigint, ${perMonth.toString()}::bigint,
-           'salary revision retro arrears', 'approved', 'revision', ${actorId}::uuid)
+          (${tenantId}::uuid, ${employeeId}::uuid, ${componentCode}, ${period}, ${period},
+           ${oldBasic.toString()}::bigint, ${newBasic.toString()}::bigint, ${storedDiff.toString()}::bigint,
+           ${reason}, 'approved', 'revision', ${actorId}::uuid)
         ON CONFLICT (tenant_id, employee_id, component_code, from_period) WHERE source = 'revision'
         DO NOTHING
       `);
@@ -184,25 +196,39 @@ async function collectAdHocEarnings(
   employeeId: string,
   runMonth: string,
 ): Promise<{
-  components: Array<{ code: string; name: string; type: "earning"; amountMinor: bigint }>;
+  components: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }>;
   arrearIds: string[]; bonusIds: string[]; reimbIds: string[];
 }> {
-  const components: Array<{ code: string; name: string; type: "earning"; amountMinor: bigint }> = [];
+  const components: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }> = [];
+  // C1: lock the candidate rows FOR UPDATE so a concurrent (regular vs
+  // supplementary) run cannot also collect+pay the same unconsumed rows. The
+  // lock is held to the end of the surrounding processPayrollRun transaction;
+  // the second run blocks here and, once the first commits its consume markers,
+  // re-reads with the marker-IS-NULL filter and sees nothing left to pay.
   const arrears = (await tx.execute(sql`
-    SELECT id, difference_minor FROM payroll.payroll_arrears
+    SELECT id, component_code, difference_minor FROM payroll.payroll_arrears
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
       AND status IN ('pending','approved') AND run_id IS NULL
       AND from_period <= ${runMonth}
     ORDER BY from_period
-  `)) as unknown as Array<{ id: string; difference_minor: string | number }>;
+    FOR UPDATE
+  `)) as unknown as Array<{ id: string; component_code: string; difference_minor: string | number }>;
   for (const a of arrears) {
     const amt = BigInt(a.difference_minor);
-    if (amt !== 0n) components.push({ code: "ARREAR", name: "Arrears", type: "earning", amountMinor: amt });
+    if (amt === 0n) continue;
+    // H1: ARREAR_RECOVERY rows are overpayment recoveries — emit them as a
+    // floor-protected DEDUCTION (positive magnitude), not a negative earning.
+    if (a.component_code === "ARREAR_RECOVERY") {
+      components.push({ code: "ARREAR_RECOVERY", name: "Arrears Recovery", type: "deduction", amountMinor: amt });
+    } else {
+      components.push({ code: "ARREAR", name: "Arrears", type: "earning", amountMinor: amt });
+    }
   }
   const bonus = (await tx.execute(sql`
     SELECT id, bonus_amount_minor FROM payroll.payroll_bonus
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
       AND status = 'approved' AND paid_in_run_id IS NULL
+    FOR UPDATE
   `)) as unknown as Array<{ id: string; bonus_amount_minor: string | number }>;
   for (const b of bonus) {
     const amt = BigInt(b.bonus_amount_minor);
@@ -213,6 +239,7 @@ async function collectAdHocEarnings(
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
       AND status = 'approved' AND paid_in_run_id IS NULL
       AND period <= ${runMonth}
+    FOR UPDATE
   `)) as unknown as Array<{ id: string; amount_minor: string | number }>;
   for (const r of reimb) {
     const amt = BigInt(r.amount_minor);
@@ -526,24 +553,46 @@ async function processPayrollRun(
         });
       }
 
-      // P1: mark the consumed source rows so a second run does NOT pay them again.
+      // C2: mark the consumed source rows so a concurrent/second run does NOT pay
+      // them again. Every UPDATE is conditional on the marker still being NULL and
+      // scoped to the tenant, and we VERIFY the affected rowcount equals the number
+      // of rows we collected. If a row was already consumed by a concurrent run
+      // (rowcount short), we abort the whole transaction so this run pays nothing
+      // it could not exclusively claim — the bonus/arrear/reimb is paid in exactly
+      // one slip. (The FOR UPDATE lock in collectAdHocEarnings normally serialises
+      // the runs; this rowcount check is the belt-and-suspenders guarantee.)
       if (earned.arrearIds.length > 0) {
-        await tx.execute(sql`
+        const updated = (await tx.execute(sql`
           UPDATE payroll.payroll_arrears SET status = 'paid', run_id = ${p.id}::uuid
           WHERE id = ANY(${sql`ARRAY[${sql.join(earned.arrearIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
-        `);
+            AND run_id IS NULL AND tenant_id = ${p.tenantId}::uuid
+          RETURNING id
+        `)) as unknown as Array<{ id: string }>;
+        if (updated.length !== earned.arrearIds.length) {
+          throw new DomainError("ARREAR_ALREADY_CONSUMED", `arrears double-pay race: expected ${earned.arrearIds.length} unconsumed rows, claimed ${updated.length}`);
+        }
       }
       if (earned.bonusIds.length > 0) {
-        await tx.execute(sql`
+        const updated = (await tx.execute(sql`
           UPDATE payroll.payroll_bonus SET status = 'paid', paid_in_run_id = ${p.id}::uuid
           WHERE id = ANY(${sql`ARRAY[${sql.join(earned.bonusIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
-        `);
+            AND paid_in_run_id IS NULL AND tenant_id = ${p.tenantId}::uuid
+          RETURNING id
+        `)) as unknown as Array<{ id: string }>;
+        if (updated.length !== earned.bonusIds.length) {
+          throw new DomainError("BONUS_ALREADY_CONSUMED", `bonus double-pay race: expected ${earned.bonusIds.length} unconsumed rows, claimed ${updated.length}`);
+        }
       }
       if (earned.reimbIds.length > 0) {
-        await tx.execute(sql`
+        const updated = (await tx.execute(sql`
           UPDATE payroll.payroll_reimbursements SET status = 'paid', paid_in_run_id = ${p.id}::uuid
           WHERE id = ANY(${sql`ARRAY[${sql.join(earned.reimbIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
-        `);
+            AND paid_in_run_id IS NULL AND tenant_id = ${p.tenantId}::uuid
+          RETURNING id
+        `)) as unknown as Array<{ id: string }>;
+        if (updated.length !== earned.reimbIds.length) {
+          throw new DomainError("REIMB_ALREADY_CONSUMED", `reimbursement double-pay race: expected ${earned.reimbIds.length} unconsumed rows, claimed ${updated.length}`);
+        }
       }
 
       // Single source of truth: totals come from the same computed result.

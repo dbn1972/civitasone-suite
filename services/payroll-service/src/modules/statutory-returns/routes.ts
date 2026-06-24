@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import { payrollTds, payrollNps, payrollTdsNonSalary } from "../statutory/schema.js";
 import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
@@ -15,6 +16,7 @@ const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employ
 // C1: Form 24Q is a deductor-wide e-TDS return exposing every deductee's PAN/TDS.
 // It must NOT be readable by the self-service `employee` role — admins/officers only.
 const RETURN_FILER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer"];
+const AUDIT_TOPIC = "audit.event.record";
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 const QUARTERS: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
@@ -101,6 +103,31 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
         "24Q blocked: TDS deducted does not match deposited challans for " +
         reconciliation.filter((r) => !r.matched).map((r) => `${r.period}(${r.status})`).join(", ") +
         ". Ingest/correct challans or pass force=1 to generate a flagged return.");
+    }
+    // H3: a force=1 filing bypasses the reconciliation gate (unreconciled TDS).
+    // This is a high-risk override — record an audit/outbox event with the actor,
+    // period, and per-period variance so the forced filing is never silent.
+    if (!reconciled && force === "1") {
+      const unmatched = reconciliation.filter((r) => !r.matched);
+      const totalVariance = unmatched.reduce((acc, r) => acc + BigInt(r.varianceMinor), 0n);
+      await db.transaction(async (tx) => {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+          payload: {
+            service: "payroll",
+            action: "force_file_24q",
+            resourceType: "statutory_return",
+            resourceId: `24Q:${fy}:${q}`,
+            outcome: "forced",
+            fy, quarter: q,
+            varianceMinor: totalVariance.toString(),
+            unreconciledPeriods: unmatched.map((r) => ({
+              period: r.period, status: r.status, varianceMinor: r.varianceMinor,
+            })),
+          },
+        });
+      });
     }
 
     const byEmp = await deducteeWiseTds(ctx.tenantId, months);
