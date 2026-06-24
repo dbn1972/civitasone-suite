@@ -13,6 +13,17 @@ export const createActivityBody = z.object({
 });
 export type CreateActivityBody = z.infer<typeof createActivityBody>;
 
+// P1-3 activity completion: status (and optional explicit completedAt).
+export const updateActivityBody = z.object({
+  status: z.enum(["open", "completed", "cancelled"]).optional(),
+  completedAt: z.string().datetime().nullable().optional(),
+}).refine((b) => b.status !== undefined || b.completedAt !== undefined, {
+  message: "at least one field required",
+});
+export type UpdateActivityBody = z.infer<typeof updateActivityBody>;
+
+export const idParam = z.object({ id: z.string().uuid() });
+
 export const activityViewSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

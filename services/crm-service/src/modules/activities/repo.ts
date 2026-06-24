@@ -36,3 +36,25 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export async function insert(tx: Writer, row: ActivityInsert): Promise<void> {
   await tx.insert(activities).values(row);
 }
+
+/** P1-3: patch activity status/completedAt. completedAt auto-set on complete. */
+export async function updateActivity(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  fields: { status?: string; completedAt?: Date | null },
+): Promise<void> {
+  const patch: Record<string, unknown> = {};
+  if (fields.status !== undefined) {
+    patch.status = fields.status;
+    // Auto-set completedAt when transitioning to completed (unless caller gave one).
+    if (fields.status === "completed" && fields.completedAt === undefined) {
+      patch.completedAt = new Date();
+    }
+  }
+  if (fields.completedAt !== undefined) patch.completedAt = fields.completedAt;
+  if (Object.keys(patch).length === 0) return;
+  await (tx as typeof db).update(activities)
+    .set(patch)
+    .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)));
+}

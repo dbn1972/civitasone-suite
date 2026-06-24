@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createDealBody, updateDealStageBody, idParam, dealsListSchema } from "./validators.js";
+import { createDealBody, updateDealStageBody, updateDealBody, idParam, dealsListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -39,6 +39,21 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = updateDealStageBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateDealStage(ctx, id, body));
+  });
+
+  app.patch("/v1/crm/deals/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateDealBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateDeal(ctx, id, body));
+  });
+
+  app.delete("/v1/crm/deals/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteDeal(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

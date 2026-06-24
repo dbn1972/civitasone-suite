@@ -7,7 +7,10 @@ export const COMMANDS = {
   bulkImportContacts: "crm.contact.bulk_import",
   createDeal: "crm.deal.create",
   updateDealStage: "crm.deal.update_stage",
+  updateDeal: "crm.deal.update",
+  deleteDeal: "crm.deal.delete",
   createActivity: "crm.activity.create",
+  updateActivity: "crm.activity.update",
   createAccount: "crm.account.create",
 } as const;
 
@@ -17,7 +20,10 @@ export const EVENTS = {
   contactDeleted: "crm.contact.deleted",
   dealCreated: "crm.deal.created",
   dealStageUpdated: "crm.deal.stage_updated",
+  dealUpdated: "crm.deal.updated",
+  dealDeleted: "crm.deal.deleted",
   activityCreated: "crm.activity.created",
+  activityUpdated: "crm.activity.updated",
   accountCreated: "crm.account.created",
 } as const;
 

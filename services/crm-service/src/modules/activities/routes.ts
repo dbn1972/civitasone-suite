@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createActivityBody, activitiesListSchema } from "./validators.js";
+import { createActivityBody, updateActivityBody, idParam, activitiesListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -22,6 +22,14 @@ export async function activityRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, activitiesListSchema, await queries.listActivities(ctx.tenantId, q.limit, q.offset));
+  });
+
+  app.patch("/v1/crm/activities/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateActivityBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateActivity(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

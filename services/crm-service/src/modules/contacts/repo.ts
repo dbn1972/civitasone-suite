@@ -199,4 +199,20 @@ export async function listAccounts(tenantId: string): Promise<{ id: string; name
     .orderBy(accounts.name);
 }
 
+/** Tenant-scoped existence check for an account (cross-tenant FK guard). */
+export async function accountExists(tenantId: string, accountId: string): Promise<boolean> {
+  const rows = await db.select({ one: sql`1` }).from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** Tenant-scoped existence check for a contact (cross-tenant FK guard). */
+export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
+  const rows = await db.select({ one: sql`1` }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export { toView };

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateActivityBody } from "./validators.js";
+import type { CreateActivityBody, UpdateActivityBody } from "./validators.js";
 import type { ActivityView } from "./schema.js";
 
 const RESOURCE = "activity";
@@ -34,5 +34,18 @@ export async function createActivity(ctx: RequestContext, body: CreateActivityBo
     payload: projected,
   });
 
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+// P1-3: update activity status/completion.
+export async function updateActivity(ctx: RequestContext, id: string, body: UpdateActivityBody): Promise<Accepted> {
+  const msgId = randomUUID();
+  await queue.publish(COMMANDS.updateActivity, {
+    messageId: msgId, type: COMMANDS.updateActivity,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
+  await cache.invalidateResource(ctx.tenantId, RESOURCE);
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
