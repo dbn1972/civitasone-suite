@@ -27,9 +27,9 @@ export function registerSessionConsumers(q: Queue): void {
   q.subscribe<{ id: string }>(COMMANDS.revokeSession, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findByIdTx(tx, msg.payload.id);
+      const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
       if (!cur) return;
-      await repo.update(tx, msg.payload.id, { status: "revoked", updatedBy: msg.actorId, version: cur.version + 1 });
+      await repo.update(tx, msg.tenantId, msg.payload.id, { status: "revoked", updatedBy: msg.actorId, version: cur.version + 1 });
       await emitAudit(tx, msg, EVENTS.sessionRevoked, { sessionId: msg.payload.id }, "revoke", msg.payload.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.session, msg.payload.id));

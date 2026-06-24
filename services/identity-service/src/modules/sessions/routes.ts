@@ -24,6 +24,12 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/identity/sessions/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = sessionIdParam.parse(req.params);
+    // P1-1: authorize the revoke. Load the session (tenant-scoped) and require
+    // the caller to be the session owner OR a session admin. A miss (wrong
+    // tenant or unknown id) is a 404, not an implicit revoke.
+    const view = await queries.getSession(ctx.tenantId, id);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "session not found");
+    if (view.userId !== ctx.actorId) requireRole(ctx, SESSION_ADMIN);
     return sendAccepted(reply, acceptedResponseSchema, await commands.revokeSession(ctx, id));
   });
 

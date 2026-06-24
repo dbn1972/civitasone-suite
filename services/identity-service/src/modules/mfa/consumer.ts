@@ -1,5 +1,5 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -14,13 +14,13 @@ export function registerMfaConsumers(q: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const { id, userId, method, tenantId } = msg.payload;
-        const existing = await tx.select().from(mfaConfigs).where(eq(mfaConfigs.userId, userId)).limit(1);
+        const existing = await tx.select().from(mfaConfigs).where(and(eq(mfaConfigs.userId, userId), eq(mfaConfigs.tenantId, tenantId))).limit(1);
         if (existing.length) {
-          await tx.update(mfaConfigs).set({ method, enabled: true, updatedBy: msg.actorId, version: (existing[0]?.version ?? 0) + 1, updatedAt: new Date() }).where(eq(mfaConfigs.userId, userId));
+          await tx.update(mfaConfigs).set({ method, enabled: true, updatedBy: msg.actorId, version: (existing[0]?.version ?? 0) + 1, updatedAt: new Date() }).where(and(eq(mfaConfigs.userId, userId), eq(mfaConfigs.tenantId, tenantId)));
         } else {
           await tx.insert(mfaConfigs).values({ id, tenantId, userId, method, enabled: true, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1 });
         }
-        await tx.update(users).set({ mfaEnabled: true, updatedBy: msg.actorId, updatedAt: new Date() }).where(eq(users.id, userId));
+        await tx.update(users).set({ mfaEnabled: true, updatedBy: msg.actorId, updatedAt: new Date() }).where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: EVENTS.mfaEnabled, eventType: EVENTS.mfaEnabled, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { userId, method },
         });

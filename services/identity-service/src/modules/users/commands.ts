@@ -23,6 +23,7 @@ export async function createUser(ctx: RequestContext, body: CreateUserBody): Pro
 
 export async function updateUser(ctx: RequestContext, id: string, body: UpdateUserBody): Promise<Accepted> {
   await queue.publish(COMMANDS.updateUser, {
+    messageId: randomUUID(),
     type: COMMANDS.updateUser, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, ...body },
   });
@@ -31,6 +32,7 @@ export async function updateUser(ctx: RequestContext, id: string, body: UpdateUs
 
 export async function changeUserStatus(ctx: RequestContext, id: string, body: StatusBody): Promise<Accepted> {
   await queue.publish(COMMANDS.deactivateUser, {
+    messageId: randomUUID(),
     type: COMMANDS.deactivateUser, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, status: body.status, reason: body.reason },
   });

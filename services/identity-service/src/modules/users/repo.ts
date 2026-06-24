@@ -11,8 +11,10 @@ function toView(r: UserRow): UserView {
   };
 }
 
-export async function findById(id: string): Promise<UserView | null> {
-  const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+export async function findById(tenantId: string, id: string): Promise<UserView | null> {
+  const rows = await db.select().from(users)
+    .where(and(eq(users.id, id), eq(users.tenantId, tenantId)))
+    .limit(1);
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -29,12 +31,15 @@ export async function insert(tx: Writer, row: UserInsert): Promise<void> {
   await tx.insert(users).values(row);
 }
 
-export async function update(tx: Writer, id: string, patch: Partial<UserInsert>): Promise<void> {
-  await tx.update(users).set({ ...patch, updatedAt: new Date() }).where(eq(users.id, id));
+export async function update(tx: Writer, tenantId: string, id: string, patch: Partial<UserInsert>): Promise<void> {
+  await tx.update(users).set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
 }
 
-export async function findByIdTx(tx: Writer, id: string): Promise<UserView | null> {
-  const rows = await tx.select().from(users).where(eq(users.id, id)).limit(1);
+export async function findByIdTx(tx: Writer, tenantId: string, id: string): Promise<UserView | null> {
+  const rows = await tx.select().from(users)
+    .where(and(eq(users.id, id), eq(users.tenantId, tenantId)))
+    .limit(1);
   return rows[0] ? toView(rows[0]) : null;
 }
 

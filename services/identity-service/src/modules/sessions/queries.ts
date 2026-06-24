@@ -4,7 +4,13 @@ import * as repo from "./repo.js";
 import type { SessionView } from "./domain.js";
 
 export async function getSession(tenantId: string, id: string): Promise<SessionView | null> {
-  return cache.getOrLoad<SessionView>(cache.makeKey(tenantId, RESOURCE.session, id), () => repo.findById(id));
+  const view = await cache.getOrLoad<SessionView>(
+    cache.makeKey(tenantId, RESOURCE.session, id),
+    () => repo.findById(tenantId, id),
+  );
+  // Defense in depth: never return a session belonging to another tenant.
+  if (view && view.tenantId !== tenantId) return null;
+  return view;
 }
 
 export async function listSessions(tenantId: string, limit: number): Promise<SessionView[]> {

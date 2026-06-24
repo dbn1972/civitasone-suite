@@ -4,7 +4,13 @@ import * as repo from "./repo.js";
 import type { UserView } from "./domain.js";
 
 export async function getUser(tenantId: string, id: string): Promise<UserView | null> {
-  return cache.getOrLoad<UserView>(cache.makeKey(tenantId, RESOURCE.user, id), () => repo.findById(id));
+  const view = await cache.getOrLoad<UserView>(
+    cache.makeKey(tenantId, RESOURCE.user, id),
+    () => repo.findById(tenantId, id),
+  );
+  // Defense in depth: never return a row belonging to another tenant.
+  if (view && view.tenantId !== tenantId) return null;
+  return view;
 }
 
 export async function listUsers(tenantId: string, limit: number, offset: number): Promise<UserView[]> {

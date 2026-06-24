@@ -30,12 +30,12 @@ export function registerUserConsumers(q: Queue): void {
   q.subscribe<{ id: string; name?: string; empCode?: string }>(COMMANDS.updateUser, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findByIdTx(tx, msg.payload.id);
+      const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
       if (!cur) throw new Error(`user ${msg.payload.id} not found`);
       const patch: Record<string, unknown> = { updatedBy: msg.actorId, version: cur.version + 1 };
       if (msg.payload.name !== undefined) patch.name = msg.payload.name;
       if (msg.payload.empCode !== undefined) patch.empCode = msg.payload.empCode;
-      await repo.update(tx, msg.payload.id, patch);
+      await repo.update(tx, msg.tenantId, msg.payload.id, patch);
       await emitAudit(tx, msg, EVENTS.userUpdated, { userId: msg.payload.id }, "update", msg.payload.id);
     });
     await cache.invalidate(keyFor(msg.tenantId, msg.payload.id));
@@ -44,10 +44,10 @@ export function registerUserConsumers(q: Queue): void {
   q.subscribe<{ id: string; status: string; reason?: string }>(COMMANDS.deactivateUser, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findByIdTx(tx, msg.payload.id);
+      const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
       if (!cur) throw new Error(`user ${msg.payload.id} not found`);
       assertTransition(cur.status, msg.payload.status as UserView["status"]);
-      await repo.update(tx, msg.payload.id, {
+      await repo.update(tx, msg.tenantId, msg.payload.id, {
         status: msg.payload.status, updatedBy: msg.actorId, version: cur.version + 1,
       });
       await emitAudit(tx, msg, EVENTS.userDeactivated, { userId: msg.payload.id, status: msg.payload.status }, "status_change", msg.payload.id);

@@ -2,22 +2,19 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
+import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import {
+  encryptMfaSecret,
+  decryptMfaSecret,
+  generateBase32Secret,
+  verifyTotp,
+} from "../../shared/mfa-crypto.js";
+import { mfaConfigs } from "./schema.js";
 import { enableMfaBody, enableMfa } from "./commands.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
-
-interface MfaSetup {
-  id: string;
-  tenantId: string;
-  userId: string;
-  method: "totp" | "sms" | "email";
-  secret: string;
-  isEnabled: boolean;
-  createdAt: string;
-}
-
-const mfaStore: MfaSetup[] = [];
 
 export async function mfaRoutes(app: FastifyInstance): Promise<void> {
   app.post("/identity/users/:id/mfa", async (req, reply) => {
@@ -28,61 +25,86 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await enableMfa(ctx, id, body));
   });
 
+  // P0-3: real TOTP enrollment. Generate a base32 secret, store it encrypted at
+  // rest (AES-256-GCM via MFA_ENC_KEY), and return the secret + provisioning URI
+  // EXACTLY ONCE so the authenticator app can enroll. enabled stays false until
+  // the user proves possession via /mfa/verify.
   app.post("/identity/mfa/setup", async (req, reply) => {
     const ctx = resolveContext(req);
-    const body = z.object({
-      method: z.enum(["totp", "sms", "email"]).default("totp"),
-    }).parse(req.body);
+    z.object({ method: z.literal("totp").default("totp") }).parse(req.body ?? {});
 
-    const existing = mfaStore.find(
-      (m) => m.userId === ctx.actorId && m.tenantId === ctx.tenantId && m.method === body.method
-    );
-    if (existing && existing.isEnabled) {
-      throw new HttpError(409, "ALREADY_ENABLED", "MFA method already enabled");
+    const existing = await db.select().from(mfaConfigs)
+      .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)))
+      .limit(1);
+    if (existing[0]?.enabled) {
+      throw new HttpError(409, "ALREADY_ENABLED", "MFA already enabled");
     }
 
-    const secret = crypto.randomUUID().replace(/-/g, "").slice(0, 20).toUpperCase();
-    const record: MfaSetup = {
-      id: crypto.randomUUID(),
-      tenantId: ctx.tenantId,
-      userId: ctx.actorId,
-      method: body.method,
-      secret,
-      isEnabled: false,
-      createdAt: new Date().toISOString(),
-    };
-    mfaStore.push(record);
+    const secret = generateBase32Secret();
+    const encrypted = encryptMfaSecret(secret);
+    const now = new Date();
 
+    if (existing[0]) {
+      await db.update(mfaConfigs)
+        .set({
+          method: "totp", secret: encrypted, enabled: false,
+          updatedBy: ctx.actorId, version: existing[0].version + 1, updatedAt: now,
+        })
+        .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+    } else {
+      await db.insert(mfaConfigs).values({
+        tenantId: ctx.tenantId, userId: ctx.actorId, method: "totp",
+        secret: encrypted, enabled: false, createdBy: ctx.actorId, updatedBy: ctx.actorId, version: 1,
+      });
+    }
+
+    const issuer = "CivitasOne";
     return reply.code(201).send({
       data: {
-        id: record.id,
-        method: record.method,
-        secret: record.secret,
-        provisioning_uri: `otpauth://totp/CivitasOne:${ctx.actorId}?secret=${secret}&issuer=CivitasOne`,
+        method: "totp",
+        secret,
+        provisioning_uri: `otpauth://totp/${issuer}:${ctx.actorId}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`,
       },
     });
   });
 
+  // P0-3: real verification. Load the persisted ENCRYPTED secret, decrypt, and
+  // check the supplied 6-digit code against the live RFC-6238 TOTP. On success
+  // flip enabled=true. The secret is NEVER echoed back.
   app.post("/identity/mfa/verify", async (req, reply) => {
     const ctx = resolveContext(req);
     const body = z.object({
-      code: z.string().min(6).max(8),
-      method: z.enum(["totp", "sms", "email"]).default("totp"),
+      code: z.string().regex(/^\d{6}$/, "code must be 6 digits"),
+      method: z.literal("totp").default("totp"),
     }).parse(req.body);
 
-    const setup = mfaStore.find(
-      (m) => m.userId === ctx.actorId && m.tenantId === ctx.tenantId && m.method === body.method
-    );
-    if (!setup) {
-      throw new HttpError(404, "NOT_FOUND", "MFA not set up for this method");
+    const rows = await db.select().from(mfaConfigs)
+      .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)))
+      .limit(1);
+    const config = rows[0];
+    if (!config || !config.secret) {
+      throw new HttpError(404, "NOT_FOUND", "MFA not set up");
     }
 
-    // In production, verify the TOTP code against the secret
-    // For now, accept any valid-length code to enable MFA
-    setup.isEnabled = true;
+    let base32Secret: string;
+    try {
+      base32Secret = decryptMfaSecret(config.secret);
+    } catch {
+      throw new HttpError(500, "INTERNAL", "MFA secret unreadable");
+    }
+
+    if (!verifyTotp(base32Secret, body.code)) {
+      throw new HttpError(401, "INVALID_CODE", "invalid TOTP code");
+    }
+
+    if (!config.enabled) {
+      await db.update(mfaConfigs)
+        .set({ enabled: true, updatedBy: ctx.actorId, version: config.version + 1, updatedAt: new Date() })
+        .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+    }
 
     return reply.code(200).send({
-      data: { verified: true, method: body.method, enabledAt: new Date().toISOString() },
+      data: { verified: true, method: "totp", enabledAt: new Date().toISOString() },
     });
   });
 

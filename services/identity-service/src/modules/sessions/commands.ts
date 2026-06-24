@@ -19,6 +19,7 @@ export async function createSession(ctx: RequestContext, body: CreateSessionBody
 
 export async function revokeSession(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.revokeSession, {
+    messageId: randomUUID(),
     type: COMMANDS.revokeSession, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id },
   });

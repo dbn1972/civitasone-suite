@@ -100,6 +100,22 @@ const PII_ENC_KEY = (() => {
   return "civitasone-hrms-pii-dev-key-not-for-prod";
 })();
 
+// -- MFA at-rest encryption key (P0-3) ----------------------------------------
+// identity-service stores TOTP secrets AES-256-GCM-encrypted at rest. The
+// 32-byte key is derived from this secret. Same injection contract as
+// PII_ENC_KEY: env -> on-host key file -> dev fallback; fail closed in prod.
+const MFA_ENC_KEY = (() => {
+  if (process.env.MFA_ENC_KEY && process.env.MFA_ENC_KEY.length >= 16) return process.env.MFA_ENC_KEY;
+  try {
+    const fs = require("fs");
+    const p = require("path").join(process.env.HOME || "/home/ec2-user", ".civitasone-identity-mfa-key");
+    const v = fs.readFileSync(p, "utf8").trim();
+    if (v.length >= 16) return v;
+  } catch (e) { /* fall through */ }
+  if (IS_PROD) throw new Error("[ecosystem] MFA_ENC_KEY required for identity-service (inject from secret manager or provision the host key file). Refusing to start.");
+  return "civitasone-identity-mfa-dev-key-not-for-prod";
+})();
+
 
 function svc(name, port, dbUser, dbName, extra = {}) {
   return {
@@ -151,7 +167,7 @@ function worker(name, dbUser, dbName, extra = {}) {
 module.exports = {
   apps: [
     // ── Core platform ──────────────────────────────────────────────────────────
-    svc("identity",     3001, "identity_svc",     "civitas_identity"),
+    svc("identity",     3001, "identity_svc",     "civitas_identity", { MFA_ENC_KEY }),
     svc("tenant",       3002, "tenant_svc",        "civitas_tenant"),
     svc("policy",       3003, "policy_svc",        "civitas_policy"),
     svc("audit",        3004, "audit_svc",         "civitas_audit"),
@@ -218,7 +234,7 @@ module.exports = {
     // ── EVT-1 (04-T1): previously-missing workers now wired. Each ships a real
     //    src/worker.ts (consumers + outbox relay); without these entries their
     //    HTTP commands returned 202 but the async write never applied. ──────────
-    worker("identity",     "identity_svc",     "civitas_identity"),
+    worker("identity",     "identity_svc",     "civitas_identity", { MFA_ENC_KEY }),
     worker("tenant",       "tenant_svc",       "civitas_tenant"),
     worker("policy",       "policy_svc",       "civitas_policy"),
     worker("install",      "install_svc",      "civitas_install"),
