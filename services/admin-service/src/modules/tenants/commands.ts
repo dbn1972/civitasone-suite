@@ -1,6 +1,7 @@
 import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { commandMessageId } from "../../shared/idempotency.js";
 import { COMMANDS, RESOURCE_TENANT } from "../../topics.js";
 import type { CreateTenantBody, EditionChangeBody, SuspendBody } from "./validators.js";
 import type { TenantView } from "./domain.js";
@@ -26,8 +27,11 @@ export async function createTenant(ctx: RequestContext, body: CreateTenantBody):
 }
 
 export async function changeEdition(ctx: RequestContext, id: string, body: EditionChangeBody): Promise<Accepted> {
+  // P0-1: deterministic messageId so a double-submit of the edition change
+  // dedupes at the consumer instead of applying twice.
+  const messageId = commandMessageId(ctx, `tenant:${id}`, `edition_change:${body.edition}`);
   await queue.publish(COMMANDS.tenantEditionChange, {
-    type: COMMANDS.tenantEditionChange, tenantId: id,
+    messageId, type: COMMANDS.tenantEditionChange, tenantId: id,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, edition: body.edition },
   });
@@ -36,8 +40,10 @@ export async function changeEdition(ctx: RequestContext, id: string, body: Editi
 }
 
 export async function suspendTenant(ctx: RequestContext, id: string, body: SuspendBody): Promise<Accepted> {
+  // P0-1: deterministic messageId so a double-submit suspends once.
+  const messageId = commandMessageId(ctx, `tenant:${id}`, "suspend");
   await queue.publish(COMMANDS.tenantSuspend, {
-    type: COMMANDS.tenantSuspend, tenantId: id,
+    messageId, type: COMMANDS.tenantSuspend, tenantId: id,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, reason: body.reason },
   });
@@ -46,8 +52,10 @@ export async function suspendTenant(ctx: RequestContext, id: string, body: Suspe
 }
 
 export async function reactivateTenant(ctx: RequestContext, id: string): Promise<Accepted> {
+  // P0-1: deterministic messageId so a double-submit reactivates once.
+  const messageId = commandMessageId(ctx, `tenant:${id}`, "reactivate");
   await queue.publish(COMMANDS.tenantReactivate, {
-    type: COMMANDS.tenantReactivate, tenantId: id,
+    messageId, type: COMMANDS.tenantReactivate, tenantId: id,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id },
   });

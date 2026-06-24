@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, text, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, boolean, integer, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const configSchema = pgSchema("config");
 const PLATFORM = "00000000-0000-0000-0000-000000000000";
@@ -38,6 +38,10 @@ export const adminFeatureFlags = configSchema.table("admin_feature_flags", {
   createdBy: uuid("created_by").notNull(),
   updatedBy: uuid("updated_by").notNull(),
   version: integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // P0-1: one feature flag row per (tenant, flag_key) so a double-submit of the
+  // platform create cannot insert a duplicate row.
+  flagKeyUnique: uniqueIndex("admin_feature_flags_tenant_id_flag_key_key").on(t.tenantId, t.flagKey),
+}));
 
 export const schema = { adminEditions, adminModuleConfigs, adminFeatureFlags };
