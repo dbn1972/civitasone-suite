@@ -5,6 +5,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { hasAnyRole } from "@civitasone/auth";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { createExportBody, PII_EXPORT_ROLES } from "./validators.js";
@@ -15,7 +16,18 @@ const EXPORT_ROLES = ["audit_officer", "audit_admin", "super_admin", "platform_a
 const READER_ROLES = EXPORT_ROLES;
 const EXPORT_DIR = process.env.EXPORT_DIR ?? "/tmp/audit-exports";
 
-function statusDto(r: NonNullable<Awaited<ReturnType<typeof repo.findByIdTx>>>) {
+// H1: the tokenized download URL must only be handed to a caller who is actually
+// allowed to fetch the artifact: the requester, and for PII exports also a PII role.
+// Everyone else authorized to read status gets ready:true with no token.
+function canDownload(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof repo.findByIdTx>>>): boolean {
+  const isRequester = r.createdBy === ctx.actorId;
+  const piiOk = !r.includesPii || hasAnyRole(ctx, PII_EXPORT_ROLES);
+  return isRequester && piiOk;
+}
+
+function statusDto(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof repo.findByIdTx>>>) {
+  const ready = r.status === "completed" && !!r.signedUrl;
+  const allowToken = ready && canDownload(ctx, r);
   return {
     id: r.id,
     status: r.status,
@@ -24,7 +36,8 @@ function statusDto(r: NonNullable<Awaited<ReturnType<typeof repo.findByIdTx>>>) 
     periodTo: r.periodTo.toISOString(),
     rowCount: r.rowCount ?? null,
     includesPii: r.includesPii,
-    download: r.signedUrl ?? null,
+    ready,
+    download: allowToken ? r.signedUrl : null,
     retentionUntil: r.retentionUntil ? r.retentionUntil.toISOString() : null,
     expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
     error: r.error ?? null,
@@ -46,7 +59,7 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const found = await repo.findByIdTx(db, id, ctx.tenantId);
     if (!found) throw new HttpError(404, "NOT_FOUND", "export not found");
-    return reply.send({ data: statusDto(found) });
+    return reply.send({ data: statusDto(ctx, found) });
   });
 
   // P1-5: tenant-scoped, time-limited, token-guarded download. PII artifacts re-check role.

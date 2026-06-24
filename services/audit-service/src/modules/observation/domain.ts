@@ -20,7 +20,7 @@ export type ObservationStatus = (typeof OBSERVATION_STATUSES)[number];
 
 // P1-6: lifecycle transition graph (closure paths added).
 const VALID_TRANSITIONS: Record<ObservationStatus, ObservationStatus[]> = {
-  open:               ["replied", "para_drafted", "closed"],
+  open:               ["replied", "para_drafted"],
   replied:            ["compliance_pending", "replied_rejected"],
   replied_rejected:   ["replied"],
   para_drafted:       ["compliance_pending", "closed"],

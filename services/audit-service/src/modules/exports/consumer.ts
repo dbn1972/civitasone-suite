@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -20,13 +20,26 @@ const RETENTION_DAYS = Number(process.env.EXPORT_RETENTION_DAYS ?? 7);
 type PiiField = "ipAddress" | "userAgent" | "oldValue" | "newValue";
 const PII_FIELDS: PiiField[] = ["ipAddress", "userAgent", "oldValue", "newValue"];
 
+// H3: thrown when an export's window exceeds the row cap; routed to failExportVersioned.
+class ExportTooLargeError extends Error {
+  readonly code = "EXPORT_TOO_LARGE";
+  constructor(cap: number) {
+    super(`[EXPORT_TOO_LARGE] export exceeds the ${cap}-row cap; narrow the date window and retry`);
+    this.name = "ExportTooLargeError";
+  }
+}
+
 function hasPiiRole(roles: string[]): boolean {
   return roles.some((r) => PII_EXPORT_ROLES.includes(r));
 }
 
 function csvCell(v: unknown): string {
   if (v === null || v === undefined) return "";
-  const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  let s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  // L3: neutralize CSV/spreadsheet formula injection — a leading = + - @ (or a
+  // leading tab / CR that some apps strip before re-evaluating) makes the cell a
+  // formula. Prefix with a single quote so it is rendered as literal text.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -64,7 +77,13 @@ export function registerExportConsumers(queue: Queue): void {
     //    so a re-delivery that already inserted (markProcessed=false) still reaches completion
     //    via the versioned, status-guarded update.
     try {
-      const rows = await eventsRepo.listEvents(p.tenantId, new Date(p.from), new Date(p.to), undefined, MAX_EXPORT_ROWS, 0);
+      // H3: probe for one row beyond the cap. If the window genuinely exceeds
+      // MAX_EXPORT_ROWS we must FAIL the export rather than silently truncating it
+      // into a "completed" artifact that is missing rows.
+      const rows = await eventsRepo.listEvents(p.tenantId, new Date(p.from), new Date(p.to), undefined, MAX_EXPORT_ROWS + 1, 0);
+      if (rows.length > MAX_EXPORT_ROWS) {
+        throw new ExportTooLargeError(MAX_EXPORT_ROWS);
+      }
 
       const projected = rows.map((r) => {
         const base: Record<string, unknown> = {
@@ -92,8 +111,14 @@ export function registerExportConsumers(queue: Queue): void {
       const expiresAt = new Date(now + RETENTION_DAYS * 86_400_000);
       const tenantDir = path.join(EXPORT_DIR, p.tenantId);
       const fileName = `${p.id}.${p.format}`;
-      await mkdir(tenantDir, { recursive: true });
-      await writeFile(path.join(tenantDir, fileName), content, "utf8");
+      // H2: artifacts may carry PII. Lock the tree down to the service user only —
+      // dir 0700, file 0600 — so co-tenants / other local users cannot read them.
+      // (mkdir mode is masked by umask, so chmod explicitly to guarantee perms.)
+      await mkdir(tenantDir, { recursive: true, mode: 0o700 });
+      await chmod(tenantDir, 0o700);
+      const filePath = path.join(tenantDir, fileName);
+      await writeFile(filePath, content, { encoding: "utf8", mode: 0o600 });
+      await chmod(filePath, 0o600);
 
       // tenant-scoped, time-limited download location.
       const downloadPath = `/v1/audit/exports/${p.id}/download?token=${token}`;

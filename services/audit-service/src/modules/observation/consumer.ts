@@ -119,6 +119,13 @@ export function registerObservationConsumers(queue: Queue): void {
       if (!obs) throw new Error(`observation ${p.observationId} not found`);
       const target = p.mode === "partial" ? "partially_closed" : "closed";
       assertCanTransition(obs.status ?? "open", target);
+      // C1/M1: full closure additionally requires no outstanding paras/pending-register rows.
+      if (target === "closed") {
+        const blockers = await repo.countOpenBlockers(tx, p.observationId, p.tenantId);
+        if (blockers > 0) {
+          throw new Error(`[CLOSURE_BLOCKED] observation ${p.observationId} has ${blockers} open para(s) or unsettled pending-register row(s)`);
+        }
+      }
       const rows = await repo.updateObservationVersioned(tx, p.observationId, p.tenantId, obs.version ?? 1, {
         status: target, updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
       });
