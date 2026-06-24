@@ -39,7 +39,7 @@ export async function listSchemeSummaries(tenantId: string, limit: number) {
       fundingType: mapFundingType(row.type),
       totalAllocation: minorToAmount(row.totalOutlayMinor),
       releasedAmount: minorToAmount(row.releasedMinor),
-      projectCount: await repo.countProjectsByScheme(row.id),
+      projectCount: await repo.countProjectsByScheme(row.id, tenantId),
       status: (row.status === "completed" ? "completed" : row.status === "discontinued" ? "discontinued" : "active") as "active" | "completed" | "discontinued",
     });
   }

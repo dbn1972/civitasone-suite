@@ -3,9 +3,39 @@ import { sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { findProjectByIdTx } from "./repo.js";
+import {
+  projectIdParam, billParam, extParam,
+  createRiskBody, computeEvmBody, createRaBillBody, createTimeExtBody,
+  createPenaltyBody, createResourceBody, createBaselineBody,
+} from "./world-class-validators.js";
 
 const PROJ_ROLES   = ["project_manager", "project_officer", "super_admin"];
 const READER_ROLES = [...PROJ_ROLES, "audit_officer", "finance_officer"];
+const AUDIT_TOPIC  = "audit.event.record";
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// P0-1: a world-class child may only be created under a project that belongs to
+// the caller's tenant. Throws 404 (matching the core's not-found semantics)
+// when the parent is missing or owned by another tenant.
+async function assertParent(tx: Tx, projectId: string, tenantId: string): Promise<void> {
+  const parent = await findProjectByIdTx(tx, projectId, tenantId);
+  if (!parent) throw new HttpError(404, "NOT_FOUND", "project not found");
+}
+
+// P1-1: emit an audit event on the same tx as the business write (outbox).
+async function audit(
+  tx: Tx, ctx: { tenantId: string; actorId: string; correlationId: string },
+  action: string, resourceType: string, resourceId: string,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+    payload: { service: "project", action, resourceType, resourceId, outcome: "success" },
+  });
+}
 
 export async function worldClassProjectRoutes(app: FastifyInstance): Promise<void> {
 
@@ -14,7 +44,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/projects/:id/risks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = projectIdParam.parse(req.params);
     const rows = await db.execute(sql`
       SELECT * FROM project.project_risks
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -26,14 +56,21 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.post("/v1/projects/:id/risks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id } = req.params as { id: string };
-    const b = req.body as any;
-    const riskScore = computeRiskScore(b.probability ?? "medium", b.impact ?? "medium");
-    await db.execute(sql`
-      INSERT INTO project.project_risks (tenant_id, project_id, title, description, category, probability, impact, risk_score, mitigation_plan, owner_id, status, created_by)
-      VALUES (${ctx.tenantId}, ${id}, ${b.title}, ${b.description ?? null}, ${b.category ?? "technical"}, ${b.probability ?? "medium"}, ${b.impact ?? "medium"}, ${riskScore}, ${b.mitigationPlan ?? null}, ${b.ownerId ?? null}, ${b.status ?? "open"}, ${ctx.actorId})
-    `);
-    return reply.code(201).send({ message: "risk created" });
+    const { id } = projectIdParam.parse(req.params);
+    const b = createRiskBody.parse(req.body);
+    const riskScore = computeRiskScore(b.probability, b.impact);
+    const newId = await db.transaction(async (tx) => {
+      await assertParent(tx, id, ctx.tenantId);
+      const rows = await tx.execute(sql`
+        INSERT INTO project.project_risks (tenant_id, project_id, title, description, category, probability, impact, risk_score, mitigation_plan, owner_id, status, created_by)
+        VALUES (${ctx.tenantId}, ${id}, ${b.title}, ${b.description ?? null}, ${b.category}, ${b.probability}, ${b.impact}, ${riskScore}, ${b.mitigationPlan ?? null}, ${b.ownerId ?? null}, ${b.status}, ${ctx.actorId})
+        RETURNING id
+      `);
+      const rid = (rows[0] as { id: string }).id;
+      await audit(tx, ctx, "create", "project_risk", rid);
+      return rid;
+    });
+    return reply.code(201).send({ id: newId, message: "risk created" });
   });
 
   // ─── Earned Value Management ─────────────────────────────────────────────────
@@ -41,7 +78,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/projects/:id/evm", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = projectIdParam.parse(req.params);
     const rows = await db.execute(sql`
       SELECT * FROM project.project_evm
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -53,30 +90,41 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.post("/v1/projects/:id/evm/compute", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id } = req.params as { id: string };
-    const b = req.body as any;
-    const pv = Number(b.plannedValueMinor ?? 0);
-    const ev = Number(b.earnedValueMinor ?? 0);
-    const ac = Number(b.actualCostMinor ?? 0);
-    const cpi = ac > 0 ? (ev / ac) : null;
-    const spi = pv > 0 ? (ev / pv) : null;
-    const bac = Number(b.budgetAtCompletionMinor ?? pv);
-    const eac = cpi && cpi > 0 ? Math.round(bac / cpi) : null;
-    const etc = eac ? eac - ac : null;
-    const vac = eac ? bac - eac : null;
-    await db.execute(sql`
-      INSERT INTO project.project_evm (tenant_id, project_id, period, planned_value_minor, earned_value_minor, actual_cost_minor, cpi, spi, eac_minor, etc_minor, variance_at_completion_minor)
-      VALUES (${ctx.tenantId}, ${id}, ${b.period}, ${pv}, ${ev}, ${ac}, ${cpi}, ${spi}, ${eac}, ${etc}, ${vac})
-      ON CONFLICT (tenant_id, project_id, period) DO UPDATE SET
-        planned_value_minor = EXCLUDED.planned_value_minor,
-        earned_value_minor = EXCLUDED.earned_value_minor,
-        actual_cost_minor = EXCLUDED.actual_cost_minor,
-        cpi = EXCLUDED.cpi, spi = EXCLUDED.spi,
-        eac_minor = EXCLUDED.eac_minor, etc_minor = EXCLUDED.etc_minor,
-        variance_at_completion_minor = EXCLUDED.variance_at_completion_minor,
-        computed_at = NOW()
-    `);
-    return reply.code(201).send({ message: "evm computed", cpi, spi, eac, etc: etc, vac });
+    const { id } = projectIdParam.parse(req.params);
+    const b = computeEvmBody.parse(req.body);
+    // P0-3: paise stay in BigInt; ratios (cpi/spi) are decimals for display only.
+    const pv = BigInt(b.plannedValueMinor);
+    const ev = BigInt(b.earnedValueMinor);
+    const ac = BigInt(b.actualCostMinor);
+    const bac = b.budgetAtCompletionMinor !== undefined ? BigInt(b.budgetAtCompletionMinor) : pv;
+    const cpi = ac > 0n ? Number(ev) / Number(ac) : null;
+    const spi = pv > 0n ? Number(ev) / Number(pv) : null;
+    // EAC = BAC / CPI, computed exactly in integer paise: (bac * ac) / ev.
+    const eac = ev > 0n ? (bac * ac) / ev : null;
+    const etc = eac !== null ? eac - ac : null;
+    const vac = eac !== null ? bac - eac : null;
+    await db.transaction(async (tx) => {
+      await assertParent(tx, id, ctx.tenantId);
+      await tx.execute(sql`
+        INSERT INTO project.project_evm (tenant_id, project_id, period, planned_value_minor, earned_value_minor, actual_cost_minor, cpi, spi, eac_minor, etc_minor, variance_at_completion_minor)
+        VALUES (${ctx.tenantId}, ${id}, ${b.period}, ${pv}, ${ev}, ${ac}, ${cpi}, ${spi}, ${eac}, ${etc}, ${vac})
+        ON CONFLICT (tenant_id, project_id, period) DO UPDATE SET
+          planned_value_minor = EXCLUDED.planned_value_minor,
+          earned_value_minor = EXCLUDED.earned_value_minor,
+          actual_cost_minor = EXCLUDED.actual_cost_minor,
+          cpi = EXCLUDED.cpi, spi = EXCLUDED.spi,
+          eac_minor = EXCLUDED.eac_minor, etc_minor = EXCLUDED.etc_minor,
+          variance_at_completion_minor = EXCLUDED.variance_at_completion_minor,
+          computed_at = NOW()
+      `);
+      await audit(tx, ctx, "compute", "project_evm", `${id}:${b.period}`);
+    });
+    return reply.code(201).send({
+      message: "evm computed", cpi, spi,
+      eacMinor: eac?.toString() ?? null,
+      etcMinor: etc?.toString() ?? null,
+      vacMinor: vac?.toString() ?? null,
+    });
   });
 
   // ─── Contractor Billing (RA Bills) ──────────────────────────────────────────
@@ -84,7 +132,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/projects/:id/ra-bills", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = projectIdParam.parse(req.params);
     const rows = await db.execute(sql`
       SELECT * FROM project.project_ra_bills
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -96,24 +144,54 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.post("/v1/projects/:id/ra-bills", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id } = req.params as { id: string };
-    const b = req.body as any;
-    await db.execute(sql`
-      INSERT INTO project.project_ra_bills (tenant_id, project_id, contractor_id, contractor_name, bill_no, bill_date, work_description, gross_amount_minor, deductions_minor, net_amount_minor, cumulative_minor, status, created_by)
-      VALUES (${ctx.tenantId}, ${id}, ${b.contractorId}, ${b.contractorName ?? null}, ${b.billNo}, ${b.billDate}, ${b.workDescription ?? null}, ${b.grossAmountMinor}, ${b.deductionsMinor ?? 0}, ${b.netAmountMinor}, ${b.cumulativeMinor ?? 0}, ${"submitted"}, ${ctx.actorId})
-    `);
-    return reply.code(201).send({ message: "ra bill submitted" });
+    const { id } = projectIdParam.parse(req.params);
+    const b = createRaBillBody.parse(req.body);
+    // P0-3: amounts stay BigInt paise.
+    const gross = BigInt(b.grossAmountMinor);
+    const deductions = BigInt(b.deductionsMinor);
+    const net = BigInt(b.netAmountMinor);
+    const cumulative = BigInt(b.cumulativeMinor);
+    const newId = await db.transaction(async (tx) => {
+      await assertParent(tx, id, ctx.tenantId);
+      const rows = await tx.execute(sql`
+        INSERT INTO project.project_ra_bills (tenant_id, project_id, contractor_id, contractor_name, bill_no, bill_date, work_description, gross_amount_minor, deductions_minor, net_amount_minor, cumulative_minor, status, created_by)
+        VALUES (${ctx.tenantId}, ${id}, ${b.contractorId}, ${b.contractorName ?? null}, ${b.billNo}, ${b.billDate}, ${b.workDescription ?? null}, ${gross}, ${deductions}, ${net}, ${cumulative}, ${"submitted"}, ${ctx.actorId})
+        RETURNING id
+      `);
+      const rid = (rows[0] as { id: string }).id;
+      await audit(tx, ctx, "submit", "ra_bill", rid);
+      return rid;
+    });
+    return reply.code(201).send({ id: newId, message: "ra bill submitted" });
   });
 
   app.post("/v1/projects/:id/ra-bills/:billId/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id, billId } = req.params as { id: string; billId: string };
-    await db.execute(sql`
-      UPDATE project.project_ra_bills
-      SET status = 'approved', approved_by = ${ctx.actorId}
-      WHERE id = ${billId} AND tenant_id = ${ctx.tenantId} AND project_id = ${id}
-    `);
+    const { id, billId } = billParam.parse(req.params);
+    await db.transaction(async (tx) => {
+      const rows = await tx.execute(sql`
+        SELECT created_by, status FROM project.project_ra_bills
+        WHERE id = ${billId} AND tenant_id = ${ctx.tenantId} AND project_id = ${id}
+        FOR UPDATE
+      `);
+      const row = rows[0] as { created_by: string; status: string } | undefined;
+      if (!row) throw new HttpError(404, "NOT_FOUND", "ra bill not found");
+      // P0-2 SoD: the submitter may not approve their own bill.
+      if (row.created_by === ctx.actorId) {
+        throw new HttpError(403, "SOD_VIOLATION", "approver must differ from submitter");
+      }
+      // P1-3: state guard — only a submitted/verified bill can be approved.
+      const upd = await tx.execute(sql`
+        UPDATE project.project_ra_bills
+        SET status = 'approved', approved_by = ${ctx.actorId}
+        WHERE id = ${billId} AND tenant_id = ${ctx.tenantId} AND project_id = ${id}
+          AND status IN ('submitted','verified')
+        RETURNING id
+      `);
+      if (upd.length === 0) throw new HttpError(409, "CONFLICT", "ra bill is not in an approvable state");
+      await audit(tx, ctx, "approve", "ra_bill", billId);
+    });
     return reply.send({ message: "ra bill approved" });
   });
 
@@ -122,7 +200,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/projects/:id/time-extensions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = projectIdParam.parse(req.params);
     const rows = await db.execute(sql`
       SELECT * FROM project.project_time_extensions
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -134,24 +212,50 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.post("/v1/projects/:id/time-extensions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id } = req.params as { id: string };
-    const b = req.body as any;
-    await db.execute(sql`
-      INSERT INTO project.project_time_extensions (tenant_id, project_id, original_end_date, extended_end_date, extension_days, reason, penalty_applicable, penalty_per_day_minor, status, created_by)
-      VALUES (${ctx.tenantId}, ${id}, ${b.originalEndDate}, ${b.extendedEndDate}, ${b.extensionDays}, ${b.reason}, ${b.penaltyApplicable ?? false}, ${b.penaltyPerDayMinor ?? 0}, ${"requested"}, ${ctx.actorId})
-    `);
-    return reply.code(201).send({ message: "time extension requested" });
+    const { id } = projectIdParam.parse(req.params);
+    const b = createTimeExtBody.parse(req.body);
+    const penaltyPerDay = BigInt(b.penaltyPerDayMinor);
+    const newId = await db.transaction(async (tx) => {
+      await assertParent(tx, id, ctx.tenantId);
+      const rows = await tx.execute(sql`
+        INSERT INTO project.project_time_extensions (tenant_id, project_id, original_end_date, extended_end_date, extension_days, reason, penalty_applicable, penalty_per_day_minor, status, created_by)
+        VALUES (${ctx.tenantId}, ${id}, ${b.originalEndDate}, ${b.extendedEndDate}, ${b.extensionDays}, ${b.reason}, ${b.penaltyApplicable}, ${penaltyPerDay}, ${"requested"}, ${ctx.actorId})
+        RETURNING id
+      `);
+      const rid = (rows[0] as { id: string }).id;
+      await audit(tx, ctx, "request", "time_extension", rid);
+      return rid;
+    });
+    return reply.code(201).send({ id: newId, message: "time extension requested" });
   });
 
   app.post("/v1/projects/:id/time-extensions/:extId/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id, extId } = req.params as { id: string; extId: string };
-    await db.execute(sql`
-      UPDATE project.project_time_extensions
-      SET status = 'approved', approved_by = ${ctx.actorId}, approval_date = CURRENT_DATE
-      WHERE id = ${extId} AND tenant_id = ${ctx.tenantId} AND project_id = ${id}
-    `);
+    const { id, extId } = extParam.parse(req.params);
+    await db.transaction(async (tx) => {
+      const rows = await tx.execute(sql`
+        SELECT created_by, status FROM project.project_time_extensions
+        WHERE id = ${extId} AND tenant_id = ${ctx.tenantId} AND project_id = ${id}
+        FOR UPDATE
+      `);
+      const row = rows[0] as { created_by: string; status: string } | undefined;
+      if (!row) throw new HttpError(404, "NOT_FOUND", "time extension not found");
+      // P0-2 SoD: the requester may not approve their own extension.
+      if (row.created_by === ctx.actorId) {
+        throw new HttpError(403, "SOD_VIOLATION", "approver must differ from requester");
+      }
+      // P1-3: state guard — only a requested extension can be approved.
+      const upd = await tx.execute(sql`
+        UPDATE project.project_time_extensions
+        SET status = 'approved', approved_by = ${ctx.actorId}, approval_date = CURRENT_DATE
+        WHERE id = ${extId} AND tenant_id = ${ctx.tenantId} AND project_id = ${id}
+          AND status = 'requested'
+        RETURNING id
+      `);
+      if (upd.length === 0) throw new HttpError(409, "CONFLICT", "time extension is not in an approvable state");
+      await audit(tx, ctx, "approve", "time_extension", extId);
+    });
     return reply.send({ message: "time extension approved" });
   });
 
@@ -160,7 +264,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/projects/:id/penalties", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = projectIdParam.parse(req.params);
     const rows = await db.execute(sql`
       SELECT * FROM project.project_penalties
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -172,14 +276,23 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.post("/v1/projects/:id/penalties", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id } = req.params as { id: string };
-    const b = req.body as any;
-    const total = Number(b.days) * Number(b.ratePerDayMinor);
-    await db.execute(sql`
-      INSERT INTO project.project_penalties (tenant_id, project_id, contractor_id, penalty_type, from_date, to_date, days, rate_per_day_minor, total_minor, recovered, recovered_from, created_by)
-      VALUES (${ctx.tenantId}, ${id}, ${b.contractorId ?? null}, ${b.penaltyType ?? "delay"}, ${b.fromDate}, ${b.toDate}, ${b.days}, ${b.ratePerDayMinor}, ${total}, ${false}, ${b.recoveredFrom ?? null}, ${ctx.actorId})
-    `);
-    return reply.code(201).send({ message: "penalty levied" });
+    const { id } = projectIdParam.parse(req.params);
+    const b = createPenaltyBody.parse(req.body);
+    // P0-3: total = days * ratePerDay computed strictly in BigInt paise.
+    const ratePerDay = BigInt(b.ratePerDayMinor);
+    const total = BigInt(b.days) * ratePerDay;
+    const newId = await db.transaction(async (tx) => {
+      await assertParent(tx, id, ctx.tenantId);
+      const rows = await tx.execute(sql`
+        INSERT INTO project.project_penalties (tenant_id, project_id, contractor_id, penalty_type, from_date, to_date, days, rate_per_day_minor, total_minor, recovered, recovered_from, created_by)
+        VALUES (${ctx.tenantId}, ${id}, ${b.contractorId ?? null}, ${b.penaltyType}, ${b.fromDate}, ${b.toDate}, ${b.days}, ${ratePerDay}, ${total}, ${false}, ${b.recoveredFrom ?? null}, ${ctx.actorId})
+        RETURNING id
+      `);
+      const rid = (rows[0] as { id: string }).id;
+      await audit(tx, ctx, "levy", "penalty", rid);
+      return rid;
+    });
+    return reply.code(201).send({ id: newId, message: "penalty levied", totalMinor: total.toString() });
   });
 
   // ─── Resource Allocation ────────────────────────────────────────────────────
@@ -187,7 +300,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/projects/:id/resources", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = projectIdParam.parse(req.params);
     const rows = await db.execute(sql`
       SELECT * FROM project.project_resources
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -199,13 +312,21 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.post("/v1/projects/:id/resources", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id } = req.params as { id: string };
-    const b = req.body as any;
-    await db.execute(sql`
-      INSERT INTO project.project_resources (tenant_id, project_id, task_id, resource_type, resource_id, resource_name, allocated_hours, daily_rate_minor, from_date, to_date, status)
-      VALUES (${ctx.tenantId}, ${id}, ${b.taskId ?? null}, ${b.resourceType ?? "person"}, ${b.resourceId ?? null}, ${b.resourceName}, ${b.allocatedHours ?? null}, ${b.dailyRateMinor ?? 0}, ${b.fromDate ?? null}, ${b.toDate ?? null}, ${"allocated"})
-    `);
-    return reply.code(201).send({ message: "resource allocated" });
+    const { id } = projectIdParam.parse(req.params);
+    const b = createResourceBody.parse(req.body);
+    const dailyRate = BigInt(b.dailyRateMinor);
+    const newId = await db.transaction(async (tx) => {
+      await assertParent(tx, id, ctx.tenantId);
+      const rows = await tx.execute(sql`
+        INSERT INTO project.project_resources (tenant_id, project_id, task_id, resource_type, resource_id, resource_name, allocated_hours, daily_rate_minor, from_date, to_date, status, created_by)
+        VALUES (${ctx.tenantId}, ${id}, ${b.taskId ?? null}, ${b.resourceType}, ${b.resourceId ?? null}, ${b.resourceName}, ${b.allocatedHours ?? null}, ${dailyRate}, ${b.fromDate ?? null}, ${b.toDate ?? null}, ${"allocated"}, ${ctx.actorId})
+        RETURNING id
+      `);
+      const rid = (rows[0] as { id: string }).id;
+      await audit(tx, ctx, "allocate", "resource", rid);
+      return rid;
+    });
+    return reply.code(201).send({ id: newId, message: "resource allocated" });
   });
 
   // ─── Baselines ──────────────────────────────────────────────────────────────
@@ -213,7 +334,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/projects/:id/baselines", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = projectIdParam.parse(req.params);
     const rows = await db.execute(sql`
       SELECT * FROM project.project_baselines
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -225,13 +346,21 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   app.post("/v1/projects/:id/baselines", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
-    const { id } = req.params as { id: string };
-    const b = req.body as any;
-    await db.execute(sql`
-      INSERT INTO project.project_baselines (tenant_id, project_id, baseline_no, snapshot_date, planned_start, planned_end, planned_cost_minor, milestones_snapshot, created_by)
-      VALUES (${ctx.tenantId}, ${id}, ${b.baselineNo ?? 1}, ${b.snapshotDate}, ${b.plannedStart}, ${b.plannedEnd}, ${b.plannedCostMinor}, ${JSON.stringify(b.milestonesSnapshot ?? [])}, ${ctx.actorId})
-    `);
-    return reply.code(201).send({ message: "baseline created" });
+    const { id } = projectIdParam.parse(req.params);
+    const b = createBaselineBody.parse(req.body);
+    const plannedCost = BigInt(b.plannedCostMinor);
+    const newId = await db.transaction(async (tx) => {
+      await assertParent(tx, id, ctx.tenantId);
+      const rows = await tx.execute(sql`
+        INSERT INTO project.project_baselines (tenant_id, project_id, baseline_no, snapshot_date, planned_start, planned_end, planned_cost_minor, milestones_snapshot, created_by)
+        VALUES (${ctx.tenantId}, ${id}, ${b.baselineNo}, ${b.snapshotDate}, ${b.plannedStart}, ${b.plannedEnd}, ${plannedCost}, ${JSON.stringify(b.milestonesSnapshot)}, ${ctx.actorId})
+        RETURNING id
+      `);
+      const rid = (rows[0] as { id: string }).id;
+      await audit(tx, ctx, "create", "baseline", rid);
+      return rid;
+    });
+    return reply.code(201).send({ id: newId, message: "baseline created" });
   });
 
   // ─── Error handler ──────────────────────────────────────────────────────────
