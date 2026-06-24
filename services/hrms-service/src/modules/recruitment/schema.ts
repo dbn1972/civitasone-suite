@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp,
+  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const recruitmentSchema = pgSchema("recruitment");
@@ -56,7 +56,34 @@ export const hrmsOffers = recruitmentSchema.table("hrms_offers", {
   version:       integer("version").notNull().default(1),
 });
 
+
+// Maps the existing recruitment.hrms_interviews table (migration 0008). The
+// scheduling route was previously an in-memory array; it now persists here.
+export const hrmsInterviews = recruitmentSchema.table("hrms_interviews", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  applicationId:   uuid("application_id").notNull(),
+  jobOpeningId:    uuid("job_opening_id").notNull(),
+  roundNumber:     integer("round_number").notNull().default(1),
+  roundType:       varchar("round_type", { length: 32 }).notNull().default("technical"),
+  scheduledDate:   date("scheduled_date").notNull(),
+  scheduledTime:   varchar("scheduled_time", { length: 5 }).notNull(),
+  durationMinutes: integer("duration_minutes").notNull().default(60),
+  mode:            varchar("mode", { length: 16 }).notNull().default("in_person"),
+  location:        varchar("location", { length: 512 }),
+  meetingLink:     varchar("meeting_link", { length: 1024 }),
+  panelMembers:    jsonb("panel_members").$type<unknown[]>().notNull().default([]),
+  scorecard:       jsonb("scorecard").$type<Record<string, unknown>>(),
+  status:          varchar("status", { length: 24 }).notNull().default("scheduled"),
+  feedback:        text("feedback"),
+  recommendation:  varchar("recommendation", { length: 24 }),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+  version:         integer("version").notNull().default(1),
+});
+
 export type JobOpeningRow = typeof hrmsJobOpenings.$inferSelect;
 export type ApplicationRow = typeof hrmsApplications.$inferSelect;
+export type InterviewRow = typeof hrmsInterviews.$inferSelect;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers };
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews };

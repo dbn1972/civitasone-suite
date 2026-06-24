@@ -1,6 +1,6 @@
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { hrmsJobOpenings, hrmsApplications, hrmsOffers, type ApplicationRow, type JobOpeningRow } from "./schema.js";
+import { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, type ApplicationRow, type JobOpeningRow, type InterviewRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -46,4 +46,43 @@ export async function countApplicationsByJob(tenantId: string, jobIds: string[])
     .groupBy(hrmsApplications.jobOpeningId);
   for (const row of rows) counts.set(row.jobOpeningId, row.count);
   return counts;
+}
+
+// --- Interviews (P0-2: persisted in recruitment.hrms_interviews) ---
+
+export async function insertInterview(tx: Writer, row: typeof hrmsInterviews.$inferInsert): Promise<void> {
+  await tx.insert(hrmsInterviews).values(row);
+}
+
+export async function findInterviewById(id: string, tenantId: string): Promise<InterviewRow | null> {
+  const rows = await db.select().from(hrmsInterviews)
+    .where(and(eq(hrmsInterviews.id, id), eq(hrmsInterviews.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listInterviews(
+  tenantId: string,
+  filters: { jobOpeningId?: string; applicationId?: string },
+  limit = 50,
+): Promise<InterviewRow[]> {
+  const conds = [eq(hrmsInterviews.tenantId, tenantId)];
+  if (filters.jobOpeningId) conds.push(eq(hrmsInterviews.jobOpeningId, filters.jobOpeningId));
+  if (filters.applicationId) conds.push(eq(hrmsInterviews.applicationId, filters.applicationId));
+  return db.select().from(hrmsInterviews)
+    .where(and(...conds))
+    .orderBy(desc(hrmsInterviews.scheduledDate))
+    .limit(limit);
+}
+
+export async function updateInterviewScorecard(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  scorecard: Record<string, unknown>,
+  recommendation: string | null,
+): Promise<void> {
+  await tx.update(hrmsInterviews)
+    .set({ scorecard, status: "completed", ...(recommendation ? { recommendation } : {}) })
+    .where(and(eq(hrmsInterviews.id, id), eq(hrmsInterviews.tenantId, tenantId)));
 }

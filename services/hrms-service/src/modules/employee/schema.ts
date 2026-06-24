@@ -1,6 +1,7 @@
 import {
   pgSchema, uuid, text, integer, bigint, char, varchar, boolean, date, timestamp,
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const employeeSchema = pgSchema("employee");
 
@@ -41,15 +42,15 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   dateOfJoining:    date("date_of_joining").notNull(),
   dateOfBirth:      date("date_of_birth"),
   gender:           varchar("gender", { length: 16 }),
-  pan:              varchar("pan", { length: 16 }),
+  pan:              encryptedText("pan"),
   uanNumber:        varchar("uan_number", { length: 12 }),
   hraCityClass:     varchar("hra_city_class", { length: 1 }).notNull().default("X"),
   taxRegime:        varchar("tax_regime", { length: 4 }).notNull().default("new"),
-  aadhaarRef:       text("aadhaar_ref"),
+  aadhaarRef:       encryptedText("aadhaar_ref"),
   mobile:           varchar("mobile", { length: 20 }),
   email:            text("email"),
-  bankAccountNo:    text("bank_account_no"),
-  bankIfsc:         varchar("bank_ifsc", { length: 16 }),
+  bankAccountNo:    encryptedText("bank_account_no"),
+  bankIfsc:         encryptedText("bank_ifsc"),
   employeeType:     varchar("employee_type", { length: 24 }).notNull().default("permanent"),
   status:           varchar("status", { length: 24 }).notNull().default("probation"),
   confirmationDate: date("confirmation_date"),

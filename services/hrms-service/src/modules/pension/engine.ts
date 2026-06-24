@@ -79,14 +79,98 @@ function diffYears(fromISO: string, toISO: string): { totalMonths: number } {
   return { totalMonths: Math.max(0, months) };
 }
 
+/**
+ * Non-qualifying service spell recorded in the service book.
+ *
+ * `entryType` identifies a category of service that does NOT count toward
+ * qualifying service for pension/DCRG under CCS (Pension) Rules:
+ *   - dies_non                 : a "dies non" day (treated as not on duty)
+ *   - eol_without_qs           : Extraordinary Leave NOT counting as QS
+ *   - suspension_non_duty      : a suspension period treated as non-duty (not
+ *                                later regularised as duty)
+ *   - boy_service / temporary_service : break-of-service / temporary (non-
+ *                                pensionable) service prior to regular service
+ *
+ * The spell LENGTH is read from the free-text `description` using one of two
+ * conventions (case-insensitive, first match wins):
+ *   - "days=<n>"                         e.g. "EOL not counting QS; days=180"
+ *   - "from=YYYY-MM-DD;to=YYYY-MM-DD"    inclusive span in days
+ * Entries without a parseable length contribute zero (and are reported as
+ * `unparsed`), so a malformed record can never silently inflate pension.
+ */
+export const NON_QUALIFYING_ENTRY_TYPES: ReadonlySet<string> = new Set([
+  "dies_non",
+  "eol_without_qs",
+  "suspension_non_duty",
+  "boy_service",
+  "temporary_service",
+]);
+
+export interface ServiceBookEvent {
+  entryType: string;
+  effectiveDate: string;
+  description: string;
+}
+
+/** Parse the day-length of a non-qualifying spell from its description. */
+export function parseNonQualifyingDays(description: string): number | null {
+  const d = (description ?? "").toLowerCase();
+  const daysMatch = d.match(/days\s*=\s*(\d+)/);
+  if (daysMatch) return Math.max(0, parseInt(daysMatch[1]!, 10));
+  const rangeMatch = d.match(/from\s*=\s*(\d{4}-\d{2}-\d{2})\s*;?\s*to\s*=\s*(\d{4}-\d{2}-\d{2})/);
+  if (rangeMatch) {
+    const from = Date.parse(rangeMatch[1]!);
+    const to = Date.parse(rangeMatch[2]!);
+    if (!Number.isNaN(from) && !Number.isNaN(to) && to >= from) {
+      return Math.round((to - from) / 86_400_000) + 1; // inclusive
+    }
+  }
+  return null;
+}
+
+export interface NonQualifyingSummary {
+  totalDays: number;
+  counted: Array<{ entryType: string; effectiveDate: string; days: number }>;
+  unparsed: Array<{ entryType: string; effectiveDate: string }>;
+}
+
+/** Sum all non-qualifying spell days from service-book events. */
+export function summariseNonQualifying(events: readonly ServiceBookEvent[]): NonQualifyingSummary {
+  const counted: NonQualifyingSummary["counted"] = [];
+  const unparsed: NonQualifyingSummary["unparsed"] = [];
+  let totalDays = 0;
+  for (const e of events) {
+    if (!NON_QUALIFYING_ENTRY_TYPES.has(e.entryType)) continue;
+    const days = parseNonQualifyingDays(e.description);
+    if (days === null) {
+      unparsed.push({ entryType: e.entryType, effectiveDate: e.effectiveDate });
+      continue;
+    }
+    totalDays += days;
+    counted.push({ entryType: e.entryType, effectiveDate: e.effectiveDate, days });
+  }
+  return { totalDays, counted, unparsed };
+}
+
 /** Qualifying service in completed half-years (capped) plus a years view. */
 export function qualifyingService(
   dateOfJoining: string,
   retirementDate: string,
-): { totalMonths: number; halfYears: number; years: number } {
-  const { totalMonths } = diffYears(dateOfJoining, retirementDate);
+  nonQualifyingDays = 0,
+): { totalMonths: number; grossMonths: number; nonQualifyingDays: number; halfYears: number; years: number } {
+  const { totalMonths: grossMonths } = diffYears(dateOfJoining, retirementDate);
+  // Net out non-qualifying spells. ~30.4375 days/month (avg) keeps half-year
+  // boundaries honest; a 6-month (≈183-day) EOL nets ~6 months => 1 half-year.
+  const deductedMonths = Math.floor(Math.max(0, nonQualifyingDays) / 30.4375);
+  const totalMonths = Math.max(0, grossMonths - deductedMonths);
   const halfYears = Math.min(Math.floor(totalMonths / 6), MAX_QUALIFYING_HALF_YEARS);
-  return { totalMonths, halfYears, years: Math.round((totalMonths / 12) * 100) / 100 };
+  return {
+    totalMonths,
+    grossMonths,
+    nonQualifyingDays: Math.max(0, nonQualifyingDays),
+    halfYears,
+    years: Math.round((totalMonths / 12) * 100) / 100,
+  };
 }
 
 /** Age (in whole years) at a date, plus age next birthday. */
@@ -115,13 +199,15 @@ export interface PensionInput {
   commutePct?: number;
   /** Age next birthday override (used if dateOfBirth not supplied). Defaults to 61 (retire at 60). */
   ageNextBirthday?: number;
+  /** Non-qualifying service days (from the service book) to net out of QS. */
+  nonQualifyingDays?: number;
 }
 
 export interface PensionResult {
   pensionScheme: string;
   definedBenefit: boolean;
   note?: string;
-  qualifying: { totalMonths: number; halfYears: number; years: number };
+  qualifying: { totalMonths: number; grossMonths: number; nonQualifyingDays: number; halfYears: number; years: number };
   avgEmolumentsMinor: bigint;
   avgEmolumentsSource: "last_10_months" | "last_drawn_fallback";
   emolumentsBasicPlusDaMinor: bigint; // last-drawn Basic+DA (used for DCRG / commutation base)
@@ -160,7 +246,7 @@ export interface PensionResult {
  * For NPS/EPF returns a clear no-defined-benefit note and zero pension amounts.
  */
 export function computePension(input: PensionInput): PensionResult {
-  const qualifying = qualifyingService(input.dateOfJoining, input.retirementDate);
+  const qualifying = qualifyingService(input.dateOfJoining, input.retirementDate, input.nonQualifyingDays ?? 0);
   const daRate = input.daRatePct / 100;
 
   // Last-drawn Basic+DA (emoluments base for DCRG and commutation).

@@ -32,6 +32,10 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // P0-1: field-level access log for the sensitive-PII payroll projection
+    // (pan / bankAccountNo / bankIfsc decrypted at rest and returned to payroll).
+    req.log.info({ event: "pii.access", projection: "payroll-input", fields: ["pan","bankAccountNo","bankIfsc"], count: active.length, actorId: ctx.actorId, tenantId: ctx.tenantId, month: q.month }, "payroll-input PII projection");
+
     return reply.send({
       month: q.month,
       employees: active.map((e) => ({
