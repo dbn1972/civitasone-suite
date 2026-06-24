@@ -19,8 +19,11 @@ export async function findByTenant(tenantId: string, limit = 50, offset = 0, act
     .limit(limit).offset(offset);
 }
 
-export async function findById(id: string): Promise<typeof notificationDeliveries.$inferSelect | null> {
-  const rows = await db.select().from(notificationDeliveries).where(eq(notificationDeliveries.id, id)).limit(1);
+export async function findById(tenantId: string, id: string): Promise<typeof notificationDeliveries.$inferSelect | null> {
+  // SEC P0-1: scope the read to the tenant so a delivery id from another tenant 404s
+  // instead of leaking another tenant's notification (callers always know the tenant).
+  const rows = await db.select().from(notificationDeliveries)
+    .where(and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.id, id))).limit(1);
   return rows[0] ?? null;
 }
 

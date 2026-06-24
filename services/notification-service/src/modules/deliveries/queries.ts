@@ -11,6 +11,6 @@ export async function listDeliveries(tenantId: string, limit = 50, offset = 0, a
 export async function getDelivery(tenantId: string, id: string): Promise<typeof notificationDeliveries.$inferSelect | null> {
   return cache.getOrLoad(
     cache.makeKey(tenantId, RESOURCE.delivery, id),
-    () => repo.findById(id),
+    () => repo.findById(tenantId, id),
   );
 }

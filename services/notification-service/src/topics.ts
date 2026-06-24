@@ -18,7 +18,7 @@ export const EVENTS = {
   delivered:             "notification.delivered",
   failed:                "notification.failed",
   permanentlyFailed:     "notification.delivery.permanently_failed",
-  prefSet:               "notification.prefs.set",
+  prefSet:               "notification.prefs.changed",
   channelCreated:        "notification.channel.created",
   alertRuleCreated:      "notification.alert_rule.created",
   campaignCreated:       "notification.campaign.created",
