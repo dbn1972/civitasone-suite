@@ -5,6 +5,26 @@ export class DomainError extends Error {
   }
 }
 
+/**
+ * C1 / Segregation of duties: the award approver (checker) must differ from the
+ * tender creator (maker). Mirrors po/consumer's assertDistinctMakerChecker.
+ */
+export function assertDistinctMakerChecker(creatorId: string, approverId: string): void {
+  if (creatorId && approverId && creatorId === approverId) {
+    throw new DomainError("SOD_VIOLATION", "tender creator cannot also award the tender (self-award rejected)");
+  }
+}
+
+/**
+ * C1 / Segregation of duties: the award approver must also differ from the
+ * technical evaluator, so a single actor cannot both qualify and award.
+ */
+export function assertTechEvaluatorDistinct(techEvaluatorId: string, approverId: string): void {
+  if (techEvaluatorId && approverId && techEvaluatorId === approverId) {
+    throw new DomainError("SOD_VIOLATION", "technical evaluator cannot also award the tender (self-award rejected)");
+  }
+}
+
 export type TenderStatus =
   | "draft" | "published" | "technical_evaluation" | "financial_evaluation"
   | "awarded" | "cancelled";

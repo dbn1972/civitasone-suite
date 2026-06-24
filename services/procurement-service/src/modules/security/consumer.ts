@@ -9,6 +9,40 @@ import { assertEmdTransition, assertPbgTransition, assertPositiveAmount } from "
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/**
+ * H4: build a BALANCED, idempotency-keyed GL post payload.
+ *
+ * - `idempotencyKey` is deterministic per disposition (e.g. `emd:{id}:forfeited`,
+ *   `pbg:{id}:released`) so a relay re-publish is deduped downstream by key and
+ *   cannot double-post.
+ * - `legs` carries BOTH sides with EQUAL amounts (debit total == credit total),
+ *   making the contract balanced/self-checking. `debit`/`credit`/`amountMinor`
+ *   are retained for backward compatibility with the existing finance consumer.
+ *
+ * Account map (paise, all single debit + single credit, equal amounts):
+ *   emd_collected  : DR bank                     CR emd_deposit_liability
+ *   emd_forfeited  : DR emd_deposit_liability    CR forfeiture_income
+ *   emd_refunded   : DR emd_deposit_liability    CR bank
+ *   pbg_collected  : DR bank                     CR pbg_deposit_liability
+ *   pbg_forfeited  : DR pbg_deposit_liability    CR forfeiture_income
+ *   pbg_released   : DR pbg_deposit_liability    CR bank
+ */
+function glPost(args: {
+  type: string; refType: string; refId: string; idempotencyKey: string;
+  amountMinor: string; debit: string; credit: string;
+}): Record<string, unknown> {
+  return {
+    source: "procurement", type: args.type, refType: args.refType, refId: args.refId,
+    idempotencyKey: args.idempotencyKey,
+    amountMinor: args.amountMinor, currency: "INR",
+    debit: args.debit, credit: args.credit,
+    legs: [
+      { account: args.debit, side: "debit", amountMinor: args.amountMinor, currency: "INR" },
+      { account: args.credit, side: "credit", amountMinor: args.amountMinor, currency: "INR" },
+    ],
+  };
+}
+
 export function registerSecurityConsumers(queue: Queue): void {
   // ── EMD ────────────────────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.emdCollect, async (msg) => {
@@ -31,11 +65,11 @@ export function registerSecurityConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          source: "procurement", type: "emd_collected", refType: "emd", refId: p.id,
-          amountMinor: String(p.amountMinor), currency: "INR",
-          debit: "bank", credit: "emd_deposit_liability",
-        },
+        payload: glPost({
+          type: "emd_collected", refType: "emd", refId: p.id,
+          idempotencyKey: `emd:${p.id}:collected`,
+          amountMinor: String(p.amountMinor), debit: "bank", credit: "emd_deposit_liability",
+        }),
       });
       await enqueue(tx, {
         topic: EVENTS.emdCollected, eventType: EVENTS.emdCollected,
@@ -61,11 +95,11 @@ export function registerSecurityConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          source: "procurement", type: "emd_forfeited", refType: "emd", refId: p.id,
-          amountMinor: String(emd.amountMinor), currency: "INR",
-          debit: "emd_deposit_liability", credit: "forfeiture_income",
-        },
+        payload: glPost({
+          type: "emd_forfeited", refType: "emd", refId: p.id,
+          idempotencyKey: `emd:${p.id}:forfeited`,
+          amountMinor: String(emd.amountMinor), debit: "emd_deposit_liability", credit: "forfeiture_income",
+        }),
       });
       await enqueue(tx, {
         topic: EVENTS.emdForfeited, eventType: EVENTS.emdForfeited,
@@ -91,11 +125,11 @@ export function registerSecurityConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          source: "procurement", type: "emd_refunded", refType: "emd", refId: p.id,
-          amountMinor: String(emd.amountMinor), currency: "INR",
-          debit: "emd_deposit_liability", credit: "bank",
-        },
+        payload: glPost({
+          type: "emd_refunded", refType: "emd", refId: p.id,
+          idempotencyKey: `emd:${p.id}:refunded`,
+          amountMinor: String(emd.amountMinor), debit: "emd_deposit_liability", credit: "bank",
+        }),
       });
       await enqueue(tx, {
         topic: EVENTS.emdRefunded, eventType: EVENTS.emdRefunded,
@@ -127,11 +161,11 @@ export function registerSecurityConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          source: "procurement", type: "pbg_collected", refType: "pbg", refId: p.id,
-          amountMinor: String(p.amountMinor), currency: "INR",
-          debit: "bank", credit: "pbg_deposit_liability",
-        },
+        payload: glPost({
+          type: "pbg_collected", refType: "pbg", refId: p.id,
+          idempotencyKey: `pbg:${p.id}:collected`,
+          amountMinor: String(p.amountMinor), debit: "bank", credit: "pbg_deposit_liability",
+        }),
       });
       await enqueue(tx, {
         topic: EVENTS.pbgCollected, eventType: EVENTS.pbgCollected,
@@ -156,11 +190,11 @@ export function registerSecurityConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          source: "procurement", type: "pbg_forfeited", refType: "pbg", refId: p.id,
-          amountMinor: String(pbg.amountMinor), currency: "INR",
-          debit: "pbg_deposit_liability", credit: "forfeiture_income",
-        },
+        payload: glPost({
+          type: "pbg_forfeited", refType: "pbg", refId: p.id,
+          idempotencyKey: `pbg:${p.id}:forfeited`,
+          amountMinor: String(pbg.amountMinor), debit: "pbg_deposit_liability", credit: "forfeiture_income",
+        }),
       });
       await enqueue(tx, {
         topic: EVENTS.pbgForfeited, eventType: EVENTS.pbgForfeited,
@@ -185,11 +219,11 @@ export function registerSecurityConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          source: "procurement", type: "pbg_released", refType: "pbg", refId: p.id,
-          amountMinor: String(pbg.amountMinor), currency: "INR",
-          debit: "pbg_deposit_liability", credit: "bank",
-        },
+        payload: glPost({
+          type: "pbg_released", refType: "pbg", refId: p.id,
+          idempotencyKey: `pbg:${p.id}:released`,
+          amountMinor: String(pbg.amountMinor), debit: "pbg_deposit_liability", credit: "bank",
+        }),
       });
       await enqueue(tx, {
         topic: EVENTS.pbgReleased, eventType: EVENTS.pbgReleased,
