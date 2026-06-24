@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { auditObservations, type ObservationRow, type ObservationInsert } from "./schema.js";
 
@@ -31,4 +31,29 @@ export async function listObservationsByTenant(tenantId: string, limit: number):
   return db.select().from(auditObservations)
     .where(eq(auditObservations.tenantId, tenantId))
     .limit(limit);
+}
+
+// C1/M1: a "closed" transition is only allowed when the observation has no
+// outstanding work. Returns the number of blocking rows:
+//   - paras for this observation whose status is not yet "closed"
+//   - pending-register rows (joined via para_id) that are still unsettled
+//     (status not in "settled"/"closed").
+// Tenant-scoped; runs inside the close transaction (Writer = tx).
+export async function countOpenBlockers(tx: Writer, observationId: string, tenantId: string): Promise<number> {
+  const rows = await (tx as typeof db).execute(sql`
+    SELECT (
+      (SELECT count(*) FROM para.audit_paras p
+         WHERE p.tenant_id = ${tenantId}
+           AND p.observation_id = ${observationId}
+           AND p.status <> 'closed')
+      +
+      (SELECT count(*) FROM compliance.audit_pending_register r
+         JOIN para.audit_paras p2 ON p2.id = r.para_id
+         WHERE r.tenant_id = ${tenantId}
+           AND p2.observation_id = ${observationId}
+           AND r.status NOT IN ('settled', 'closed'))
+    )::int AS blockers
+  `);
+  const list = (rows as unknown as { rows?: Array<{ blockers: number }> }).rows ?? (rows as unknown as Array<{ blockers: number }>);
+  return Number(list?.[0]?.blockers ?? 0);
 }

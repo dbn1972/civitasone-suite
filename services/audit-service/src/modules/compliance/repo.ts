@@ -1,21 +1,33 @@
-import { and, eq, desc, sql, lt } from "drizzle-orm";
+import { and, eq, desc, sql, lt, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { auditPendingRegister, auditChecklists, type PendingRegisterRow, type ChecklistRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 /**
- * P2-4: ageing sweep — flip 'pending' register items whose due_date is strictly in the
- * past to 'overdue'. Returns the rows that transitioned (for auditing). Cross-tenant safe
- * (no tenant filter: this is the system-wide scheduled tick), bumps version + updated_at.
+ * P2-4 / M3: ageing sweep — flip up to `limit` 'pending' register items whose due_date
+ * is strictly in the past to 'overdue'. Runs inside the caller's transaction (Writer = tx)
+ * so the status flip and its audit events are committed atomically. The LIMIT bounds each
+ * transaction; the caller loops until a batch comes back empty. Cross-tenant (system tick),
+ * bumps version + updated_at. Returns the rows that transitioned in this batch.
  */
-export async function sweepOverdue(now: Date): Promise<{ id: string; tenantId: string }[]> {
-  const res = await db.update(auditPendingRegister)
-    .set({ status: "overdue", updatedAt: new Date(), version: sql`${auditPendingRegister.version} + 1` })
+export async function sweepOverdueBatch(tx: Writer, now: Date, limit: number): Promise<{ id: string; tenantId: string }[]> {
+  // FOR UPDATE SKIP LOCKED on the candidate set so concurrent ticks don't deadlock/double-flip.
+  const candidates = await (tx as typeof db).select({ id: auditPendingRegister.id }).from(auditPendingRegister)
     .where(and(
       eq(auditPendingRegister.status, "pending"),
       sql`${auditPendingRegister.dueDate} IS NOT NULL`,
       lt(auditPendingRegister.dueDate, now.toISOString().slice(0, 10)),
+    ))
+    .limit(limit)
+    .for("update", { skipLocked: true });
+  if (candidates.length === 0) return [];
+  const ids = candidates.map((c) => c.id);
+  const res = await (tx as typeof db).update(auditPendingRegister)
+    .set({ status: "overdue", updatedAt: new Date(), version: sql`${auditPendingRegister.version} + 1` })
+    .where(and(
+      eq(auditPendingRegister.status, "pending"),
+      inArray(auditPendingRegister.id, ids),
     ))
     .returning({ id: auditPendingRegister.id, tenantId: auditPendingRegister.tenantId });
   return res;
