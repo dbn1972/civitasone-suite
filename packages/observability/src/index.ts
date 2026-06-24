@@ -186,6 +186,7 @@ function formatConsumerHeartbeatMetrics(): string[] {
 
 const outboxRelayFailuresTotal = new Map<string, number>(); // service -> count
 const dlqMessagesTotal = new Map<string, number>();          // topic -> count
+const capturedErrorsTotal = new Map<string, number>();       // service -> count
 
 /** Increment outbox_relay_failures_total{service}. */
 export function incrementOutboxRelayFailure(service: string): void {
@@ -206,6 +207,7 @@ export function getDlqMessageCount(topic: string): number {
 export function resetFailureMetrics(): void {
   outboxRelayFailuresTotal.clear();
   dlqMessagesTotal.clear();
+  capturedErrorsTotal.clear();
 }
 
 function formatFailureMetrics(): string[] {
@@ -222,6 +224,13 @@ function formatFailureMetrics(): string[] {
   );
   for (const [topic, count] of dlqMessagesTotal) {
     lines.push(`dlq_messages_total{topic="${topic}"} ${count}`);
+  }
+  lines.push(
+    "# HELP captured_errors_total Failures captured via captureError(), by service",
+    "# TYPE captured_errors_total counter",
+  );
+  for (const [service, count] of capturedErrorsTotal) {
+    lines.push(`captured_errors_total{service="${service}"} ${count}`);
   }
   return lines;
 }
@@ -251,6 +260,10 @@ export function setErrorReporter(reporter: ErrorReporter): void {
 export function getCapturedErrorCount(): number {
   return _capturedErrors;
 }
+/** Captured-error count for a single service label (as exposed on /metrics). */
+export function getCapturedErrorCountByService(service: string): number {
+  return capturedErrorsTotal.get(service) ?? 0;
+}
 export function resetCapturedErrors(): void {
   _capturedErrors = 0;
 }
@@ -262,6 +275,10 @@ export function resetCapturedErrors(): void {
  */
 export function captureError(err: unknown, ctx: ErrorContext = {}): void {
   _capturedErrors++;
+  // OPS-1: also expose as a Prometheus counter so the failure is scrapeable and
+  // alertable (alert.rules.yml CapturedErrorsAppearing), not just a log line.
+  const svc = ctx.service ?? "unknown";
+  capturedErrorsTotal.set(svc, (capturedErrorsTotal.get(svc) ?? 0) + 1);
   const stack = err instanceof Error ? err.stack : String(err);
   // eslint-disable-next-line no-console
   console.error(

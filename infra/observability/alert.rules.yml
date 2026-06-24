@@ -41,3 +41,16 @@ groups:
         annotations:
           summary: "Service {{ $labels.job }} target {{ $labels.instance }} is down"
           description: "Prometheus cannot scrape the target — process down or /metrics unreachable."
+
+      # OPS-1 (T1.2): any failure routed through captureError() — the single
+      # choke point for "invisible failures". This fires for thrown handlers,
+      # outbox publish errors, and any code path that calls captureError, even
+      # where there is no more specific metric above.
+      - alert: CapturedErrorsAppearing
+        expr: increase(captured_errors_total[10m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations:
+          summary: "Captured errors on {{ $labels.service }}"
+          description: "captured_errors_total increased — a failure was captured via captureError(); inspect the captured_error structured logs in Loki."
+

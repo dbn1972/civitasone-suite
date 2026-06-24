@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   captureError, setErrorReporter, getCapturedErrorCount, resetCapturedErrors,
+  getCapturedErrorCountByService,
   incrementConsumerError, getConsumerErrorCount,
   incrementDlqMessage, getDlqMessageCount,
   incrementOutboxRelayFailure, getOutboxRelayFailureCount,
@@ -47,6 +48,27 @@ describe("observability — error capture + failure metrics (09-T1)", () => {
     expect(getConsumerErrorCount("finance", "finance.gl.post")).toBe(2);
     expect(getDlqMessageCount("finance.gl.post")).toBe(1);
     expect(getOutboxRelayFailureCount("finance")).toBe(1);
+  });
+
+  it("captureError increments the service-labeled captured_errors_total metric (T1.2)", () => {
+    captureError(new Error("boom"), { service: "finance", topic: "finance.gl.post" });
+    captureError(new Error("boom2"), { service: "finance" });
+    captureError(new Error("other"), { service: "grant" });
+    // missing service falls into the "unknown" series, never dropped
+    captureError(new Error("nosvc"), {});
+
+    expect(getCapturedErrorCountByService("finance")).toBe(2);
+    expect(getCapturedErrorCountByService("grant")).toBe(1);
+    expect(getCapturedErrorCountByService("unknown")).toBe(1);
+    // global counter still tracks the total across services
+    expect(getCapturedErrorCount()).toBe(4);
+  });
+
+  it("resetFailureMetrics clears the captured_errors_total series", () => {
+    captureError(new Error("boom"), { service: "finance" });
+    expect(getCapturedErrorCountByService("finance")).toBe(1);
+    resetFailureMetrics();
+    expect(getCapturedErrorCountByService("finance")).toBe(0);
   });
 
   it("fault injection: a throwing handler dead-letters after max attempts", async () => {
