@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createUserBody, updateUserBody, statusBody, userIdParam, tenantIdQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as keycloak from "../../shared/keycloak.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 
@@ -62,6 +63,21 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN);
     const { id } = userIdParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.changeUserStatus(ctx, id, { status: "deactivated" }));
+  });
+
+  // Keycloak drift-reconcile: re-sync a user's realm state to identity-service.
+  // Admin-gated; best-effort; returns the reconcile result (or skipped when
+  // Keycloak admin creds are not configured).
+  app.post("/identity/users/:id/keycloak-reconcile", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const { id } = userIdParam.parse(req.params);
+    const view = await queries.getUser(ctx.tenantId, id);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
+    const result = await keycloak.reconcileUser(
+      { id: view.id, tenantId: view.tenantId, email: view.email, name: view.name, active: view.status === "active" },
+    );
+    return reply.send({ userId: id, keycloak: result });
   });
 
   app.setErrorHandler((err, req, reply) => {
