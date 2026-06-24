@@ -15,8 +15,10 @@ const nodeSchema = z.object({
   nodeKey: z.string().min(1).max(64),
   name: z.string().min(1).max(200),
   roleRef: z.string().max(128).optional(),
-  nodeType: z.enum(["task", "split", "join", "start", "end"]).default("task"),
+  nodeType: z.enum(["task", "split", "join", "start", "end", "timer"]).default("task"),
   slaMinutes: z.number().int().positive().optional(),
+  // 0 = "deemed approved on the next timer tick" (fire immediately).
+  timerMinutes: z.number().int().nonnegative().optional(),
   sortOrder: z.number().int().optional(),
 });
 const edgeSchema = z.object({

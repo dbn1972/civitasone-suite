@@ -24,6 +24,9 @@ export const definitionNodes = domainSchema.table("definition_nodes", {
   roleRef: varchar("role_ref", { length: 128 }),
   nodeType: varchar("node_type", { length: 16 }).notNull().default("task"),
   slaMinutes: integer("sla_minutes"),
+  // P1-2 — deemed-approval window (minutes) for a `timer` node. The instance
+  // auto-advances along the timer's outgoing edge once this elapses.
+  timerMinutes: integer("timer_minutes"),
   sortOrder: integer("sort_order").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

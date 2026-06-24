@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { instances, type InstanceRow, type InstanceInsert, type InstanceView } from "./schema.js";
 
@@ -80,4 +80,33 @@ export async function markStatus(tx: Writer, id: string, status: string, actorId
   await tx.update(instances)
     .set({ status, updatedBy: actorId, updatedAt: new Date() })
     .where(eq(instances.id, id));
+}
+
+/**
+ * P1-4 — rebind a running instance to a different definition version (in-flight
+ * migration). Optionally remaps currentNode to a node key valid in the target
+ * version. Bumps version. Guarded by fromVersion so a concurrent migration /
+ * advance can't clobber it.
+ */
+export async function rebindDefinition(
+  tx: Writer,
+  id: string,
+  definitionId: string,
+  definitionVersion: number,
+  currentNode: string | null,
+  actorId: string,
+  fromVersion: number,
+): Promise<boolean> {
+  const updated = await (tx as typeof db).update(instances)
+    .set({
+      definitionId,
+      definitionVersion,
+      ...(currentNode !== null ? { currentNode } : {}),
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: sql`${instances.version} + 1`,
+    })
+    .where(and(eq(instances.id, id), eq(instances.version, fromVersion)))
+    .returning({ id: instances.id });
+  return updated.length > 0;
 }

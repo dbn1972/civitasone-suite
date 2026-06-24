@@ -2,8 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { idParam, taskViewSchema, completeTaskBody } from "./validators.js";
+import { idParam, taskViewSchema, completeTaskBody, assignTaskBody, bulkCompleteBody } from "./validators.js";
 import { paginatedSchema } from "@civitasone/schemas/common";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -15,6 +16,22 @@ const ROLES = [
   "payroll_admin", "procurement_admin", "procurement_officer",
   "estab_officer", "estab_admin", "estab_section_officer", "estab_under_secretary", "estab_deputy_secretary",
 ];
+
+const ASSIGN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
+
+// Per-refType domain permission gate, shared by single + bulk completion so a
+// bulk-complete cannot bypass the per-task approve permission.
+const REF_PERMISSION: Record<string, string> = {
+  leave_app: "hrms.leave.approve",
+  payroll_run: "payroll.run.approve",
+  procurement_indent: "procurement.indent.approve",
+  procurement_po: "procurement.po.approve",
+};
+
+async function requireTaskPermission(ctx: RequestContext, refType: string | null | undefined): Promise<void> {
+  const key = refType ? REF_PERMISSION[refType] : undefined;
+  if (key) await requirePermissionKey(ctx, key);
+}
 
 export async function taskRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/workflow/tasks", async (req, reply) => {
@@ -33,16 +50,53 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = completeTaskBody.parse(req.body ?? {});
     const task = await queries.getTask(id, ctx.tenantId);
-    if (task?.refType === "leave_app") {
-      await requirePermissionKey(ctx, "hrms.leave.approve");
-    } else if (task?.refType === "payroll_run") {
-      await requirePermissionKey(ctx, "payroll.run.approve");
-    } else if (task?.refType === "procurement_indent") {
-      await requirePermissionKey(ctx, "procurement.indent.approve");
-    } else if (task?.refType === "procurement_po") {
-      await requirePermissionKey(ctx, "procurement.po.approve");
-    }
+    await requireTaskPermission(ctx, task?.refType);
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeTask(ctx, id, body.decision));
+  });
+
+  // P1-1 — claim an unassigned task (any role-holder who can see it). Synchronous.
+  app.post("/v1/workflow/tasks/:id/claim", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = idParam.parse(req.params);
+    const claimed = await commands.claimTask(ctx, id);
+    return sendValidated(reply, taskViewSchema, claimed);
+  });
+
+  // P1-1 — assign a task to a specific user (admin only). Synchronous.
+  app.post("/v1/workflow/tasks/:id/assign", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ASSIGN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = assignTaskBody.parse(req.body ?? {});
+    const assigned = await commands.assignTask(ctx, id, body.assigneeId);
+    return sendValidated(reply, taskViewSchema, assigned);
+  });
+
+  // P1-3 — bulk-complete. Per-task domain permission gate + the per-task
+  // completeTask command (role-on-task + SoD + assignee + instance-active).
+  app.post("/v1/workflow/tasks/bulk-complete", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const body = bulkCompleteBody.parse(req.body ?? {});
+    const results: commands.BulkResult[] = [];
+    const toRun: string[] = [];
+    // Pre-gate the per-task domain permission; a permission failure for one task
+    // is reported per-id without aborting the batch.
+    for (const id of body.taskIds) {
+      try {
+        const task = await queries.getTask(id, ctx.tenantId);
+        await requireTaskPermission(ctx, task?.refType);
+        toRun.push(id);
+      } catch (err) {
+        if (err instanceof HttpError) results.push({ id, ok: false, code: err.code, message: err.message });
+        else results.push({ id, ok: false, code: "INTERNAL", message: "internal error" });
+      }
+    }
+    const completed = await commands.bulkComplete(ctx, toRun, body.decision);
+    // preserve input order in the response
+    const byId = new Map([...results, ...completed].map((r) => [r.id, r]));
+    return reply.send({ data: body.taskIds.map((id) => byId.get(id)) });
   });
 
   app.setErrorHandler((err, req, reply) => {

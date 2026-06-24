@@ -260,12 +260,18 @@ async function spawnTask(
   msg: CommandEnvelope,
   instance: InstanceRow,
   fromNode: string,
-  node: { nodeKey: string; name: string; roleRef: string | null; slaMinutes: number | null },
+  node: { nodeKey: string; name: string; roleRef: string | null; slaMinutes: number | null; nodeType?: string; timerMinutes?: number | null },
   action: string,
 ): Promise<void> {
   await instanceRepo.updateCurrentNode(tx, instance.id, node.nodeKey, msg.actorId);
   const newTaskId = randomUUID();
   const dueAt = computeDueAt(node.slaMinutes);
+  // P1-2 — a `timer` node spawns a pending task carrying fire_at = now +
+  // timer_minutes (default 0 -> fire immediately on next tick). The timer
+  // sweeper auto-completes it (deemed approval), reusing the normal advance
+  // path along the timer's outgoing edge.
+  const isTimer = node.nodeType === "timer";
+  const fireAt = isTimer ? computeDueAt(node.timerMinutes ?? 0.0001) ?? new Date() : null;
   await repo.insert(tx, {
     id: newTaskId,
     tenantId: instance.tenantId,
@@ -277,13 +283,15 @@ async function spawnTask(
     refType: instance.refType,
     refId: instance.refId,
     dueAt,
+    ...(fireAt ? { fireAt } : {}),
     createdBy: msg.actorId,
     updatedBy: msg.actorId,
     version: 1,
   });
   await historyRepo.record(tx, {
     tenantId: instance.tenantId, instanceId: instance.id, taskId: newTaskId,
-    fromNode, toNode: node.nodeKey, action, decision: null, actorId: msg.actorId, detail: {},
+    fromNode, toNode: node.nodeKey, action: isTimer ? "timer_wait" : action, decision: null, actorId: msg.actorId,
+    detail: isTimer ? { timerMinutes: node.timerMinutes ?? null, fireAt: fireAt?.toISOString() ?? null } : {},
   });
   await emit(tx, msg, EVENTS.taskAssigned, {
     taskId: newTaskId,

@@ -3,9 +3,12 @@ import { and, eq, lte, isNotNull, or, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
+import { COMMANDS } from "../../topics.js";
 import { tasks } from "./schema.js";
 import { instances } from "../instances/schema.js";
+import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
 
 const log = pino({ name: "workflow-sla-sweeper" });
@@ -123,5 +126,87 @@ export async function sweepOverdueTasks(
 export function startSlaSweeper(intervalMs = 30_000): NodeJS.Timeout {
   return setInterval(() => {
     sweepOverdueTasks().catch((err) => log.error({ err }, "sla sweep cycle failed"));
+  }, intervalMs);
+}
+
+// ---------------------------------------------------------------------------
+// P1-2 — Timer / wait nodes (deemed approval).
+// ---------------------------------------------------------------------------
+
+const timerLog = pino({ name: "workflow-timer-sweeper" });
+
+/**
+ * Find pending timer tasks whose fire_at has passed and auto-advance each by
+ * publishing a normal completeTask(approve) command attributed to the SYSTEM
+ * actor with sodOverride. Reusing completeTask means the instance advances
+ * along the timer node's outgoing edge through the same engine path (edge
+ * conditions, join gating, domain dispatch) as a human approval — "deemed
+ * approved if not acted within N". The instance-active gate in the consumer
+ * still applies, so a timer task on a suspended instance is left alone.
+ *
+ * Idempotency: we stamp fire_at = NULL under the row lock before publishing so
+ * overlapping sweeps don't double-fire; the completeTask optimistic lock is the
+ * final backstop. Returns the number of timer tasks fired this sweep.
+ */
+export async function sweepTimerTasks(now: Date = new Date(), batch = 200): Promise<number> {
+  const due = await repo.dueTimers(now, batch);
+  let fired = 0;
+  for (const t of due) {
+    // claim this timer under a row lock: clear fire_at only if still pending &
+    // still due, so a concurrent sweep can't also pick it up.
+    const claimed = await db.transaction(async (tx) => {
+      const res = await tx.update(tasks)
+        .set({ fireAt: null, updatedAt: now })
+        .where(and(
+          eq(tasks.id, t.id),
+          eq(tasks.status, "pending"),
+          isNotNull(tasks.fireAt),
+          lte(tasks.fireAt, now),
+        ))
+        .returning({ id: tasks.id });
+      if (res.length === 0) return false;
+      await historyRepo.record(tx, {
+        tenantId: t.tenantId, instanceId: t.instanceId, taskId: t.id,
+        fromNode: t.nodeKey, toNode: t.nodeKey, action: "timer_fire", decision: "approve",
+        actorId: SYSTEM_ACTOR_ID,
+        detail: { reason: "deemed_approval", fireAt: t.fireAt?.toISOString() ?? null },
+      });
+      return true;
+    });
+    if (!claimed) continue;
+
+    // publish completeTask(approve) as the system actor. The payload mirrors the
+    // TaskView the HTTP path sends; sodOverride lets the system bypass SoD.
+    await queue.publish(COMMANDS.completeTask, {
+      messageId: randomUUID(),
+      type: COMMANDS.completeTask,
+      tenantId: t.tenantId,
+      actorId: SYSTEM_ACTOR_ID,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: {
+        id: t.id,
+        tenantId: t.tenantId,
+        instanceId: t.instanceId,
+        name: t.name,
+        status: "pending",
+        roleRef: t.roleRef,
+        nodeKey: t.nodeKey,
+        refType: t.refType,
+        refId: t.refId,
+        decision: "approve",
+        sodOverride: true,
+      },
+    });
+    fired++;
+  }
+  if (fired > 0) timerLog.info({ fired }, "timer sweeper auto-advanced timer tasks");
+  return fired;
+}
+
+/** Run the timer sweeper on an interval. Never throws out of the loop. */
+export function startTimerSweeper(intervalMs = 30_000): NodeJS.Timeout {
+  return setInterval(() => {
+    sweepTimerTasks().catch((err) => timerLog.error({ err }, "timer sweep cycle failed"));
   }, intervalMs);
 }
