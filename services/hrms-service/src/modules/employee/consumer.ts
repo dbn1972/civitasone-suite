@@ -5,8 +5,18 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
+import { computePension, elEncashment } from "../pension/engine.js";
 
 const AUDIT = "audit.event.record";
+
+/**
+ * Default Dearness Allowance rate (% of basic) used when computing separation
+ * settlement (DCRG + EL encashment). The separation command does not carry a DA
+ * rate, so we apply the current CCS DA rate as a documented default. EL balance
+ * is taken from the separation payload's `encashmentDays` (capped at 300 by the
+ * EL encashment formula).
+ */
+const DEFAULT_DA_RATE_PCT = 50;
 
 export function registerEmployeeConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.employeeCreate, async (msg) => {
@@ -83,11 +93,31 @@ export function registerEmployeeConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const emp = await repo.findById(p.employeeId, p.tenantId);
+      const basicMinor = emp?.basicMinor ?? 0n;
+
+      // Settlement computation (CCS rules):
+      //  - EL encashment = (Basic+DA)/30 * min(EL_balance, 300 days)
+      //  - DCRG (gratuity) = 1/4 * (Basic+DA) * completed_half_years, capped
+      //    at 16.5x emoluments and at Rs 20,00,000. Computed via the pension
+      //    engine using last-drawn emoluments (GPF/old-scheme defined benefit).
+      const encashmentMinor = elEncashment(basicMinor, DEFAULT_DA_RATE_PCT, p.encashmentDays);
+      let gratuityMinor = 0n;
+      if (emp) {
+        const pension = computePension({
+          pensionScheme: emp.pensionScheme,
+          dateOfJoining: emp.dateOfJoining,
+          retirementDate: p.effectiveDate,
+          lastBasicMinor: basicMinor,
+          daRatePct: DEFAULT_DA_RATE_PCT,
+        });
+        gratuityMinor = pension.dcrg.payableMinor;
+      }
+
       await lifecycleRepo.insertSeparation(tx, {
         id: msg.messageId, tenantId: p.tenantId, employeeId: p.employeeId,
         separationType: p.separationType, effectiveDate: p.effectiveDate,
         lastWorkingDate: p.lastWorkingDate ?? null, encashmentDays: p.encashmentDays,
-        encashmentMinor: 0n, gratuityMinor: 0n,
+        encashmentMinor, gratuityMinor,
         remarks: p.remarks ?? null, status: "initiated",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
