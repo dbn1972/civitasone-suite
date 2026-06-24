@@ -10,9 +10,16 @@
  *  - Average emoluments = average of last 10 months (Basic + DA). Where a
  *    10-month history is not available we FALL BACK to last-drawn (Basic + DA)
  *    — documented per call via `avgEmolumentsSource`.
- *  - Superannuation pension = 50% of average emoluments for qualifying service
- *    >= 20 years (full); proportionately reduced below 20 years
- *    (factor = qualifyingHalfYears / 66, i.e. fraction of full 33-year service).
+ *  - Superannuation pension (CCS (Pension) Rules, 2021, Rule 44 — codifying the
+ *    position w.e.f. 01.01.2006): a minimum of 10 years' qualifying service is
+ *    required to earn a pension. Once that floor is met, the pension is a FLAT
+ *    50% of average emoluments (or last-drawn, whichever beneficial)
+ *    IRRESPECTIVE of the length of qualifying service beyond 10 years. The
+ *    pre-2006 linear "proportionate reduction" below 20/33 years was ABOLISHED
+ *    w.e.f. 01.01.2006 and is therefore NOT applied here. Below 10 years there
+ *    is no superannuation pension (only service gratuity, out of scope here).
+ *    NOTE: half-years are still capped at 66 (33 yrs) for DCRG; the cap no
+ *    longer affects the pension fraction, which is flat 50%.
  *  - Commutation: up to 40% of pension is commutable. Commuted value =
  *    commuted_monthly_pension * 12 * commutationFactor(age next birthday).
  *    Restored after 15 years.
@@ -23,8 +30,9 @@
  *  - NPS / EPF: no defined-benefit pension from this engine.
  */
 
-export const MAX_QUALIFYING_HALF_YEARS = 66; // 33 years
-export const FULL_PENSION_FRACTION = 0.5; // 50% of average emoluments
+export const MAX_QUALIFYING_HALF_YEARS = 66; // 33 years (DCRG cap only)
+export const MIN_PENSION_QUALIFYING_HALF_YEARS = 20; // 10 years — pension floor (CCS Pension Rules 2021, Rule 44)
+export const FULL_PENSION_FRACTION = 0.5; // 50% of average emoluments (flat, irrespective of length once >= 10 yrs)
 export const MAX_COMMUTABLE_PCT = 40; // up to 40% commutable
 export const DCRG_HALF_YEAR_FACTOR = 0.25; // 1/4 per half-year
 export const DCRG_EMOLUMENT_CAP_MULTIPLE = 16.5; // 16.5 x emoluments
@@ -119,6 +127,9 @@ export interface PensionResult {
   emolumentsBasicPlusDaMinor: bigint; // last-drawn Basic+DA (used for DCRG / commutation base)
   monthlyPensionMinor: bigint;
   fullPensionEligible: boolean;
+  /** True when qualifying service >= 10 years (the minimum to earn any pension). */
+  pensionEligible: boolean;
+  pensionRule: string;
   commutation: {
     commutePct: number;
     ageNextBirthday: number;
@@ -171,6 +182,8 @@ export function computePension(input: PensionInput): PensionResult {
       emolumentsBasicPlusDaMinor: emolumentsBasicPlusDa,
       monthlyPensionMinor: 0n,
       fullPensionEligible: false,
+      pensionEligible: false,
+      pensionRule: "Defined-contribution scheme (NPS/EPF) — CCS defined-benefit pension not applicable.",
       commutation: {
         commutePct: 0, ageNextBirthday: 0, factor: 0,
         commutedMonthlyPensionMinor: 0n, commutedValueMinor: 0n,
@@ -196,13 +209,22 @@ export function computePension(input: PensionInput): PensionResult {
   const avgEmoluments =
     input.avgEmolumentsMinor !== undefined ? Number(input.avgEmolumentsMinor) : lastBasic * (1 + daRate);
 
-  // Superannuation pension = 50% of avg emoluments for >= 20 yrs (40 half-years);
-  // proportionate below that (fraction of full 33-year / 66-half-year service).
-  const fullPensionEligible = qualifying.halfYears >= 40; // 20 years
-  const serviceFraction = fullPensionEligible
-    ? 1
-    : qualifying.halfYears / MAX_QUALIFYING_HALF_YEARS;
+  // Superannuation pension — CCS (Pension) Rules, 2021, Rule 44 (position w.e.f.
+  // 01.01.2006): a flat 50% of average emoluments once the 10-year qualifying
+  // floor is met, IRRESPECTIVE of length of service beyond 10 years. The
+  // pre-2006 linear proportionate reduction below 20/33 years is NOT applied.
+  // Below 10 years no superannuation pension accrues (service gratuity only,
+  // which is out of scope for this engine — pension is reported as zero).
+  const pensionEligible = qualifying.halfYears >= MIN_PENSION_QUALIFYING_HALF_YEARS; // >= 10 years
+  // `fullPensionEligible` is retained for backward compatibility: under the
+  // post-2006 rule full (50%) pension applies the moment the 10-year floor is
+  // crossed, so it is now equivalent to `pensionEligible`.
+  const fullPensionEligible = pensionEligible;
+  const serviceFraction = pensionEligible ? 1 : 0;
   const monthlyPension = toPaise(avgEmoluments * FULL_PENSION_FRACTION * serviceFraction);
+  const pensionRule = pensionEligible
+    ? "CCS (Pension) Rules 2021, Rule 44: flat 50% of average emoluments (>=10 yrs qualifying service), no proportionate reduction (post-01.01.2006)."
+    : "Qualifying service below the 10-year minimum: no superannuation pension; only service gratuity is payable (not computed by this engine).";
 
   // Commutation.
   let ageNextBirthday = input.ageNextBirthday ?? 61;
@@ -234,6 +256,8 @@ export function computePension(input: PensionInput): PensionResult {
     emolumentsBasicPlusDaMinor: emolumentsBasicPlusDa,
     monthlyPensionMinor: monthlyPension,
     fullPensionEligible,
+    pensionEligible,
+    pensionRule,
     commutation: {
       commutePct, ageNextBirthday, factor,
       commutedMonthlyPensionMinor: commutedMonthly,

@@ -10,6 +10,8 @@ import { schema as serviceBookModule } from "../modules/service-book/schema.js";
 import { schema as appraisalModule }   from "../modules/appraisals/schema.js";
 import { aparSchema as aparModule }            from "../modules/apar/schema.js";
 import { gpfModuleSchema as gpfModule }        from "../modules/gpf/schema.js";
+import { schema as deputationModule }  from "../modules/deputation/schema.js";
+import { schema as claimsModule }      from "../modules/claims/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -18,7 +20,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://hrms_svc:***@hos
 export const sqlClient = createSqlClient(url);
 
 export const db = drizzle(sqlClient, {
-  schema: { ...employeeModule, ...recruitmentModule, ...attendanceModule, ...leaveModule, ...trainingModule, ...lifecycleModule, ...serviceBookModule, ...appraisalModule, ...aparModule, ...gpfModule, ...outboxSchema },
+  schema: { ...employeeModule, ...recruitmentModule, ...attendanceModule, ...leaveModule, ...trainingModule, ...lifecycleModule, ...serviceBookModule, ...appraisalModule, ...aparModule, ...gpfModule, ...deputationModule, ...claimsModule, ...outboxSchema },
 });
 
 export type Db = typeof db;

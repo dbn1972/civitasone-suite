@@ -131,6 +131,8 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
         ...(body.effectiveDate !== undefined ? { effectiveDate: body.effectiveDate } : {}),
         createdBy: ctx.actorId,
       });
+      // L4: bump the account optimistic-lock version on every ledger mutation.
+      await repo.bumpAccountVersion(tx, ctx.tenantId, acct.id, ctx.actorId, acct.version);
       return { prev: prevBal, next: nextBal };
     });
     return reply.code(201).send(jsonSafe({
@@ -167,6 +169,8 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
         entryType: "interest", amountMinor: interestMinor, deltaMinor: interestMinor, balanceMinor: nextBal,
         narrative: `interest @ ${ratePct}% for ${body.months} month(s)`, createdBy: ctx.actorId,
       });
+      // L4: bump the account optimistic-lock version on interest accrual too.
+      await repo.bumpAccountVersion(tx, ctx.tenantId, acct.id, ctx.actorId, acct.version);
       return { prev: prevBal, interest: interestMinor, next: nextBal };
     });
     return reply.code(201).send(jsonSafe({

@@ -1,5 +1,6 @@
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { HttpError } from "../../shared/context.js";
 import { hrmsAppraisals, type AppraisalRow, type AppraisalInsert } from "../appraisals/schema.js";
 import {
   hrmsAparScores, hrmsAparStageHistory,
@@ -14,8 +15,30 @@ export async function findAppraisal(id: string, tenantId: string): Promise<Appra
   return rows[0] ?? null;
 }
 
-export async function updateAppraisal(tx: Writer, id: string, patch: Partial<AppraisalInsert>): Promise<void> {
-  await tx.update(hrmsAppraisals).set({ ...patch, updatedAt: new Date() }).where(eq(hrmsAppraisals.id, id));
+/**
+ * Update an appraisal, ALWAYS incrementing the optimistic-lock `version` column
+ * (L4). When `expectedVersion` is supplied the update is GUARDED: the row is
+ * only modified if its current version still matches, and a stale write raises
+ * a 409 VERSION_CONFLICT instead of silently clobbering a concurrent change.
+ */
+export async function updateAppraisal(
+  tx: Writer,
+  id: string,
+  patch: Partial<AppraisalInsert>,
+  expectedVersion?: number,
+): Promise<void> {
+  const where =
+    expectedVersion !== undefined
+      ? and(eq(hrmsAppraisals.id, id), eq(hrmsAppraisals.version, expectedVersion))
+      : eq(hrmsAppraisals.id, id);
+  const res = await tx
+    .update(hrmsAppraisals)
+    .set({ ...patch, version: sql`${hrmsAppraisals.version} + 1`, updatedAt: new Date() })
+    .where(where);
+  if (expectedVersion !== undefined && (res as { rowCount?: number }).rowCount === 0) {
+    throw new HttpError(409, "VERSION_CONFLICT",
+      "appraisal was modified by another request; reload and retry");
+  }
 }
 
 export async function upsertScore(tx: Writer, row: AparScoreInsert): Promise<void> {

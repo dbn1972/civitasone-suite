@@ -148,7 +148,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     await db.transaction(async (tx) => {
       await repo.updateAppraisal(tx, id, {
         selfAppraisal: body.selfAppraisal, status: "reporting_officer", updatedBy: ctx.actorId,
-      });
+      }, a.version);
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "self_pending", toStage: "reporting_officer",
         actorId: ctx.actorId, actorRole: trueActorRole(ctx, "appraisee", override), override,
@@ -186,7 +186,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       }
       await repo.updateAppraisal(tx, id, {
         reportingPenPicture: body.penPicture, status: "reviewing_officer", updatedBy: ctx.actorId,
-      });
+      }, a.version);
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "reporting_officer", toStage: "reviewing_officer",
         actorId: ctx.actorId, actorRole: trueActorRole(ctx, "reporting_officer", override), override,
@@ -229,7 +229,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       }
       await repo.updateAppraisal(tx, id, {
         reviewingRemarks: body.remarks, status: "accepting_authority", updatedBy: ctx.actorId,
-      });
+      }, a.version);
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "reviewing_officer", toStage: "accepting_authority",
         actorId: ctx.actorId, actorRole: trueActorRole(ctx, "reviewing_officer", override), override,
@@ -261,7 +261,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
         status: "disclosed",
         disclosedAt: new Date(),
         updatedBy: ctx.actorId,
-      });
+      }, a.version);
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "accepting_authority", toStage: "disclosed",
         actorId: ctx.actorId, actorRole: trueActorRole(ctx, "accepting_authority", override), override,
@@ -283,7 +283,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     await db.transaction(async (tx) => {
       await repo.updateAppraisal(tx, id, {
         representation: body.representation, status: "representation", updatedBy: ctx.actorId,
-      });
+      }, a.version);
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "disclosed", toStage: "representation",
         actorId: ctx.actorId, actorRole: trueActorRole(ctx, "appraisee", override), override,
@@ -304,7 +304,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "WRONG_STAGE", `cannot finalise from '${a.status}'`);
     }
     await db.transaction(async (tx) => {
-      await repo.updateAppraisal(tx, id, { status: "finalised", updatedBy: ctx.actorId });
+      await repo.updateAppraisal(tx, id, { status: "finalised", updatedBy: ctx.actorId }, a.version);
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: a.status, toStage: "finalised",
         actorId: ctx.actorId, actorRole: "hr", remarks: "APAR finalised", payload: {},
