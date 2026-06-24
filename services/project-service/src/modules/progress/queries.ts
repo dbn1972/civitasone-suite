@@ -12,9 +12,9 @@ export async function getProgress(projectId: string, tenantId: string): Promise<
     cache.makeKey(tenantId, "progress", projectId),
     async () => {
       const [physical, financial, dprs] = await Promise.all([
-        repo.listPhysicalProgressByProject(projectId),
-        repo.listFinancialProgressByProject(projectId),
-        repo.listDprsByProject(projectId),
+        repo.listPhysicalProgressByProject(projectId, tenantId),
+        repo.listFinancialProgressByProject(projectId, tenantId),
+        repo.listDprsByProject(projectId, tenantId),
       ]);
       return { physical, financial, dprs };
     }

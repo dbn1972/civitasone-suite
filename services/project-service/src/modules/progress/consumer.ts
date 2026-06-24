@@ -4,7 +4,10 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as projectRepo from "../project/repo.js";
 import { assertDprDateUnique } from "./domain.js";
+
+void assertDprDateUnique;
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -24,6 +27,11 @@ export function registerProgressConsumers(queue: Queue): void {
         reportedBy: p.reportedBy, notes: p.notes ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      // P0-1: roll the latest cumulative physical % up onto the project aggregate.
+      const latestPct = await repo.latestCumulativePctTx(tx, p.projectId, p.tenantId);
+      if (latestPct !== null) {
+        await projectRepo.updateProjectProgressTx(tx, p.projectId, p.tenantId, { physicalPct: latestPct });
+      }
       await enqueue(tx, {
         topic: EVENTS.physicalProgressRecorded, eventType: EVENTS.physicalProgressRecorded,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -32,6 +40,8 @@ export function registerProgressConsumers(queue: Queue): void {
       await audit(tx, msg, "record", "physical_progress", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "progress", p.projectId));
+    // P0-1: project aggregate physical_pct changed -> bust the project cache too.
+    await cache.invalidate(cache.makeKey(msg.tenantId, "project", p.projectId));
   });
 
   queue.subscribe(COMMANDS.financialProgressRecord, async (msg) => {
@@ -48,9 +58,25 @@ export function registerProgressConsumers(queue: Queue): void {
         reportedBy: p.reportedBy, notes: p.notes ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      // P0-1: recompute financial_pct = cumulative expenditure / sanctioned (paise bigint math).
+      const project = await projectRepo.findProjectByIdTx(tx, p.projectId, p.tenantId);
+      if (project) {
+        const sanctioned = project.sanctionedMinor ?? 0n;
+        const spent = await repo.totalExpenditureMinorTx(tx, p.projectId, p.tenantId);
+        let pct = "0.00";
+        if (sanctioned > 0n) {
+          // basis points then scale to 2dp, capped at 100.00
+          const bps = (spent * 10000n) / sanctioned;
+          const capped = bps > 10000n ? 10000n : bps;
+          pct = (Number(capped) / 100).toFixed(2);
+        }
+        await projectRepo.updateProjectProgressTx(tx, p.projectId, p.tenantId, { financialPct: pct });
+      }
       await audit(tx, msg, "record", "financial_progress", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "progress", p.projectId));
+    // P0-1: project aggregate financial_pct changed -> bust the project cache too.
+    await cache.invalidate(cache.makeKey(msg.tenantId, "project", p.projectId));
   });
 
   queue.subscribe(COMMANDS.dprSubmit, async (msg) => {
@@ -60,7 +86,7 @@ export function registerProgressConsumers(queue: Queue): void {
     };
 
     // DPR immutability: no duplicate for same project + date
-    const existing = await repo.findDprByProjectAndDate(p.projectId, p.dprDate);
+    const existing = await repo.findDprByProjectAndDate(p.projectId, p.dprDate, p.tenantId);
     if (existing) {
       // DPR for this date already exists — do not overwrite; idempotent ack
       return;

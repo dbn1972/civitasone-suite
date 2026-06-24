@@ -7,6 +7,7 @@ import { registerSchemeConsumers }      from "./modules/scheme/consumer.js";
 import { registerProgressConsumers }    from "./modules/progress/consumer.js";
 import { registerUcConsumers }          from "./modules/utilisation/consumer.js";
 import { registerGeoConsumers }         from "./modules/geo/consumer.js";
+import { startRagScheduler }            from "./modules/project/rag.js";
 
 const log = pino({ name: "project-worker" });
 
@@ -18,11 +19,13 @@ registerGeoConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
-log.info("project-service worker: consumers + outbox relay running");
+const ragScheduler = startRagScheduler();
+log.info("project-service worker: consumers + outbox relay + RAG scheduler running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(relay);
+  clearInterval(ragScheduler);
   await queue.stop();
   await sqlClient.end();
   log.info("shutdown complete");

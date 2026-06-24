@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as schemeRepo from "../scheme/repo.js";
 import { assertUcExpenditureWithinReleased } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -56,6 +57,11 @@ export function registerUcConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertUcItems(tx, itemRows);
+      // P0-5: roll utilisation up onto the scheme and each component (read but never written before).
+      await schemeRepo.incrementSchemeUtilisedTx(tx, p.schemeId, expenditureMinor);
+      for (const i of p.items) {
+        await schemeRepo.incrementComponentUtilisedTx(tx, i.componentId, BigInt(i.expenditureMinor));
+      }
       await enqueue(tx, {
         topic: EVENTS.ucSubmitted, eventType: EVENTS.ucSubmitted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

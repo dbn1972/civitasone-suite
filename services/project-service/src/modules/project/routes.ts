@@ -30,15 +30,15 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listProjectsQuery.parse(req.query);
-    const tenantId = q.tenantId ?? ctx.tenantId;
-    return reply.send(await queries.listProjects(tenantId, q.status, q.page, q.limit));
+    // SECURITY: always derive tenant from auth context; never trust client-supplied tenantId.
+    return reply.send(await queries.listProjects(ctx.tenantId, q.status, q.page, q.limit));
   });
 
   app.get("/v1/projects/projects", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listProjectsQuery.parse(req.query);
-    sendValidated(reply, ProjectSummaryListSchema, await queries.listProjectSummaries(q.tenantId ?? ctx.tenantId, q.limit));
+    sendValidated(reply, ProjectSummaryListSchema, await queries.listProjectSummaries(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/projects/milestones", async (req, reply) => {
