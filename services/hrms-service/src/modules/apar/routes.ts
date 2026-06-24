@@ -45,17 +45,54 @@ export function stageOwner(a: AppraisalRow): { stage: string; ownerId: string | 
   }
 }
 
-export function assertStageOwner(ctx: RequestContext, a: AppraisalRow, expected: string): void {
+/**
+ * Separation-of-duties guard for a stage transition. Returns whether the action
+ * was performed as a privileged override (recorded in stage-history). (C2)
+ *
+ * Rules:
+ *  - The default authorisation is identity-based: the acting actor MUST BE the
+ *    officer assigned to the current stage. Holding hr_admin/super_admin role is
+ *    NOT by itself sufficient to enter/alter scores or decisions — that would
+ *    collapse the four-eyes chain.
+ *  - A super_admin (and ONLY super_admin) may act as an explicit override when
+ *    they are not the assigned owner; the caller records override=true plus the
+ *    true actor id/role in stage-history. hr_admin gets NO scoring override.
+ *  - The appraisee can NEVER act on an officer stage (reporting/reviewing/
+ *    accepting), even with an admin role.
+ */
+export function assertStageOwner(ctx: RequestContext, a: AppraisalRow, expected: string): { override: boolean } {
   if (a.status !== expected) {
     throw new HttpError(409, "WRONG_STAGE", `appraisal is at stage '${a.status}', expected '${expected}'`);
   }
   const { ownerId } = stageOwner(a);
-  const isAdmin = ctx.roles.includes("super_admin") || ctx.roles.includes("hr_admin");
-  if (isAdmin) return; // administrative override
-  if (ownerId === null || ctx.actorId !== ownerId) {
-    throw new HttpError(403, "NOT_STAGE_OWNER",
-      `actor is not the assigned owner of stage '${expected}'`);
+  const isOwner = ownerId !== null && ctx.actorId === ownerId;
+  if (isOwner) return { override: false };
+
+  // Not the owner. Officer stages must never be performed by the appraisee, and
+  // only super_admin may override; hr_admin may not silently enter scores.
+  const OFFICER_STAGES = new Set(["reporting_officer", "reviewing_officer", "accepting_authority"]);
+  if (OFFICER_STAGES.has(expected) && ctx.actorId === a.employeeId) {
+    throw new HttpError(403, "SELF_REVIEW_FORBIDDEN",
+      `the appraisee cannot act as the officer for stage '${expected}'`);
   }
+  if (ctx.roles.includes("super_admin")) {
+    return { override: true }; // explicit, audited privileged override
+  }
+  throw new HttpError(403, "NOT_STAGE_OWNER",
+    `actor is not the assigned owner of stage '${expected}'`);
+}
+
+/**
+ * The TRUE role of the acting actor for stage-history (C2). We record the
+ * functional stage role only when the actor genuinely owns the stage; on a
+ * privileged override we record the actor's real elevated role so history is
+ * never falsified.
+ */
+function trueActorRole(ctx: RequestContext, functionalRole: string, override: boolean): string {
+  if (!override) return functionalRole;
+  if (ctx.roles.includes("super_admin")) return "super_admin";
+  if (ctx.roles.includes("hr_admin")) return "hr_admin";
+  return ctx.roles[0] ?? functionalRole;
 }
 
 export async function aparRoutes(app: FastifyInstance): Promise<void> {
@@ -70,6 +107,17 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       reviewingOfficerId: z.string().uuid(),
       acceptingAuthorityId: z.string().uuid(),
     }).parse(req.body);
+    // H1: the appraisee cannot be any of their own officers, and the three
+    // officers must be distinct (no one person holds two stages).
+    const officers = [body.reportingOfficerId, body.reviewingOfficerId, body.acceptingAuthorityId];
+    if (officers.includes(body.employeeId)) {
+      throw new HttpError(400, "SELF_OFFICER_FORBIDDEN",
+        "the appraisee cannot be their own reporting/reviewing/accepting officer");
+    }
+    if (new Set(officers).size !== officers.length) {
+      throw new HttpError(400, "OFFICERS_NOT_DISTINCT",
+        "reporting, reviewing and accepting officers must be three distinct people");
+    }
     const id = randomUUID();
     await db.transaction(async (tx) => {
       await tx.insert((await import("../appraisals/schema.js")).hrmsAppraisals).values({
@@ -96,14 +144,15 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ selfAppraisal: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    assertStageOwner(ctx, a, "self_pending");
+    const { override } = assertStageOwner(ctx, a, "self_pending");
     await db.transaction(async (tx) => {
       await repo.updateAppraisal(tx, id, {
         selfAppraisal: body.selfAppraisal, status: "reporting_officer", updatedBy: ctx.actorId,
       });
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "self_pending", toStage: "reporting_officer",
-        actorId: ctx.actorId, actorRole: "officer", remarks: "self-appraisal submitted",
+        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "appraisee", override), override,
+        remarks: "self-appraisal submitted",
         payload: { selfAppraisal: body.selfAppraisal },
       });
     });
@@ -125,7 +174,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       })).min(1),
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    assertStageOwner(ctx, a, "reporting_officer");
+    const { override } = assertStageOwner(ctx, a, "reporting_officer");
     await db.transaction(async (tx) => {
       for (const s of body.scores) {
         await repo.upsertScore(tx, {
@@ -140,7 +189,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       });
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "reporting_officer", toStage: "reviewing_officer",
-        actorId: ctx.actorId, actorRole: "reporting_officer", remarks: "scores + pen-picture recorded",
+        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "reporting_officer", override), override,
+        remarks: "scores + pen-picture recorded",
         payload: { penPicture: body.penPicture, scores: body.scores },
       });
     });
@@ -162,7 +212,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       })).optional(),
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    assertStageOwner(ctx, a, "reviewing_officer");
+    const { override } = assertStageOwner(ctx, a, "reviewing_officer");
     await db.transaction(async (tx) => {
       if (body.decision === "vary" && body.variations) {
         const existing = await repo.listScores(ctx.tenantId, id);
@@ -182,7 +232,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       });
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "reviewing_officer", toStage: "accepting_authority",
-        actorId: ctx.actorId, actorRole: "reviewing_officer",
+        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "reviewing_officer", override), override,
         remarks: body.remarks, payload: { decision: body.decision, variations: body.variations ?? [] },
       });
     });
@@ -196,7 +246,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ remarks: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    assertStageOwner(ctx, a, "accepting_authority");
+    const { override } = assertStageOwner(ctx, a, "accepting_authority");
     const scoreRows = await repo.listScores(ctx.tenantId, id);
     if (scoreRows.length === 0) throw new HttpError(409, "NO_SCORES", "no attribute scores to grade");
     const scores: ScoreInput[] = scoreRows.map((s) => ({
@@ -214,7 +264,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       });
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "accepting_authority", toStage: "disclosed",
-        actorId: ctx.actorId, actorRole: "accepting_authority", remarks: body.remarks,
+        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "accepting_authority", override), override,
+        remarks: body.remarks,
         payload: { computed: { overallGrade: grade.overallGrade, band: grade.band, totalWeight: grade.totalWeight, attributeCount: grade.attributeCount } },
       });
     });
@@ -228,14 +279,15 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ representation: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    assertStageOwner(ctx, a, "disclosed");
+    const { override } = assertStageOwner(ctx, a, "disclosed");
     await db.transaction(async (tx) => {
       await repo.updateAppraisal(tx, id, {
         representation: body.representation, status: "representation", updatedBy: ctx.actorId,
       });
       await repo.appendHistory(tx, {
         tenantId: ctx.tenantId, appraisalId: id, fromStage: "disclosed", toStage: "representation",
-        actorId: ctx.actorId, actorRole: "officer", remarks: "representation filed",
+        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "appraisee", override), override,
+        remarks: "representation filed",
         payload: { representation: body.representation },
       });
     });

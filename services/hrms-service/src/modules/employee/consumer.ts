@@ -5,7 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
-import { computePension, elEncashment } from "../pension/engine.js";
+import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
 
 const AUDIT = "audit.event.record";
 
@@ -101,16 +101,35 @@ export function registerEmployeeConsumers(queue: Queue): void {
       //    at 16.5x emoluments and at Rs 20,00,000. Computed via the pension
       //    engine using last-drawn emoluments (GPF/old-scheme defined benefit).
       const encashmentMinor = elEncashment(basicMinor, DEFAULT_DA_RATE_PCT, p.encashmentDays);
+
+      // H2 — DCRG / retirement gratuity is NOT payable on every separation.
+      // Under CCS (Pension) Rules, retirement gratuity requires (a) a qualifying
+      // separation cause AND (b) a minimum of 5 years' qualifying service. For
+      // resignation / dismissal / removal the gratuity is forfeited (set to 0).
+      // Eligible causes: superannuation/retirement, voluntary retirement (VRS),
+      // death and invalidation. Forfeited: resignation, dismissal, removal,
+      // termination. (Synonyms included to match the separation command enum.)
+      const GRATUITY_ELIGIBLE_TYPES = new Set([
+        "retirement", "superannuation", "vrs", "voluntary_retirement", "death", "invalidation",
+      ]);
+      const MIN_QUALIFYING_HALF_YEARS = 10; // 5 years
       let gratuityMinor = 0n;
       if (emp) {
-        const pension = computePension({
-          pensionScheme: emp.pensionScheme,
-          dateOfJoining: emp.dateOfJoining,
-          retirementDate: p.effectiveDate,
-          lastBasicMinor: basicMinor,
-          daRatePct: DEFAULT_DA_RATE_PCT,
-        });
-        gratuityMinor = pension.dcrg.payableMinor;
+        const sep = (p.separationType ?? "").toLowerCase();
+        const qualifies = qualifyingService(emp.dateOfJoining, p.effectiveDate);
+        const causeEligible = GRATUITY_ELIGIBLE_TYPES.has(sep);
+        const serviceEligible = qualifies.halfYears >= MIN_QUALIFYING_HALF_YEARS;
+        if (causeEligible && serviceEligible) {
+          const pension = computePension({
+            pensionScheme: emp.pensionScheme,
+            dateOfJoining: emp.dateOfJoining,
+            retirementDate: p.effectiveDate,
+            lastBasicMinor: basicMinor,
+            daRatePct: DEFAULT_DA_RATE_PCT,
+          });
+          gratuityMinor = pension.dcrg.payableMinor;
+        }
+        // else: forfeited / not yet qualified -> gratuity remains 0n.
       }
 
       await lifecycleRepo.insertSeparation(tx, {

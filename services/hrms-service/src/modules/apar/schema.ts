@@ -1,5 +1,5 @@
 import {
-  uuid, varchar, numeric, integer, text, jsonb, timestamp,
+  uuid, varchar, numeric, integer, text, jsonb, timestamp, boolean,
 } from "drizzle-orm/pg-core";
 import { appraisalSchema } from "../appraisals/schema.js";
 
@@ -24,6 +24,7 @@ export const hrmsAparStageHistory = appraisalSchema.table("hrms_apar_stage_histo
   toStage:     varchar("to_stage", { length: 24 }).notNull(),
   actorId:     uuid("actor_id").notNull(),
   actorRole:   varchar("actor_role", { length: 32 }).notNull(),
+  override:    boolean("override").notNull().default(false),
   remarks:     text("remarks"),
   payload:     jsonb("payload").notNull().default({}),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
