@@ -45,7 +45,7 @@ export function registerApplicationConsumers(queue: Queue): void {
               tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
               payload: { applicationId: p.id, reason: `eligibility_failed: ${result.reason}` },
             });
-            await audit(tx, msg, "eligibility_rejected", "grant_application", p.id);
+            await audit(tx, msg, "eligibility_rejected", "grant_application", p.id, "failure");
           });
           return;
         }
@@ -63,6 +63,7 @@ export function registerApplicationConsumers(queue: Queue): void {
         currency: p.currency ?? "INR",
         status: "submitted",
         submittedAt: new Date(),
+        submittedBy: msg.actorId,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "submit", "grant_application", p.id);
@@ -99,16 +100,28 @@ export function registerApplicationConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.applicationApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; amountApprovedMinor: number };
+    const p = msg.payload as { id: string; tenantId: string; amountApprovedMinor: number; approvedBy?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
+      // P0-4 SoD (defence in depth): never approve when approver == submitter.
+      const approver = p.approvedBy ?? msg.actorId;
+      if (app.submittedBy && app.submittedBy === approver) {
+        await enqueue(tx, {
+          topic: EVENTS.applicationRejected, eventType: "grant.application.sod_violation",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { applicationId: p.id, reason: "SOD_VIOLATION: approver must differ from submitter" },
+        });
+        await audit(tx, msg, "approve", "grant_application", p.id, "failure");
+        return;
+      }
       assertTransition(app.status, "approved");
       await repo.updateApplication(tx, p.id, {
         status: "approved",
         amountApprovedMinor: BigInt(p.amountApprovedMinor),
         approvedAt: new Date(),
+        approvedBy: approver,
         updatedBy: msg.actorId,
       });
       await enqueue(tx, {
@@ -159,10 +172,10 @@ export function registerApplicationConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "grant", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "grant", action, resourceType, resourceId, outcome },
   });
 }

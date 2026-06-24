@@ -1,4 +1,4 @@
-import { eq, and, sum } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { grantInstallments, grantDisbursements, grantPfmsRecords, type InstallmentRow, type InstallmentInsert, type DisbursementRow, type DisbursementInsert, type PfmsRecordInsert } from "./schema.js";
 
@@ -33,10 +33,23 @@ export async function findDisbursementsByApplicationId(applicationId: string, te
   return all;
 }
 
-export async function sumDisbursedForApplication(tx: Writer, applicationId: string): Promise<bigint> {
-  const installments = await (tx as typeof db).select().from(grantInstallments)
-    .where(and(eq(grantInstallments.applicationId, applicationId), eq(grantInstallments.status, "disbursed")));
-  return installments.reduce((acc, i) => acc + i.amountMinor, 0n);
+export async function sumDisbursedForApplication(tx: Writer, applicationId: string, tenantId: string): Promise<bigint> {
+  // P1-1: count only COMPLETED disbursements (post-EFT settlement), not the
+  // optimistic installment status. A failed/initiated disbursement must NOT
+  // inflate the approved/UC ceiling. Tenant-scoped (P1 isolation).
+  const installments = await (tx as typeof db).select({ id: grantInstallments.id })
+    .from(grantInstallments)
+    .where(and(eq(grantInstallments.applicationId, applicationId), eq(grantInstallments.tenantId, tenantId)));
+  if (!installments.length) return 0n;
+  const ids = installments.map((i) => i.id);
+  const rows = await (tx as typeof db).select({ amountMinor: grantDisbursements.amountMinor })
+    .from(grantDisbursements)
+    .where(and(
+      inArray(grantDisbursements.installmentId, ids),
+      eq(grantDisbursements.tenantId, tenantId),
+      eq(grantDisbursements.status, "completed"),
+    ));
+  return rows.reduce((acc, r) => acc + r.amountMinor, 0n);
 }
 
 export async function insertInstallment(tx: Writer, row: InstallmentInsert): Promise<void> {
@@ -55,8 +68,10 @@ export async function updateDisbursement(tx: Writer, id: string, patch: Partial<
   await tx.update(grantDisbursements).set({ ...patch, updatedAt: new Date() }).where(eq(grantDisbursements.id, id));
 }
 
-export async function findDisbursementByPfmsTxnId(pfmsTxnId: string): Promise<DisbursementRow | null> {
-  const rows = await db.select().from(grantDisbursements).where(eq(grantDisbursements.pfmsTxnId, pfmsTxnId)).limit(1);
+export async function findDisbursementByPfmsTxnId(pfmsTxnId: string, tenantId: string): Promise<DisbursementRow | null> {
+  const rows = await db.select().from(grantDisbursements)
+    .where(and(eq(grantDisbursements.pfmsTxnId, pfmsTxnId), eq(grantDisbursements.tenantId, tenantId)))
+    .limit(1);
   return rows[0] ?? null;
 }
 

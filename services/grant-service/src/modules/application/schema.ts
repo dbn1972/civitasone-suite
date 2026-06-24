@@ -19,6 +19,9 @@ export const grantApplications = applicationSchema.table("grant_applications", {
   approvedAt:           timestamp("approved_at", { withTimezone: true }),
   rejectedAt:           timestamp("rejected_at", { withTimezone: true }),
   rejectionReason:      text("rejection_reason"),
+  // 0003 hardening (P0-4 SoD): maker/checker actors
+  submittedBy:          uuid("submitted_by"),
+  approvedBy:           uuid("approved_by"),
   createdAt:            timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:            uuid("created_by").notNull(),

@@ -32,6 +32,10 @@ export const EVENTS = {
   beneficiaryCreated:         "grant.beneficiary.created",
   disbursementExceedsApproved: "grant.disbursement.exceeds_approved",
   ucExpenditureExceeds:       "grant.uc.expenditure_exceeds",
+  ucGateBlocked:              "grant.disbursement.uc_gate_blocked",
+  schemeBudgetExceeded:       "grant.scheme.budget_exceeded",
+  ucValidated:                "grant.uc.validated",
+  ucRejected:                 "grant.uc.rejected",
 } as const;
 
 /** Topics consumed from other services */
