@@ -44,6 +44,8 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         bankIfsc: e.bankIfsc,
         pan: e.pan,
         uan: e.uanNumber,
+        cityClass: (e.hraCityClass ?? "X") as "X" | "Y" | "Z",
+        taxRegime: (e.taxRegime ?? "new") as "old" | "new",
         departmentId: e.departmentId,
         pensionScheme: (e.pensionScheme ?? "NPS") as "GPF" | "NPS" | "EPF",
       })),

@@ -139,7 +139,6 @@ export function registerPayrollConsumers(queue: Queue): void {
       const slips = await repo.listSlipsByRun(p.id, p.tenantId);
       const totalGross = slips.reduce((s, sl) => s + sl.grossMinor, 0n);
       const totalNet = slips.reduce((s, sl) => s + sl.netPayMinor, 0n);
-      const totalEmployerContrib = await statutoryRepo.sumEmployerContribByRun(p.id, p.tenantId);
       await repo.updateRun(tx, p.id, {
         status: "approved",
         totalGrossMinor: totalGross,
@@ -156,7 +155,6 @@ export function registerPayrollConsumers(queue: Queue): void {
           month: run.month,
           totalGrossMinor: totalGross.toString(),
           totalNetMinor: totalNet.toString(),
-          totalEmployerContribMinor: totalEmployerContrib.toString(),
         },
       });
       await enqueue(tx, {
@@ -293,9 +291,9 @@ async function processPayrollRun(
         month: p.month,
         pensionScheme: emp.pensionScheme ?? "NPS",
         daRateBps,
-        cityClass: ((emp as { cityClass?: string }).cityClass as CityClass) ?? "X",
+        cityClass: emp.cityClass ?? "X",
         ptMinor: resolvePt(ptSlabs, basicMinor + daMinor),
-        taxRegime: decl?.regime ?? ((emp as { taxRegime?: "old" | "new" }).taxRegime) ?? "new",
+        taxRegime: decl?.regime ?? emp.taxRegime ?? "new",
         fyStartYear: fyStart,
         tdsYtdMinor,
         monthsRemaining: 12 - monthIdxInFy,
