@@ -11,10 +11,10 @@ export function registerUtilisationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.ucSubmit, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; applicationId: string;
-      period: string; releasedMinor: number; utilisedMinor: number; ucRef?: string;
+      period: string; installmentNo: number; releasedMinor: number; utilisedMinor: number; ucRef?: string;
     };
 
-    const disbursed = await disbursementRepo.sumDisbursedForApplication(db, p.applicationId);
+    const disbursed = await disbursementRepo.sumDisbursedForApplication(db, p.applicationId, p.tenantId);
     const utilisedMinor = BigInt(p.utilisedMinor);
 
     try {
@@ -41,7 +41,9 @@ export function registerUtilisationConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertUcStatement(tx, {
         id: p.id, tenantId: p.tenantId, applicationId: p.applicationId,
-        period: p.period, releasedMinor, utilisedMinor, varianceMinor,
+        period: p.period, installmentNo: p.installmentNo,
+        validationStatus: "pending",
+        releasedMinor, utilisedMinor, varianceMinor,
         currency: "INR", status: "submitted", isImmutable: true,
         ucRef: p.ucRef ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -49,7 +51,7 @@ export function registerUtilisationConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.ucSubmitted, eventType: EVENTS.ucSubmitted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { ucId: p.id, applicationId: p.applicationId, utilisedMinor: p.utilisedMinor },
+        payload: { ucId: p.id, applicationId: p.applicationId, installmentNo: p.installmentNo, utilisedMinor: p.utilisedMinor },
       });
       await audit(tx, msg, "submit_uc", "grant_uc_statement", p.id);
     });

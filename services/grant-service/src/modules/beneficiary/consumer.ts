@@ -4,7 +4,6 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { maskAadhaar } from "./domain.js";
 
 export function registerBeneficiaryConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.beneficiaryCreate, async (msg) => {
@@ -54,10 +53,12 @@ export function registerBeneficiaryConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.beneficiarySeedAadhaar, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; beneficiaryId: string;
-      aadhaar: string; bankAccountId?: string;
+      aadhaarLast4: string; aadhaarToken: string; bankAccountId?: string;
     };
-    // DPDP §4: extract last4 + token immediately, raw Aadhaar never reaches DB
-    const { last4, token } = maskAadhaar(p.aadhaar);
+    // P1-3 DPDP: Aadhaar is already masked at the command boundary; the queue
+    // payload carries only (last4, HMAC token) — raw Aadhaar never reaches here.
+    const last4 = p.aadhaarLast4;
+    const token = p.aadhaarToken;
 
     // De-duplication: reject if this Aadhaar token already belongs to a different beneficiary
     const existing = await repo.findAadhaarByTokenAndTenant(p.tenantId, token);

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
 import type { SubmitApplicationBody, ScoreApplicationBody, ApproveApplicationBody, RejectApplicationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -28,10 +30,18 @@ export async function scoreApplication(ctx: RequestContext, id: string, body: Sc
 }
 
 export async function approveApplication(ctx: RequestContext, id: string, body: ApproveApplicationBody): Promise<Accepted> {
+  // P0-4 Separation of Duties: the approver must be distinct from the submitter.
+  // Enforced synchronously at the command boundary so the caller gets a 403,
+  // and re-asserted in the consumer transaction for defence in depth.
+  const app = await repo.findApplicationById(id, ctx.tenantId);
+  if (!app) throw new HttpError(404, "NOT_FOUND", "application not found");
+  if (app.submittedBy && app.submittedBy === ctx.actorId) {
+    throw new HttpError(403, "SOD_VIOLATION", "approver must be different from the submitter (separation of duties)");
+  }
   await queue.publish(COMMANDS.applicationApprove, {
     type: COMMANDS.applicationApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...body },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "application", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

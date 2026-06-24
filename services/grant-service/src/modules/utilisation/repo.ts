@@ -1,8 +1,8 @@
-import { eq, and, count, inArray } from "drizzle-orm";
+import { eq, and, count, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
-  grantUcStatements, grantComplianceReports,
-  type UcRow, type UcInsert,
+  grantUcStatements, grantComplianceReports, grantUcValidations,
+  type UcRow, type UcInsert, type UcValidationInsert,
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -23,23 +23,71 @@ export async function listUcByTenant(tenantId: string, limit: number): Promise<U
 }
 
 /**
- * PFMS critical rule: tranche N+1 cannot be released unless UC for prior tranches
- * has been submitted/accepted. Requires at least (installmentNo - 1) UC records.
+ * PFMS next-tranche gate (P0-3). Tranche N may only be released once the UC for
+ * the SPECIFIC prior tranche (installment_no = N-1) has been submitted AND
+ * validated, scoped to the tenant. A rejected/pending UC, a UC for a different
+ * tranche, or a UC belonging to another tenant does NOT unlock tranche N.
  */
 export async function hasSubmittedUcForApplication(
   applicationId: string,
+  tenantId: string,
   installmentNo = 2,
 ): Promise<boolean> {
   if (installmentNo <= 1) return true;
-  const required = installmentNo - 1;
+  const priorTranche = installmentNo - 1;
   const rows = await db
     .select({ cnt: count() })
     .from(grantUcStatements)
     .where(and(
+      eq(grantUcStatements.tenantId, tenantId),
       eq(grantUcStatements.applicationId, applicationId),
-      inArray(grantUcStatements.status, ["submitted", "accepted"]),
+      eq(grantUcStatements.installmentNo, priorTranche),
+      eq(grantUcStatements.validationStatus, "validated"),
     ));
-  return (rows[0]?.cnt ?? 0) >= required;
+  return (rows[0]?.cnt ?? 0) >= 1;
+}
+
+/** Fetch a single UC statement scoped to tenant (for validation decisions). */
+export async function findUcById(ucId: string, tenantId: string): Promise<UcRow | null> {
+  const rows = await db.select().from(grantUcStatements)
+    .where(and(eq(grantUcStatements.id, ucId), eq(grantUcStatements.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Persist a UC validation decision row (utilisation.grant_uc_validations). */
+export async function insertUcValidation(tx: Writer, row: UcValidationInsert): Promise<void> {
+  await tx.insert(grantUcValidations).values(row);
+}
+
+/** Set validation_status (+ validator metadata) on a UC statement, tenant-scoped. */
+export async function setUcValidationStatus(
+  tx: Writer,
+  ucId: string,
+  tenantId: string,
+  status: "validated" | "rejected",
+  validatedBy: string,
+  remarks: string | null,
+): Promise<void> {
+  await tx.update(grantUcStatements)
+    .set({
+      validationStatus: status,
+      validatedBy,
+      validatedAt: new Date(),
+      validationRemarks: remarks,
+      updatedAt: new Date(),
+      updatedBy: validatedBy,
+    })
+    .where(and(eq(grantUcStatements.id, ucId), eq(grantUcStatements.tenantId, tenantId)));
+}
+
+/** Latest validation decision for a UC (tenant-scoped), or null. */
+export async function findLatestUcValidation(ucId: string, tenantId: string) {
+  const rows = await db.select().from(grantUcValidations)
+    .where(and(eq(grantUcValidations.ucId, ucId), eq(grantUcValidations.tenantId, tenantId)))
+    .orderBy(desc(grantUcValidations.validatedAt))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function insertComplianceReport(tx: Writer, row: typeof grantComplianceReports.$inferInsert): Promise<void> {

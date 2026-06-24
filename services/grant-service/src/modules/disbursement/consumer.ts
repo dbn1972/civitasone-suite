@@ -7,6 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../application/repo.js";
+import * as schemeRepo from "../scheme/repo.js";
 import * as ucRepo from "../utilisation/repo.js";
 import { assertDisbursementWithinApproved, canRetryDisbursement, MAX_DISBURSEMENT_RETRIES } from "./domain.js";
 
@@ -79,7 +80,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
       // Guard: total disbursed must not exceed approved amount
       const app = await appRepo.findApplicationByIdTx(tx, installment.applicationId, installment.tenantId);
       if (app) {
-        const alreadyDisbursed = await repo.sumDisbursedForApplication(tx, installment.applicationId);
+        const alreadyDisbursed = await repo.sumDisbursedForApplication(tx, installment.applicationId, installment.tenantId);
         try {
           assertDisbursementWithinApproved(app.amountApprovedMinor, alreadyDisbursed, installment.amountMinor);
         } catch {
@@ -98,19 +99,47 @@ export function registerDisbursementConsumers(queue: Queue): void {
       if (installment.installmentNo > 1) {
         const ucExists = await ucRepo.hasSubmittedUcForApplication(
           installment.applicationId,
+          installment.tenantId,
           installment.installmentNo,
         );
         if (!ucExists) {
           await enqueue(tx, {
-            topic: EVENTS.disbursementExceedsApproved, eventType: "grant.disbursement.uc_gate_blocked",
+            topic: EVENTS.ucGateBlocked, eventType: EVENTS.ucGateBlocked,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
             payload: {
               installmentId: p.installmentId, installmentNo: installment.installmentNo,
               applicationId: installment.applicationId,
-              reason: "UC_GATE_BLOCKED: a Utilisation Certificate must be submitted for the previous tranche before releasing the next tranche (PFMS rule)",
+              reason: "UC_GATE_BLOCKED: the prior tranche's Utilisation Certificate must be submitted AND validated before releasing the next tranche (PFMS rule)",
             },
           });
           return;
+        }
+      }
+
+      // P0-5 scheme budget control: atomically reserve this installment against the
+      // scheme budget AFTER all rejection gates (duplicate / approved / UC) have
+      // passed, so a blocked tranche never leaks budget. The conditional UPDATE only
+      // succeeds when disbursed_minor + amount <= budget_minor (tenant-scoped), so
+      // concurrent disbursements cannot overspend the envelope. Reject (no EFT) on failure.
+      {
+        const appForBudget = await appRepo.findApplicationByIdTx(tx, installment.applicationId, installment.tenantId);
+        const schemeId = appForBudget?.schemeId;
+        if (schemeId) {
+          const reserved = await schemeRepo.reserveSchemeBudget(
+            tx, schemeId, installment.tenantId, installment.amountMinor,
+          );
+          if (!reserved) {
+            await enqueue(tx, {
+              topic: EVENTS.schemeBudgetExceeded, eventType: EVENTS.schemeBudgetExceeded,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                installmentId: p.installmentId, schemeId,
+                amountMinor: installment.amountMinor.toString(),
+                reason: "SCHEME_BUDGET_EXCEEDED: disbursing this installment would exceed the scheme budget envelope",
+              },
+            });
+            return;
+          }
         }
       }
 
@@ -153,11 +182,14 @@ export function registerDisbursementConsumers(queue: Queue): void {
     if (!p.disbursementId && !p.pfmsTxnId) return;
     const disbursement = p.disbursementId
       ? await (async () => {
-          const rows = await db.select().from((await import("./schema.js")).grantDisbursements)
-            .where((await import("drizzle-orm")).eq((await import("./schema.js")).grantDisbursements.id, p.disbursementId!)).limit(1);
+          const { grantDisbursements } = await import("./schema.js");
+          const { eq, and } = await import("drizzle-orm");
+          const rows = await db.select().from(grantDisbursements)
+            .where(and(eq(grantDisbursements.id, p.disbursementId!), eq(grantDisbursements.tenantId, msg.tenantId)))
+            .limit(1);
           return rows[0] ?? null;
         })()
-      : p.pfmsTxnId ? await repo.findDisbursementByPfmsTxnId(p.pfmsTxnId) : null;
+      : p.pfmsTxnId ? await repo.findDisbursementByPfmsTxnId(p.pfmsTxnId, msg.tenantId) : null;
     if (!disbursement) return;
     const isSuccess = p.outcome !== "failure";
     await db.transaction(async (tx) => {
@@ -210,7 +242,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
           installmentId: disbursement.installmentId,
         });
       }
-      await audit(tx, msg, isSuccess ? "disbursement_completed" : "disbursement_failed", "grant_disbursement", disbursement.id);
+      await audit(tx, msg, isSuccess ? "disbursement_completed" : "disbursement_failed", "grant_disbursement", disbursement.id, isSuccess ? "success" : "failure");
     });
   });
 
@@ -222,7 +254,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       for (const rec of p.records) {
-        const disbursement = await repo.findDisbursementByPfmsTxnId(rec.pfmsTxnId);
+        const disbursement = await repo.findDisbursementByPfmsTxnId(rec.pfmsTxnId, p.tenantId);
         if (!disbursement) continue;
         const isSuccess = rec.status === "completed";
         await repo.updateDisbursement(tx, disbursement.id, {
@@ -244,10 +276,10 @@ export function registerDisbursementConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "grant", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "grant", action, resourceType, resourceId, outcome },
   });
 }

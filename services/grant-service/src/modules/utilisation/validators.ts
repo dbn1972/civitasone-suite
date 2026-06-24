@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const submitUcBody = z.object({
   period:        z.string().min(4).max(7),
+  installmentNo: z.number().int().positive(),
   releasedMinor: z.number().int().nonnegative(),
   utilisedMinor: z.number().int().nonnegative(),
   ucRef:         z.string().optional(),
