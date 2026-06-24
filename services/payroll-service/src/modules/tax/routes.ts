@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
+import { buildForm16 } from "./form16.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -197,7 +198,8 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * GET /v1/payroll/tax/form16?employeeId=X&fy=2025-26
-   * Returns Form 16 Part B structured data.
+   * Returns Form 16 Part A (deductor/deductee identity + quarterly TDS) and a
+   * complete Part B (gross → deductions → taxable → tax → TDS → balance).
    */
   app.get("/v1/payroll/tax/form16", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -207,51 +209,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     if (!employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2025-26)");
 
-    const { startYear } = parseFy(fy);
-    const months = fyMonths(startYear);
-
-    // Aggregate TDS deducted during the year
-    let totalTdsDeducted = 0;
-    let annualGross = 0;
-    let annualBasic = 0;
-
-    for (const month of months) {
-      const tdsRows = await db.select().from(payrollTds)
-        .where(and(
-          eq(payrollTds.tenantId, ctx.tenantId),
-          eq(payrollTds.employeeId, employeeId),
-          eq(payrollTds.period, month),
-        ));
-      for (const t of tdsRows) {
-        totalTdsDeducted += Number(t.tdsMinor) / 100;
-        annualGross += Number(t.annualBasicMinor) / 100;
-      }
-    }
-
-    // Fetch declarations
-    const decRows = await db.select().from(taxDeclarations)
-      .where(and(
-        eq(taxDeclarations.tenantId, ctx.tenantId),
-        eq(taxDeclarations.employeeId, employeeId),
-        eq(taxDeclarations.fy, fy),
-      ))
-      .limit(1);
-    const dec = decRows[0] ?? null;
-
-    return reply.send({
-      employeeId,
-      fy,
-      form16PartB: {
-        grossSalary: Math.round(annualGross),
-        standardDeduction: 50000,
-        section80c: dec ? Math.min(Number(dec.section80c) / 100, 150000) : 0,
-        section80d: dec ? Math.min(Number(dec.section80d) / 100, 50000) : 0,
-        hraClaimed: dec ? Number(dec.hraClaimed) / 100 : 0,
-        otherDeductions: dec ? Number(dec.otherDeductions) / 100 : 0,
-        totalTdsDeducted: Math.round(totalTdsDeducted),
-        regime: dec?.regime ?? "new",
-      },
-    });
+    return reply.send(await buildForm16(ctx.tenantId, employeeId, fy));
   });
 
   /**
