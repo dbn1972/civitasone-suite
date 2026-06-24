@@ -13,7 +13,7 @@ function toDateOnly(value: Date | string | null | undefined): string {
 }
 
 export async function getInstallmentsByApplication(tenantId: string, appId: string) {
-  return repo.findInstallmentsByApplication(appId);
+  return repo.findInstallmentsByApplication(appId, tenantId);
 }
 
 export async function listAllInstallments(tenantId: string, limit: number) {
@@ -30,9 +30,9 @@ export async function listGrantReleases(tenantId: string, limit: number) {
   );
   const summaries = [];
   for (const row of rows ?? []) {
-    const installment = await repo.findInstallmentById(row.installmentId);
-    const application = installment ? await applicationRepo.findApplicationById(installment.applicationId) : null;
-    const beneficiary = application ? await beneficiaryRepo.findBeneficiaryById(application.beneficiaryId) : null;
+    const installment = await repo.findInstallmentById(row.installmentId, tenantId);
+    const application = installment ? await applicationRepo.findApplicationById(installment.applicationId, tenantId) : null;
+    const beneficiary = application ? await beneficiaryRepo.findBeneficiaryById(application.beneficiaryId, tenantId) : null;
     summaries.push({
       id: row.id,
       releaseNo: row.pfmsTxnId ?? row.id.slice(0, 8).toUpperCase(),

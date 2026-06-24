@@ -10,17 +10,25 @@ import { checkEligibility } from "../scheme/domain.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
 import { assertTransition } from "./domain.js";
 
+/** Indian financial year (Apr-Mar) for a given date, formatted e.g. "2026-27". */
+function indianFinancialYear(now: Date = new Date()): string {
+  const y = now.getUTCFullYear();
+  const startYear = now.getUTCMonth() >= 3 ? y : y - 1; // months are 0-based; Apr = 3
+  const endYY = String((startYear + 1) % 100).padStart(2, "0");
+  return `${startYear}-${endYY}`;
+}
+
 export function registerApplicationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.applicationSubmit, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; schemeId: string; grantNo: string;
+      id: string; tenantId: string; schemeId: string;
       beneficiaryId: string; purpose: string; amountRequestedMinor: number; currency?: string;
     };
 
     // Eligibility check — runs before DB write
     const criteria = await schemeRepo.findCriteriaByScheme(p.schemeId);
     if (criteria.length > 0) {
-      const ben = await beneficiaryRepo.findBeneficiaryById(p.beneficiaryId);
+      const ben = await beneficiaryRepo.findBeneficiaryById(p.beneficiaryId, p.tenantId);
       if (ben) {
         const profile: import("../scheme/domain.js").BeneficiaryProfile = {
           incomeAnnualMinor: ben.incomeAnnualMinor,
@@ -46,8 +54,9 @@ export function registerApplicationConsumers(queue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const grantNo = await repo.allocateSanctionNo(tx, p.tenantId, indianFinancialYear());
       await repo.insertApplication(tx, {
-        id: p.id, tenantId: p.tenantId, grantNo: p.grantNo, schemeId: p.schemeId,
+        id: p.id, tenantId: p.tenantId, grantNo, schemeId: p.schemeId,
         beneficiaryId: p.beneficiaryId, purpose: p.purpose,
         amountRequestedMinor: BigInt(p.amountRequestedMinor),
         amountApprovedMinor: 0n,
@@ -68,7 +77,7 @@ export function registerApplicationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const app = await repo.findApplicationByIdTx(tx, p.id);
+      const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
       assertTransition(app.status, "under_review");
       await repo.updateApplication(tx, p.id, { status: "under_review", updatedBy: msg.actorId });
@@ -93,7 +102,7 @@ export function registerApplicationConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; amountApprovedMinor: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const app = await repo.findApplicationByIdTx(tx, p.id);
+      const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
       assertTransition(app.status, "approved");
       await repo.updateApplication(tx, p.id, {
@@ -107,7 +116,7 @@ export function registerApplicationConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { applicationId: p.id, amountApprovedMinor: p.amountApprovedMinor },
       });
-      const beneficiary = await beneficiaryRepo.findBeneficiaryById(app.beneficiaryId);
+      const beneficiary = await beneficiaryRepo.findBeneficiaryById(app.beneficiaryId, app.tenantId);
       await enqueue(tx, {
         topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -130,7 +139,7 @@ export function registerApplicationConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const app = await repo.findApplicationByIdTx(tx, p.id);
+      const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
       assertTransition(app.status, "rejected");
       await repo.updateApplication(tx, p.id, {

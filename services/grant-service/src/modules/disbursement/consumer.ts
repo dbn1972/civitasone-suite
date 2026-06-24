@@ -17,7 +17,7 @@ async function notifyDisbursementOutcome(
   eventType: string,
   variables: Record<string, string>,
 ): Promise<void> {
-  const app = await appRepo.findApplicationByIdTx(tx, applicationId);
+  const app = await appRepo.findApplicationByIdTx(tx, applicationId, msg.tenantId);
   if (!app) return;
   await enqueue(tx, {
     topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
@@ -63,7 +63,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const installment = await repo.findInstallmentByIdTx(tx, p.installmentId);
+      const installment = await repo.findInstallmentByIdTx(tx, p.installmentId, p.tenantId);
       if (!installment) return;
 
       // Idempotency guard: installment already disbursed — reject duplicate
@@ -77,7 +77,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
       }
 
       // Guard: total disbursed must not exceed approved amount
-      const app = await appRepo.findApplicationByIdTx(tx, installment.applicationId);
+      const app = await appRepo.findApplicationByIdTx(tx, installment.applicationId, installment.tenantId);
       if (app) {
         const alreadyDisbursed = await repo.sumDisbursedForApplication(tx, installment.applicationId);
         try {
@@ -171,7 +171,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
           failureReason: `eft_failed: retry ${nextRetry}/${MAX_DISBURSEMENT_RETRIES}`,
           updatedBy: msg.actorId,
         });
-        const installment = await repo.findInstallmentByIdTx(tx, disbursement.installmentId);
+        const installment = await repo.findInstallmentByIdTx(tx, disbursement.installmentId, disbursement.tenantId);
         if (installment) {
           await enqueue(tx, {
             topic: "finance.payment.eft.initiate", eventType: "finance.payment.eft.initiate",
@@ -203,7 +203,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { disbursementId: disbursement.id, installmentId: disbursement.installmentId },
       });
-      const installment = await repo.findInstallmentByIdTx(tx, disbursement.installmentId);
+      const installment = await repo.findInstallmentByIdTx(tx, disbursement.installmentId, disbursement.tenantId);
       if (installment) {
         await notifyDisbursementOutcome(tx, msg, installment.applicationId, eventTopic, {
           disbursementId: disbursement.id,

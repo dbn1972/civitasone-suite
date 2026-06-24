@@ -4,8 +4,9 @@ import { grantSchemes, grantEligibilityCriteria, type SchemeRow, type SchemeInse
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findSchemeById(id: string): Promise<SchemeRow | null> {
-  const rows = await db.select().from(grantSchemes).where(eq(grantSchemes.id, id)).limit(1);
+export async function findSchemeById(id: string, tenantId: string): Promise<SchemeRow | null> {
+  const rows = await db.select().from(grantSchemes)
+    .where(and(eq(grantSchemes.id, id), eq(grantSchemes.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 

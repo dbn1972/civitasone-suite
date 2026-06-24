@@ -56,6 +56,12 @@ export const grantScores = applicationSchema.table("grant_scores", {
   version:        integer("version").notNull().default(1),
 });
 
+export const grantSanctionCounters = applicationSchema.table("grant_sanction_counters", {
+  tenantId: uuid("tenant_id").notNull(),
+  fy:       varchar("fy", { length: 9 }).notNull(),
+  nextVal:  bigint("next_val", { mode: "bigint" }).notNull().default(1n),
+});
+
 export type ApplicationRow    = typeof grantApplications.$inferSelect;
 export type ApplicationInsert = typeof grantApplications.$inferInsert;
 export type ScoreRow    = typeof grantScores.$inferSelect;

@@ -8,11 +8,11 @@ export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function submitApplication(ctx: RequestContext, schemeId: string, body: SubmitApplicationBody): Promise<Accepted> {
   const id = randomUUID();
-  const grantNo = `GNT-${Date.now()}`;
+  // grantNo is allocated gaplessly inside the consumer transaction (per-tenant, per-FY counter).
   await queue.publish(COMMANDS.applicationSubmit, {
     messageId: id, type: COMMANDS.applicationSubmit,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, schemeId, grantNo, ...body },
+    payload: { id, tenantId: ctx.tenantId, schemeId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -21,7 +21,7 @@ function mapGrantStatus(status: string): "active" | "completed" | "suspended" | 
 }
 
 async function mapApplicationRow(row: ApplicationRow) {
-  const beneficiary = await beneficiaryRepo.findBeneficiaryById(row.beneficiaryId);
+  const beneficiary = await beneficiaryRepo.findBeneficiaryById(row.beneficiaryId, row.tenantId);
   return {
     id: row.id,
     grantNo: row.grantNo,
@@ -40,7 +40,7 @@ async function mapApplicationRow(row: ApplicationRow) {
 export async function getApplication(tenantId: string, id: string): Promise<ApplicationRow | null> {
   return cache.getOrLoad(
     cache.makeKey(tenantId, "application", id),
-    () => repo.findApplicationById(id)
+    () => repo.findApplicationById(id, tenantId)
   );
 }
 

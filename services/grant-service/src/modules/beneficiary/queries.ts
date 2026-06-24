@@ -10,10 +10,12 @@ function mapBeneficiaryType(type: string): "ngo" | "government" | "institution" 
 }
 
 export async function getBeneficiary(tenantId: string, id: string): Promise<BeneficiaryRow | null> {
-  return cache.getOrLoad(
+  const row = await cache.getOrLoad(
     cache.makeKey(tenantId, "beneficiary", id),
-    () => repo.findBeneficiaryById(id)
+    () => repo.findBeneficiaryById(id, tenantId)
   );
+  if (!row || row.tenantId !== tenantId) return null;
+  return row;
 }
 
 export async function listGranteeSummaries(tenantId: string, limit: number) {
