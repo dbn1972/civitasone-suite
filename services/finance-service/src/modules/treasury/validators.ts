@@ -20,4 +20,10 @@ export const createDepositBody = z.object({
 });
 export type CreateDepositBody = z.infer<typeof createDepositBody>;
 
+export const depositDispositionBody = z.object({
+  amountMinor: z.number().int().positive(),
+  billId:      z.string().uuid().optional(),
+});
+export type DepositDispositionBody = z.infer<typeof depositDispositionBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });

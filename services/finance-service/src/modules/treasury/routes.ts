@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createChallanBody, createDepositBody, idParam } from "./validators.js";
+import { createChallanBody, createDepositBody, depositDispositionBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -31,6 +31,31 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = createDepositBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createDeposit(ctx, body));
+  });
+
+  // P1-3: deposit lifecycle — refund / forfeit / adjust-against-bill.
+  app.post("/v1/finance/deposits/:id/refund", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = depositDispositionBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.refundDeposit(ctx, id, body));
+  });
+
+  app.post("/v1/finance/deposits/:id/forfeit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = depositDispositionBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.forfeitDeposit(ctx, id, body));
+  });
+
+  app.post("/v1/finance/deposits/:id/adjust", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = depositDispositionBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.adjustDeposit(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

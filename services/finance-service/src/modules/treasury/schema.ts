@@ -49,11 +49,27 @@ export const financeDeposits = treasurySchema.table("finance_deposits", {
   balanceMinor: bigint("balance_minor", { mode: "bigint" }).notNull().default(0n),
   currency:     char("currency", { length: 3 }).notNull().default("INR"),
   status:       varchar("status", { length: 24 }).notNull().default("active"),
+  sourceBillId:   uuid("source_bill_id"),
+  forfeitedMinor: bigint("forfeited_minor", { mode: "bigint" }).notNull().default(0n),
+  refundedMinor:  bigint("refunded_minor", { mode: "bigint" }).notNull().default(0n),
+  adjustedMinor:  bigint("adjusted_minor", { mode: "bigint" }).notNull().default(0n),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
   updatedBy:    uuid("updated_by").notNull(),
   version:      integer("version").notNull().default(1),
+});
+
+export const financeDepositEvents = treasurySchema.table("finance_deposit_events", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  depositId:   uuid("deposit_id").notNull(),
+  eventType:   varchar("event_type", { length: 24 }).notNull(),
+  amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull(),
+  reference:   varchar("reference", { length: 128 }),
+  journalId:   uuid("journal_id"),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
 });
 
 export const financeDebt = treasurySchema.table("finance_debt", {
@@ -91,6 +107,8 @@ export const financeGuarantees = treasurySchema.table("finance_guarantees", {
 export type BankRow      = typeof financeBanks.$inferSelect;
 export type ChallanRow   = typeof financeChallans.$inferSelect;
 export type ChallanInsert = typeof financeChallans.$inferInsert;
+export type DepositRow    = typeof financeDeposits.$inferSelect;
 export type DepositInsert = typeof financeDeposits.$inferInsert;
+export type DepositEventInsert = typeof financeDepositEvents.$inferInsert;
 
-export const schema = { financeBanks, financeChallans, financeDeposits, financeDebt, financeGuarantees };
+export const schema = { financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeGuarantees };

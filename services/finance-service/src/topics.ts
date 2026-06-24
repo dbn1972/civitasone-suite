@@ -11,6 +11,9 @@ export const COMMANDS = {
   // treasury
   challanCreate:        "finance.challan.create",
   depositCreate:        "finance.deposit.create",
+  depositRefund:        "finance.deposit.refund",
+  depositForfeit:       "finance.deposit.forfeit",
+  depositAdjust:        "finance.deposit.adjust",
   // payments
   billCreate:           "finance.bill.create",
   billApprove:          "finance.bill.approve",

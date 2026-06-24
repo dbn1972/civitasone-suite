@@ -5,12 +5,33 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances } from "./domain.js";
 import { getPeriodStatus } from "../period-close/routes.js";
 import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
 import type { JournalLine } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve a line's accountCode to a head UUID for the uuid head_id ledger column.
+ * GL-spine callers (bills/payments/challans) already pass UUIDs and pass through
+ * unchanged. The depreciation / asset-disposal / manual-journal paths build
+ * lines from raw 4-digit account CODES — previously these were inserted straight
+ * into the uuid head_id column and the row dead-lettered. We now resolve the
+ * code to its head UUID via the per-tenant master; an unknown code is cleanly
+ * rejected with a clear error instead of poisoning the queue.
+ */
+async function resolveHeadIdTx(tx: unknown, tenantId: string, accountCode: string): Promise<string> {
+  if (UUID_RE.test(accountCode)) return accountCode;
+  const head = await budgetRepo.findHeadByCodeTx(
+    tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0], tenantId, accountCode,
+  );
+  if (!head) throw new Error(`UNKNOWN_ACCOUNT_CODE: head code ${accountCode} not found for tenant ${tenantId}`);
+  return head.id;
+}
 
 const DEP_EXPENSE = process.env.FINANCE_DEP_EXPENSE_CODE ?? "5100";
 const DEP_EXPENSE_STAT = process.env.FINANCE_STAT_DEP_EXPENSE_CODE ?? "5101";
@@ -61,9 +82,12 @@ async function postJournal(
     ...(journal.reversesId ? { reversesId: journal.reversesId } : {}),
   });
   for (const line of journal.lines) {
+    // P5: resolve raw account codes -> head UUIDs so the depreciation / disposal
+    // / manual-journal paths post instead of dead-lettering on the uuid column.
+    const headId = await resolveHeadIdTx(tx, journal.tenantId, line.accountCode);
     await repo.insertLedgerLine(tx, {
       id: randomUUID(), tenantId: journal.tenantId,
-      headId: line.accountCode,
+      headId,
       debitMinor: BigInt(line.debitMinor), creditMinor: BigInt(line.creditMinor),
       balanceMinor: BigInt(line.debitMinor) - BigInt(line.creditMinor),
       voucherNo, postingDate: journal.postingDate,

@@ -11,9 +11,10 @@ import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists } from "../masters/repo.js";
 import { getPeriodStatus } from "../period-close/routes.js";
 import * as allocRepo from "../budget/allocation-repo.js";
-import { fyFromDate } from "../hoa/voucher.js";
+import { fyFromDate, nextDocNo } from "../hoa/voucher.js";
 import type { Deduction } from "./schema.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
+import { postCashBook } from "../../shared/cashbook.js";
 import type { JournalLine } from "../gl/schema.js";
 
 const AP_CONTROL_CODE = process.env.FINANCE_AP_CONTROL_CODE ?? "2050";
@@ -80,8 +81,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // Budget appropriation control: locate the head allocation for the bill's FY.
       const billFy = fyFromDate(billDate);
       const alloc = await allocRepo.findAllocationTx(tx, p.tenantId, p.headId, billFy);
+      // P1-1: gapless, strictly-sequential bill number from the shared atomic
+      // allocator (per tenant+FY+series). The caller-supplied billNo is ignored
+      // as the authoritative number; a rolled-back create does not consume one.
+      const { docNo: billNo } = await nextDocNo(
+        tx as unknown as Parameters<typeof nextDocNo>[0], p.tenantId, billFy, "BILL",
+      );
       await repo.insertBill(tx, {
-        id: p.id, tenantId: p.tenantId, billNo: p.billNo, vendorId: p.vendorId,
+        id: p.id, tenantId: p.tenantId, billNo, vendorId: p.vendorId,
         headId: p.headId, ddoCode: p.ddoCode.toUpperCase(),
         ...(p.paoCode ? { paoCode: p.paoCode.toUpperCase() } : {}),
         sanctionRef: p.sanctionRef ?? null,
@@ -113,7 +120,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.billMismatch, eventType: EVENTS.billMismatch,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { billId: p.id, billNo: p.billNo, reason: "missing po_ref or grn_ref" },
+          payload: { billId: p.id, billNo, reason: "missing po_ref or grn_ref" },
         });
       }
       await audit(tx, msg, "create", "bill", p.id);
@@ -219,6 +226,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await enqueueSpineJournal(tx, {
         tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         sourceKey: `payment:${p.id}`, type: "payment", postingDate: payDate, lines: payLines,
+      });
+      // P1-2: cash book (IGFRS cash basis) — payment release is cash OUT of bank.
+      // Idempotent on (tenant, reference); redelivery is a no-op.
+      await postCashBook(tx as unknown as Parameters<typeof postCashBook>[0], {
+        tenantId: p.tenantId, entryDate: payDate, voucherType: "payment",
+        voucherNo: bill.billNo, particulars: `Payment against bill ${bill.billNo}`,
+        receiptMinor: 0n, paymentMinor: payAmount, bankOrCash: "bank",
+        reference: `payment:${p.id}`, actorId: msg.actorId,
       });
       await audit(tx, msg, "initiate", "payment", p.id);
     });

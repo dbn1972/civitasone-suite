@@ -33,6 +33,28 @@ export async function nextVoucherNo(
   return { seq, voucherNo };
 }
 
+/**
+ * Gapless, strictly-sequential document number for ANY document type
+ * (bill / challan / payment / sanction / …). Shares the same atomic per
+ * (tenant, fy, series) counter as the journal voucher allocator above, so every
+ * document class gets its own gap-free run within an FY. Must be called inside a
+ * DB transaction so a rolled-back create does NOT consume a number — the
+ * INSERT ... ON CONFLICT increment is rolled back with the surrounding tx.
+ *
+ * Format: "<PREFIX>/<fy>/<000042>", e.g. "BILL/2026-27/000042".
+ */
+export async function nextDocNo(
+  tx: Executor,
+  tenantId: string,
+  fy: string,
+  series: string,
+  prefix = series,
+): Promise<{ seq: number; docNo: string }> {
+  const { seq } = await nextVoucherNo(tx, tenantId, fy, series);
+  const docNo = `${prefix}/${fy}/${String(seq).padStart(6, "0")}`;
+  return { seq, docNo };
+}
+
 /** Derive the Indian financial year (Apr–Mar) from a YYYY-MM-DD posting date. */
 export function fyFromDate(postingDate: string): string {
   const [y, m] = postingDate.split("-").map(Number);
