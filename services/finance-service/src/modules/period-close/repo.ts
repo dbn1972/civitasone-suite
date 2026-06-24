@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { financePeriodClose } from "./schema.js";
+import { financePeriodClose, financePeriodReopenLog } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -40,4 +40,8 @@ export async function isPeriodHardClosedDb(tenantId: string, period: string): Pr
 export async function getPeriodStatusDb(tenantId: string, period: string): Promise<string> {
   const row = await findPeriodClose(tenantId, period);
   return row?.status ?? "open";
+}
+
+export async function logReopen(tx: Writer, row: typeof financePeriodReopenLog.$inferInsert): Promise<void> {
+  await tx.insert(financePeriodReopenLog).values(row);
 }
