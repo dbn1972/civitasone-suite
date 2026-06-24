@@ -10,6 +10,7 @@ import { schema as auctionModule }  from "../modules/auction/schema.js";
 import { schema as paymentsModule } from "../modules/payments/schema.js";
 import { schema as blacklistModule } from "../modules/vendor-blacklist/schema.js";
 import { schema as threeWayModule }  from "../modules/three-way-match/schema.js";
+import { schema as securityModule }  from "../modules/security/schema.js";
 import { docCountersSchema }         from "./numbering.js";
 import { outboxSchema }             from "./outbox.js";
 
@@ -30,6 +31,7 @@ export const db = drizzle(sqlClient, {
     ...paymentsModule,
     ...blacklistModule,
     ...threeWayModule,
+    ...securityModule,
     ...docCountersSchema,
     ...outboxSchema,
   },

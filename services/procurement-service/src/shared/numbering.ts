@@ -20,6 +20,9 @@ const PREFIX: Record<string, string> = {
   grn: "GRN",
   auction: "AUC",
   gem: "GEM",
+  bid: "BID",
+  emd: "EMD",
+  pbg: "PBG",
 };
 
 /**
