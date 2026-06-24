@@ -104,11 +104,44 @@ export const financeGuarantees = treasurySchema.table("finance_guarantees", {
   version:     integer("version").notNull().default(1),
 });
 
+/**
+ * Cheque / DD payment instruments (Tier-1 residual). Tenant-scoped issuance with
+ * a status lifecycle: issued -> presented -> cleared | bounced | cancelled.
+ * Money is PAISE bigint. (tenant_id, instrument_type, instrument_no) is unique —
+ * that tuple is the idempotency key for issuance.
+ */
+export const financeInstruments = treasurySchema.table("finance_instruments", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  instrumentType: varchar("instrument_type", { length: 8 }).notNull(),
+  instrumentNo:   text("instrument_no").notNull(),
+  bankAccountId:  uuid("bank_account_id"),
+  bankName:       text("bank_name").notNull(),
+  payee:          text("payee").notNull(),
+  amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull(),
+  currency:       char("currency", { length: 3 }).notNull().default("INR"),
+  issueDate:      date("issue_date").notNull(),
+  status:         varchar("status", { length: 16 }).notNull().default("issued"),
+  presentedAt:    timestamp("presented_at", { withTimezone: true }),
+  clearedAt:      timestamp("cleared_at", { withTimezone: true }),
+  bouncedAt:      timestamp("bounced_at", { withTimezone: true }),
+  cancelledAt:    timestamp("cancelled_at", { withTimezone: true }),
+  bounceReason:   text("bounce_reason"),
+  paymentId:      uuid("payment_id"),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:      uuid("created_by").notNull(),
+  updatedBy:      uuid("updated_by").notNull(),
+  version:        integer("version").notNull().default(1),
+});
+
 export type BankRow      = typeof financeBanks.$inferSelect;
 export type ChallanRow   = typeof financeChallans.$inferSelect;
 export type ChallanInsert = typeof financeChallans.$inferInsert;
 export type DepositRow    = typeof financeDeposits.$inferSelect;
 export type DepositInsert = typeof financeDeposits.$inferInsert;
 export type DepositEventInsert = typeof financeDepositEvents.$inferInsert;
+export type InstrumentRow    = typeof financeInstruments.$inferSelect;
+export type InstrumentInsert = typeof financeInstruments.$inferInsert;
 
-export const schema = { financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeGuarantees };
+export const schema = { financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeGuarantees, financeInstruments };
