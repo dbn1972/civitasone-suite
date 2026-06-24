@@ -90,15 +90,24 @@ export async function bankReconRoutes(app: FastifyInstance): Promise<void> {
       const payPairs = autoMatch(debitLines, paymentBooks, q.nearDays);
       const recPairs = autoMatch(creditLines, challanBooks, q.nearDays);
 
+      // H1: only mark the bank line matched when we actually won the book-side
+      // reconcile (reconciled=false → true). A concurrent call that already
+      // reconciled the payment loses the guard (rowcount=0) and we skip the match,
+      // so one payment can never be matched to two lines.
+      let matched = 0;
       for (const pair of payPairs) {
+        const won = await repo.markPaymentReconciled(tx, pair.bookId, pair.lineId);
+        if (!won) continue;
         await repo.markLineMatched(tx, pair.lineId, "payment", pair.bookId);
-        await repo.markPaymentReconciled(tx, pair.bookId, pair.lineId);
+        matched += 1;
       }
       for (const pair of recPairs) {
+        const won = await repo.markChallanReconciled(tx, pair.bookId, pair.lineId);
+        if (!won) continue;
         await repo.markLineMatched(tx, pair.lineId, "receipt", pair.bookId);
-        await repo.markChallanReconciled(tx, pair.bookId, pair.lineId);
+        matched += 1;
       }
-      return payPairs.length + recPairs.length;
+      return matched;
     });
 
     return reply.send({ data: { statementId: id, matched: matchedCount } });

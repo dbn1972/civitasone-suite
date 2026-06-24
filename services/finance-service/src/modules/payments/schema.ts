@@ -19,6 +19,7 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   netMinor:    bigint("net_minor", { mode: "bigint" }).notNull().default(0n),
   poRef:       text("po_ref"),
   grnRef:      text("grn_ref"),
+  billDate:    date("bill_date"),
   ddoCode:     varchar("ddo_code", { length: 12 }),
   paoCode:     varchar("pao_code", { length: 12 }),
   agencyCode:  varchar("agency_code", { length: 12 }),

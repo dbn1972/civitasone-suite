@@ -23,6 +23,7 @@ export const createBillBody = z.object({
   deductions:  z.array(deduction).default([]),
   poRef:       z.string().optional(),
   grnRef:      z.string().optional(),
+  billDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "billDate must be YYYY-MM-DD").optional(),
 });
 export type CreateBillBody = z.infer<typeof createBillBody>;
 

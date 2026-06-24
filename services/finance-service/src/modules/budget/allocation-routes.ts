@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import * as allocRepo from "./allocation-repo.js";
-import { assertReappropriable } from "./allocation-domain.js";
 import { DomainError } from "./domain.js";
 import type { BudgetAllocationRow } from "./allocation-schema.js";
 
@@ -71,7 +70,6 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
       await db.transaction(async (tx) => {
         const from = await allocRepo.findAllocationTx(tx, ctx.tenantId, body.fromHeadId, body.fy);
         if (!from) throw new HttpError(404, "NOT_FOUND", "source allocation not found");
-        assertReappropriable(from, BigInt(body.amountMinor));
         let to = await allocRepo.findAllocationTx(tx, ctx.tenantId, body.toHeadId, body.fy);
         if (!to) {
           await allocRepo.upsertAllocation(tx, {
@@ -80,7 +78,16 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
           });
           to = await allocRepo.findAllocationTx(tx, ctx.tenantId, body.toHeadId, body.fy);
         }
-        await allocRepo.moveAllocation(tx, from.id, to!.id, BigInt(body.amountMinor));
+        if (BigInt(body.amountMinor) <= 0n) {
+          throw new HttpError(400, "INVALID_AMOUNT", "re-appropriation amount must be positive");
+        }
+        // C1: atomic guarded move — the conditional decrement serialises concurrent
+        // re-appropriations so the source allocated_minor can never be driven below
+        // its already committed+actual usage (and never negative).
+        const moved = await allocRepo.moveAllocationGuarded(tx, from.id, to!.id, BigInt(body.amountMinor));
+        if (!moved) {
+          throw new HttpError(409, "REAPPROPRIATION_EXCEEDS_BALANCE", "re-appropriation exceeds source available balance");
+        }
         await allocRepo.logReappropriation(tx, {
           id: randomUUID(), tenantId: ctx.tenantId, fy: body.fy,
           fromHeadId: body.fromHeadId, toHeadId: body.toHeadId,
