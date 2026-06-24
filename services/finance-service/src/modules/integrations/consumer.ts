@@ -101,10 +101,12 @@ export function registerIntegrationConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.payrollRunApproved, async (msg) => {
     const p = msg.payload as {
       runId: string; month: string; totalGrossMinor: string; totalNetMinor: string;
+      totalEmployerContribMinor?: string;
     };
     const gross = BigInt(p.totalGrossMinor);
     const net = BigInt(p.totalNetMinor);
     const statutory = gross - net;
+    const employer = BigInt(p.totalEmployerContribMinor ?? "0");
     const journalId = randomUUID();
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -121,6 +123,12 @@ export function registerIntegrationConsumers(queue: Queue): void {
             { accountCode: "5001", debitMinor: Number(gross), creditMinor: 0, narration: "Salary expense" },
             { accountCode: "2101", debitMinor: 0, creditMinor: Number(net), narration: "Net salary payable" },
             { accountCode: "2102", debitMinor: 0, creditMinor: Number(statutory > 0n ? statutory : 0n), narration: "Statutory deductions payable" },
+            // Employer statutory contributions (PF/EPS, ESI, NPS) are an additional
+            // expense + liability, separate from the employee-side gross above.
+            ...(employer > 0n ? [
+              { accountCode: "5002", debitMinor: Number(employer), creditMinor: 0, narration: "Employer contributions expense" },
+              { accountCode: "2103", debitMinor: 0, creditMinor: Number(employer), narration: "Employer contributions payable" },
+            ] : []),
           ],
         },
       });
