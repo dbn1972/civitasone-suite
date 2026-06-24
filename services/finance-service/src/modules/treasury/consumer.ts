@@ -11,6 +11,7 @@ export function registerTreasuryConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; challanNo: string; receiptHeadId: string;
       depositor: string; amountMinor: number; currency?: string; grnNo?: string;
+      bankAccountId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -18,6 +19,7 @@ export function registerTreasuryConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, challanNo: p.challanNo,
         receiptHeadId: p.receiptHeadId, depositor: p.depositor,
         amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        ...(p.bankAccountId ? { bankAccountId: p.bankAccountId } : {}),
         grnNo: p.grnNo ?? null, status: "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

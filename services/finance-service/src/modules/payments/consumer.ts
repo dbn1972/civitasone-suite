@@ -141,7 +141,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.paymentInitiate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
-      amountMinor: number; currency?: string; eftRef?: string;
+      amountMinor: number; currency?: string; eftRef?: string; bankAccountId?: string;
     };
     assertValidDdoCode(p.ddoCode);
     await db.transaction(async (tx) => {
@@ -165,9 +165,21 @@ export function registerPaymentsConsumers(queue: Queue): void {
         ddoCode: p.ddoCode.toUpperCase(),
         eftRef: p.eftRef ?? null, mode: p.mode,
         amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        ...(p.bankAccountId ? { bankAccountId: p.bankAccountId } : {}),
         status: "initiated", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateBill(tx, p.billId, { status: "paid", updatedBy: msg.actorId });
+      // M2: on payment release, settle the bill's committed appropriation into
+      // actual. C1 registered the commitment as the bill's netMinor for the
+      // bill's FY allocation; here we drain exactly that amount from committed
+      // into actual via an atomic guarded UPDATE (committed_minor >= amount).
+      // available = allocated-(committed+actual) is invariant across the move,
+      // and the guard makes a redelivered payment a no-op (no double-move).
+      const settleFy = fyFromDate(payDate);
+      const settleAlloc = await allocRepo.findAllocationTx(tx, p.tenantId, bill.headId, settleFy);
+      if (settleAlloc) {
+        await allocRepo.settleCommittedToActualGuarded(tx, settleAlloc.id, bill.netMinor);
+      }
       await enqueue(tx, {
         topic: EVENTS.paymentMade, eventType: EVENTS.paymentMade,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, isNull, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   bankStatement, bankStatementLines,
@@ -33,26 +33,48 @@ export async function listStatements(tenantId: string, limit: number) {
     .where(eq(bankStatement.tenantId, tenantId)).limit(limit);
 }
 
-/** Unreconciled payments (money out) for a tenant — match against debit statement lines. */
-export async function unreconciledPayments(tenantId: string) {
+/**
+ * Unreconciled payments (money out) for a tenant — match against debit statement
+ * lines. H2: when `bankAccountId` is supplied (the statement's own account) the
+ * candidate set is scoped so a payment tagged to a DIFFERENT bank account cannot
+ * match this statement's lines. Payments with a NULL bank_account_id stay
+ * eligible (legacy/untagged), preserving prior behaviour.
+ */
+export async function unreconciledPayments(tenantId: string, bankAccountId?: string) {
   return db.select({
     id: financePayments.id,
     amountMinor: financePayments.amountMinor,
     date: sql<string>`to_char(${financePayments.createdAt}, 'YYYY-MM-DD')`,
     reference: financePayments.utr,
   }).from(financePayments)
-    .where(and(eq(financePayments.tenantId, tenantId), eq(financePayments.reconciled, false)));
+    .where(and(
+      eq(financePayments.tenantId, tenantId),
+      eq(financePayments.reconciled, false),
+      ...(bankAccountId
+        ? [or(isNull(financePayments.bankAccountId), eq(financePayments.bankAccountId, bankAccountId))!]
+        : []),
+    ));
 }
 
-/** Unreconciled challans/receipts (money in) — match against credit statement lines. */
-export async function unreconciledChallans(tenantId: string) {
+/**
+ * Unreconciled challans/receipts (money in) — match against credit statement
+ * lines. H2: scoped to the statement's bank account when supplied; untagged
+ * (NULL) challans remain eligible.
+ */
+export async function unreconciledChallans(tenantId: string, bankAccountId?: string) {
   return db.select({
     id: financeChallans.id,
     amountMinor: financeChallans.amountMinor,
     date: sql<string>`to_char(${financeChallans.createdAt}, 'YYYY-MM-DD')`,
     reference: financeChallans.challanNo,
   }).from(financeChallans)
-    .where(and(eq(financeChallans.tenantId, tenantId), eq(financeChallans.reconciled, false)));
+    .where(and(
+      eq(financeChallans.tenantId, tenantId),
+      eq(financeChallans.reconciled, false),
+      ...(bankAccountId
+        ? [or(isNull(financeChallans.bankAccountId), eq(financeChallans.bankAccountId, bankAccountId))!]
+        : []),
+    ));
 }
 
 export async function markLineMatched(tx: Writer, lineId: string, matchType: string, matchId: string): Promise<void> {

@@ -38,6 +38,7 @@ export const financePayments = paymentsSchema.table("finance_payments", {
   tenantId:    uuid("tenant_id").notNull(),
   eftRef:      text("eft_ref"),
   billId:      uuid("bill_id").notNull(),
+  bankAccountId: uuid("bank_account_id"),
   mode:        varchar("mode", { length: 16 }).notNull(),
   amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:    char("currency", { length: 3 }).notNull().default("INR"),

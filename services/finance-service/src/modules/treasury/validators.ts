@@ -7,6 +7,7 @@ export const createChallanBody = z.object({
   amountMinor:   z.number().int().positive(),
   currency:      z.string().length(3).default("INR"),
   grnNo:         z.string().optional(),
+  bankAccountId: z.string().uuid().optional(),
 });
 export type CreateChallanBody = z.infer<typeof createChallanBody>;
 
