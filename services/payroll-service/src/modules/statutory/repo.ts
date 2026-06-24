@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps } from "./schema.js";
 
@@ -50,4 +50,19 @@ export async function listGpfByTenant(tenantId: string, limit = 100) {
 
 export async function listNpsByTenant(tenantId: string, limit = 100) {
   return db.select().from(payrollNps).where(eq(payrollNps.tenantId, tenantId)).limit(limit);
+}
+
+/**
+ * Total EMPLOYER statutory contributions for a run (employer PF incl. EPS, employer
+ * ESI, employer NPS), in paise. Used by finance to accrue the employer-cost legs.
+ */
+export async function sumEmployerContribByRun(runId: string, tenantId: string): Promise<bigint> {
+  const sumOf = async (tbl: typeof payrollPf | typeof payrollEsi | typeof payrollNps): Promise<bigint> => {
+    const rows = await db.select({ v: tbl.erContribMinor }).from(tbl)
+      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId)));
+    return rows.reduce((s: bigint, r: { v: bigint }) => s + (r.v ?? 0n), 0n);
+  };
+  // payrollPf.erContribMinor is the full employer 12% (EPS + EPF-er); do not also
+  // add epfErContribMinor or it double-counts.
+  return (await sumOf(payrollPf)) + (await sumOf(payrollEsi)) + (await sumOf(payrollNps));
 }
