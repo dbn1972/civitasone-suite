@@ -115,20 +115,23 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
       effectiveDate: z.string().optional(),
     }).parse(req.body);
     const acct = await mustAccount(ctx.tenantId, id);
-    const prev = await repo.currentBalance(ctx.tenantId, acct);
     const amount = BigInt(body.amountMinor);
     const delta = sign === 1 ? amount : -amount;
-    const next = prev + delta;
-    if (next < 0n) throw new HttpError(409, "INSUFFICIENT_BALANCE", "debit exceeds available GPF balance");
     const ledgerId = randomUUID();
-    await db.transaction(async (tx) => {
+    // Lock the account, read the balance, guard and insert — all in one tx so
+    // two concurrent debits cannot both pass the INSUFFICIENT_BALANCE check. (C1)
+    const { prev, next } = await db.transaction(async (tx) => {
+      const prevBal = await repo.lockedBalance(tx, ctx.tenantId, acct);
+      const nextBal = prevBal + delta;
+      if (nextBal < 0n) throw new HttpError(409, "INSUFFICIENT_BALANCE", "debit exceeds available GPF balance");
       await repo.insertLedger(tx, {
         id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
-        entryType, amountMinor: amount, deltaMinor: delta, balanceMinor: next,
+        entryType, amountMinor: amount, deltaMinor: delta, balanceMinor: nextBal,
         ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
         ...(body.effectiveDate !== undefined ? { effectiveDate: body.effectiveDate } : {}),
         createdBy: ctx.actorId,
       });
+      return { prev: prevBal, next: nextBal };
     });
     return reply.code(201).send(jsonSafe({
       ledgerId, entryType, amountMinor: amount, previousBalanceMinor: prev, balanceMinor: next,
@@ -150,18 +153,21 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
       ratePctOverride: z.coerce.number().min(0).max(20).optional(),
     }).parse(req.body);
     const acct = await mustAccount(ctx.tenantId, id);
-    const prev = await repo.currentBalance(ctx.tenantId, acct);
     const ratePct = body.ratePctOverride ?? Number(acct.interestRatePct);
-    // paise * rate% * months/12, rounded to nearest paise
-    const interest = BigInt(Math.round(Number(prev) * (ratePct / 100) * (body.months / 12)));
-    const next = prev + interest;
     const ledgerId = randomUUID();
-    await db.transaction(async (tx) => {
+    // Read the locked balance inside the tx so interest accrues on the true,
+    // serialised balance (not a stale pre-tx read). (C1)
+    const { prev, interest, next } = await db.transaction(async (tx) => {
+      const prevBal = await repo.lockedBalance(tx, ctx.tenantId, acct);
+      // paise * rate% * months/12, rounded to nearest paise
+      const interestMinor = BigInt(Math.round(Number(prevBal) * (ratePct / 100) * (body.months / 12)));
+      const nextBal = prevBal + interestMinor;
       await repo.insertLedger(tx, {
         id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
-        entryType: "interest", amountMinor: interest, deltaMinor: interest, balanceMinor: next,
+        entryType: "interest", amountMinor: interestMinor, deltaMinor: interestMinor, balanceMinor: nextBal,
         narrative: `interest @ ${ratePct}% for ${body.months} month(s)`, createdBy: ctx.actorId,
       });
+      return { prev: prevBal, interest: interestMinor, next: nextBal };
     });
     return reply.code(201).send(jsonSafe({
       ledgerId, ratePct, months: body.months, interestMinor: interest,
