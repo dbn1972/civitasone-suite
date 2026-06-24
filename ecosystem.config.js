@@ -58,6 +58,11 @@ const JWT_ALGORITHM = process.env.JWT_ALGORITHM ?? "RS256";
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://civitasone-keycloak:8080";
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "civitasone";
 const INTERNAL_SERVICE_SECRET = requireSecret("INTERNAL_SERVICE_SECRET");
+// SEC-3 device trust: identity mints/validates device trust tokens with this.
+// Fail-closed in prod (no insecure default); dev/test gets a stable dev value.
+const DEVICE_TRUST_SECRET = IS_PROD
+  ? requireSecret("DEVICE_TRUST_SECRET")
+  : (process.env.DEVICE_TRUST_SECRET ?? "civitasone-device-trust-dev-secret");
 // Only honoured outside production (tests/dev). Empty in prod.
 const JWT_SECRET = IS_PROD ? undefined : (process.env.JWT_SECRET ?? "civitasone-dev-secret");
 
@@ -65,6 +70,7 @@ const AUTH_ENV = {
   JWT_ALGORITHM,
   KEYCLOAK_URL,
   KEYCLOAK_REALM,
+  DEVICE_TRUST_SECRET,
   ...(JWT_SECRET ? { JWT_SECRET } : {}),
 };
 
