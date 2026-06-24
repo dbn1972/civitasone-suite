@@ -15,6 +15,8 @@ export const payrollPf = statutorySchema.table("payroll_pf", {
   erContribPct:      numeric("er_contrib_pct", { precision: 5, scale: 2 }).notNull().default("12"),
   empContribMinor:   bigint("emp_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   erContribMinor:    bigint("er_contrib_minor", { mode: "bigint" }).notNull().default(0n),
+  epsContribMinor:   bigint("eps_contrib_minor", { mode: "bigint" }).notNull().default(0n),
+  epfErContribMinor: bigint("epf_er_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   currency:          char("currency", { length: 3 }).notNull().default("INR"),
   period:            char("period", { length: 7 }).notNull(),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

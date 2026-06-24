@@ -28,3 +28,12 @@ export async function findLoanByIdTx(tx: Writer, id: string): Promise<LoanRow | 
   const rows = await (tx as typeof db).select().from(payrollLoans).where(eq(payrollLoans.id, id)).limit(1);
   return rows[0] ?? null;
 }
+
+export async function insertRepayment(tx: Writer, row: typeof payrollLoanRepayments.$inferInsert): Promise<void> {
+  await tx.insert(payrollLoanRepayments).values(row);
+}
+
+export async function countRepayments(tx: Writer, loanId: string): Promise<number> {
+  const rows = await (tx as typeof db).select().from(payrollLoanRepayments).where(eq(payrollLoanRepayments.loanId, loanId));
+  return rows.length;
+}

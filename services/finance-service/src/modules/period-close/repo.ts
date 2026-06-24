@@ -35,3 +35,9 @@ export async function isPeriodHardClosedDb(tenantId: string, period: string): Pr
   const row = await findPeriodClose(tenantId, period);
   return row?.status === "hard_close";
 }
+
+/** Period status: 'open' | 'soft_close' | 'hard_close'. */
+export async function getPeriodStatusDb(tenantId: string, period: string): Promise<string> {
+  const row = await findPeriodClose(tenantId, period);
+  return row?.status ?? "open";
+}

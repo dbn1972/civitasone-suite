@@ -13,6 +13,7 @@ export const taxDeclarations = payrollSchema.table("payroll_tax_declarations", {
   section80c:      bigint("section_80c", { mode: "bigint" }).notNull().default(0n),
   section80d:      bigint("section_80d", { mode: "bigint" }).notNull().default(0n),
   hraClaimed:      bigint("hra_claimed", { mode: "bigint" }).notNull().default(0n),
+  rentPaidMinor:   bigint("rent_paid_minor", { mode: "bigint" }).notNull().default(0n),
   otherDeductions: bigint("other_deductions", { mode: "bigint" }).notNull().default(0n),
   status:          varchar("status", { length: 16 }).notNull().default("draft"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

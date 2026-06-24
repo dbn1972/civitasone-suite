@@ -42,7 +42,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
         deductions: p.deductions, netMinor: BigInt(p.netMinor),
         poRef: p.poRef ?? null, grnRef: p.grnRef ?? null,
-        stage: "section", status: hasMismatch ? "pending" : "pending",
+        stage: "section", status: hasMismatch ? "on_hold" : "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       if (hasMismatch) {

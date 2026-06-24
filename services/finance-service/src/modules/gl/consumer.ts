@@ -6,7 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertJournalBalances } from "./domain.js";
-import { isPeriodHardClosed } from "../period-close/routes.js";
+import { getPeriodStatus } from "../period-close/routes.js";
 import type { JournalLine } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -30,8 +30,12 @@ async function postJournal(
 ): Promise<void> {
   assertJournalBalances(journal.lines);
   const period = journal.postingDate.slice(0, 7);
-  if (await isPeriodHardClosed(journal.tenantId, period)) {
+  const periodStatus = await getPeriodStatus(journal.tenantId, period);
+  if (periodStatus === "hard_close") {
     throw new Error(`PERIOD_CLOSED: cannot post to hard-closed period ${period}`);
+  }
+  if (periodStatus === "soft_close" && !(["adjustment", "closing"].includes(journal.type))) {
+    throw new Error(`PERIOD_SOFT_CLOSED: only adjustment/closing journals allowed in soft-closed period ${period}`);
   }
   await repo.insertJournal(tx, {
     id: journal.id, tenantId: journal.tenantId, voucherNo: journal.voucherNo,

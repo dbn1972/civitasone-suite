@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
@@ -40,7 +41,15 @@ export function registerIntegrationConsumers(queue: Queue): void {
       const join = new Date(p.dateOfJoining ?? p.effectiveDate);
       const sep = new Date(p.effectiveDate);
       const years = Math.max(0, (sep.getTime() - join.getTime()) / (365.25 * 86400000));
-      const gratuityMinor = computeGratuity(years, basicMinor);
+      // Gratuity emoluments = last Basic + DA (CCS/Gratuity Act). Resolve DA rate at separation.
+      const daRows = (await tx.execute(sql`
+        SELECT rate_bps FROM payroll.dearness_allowance_rates
+        WHERE tenant_id = ${msg.tenantId}::uuid AND effective_from <= ${p.effectiveDate}::date
+        ORDER BY effective_from DESC LIMIT 1
+      `)) as unknown as Array<{ rate_bps: number | string }>;
+      const daRateBps = daRows[0]?.rate_bps != null ? BigInt(daRows[0].rate_bps) : 0n;
+      const lastDaMinor = (basicMinor * daRateBps) / 10000n;
+      const gratuityMinor = computeGratuity(years, basicMinor, lastDaMinor);
       if (gratuityMinor <= 0n) return;
       await statutoryRepo.insertGratuity(tx, {
         id: randomUUID(),
