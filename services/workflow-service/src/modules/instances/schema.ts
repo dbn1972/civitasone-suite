@@ -17,6 +17,9 @@ export const instances = domainSchema.table("instances", {
   parentInstanceId: uuid("parent_instance_id"),
   parentTaskId: uuid("parent_task_id"),
   parentNodeKey: varchar("parent_node_key", { length: 64 }),
+  // SECURITY C1 — call-activity nesting depth. Root = 0; a call-node child is
+  // parent.call_depth + 1. Used to reject fork-bombs past WORKFLOW_MAX_CALL_DEPTH.
+  callDepth: integer("call_depth").notNull().default(0),
   context: jsonb("context").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -19,6 +19,11 @@ import type { InstanceRow } from "../instances/schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+// SECURITY C1 — maximum call-activity nesting depth (root instance = depth 0).
+// A spawn that would push the child past this is rejected (fail the parent, no
+// spawn) so a recursive/mutually-recursive call graph cannot fork-bomb.
+const MAX_CALL_DEPTH = Math.max(1, Number(process.env.WORKFLOW_MAX_CALL_DEPTH ?? 10));
+
 // The transaction handle passed by drizzle's db.transaction() — needs
 // select/insert/update + execute (for the assignment resolver's atomic cursor).
 type Tx = Parameters<typeof repo.insert>[0] & Parameters<typeof defRepo.findNodeByKeyTx>[0]
@@ -305,7 +310,7 @@ async function spawnCallActivity(
   await instanceRepo.updateCurrentNode(tx, instance.id, node.nodeKey, msg.actorId);
 
   const childDefCode = node.callDefinitionCode ?? null;
-  const childDef = childDefCode ? await defRepo.findByCodeTx(tx, instance.tenantId, childDefCode) : null;
+  const childDef = childDefCode ? await defRepo.findExecutableByCodeTx(tx, instance.tenantId, childDefCode) : null;
 
   // Parent call task: a non-human wait task held at the call node.
   const callTaskId = randomUUID();
@@ -317,6 +322,42 @@ async function spawnCallActivity(
       tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
       fromNode, toNode: node.nodeKey, action: "call_error", decision: null, actorId: msg.actorId,
       detail: { reason: "child_definition_not_active", callDefinitionCode: childDefCode },
+    });
+    await completeInstance(tx, msg, instance, "reject");
+    return;
+  }
+
+  // SECURITY C1 — fork-bomb guard. The child would sit one level deeper than
+  // the parent; reject the spawn (fail the parent, audited) if that exceeds the
+  // configured max depth, OR if any ANCESTOR instance (walking parent_instance_id
+  // up the chain, tenant-scoped) is already running this same target definition
+  // (an A->...->A cycle). Either way: do NOT spawn an unbounded child.
+  const childDepth = (instance.callDepth ?? 0) + 1;
+  let cycle = false;
+  if (childDepth <= MAX_CALL_DEPTH) {
+    let ancestorId: string | null = instance.parentInstanceId ?? null;
+    // include the immediate parent itself in the walk (instance is about to host
+    // the child, so instance is the nearest ancestor of childDef).
+    let cursor: InstanceRow | null = instance;
+    const seen = new Set<string>();
+    while (cursor && !seen.has(cursor.id)) {
+      seen.add(cursor.id);
+      if (cursor.definitionId === childDef.id) { cycle = true; break; }
+      ancestorId = cursor.parentInstanceId ?? null;
+      cursor = ancestorId
+        ? await instanceRepo.findByIdTx(tx, ancestorId)
+        : null;
+      // tenant-scope the walk: never cross a tenant boundary.
+      if (cursor && cursor.tenantId !== instance.tenantId) cursor = null;
+    }
+  }
+  if (childDepth > MAX_CALL_DEPTH || cycle) {
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: node.nodeKey, action: "call_error", decision: null, actorId: msg.actorId,
+      detail: cycle
+        ? { reason: "call_cycle", callDefinitionCode: childDefCode, definitionId: childDef.id }
+        : { reason: "call_depth_exceeded", callDepth: childDepth, maxCallDepth: MAX_CALL_DEPTH },
     });
     await completeInstance(tx, msg, instance, "reject");
     return;
@@ -371,6 +412,7 @@ async function spawnCallActivity(
     parentInstanceId: instance.id,
     parentTaskId: callTaskId,
     parentNodeKey: node.nodeKey,
+    callDepth: childDepth,
     createdBy: msg.actorId,
     updatedBy: msg.actorId,
     version: 1,
@@ -427,8 +469,30 @@ async function completeInstance(
   if (!instance.parentInstanceId || !instance.parentTaskId) return;
 
   // resume the parent: complete the waiting call task with the child outcome.
-  const callTask = await repo.findByIdTx(tx, instance.parentTaskId);
+  // H1 - verify the linkage before completing/advancing the parent. The call
+  // task must (a) exist in THIS child tenant (findByIdTx is tenant-scoped),
+  // (b) be an actual call task (is_call), (c) point back at THIS exact child
+  // (child_instance_id === instance.id), and (d) share the child tenant. A
+  // mismatched / cross-tenant / non-call linkage is rejected so a child can
+  // only ever resume its own linked parent call task.
+  const callTask = await repo.findByIdTx(tx, instance.parentTaskId, instance.tenantId);
   if (!callTask || callTask.status !== "pending") return;
+  if (callTask.isCall !== true
+      || callTask.childInstanceId !== instance.id
+      || callTask.tenantId !== instance.tenantId) {
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.parentInstanceId, taskId: callTask.id,
+      fromNode: instance.parentNodeKey ?? null, toNode: null, action: "call_error", decision: null,
+      actorId: SYSTEM_ACTOR_ID,
+      detail: {
+        reason: "call_task_linkage_mismatch",
+        childInstanceId: instance.id,
+        callTaskChildInstanceId: callTask.childInstanceId,
+        isCall: callTask.isCall,
+      },
+    });
+    return; // do not complete the call task / advance the parent
+  }
 
   // mark the call task completed in-band (it's a system wait task; no SoD).
   await repo.markCompleted(tx, callTask.id, callTask.tenantId, SYSTEM_ACTOR_ID, outcome, true);
