@@ -1,5 +1,6 @@
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { HttpError } from "../../shared/context.js";
 import {
   hrmsGpfAccounts, hrmsGpfLedger,
   type GpfAccountRow, type GpfAccountInsert, type GpfLedgerRow, type GpfLedgerInsert,
@@ -28,6 +29,29 @@ export async function insertAccount(tx: Writer, row: GpfAccountInsert): Promise<
 
 export async function insertLedger(tx: Writer, row: GpfLedgerInsert): Promise<void> {
   await tx.insert(hrmsGpfLedger).values(row);
+}
+
+/**
+ * Increment the account's optimistic-lock `version` on every ledger mutation
+ * (L4). When `expectedVersion` is supplied the bump is GUARDED: it only applies
+ * while the stored version still matches, otherwise a 409 VERSION_CONFLICT is
+ * raised so a stale concurrent op cannot clobber the account row. Postings are
+ * already serialised per-account via the advisory lock in `lockedBalance`, so
+ * within a posting tx the guard always observes the freshest version.
+ */
+export async function bumpAccountVersion(
+  tx: Writer, tenantId: string, accountId: string, updatedBy: string, expectedVersion?: number,
+): Promise<void> {
+  const where = expectedVersion !== undefined
+    ? and(eq(hrmsGpfAccounts.tenantId, tenantId), eq(hrmsGpfAccounts.id, accountId), eq(hrmsGpfAccounts.version, expectedVersion))
+    : and(eq(hrmsGpfAccounts.tenantId, tenantId), eq(hrmsGpfAccounts.id, accountId));
+  const res = await tx.update(hrmsGpfAccounts)
+    .set({ version: sql`${hrmsGpfAccounts.version} + 1`, updatedBy, updatedAt: new Date() })
+    .where(where);
+  if (expectedVersion !== undefined && (res as { rowCount?: number }).rowCount === 0) {
+    throw new HttpError(409, "VERSION_CONFLICT",
+      "GPF account was modified by another request; reload and retry");
+  }
 }
 
 /** Current running balance = latest ledger balance, else opening balance. */
