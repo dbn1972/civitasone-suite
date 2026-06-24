@@ -6,6 +6,7 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
 import { buildForm16 } from "./form16.js";
+import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -94,13 +95,19 @@ function computeTax(taxableIncome: number, regime: "old" | "new", startYear: num
   return { baseTax, rebate, surcharge, cess, totalTax: total, slabBreakdown: breakdown };
 }
 
-/** Parse FY string like "2025-26" to start/end year */
+/**
+ * Parse FY string like "2025-26" to start/end year.
+ * M5: strict — must match ^\d{4}-\d{2}$ AND suffix == (startYear+1)%100.
+ */
 function parseFy(fy: string): { startYear: number; endYear: number } {
-  const parts = fy.split("-");
-  if (parts.length !== 2 || !parts[0]) throw new HttpError(400, "VALIDATION_FAILED", "fy must be in format YYYY-YY e.g. 2025-26");
-  const startYear = parseInt(parts[0], 10);
-  const endYear = startYear + 1;
-  return { startYear, endYear };
+  const m = /^(\d{4})-(\d{2})$/.exec(fy ?? "");
+  if (!m) throw new HttpError(400, "VALIDATION_FAILED", "fy must be in format YYYY-YY e.g. 2025-26");
+  const startYear = parseInt(m[1]!, 10);
+  const suffix = parseInt(m[2]!, 10);
+  if (suffix !== (startYear + 1) % 100) {
+    throw new HttpError(400, "VALIDATION_FAILED", "fy second component must be (startYear+1) mod 100, e.g. 2025-26");
+  }
+  return { startYear, endYear: startYear + 1 };
 }
 
 /** Get all months for a financial year */
@@ -210,8 +217,19 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     // C1: a self-service employee may only read their OWN Form 16.
     const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2025-26)");
+    // M5: reject malformed FY with 400 before reaching the builder (whose parseFy
+    // throws a plain Error that would otherwise surface as 500).
+    parseFy(fy);
 
-    return reply.send(await buildForm16(ctx.tenantId, employeeId, fy));
+    try {
+      return reply.send(await buildForm16(ctx.tenantId, employeeId, fy));
+    } catch (err) {
+      // M4: HRMS unreachable → 502 (do not emit a blank-identity Form 16).
+      if (err instanceof HrmsUnavailableError) {
+        throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot issue Form 16: HRMS identity source unreachable");
+      }
+      throw err;
+    }
   });
 
   /**

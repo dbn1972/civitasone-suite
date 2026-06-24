@@ -6,12 +6,18 @@ import { taxDeclarations } from "./schema.js";
 import { computeTax } from "./engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
-/** Parse "2025-26" → start/end year. Throws on malformed input. */
+/**
+ * Parse "2025-26" → start/end year. Throws on malformed input.
+ * M5: strict validation — must match ^\d{4}-\d{2}$ AND the two-digit suffix must
+ * equal (startYear+1)%100 (e.g. 2025-26 valid; 2025-99 / 2025-XYZ rejected 400).
+ */
 export function parseFy(fy: string): { startYear: number; endYear: number } {
-  const parts = fy.split("-");
-  const startYear = parts[0] ? parseInt(parts[0], 10) : NaN;
-  if (parts.length !== 2 || Number.isNaN(startYear)) {
-    throw new Error("fy must be in format YYYY-YY e.g. 2025-26");
+  const m = /^(\d{4})-(\d{2})$/.exec(fy ?? "");
+  if (!m) throw new Error("fy must be in format YYYY-YY e.g. 2025-26");
+  const startYear = parseInt(m[1]!, 10);
+  const suffix = parseInt(m[2]!, 10);
+  if (suffix !== (startYear + 1) % 100) {
+    throw new Error("fy second component must be (startYear+1) mod 100, e.g. 2025-26");
   }
   return { startYear, endYear: startYear + 1 };
 }
@@ -30,7 +36,7 @@ export interface Form16 {
   assessmentYear: string;
   form16PartA: {
     deductor: { name: string; tan: string; pan: string };
-    deductee: { name: string; pan: string };
+    deductee: { name: string; pan: string; panFlag: string };
     quarterlyTds: { Q1: number; Q2: number; Q3: number; Q4: number };
     totalTdsDeposited: number;
     note: string;
@@ -53,13 +59,18 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   const { startYear, endYear } = parseFy(fy);
   const months = fyMonths(startYear);
 
-  // Actual gross paid = sum of monthly slip gross for FY runs.
+  // M3: only count figures from runs that have actually been finalised
+  // (approved/disbursed). A draft/processing/failed run must not contribute to
+  // Form 16 gross or TDS — an out-of-order or abandoned run would otherwise
+  // corrupt the Sec-192 true-up.
   const fyRuns = await db.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months)));
-  const fyRunIds = new Set(fyRuns.map((r) => r.id));
+  const finalisedRunIds = new Set(
+    fyRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id),
+  );
   const slipRows = await db.select().from(payrollSlips)
     .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId)));
-  const fySlips = slipRows.filter((s) => fyRunIds.has(s.runId));
+  const fySlips = slipRows.filter((s) => finalisedRunIds.has(s.runId));
   const grossSalary = Math.round(fySlips.reduce((a, s) => a + Number(s.grossMinor) / 100, 0));
 
   // Quarterly TDS breakup.
@@ -76,6 +87,8 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
     const tdsRows = await db.select().from(payrollTds)
       .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.employeeId, employeeId), eq(payrollTds.period, month)));
     for (const t of tdsRows) {
+      // M3: exclude TDS rows whose source run is not approved/disbursed.
+      if (!finalisedRunIds.has(t.runId)) continue;
       const amt = Number(t.tdsMinor) / 100;
       totalTdsDeducted += amt;
       quarters[quarterOf(month)] += amt;
@@ -110,13 +123,13 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   const totalTdsCredited = Math.round(totalTdsDeducted) + Math.round(prevEmployerTds);
   const balance = Math.round(totalTaxLiability - totalTdsCredited);
 
-  let deducteePan = ""; let deducteeName = "";
-  try {
-    const input = await fetchPayrollInput(tenantId, `${endYear}-03`);
-    const emp = input.employees.find((e) => e.id === employeeId);
-    deducteePan = emp?.pan ?? "";
-    deducteeName = emp?.fullName ?? "";
-  } catch { /* HRMS unavailable — identity blank, computation still valid */ }
+  // M4: HRMS fetch failure must FAIL the export (HrmsUnavailableError propagates
+  // → 502) instead of silently emitting a blank PAN. A blank PAN is only
+  // legitimate when the employee is reachable but genuinely has no PAN on file.
+  const input = await fetchPayrollInput(tenantId, `${endYear}-03`);
+  const emp = input.employees.find((e) => e.id === employeeId);
+  const deducteePan = emp?.pan ?? "";   // reachable + no PAN → genuine PANNOTAVBL
+  const deducteeName = emp?.fullName ?? "";
 
   return {
     employeeId,
@@ -128,7 +141,7 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
         tan: process.env.EMPLOYER_TAN ?? "<TAN — configure EMPLOYER_TAN>",
         pan: process.env.EMPLOYER_PAN ?? "<PAN — configure EMPLOYER_PAN>",
       },
-      deductee: { name: deducteeName, pan: deducteePan },
+      deductee: { name: deducteeName, pan: deducteePan, panFlag: deducteePan ? "" : "PANNOTAVBL" },
       quarterlyTds: quarters,
       totalTdsDeposited: Math.round(totalTdsDeducted),
       note: "Verify challan/TRACES references before issuing Part A.",

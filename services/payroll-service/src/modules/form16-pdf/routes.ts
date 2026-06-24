@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole } from "../../shared/context.js";
-import { buildForm16 } from "../tax/form16.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { buildForm16, parseFy } from "../tax/form16.js";
+import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 
@@ -67,8 +68,19 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.query);
+    // M5: strict FY (suffix arithmetic) beyond the shape check above → 400.
+    try { parseFy(q.fy); }
+    catch { throw new HttpError(400, "VALIDATION_FAILED", "fy second component must be (startYear+1) mod 100, e.g. 2025-26"); }
 
-    const f = await buildForm16(ctx.tenantId, employeeId, q.fy);
-    return reply.header("content-type", "text/html; charset=utf-8").send(renderForm16(f));
+    try {
+      const f = await buildForm16(ctx.tenantId, employeeId, q.fy);
+      return reply.header("content-type", "text/html; charset=utf-8").send(renderForm16(f));
+    } catch (err) {
+      // M4: HRMS unreachable → 502 (do not emit a blank-identity Form 16 PDF).
+      if (err instanceof HrmsUnavailableError) {
+        throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot issue Form 16 PDF: HRMS identity source unreachable");
+      }
+      throw err;
+    }
   });
 }

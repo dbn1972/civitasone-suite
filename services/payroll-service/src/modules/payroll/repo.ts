@@ -70,6 +70,12 @@ export async function listSlipsByRun(runId: string, tenantId: string): Promise<P
     .where(and(eq(payrollSlips.runId, runId), eq(payrollSlips.tenantId, tenantId)));
 }
 
+/** M1: transaction-scoped slip read (for computing authoritative run totals). */
+export async function listSlipsByRunTx(tx: Writer, runId: string, tenantId: string): Promise<PayrollSlipRow[]> {
+  return (tx as typeof db).select().from(payrollSlips)
+    .where(and(eq(payrollSlips.runId, runId), eq(payrollSlips.tenantId, tenantId)));
+}
+
 export async function markSlipsPaidForRun(tx: Writer, runId: string, actorId: string): Promise<void> {
   await tx.update(payrollSlips)
     .set({ status: "paid", updatedAt: new Date(), updatedBy: actorId })
