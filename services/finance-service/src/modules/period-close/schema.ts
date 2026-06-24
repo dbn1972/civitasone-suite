@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
 
 export const periodCloseSchema = pgSchema("gl");
 
@@ -13,4 +13,16 @@ export const financePeriodClose = periodCloseSchema.table("finance_period_close"
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const schema = { financePeriodClose };
+
+export const financePeriodReopenLog = periodCloseSchema.table("finance_period_reopen_log", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull(),
+  period:     varchar("period", { length: 7 }).notNull(),
+  fromStatus: varchar("from_status", { length: 12 }).notNull(),
+  toStatus:   varchar("to_status", { length: 12 }).notNull(),
+  reason:     text("reason"),
+  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:  uuid("created_by").notNull(),
+});
+
+export const schema = { financePeriodClose, financePeriodReopenLog };

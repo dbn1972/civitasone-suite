@@ -68,6 +68,43 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(existing ? 200 : 201).send({ data: record });
   });
 
+  app.post("/v1/finance/periods/:period/reopen", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { period } = z.object({ period: z.string().min(1) }).parse(req.params);
+    const body = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
+
+    const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
+    if (!existing || existing.status === "open") {
+      throw new HttpError(409, "NOT_CLOSED", "period is already open");
+    }
+    const fromStatus = existing.status;
+
+    await db.transaction(async (tx) => {
+      await periodRepo.upsertPeriodClose(tx, {
+        id: existing.id,
+        tenantId: ctx.tenantId,
+        fiscalYear: deriveFY(period),
+        period,
+        status: "open",
+        closedBy: null,
+        closedAt: null,
+      });
+      await periodRepo.logReopen(tx, {
+        id: crypto.randomUUID(),
+        tenantId: ctx.tenantId,
+        period,
+        fromStatus,
+        toStatus: "open",
+        ...(body.reason ? { reason: body.reason } : {}),
+        createdBy: ctx.actorId,
+      });
+    });
+
+    const record = await periodRepo.findPeriodClose(ctx.tenantId, period);
+    return reply.send({ data: record });
+  });
+
   app.get("/v1/finance/periods", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);

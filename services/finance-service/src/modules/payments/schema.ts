@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, jsonb, date,
+  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, jsonb, date, boolean,
 } from "drizzle-orm/pg-core";
 
 export const paymentsSchema = pgSchema("payments");
@@ -44,6 +44,9 @@ export const financePayments = paymentsSchema.table("finance_payments", {
   ddoCode:     varchar("ddo_code", { length: 12 }),
   paoCode:     varchar("pao_code", { length: 12 }),
   status:      varchar("status", { length: 24 }).notNull().default("initiated"),
+  reconciled:  boolean("reconciled").notNull().default(false),
+  reconciledLineId: uuid("reconciled_line_id"),
+  reconciledAt:     timestamp("reconciled_at", { withTimezone: true }),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),

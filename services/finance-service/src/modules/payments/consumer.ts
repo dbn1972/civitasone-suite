@@ -10,6 +10,10 @@ import { assertSanctionNotExhausted } from "../budget/domain.js";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists } from "../masters/repo.js";
+import { getPeriodStatus } from "../period-close/routes.js";
+import * as allocRepo from "../budget/allocation-repo.js";
+import { assertWithinAppropriation } from "../budget/allocation-domain.js";
+import { fyFromDate } from "../hoa/voucher.js";
 import type { Deduction } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -47,6 +51,20 @@ export function registerPaymentsConsumers(queue: Queue): void {
           );
         }
       }
+      // Period hard-close: block bill posting into a hard-closed period (current month)
+      const billPeriod = new Date().toISOString().slice(0, 7);
+      if ((await getPeriodStatus(p.tenantId, billPeriod)) === "hard_close") {
+        throw new Error(`PERIOD_CLOSED: cannot post bill into hard-closed period ${billPeriod}`);
+      }
+      // Budget appropriation control: block over-appropriation against the head allocation
+      const billFy = fyFromDate(`${billPeriod}-01`);
+      const alloc = await allocRepo.findAllocationTx(tx, p.tenantId, p.headId, billFy);
+      if (alloc) {
+        assertWithinAppropriation(
+          { allocatedMinor: alloc.allocatedMinor, committedMinor: alloc.committedMinor, actualMinor: alloc.actualMinor, enforce: alloc.enforce },
+          BigInt(p.netMinor),
+        );
+      }
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo: p.billNo, vendorId: p.vendorId,
         headId: p.headId, ddoCode: p.ddoCode.toUpperCase(),
@@ -58,6 +76,20 @@ export function registerPaymentsConsumers(queue: Queue): void {
         stage: "section", status: hasMismatch ? "on_hold" : "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      // Budget control: register the bill as a committed appropriation against the head
+      if (alloc) {
+        await allocRepo.addCommitted(tx, alloc.id, BigInt(p.netMinor));
+      }
+      // Sanction lifecycle: increment utilised on the backing sanction (already balance-checked above)
+      if (p.sanctionRef) {
+        const sanction = await budgetRepo.findSanctionByIdTx(tx, p.sanctionRef);
+        if (sanction) {
+          await budgetRepo.updateSanction(tx, sanction.id, {
+            utilisedMinor: sanction.utilisedMinor + BigInt(p.netMinor),
+            updatedBy: msg.actorId,
+          });
+        }
+      }
       if (hasMismatch) {
         await enqueue(tx, {
           topic: EVENTS.billMismatch, eventType: EVENTS.billMismatch,
@@ -114,6 +146,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       assertBillPassed(bill.status ?? "pending");
       assertValidPaymentMode(p.mode);
+      // Period hard-close: block payment posting into a hard-closed period (current month)
+      const payPeriod = new Date().toISOString().slice(0, 7);
+      if ((await getPeriodStatus(p.tenantId, payPeriod)) === "hard_close") {
+        throw new Error(`PERIOD_CLOSED: cannot post payment into hard-closed period ${payPeriod}`);
+      }
       await repo.insertPayment(tx, {
         id: p.id, tenantId: p.tenantId, billId: p.billId,
         ddoCode: p.ddoCode.toUpperCase(),
