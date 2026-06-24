@@ -20,8 +20,8 @@ function toView(r: AuditEventRow): AuditEventView {
   };
 }
 
-export async function findById(id: string): Promise<AuditEventView | null> {
-  const rows = await db.select().from(auditEvents).where(eq(auditEvents.id, id)).limit(1);
+export async function findById(id: string, tenantId: string): Promise<AuditEventView | null> {
+  const rows = await db.select().from(auditEvents).where(and(eq(auditEvents.id, id), eq(auditEvents.tenantId, tenantId))).limit(1);
   return rows[0] ? toView(rows[0]) : null;
 }
 

@@ -28,7 +28,9 @@ export async function createPlanItem(ctx: RequestContext, planId: string, body: 
 }
 
 export async function startPlan(ctx: RequestContext, planId: string): Promise<Accepted> {
+  const messageId = randomUUID();
   await queue.publish(COMMANDS.planStart, {
+    messageId,
     type: COMMANDS.planStart,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { planId, tenantId: ctx.tenantId },

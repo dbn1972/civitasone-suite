@@ -13,6 +13,15 @@ import type { ParaStatus } from "./schema.js";
 
 const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
 
+/** Raised when an optimistic-locked update affects 0 rows (stale version / cross-tenant). */
+class StaleWriteError extends Error {
+  readonly status = 409;
+  readonly code = "VERSION_CONFLICT";
+  constructor(resource: string, id: string) {
+    super(`[VERSION_CONFLICT] ${resource} ${id} was modified concurrently`);
+  }
+}
+
 export function registerParaConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.paraDraft, async (msg) => {
     const p = msg.payload as {
@@ -21,7 +30,7 @@ export function registerParaConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const obs = await obsRepo.findObservationByIdTx(tx, p.observationId);
+      const obs = await obsRepo.findObservationByIdTx(tx, p.observationId, p.tenantId);
       if (!obs) throw new Error(`observation ${p.observationId} not found`);
       assertCanDraftPara(obs.status ?? "open");
       await repo.insertPara(tx, {
@@ -35,7 +44,10 @@ export function registerParaConsumers(queue: Queue): void {
         fromStatus: "draft", toStatus: "draft", reason: "created from observation",
         createdBy: msg.actorId,
       });
-      await obsRepo.updateObservation(tx, p.observationId, { status: "para_drafted", updatedBy: msg.actorId });
+      const obsRows = await obsRepo.updateObservationVersioned(tx, p.observationId, p.tenantId, obs.version ?? 1, {
+        status: "para_drafted", updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
+      });
+      if (obsRows !== 1) throw new StaleWriteError("observation", p.observationId);
       await audit(tx, msg, "draft", "para", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "para", p.id));
@@ -45,12 +57,13 @@ export function registerParaConsumers(queue: Queue): void {
     const p = msg.payload as { paraId: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const para = await repo.findParaByIdTx(tx, p.paraId);
+      const para = await repo.findParaByIdTx(tx, p.paraId, p.tenantId);
       if (!para) throw new Error(`para ${p.paraId} not found`);
       assertCanTransition(para.status as ParaStatus, "issued");
-      await repo.updatePara(tx, p.paraId, {
+      const issuedRows = await repo.updateParaVersioned(tx, p.paraId, p.tenantId, para.version ?? 1, {
         status: "issued", issuedAt: new Date(), updatedBy: msg.actorId, version: (para.version ?? 1) + 1,
       });
+      if (issuedRows !== 1) throw new StaleWriteError("para", p.paraId);
       await repo.insertStatusHistory(tx, {
         id: randomUUID(), tenantId: p.tenantId, paraId: p.paraId,
         fromStatus: para.status ?? "draft", toStatus: "issued", reason: "issued to department",
@@ -82,7 +95,7 @@ export function registerParaConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const para = await repo.findParaByIdTx(tx, p.paraId);
+      const para = await repo.findParaByIdTx(tx, p.paraId, p.tenantId);
       if (!para) throw new Error(`para ${p.paraId} not found`);
       if (p.body !== undefined) {
         assertBodyMutable(para.status as ParaStatus);
@@ -93,9 +106,10 @@ export function registerParaConsumers(queue: Queue): void {
         responseBody: p.responseBody, respondedByRef: p.respondedByRef,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await repo.updatePara(tx, p.paraId, {
+      const repliedRows = await repo.updateParaVersioned(tx, p.paraId, p.tenantId, para.version ?? 1, {
         status: "replied", updatedBy: msg.actorId, version: (para.version ?? 1) + 1,
       });
+      if (repliedRows !== 1) throw new StaleWriteError("para", p.paraId);
       await repo.insertStatusHistory(tx, {
         id: randomUUID(), tenantId: p.tenantId, paraId: p.paraId,
         fromStatus: para.status ?? "issued", toStatus: "replied", reason: "department response received",
@@ -110,12 +124,13 @@ export function registerParaConsumers(queue: Queue): void {
     const p = msg.payload as { paraId: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const para = await repo.findParaByIdTx(tx, p.paraId);
+      const para = await repo.findParaByIdTx(tx, p.paraId, p.tenantId);
       if (!para) throw new Error(`para ${p.paraId} not found`);
       assertCanTransition(para.status as ParaStatus, "settled");
-      await repo.updatePara(tx, p.paraId, {
+      const settledRows = await repo.updateParaVersioned(tx, p.paraId, p.tenantId, para.version ?? 1, {
         status: "settled", updatedBy: msg.actorId, version: (para.version ?? 1) + 1,
       });
+      if (settledRows !== 1) throw new StaleWriteError("para", p.paraId);
       await repo.insertStatusHistory(tx, {
         id: randomUUID(), tenantId: p.tenantId, paraId: p.paraId,
         fromStatus: para.status ?? "replied", toStatus: "settled", reason: p.reason ?? "settled",
@@ -130,12 +145,13 @@ export function registerParaConsumers(queue: Queue): void {
     const p = msg.payload as { paraId: string; tenantId: string; reason?: string; dueDate?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const para = await repo.findParaByIdTx(tx, p.paraId);
+      const para = await repo.findParaByIdTx(tx, p.paraId, p.tenantId);
       if (!para) throw new Error(`para ${p.paraId} not found`);
       assertCanTransition(para.status as ParaStatus, "pending_recovery");
-      await repo.updatePara(tx, p.paraId, {
+      const pendingRows = await repo.updateParaVersioned(tx, p.paraId, p.tenantId, para.version ?? 1, {
         status: "pending_recovery", updatedBy: msg.actorId, version: (para.version ?? 1) + 1,
       });
+      if (pendingRows !== 1) throw new StaleWriteError("para", p.paraId);
       await repo.insertStatusHistory(tx, {
         id: randomUUID(), tenantId: p.tenantId, paraId: p.paraId,
         fromStatus: para.status ?? "replied", toStatus: "pending_recovery", reason: p.reason ?? "pending recovery",
@@ -147,13 +163,13 @@ export function registerParaConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           id: registerId, tenantId: p.tenantId, paraId: p.paraId, deptRef: para.deptRef,
-          amountInvolvedMinor: Number(para.amountInvolvedMinor ?? 0n), dueDate: p.dueDate,
+          amountInvolvedMinor: (para.amountInvolvedMinor ?? 0n).toString(), dueDate: p.dueDate,
         },
       });
       await enqueue(tx, {
         topic: EVENTS.paraPendingRecovery, eventType: EVENTS.paraPendingRecovery,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { paraId: p.paraId, deptRef: para.deptRef, amountInvolvedMinor: Number(para.amountInvolvedMinor ?? 0n) },
+        payload: { paraId: p.paraId, deptRef: para.deptRef, amountInvolvedMinor: (para.amountInvolvedMinor ?? 0n).toString() },
       });
       await audit(tx, msg, "pending_recovery", "para", p.paraId);
     });
@@ -165,12 +181,13 @@ export function registerParaConsumers(queue: Queue): void {
     const p = msg.payload as { paraId: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const para = await repo.findParaByIdTx(tx, p.paraId);
+      const para = await repo.findParaByIdTx(tx, p.paraId, p.tenantId);
       if (!para) throw new Error(`para ${p.paraId} not found`);
       assertCanTransition(para.status as ParaStatus, "closed");
-      await repo.updatePara(tx, p.paraId, {
+      const closedRows = await repo.updateParaVersioned(tx, p.paraId, p.tenantId, para.version ?? 1, {
         status: "closed", updatedBy: msg.actorId, version: (para.version ?? 1) + 1,
       });
+      if (closedRows !== 1) throw new StaleWriteError("para", p.paraId);
       await repo.insertStatusHistory(tx, {
         id: randomUUID(), tenantId: p.tenantId, paraId: p.paraId,
         fromStatus: para.status ?? "settled", toStatus: "closed",

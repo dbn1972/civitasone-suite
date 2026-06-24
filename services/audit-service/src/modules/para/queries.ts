@@ -5,7 +5,7 @@ import type { ParaRow } from "./schema.js";
 export async function getPara(id: string, tenantId: string): Promise<ParaRow | null> {
   return cache.getOrLoad<ParaRow>(
     cache.makeKey(tenantId, "para", id),
-    () => repo.findParaById(id),
+    () => repo.findParaById(id, tenantId),
   );
 }
 

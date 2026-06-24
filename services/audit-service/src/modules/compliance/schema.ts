@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, bigint, varchar, timestamp, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, bigint, varchar, timestamp, date, jsonb, boolean } from "drizzle-orm/pg-core";
 
 export const complianceSchema = pgSchema("compliance");
 
@@ -32,5 +32,22 @@ export const auditPendingRegister = complianceSchema.table("audit_pending_regist
   version:             integer("version").notNull().default(1),
 });
 
+/** P0-4: compliance checklists persisted to a real, tenant-scoped table (was an in-memory array). */
+export const auditChecklists = complianceSchema.table("audit_checklists", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  title:       text("title").notNull(),
+  description: text("description"),
+  items:       jsonb("items").$type<string[]>().notNull().default([]),
+  completed:   boolean("completed").notNull().default(false),
+  completedBy: uuid("completed_by"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
+  version:     integer("version").notNull().default(1),
+});
+
 export type PendingRegisterRow = typeof auditPendingRegister.$inferSelect;
-export const schema = { auditComplianceReports, auditPendingRegister };
+export type ChecklistRow = typeof auditChecklists.$inferSelect;
+export const schema = { auditComplianceReports, auditPendingRegister, auditChecklists };

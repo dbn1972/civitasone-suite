@@ -7,18 +7,28 @@ import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
 
+/** Raised when an optimistic-locked update affects 0 rows (stale version / cross-tenant). */
+class StaleWriteError extends Error {
+  readonly status = 409;
+  readonly code = "VERSION_CONFLICT";
+  constructor(resource: string, id: string) {
+    super(`[VERSION_CONFLICT] ${resource} ${id} was modified concurrently`);
+  }
+}
+
 export function registerObservationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.observationCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; obsNo: string; planId?: string; auditeeRef: string;
-      finding: string; category?: string; riskLevel?: string; amountInvolvedMinor?: number;
+      // P0-3: amountInvolvedMinor (PAISE) carried as string end-to-end; BigInt()-parsed here.
+      finding: string; category?: string; riskLevel?: string; amountInvolvedMinor?: string | number;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertObservation(tx, {
         id: p.id, tenantId: p.tenantId, obsNo: p.obsNo, planId: p.planId ?? null,
         auditeeRef: p.auditeeRef, finding: p.finding, category: p.category ?? "compliance",
-        riskLevel: p.riskLevel ?? "medium", amountInvolvedMinor: BigInt(p.amountInvolvedMinor ?? 0),
+        riskLevel: p.riskLevel ?? "medium", amountInvolvedMinor: BigInt(p.amountInvolvedMinor ?? 0n),
         status: "open", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "observation", p.id);
@@ -38,13 +48,16 @@ export function registerObservationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const obs = await repo.findObservationByIdTx(tx, p.observationId);
+      const obs = await repo.findObservationByIdTx(tx, p.observationId, p.tenantId);
       if (!obs) throw new Error(`observation ${p.observationId} not found`);
       // Only allow reply when observation is open or previously rejected
       if (!["open", "replied_rejected"].includes(obs.status ?? "open")) {
         throw new Error(`[INVALID_STATUS] observation status '${obs.status}' cannot receive a reply`);
       }
-      await repo.updateObservation(tx, p.observationId, { status: "replied", updatedBy: msg.actorId });
+      const replyRows = await repo.updateObservationVersioned(tx, p.observationId, p.tenantId, obs.version ?? 1, {
+        status: "replied", updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
+      });
+      if (replyRows !== 1) throw new StaleWriteError("observation", p.observationId);
       await audit(tx, msg, "reply", "observation", p.observationId);
       // Notify the audit team
       await enqueue(tx, {
@@ -73,13 +86,16 @@ export function registerObservationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const obs = await repo.findObservationByIdTx(tx, p.observationId);
+      const obs = await repo.findObservationByIdTx(tx, p.observationId, p.tenantId);
       if (!obs) throw new Error(`observation ${p.observationId} not found`);
       if (obs.status !== "replied") {
         throw new Error(`[INVALID_STATUS] can only review a 'replied' observation, got '${obs.status}'`);
       }
       const newStatus = p.decision === "accepted" ? "compliance_pending" : "replied_rejected";
-      await repo.updateObservation(tx, p.observationId, { status: newStatus, updatedBy: msg.actorId });
+      const reviewRows = await repo.updateObservationVersioned(tx, p.observationId, p.tenantId, obs.version ?? 1, {
+        status: newStatus, updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
+      });
+      if (reviewRows !== 1) throw new StaleWriteError("observation", p.observationId);
       await audit(tx, msg, p.decision === "accepted" ? "reply_accepted" : "reply_rejected", "observation", p.observationId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "observation", p.observationId));
