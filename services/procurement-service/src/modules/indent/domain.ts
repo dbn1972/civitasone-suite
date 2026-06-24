@@ -23,6 +23,13 @@ export function assertTransitionAllowed(from: string, to: IndentStatus): void {
   }
 }
 
+/** Segregation of duties: the approver (checker) must differ from the creator (maker). */
+export function assertDistinctMakerChecker(creatorId: string, approverId: string): void {
+  if (creatorId && approverId && creatorId === approverId) {
+    throw new DomainError("SOD_VIOLATION", "maker and checker must be different actors (self-approval rejected)");
+  }
+}
+
 export function assertIndentApproved(status: string): void {
   if (status !== "approved") {
     throw new DomainError("INDENT_NOT_APPROVED", `PO requires an approved indent, got '${status}'`);

@@ -22,6 +22,7 @@ export const EVENTS = {
   poApproved:          "procurement.po.approved",
   poBudgetExceeded:    "procurement.po.budget_exceeded",
   poVendorBlacklisted: "procurement.po.vendor_blacklisted",
+  poApprovalRejected:  "procurement.po.approval_rejected",
   grnAccepted:         "procurement.grn.accepted",
   grnRejected:         "procurement.grn.rejected",
   vendorBlacklisted:   "procurement.vendor.blacklisted",

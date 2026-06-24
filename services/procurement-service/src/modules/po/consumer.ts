@@ -5,22 +5,39 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed } from "./domain.js";
+import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, DomainError } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
+import * as blacklistRepo from "../vendor-blacklist/repo.js";
+import { allocateDocNo } from "../../shared/numbering.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const PO_WORKFLOW_NAME = "Procurement PO Approval";
 const FINANCE_URL = process.env.FINANCE_SERVICE_URL ?? "http://finance-service:3007";
 
+/** Finance service unreachable / errored — distinct from a budget shortfall. */
+class FinanceUnavailableError extends Error {
+  constructor(message: string) { super(message); this.name = "FinanceUnavailableError"; }
+}
+
+// PO value above this (Rs 1,000 in paise) must carry a sanctionRef (#14).
+const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
+
 async function checkSanctionAvailable(sanctionRef: string, required: bigint): Promise<void> {
   const sanctionId = sanctionRef.replace(/^.*:/, "");
-  const res = await fetch(`${FINANCE_URL}/v1/finance/sanctions/${sanctionId}/available`, {
-    headers: { "x-internal": "1" },
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!res.ok) throw new Error(`finance-service sanctions check failed: ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetch(`${FINANCE_URL}/v1/finance/sanctions/${sanctionId}/available`, {
+      headers: { "x-internal": "1" },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    // Network error / timeout → retryable finance-unavailable, NOT budget-exceeded.
+    throw new FinanceUnavailableError(`finance-service unreachable: ${String(err)}`);
+  }
+  if (!res.ok) throw new FinanceUnavailableError(`finance-service sanctions check failed: ${res.status}`);
   const data = await res.json() as { available: string };
+  // Throws DomainError("BUDGET_EXCEEDED") only when funds are genuinely insufficient.
   assertBudgetSufficient(BigInt(data.available), required);
 }
 
@@ -33,20 +50,17 @@ export function registerPoConsumers(queue: Queue): void {
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
 
-    // Vendor blacklist check (CVC compliance): reject PO for blacklisted vendor
-    const vendor = await vendorRepo.findVendorById(p.vendorId);
-    if (vendor && vendor.vendorType === "blacklisted") {
+    // #14: non-trivial PO value MUST carry a sanctionRef. Missing → reject (not a
+    // budget shortfall) and do not write a PO.
+    if (!p.sanctionRef && totalMinor > SANCTION_REQUIRED_ABOVE_MINOR) {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await enqueue(tx, {
-          topic: EVENTS.poVendorBlacklisted,
-          eventType: EVENTS.poVendorBlacklisted,
+          topic: EVENTS.poBudgetExceeded, eventType: EVENTS.poBudgetExceeded,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: {
-            poId: p.id, poNo: p.poNo, vendorId: p.vendorId,
-            reason: vendor.blacklistReason ?? "vendor is blacklisted (CVC order)",
-          },
+          payload: { poId: p.id, poNo: p.poNo, totalMinor: totalMinor.toString(), reason: "SANCTION_REF_REQUIRED", code: "SANCTION_REF_REQUIRED" },
         });
+        await audit(tx, msg, "rejected_no_sanction", "po", p.id);
       });
       return;
     }
@@ -56,14 +70,20 @@ export function registerPoConsumers(queue: Queue): void {
       try {
         await checkSanctionAvailable(p.sanctionRef, totalMinor);
       } catch (err) {
-        // Budget exceeded or finance-service unavailable → emit budget_exceeded, do not write PO
+        if (err instanceof FinanceUnavailableError) {
+          // #14: finance unreachable is RETRYABLE — rethrow so the queue redelivers.
+          // Do NOT misreport this as a budget shortfall and do NOT write a PO.
+          throw err;
+        }
+        // Genuine budget shortfall (DomainError BUDGET_EXCEEDED) → emit + drop PO.
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
           await enqueue(tx, {
             topic: EVENTS.poBudgetExceeded, eventType: EVENTS.poBudgetExceeded,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { poId: p.id, poNo: p.poNo, sanctionRef: p.sanctionRef, totalMinor: totalMinor.toString(), reason: String(err) },
+            payload: { poId: p.id, poNo: p.poNo, sanctionRef: p.sanctionRef, totalMinor: totalMinor.toString(), reason: String(err), code: "BUDGET_EXCEEDED" },
           });
+          await audit(tx, msg, "rejected_budget_exceeded", "po", p.id);
         });
         return;
       }
@@ -71,8 +91,31 @@ export function registerPoConsumers(queue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // Blacklist gate re-checked INSIDE the txn against the persisted store
+      // (tenant-scoped). Reject the PO for a blacklisted vendor — no PO written.
+      const vendorTx = await vendorRepo.findVendorByIdTx(tx, p.vendorId, p.tenantId);
+      const blacklisted =
+        (await blacklistRepo.isBlacklistedTx(tx, p.tenantId, p.vendorId)) ||
+        (vendorTx?.vendorType === "blacklisted");
+      if (blacklisted) {
+        await enqueue(tx, {
+          topic: EVENTS.poVendorBlacklisted, eventType: EVENTS.poVendorBlacklisted,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            poId: p.id, poNo: p.poNo, vendorId: p.vendorId,
+            reason: vendorTx?.blacklistReason ?? "vendor is blacklisted (CVC order)",
+          },
+        });
+        await audit(tx, msg, "rejected_blacklisted", "po", p.id);
+        return;
+      }
+
+      // Gapless server-generated PO number (#12) — allocated only after the
+      // blacklist gate passes, so a rejected PO never consumes a number.
+      const poNo = await allocateDocNo(tx, p.tenantId, "po");
       await repo.insertPo(tx, {
-        id: p.id, tenantId: p.tenantId, poNo: p.poNo, vendorId: p.vendorId,
+        id: p.id, tenantId: p.tenantId, poNo, vendorId: p.vendorId,
         indentRef: p.indentRef, sanctionRef: p.sanctionRef ?? null,
         rateContractRef: p.rateContractRef ?? null, gemOrderNo: null,
         totalMinor, currency: "INR", status: "pending",
@@ -93,7 +136,7 @@ export function registerPoConsumers(queue: Queue): void {
         payload: {
           id: wfId,
           tenantId: msg.tenantId,
-          name: `${PO_WORKFLOW_NAME} — ${p.poNo}`,
+          name: `${PO_WORKFLOW_NAME} — ${poNo}`,
           status: "active",
           definitionCode: "procurement_po_approval",
           initialTaskName: "Procurement Head Approval",
@@ -111,10 +154,26 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const po = await repo.findPoByIdTx(tx, p.id);
+      const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
+      // SoD (#9): the approver must differ from the PO creator. Self-approval is
+      // rejected — emit a rejection event instead of approving.
+      try {
+        assertDistinctMakerChecker(po.createdBy, msg.actorId);
+      } catch (err) {
+        if (err instanceof DomainError && err.code === "SOD_VIOLATION") {
+          await enqueue(tx, {
+            topic: EVENTS.poApprovalRejected, eventType: EVENTS.poApprovalRejected,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { poId: p.id, poNo: po.poNo, reason: err.message, code: err.code },
+          });
+          await audit(tx, msg, "approval_rejected_sod", "po", p.id);
+          return;
+        }
+        throw err;
+      }
       assertTransitionAllowed(po.status ?? "draft", "approved");
-      await repo.updatePo(tx, p.id, { status: "approved", updatedBy: msg.actorId, version: (po.version ?? 1) + 1 });
+      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "approved", updatedBy: msg.actorId });
       await enqueue(tx, {
         topic: EVENTS.poApproved, eventType: EVENTS.poApproved,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -129,10 +188,10 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const po = await repo.findPoByIdTx(tx, p.id);
+      const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
       assertCanDispatch(po.status ?? "draft");
-      await repo.updatePo(tx, p.id, { status: "dispatched", updatedBy: msg.actorId, version: (po.version ?? 1) + 1 });
+      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "dispatched", updatedBy: msg.actorId });
       await audit(tx, msg, "dispatch", "po", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
@@ -147,8 +206,28 @@ export function registerPoConsumers(queue: Queue): void {
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // Blacklist gate (#3/#4/#5): reject GeM award for a blacklisted vendor.
+      const vendorTx = await vendorRepo.findVendorByIdTx(tx, p.vendorId, p.tenantId);
+      const blacklisted =
+        (await blacklistRepo.isBlacklistedTx(tx, p.tenantId, p.vendorId)) ||
+        (vendorTx?.vendorType === "blacklisted");
+      if (blacklisted) {
+        await enqueue(tx, {
+          topic: EVENTS.poVendorBlacklisted, eventType: EVENTS.poVendorBlacklisted,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            poId: p.id, poNo: p.poNo, vendorId: p.vendorId,
+            reason: vendorTx?.blacklistReason ?? "vendor is blacklisted (CVC order)",
+          },
+        });
+        await audit(tx, msg, "rejected_blacklisted", "po", p.id);
+        return;
+      }
+
+      const poNo = await allocateDocNo(tx, p.tenantId, "po");
       await repo.insertPo(tx, {
-        id: p.id, tenantId: p.tenantId, poNo: p.poNo, vendorId: p.vendorId,
+        id: p.id, tenantId: p.tenantId, poNo, vendorId: p.vendorId,
         indentRef: p.indentRef, sanctionRef: p.sanctionRef ?? null, rateContractRef: null,
         gemOrderNo: p.gemOrderNo, totalMinor, currency: "INR", status: "gem_placed",
         deliveryDate: p.deliveryDate ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,

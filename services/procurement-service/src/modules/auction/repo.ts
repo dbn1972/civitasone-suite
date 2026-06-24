@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementAuctions, procurementBids, type AuctionRow, type AuctionInsert, type BidInsert } from "./schema.js";
 
@@ -24,6 +24,17 @@ export async function insertAuction(tx: Writer, row: AuctionInsert): Promise<voi
 
 export async function updateAuction(tx: Writer, id: string, patch: Partial<AuctionInsert>): Promise<void> {
   await tx.update(procurementAuctions).set({ ...patch, updatedAt: new Date() }).where(eq(procurementAuctions.id, id));
+}
+
+/** Optimistic-locked auction update (#16): fails on stale `expectedVersion`. */
+export async function updateAuctionVersioned(tx: Writer, id: string, expectedVersion: number, patch: Partial<AuctionInsert>): Promise<void> {
+  const res = await (tx as typeof db).update(procurementAuctions)
+    .set({ ...patch, version: expectedVersion + 1, updatedAt: new Date() })
+    .where(and(eq(procurementAuctions.id, id), eq(procurementAuctions.version, expectedVersion)))
+    .returning({ id: procurementAuctions.id });
+  if (res.length === 0) {
+    throw new Error(`OPTIMISTIC_LOCK_CONFLICT: auction ${id} was modified concurrently (expected version ${expectedVersion})`);
+  }
 }
 
 export async function insertBid(tx: Writer, row: BidInsert): Promise<void> {

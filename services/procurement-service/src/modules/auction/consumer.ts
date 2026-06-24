@@ -6,6 +6,9 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeEffectivePrice, rankBids } from "./domain.js";
+import * as vendorRepo from "../vendor/repo.js";
+import * as blacklistRepo from "../vendor-blacklist/repo.js";
+import { allocateDocNo } from "../../shared/numbering.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -17,8 +20,9 @@ export function registerAuctionConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const auctionNo = await allocateDocNo(tx, p.tenantId, "auction");
       await repo.insertAuction(tx, {
-        id: p.id, tenantId: p.tenantId, auctionNo: p.auctionNo, indentRef: p.indentRef,
+        id: p.id, tenantId: p.tenantId, auctionNo, indentRef: p.indentRef,
         title: p.title, reserveMinor: BigInt(p.reserveMinor), currency: "INR",
         startAt: new Date(p.startAt), endAt: new Date(p.endAt),
         status: "active", winningBidId: null, msePreference: p.msePreference,
@@ -56,17 +60,34 @@ export function registerAuctionConsumers(queue: Queue): void {
       const auction = await repo.findAuctionByIdTx(tx, p.id);
       if (!auction) throw new Error(`auction ${p.id} not found`);
       const bids = await repo.findBidsByAuctionTx(tx, p.id);
+
+      // Eligibility (#11): exclude blacklisted / disqualified vendors before ranking.
+      const eligibility = new Map<string, boolean>();
+      for (const vid of new Set(bids.map((b) => b.vendorId))) {
+        const blacklisted = await blacklistRepo.isBlacklistedTx(tx, p.tenantId, vid);
+        const vendor = await vendorRepo.findVendorByIdTx(tx, vid, p.tenantId);
+        const eligible = !blacklisted && vendor != null && vendor.vendorType !== "blacklisted";
+        eligibility.set(vid, eligible);
+      }
+
       const ranked = rankBids(
-        bids.map((b) => ({ id: b.id, vendorId: b.vendorId, bidMinor: b.bidMinor, isMse: b.isMse })),
+        bids.map((b) => ({
+          id: b.id, vendorId: b.vendorId, bidMinor: b.bidMinor, isMse: b.isMse,
+          bidAt: b.bidAt, eligible: eligibility.get(b.vendorId) ?? false,
+        })),
         auction.msePreference ?? true
       );
+      // Clear rank on every bid first, then set rank on eligible/ranked ones.
+      for (const b of bids) {
+        await repo.updateBid(tx, b.id, { rank: null });
+      }
       for (const rb of ranked) {
         await repo.updateBid(tx, rb.id, { effectiveMinor: rb.effectiveMinor, rank: rb.rank });
       }
       const winner = ranked[0];
-      await repo.updateAuction(tx, p.id, {
+      await repo.updateAuctionVersioned(tx, p.id, auction.version ?? 1, {
         status: "closed", winningBidId: winner?.id ?? null,
-        updatedBy: msg.actorId, version: (auction.version ?? 1) + 1,
+        updatedBy: msg.actorId,
       });
       await enqueue(tx, {
         topic: EVENTS.auctionClosed, eventType: EVENTS.auctionClosed,

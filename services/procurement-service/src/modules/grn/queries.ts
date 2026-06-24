@@ -12,7 +12,7 @@ export async function getGrn(id: string, tenantId: string): Promise<Record<strin
 
   const items = await repo.findGrnItemsByGrnId(id);
   const inspection = await repo.findInspectionByGrnId(id);
-  const vendor = await vendorRepo.findVendorById(row.vendorId);
+  const vendor = await vendorRepo.findVendorById(row.vendorId, tenantId);
 
   return {
     id: row.id,

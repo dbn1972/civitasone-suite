@@ -24,5 +24,9 @@ export function assertQtyValid(items: GrnItem[]): void {
     if (item.acceptedQty > item.receivedQty) {
       throw new DomainError("INVALID_QTY", "accepted quantity cannot exceed received quantity");
     }
+    // Over-accept cap (#19): cannot accept more than was ordered on the PO line.
+    if (item.orderedQty > 0 && item.acceptedQty > item.orderedQty) {
+      throw new DomainError("OVER_ACCEPT", "accepted quantity cannot exceed ordered quantity");
+    }
   }
 }

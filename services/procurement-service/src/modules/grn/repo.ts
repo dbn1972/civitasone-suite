@@ -42,12 +42,15 @@ export async function countAcceptedGrnsByPoRef(tenantId: string, poRef: string):
   return Number(rows[0]?.cnt ?? 0);
 }
 
-/** Check three_way_match table for a matched record with invoice. */
+/** Check three_way_match table for a matched record with invoice. The payment
+ *  gate passes a poRef that may carry a `procurement_po:` prefix; three_way_match
+ *  stores the bare PO uuid, so strip the prefix before comparing. */
 export async function hasMatchedThreeWayWithInvoice(tenantId: string, poRef: string): Promise<boolean> {
+  const poId = poRef.replace(/^procurement_po:/, "");
   const result = await db.execute(sql`
     SELECT 1 FROM procurement.three_way_match
     WHERE tenant_id = ${tenantId}::uuid
-      AND po_id::text = ${poRef}
+      AND po_id::text = ${poId}
       AND match_status = 'matched'
       AND invoice_id IS NOT NULL
     LIMIT 1

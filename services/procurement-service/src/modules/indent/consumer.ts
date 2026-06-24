@@ -5,7 +5,8 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertTransitionAllowed } from "./domain.js";
+import { assertTransitionAllowed, assertDistinctMakerChecker } from "./domain.js";
+import { allocateDocNo } from "../../shared/numbering.js";
 import type { IndentItemInsert } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -23,8 +24,10 @@ export function registerIndentConsumers(queue: Queue): void {
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Gapless server-generated number (#12) — ignore any client-supplied indentNo.
+      const indentNo = await allocateDocNo(tx, p.tenantId, "indent");
       await repo.insertIndent(tx, {
-        id: p.id, tenantId: p.tenantId, indentNo: p.indentNo,
+        id: p.id, tenantId: p.tenantId, indentNo,
         department: p.department, purpose: p.purpose, totalMinor,
         currency: "INR", status: "pending",
         sanctionRef: p.sanctionRef ?? null, requiredBy: p.requiredBy ?? null,
@@ -45,7 +48,7 @@ export function registerIndentConsumers(queue: Queue): void {
         payload: {
           id: wfId,
           tenantId: msg.tenantId,
-          name: `${INDENT_WORKFLOW_NAME} — ${p.indentNo}`,
+          name: `${INDENT_WORKFLOW_NAME} — ${indentNo}`,
           status: "active",
           definitionCode: "procurement_indent_approval",
           initialTaskName: "Procurement Officer Approval",
@@ -80,6 +83,8 @@ export function registerIndentConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const indent = await repo.findIndentByIdTx(tx, p.id);
       if (!indent) throw new Error(`indent ${p.id} not found`);
+      // SoD defense-in-depth: approver (msg.actorId) must differ from creator.
+      assertDistinctMakerChecker(indent.createdBy, msg.actorId);
       assertTransitionAllowed(indent.status ?? "draft", "approved");
       await repo.updateIndent(tx, p.id, { status: "approved", updatedBy: msg.actorId, version: (indent.version ?? 1) + 1 });
       await enqueue(tx, {

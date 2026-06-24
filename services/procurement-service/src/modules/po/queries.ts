@@ -5,14 +5,14 @@ import type { PoRow } from "./schema.js";
 export async function getPo(id: string, tenantId: string): Promise<Record<string, unknown> | null> {
   const po = await cache.getOrLoad<PoRow | null>(
     cache.makeKey(tenantId, "po", id),
-    () => repo.findPoById(id),
+    () => repo.findPoById(id, tenantId),
   );
   if (!po || po.tenantId !== tenantId) return null;
 
   const { listVendorsByTenant } = await import("../vendor/repo.js");
   const vendors = await listVendorsByTenant(tenantId, 500);
   const vendorName = vendors.find((v) => v.id === po.vendorId)?.name ?? po.vendorId.slice(0, 8);
-  const items = await repo.findPoItemsByPoId(id);
+  const items = await repo.findPoItemsByPoId(id, tenantId);
 
   const orderDate =
     po.createdAt instanceof Date

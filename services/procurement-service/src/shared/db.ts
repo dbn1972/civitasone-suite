@@ -8,6 +8,9 @@ import { schema as rfqModule }      from "../modules/rfq/schema.js";
 import { schema as tenderModule }   from "../modules/tender/schema.js";
 import { schema as auctionModule }  from "../modules/auction/schema.js";
 import { schema as paymentsModule } from "../modules/payments/schema.js";
+import { schema as blacklistModule } from "../modules/vendor-blacklist/schema.js";
+import { schema as threeWayModule }  from "../modules/three-way-match/schema.js";
+import { docCountersSchema }         from "./numbering.js";
 import { outboxSchema }             from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -25,6 +28,9 @@ export const db = drizzle(sqlClient, {
     ...tenderModule,
     ...auctionModule,
     ...paymentsModule,
+    ...blacklistModule,
+    ...threeWayModule,
+    ...docCountersSchema,
     ...outboxSchema,
   },
 });

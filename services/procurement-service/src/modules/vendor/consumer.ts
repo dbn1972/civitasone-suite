@@ -36,10 +36,10 @@ export function registerVendorConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; category: string; validUntil?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const vendor = await repo.findVendorByIdTx(tx, p.id);
+      const vendor = await repo.findVendorByIdTx(tx, p.id, p.tenantId);
       if (!vendor) throw new Error(`vendor ${p.id} not found`);
       assertCanEmpanel(vendor.vendorType ?? "registered");
-      await repo.updateVendor(tx, p.id, { vendorType: "empanelled", updatedBy: msg.actorId, version: (vendor.version ?? 1) + 1 });
+      await repo.updateVendorVersioned(tx, p.id, vendor.version ?? 1, { vendorType: "empanelled", updatedBy: msg.actorId });
       await repo.insertEmpanelment(tx, {
         id: randomUUID(), vendorId: p.id, tenantId: p.tenantId,
         category: p.category, empanelDate: new Date().toISOString().slice(0, 10),
@@ -55,11 +55,10 @@ export function registerVendorConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const vendor = await repo.findVendorByIdTx(tx, p.id);
+      const vendor = await repo.findVendorByIdTx(tx, p.id, p.tenantId);
       if (!vendor) throw new Error(`vendor ${p.id} not found`);
-      await repo.updateVendor(tx, p.id, {
-        vendorType: "blacklisted", blacklistReason: p.reason,
-        updatedBy: msg.actorId, version: (vendor.version ?? 1) + 1,
+      await repo.updateVendorVersioned(tx, p.id, vendor.version ?? 1, {
+        vendorType: "blacklisted", blacklistReason: p.reason, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
         topic: EVENTS.vendorBlacklisted, eventType: EVENTS.vendorBlacklisted,

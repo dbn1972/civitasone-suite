@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
+import { assertDistinctMakerChecker, DomainError } from "./domain.js";
 import type { CreateIndentBody, ApproveIndentBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -17,6 +20,18 @@ export async function createIndent(ctx: RequestContext, body: CreateIndentBody):
 }
 
 export async function approveIndent(ctx: RequestContext, id: string, body: ApproveIndentBody): Promise<Accepted> {
+  // Segregation of duties (#9): reject self-approval synchronously with 403.
+  const indent = await repo.findIndentById(id);
+  if (!indent || indent.tenantId !== ctx.tenantId) {
+    throw new HttpError(404, "NOT_FOUND", "indent not found");
+  }
+  try {
+    assertDistinctMakerChecker(indent.createdBy, ctx.actorId);
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(403, err.code, err.message);
+    throw err;
+  }
+
   await queue.publish(COMMANDS.indentApprove, {
     type: COMMANDS.indentApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
