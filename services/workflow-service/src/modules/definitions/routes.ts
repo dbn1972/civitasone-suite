@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { definitions } from "./schema.js";
 import * as repo from "./repo.js";
+import { validateGraph } from "./graph.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
@@ -39,6 +40,16 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
+
+    // P0-1 — structural validation. On create we only enforce when a graph is
+    // supplied (an empty draft may be filled in later), but a supplied graph
+    // must be well-formed before it is persisted.
+    if (body.nodes.length > 0 || body.edges.length > 0) {
+      const v = validateGraph(body.nodes, body.edges);
+      if (!v.valid) {
+        throw new HttpError(400, "INVALID_GRAPH", `invalid workflow graph: ${v.errors.join("; ")}`);
+      }
+    }
 
     const id = randomUUID();
     const result = await db.transaction(async (tx) => {
@@ -95,14 +106,31 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
       const def = await repo.findById(id, ctx.tenantId);
       if (!def) throw new HttpError(404, "NOT_FOUND", "definition not found");
       if (def.status === "active") throw new HttpError(409, "ALREADY_DEPLOYED", "definition already deployed");
+
+      // P0-1 — strict structural validation gate on deploy. A definition with a
+      // dangling edge target, no terminal, or unreachable nodes is rejected
+      // (400) so it can never be activated and strand instances.
+      const [nodeRows, edgeRows] = await Promise.all([repo.listNodes(id), repo.listEdges(id)]);
+      const v = validateGraph(
+        nodeRows.map((n) => ({ nodeKey: n.nodeKey, name: n.name, nodeType: n.nodeType, sortOrder: n.sortOrder })),
+        edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, sortOrder: e.sortOrder })),
+      );
+      if (!v.valid) {
+        throw new HttpError(400, "INVALID_GRAPH", `cannot deploy: ${v.errors.join("; ")}`);
+      }
+
       await tx.update(definitions)
         .set({ status: "active", updatedBy: ctx.actorId, updatedAt: new Date() })
         .where(eq(definitions.id, id));
       await repo.archiveOtherVersionsTx(tx, ctx.tenantId, def.code, id);
-      return { ...def, status: "active" };
+      return { def: { ...def, status: "active" }, warnings: v.warnings };
     });
 
-    return reply.send({ data: result, message: "definition deployed" });
+    return reply.send({
+      data: result.def,
+      message: "definition deployed",
+      ...(result.warnings.length ? { warnings: result.warnings } : {}),
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {

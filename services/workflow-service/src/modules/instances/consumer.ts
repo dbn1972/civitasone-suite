@@ -101,6 +101,60 @@ export function registerInstancesConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, INSTANCE_RESOURCE);
     if (taskId) await cache.invalidateResource(msg.tenantId, "task");
   });
+
+  // P0-2 — lifecycle transitions. Each applies the status change under the
+  // instance row lock, appends an immutable transition_history row, and emits an
+  // event + audit record. Guarded against terminal/illegal transitions so a
+  // replayed or stale command cannot revive a cancelled/completed instance.
+  registerLifecycle(queue, COMMANDS.cancelInstance, "cancel", EVENTS.instanceCancelled, ["active", "suspended"]);
+  registerLifecycle(queue, COMMANDS.suspendInstance, "suspend", EVENTS.instanceSuspended, ["active"]);
+  registerLifecycle(queue, COMMANDS.resumeInstance, "resume", EVENTS.instanceResumed, ["suspended"]);
+}
+
+type LifecycleMsgPayload = {
+  id: string;
+  tenantId: string;
+  fromStatus: string;
+  toStatus: string;
+  reason?: string;
+};
+
+function registerLifecycle(
+  queue: Queue,
+  command: string,
+  action: string,
+  eventType: string,
+  allowedFrom: string[],
+): void {
+  queue.subscribe<LifecycleMsgPayload>(command, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const p = msg.payload;
+      // Lock the row and re-check the transition is still legal (the synchronous
+      // pre-check in commands.ts is advisory; this is authoritative).
+      const instance = await repo.lockByIdTx(tx, p.id);
+      if (!instance || instance.tenantId !== p.tenantId) return;
+      if (!allowedFrom.includes(instance.status)) return; // already moved on / illegal
+      await repo.markStatus(tx, p.id, p.toStatus, msg.actorId);
+      await historyRepo.record(tx, {
+        tenantId: p.tenantId,
+        instanceId: p.id,
+        taskId: null,
+        fromNode: instance.currentNode ?? null,
+        toNode: instance.currentNode ?? null,
+        action,
+        decision: null,
+        actorId: msg.actorId,
+        detail: {
+          fromStatus: instance.status,
+          toStatus: p.toStatus,
+          ...(p.reason !== undefined ? { reason: p.reason } : {}),
+        },
+      });
+      await emit(tx, msg, eventType, { instanceId: p.id, fromStatus: instance.status, toStatus: p.toStatus }, action, p.id);
+    });
+    await cache.invalidateResource(msg.tenantId, INSTANCE_RESOURCE);
+  });
 }
 
 async function emit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {
