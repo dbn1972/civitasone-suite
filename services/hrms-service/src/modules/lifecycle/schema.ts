@@ -14,6 +14,12 @@ export const hrmsTransfers = lifecycleSchema.table("hrms_transfers", {
   toDesigId:    uuid("to_desig_id"),
   effectiveDate: date("effective_date").notNull(),
   orderRef:     text("order_ref"),
+  fromStation:  varchar("from_station", { length: 128 }),
+  toStation:    varchar("to_station", { length: 128 }),
+  orderNo:      varchar("order_no", { length: 64 }),
+  orderDate:    date("order_date"),
+  relievedDate: date("relieved_date"),
+  joinedDate:   date("joined_date"),
   status:       varchar("status", { length: 24 }).notNull().default("pending"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -21,6 +27,8 @@ export const hrmsTransfers = lifecycleSchema.table("hrms_transfers", {
   updatedBy:    uuid("updated_by").notNull(),
   version:      integer("version").notNull().default(1),
 });
+
+export type TransferRow = typeof hrmsTransfers.$inferSelect;
 
 export const hrmsPromotions = lifecycleSchema.table("hrms_promotions", {
   id:            uuid("id").primaryKey().defaultRandom(),

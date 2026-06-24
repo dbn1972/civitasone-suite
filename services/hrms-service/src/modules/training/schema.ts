@@ -28,11 +28,16 @@ export const hrmsNominations = trainingSchema.table("hrms_nominations", {
   employeeId:    uuid("employee_id").notNull(),
   status:        varchar("status", { length: 24 }).notNull().default("nominated"),
   certificateRef: text("certificate_ref"),
+  completedDate: date("completed_date"),
+  score:         integer("score"),
+  result:        varchar("result", { length: 16 }),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),
   updatedBy:     uuid("updated_by").notNull(),
   version:       integer("version").notNull().default(1),
 });
+
+export type NominationRow = typeof hrmsNominations.$inferSelect;
 
 export const schema = { hrmsTrainings, hrmsNominations };

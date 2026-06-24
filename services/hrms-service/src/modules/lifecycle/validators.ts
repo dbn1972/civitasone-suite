@@ -1,14 +1,34 @@
 import { z } from "zod";
 
+const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+// transferBody is the shared shape consumed by employee/commands.ts
+// (employeeId comes from the URL there) — DO NOT add employeeId here.
 export const transferBody = z.object({
   fromDeptId:    z.string().uuid(),
   toDeptId:      z.string().uuid(),
   fromDesigId:   z.string().uuid().optional(),
   toDesigId:     z.string().uuid().optional(),
-  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  effectiveDate: DATE,
   orderRef:      z.string().max(128).optional(),
 });
 export type TransferBody = z.infer<typeof transferBody>;
+
+// Lifecycle transfer-order creation carries employeeId + stations in the body.
+export const createTransferBody = transferBody.extend({
+  employeeId:  z.string().uuid(),
+  fromStation: z.string().max(128).optional(),
+  toStation:   z.string().max(128).optional(),
+});
+export type CreateTransferBody = z.infer<typeof createTransferBody>;
+
+export const issueOrderBody = z.object({
+  orderNo:   z.string().min(1).max(64),
+  orderDate: DATE,
+  orderRef:  z.string().max(128).optional(),
+});
+export const relieveBody = z.object({ relievedDate: DATE });
+export const joinBody = z.object({ joinedDate: DATE });
 
 export const separateBody = z.object({
   separationType: z.enum(["resignation", "retirement", "termination", "vrs", "death"]),
