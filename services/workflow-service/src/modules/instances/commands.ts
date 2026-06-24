@@ -12,6 +12,7 @@ export type CreateInstancePayload = InstanceView & {
   definitionCode?: string;
   refType?: string;
   refId?: string;
+  context?: Record<string, unknown>;
 };
 
 export async function createInstance(ctx: RequestContext, body: CreateInstanceBody): Promise<Accepted> {
@@ -23,6 +24,10 @@ export async function createInstance(ctx: RequestContext, body: CreateInstanceBo
     status: "active",
     version: 1,
     initialTaskName: "Review",
+    ...(body.definitionCode !== undefined ? { definitionCode: body.definitionCode } : {}),
+    ...(body.refType !== undefined ? { refType: body.refType } : {}),
+    ...(body.refId !== undefined ? { refId: body.refId } : {}),
+    ...(body.context !== undefined ? { context: body.context } : {}),
   };
 
   await cache.put(cache.makeKey(ctx.tenantId, INSTANCE_RESOURCE, id), projected);

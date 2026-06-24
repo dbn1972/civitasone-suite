@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("workflow");
 
@@ -9,9 +9,15 @@ export const tasks = domainSchema.table("tasks", {
   name: varchar("name", { length: 200 }).notNull(),
   status: varchar("status", { length: 24 }).notNull().default("pending"),
   roleRef: varchar("role_ref", { length: 128 }),
+  nodeKey: varchar("node_key", { length: 64 }),
   refType: varchar("ref_type", { length: 64 }),
   refId: uuid("ref_id"),
   decision: varchar("decision", { length: 32 }),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  escalatedAt: timestamp("escalated_at", { withTimezone: true }),
+  escalationCount: integer("escalation_count").notNull().default(0),
+  completedBy: uuid("completed_by"),
+  sodOverride: boolean("sod_override").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -29,6 +35,7 @@ export type TaskView = {
   name: string;
   status: string;
   roleRef?: string | null;
+  nodeKey?: string | null;
   refType?: string | null;
   refId?: string | null;
   decision?: string | null;
