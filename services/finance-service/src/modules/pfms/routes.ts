@@ -10,18 +10,40 @@ import * as repo from "./repo.js";
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
 
+/** Format PAISE bigint as a rupees.decimals string without Number() precision loss. */
+function rupeesFromPaise(paise: bigint): string {
+  const neg = paise < 0n;
+  const abs = neg ? -paise : paise;
+  const rupees = abs / 100n;
+  const paisePart = (abs % 100n).toString().padStart(2, "0");
+  return `${neg ? "-" : ""}${rupees.toString()}.${paisePart}`;
+}
+
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
 
 /** PFMS NEFT bank file layout (CSV) per RBI/NEFT batch conventions */
-function buildBankFile(rows: Array<{ beneficiary: string; account: string; ifsc: string; amount: string; ref: string }>): string {
+function buildBankFile(rows: Array<{
+  beneficiary: string; account: string; ifsc: string; amount: string; ref: string;
+  agency?: string; scheme?: string; ddo?: string;
+}>): string {
   const header = "Beneficiary Name,Account Number,IFSC,Amount,Payment Ref,Agency,Scheme,DDO";
+  const csvCell = (v: string): string => (v.includes(",") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v);
   const lines = rows.map((r) =>
-    [r.beneficiary, r.account, r.ifsc, r.amount, r.ref, "", "", ""].map((v) => v.includes(",") ? `"${v}"` : v).join(","),
+    [r.beneficiary, r.account, r.ifsc, r.amount, r.ref, r.agency ?? "", r.scheme ?? "", r.ddo ?? ""]
+      .map(csvCell).join(","),
   );
   return [header, ...lines].join("\r\n");
 }
+
+/** Vendor display names — same resolution used by payments queries. */
+const VENDOR_NAMES: Record<string, string> = {
+  "eeeeeeee-0001-0000-0000-000000000001": "M/s Bharat Construction Pvt. Ltd.",
+  "eeeeeeee-0001-0000-0000-000000000002": "Infosys BPM Government Solutions",
+  "eeeeeeee-0001-0000-0000-000000000003": "TCIL Infrastructure Ltd.",
+  "eeeeeeee-0001-0000-0000-000000000004": "BEML Limited",
+};
 
 export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/pfms/config", async (req, reply) => {
@@ -59,14 +81,22 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     if (batch.submissionStatus !== "signed" && batch.submissionStatus !== "pending") {
       throw new HttpError(400, "INVALID_STATE", "bank file requires signed or pending batch");
     }
-    const amount = (Number(batch.amountMinor) / 100).toFixed(2);
-    const csv = buildBankFile([{
-      beneficiary: "Beneficiary",
-      account: "000000000000",
-      ifsc: "SBIN0000001",
-      amount,
-      ref: batch.pfmsId,
-    }]);
+    // P1-4: build the NEFT advice from REAL finance_payments beneficiaries
+    // (real amount / account / ref / DDO), not a hardcoded stub. Account/IFSC
+    // are emitted from captured data; IFSC is blank where no beneficiary bank
+    // master exists in this service (documented gap — not fabricated).
+    const beneficiaries = await repo.listRealBeneficiaries(ctx.tenantId);
+    const rows = beneficiaries.map((b) => ({
+      beneficiary: VENDOR_NAMES[b.beneficiary] ?? (b.beneficiary || "Unknown beneficiary"),
+      account: b.account,
+      ifsc: b.ifsc,
+      amount: rupeesFromPaise(b.amountMinor),
+      ref: b.ref,
+      agency: batch.agencyCode ?? "",
+      scheme: batch.schemeCode ?? "",
+      ddo: b.ddoCode ?? batch.ddoCode ?? "",
+    }));
+    const csv = buildBankFile(rows);
     const filename = `pfms_${batch.pfmsId}.csv`;
     return reply
       .header("content-type", "text/csv; charset=utf-8")
