@@ -125,10 +125,10 @@ export async function listSchemesByTenant(tenantId: string, limit: number): Prom
   return db.select().from(projectSchemes).where(eq(projectSchemes.tenantId, tenantId)).limit(limit);
 }
 
-export async function countProjectsByScheme(schemeId: string): Promise<number> {
+export async function countProjectsByScheme(schemeId: string, tenantId: string): Promise<number> {
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(projectProjects)
-    .where(eq(projectProjects.schemeId, schemeId));
+    .where(and(eq(projectProjects.schemeId, schemeId), eq(projectProjects.tenantId, tenantId)));
   return row?.count ?? 0;
 }
