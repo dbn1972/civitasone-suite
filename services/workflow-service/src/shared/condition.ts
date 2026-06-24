@@ -300,7 +300,7 @@ export function validateCondition(expr: string | null | undefined): string | nul
 
 function resolvePath(ctx: Record<string, unknown>, path: string): unknown {
   return path.split(".").reduce<unknown>((acc, key) => {
-    if (acc !== null && typeof acc === "object" && key in (acc as Record<string, unknown>)) {
+    if (acc !== null && typeof acc === "object" && Object.prototype.hasOwnProperty.call(acc, key)) {
       return (acc as Record<string, unknown>)[key];
     }
     return undefined;

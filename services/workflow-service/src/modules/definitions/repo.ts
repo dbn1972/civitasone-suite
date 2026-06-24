@@ -50,6 +50,23 @@ export async function findByCodeTx(tx: Writer, tenantId: string, code: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * M1 — executable lookup for call-activity. Like findByCodeTx but also excludes
+ * TEMPLATE definitions, so a call node can never instantiate a template as a
+ * live child instance (templates are clone-only, never directly runnable).
+ */
+export async function findExecutableByCodeTx(tx: Writer, tenantId: string, code: string) {
+  const rows = await (tx as typeof db).select().from(definitions)
+    .where(and(
+      eq(definitions.tenantId, tenantId),
+      eq(definitions.code, code),
+      eq(definitions.status, "active"),
+      eq(definitions.isTemplate, false),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** P1-4 — a specific version of a definition code (any status), for migration. */
 export async function findByCodeVersionTx(tx: Writer, tenantId: string, code: string, version: number) {
   const rows = await (tx as typeof db).select().from(definitions)

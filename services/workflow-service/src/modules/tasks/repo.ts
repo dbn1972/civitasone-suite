@@ -68,8 +68,11 @@ export async function listPendingForRoles(
   return rows.map(toView);
 }
 
-export async function findByIdTx(tx: Writer, id: string): Promise<TaskRow | null> {
-  const rows = await (tx as typeof db).select().from(tasks).where(eq(tasks.id, id)).limit(1);
+export async function findByIdTx(tx: Writer, id: string, tenantId: string): Promise<TaskRow | null> {
+  // H1 — tenant-scoped lookup: a cross-tenant id resolves to null so a child can
+  // never resume a call task that belongs to a different tenant.
+  const rows = await (tx as typeof db).select().from(tasks)
+    .where(and(eq(tasks.id, id), eq(tasks.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
