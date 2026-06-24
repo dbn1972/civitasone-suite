@@ -9,12 +9,18 @@ import {
   encryptMfaSecret,
   decryptMfaSecret,
   generateBase32Secret,
-  verifyTotp,
+  verifyTotpStep,
 } from "../../shared/mfa-crypto.js";
 import { mfaConfigs } from "./schema.js";
 import { enableMfaBody, enableMfa } from "./commands.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+
+// SEC H1: per-user verify lockout policy. After MAX_FAILED consecutive wrong
+// codes, lock verification for LOCKOUT_MS. A successful verify clears the count.
+const MFA_MAX_FAILED = Number(process.env.MFA_MAX_FAILED_ATTEMPTS ?? 5);
+const MFA_LOCKOUT_MS = Number(process.env.MFA_LOCKOUT_MS ?? 15 * 60 * 1000);
+const TOTP_STEP_SECONDS = 30;
 
 export async function mfaRoutes(app: FastifyInstance): Promise<void> {
   app.post("/identity/users/:id/mfa", async (req, reply) => {
@@ -86,6 +92,13 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "MFA not set up");
     }
 
+    // SEC H1: lockout — refuse verification while the user is locked out.
+    const now = new Date();
+    if (config.lockedUntil && config.lockedUntil > now) {
+      const retryAfter = Math.ceil((config.lockedUntil.getTime() - now.getTime()) / 1000);
+      throw new HttpError(429, "MFA_LOCKED", `too many failed attempts; try again in ${retryAfter}s`);
+    }
+
     let base32Secret: string;
     try {
       base32Secret = decryptMfaSecret(config.secret);
@@ -93,15 +106,41 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(500, "INTERNAL", "MFA secret unreadable");
     }
 
-    if (!verifyTotp(base32Secret, body.code)) {
+    const matchedStep = verifyTotpStep(base32Secret, body.code, { stepSeconds: TOTP_STEP_SECONDS });
+
+    if (matchedStep === null) {
+      // SEC H1: count the failure; lock out after MFA_MAX_FAILED consecutive misses.
+      const nextFailed = (config.failedAttempts ?? 0) + 1;
+      const lock = nextFailed >= MFA_MAX_FAILED;
+      await db.update(mfaConfigs)
+        .set({
+          failedAttempts: lock ? 0 : nextFailed,
+          ...(lock ? { lockedUntil: new Date(now.getTime() + MFA_LOCKOUT_MS) } : {}),
+          updatedBy: ctx.actorId, version: config.version + 1, updatedAt: now,
+        })
+        .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+      if (lock) {
+        throw new HttpError(429, "MFA_LOCKED", `too many failed attempts; locked for ${Math.ceil(MFA_LOCKOUT_MS / 1000)}s`);
+      }
       throw new HttpError(401, "INVALID_CODE", "invalid TOTP code");
     }
 
-    if (!config.enabled) {
-      await db.update(mfaConfigs)
-        .set({ enabled: true, updatedBy: ctx.actorId, version: config.version + 1, updatedAt: new Date() })
-        .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+    // SEC H1: single-use enforcement. Reject any code at or below the last
+    // accepted step (replay of an already-used code, even within the window).
+    if (config.lastUsedStep !== null && config.lastUsedStep !== undefined && matchedStep <= config.lastUsedStep) {
+      throw new HttpError(401, "CODE_REPLAYED", "TOTP code already used");
     }
+
+    // Success: record the consumed step, clear failure/lockout, enable if needed.
+    await db.update(mfaConfigs)
+      .set({
+        lastUsedStep: matchedStep,
+        failedAttempts: 0,
+        lockedUntil: null,
+        ...(config.enabled ? {} : { enabled: true }),
+        updatedBy: ctx.actorId, version: config.version + 1, updatedAt: now,
+      })
+      .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
 
     return reply.code(200).send({
       data: { verified: true, method: "totp", enabledAt: new Date().toISOString() },

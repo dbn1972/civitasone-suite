@@ -4,8 +4,28 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { roleAssignmentHistory } from "./schema.js";
+import { assertCanConfer, assertKeyAllowed, DomainError } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/**
+ * SEC C1 — record an apply-time authority rejection. The grant/assign passed
+ * the request-path check but the caller's authority was revoked (or the role's
+ * permission set changed) before apply, so we refuse to apply it and emit a
+ * failure audit. We do NOT throw: the rejection is a permanent decision, so the
+ * message is consumed (not retried/dead-lettered) — only the privileged write
+ * is suppressed.
+ */
+async function emitRejectionAudit(
+  tx: unknown, msg: CommandEnvelope, action: string, resourceType: string, resourceId: string, reason: string,
+): Promise<void> {
+  const t = tx as Parameters<typeof enqueue>[0];
+  await enqueue(t, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
+    correlationId: msg.correlationId,
+    payload: { service: "identity", action, resourceType, resourceId, outcome: "denied", reason, severity: "high" },
+  });
+}
 
 async function emitAudit(
   tx: unknown, msg: CommandEnvelope, eventType: string,
@@ -45,12 +65,36 @@ export function registerRbacConsumers(q: Queue): void {
     });
   });
 
-  q.subscribe<{ roleId: string; permissionId: string; permissionKey: string }>(COMMANDS.rbacGrantPermission, async (msg) => {
+  q.subscribe<{ roleId: string; permissionId: string; permissionKey: string; callerRoles?: string[] }>(COMMANDS.rbacGrantPermission, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
       // Idempotent: skip if already attached.
       if (await repo.roleHasPermission(tx, msg.tenantId, p.roleId, p.permissionId)) return;
+
+      // SEC C1: re-run the authority check at APPLY time under a row lock. The
+      // request-path check is advisory only; authority may have been revoked
+      // between request and apply. We lock the target role, re-derive the
+      // caller's effective DB permissions, and re-validate against the
+      // permission being conferred. Reserved-key conferral is re-validated too.
+      const lockedRole = await repo.lockRole(tx, msg.tenantId, p.roleId);
+      if (!lockedRole) {
+        await emitRejectionAudit(tx, msg, "grant", "rbac_role", p.roleId, "role no longer exists");
+        return;
+      }
+      const callerRoles = p.callerRoles ?? [];
+      try {
+        assertKeyAllowed(callerRoles, [p.permissionKey]);
+        const callerPerms = await repo.effectivePermissionKeys(tx, msg.tenantId, msg.actorId);
+        assertCanConfer(callerRoles, callerPerms, [p.permissionKey]);
+      } catch (err) {
+        if (err instanceof DomainError) {
+          await emitRejectionAudit(tx, msg, "grant", "rbac_role", p.roleId, `authority re-check failed at apply: ${err.message}`);
+          return; // consume; do not apply, do not retry
+        }
+        throw err;
+      }
+
       await repo.attachPermission(tx, msg.tenantId, p.roleId, p.permissionId, msg.actorId);
       await emitAudit(tx, msg, EVENTS.rbacPermissionGranted, { roleId: p.roleId, permissionId: p.permissionId }, "grant", "rbac_role", p.roleId);
     });
@@ -65,10 +109,33 @@ export function registerRbacConsumers(q: Queue): void {
     });
   });
 
-  q.subscribe<{ roleId: string; userId: string; reason?: string }>(COMMANDS.rbacAssignRole, async (msg) => {
+  q.subscribe<{ roleId: string; userId: string; reason?: string; callerRoles?: string[] }>(COMMANDS.rbacAssignRole, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
+
+      // SEC C1: apply-time authority re-check under a row lock. Lock the target
+      // role so its permission set cannot change concurrently, re-derive the
+      // role's permission keys + the caller's effective permissions, and confirm
+      // the caller may still confer everything the role grants.
+      const lockedRole = await repo.lockRole(tx, msg.tenantId, p.roleId);
+      if (!lockedRole) {
+        await emitRejectionAudit(tx, msg, "assign", "rbac_role_assignment", p.userId, "role no longer exists");
+        return;
+      }
+      const callerRoles = p.callerRoles ?? [];
+      try {
+        const rolePerms = await repo.permissionKeysForRole(tx, msg.tenantId, p.roleId);
+        const callerPerms = await repo.effectivePermissionKeys(tx, msg.tenantId, msg.actorId);
+        assertCanConfer(callerRoles, callerPerms, rolePerms);
+      } catch (err) {
+        if (err instanceof DomainError) {
+          await emitRejectionAudit(tx, msg, "assign", "rbac_role_assignment", p.userId, `authority re-check failed at apply: ${err.message}`);
+          return;
+        }
+        throw err;
+      }
+
       const cur = await repo.findAssignment(tx, msg.tenantId, p.roleId, p.userId);
       if (cur) {
         if (cur.status === "active") return; // idempotent
