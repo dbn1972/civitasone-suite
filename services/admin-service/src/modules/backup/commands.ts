@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function scheduleBackup(ctx: RequestContext, tenantId: string, cronExpr: string): Promise<Accepted> {
-  const id = randomUUID();
+  const id = idempotentId(ctx);
   await queue.publish(COMMANDS.backupSchedule, {
     messageId: id, type: COMMANDS.backupSchedule, tenantId,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -17,7 +17,7 @@ export async function scheduleBackup(ctx: RequestContext, tenantId: string, cron
 }
 
 export async function triggerBackup(ctx: RequestContext, tenantId: string): Promise<Accepted> {
-  const id = randomUUID();
+  const id = idempotentId(ctx);
   await queue.publish(COMMANDS.backupTrigger, {
     messageId: id, type: COMMANDS.backupTrigger, tenantId,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

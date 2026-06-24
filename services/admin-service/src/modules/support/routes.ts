@@ -1,10 +1,10 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { BreakglassSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
-import { breakGlassBody, closeParam } from "./validators.js";
+import { breakGlassBody, closeParam, breakGlassListQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -12,12 +12,16 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/breakglass", async (req, reply) => {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
-    const q = listQuerySchema.parse(req.query);
-    const rows = await repo.listBreakGlass(ctx.tenantId, q.limit);
+    // P1-3: platform-wide review; an optional tenantId query param targets a
+    // specific tenant instead of being pinned to the caller's own ctx.tenantId.
+    const q = breakGlassListQuery.parse(req.query);
+    const rows = await repo.listBreakGlass(q.limit, q.tenantId);
     sendValidated(reply, BreakglassSummaryListSchema, rows.map((row) => ({
       id: row.id,
       actor: row.actorId,
-      actorEmail: row.actorId,
+      // P2-2: no email is captured for break-glass actors (only actor_id, a uuid).
+      // Emit an empty string rather than misrepresenting the uuid as an email.
+      actorEmail: "",
       reason: row.reason,
       resourceAccessed: row.ticketId,
       startedAt: new Date(row.openedAt as unknown as string).toISOString(),
