@@ -35,6 +35,26 @@ export function registerTasksConsumers(queue: Queue): void {
       // instance. The locked row is the authoritative instance state below.
       const instance = await instanceRepo.lockByIdTx(tx, p.instanceId);
 
+      // P0-2 — authoritative lifecycle gate. A task can only be completed while
+      // its instance is active. If the instance was suspended or cancelled (or
+      // already completed) between the HTTP pre-check and now, drop the command
+      // without completing or advancing. Resume re-activates and a fresh
+      // completeTask command will then pass.
+      if (instance && instance.status !== "active") {
+        await historyRepo.record(tx, {
+          tenantId: p.tenantId,
+          instanceId: p.instanceId,
+          taskId: p.id,
+          fromNode: p.nodeKey ?? instance.currentNode ?? null,
+          toNode: null,
+          action: "blocked",
+          decision,
+          actorId: msg.actorId,
+          detail: { reason: "instance_not_active", instanceStatus: instance.status },
+        });
+        return;
+      }
+
       // C2 — DURABLE SoD enforcement (the HTTP-handler pre-check is racy because
       // completed_by is only written here). Now that we hold the instance lock
       // and read prior completions FOR UPDATE, two back-to-back completions by

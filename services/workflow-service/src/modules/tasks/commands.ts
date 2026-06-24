@@ -27,6 +27,14 @@ export async function completeTask(
   if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
   if (existing.status === "completed") throw new HttpError(409, "CONFLICT", "task already completed");
 
+  // P0-2 — a task may only be completed while its instance is active. Suspended
+  // or cancelled instances block task completion (409); resuming re-enables it.
+  // This is the friendly pre-check; the consumer re-checks under the row lock.
+  const lifecycleInstance = await instanceRepo.findById(existing.instanceId, ctx.tenantId);
+  if (lifecycleInstance && lifecycleInstance.status !== "active") {
+    throw new HttpError(409, "INSTANCE_NOT_ACTIVE", `instance is ${lifecycleInstance.status}; tasks cannot be completed`);
+  }
+
   const isSuperAdmin = ctx.roles.includes("super_admin");
   let sodOverride = false;
 
