@@ -10,7 +10,8 @@ import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
+import { annualTaxFromTaxableMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
 /** Resolve the DA rate (basis points) effective for the run month (Iter1). */
@@ -255,6 +256,23 @@ async function collectAdHocEarnings(
 
 const AUDIT = "audit.event.record";
 const EFT_INITIATE = "finance.payment.eft.initiate";
+// Sentinel structure id for runs that have no salary structure (pensioner runs).
+const NIL_STRUCTURE_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Multi-DDO: the set of department ids that belong to a DDO for the tenant.
+ * Returns null when no mapping exists (caller then pays the whole tenant — the
+ * legacy whole-tenant run). When a ddoCode is given but unmapped, an empty set
+ * is returned so the run pays nobody rather than silently paying everyone.
+ */
+async function resolveDdoDepartments(tenantId: string, ddoCode: string | null): Promise<Set<string> | null> {
+  if (!ddoCode) return null;
+  const rows = (await db.execute(sql`
+    SELECT department_id FROM payroll.payroll_ddo_departments
+    WHERE tenant_id = ${tenantId}::uuid AND ddo_code = ${ddoCode}
+  `)) as unknown as Array<{ department_id: string }>;
+  return new Set(rows.map((r) => r.department_id));
+}
 
 export function registerPayrollConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.structureCreate, async (msg) => {
@@ -273,31 +291,34 @@ export function registerPayrollConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.runCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; runNo: string; month: string;
-      departmentId?: string; structureId: string; runType?: string;
+      departmentId?: string; structureId?: string; runType?: string; ddoCode?: string;
     };
-    const runType: "regular" | "supplementary" | "arrears" =
-      p.runType === "supplementary" || p.runType === "arrears" ? p.runType : "regular";
+    const runType: "regular" | "supplementary" | "arrears" | "pensioner" =
+      p.runType === "supplementary" || p.runType === "arrears" || p.runType === "pensioner" ? p.runType : "regular";
+    const ddoCode = p.ddoCode ?? null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P3 (Iter2): the dup-guard blocks only a second *regular* run per
-      // tenant+month. Supplementary/arrears (off-cycle) runs are allowed
-      // alongside the regular run. The DB partial-unique index enforces the
-      // same rule as a belt-and-suspenders guard.
+      // tenant+month+DDO. Supplementary/arrears/pensioner (off-cycle) runs are
+      // allowed alongside the regular run. The DB partial-unique index enforces
+      // the same rule (COALESCE(ddo_code,'__ALL__')) as a belt-and-suspenders
+      // guard — so two DDOs each get one regular run in the same month.
       if (runType === "regular") {
         const dup = (await tx.execute(sql`
           SELECT 1 FROM payroll.payroll_runs
           WHERE tenant_id = ${p.tenantId}::uuid AND month = ${p.month}
             AND status <> 'failed' AND run_type = 'regular'
+            AND COALESCE(ddo_code, '__ALL__') = ${ddoCode ?? "__ALL__"}
           LIMIT 1
         `)) as unknown as Array<unknown>;
         if (dup.length > 0) {
-          throw new DomainError("DUPLICATE_RUN_FOR_PERIOD", `a regular payroll run already exists for ${p.month}`);
+          throw new DomainError("DUPLICATE_RUN_FOR_PERIOD", `a regular payroll run already exists for ${p.month}${ddoCode ? ` (DDO ${ddoCode})` : ""}`);
         }
       }
       await repo.insertRun(tx, {
         id: p.id, tenantId: p.tenantId, runNo: p.runNo, month: p.month,
-        departmentId: p.departmentId ?? null, structureId: p.structureId,
-        runType,
+        departmentId: p.departmentId ?? null, structureId: p.structureId ?? NIL_STRUCTURE_ID,
+        runType, ddoCode,
         totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -305,7 +326,11 @@ export function registerPayrollConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
     try {
-      await processPayrollRun(msg, { ...p, runType });
+      if (runType === "pensioner") {
+        await processPensionRun(msg, { id: p.id, tenantId: p.tenantId, month: p.month, ddoCode });
+      } else {
+        await processPayrollRun(msg, { ...p, structureId: p.structureId ?? NIL_STRUCTURE_ID, runType, ddoCode });
+      }
     } catch (err) {
       await db.transaction(async (tx) => {
         await repo.updateRun(tx, p.id, { status: "failed", updatedBy: msg.actorId });
@@ -403,10 +428,12 @@ export function registerPayrollConsumers(queue: Queue): void {
 
 async function processPayrollRun(
   msg: { tenantId: string; actorId: string; correlationId: string },
-  p: { id: string; tenantId: string; month: string; structureId: string; departmentId?: string; runType?: "regular" | "supplementary" | "arrears" },
+  p: { id: string; tenantId: string; month: string; structureId: string; departmentId?: string; runType?: "regular" | "supplementary" | "arrears"; ddoCode?: string | null },
 ): Promise<void> {
   const input = await fetchPayrollInput(p.tenantId, p.month);
   const structComps = await repo.listComponentsByStructure(p.structureId, p.tenantId);
+  // Multi-DDO: the departments this DDO pays (null => whole tenant, legacy).
+  const ddoDepartments = await resolveDdoDepartments(p.tenantId, p.ddoCode ?? null);
   const daRateBps = await resolveDaRateBps(p.tenantId, p.month);
   const ptSlabs = await resolvePtSlabs(p.tenantId);
   const protectedNetFloorMinor = await resolveProtectedNetFloorMinor(p.tenantId);
@@ -435,6 +462,8 @@ async function processPayrollRun(
   await db.transaction(async (tx) => {
     for (const emp of input.employees) {
       if (p.departmentId && emp.departmentId !== p.departmentId) continue;
+      // Multi-DDO: only pay employees whose department belongs to this run's DDO.
+      if (ddoDepartments && !ddoDepartments.has(emp.departmentId)) continue;
       if (alreadyComputed.has(emp.id)) continue; // M1: skip already-computed employees
 
       const cityClass = emp.cityClass ?? "X";
@@ -613,6 +642,107 @@ async function processPayrollRun(
       totalNetMinor: runNet,
       status: "processing",
       updatedBy: msg.actorId,
+    });
+  });
+}
+
+/**
+ * Pensioner payroll run: a distinct run type from salary. Computes monthly
+ * pension (basic pension, DR on pension, additional pension by age band,
+ * commutation restoration, medical allowance) for every active pensioner of the
+ * DDO (or whole tenant when unscoped), persists a slip + statutory TDS per
+ * pensioner, and rolls up run totals. GL posting (run.approved event) and the
+ * bank-file are produced by the shared run lifecycle, so they are per-DDO too.
+ */
+async function processPensionRun(
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  p: { id: string; tenantId: string; month: string; ddoCode: string | null },
+): Promise<void> {
+  const drRateBps = await resolveDaRateBps(p.tenantId, p.month); // DR shares the DA series
+  const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
+
+  const pensioners = (await db.execute(sql`
+    SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
+           basic_pension_minor, commuted_pension_minor, commutation_date::text AS commutation_date,
+           medical_allowance_minor, tax_regime
+    FROM payroll.payroll_pensioners
+    WHERE tenant_id = ${p.tenantId}::uuid AND status = 'active'
+      AND (${p.ddoCode}::varchar IS NULL OR ddo_code = ${p.ddoCode})
+    ORDER BY ppo_no
+  `)) as unknown as Array<{
+    id: string; ppo_no: string; full_name: string; date_of_birth: string;
+    basic_pension_minor: string | number; commuted_pension_minor: string | number;
+    commutation_date: string | null; medical_allowance_minor: string | number; tax_regime: string;
+  }>;
+
+  // M1: resume — skip pensioners already having a slip for this run.
+  const existingSlips = await repo.listSlipsByRun(p.id, p.tenantId);
+  const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
+
+  await db.transaction(async (tx) => {
+    for (const pen of pensioners) {
+      if (alreadyComputed.has(pen.id)) continue;
+      const regime: Regime = pen.tax_regime === "old" ? "old" : "new";
+      // Pension is taxable as salary. Estimate annual taxable = annual gross
+      // (basic + additional + DR + medical) less the std deduction baked into
+      // the tax config, then spread evenly across the year. The commuted
+      // portion withheld for restoration is NOT income, so tax is on full gross.
+      const preview = computePension({
+        basicPensionMinor: BigInt(pen.basic_pension_minor),
+        drRateBps,
+        commutedPensionMinor: BigInt(pen.commuted_pension_minor),
+        commutationDate: pen.commutation_date,
+        medicalAllowanceMinor: BigInt(pen.medical_allowance_minor),
+        dateOfBirth: pen.date_of_birth,
+        month: p.month,
+      });
+      const annualGross = preview.grossMinor * 12n;
+      const stdDed = regime === "old" ? 5_000_000n : 7_500_000n; // Sec 16 std deduction (paise)
+      let annualTaxable = annualGross - stdDed;
+      if (annualTaxable < 0n) annualTaxable = 0n;
+      const annualTax = annualTaxFromTaxableMinor(annualTaxable, regime, fyStart);
+      const tdsMinor = (annualTax / 100n / 12n) * 100n; // even monthly spread, rupee-rounded
+
+      const result = computePension({
+        basicPensionMinor: BigInt(pen.basic_pension_minor),
+        drRateBps,
+        commutedPensionMinor: BigInt(pen.commuted_pension_minor),
+        commutationDate: pen.commutation_date,
+        medicalAllowanceMinor: BigInt(pen.medical_allowance_minor),
+        dateOfBirth: pen.date_of_birth,
+        month: p.month,
+        tdsMinor,
+      });
+
+      const slipId = randomUUID();
+      const allComps = [...result.earnings, ...result.deductions];
+      await repo.insertSlip(tx, {
+        id: slipId, tenantId: p.tenantId, runId: p.id,
+        employeeId: pen.id, employeeNo: pen.ppo_no,
+        basicMinor: result.basicPensionMinor, grossMinor: result.grossMinor,
+        totalDeductionsMinor: result.totalDeductionsMinor, netPayMinor: result.netPayMinor,
+        components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: Number(c.amountMinor) })),
+        tdsMinor: result.tdsMinor,
+        status: result.netPayMinor < 0n ? "exception" : "computed",
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      if (result.tdsMinor > 0n) {
+        await statutoryRepo.insertTds(tx, {
+          id: randomUUID(), tenantId: p.tenantId, slipId, employeeId: pen.id,
+          runId: p.id, annualBasicMinor: result.basicPensionMinor * 12n,
+          taxableMinor: annualTaxable,
+          tdsMinor: result.tdsMinor, currency: "INR", period: p.month,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      }
+    }
+
+    const allSlips = await repo.listSlipsByRunTx(tx, p.id, p.tenantId);
+    const runGross = allSlips.reduce((s, sl) => s + sl.grossMinor, 0n);
+    const runNet = allSlips.reduce((s, sl) => s + sl.netPayMinor, 0n);
+    await repo.updateRun(tx, p.id, {
+      totalGrossMinor: runGross, totalNetMinor: runNet,
+      status: "processing", updatedBy: msg.actorId,
     });
   });
 }

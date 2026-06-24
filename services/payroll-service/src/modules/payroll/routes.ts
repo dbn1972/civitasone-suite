@@ -4,9 +4,12 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { createStructureBody, createRunBody, idParam } from "./validators.js";
+import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { db } from "../../shared/db.js";
+import { sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -78,6 +81,87 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const slip = await queries.getSlip(id, ctx.tenantId);
     if (!slip) throw new HttpError(404, "NOT_FOUND", "slip not found");
     return reply.send(slip);
+  });
+
+  // ===================== Multi-DDO master data =====================
+  app.get("/v1/payroll/ddos", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const rows = (await db.execute(sql`
+      SELECT d.ddo_code, d.name,
+             COALESCE(array_agg(m.department_id) FILTER (WHERE m.department_id IS NOT NULL), '{}') AS department_ids
+      FROM payroll.payroll_ddos d
+      LEFT JOIN payroll.payroll_ddo_departments m
+        ON m.tenant_id = d.tenant_id AND m.ddo_code = d.ddo_code
+      WHERE d.tenant_id = ${ctx.tenantId}::uuid
+      GROUP BY d.ddo_code, d.name
+      ORDER BY d.ddo_code
+    `)) as unknown as Array<{ ddo_code: string; name: string; department_ids: string[] }>;
+    return reply.send(rows.map((r) => ({ ddoCode: r.ddo_code, name: r.name, departmentIds: r.department_ids })));
+  });
+
+  app.post("/v1/payroll/ddos", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ROLES);
+    const body = createDdoBody.parse(req.body);
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_ddos (tenant_id, ddo_code, name)
+        VALUES (${ctx.tenantId}::uuid, ${body.ddoCode}, ${body.name})
+        ON CONFLICT (tenant_id, ddo_code) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()
+      `);
+      for (const deptId of body.departmentIds) {
+        await tx.execute(sql`
+          INSERT INTO payroll.payroll_ddo_departments (tenant_id, department_id, ddo_code)
+          VALUES (${ctx.tenantId}::uuid, ${deptId}::uuid, ${body.ddoCode})
+          ON CONFLICT (tenant_id, department_id) DO UPDATE SET ddo_code = EXCLUDED.ddo_code
+        `);
+      }
+    });
+    return reply.code(201).send({ ddoCode: body.ddoCode, name: body.name, departmentIds: body.departmentIds });
+  });
+
+  // ===================== Pensioner master =====================
+  app.get("/v1/payroll/pensioners", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const rows = (await db.execute(sql`
+      SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
+             basic_pension_minor, commuted_pension_minor, commutation_date::text AS commutation_date,
+             medical_allowance_minor, ddo_code, tax_regime, status
+      FROM payroll.payroll_pensioners
+      WHERE tenant_id = ${ctx.tenantId}::uuid
+      ORDER BY ppo_no
+    `)) as unknown as Array<Record<string, unknown>>;
+    return reply.send(rows.map((r) => ({
+      id: r.id, ppoNo: r.ppo_no, fullName: r.full_name, dateOfBirth: r.date_of_birth,
+      basicPensionMinor: Number(r.basic_pension_minor), commutedPensionMinor: Number(r.commuted_pension_minor),
+      commutationDate: r.commutation_date, medicalAllowanceMinor: Number(r.medical_allowance_minor),
+      ddoCode: r.ddo_code, taxRegime: r.tax_regime, status: r.status,
+    })));
+  });
+
+  app.post("/v1/payroll/pensioners", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ROLES);
+    const b = createPensionerBody.parse(req.body);
+    const id = randomUUID();
+    await db.execute(sql`
+      INSERT INTO payroll.payroll_pensioners
+        (id, tenant_id, ppo_no, full_name, date_of_birth, basic_pension_minor,
+         commuted_pension_minor, commutation_date, medical_allowance_minor, ddo_code,
+         bank_account_no, bank_ifsc, pan, tax_regime, created_by, updated_by)
+      VALUES
+        (${id}::uuid, ${ctx.tenantId}::uuid, ${b.ppoNo}, ${b.fullName}, ${b.dateOfBirth}::date,
+         ${b.basicPensionMinor.toString()}::bigint,
+         ${(b.commutedPensionMinor ?? 0n).toString()}::bigint,
+         ${b.commutationDate ?? null}::date,
+         ${(b.medicalAllowanceMinor ?? 0n).toString()}::bigint,
+         ${b.ddoCode ?? null}, ${b.bankAccountNo ?? null}, ${b.bankIfsc ?? null}, ${b.pan ?? null},
+         ${b.taxRegime}, ${ctx.actorId}::uuid, ${ctx.actorId}::uuid)
+      ON CONFLICT (tenant_id, ppo_no) DO NOTHING
+    `);
+    return reply.code(201).send({ id, ppoNo: b.ppoNo });
   });
 
   app.setErrorHandler(errorHandler);
