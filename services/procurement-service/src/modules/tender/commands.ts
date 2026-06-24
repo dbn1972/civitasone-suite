@@ -5,11 +5,22 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertDistinctMakerChecker, assertTechEvaluatorDistinct, DomainError } from "./domain.js";
+import { assertModeAllowedForValue, modeForTenderType, GfrModeError } from "../gfr/mode-bands.js";
 import type { CreateTenderBody, SubmitBidBody, TechEvaluateBody, AwardTenderBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createTender(ctx: RequestContext, body: CreateTenderBody): Promise<Accepted> {
+  // GFR mode-bands: reject a tender type that violates the value band for the
+  // estimated value synchronously with 400 (e.g. single-rigour mode below the
+  // band floor). Mirrors the SoD synchronous-reject pattern. Money is paise.
+  try {
+    assertModeAllowedForValue(modeForTenderType(body.type), BigInt(body.estimatedMinor));
+  } catch (err) {
+    if (err instanceof GfrModeError) throw new HttpError(400, err.code, err.message);
+    throw err;
+  }
+
   const id = randomUUID();
   await queue.publish(COMMANDS.tenderCreate, {
     messageId: id, type: COMMANDS.tenderCreate,

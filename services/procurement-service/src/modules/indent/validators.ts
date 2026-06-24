@@ -14,6 +14,11 @@ export const createIndentBody = z.object({
   purpose:     z.string().min(3).max(500),
   sanctionRef: z.string().optional(),
   requiredBy:  z.string().optional(),
+  // GFR procurement-mode (optional): when supplied it is validated against the
+  // indent's estimated-value band (GFR R.154/155/162/161/166).
+  procurementMode: z.enum([
+    "direct_purchase", "gem", "limited_tender", "advertised_tender", "single_tender",
+  ]).optional(),
   items:       z.array(itemSchema).min(1),
 });
 export type CreateIndentBody = z.infer<typeof createIndentBody>;
