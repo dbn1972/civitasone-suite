@@ -58,7 +58,7 @@ function mapProjectRow(row: ProjectRow, schemeName?: string): ProjectSummary {
 export async function getProject(id: string, tenantId: string): Promise<ProjectRow | null> {
   return cache.getOrLoad<ProjectRow>(
     cache.makeKey(tenantId, "project", id),
-    () => repo.findProjectById(id)
+    () => repo.findProjectById(id, tenantId)
   );
 }
 
@@ -80,7 +80,7 @@ export async function listProjectSummaries(tenantId: string, limit: number): Pro
   const rows = await listProjects(tenantId, undefined, 1, limit);
   const summaries: ProjectSummary[] = [];
   for (const row of rows) {
-    const scheme = row.schemeId ? await schemeRepo.findSchemeById(row.schemeId) : null;
+    const scheme = row.schemeId ? await schemeRepo.findSchemeById(row.schemeId, tenantId) : null;
     summaries.push(mapProjectRow(row, scheme?.name));
   }
   return summaries;
@@ -90,9 +90,9 @@ export async function getProjectDetail(id: string, tenantId: string) {
   const row = await getProject(id, tenantId);
   if (!row) return null;
   const [milestones, scheme, fundReleaseRows] = await Promise.all([
-    repo.listMilestonesByProject(id),
-    row.schemeId ? schemeRepo.findSchemeById(row.schemeId) : Promise.resolve(null),
-    row.schemeId ? schemeRepo.listFundReleasesByScheme(row.schemeId) : Promise.resolve([]),
+    repo.listMilestonesByProject(id, tenantId),
+    row.schemeId ? schemeRepo.findSchemeById(row.schemeId, tenantId) : Promise.resolve(null),
+    row.schemeId ? schemeRepo.listFundReleasesByScheme(row.schemeId, tenantId) : Promise.resolve([]),
   ]);
   return {
     ...mapProjectRow(row, scheme?.name),
@@ -121,7 +121,7 @@ export async function listMilestoneSummaries(tenantId: string, limit: number) {
   );
   const summaries = [];
   for (const row of rows ?? []) {
-    const project = await repo.findProjectById(row.projectId);
+    const project = await repo.findProjectById(row.projectId, tenantId);
     summaries.push({
       id: row.id,
       projectId: row.projectId,

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { projectUcStatements, projectUcItems, type UcStatementInsert, type UcItemInsert } from "./schema.js";
 
@@ -12,6 +12,7 @@ export async function insertUcItems(tx: Writer, rows: UcItemInsert[]): Promise<v
   if (rows.length) await tx.insert(projectUcItems).values(rows);
 }
 
-export async function listUcStatementsByScheme(schemeId: string): Promise<(typeof projectUcStatements.$inferSelect)[]> {
-  return db.select().from(projectUcStatements).where(eq(projectUcStatements.schemeId, schemeId));
+export async function listUcStatementsByScheme(schemeId: string, tenantId: string): Promise<(typeof projectUcStatements.$inferSelect)[]> {
+  return db.select().from(projectUcStatements)
+    .where(and(eq(projectUcStatements.schemeId, schemeId), eq(projectUcStatements.tenantId, tenantId)));
 }

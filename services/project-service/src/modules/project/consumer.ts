@@ -67,7 +67,7 @@ export function registerProjectConsumers(queue: Queue): void {
     const p = msg.payload as { taskId: string; tenantId: string; projectId: string; status: string; progressPct?: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const task = await repo.findTaskByIdTx(tx, p.taskId);
+      const task = await repo.findTaskByIdTx(tx, p.taskId, p.tenantId);
       if (!task) throw new Error(`task ${p.taskId} not found`);
       assertTaskTransitionAllowed(task.status ?? "pending", p.status);
       await repo.updateTaskTx(tx, p.taskId, {
@@ -108,7 +108,7 @@ export function registerProjectConsumers(queue: Queue): void {
     const p = msg.payload as { mId: string; tenantId: string; projectId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const milestone = await repo.findMilestoneByIdTx(tx, p.mId);
+      const milestone = await repo.findMilestoneByIdTx(tx, p.mId, p.tenantId);
       if (!milestone) throw new Error(`milestone ${p.mId} not found`);
       assertMilestoneCanComplete(milestone.status ?? "pending");
       const today = new Date().toISOString().split("T")[0]!;

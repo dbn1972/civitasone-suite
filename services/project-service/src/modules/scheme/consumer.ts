@@ -65,40 +65,39 @@ export function registerSchemeConsumers(queue: Queue): void {
     };
     const amount = BigInt(p.amountMinor);
 
-    // Domain check: fund release within component allocation
-    const component = await repo.findComponentByIdTx(db as any, p.componentId);
-    if (!component) {
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
+    // P1-4: perform the allocation check + releasedMinor increment atomically against a
+    // FOR UPDATE locked component row inside the tx, so concurrent releases cannot over-allocate.
+    let rejected: string | null = null;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const component = await repo.lockComponentByIdTx(tx, p.componentId, p.tenantId);
+      if (!component) {
+        rejected = "component not found";
         await enqueue(tx, {
           topic: EVENTS.fundReleaseAllocationExceeded, eventType: EVENTS.fundReleaseAllocationExceeded,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { releaseId: p.id, componentId: p.componentId, reason: "component not found" },
         });
-      });
-      return;
-    }
+        return;
+      }
 
-    try {
-      assertFundReleaseWithinAllocation(
-        component.allocationMinor ?? 0n,
-        component.releasedMinor ?? 0n,
-        amount
-      );
-    } catch (err) {
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
+      try {
+        assertFundReleaseWithinAllocation(
+          component.allocationMinor ?? 0n,
+          component.releasedMinor ?? 0n,
+          amount
+        );
+      } catch (err) {
+        rejected = String(err);
         await enqueue(tx, {
           topic: EVENTS.fundReleaseAllocationExceeded, eventType: EVENTS.fundReleaseAllocationExceeded,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { releaseId: p.id, componentId: p.componentId, amountMinor: p.amountMinor, reason: String(err) },
         });
-      });
-      return;
-    }
+        return;
+      }
 
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertFundRelease(tx, {
         id: p.id, schemeId: p.schemeId, componentId: p.componentId, tenantId: p.tenantId,
         releaseNo: p.releaseNo, amountMinor: amount, currency: "INR",
@@ -106,7 +105,7 @@ export function registerSchemeConsumers(queue: Queue): void {
         pfmsRef: p.pfmsRef ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await repo.updateComponentReleasedTx(tx, p.componentId, amount, component.version ?? 1);
+      await repo.incrementComponentReleasedTx(tx, p.componentId, amount);
       await enqueue(tx, {
         topic: EVENTS.fundReleaseApproved, eventType: EVENTS.fundReleaseApproved,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -117,6 +116,7 @@ export function registerSchemeConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create", "fund_release", p.id);
     });
+    void rejected;
     await cache.invalidate(cache.makeKey(msg.tenantId, "scheme", p.schemeId));
   });
 
@@ -124,7 +124,7 @@ export function registerSchemeConsumers(queue: Queue): void {
     const p = msg.payload as { rId: string; tenantId: string; schemeId: string; pfmsRef?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const release = await repo.findFundReleaseByIdTx(tx, p.rId);
+      const release = await repo.findFundReleaseByIdTx(tx, p.rId, p.tenantId);
       if (!release) throw new Error(`fund release ${p.rId} not found`);
       assertFundReleaseCanDisburse(release.status ?? "pending");
       await repo.updateFundReleaseTx(tx, p.rId, {
@@ -134,6 +134,8 @@ export function registerSchemeConsumers(queue: Queue): void {
         updatedBy: msg.actorId,
         version: (release.version ?? 1) + 1,
       });
+      // P0-5: roll the disbursed amount up onto the scheme's released_minor (read but never written before).
+      await repo.incrementSchemeReleasedTx(tx, release.schemeId, release.amountMinor ?? 0n);
       await enqueue(tx, {
         topic: EVENTS.fundReleaseDisbursed, eventType: EVENTS.fundReleaseDisbursed,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

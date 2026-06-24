@@ -34,8 +34,8 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = createBody.parse(req.body);
 
-    const milestone = await projectRepo.findMilestoneById(id);
-    if (!milestone || milestone.tenantId !== ctx.tenantId) {
+    const milestone = await projectRepo.findMilestoneById(id, ctx.tenantId);
+    if (!milestone) {
       throw new HttpError(404, "NOT_FOUND", "milestone not found");
     }
 

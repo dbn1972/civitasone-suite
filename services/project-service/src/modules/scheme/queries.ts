@@ -21,7 +21,7 @@ function mapFundingType(type: string): "central" | "state" | "centrally_sponsore
 export async function getScheme(id: string, tenantId: string): Promise<SchemeRow | null> {
   return cache.getOrLoad<SchemeRow>(
     cache.makeKey(tenantId, "scheme", id),
-    () => repo.findSchemeById(id)
+    () => repo.findSchemeById(id, tenantId)
   );
 }
 
@@ -53,7 +53,7 @@ export async function listFundReleaseSummaries(tenantId: string, limit: number) 
   );
   const summaries = [];
   for (const row of rows ?? []) {
-    const scheme = await repo.findSchemeById(row.schemeId);
+    const scheme = await repo.findSchemeById(row.schemeId, tenantId);
     summaries.push({
       id: row.id,
       releaseNo: row.releaseNo,
