@@ -3,6 +3,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerUserConsumers } from "./modules/users/consumer.js";
+import { registerRbacConsumers } from "./modules/rbac/consumer.js";
 import { registerSessionConsumers } from "./modules/sessions/consumer.js";
 import { reapExpiredSessions } from "./modules/sessions/repo.js";
 import { registerMfaConsumers } from "./modules/mfa/consumer.js";
@@ -11,6 +12,7 @@ import { registerSyncFeederConsumers } from "./modules/sync/feeder.js";
 const log = pino({ name: "identity-worker" });
 
 registerUserConsumers(queue);
+registerRbacConsumers(queue);
 registerSessionConsumers(queue);
 registerMfaConsumers(queue);
 registerSyncFeederConsumers(queue);

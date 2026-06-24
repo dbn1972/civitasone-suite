@@ -5,6 +5,13 @@ export const COMMANDS = {
   createSession:   "identity.session.create",
   revokeSession:   "identity.session.revoke",
   enableMfa:       "identity.mfa.enable",
+  // RBAC (wave 2)
+  rbacCreateRole:        "identity.rbac.role.create",
+  rbacCreatePermission:  "identity.rbac.permission.create",
+  rbacGrantPermission:   "identity.rbac.permission.grant",
+  rbacRevokePermission:  "identity.rbac.permission.revoke",
+  rbacAssignRole:        "identity.rbac.role.assign",
+  rbacRevokeRole:        "identity.rbac.role.revoke",
 } as const;
 
 export const EVENTS = {
@@ -14,6 +21,13 @@ export const EVENTS = {
   sessionCreated:  "identity.session.created",
   sessionRevoked:  "identity.session.revoked",
   mfaEnabled:      "identity.mfa.enabled",
+  // RBAC (wave 2)
+  rbacRoleCreated:        "identity.rbac.role.created",
+  rbacPermissionCreated:  "identity.rbac.permission.created",
+  rbacPermissionGranted:  "identity.rbac.permission.granted",
+  rbacPermissionRevoked:  "identity.rbac.permission.revoked",
+  rbacRoleAssigned:       "identity.rbac.role.assigned",
+  rbacRoleRevoked:        "identity.rbac.role.revoked",
 } as const;
 
 export const SERVICE = "identity";
@@ -21,4 +35,5 @@ export const RESOURCE = {
   user:    "user",
   session: "session",
   mfa:     "mfa",
+  role:    "rbac_role",
 };

@@ -8,6 +8,7 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID } from "node:crypto";
 import { HttpError } from "./shared/context.js";
 import { userRoutes } from "./modules/users/routes.js";
+import { rbacRoutes } from "./modules/rbac/routes.js";
 import { sessionRoutes } from "./modules/sessions/routes.js";
 import { mfaRoutes } from "./modules/mfa/routes.js";
 import { deviceRoutes } from "./modules/devices/routes.js";
@@ -26,6 +27,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
 
   await app.register(userRoutes);
+  await app.register(rbacRoutes);
   await app.register(sessionRoutes);
   await app.register(mfaRoutes);
   await app.register(deviceRoutes);

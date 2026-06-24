@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import { createSqlClient } from "@civitasone/db";
 import { usersModuleSchema } from "../modules/users/schema.js";
+import { rbacModuleSchema } from "../modules/rbac/schema.js";
 import { sessionsModuleSchema } from "../modules/sessions/schema.js";
 import { mfaModuleSchema } from "../modules/mfa/schema.js";
 import { schema as devicesSyncSchema } from "../modules/devices/schema.js";
@@ -12,7 +13,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://identity_svc:***
 export const sqlClient = createSqlClient(url);
 
 export const db = drizzle(sqlClient, {
-  schema: { ...usersModuleSchema, ...sessionsModuleSchema, ...mfaModuleSchema, ...devicesSyncSchema, ...outboxSchema },
+  schema: { ...usersModuleSchema, ...rbacModuleSchema, ...sessionsModuleSchema, ...mfaModuleSchema, ...devicesSyncSchema, ...outboxSchema },
 });
 
 export type Db = typeof db;

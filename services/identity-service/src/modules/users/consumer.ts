@@ -5,6 +5,10 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertTransition, type UserView } from "./domain.js";
+import * as keycloak from "../../shared/keycloak.js";
+import { pino } from "pino";
+
+const kcLog = pino({ name: "identity-keycloak" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -25,6 +29,11 @@ export function registerUserConsumers(q: Queue): void {
       await emitAudit(tx, msg, EVENTS.userCreated, { userId: p.id }, "create", p.id);
     });
     await cache.put(keyFor(msg.payload.tenantId, msg.payload.id), msg.payload);
+    // Keycloak federation (best-effort, feature-flagged, never blocks user create).
+    void keycloak.provisionUser(
+      { id: msg.payload.id, tenantId: msg.payload.tenantId, email: msg.payload.email, name: msg.payload.name },
+      kcLog,
+    ).then((r) => { if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak provision"); });
   });
 
   q.subscribe<{ id: string; name?: string; empCode?: string }>(COMMANDS.updateUser, async (msg) => {
@@ -42,6 +51,7 @@ export function registerUserConsumers(q: Queue): void {
   });
 
   q.subscribe<{ id: string; status: string; reason?: string }>(COMMANDS.deactivateUser, async (msg) => {
+    let deactivatedEmail: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
@@ -51,8 +61,14 @@ export function registerUserConsumers(q: Queue): void {
         status: msg.payload.status, updatedBy: msg.actorId, version: cur.version + 1,
       });
       await emitAudit(tx, msg, EVENTS.userDeactivated, { userId: msg.payload.id, status: msg.payload.status }, "status_change", msg.payload.id);
+      if (msg.payload.status === "deactivated") deactivatedEmail = cur.email;
     });
     await cache.invalidate(keyFor(msg.tenantId, msg.payload.id));
+    // Keycloak deprovision (disable + logout sessions). Best-effort, never blocks.
+    if (deactivatedEmail) {
+      void keycloak.deactivateUser(deactivatedEmail, kcLog)
+        .then((r) => { if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak deactivate"); });
+    }
   });
 }
 
