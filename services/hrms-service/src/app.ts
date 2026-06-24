@@ -33,6 +33,9 @@ import { fnfRoutes } from "./modules/employee/fnf-route.js";
 import { lifecycleRoutes } from "./modules/lifecycle/routes.js";
 import { serviceBookRoutes } from "./modules/service-book/routes.js";
 import { pensionRoutes } from "./modules/pension/routes.js";
+import { aparRoutes } from "./modules/apar/routes.js";
+import { seniorityRoutes } from "./modules/seniority/routes.js";
+import { gpfRoutes } from "./modules/gpf/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -73,6 +76,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(lifecycleRoutes);
   await app.register(serviceBookRoutes);
   await app.register(pensionRoutes);
+  await app.register(aparRoutes);
+  await app.register(seniorityRoutes);
+  await app.register(gpfRoutes);
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
   await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
 
