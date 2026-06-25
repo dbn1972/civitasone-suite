@@ -3,8 +3,17 @@
  *
  * Test 1 — Journal balance (pure): balanced journals pass; unbalanced throw.
  * Test 2 — Budget exceeded (pure): requested > available throws DomainError.
- * Test 3 — Bill 3-way match: missing GRN → consumer emits billMismatch not bill.create.
- * Test 4 — CQRS wiring: POST /finance/bills → queue → consumer → DB (MemoryQueue + MemoryCache).
+ * Test 3 — Bill 3-way match: missing GRN -> consumer emits billMismatch (on_hold).
+ * Test 4 — CQRS wiring: publish finance.bill.create -> consumer -> DB (MemoryQueue).
+ * Test 5 — PFMS HoA / DDO validation (pure).
+ *
+ * The integration tests (3 & 4) drive the REAL bill consumer against the live
+ * finance DB, so they reference seeded master data for the default tenant:
+ *   tenant  00000000-0000-0000-0000-000000000001
+ *   head    b98d5225-6b76-474d-8992-eef8ad032436  (code 6001, HoA 207101010101010102)
+ *   ddo     DDO123456
+ * The consumer enforces UNKNOWN_HEAD / UNKNOWN_DDO / HoA-master checks, so these
+ * must resolve or the create transaction rolls back.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
@@ -19,19 +28,33 @@ import { assertValidDdoCode } from "../src/shared/pfms.js";
 import { EVENTS } from "../src/topics.js";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
-const TENANT = "11111111-aaaa-4000-8000-000000000001";
+// Real seeded tenant + head so the consumer master checks pass.
+const TENANT = "00000000-0000-0000-0000-000000000001";
+const HEAD   = "b98d5225-6b76-474d-8992-eef8ad032436";
+const DDO    = "DDO123456";
 const BILL_1 = "22222222-bbbb-4000-8000-000000000001";
 const BILL_2 = "33333333-cccc-4000-8000-000000000002";
 const MSG_1  = "44444444-dddd-4000-8000-000000000001";
 const MSG_2  = "55555555-eeee-4000-8000-000000000002";
+const CORR_1 = "corr-mismatch-1";
+const CORR_2 = "corr-bill-happy-1";
 
-async function wipe(billId: string, msgId: string) {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+async function wipe(billId: string, msgId: string, correlationId: string) {
+  await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, correlationId));
   await db.delete(financeBills).where(eq(financeBills.id, billId));
   await db.delete(processed).where(eq(processed.messageId, msgId));
 }
 
-// ── 1. Journal balance — pure ──────────────────────────────────────────────
+// helper: pump the memory queue until a predicate holds (or timeout).
+async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await fn()) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+// 1. Journal balance — pure ----------------------------------------------------
 
 describe("GL domain — journal balance (pure)", () => {
   it("balanced journal passes", () => {
@@ -59,7 +82,7 @@ describe("GL domain — journal balance (pure)", () => {
   });
 });
 
-// ── 2. Budget exceeded — pure ──────────────────────────────────────────────
+// 2. Budget exceeded — pure ----------------------------------------------------
 
 describe("Budget domain — exceeded check (pure)", () => {
   it("within budget passes", () => {
@@ -78,17 +101,13 @@ describe("Budget domain — exceeded check (pure)", () => {
   });
 });
 
-// ── 3. Bill 3-way match — missing GRN → mismatch event ───────────────────
+// 3. Bill 3-way match — missing GRN -> mismatch event + on_hold ----------------
 
 describe("Bill consumer — 3-way match (integration)", () => {
-  beforeAll(async () => {
-    await wipe(BILL_1, MSG_1);
-  });
-  afterAll(async () => {
-    await wipe(BILL_1, MSG_1);
-  });
+  beforeAll(async () => { await wipe(BILL_1, MSG_1, CORR_1); });
+  afterAll(async () => { await wipe(BILL_1, MSG_1, CORR_1); });
 
-  it("missing grn_ref causes finance.bill.mismatch in outbox", async () => {
+  it("missing grn_ref causes finance.bill.mismatch and bill on_hold", async () => {
     const q = new MemoryQueue();
     registerPaymentsConsumers(q);
     await q.start();
@@ -105,40 +124,37 @@ describe("Bill consumer — 3-way match (integration)", () => {
         tenantId: TENANT,
         billNo: "BILL-3WM-001",
         vendorId: "aaaaaaaa-0000-4000-8000-000000000001",
-        headId:   "bbbbbbbb-0000-4000-8000-000000000001",
-        ddoCode:  "DDO123456",
+        headId:   HEAD,
+        ddoCode:  DDO,
         grossMinor: 50000,
         currency: "INR",
         deductions: [],
         netMinor: 50000,
         poRef: "procurement_po:cccccccc-0000-4000-8000-000000000001",
-        // grnRef intentionally omitted → triggers mismatch
+        // grnRef intentionally omitted -> triggers mismatch
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await waitFor(async () =>
+      (await db.select().from(financeBills).where(eq(financeBills.id, BILL_1))).length === 1);
     await q.stop();
 
     const rows = await db.select().from(financeBills).where(eq(financeBills.id, BILL_1));
     expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("on_hold");
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, CORR_1));
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain(EVENTS.billMismatch);
     expect(eventTypes).not.toContain(EVENTS.billPassed);
   });
 });
 
-// ── 4. CQRS wiring — happy path bill ─────────────────────────────────────
+// 4. CQRS wiring — happy path bill ---------------------------------------------
 
 describe("Bill consumer — CQRS wiring (integration)", () => {
-  beforeAll(async () => {
-    await wipe(BILL_2, MSG_2);
-  });
-  afterAll(async () => {
-    await wipe(BILL_2, MSG_2);
-    await sqlClient.end();
-  });
+  beforeAll(async () => { await wipe(BILL_2, MSG_2, CORR_2); });
+  afterAll(async () => { await wipe(BILL_2, MSG_2, CORR_2); });
 
   it("happy path: bill with po_ref + grn_ref inserts row and records _inbox.processed", async () => {
     const q = new MemoryQueue();
@@ -157,8 +173,8 @@ describe("Bill consumer — CQRS wiring (integration)", () => {
         tenantId: TENANT,
         billNo: "BILL-HAPPY-001",
         vendorId: "aaaaaaaa-1111-4000-8000-000000000001",
-        headId:   "bbbbbbbb-1111-4000-8000-000000000001",
-        ddoCode:  "DDO123456",
+        headId:   HEAD,
+        ddoCode:  DDO,
         grossMinor: 75000,
         currency: "INR",
         deductions: [{ type: "tds", amountMinor: 7500 }],
@@ -168,26 +184,28 @@ describe("Bill consumer — CQRS wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await waitFor(async () =>
+      (await db.select().from(processed).where(eq(processed.messageId, MSG_2))).length === 1);
     await q.stop();
 
     const bills = await db.select().from(financeBills).where(eq(financeBills.id, BILL_2));
     expect(bills).toHaveLength(1);
-    expect(bills[0]?.billNo).toBe("BILL-HAPPY-001");
+    // billNo is reassigned by the gapless allocator (BILL/<fy>/NNNN), not the caller value.
+    expect(bills[0]?.billNo).toMatch(/^BILL\//);
     expect(bills[0]?.status).toBe("pending");
     expect(bills[0]?.netMinor).toBe(67500n);
 
     const seen = await db.select().from(processed).where(eq(processed.messageId, MSG_2));
     expect(seen).toHaveLength(1);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, CORR_2));
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain("audit.event.record");
     expect(eventTypes).not.toContain(EVENTS.billMismatch);
   });
 });
 
-// ── 5. PFMS HoA / DDO validation (pure) ──────────────────────────
+// 5. PFMS HoA / DDO validation (pure) ------------------------------------------
 
 describe("PFMS domain — HoA and DDO validation (pure)", () => {
   it("valid 18-digit HoA passes", () => {
@@ -207,3 +225,6 @@ describe("PFMS domain — HoA and DDO validation (pure)", () => {
     expect(() => assertValidDdoCode("AB")).toThrowError("INVALID_DDO_CODE");
   });
 });
+
+import { afterAll as _afterAllFinal } from "vitest";
+_afterAllFinal(async () => { await sqlClient.end(); });
