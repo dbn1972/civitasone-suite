@@ -9,6 +9,7 @@ import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { createExportBody, PII_EXPORT_ROLES } from "./validators.js";
+import { verifyArtifact } from "./signing.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -41,6 +42,12 @@ function statusDto(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof
     retentionUntil: r.retentionUntil ? r.retentionUntil.toISOString() : null,
     expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
     error: r.error ?? null,
+    // AUD-2: tamper-evidence metadata so a client knows the artifact is signed.
+    contentSha256: r.contentSha256 ?? null,
+    signature: r.signature ?? null,
+    signatureAlg: r.signatureAlg ?? null,
+    signingKeyId: r.signingKeyId ?? null,
+    signedAt: r.signedAt ? r.signedAt.toISOString() : null,
   };
 }
 
@@ -84,7 +91,50 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     if (!buf) throw new HttpError(404, "NOT_FOUND", "artifact missing");
     void reply.header("content-type", row.format === "csv" ? "text/csv" : "application/json");
     void reply.header("content-disposition", `attachment; filename="audit-export-${id}.${row.format}"`);
+    // AUD-2: surface the integrity proof alongside the bytes so a client can
+    // verify the artifact it just received was not altered in transit/at rest.
+    if (row.contentSha256) void reply.header("x-content-sha256", row.contentSha256);
+    if (row.signature) void reply.header("x-content-signature", row.signature);
+    if (row.signatureAlg) void reply.header("x-signature-alg", row.signatureAlg);
+    if (row.signingKeyId) void reply.header("x-signing-key-id", row.signingKeyId);
     return reply.send(buf);
+  });
+
+  // AUD-2: server-side integrity verification. Re-reads the artifact from disk,
+  // recomputes its SHA-256 and the HMAC signature over the manifest, and reports
+  // whether both still match what was persisted at signing time. This is the
+  // tamper-evidence check a regulator (or an automated monitor) calls to prove the
+  // WORM artifact has not been altered after generation.
+  app.get("/v1/audit/exports/:id/verify", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const row = await repo.findByIdTx(db, id, ctx.tenantId);
+    if (!row || row.status !== "completed") throw new HttpError(404, "NOT_FOUND", "export not available");
+    if (!row.contentSha256 || !row.signature) {
+      throw new HttpError(409, "NOT_SIGNED", "export has no integrity signature");
+    }
+    const file = path.join(EXPORT_DIR, ctx.tenantId, `${id}.${row.format}`);
+    const buf = await readFile(file).catch(() => null);
+    if (!buf) {
+      return reply.send({ data: { id, verified: false, contentMatch: false, signatureMatch: false, reason: "artifact missing" } });
+    }
+    const result = verifyArtifact(
+      buf,
+      { contentSha256: row.contentSha256, signature: row.signature },
+      {
+        exportId: row.id, tenantId: row.tenantId,
+        from: row.periodFrom.toISOString(), to: row.periodTo.toISOString(),
+        format: row.format, includesPii: row.includesPii, rowCount: row.rowCount ?? 0,
+      },
+    );
+    return reply.send({
+      data: {
+        id, verified: result.ok, contentMatch: result.contentMatch, signatureMatch: result.signatureMatch,
+        contentSha256: row.contentSha256, signatureAlg: row.signatureAlg, signingKeyId: row.signingKeyId,
+        signedAt: row.signedAt ? row.signedAt.toISOString() : null,
+      },
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {
