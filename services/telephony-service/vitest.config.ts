@@ -10,6 +10,8 @@ export default defineConfig({
         "postgres://telephony_svc:telephony_dev_pw@localhost:5435/civitas_telephony",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      // At-rest PII key for caller/callee phone encryption (test-only value).
+      TELEPHONY_PII_KEY: "test_telephony_pii_key_0123456789",
     },
   },
 });

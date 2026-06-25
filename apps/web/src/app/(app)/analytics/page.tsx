@@ -4,8 +4,12 @@ export default function Page() {
   return (
     <ModuleHub
       title="Data & Analytics"
-      description="Dashboards and query runs — API-backed list views."
-      links={[{ href: "/analytics/list", label: "Dashboards", note: "Live data from Analytics service API" }]}
+      description="Saved dashboards and safe, whitelisted query runs over the analytics service's own data."
+      links={[
+        { href: "/analytics/dashboards", label: "Dashboards", note: "Saved dashboards with widgets, sharing and access control" },
+        { href: "/analytics/queries", label: "Query Results", note: "Recent query runs with accessible charts and tables" },
+        { href: "/analytics/list", label: "Dashboards (legacy list)", note: "Simple read-only list view" },
+      ]}
     />
   );
 }

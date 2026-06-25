@@ -8,8 +8,13 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { itemRoutes } from "./modules/items/routes.js";
+import { storeRoutes } from "./modules/stores/routes.js";
+import { movementRoutes } from "./modules/movements/routes.js";
 
-// DEPRECATED: inventory-service is superseded by stock-service. The /api/v1/inventory gateway route should be removed after migration. UI redirects to /stock.
+/**
+ * inventory-service HTTP app — government store/inventory domain.
+ * CQRS: routes enqueue commands; the worker (src/worker.ts) consumes them.
+ */
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
@@ -22,6 +27,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "inventory-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(itemRoutes);
+  await app.register(storeRoutes);
+  await app.register(movementRoutes);
+
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

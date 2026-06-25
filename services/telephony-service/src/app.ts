@@ -8,6 +8,8 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { callRoutes } from "./modules/calls/routes.js";
+import { queueRoutes } from "./modules/queues/routes.js";
+import { agentRoutes } from "./modules/agents/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -21,6 +23,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "telephony-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(callRoutes);
+  await app.register(queueRoutes);
+  await app.register(agentRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
