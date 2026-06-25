@@ -16,7 +16,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {/* Skip-to-content link: first focusable element on the page (WCAG 2.4.1).
+            Targets the <main id="main"> rendered by AppShell. */}
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

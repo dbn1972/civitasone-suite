@@ -13,7 +13,9 @@ export function AppShell({ children, crumb }: AppShellProps) {
       <Sidebar />
       <div className="main">
         <TopBar crumb={crumb} />
-        <div className="wrap">{children}</div>
+        <main id="main" tabIndex={-1} className="wrap">
+          {children}
+        </main>
       </div>
     </div>
   );

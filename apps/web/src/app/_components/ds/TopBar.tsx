@@ -13,9 +13,9 @@ interface TopBarProps {
 export function TopBar({ crumb }: TopBarProps) {
   return (
     <header className="tb">
-      <div className="crumb">
+      <nav className="crumb" aria-label="Breadcrumb">
         {crumb ?? <b>CivitasOne</b>}
-      </div>
+      </nav>
       <div className="tb-search">
         <span style={{ fontSize: 14 }}>🔍</span>
         <input placeholder="Search… (Ctrl+K)" aria-label="Search" />

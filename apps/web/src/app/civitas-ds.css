@@ -46,7 +46,8 @@ a{color:inherit;text-decoration:none}
 .tb .crumb{font-size:13px;color:var(--ink2)}.tb .crumb b{color:var(--ink)}.tb .crumb i{color:#cdd2dc;font-style:normal;margin:0 7px}
 .tb-search{flex:1;max-width:380px;display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--line);
   border-radius:10px;padding:9px 13px;color:var(--mut)}
-.tb-search input{border:0;background:transparent;outline:0;width:100%;font-size:13.5px;color:var(--ink)}
+.tb-search input{border:0;background:transparent;width:100%;font-size:13.5px;color:var(--ink)}
+.tb-search input:focus{outline:none}
 .tb-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
 .iconbtn{position:relative;width:40px;height:40px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-size:16px}
 .iconbtn .dot{position:absolute;top:9px;right:10px;width:8px;height:8px;background:var(--rose);border-radius:50%;border:2px solid #fff}
@@ -262,3 +263,76 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 
 :root{--primary:#4f46e5;--primary-d:#4338ca;--primary-soft:#eef2ff}
 .sb-logo{background:linear-gradient(135deg,#4f46e5,#6366f1)!important}
+
+/* ============================================================
+   ACCESSIBILITY FOUNDATIONS (WCAG 2.2 AA)
+   ============================================================ */
+:root{--focus-ring:var(--indigo,#6366f1)}
+
+/* Global visible focus indicator — keyboard only, never on mouse click.
+   Applies to links, buttons, inputs, segmented controls, table rows, etc. */
+:focus-visible{
+  outline:2px solid var(--focus-ring);
+  outline-offset:2px;
+  border-radius:4px;
+}
+/* The TopBar search is a styled wrapper around a borderless input; surface the
+   ring on the wrapper when the inner input is focused via keyboard. */
+.tb-search:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:10px}
+
+/* Skip-to-content link — visually hidden until focused. */
+.skip-link{
+  position:absolute;left:12px;top:-60px;z-index:1000;
+  background:var(--primary);color:#fff;font-size:13.5px;font-weight:650;
+  padding:10px 16px;border-radius:10px;box-shadow:var(--sh-md);
+  transition:top .15s ease;
+}
+.skip-link:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
+
+/* Screen-reader-only utility (visible to AT, hidden visually). */
+.sr-only{
+  position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+.sr-only-focusable:focus,.sr-only-focusable:focus-within{
+  position:static!important;width:auto;height:auto;margin:0;overflow:visible;
+  clip:auto;white-space:normal;
+}
+
+/* ============================================================
+   DATATABLE — sortable headers, filter, pagination
+   ============================================================ */
+.tbl th.sortable{cursor:pointer;user-select:none}
+.tbl th.sortable:hover{color:var(--ink)}
+.tbl th.sortable .sort-ind{margin-left:5px;opacity:.55;font-size:10px}
+.tbl th[aria-sort="ascending"] .sort-ind,
+.tbl th[aria-sort="descending"] .sort-ind{opacity:1;color:var(--primary-d)}
+.tbl tbody tr.row-link:focus-visible{
+  outline:2px solid var(--focus-ring);outline-offset:-2px;background:var(--primary-soft);
+}
+.dt-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.dt-filter{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);
+  border-radius:10px;padding:8px 12px;min-width:240px}
+.dt-filter input{border:0;background:transparent;width:100%;font-size:13px;color:var(--ink)}
+.dt-filter input:focus{outline:none}
+.dt-pager{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:13px;color:var(--ink2)}
+.dt-pager .btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ============================================================
+   CONFIRM DIALOG (role=alertdialog)
+   ============================================================ */
+.cd-overlay{position:fixed;inset:0;z-index:1000;background:rgba(16,24,40,.45);
+  display:grid;place-items:center;padding:20px;animation:cd-fade .12s ease}
+@keyframes cd-fade{from{opacity:0}to{opacity:1}}
+.cd-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh-lg);max-width:440px;width:100%;padding:22px}
+.cd-title{font-size:17px;font-weight:750;letter-spacing:-.2px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
+.cd-desc{color:var(--ink2);font-size:13.5px;line-height:1.5}
+.cd-field{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+.cd-field label{font-size:12.5px;font-weight:650;color:var(--ink2)}
+.cd-field input,.cd-field textarea{border:1px solid var(--line);border-radius:10px;padding:9px 12px;
+  font-size:13.5px;color:var(--ink);background:#fff;font-family:inherit}
+.cd-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.cd-error{color:var(--bad);font-size:12.5px;margin-top:6px}
+.btn.danger{background:var(--bad);color:#fff;box-shadow:0 8px 16px -8px var(--bad)}
+.btn.danger:hover{background:#912018}

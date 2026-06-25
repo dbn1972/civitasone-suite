@@ -12,3 +12,7 @@ export { Tabs } from "./Tabs";
 export { EmptyState } from "./EmptyState";
 export { Avatar } from "./Avatar";
 export { ProgressBar } from "./ProgressBar";
+export { ConfirmDialog } from "./ConfirmDialog";
+export type { ConfirmDialogProps } from "./ConfirmDialog";
+export { ActionButton, useConfirmAction } from "./ActionButton";
+export type { ActionButtonProps, UseConfirmActionOptions } from "./ActionButton";
