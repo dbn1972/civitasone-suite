@@ -1,8 +1,9 @@
-import { eq, and, sql, lt } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { grantApplications } from "../application/schema.js";
 import { grantBeneficiaries } from "../beneficiary/schema.js";
 import { grantComplianceReports } from "../utilisation/schema.js";
+import { grantDisbursements } from "../disbursement/schema.js";
 
 /**
  * G-03 compliance monitoring: find approved applications that have missed
@@ -25,13 +26,16 @@ export async function getOverdueApplicationIds(tenantId: string): Promise<string
     // Only check apps approved more than 90 days ago (first reporting period has elapsed)
     if (app.approvedAt > ninetyDaysAgo) continue;
 
-    // Check if any compliance report was submitted in the last 90 days
+    // Check if a compliance report was submitted within the current reporting
+    // window (last 90 days). Previously this matched ALL reports ever filed
+    // (createdAt < now), so a single stale report marked an app compliant
+    // forever — defeating overdue detection. Use gte(ninetyDaysAgo).
     const recentReports = await db
       .select({ id: grantComplianceReports.id })
       .from(grantComplianceReports)
       .where(and(
         eq(grantComplianceReports.applicationId, app.id),
-        lt(grantComplianceReports.createdAt, new Date()),
+        gte(grantComplianceReports.createdAt, ninetyDaysAgo),
       ))
       .limit(1);
 
@@ -62,9 +66,16 @@ export async function getDashboard(tenantId: string) {
 
   const overdueIds = await getOverdueApplicationIds(tenantId);
 
+  // Real tenant-wide disbursed total: sum of COMPLETED disbursements (paise → rupees).
+  const [disbursed] = await db
+    .select({ total: sql<string>`coalesce(sum(${grantDisbursements.amountMinor}), 0)::text` })
+    .from(grantDisbursements)
+    .where(and(eq(grantDisbursements.tenantId, tenantId), eq(grantDisbursements.status, "completed")));
+  const disbursedAmount = Number(BigInt(disbursed?.total ?? "0")) / 100;
+
   return {
     totalGrants: grants?.count ?? 0,
-    disbursedAmount: 0,
+    disbursedAmount,
     pendingUCs: pendingUcs?.count ?? 0,
     totalGrantees: grantees?.count ?? 0,
     overdueGrants: overdueIds.length,
