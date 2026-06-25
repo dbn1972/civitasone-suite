@@ -46,6 +46,7 @@ const LOADER_PATHS = [
   { method: "GET", gatewayPath: "/api/v1/estab/files", expectUpstream: "/v1/estab/files" },
   { method: "GET", gatewayPath: "/api/v1/admin/health", expectUpstream: "/v1/admin/health" },
   { method: "GET", gatewayPath: "/api/v1/admin/health/readiness", expectUpstream: "/v1/admin/health/readiness" },
+  { method: "GET", gatewayPath: "/api/v1/admin/operations", expectUpstream: "/v1/admin/operations" },
   { method: "GET", gatewayPath: "/api/v1/knowledge/documents", expectUpstream: "/v1/knowledge/documents" },
   { method: "GET", gatewayPath: "/api/v1/workflow/instances", expectUpstream: "/v1/workflow/instances" },
   { method: "GET", gatewayPath: "/api/v1/analytics/dashboards", expectUpstream: "/v1/analytics/dashboards" },

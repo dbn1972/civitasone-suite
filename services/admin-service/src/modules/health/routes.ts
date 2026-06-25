@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveContext, requireSuperAdmin, requireRole, TENANT_ADMIN_ROLES, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
 import { computeProductionReadiness } from "./readiness.js";
+import { getOperationsSnapshot } from "./operations.js";
 
 const serviceParam = z.object({ service: z.string().min(1) });
 
@@ -19,6 +20,12 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     return reply.send(computeProductionReadiness());
+  });
+
+  app.get("/v1/admin/operations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    return reply.send(await getOperationsSnapshot());
   });
 
   app.get("/v1/admin/health/:service", async (req, reply) => {

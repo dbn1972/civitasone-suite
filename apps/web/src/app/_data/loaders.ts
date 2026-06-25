@@ -791,6 +791,166 @@ export async function getTenantAdminDashboard(): Promise<LoaderResult<TenantAdmi
   };
 }
 
+export type AdminOperationProcess = {
+  name: string;
+  kind: "service" | "worker" | "infrastructure";
+  status: string;
+  restarts: number;
+  cpuPct: number;
+  memoryMb: number;
+  uptimeSeconds: number | null;
+};
+
+export type AdminOperationScheduler = {
+  name: string;
+  ownerProcess: string;
+  schedule: string;
+  intervalMs?: number;
+  status: "online" | "owner_down" | "unknown";
+  lastObservedAt?: string;
+};
+
+export type AdminOperationsDashboard = {
+  checkedAt: string;
+  pm2Available: boolean;
+  summary: {
+    totalProcesses: number;
+    onlineProcesses: number;
+    workersOnline: number;
+    workersTotal: number;
+    failedJobs: number;
+    outboxPending: number;
+    queueHealthy: boolean;
+  };
+  processes: AdminOperationProcess[];
+  queue: { healthy: boolean; detail: string };
+  schedulers: AdminOperationScheduler[];
+  outbox: { pending: number };
+  recentErrors: Array<{ source: string; line: string }>;
+  externalMonitorRecommendation: Array<{ tool: string; purpose: string }>;
+};
+
+const emptyOperationsDashboard: AdminOperationsDashboard = {
+  checkedAt: "",
+  pm2Available: false,
+  summary: {
+    totalProcesses: 0,
+    onlineProcesses: 0,
+    workersOnline: 0,
+    workersTotal: 0,
+    failedJobs: 0,
+    outboxPending: 0,
+    queueHealthy: false,
+  },
+  processes: [],
+  queue: { healthy: false, detail: "operations API unavailable" },
+  schedulers: [],
+  outbox: { pending: 0 },
+  recentErrors: [],
+  externalMonitorRecommendation: [],
+};
+
+function toNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function toNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function mapOperationsDashboard(payload: unknown): AdminOperationsDashboard | null {
+  if (!isRecord(payload) || !isRecord(payload.summary) || !isRecord(payload.queue) || !isRecord(payload.outbox)) return null;
+  const processes = Array.isArray(payload.processes)
+    ? payload.processes.flatMap((row): AdminOperationProcess[] => {
+        if (!isRecord(row)) return [];
+        const name = toText(row.name);
+        const kind = row.kind === "service" || row.kind === "worker" || row.kind === "infrastructure" ? row.kind : null;
+        const status = toText(row.status);
+        if (!name || !kind || !status) return [];
+        return [{
+          name,
+          kind,
+          status,
+          restarts: toNumber(row.restarts),
+          cpuPct: toNumber(row.cpuPct),
+          memoryMb: toNumber(row.memoryMb),
+          uptimeSeconds: toNullableNumber(row.uptimeSeconds),
+        }];
+      })
+    : [];
+  const schedulers = Array.isArray(payload.schedulers)
+    ? payload.schedulers.flatMap((row): AdminOperationScheduler[] => {
+        if (!isRecord(row)) return [];
+        const name = toText(row.name);
+        const ownerProcess = toText(row.ownerProcess);
+        const schedule = toText(row.schedule);
+        const status = row.status === "online" || row.status === "owner_down" || row.status === "unknown" ? row.status : null;
+        if (!name || !ownerProcess || !schedule || !status) return [];
+        return [{
+          name,
+          ownerProcess,
+          schedule,
+          status,
+          intervalMs: toNullableNumber(row.intervalMs) ?? undefined,
+          lastObservedAt: toText(row.lastObservedAt) ?? undefined,
+        }];
+      })
+    : [];
+  const recentErrors = Array.isArray(payload.recentErrors)
+    ? payload.recentErrors.flatMap((row): Array<{ source: string; line: string }> => {
+        if (!isRecord(row)) return [];
+        const source = toText(row.source);
+        const line = toText(row.line);
+        return source && line ? [{ source, line }] : [];
+      })
+    : [];
+  const externalMonitorRecommendation = Array.isArray(payload.externalMonitorRecommendation)
+    ? payload.externalMonitorRecommendation.flatMap((row): Array<{ tool: string; purpose: string }> => {
+        if (!isRecord(row)) return [];
+        const tool = toText(row.tool);
+        const purpose = toText(row.purpose);
+        return tool && purpose ? [{ tool, purpose }] : [];
+      })
+    : [];
+
+  return {
+    checkedAt: toText(payload.checkedAt) ?? "",
+    pm2Available: payload.pm2Available === true,
+    summary: {
+      totalProcesses: toNumber(payload.summary.totalProcesses),
+      onlineProcesses: toNumber(payload.summary.onlineProcesses),
+      workersOnline: toNumber(payload.summary.workersOnline),
+      workersTotal: toNumber(payload.summary.workersTotal),
+      failedJobs: toNumber(payload.summary.failedJobs),
+      outboxPending: toNumber(payload.summary.outboxPending),
+      queueHealthy: payload.summary.queueHealthy === true,
+    },
+    processes,
+    queue: {
+      healthy: payload.queue.healthy === true,
+      detail: toText(payload.queue.detail) ?? "",
+    },
+    schedulers,
+    outbox: {
+      pending: toNumber(payload.outbox.pending),
+    },
+    recentErrors,
+    externalMonitorRecommendation,
+  };
+}
+
+export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminOperationsDashboard>> {
+  return fetchJson<unknown, AdminOperationsDashboard>(
+    "/api/v1/admin/operations",
+    emptyOperationsDashboard,
+    {
+      revalidateSeconds: 15,
+      telemetryKey: "tenant_admin.operations",
+      mapResponse: mapOperationsDashboard,
+    },
+  );
+}
+
 export async function getEmployees(): Promise<LoaderResult<EmployeeSummary[]>> {
   return fetchJson("/api/v1/hrms/employees", [] as EmployeeSummary[], {
     revalidateSeconds: 30,
