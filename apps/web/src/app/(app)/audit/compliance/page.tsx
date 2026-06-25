@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatCard } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 import { getAuditCompliance } from "../../../_data/loaders";
+import { GenerateReportButton } from "./GenerateReportButton";
 
 export default async function AuditCompliancePage() {
   const { data: items, source } = await getAuditCompliance();
@@ -17,16 +20,16 @@ export default async function AuditCompliancePage() {
   const displayCert = certItems.length > 0 ? certItems : items.slice(Math.ceil(items.length / 2));
 
   return (
-    <div className="wrap">
+    <main className="wrap">
+      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
+        <Link href="/audit/dashboard" className="lnk">Audit</Link>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-current="page">Compliance</span>
+      </nav>
       <PageHeader
         title="Compliance — DPDP & CERT-In"
         subtitle="Data-protection (DPDP Act), CERT-In directions & security-policy posture."
-        actions={
-          <>
-            <button className="btn ghost">Evidence</button>
-            <button className="btn primary">Generate Report</button>
-          </>
-        }
+        actions={<GenerateReportButton items={items} />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="📜" iconBg="#f5f3ff" label="Compliance Score" value={`${score}%`} />
@@ -45,7 +48,7 @@ export default async function AuditCompliancePage() {
                 <tr key={item.id}>
                   <td>{item.lawOrRule}{item.section ? ` §${item.section}` : ""}</td>
                   <td>{item.requirement}</td>
-                  <td>{item.dueDate}</td>
+                  <td>{formatIndianDate(item.dueDate)}</td>
                   <td>
                     {item.status === "complied" ? <span className="pill good">Compliant</span>
                       : item.status === "overdue" ? <span className="pill bad">Overdue</span>
@@ -81,6 +84,6 @@ export default async function AuditCompliancePage() {
           </table>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

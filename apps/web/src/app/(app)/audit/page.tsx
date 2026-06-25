@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, StatusPill } from "../../_components/ds";
+import { PageHeader, StatCard } from "../../_components/ds";
 import { getAuditItems } from "../../_data/loaders";
+import { AuditLogTable } from "./AuditLogTable";
 
 export default async function AuditPage() {
   const { data: auditItems, source } = await getAuditItems();
@@ -10,16 +12,16 @@ export default async function AuditPage() {
   const failures = auditItems.filter((i) => i.outcome === "failure").length;
 
   return (
-    <div className="wrap">
+    <main className="wrap">
+      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
+        <Link href="/audit/dashboard" className="lnk">Audit</Link>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-current="page">Event Log</span>
+      </nav>
       <PageHeader
         title="Audit Events"
         subtitle="Tenant-scoped activity log with outcome and resource context."
-        actions={
-          <>
-            <button className="btn ghost">Export</button>
-            <button className="btn primary">Filter</button>
-          </>
-        }
+        actions={<Link href="/audit/exports" className="btn ghost">Export</Link>}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="📜" iconBg="#eef2ff" label="Total Events" value={total} />
@@ -30,34 +32,10 @@ export default async function AuditPage() {
       {source === "error" && <DataSourceBadge source={source} />}
       <div className="card">
         <div className="card-h"><h3>Audit event log</h3></div>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Actor</th>
-              <th>Action</th>
-              <th>Target</th>
-              <th>Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {auditItems.map((item, i) => (
-              <tr key={i}>
-                <td>{item.actor}</td>
-                <td><span className="mono">{item.action}</span></td>
-                <td>{item.resource}</td>
-                <td><StatusPill status={item.outcome} label={item.outcome} /></td>
-              </tr>
-            ))}
-            {auditItems.length === 0 && (
-              <tr>
-                <td colSpan={4}>
-                  <div className="empty-state"><div>📜</div><h4>No audit events</h4><p>Activity will appear here as actions are performed.</p></div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="pad">
+          <AuditLogTable rows={auditItems} />
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
