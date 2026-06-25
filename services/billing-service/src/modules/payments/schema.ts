@@ -10,6 +10,9 @@ export const billingPayments = paymentsSchema.table("billing_payments", {
   currency: char("currency", { length: 3 }).notNull().default("INR"),
   method: varchar("method", { length: 32 }).notNull().default("gateway"),
   status: varchar("status", { length: 24 }).notNull().default("pending"),
+  receiptNo: text("receipt_no"),
+  reference: text("reference"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -31,6 +34,7 @@ export const billingGatewayTxns = paymentsSchema.table("billing_gateway_txns", {
   version: integer("version").notNull().default(1),
 });
 
+export type BillingPaymentRow = typeof billingPayments.$inferSelect;
 export type BillingPaymentInsert = typeof billingPayments.$inferInsert;
 export type BillingGatewayTxnInsert = typeof billingGatewayTxns.$inferInsert;
 export const schema = { billingPayments, billingGatewayTxns };

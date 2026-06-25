@@ -3,15 +3,33 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
-import { recordPaymentBody } from "./validators.js";
+import { recordPaymentBody, invoiceParam, tenantParam } from "./validators.js";
 import * as commands from "./commands.js";
+import * as queries from "./queries.js";
 
 export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
+  // Record a payment receipt against a bill.
   app.post("/v1/billing/payments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const body = recordPaymentBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.recordPayment(ctx, body.tenantId, body.invoiceId, body.amountMinor, body.gateway));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordPayment(ctx, body));
+  });
+
+  // Read model: receipts against a bill.
+  app.get("/v1/billing/invoices/:id/payments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const { id } = invoiceParam.parse(req.params);
+    return reply.send(await queries.listReceiptsForInvoice(id, ctx.tenantId));
+  });
+
+  // Read model: all receipts for a tenant.
+  app.get("/v1/billing/tenants/:id/payments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const { id } = tenantParam.parse(req.params);
+    return reply.send(await queries.listReceiptsForTenant(id));
   });
 
   app.setErrorHandler((err, req, reply) => {
