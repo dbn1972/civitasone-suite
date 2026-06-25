@@ -7,6 +7,7 @@ export const notificationDeliveries = deliveriesSchema.table("deliveries", {
   tenantId:   uuid("tenant_id").notNull(),
   templateId: uuid("template_id").notNull(),
   recipient:  varchar("recipient", { length: 254 }).notNull(),
+  recipientId: uuid("recipient_id"),
   channel:    varchar("channel", { length: 32 }).notNull(),
   status:       varchar("status", { length: 24 }).notNull().default("queued"),
   sentAt:       timestamp("sent_at", { withTimezone: true }),

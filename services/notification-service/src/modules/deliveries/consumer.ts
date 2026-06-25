@@ -3,9 +3,15 @@ import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { maskRecipient } from "../../adapters/mask.js";
 import * as repo from "./repo.js";
-import { computeNextRetryAt, retryDelaySeconds, shouldRetry } from "./retry.js";
-import { resolvePreferredChannel, resolveChannelWithDefault, sendWithFallback } from "./channel.js";
+import { computeNextRetryAt, shouldRetry } from "./retry.js";
+import {
+  resolvePreferredChannel,
+  resolveChannelWithDefault,
+  sendWithFallback,
+  CHANNEL_NONE,
+} from "./channel.js";
 import { notificationTemplates, notificationPrefs } from "../templates/schema.js";
 import { eq } from "drizzle-orm";
 
@@ -24,14 +30,15 @@ type SendPayload = {
 
 export function registerDeliveryConsumers(q: Queue): void {
   q.subscribe<SendPayload>(COMMANDS.sendNotification, async (msg) => {
-    await processSend(q, msg);
+    await processSend(msg);
   });
 }
 
-async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise<void> {
+async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
   const p = msg.payload;
   const deliveryId = p.deliveryId ?? randomUUID();
   const retryCount = p.retryCount ?? 0;
+  const recipientId = p.recipientId ?? null;
 
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
@@ -45,14 +52,48 @@ async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise
       inApp: r.inApp, email: r.email, push: r.push, version: r.version,
     }));
 
-    const channel = await resolveChannelWithDefault(msg.tenantId, prefs, p.eventType, p.channel ?? template?.channel);
-    const { preferred, fallbacks } = resolvePreferredChannel(prefs, p.eventType, channel);
+    // P1-1: opt-out is decided from prefs FIRST, using only a CALLER-specified
+    // channel (`p.channel`) as an explicit override. The template's default
+    // channel must NOT be treated as an override — otherwise every template
+    // (which always carries a channel) would silently defeat a recipient's
+    // opt-out. The template channel is applied only as a default for a recipient
+    // who has NOT opted out and expressed no preference.
+    const prefResolution = resolvePreferredChannel(prefs, p.eventType, p.channel);
+    const optedOut = prefResolution.optedOut;
+    const channel = optedOut
+      ? CHANNEL_NONE
+      : await resolveChannelWithDefault(msg.tenantId, prefs, p.eventType, p.channel ?? template?.channel);
+    const { preferred, fallbacks } = resolvePreferredChannel(prefs, p.eventType, optedOut ? undefined : channel);
+
+    // P1-1: a fully opted-out recipient → record a `skipped` delivery on channel
+    // `none` and send nothing. This is terminal (no retry, no fallback to email).
+    if (optedOut || channel === CHANNEL_NONE) {
+      if (!p.deliveryId) {
+        await repo.insertDelivery(tx, {
+          id: deliveryId, tenantId: msg.tenantId, templateId: p.templateId,
+          recipient: p.recipient, recipientId, channel: CHANNEL_NONE, status: "skipped",
+          retryCount, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+        });
+      } else {
+        await repo.updateDeliveryStatus(tx, deliveryId, "skipped", msg.actorId, retryCount + 1);
+      }
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
+        actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId,
+          outcome: "skipped", channel: CHANNEL_NONE, reason: "recipient_opted_out",
+        },
+      });
+      return;
+    }
+
     const attemptChannels = [preferred, ...fallbacks];
 
     if (!p.deliveryId) {
       await repo.insertDelivery(tx, {
         id: deliveryId, tenantId: msg.tenantId, templateId: p.templateId,
-        recipient: p.recipient, channel: preferred, status: "sending",
+        recipient: p.recipient, recipientId, channel: preferred, status: "sending",
         retryCount, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
     } else {
@@ -72,14 +113,16 @@ async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise
     if (sendResult.error) {
       const nextRetry = retryCount + 1;
       if (shouldRetry(retryCount)) {
+        // P1-2: DURABLE retry. Persist status='queued' + next_retry_at and let the
+        // DB-backed sweeper (worker.ts) republish once due. No setTimeout — survives
+        // a worker restart because the due row is stored in Postgres.
         const nextRetryAt = computeNextRetryAt(retryCount);
         await repo.scheduleDeliveryRetry(tx, deliveryId, nextRetry, nextRetryAt, msg.actorId, sendResult.error);
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: EVENTS.failed, eventType: EVENTS.failed, tenantId: msg.tenantId,
           actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { deliveryId, retryCount: nextRetry, nextRetryAt: nextRetryAt.toISOString(), recipientId: p.recipientId ?? null, error: sendResult.error },
+          payload: { deliveryId, retryCount: nextRetry, nextRetryAt: nextRetryAt.toISOString(), recipientId, error: sendResult.error },
         });
-        scheduleRetryPublish(q, msg, deliveryId, nextRetry, retryDelaySeconds(retryCount));
         return;
       }
 
@@ -88,7 +131,7 @@ async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise
         topic: EVENTS.permanentlyFailed, eventType: EVENTS.permanentlyFailed, tenantId: msg.tenantId,
         actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
-          deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId: p.recipientId ?? null, channel: sendResult.channel,
+          deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId, channel: sendResult.channel,
           retryCount: nextRetry, error: sendResult.error,
         },
       });
@@ -103,35 +146,20 @@ async function processSend(q: Queue, msg: CommandEnvelope<SendPayload>): Promise
       return;
     }
 
-    await repo.updateDeliveryStatus(tx, deliveryId, "delivered", msg.actorId, retryCount + 2, new Date());
+    await repo.updateDeliveryStatus(tx, deliveryId, "delivered", msg.actorId, retryCount + 2, new Date(), undefined, undefined, sendResult.channel);
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: EVENTS.delivered, eventType: EVENTS.delivered, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
-      payload: { deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId: p.recipientId ?? null, channel: sendResult.channel },
+      payload: { deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId, channel: sendResult.channel },
     });
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
-      payload: { service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId, outcome: "success" },
+      payload: { service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId, outcome: "success", recipient: maskRecipient(p.recipient) },
     });
   });
 }
 
-function scheduleRetryPublish(q: Queue, msg: CommandEnvelope<SendPayload>, deliveryId: string, retryCount: number, delaySeconds: number): void {
-  const republish = () => {
-    void q.publish(COMMANDS.sendNotification, {
-      messageId: randomUUID(),
-      type: COMMANDS.sendNotification,
-      tenantId: msg.tenantId,
-      actorId: msg.actorId,
-      correlationId: msg.correlationId,
-      schemaVersion: "1.0",
-      payload: { ...msg.payload, deliveryId, retryCount },
-    });
-  };
-  if (delaySeconds > 0) setTimeout(republish, delaySeconds * 1000);
-  else void republish();
-}
-
 /** Exported for tests — same delay schedule as SQS DelaySeconds [900, 3600, 14400]. */
-export { computeNextRetryAt, retryDelaySeconds, shouldRetry };
+export { computeNextRetryAt, shouldRetry } from "./retry.js";
+export { retryDelaySeconds } from "./retry.js";

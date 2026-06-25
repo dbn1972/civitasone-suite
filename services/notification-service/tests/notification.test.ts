@@ -38,7 +38,7 @@ describe("notification-service queue wiring", () => {
   it("notification.send routes to delivery consumer", async () => {
     const templateId = "bbbbbbbb-2222-4000-8000-000000000002";
     await q.publish("notification.send", {
-      messageId: "m2", type: "notification.send", tenantId: "t1", actorId: "a1",
+      messageId: "10000000-0000-4000-8000-000000000002", type: "notification.send", tenantId: "t1", actorId: "a1",
       correlationId: "c2", schemaVersion: "1.0",
       payload: { templateId, recipient: "user@dept.gov.in", channel: "email" },
     });
@@ -58,7 +58,7 @@ describe("notification-service queue wiring", () => {
   it("dedupes repeated messageId", async () => {
     let count = 0;
     q.subscribe("notification.test", async () => { count++; });
-    const opts = { messageId: "dup", type: "notification.test", tenantId: "t", actorId: "u", correlationId: "c", schemaVersion: "1.0", payload: {} };
+    const opts = { messageId: "10000000-0000-4000-8000-0000000000d0", type: "notification.test", tenantId: "t", actorId: "u", correlationId: "c", schemaVersion: "1.0", payload: {} };
     await q.publish("notification.test", opts);
     await q.publish("notification.test", opts);
     await new Promise((r) => setTimeout(r, 20));

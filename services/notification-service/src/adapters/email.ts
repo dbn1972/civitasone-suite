@@ -2,6 +2,7 @@ import { pino } from "pino";
 import type { ChannelAdapter, SendParams, SendResult } from "./types.js";
 import { createSmtpTransport, MemoryEmailTransport, type EmailTransport } from "./email-transport.js";
 import { renderBody } from "./render.js";
+import { maskRecipient } from "./mask.js";
 
 const log = pino({ name: "adapter:email" });
 
@@ -28,7 +29,7 @@ export class EmailAdapter implements ChannelAdapter {
     const driver = emailDriver();
 
     if (driver === "stub") {
-      log.debug({ to: params.recipient, subject: params.subject }, "email stub — accepted without SMTP");
+      log.debug({ to: maskRecipient(params.recipient), subject: params.subject }, "email stub — accepted without SMTP");
       return { ok: true };
     }
 
@@ -52,11 +53,11 @@ export class EmailAdapter implements ChannelAdapter {
         subject: params.subject ?? null,
         text: renderBody(params.body, params.variables),
       });
-      log.info({ to: params.recipient, subject: params.subject }, "email sent via smtp");
+      log.info({ to: maskRecipient(params.recipient), subject: params.subject }, "email sent via smtp");
       return { ok: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : "smtp send failed";
-      log.warn({ err, to: params.recipient }, "email smtp delivery failed");
+      log.warn({ err, to: maskRecipient(params.recipient) }, "email smtp delivery failed");
       return { ok: false, error: message };
     }
   }
