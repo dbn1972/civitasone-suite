@@ -2,10 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ConfirmDialog } from "@/app/_components/ds";
 
 export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDispatch: boolean }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState("");
 
   if (!canDispatch) {
@@ -18,6 +21,7 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
 
   async function dispatch() {
     setBusy(true);
+    setError(undefined);
     setMessage("");
     try {
       const res = await fetch(`/api/proxy/v1/procurement/pos/${poId}/dispatch`, {
@@ -27,13 +31,17 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
       });
       const text = await res.text();
       if (!res.ok) {
-        setMessage(text || `Dispatch failed (${res.status})`);
-        return;
+        const msg = text || `Dispatch failed (${res.status})`;
+        setError(msg);
+        throw new Error(msg);
       }
+      setOpen(false);
       setMessage("PO dispatched to vendor.");
       router.refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Network error");
+      const msg = err instanceof Error ? err.message : "Network error";
+      setError(msg);
+      throw err instanceof Error ? err : new Error(msg);
     } finally {
       setBusy(false);
     }
@@ -41,10 +49,27 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-      <button type="button" className="btn primary" disabled={busy} onClick={() => void dispatch()}>
-        {busy ? "Dispatching…" : "Dispatch to vendor"}
+      <button
+        type="button"
+        className="btn primary"
+        style={{ minHeight: 44 }}
+        onClick={() => { setError(undefined); setMessage(""); setOpen(true); }}
+      >
+        Dispatch to vendor
       </button>
-      {message ? <span style={{ fontSize: "0.8rem", color: message.includes("failed") ? "#b91c1c" : "#047857" }}>{message}</span> : null}
+      <span role="status" aria-live="polite" style={{ fontSize: "0.8rem", color: "#047857" }}>{message}</span>
+
+      <ConfirmDialog
+        open={open}
+        title="Dispatch this PO to the vendor?"
+        description="This issues the purchase order to the vendor and cannot be undone."
+        confirmLabel="Dispatch"
+        danger
+        busy={busy}
+        errorMessage={error}
+        onConfirm={() => { void dispatch().catch(() => {}); }}
+        onCancel={() => { if (!busy) { setOpen(false); setError(undefined); } }}
+      />
     </div>
   );
 }

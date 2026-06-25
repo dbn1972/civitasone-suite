@@ -1,7 +1,17 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { getTrainingPrograms } from "../../../_data/loaders";
-import type { TrainingProgramSummary } from "@civitasone/types";
+import { formatIndianDate } from "@/lib/formatters";
+
+type Row = {
+  id: string;
+  title: string;
+  category: string;
+  trainer: string;
+  dates: string;
+  enrolled: string;
+  status: string;
+} & Record<string, unknown>;
 
 export default async function TrainingPage() {
   const { data: programs, source } = await getTrainingPrograms();
@@ -11,29 +21,23 @@ export default async function TrainingPage() {
   const ongoing = programs.filter((p) => p.status === "ongoing").length;
   const completed = programs.filter((p) => p.status === "completed").length;
 
-  const columns: { key: keyof TrainingProgramSummary & string; label: string; align?: "left" | "right"; render?: (row: TrainingProgramSummary) => React.ReactNode }[] = [
+  const rows: Row[] = programs.map((p) => ({
+    id: p.id,
+    title: p.title,
+    category: p.category,
+    trainer: p.trainerName ?? "—",
+    dates: `${formatIndianDate(p.startDate)} – ${formatIndianDate(p.endDate)}`,
+    enrolled: p.maxCapacity != null ? `${p.enrolledCount} / ${p.maxCapacity}` : String(p.enrolledCount),
+    status: p.status,
+  }));
+
+  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
     { key: "title", label: "Title" },
     { key: "category", label: "Category" },
-    { key: "trainerName", label: "Trainer", render: (r) => r.trainerName ?? "—" },
-    {
-      key: "startDate",
-      label: "Dates",
-      render: (r) => `${r.startDate} – ${r.endDate}`,
-    },
-    {
-      key: "enrolledCount",
-      label: "Enrolled",
-      align: "right",
-      render: (r) =>
-        r.maxCapacity != null
-          ? `${r.enrolledCount} / ${r.maxCapacity}`
-          : String(r.enrolledCount),
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => <StatusPill status={r.status} />,
-    },
+    { key: "trainer", label: "Trainer" },
+    { key: "dates", label: "Dates" },
+    { key: "enrolled", label: "Enrolled", align: "right" },
+    { key: "status", label: "Status", cellType: "status" },
   ];
 
   return (
@@ -50,9 +54,13 @@ export default async function TrainingPage() {
         <StatCard icon="✅" iconBg="#fffbe6" label="Completed" value={completed} />
       </StatGrid>
       <Card title="Training Programs">
-        <DataTable<TrainingProgramSummary>
+        <DataTable<Row>
           columns={columns}
-          rows={programs}
+          rows={rows}
+          sortable
+          filterable
+          filterPlaceholder="Filter by title, category or trainer…"
+          pageSize={15}
         />
       </Card>
     </>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StatusPill, EmptyState } from "../../../../_components/ds";
+import { Segmented, DataTable } from "../../../../_components/ds";
 import type { AdvanceSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -42,53 +42,28 @@ export function AdvancesTable({ advances, source = "api" }: { advances: AdvanceS
           {cacheNote}
         </p>
       ) : null}
-      <div className="seg">
-        {TABS.map((tab) => (
-          <span
-            key={tab}
-            className={activeTab === tab ? "on" : ""}
-            onClick={() => setActiveTab(tab)}
-            style={{ cursor: "pointer" }}
-          >
-            {tab}
-          </span>
-        ))}
+      <div style={{ marginBottom: 12 }}>
+        <Segmented options={TABS} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState icon="💵" title="No advances found" message="No advances match the selected filter." />
-      ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Advance No</th>
-              <th>Officer / Party</th>
-              <th>Purpose</th>
-              <th className="num">Advance</th>
-              <th className="num">Settled</th>
-              <th className="num">Balance</th>
-              <th>Disbursed</th>
-              <th>Due</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((a) => (
-              <tr key={a.id}>
-                <td><span className="mono">{a.advanceNo}</span></td>
-                <td>{a.beneficiary}</td>
-                <td style={{ textTransform: "capitalize" }}>{a.type}</td>
-                <td className="num">₹{(a.amount / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(a.adjustedAmount / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(a.balance / 100).toLocaleString("en-IN")}</td>
-                <td>{formatIndianDate(a.disbursedDate)}</td>
-                <td>{formatIndianDate(a.dueDate)}</td>
-                <td><StatusPill status={a.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <DataTable<AdvanceSummary>
+        columns={[
+          { key: "advanceNo", label: "Advance No", render: (a) => <span className="mono">{a.advanceNo}</span> },
+          { key: "beneficiary", label: "Officer / Party" },
+          { key: "type", label: "Purpose", render: (a) => <span style={{ textTransform: "capitalize" }}>{a.type}</span> },
+          { key: "amount", label: "Advance", align: "right", cellType: "amount" },
+          { key: "adjustedAmount", label: "Settled", align: "right", cellType: "amount" },
+          { key: "balance", label: "Balance", align: "right", cellType: "amount" },
+          { key: "disbursedDate", label: "Disbursed", render: (a) => formatIndianDate(a.disbursedDate) },
+          { key: "dueDate", label: "Due", render: (a) => formatIndianDate(a.dueDate) },
+          { key: "status", label: "Status", cellType: "status" },
+        ]}
+        rows={filtered}
+        sortable
+        filterable
+        filterPlaceholder="Search advances…"
+        pageSize={15}
+      />
     </>
   );
 }

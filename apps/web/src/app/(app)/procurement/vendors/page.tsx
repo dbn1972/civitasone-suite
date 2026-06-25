@@ -2,11 +2,10 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getProcurementVendors } from "../../../_data/loaders";
-import type { ListSearchParams } from "../_components/listUtils";
 import { VendorsTable } from "./VendorsTable";
 
-export default async function VendorsPage({ searchParams }: { searchParams: ListSearchParams }) {
-  const { data: vendors, source } = await getProcurementVendors({ limit: 500, q: searchParams.q });
+export default async function VendorsPage() {
+  const { data: vendors, source } = await getProcurementVendors({ limit: 500 });
 
   const empanelled = vendors.filter((v) => v.empanelmentStatus === "empanelled").length;
   const provisional = vendors.filter((v) => v.empanelmentStatus === "provisional").length;

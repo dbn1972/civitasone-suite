@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
 import { getProcurementIndents } from "../../../_data/loaders";
-import { ListToolbar } from "../_components/ListToolbar";
-import { paginateList, type ListSearchParams } from "../_components/listUtils";
+import { formatIndianDate } from "@/lib/formatters";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -13,17 +12,36 @@ const STATUS_LABELS: Record<string, string> = {
   converted_to_po: "Converted to PO",
 };
 
-export default async function IndentsPage({ searchParams }: { searchParams: ListSearchParams }) {
-  const pageSize = Math.min(50, Math.max(5, Number.parseInt(searchParams.limit ?? "10", 10) || 10));
-  const { data: indents, source } = await getProcurementIndents({
-    limit: 500,
-    q: searchParams.q,
-  });
-  const { rows, total, page, limit, pageCount, q } = paginateList(indents, { ...searchParams, limit: String(pageSize) });
+type IndentRow = {
+  id: string;
+  indentNo: string;
+  requestedBy: string;
+  department: string;
+  itemCount: number;
+  estimatedAmount: number;
+  requestDate: string;
+  requiredByDate: string;
+  status: string;
+} & Record<string, unknown>;
+
+export default async function IndentsPage() {
+  const { data: indents, source } = await getProcurementIndents({ limit: 500 });
 
   const pendingApproval = indents.filter((i) => i.status === "pending_approval").length;
   const approved = indents.filter((i) => i.status === "approved").length;
   const converted = indents.filter((i) => i.status === "converted_to_po").length;
+
+  const rows: IndentRow[] = indents.map((i) => ({
+    id: i.id,
+    indentNo: i.indentNo,
+    requestedBy: i.requestedBy,
+    department: i.department,
+    itemCount: i.itemCount,
+    estimatedAmount: i.estimatedAmount,
+    requestDate: formatIndianDate(i.requestDate),
+    requiredByDate: i.requiredByDate ? formatIndianDate(i.requiredByDate) : "—",
+    status: STATUS_LABELS[i.status] ?? i.status,
+  }));
 
   return (
     <>
@@ -46,44 +64,40 @@ export default async function IndentsPage({ searchParams }: { searchParams: List
       </StatGrid>
 
       <Card title="All indents">
-        <div className="pad" style={{ paddingBottom: 0 }}>
-          <ListToolbar basePath="/procurement/indents" total={total} page={page} limit={limit} pageCount={pageCount} q={q} />
-        </div>
-        {rows.length === 0 ? (
-          <EmptyState icon="📋" title="No indents found" message="Create a new indent to get started." />
+        {source === "error" ? (
+          <EmptyState
+            icon="⚠️"
+            title="Couldn’t load indents"
+            message="The procurement service didn’t respond. Check your connection and try again."
+            action={<Link href="/procurement/indents" className="btn ghost">Retry</Link>}
+          />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon="📋"
+            title="No indents found"
+            message="Create a new indent to get started."
+            action={<Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>}
+          />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Indent No</th>
-                <th>Requested By</th>
-                <th>Department</th>
-                <th className="num">Items</th>
-                <th className="num">Est. Amount</th>
-                <th>Request Date</th>
-                <th>Required By</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((indent) => (
-                <tr key={indent.id} className="clickable">
-                  <td>
-                    <Link href={`/procurement/indents/${indent.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                      <span className="mono">{indent.indentNo}</span>
-                    </Link>
-                  </td>
-                  <td>{indent.requestedBy}</td>
-                  <td>{indent.department}</td>
-                  <td className="num">{indent.itemCount}</td>
-                  <td className="num">₹{(indent.estimatedAmount / 100).toLocaleString("en-IN")}</td>
-                  <td>{indent.requestDate}</td>
-                  <td>{indent.requiredByDate ?? "—"}</td>
-                  <td><StatusPill status={indent.status} label={STATUS_LABELS[indent.status] ?? indent.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<IndentRow>
+            rows={rows}
+            rowLinkKey="id"
+            rowLinkPrefix="/procurement/indents/"
+            sortable
+            filterable
+            filterPlaceholder="Filter by indent no, department, requester…"
+            pageSize={10}
+            columns={[
+              { key: "indentNo", label: "Indent No" },
+              { key: "requestedBy", label: "Requested By" },
+              { key: "department", label: "Department" },
+              { key: "itemCount", label: "Items", align: "right" },
+              { key: "estimatedAmount", label: "Est. Amount", align: "right", cellType: "amount" },
+              { key: "requestDate", label: "Request Date" },
+              { key: "requiredByDate", label: "Required By" },
+              { key: "status", label: "Status", cellType: "status" },
+            ]}
+          />
         )}
       </Card>
     </>

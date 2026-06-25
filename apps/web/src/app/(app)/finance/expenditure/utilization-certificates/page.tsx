@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceUCs } from "../../../../_data/loaders";
 import { UCsTable } from "./UCsTable";
+import { formatMoney } from "@/lib/formatters";
 
 export default async function UCsPage() {
   const { data: ucs, source } = await getFinanceUCs();
@@ -28,7 +29,7 @@ export default async function UCsPage() {
         <StatCard icon="📋" iconBg="#e7edfd" label="Total UCs" value={ucs.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Submitted / Verified" value={submitted} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Submission" value={pending} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Covered Amount" value={`₹${(totalAmount / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Covered Amount" value={formatMoney(totalAmount)} />
       </StatGrid>
 
       <Card title="Utilization certificates">

@@ -32,7 +32,16 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
           {cacheNote}
         </p>
       ) : null}
-      <DataTable<EmpRow> columns={columns} rows={rows} rowLinkKey="id" rowLinkPrefix="/hr/employees/" />
+      <DataTable<EmpRow>
+        columns={columns}
+        rows={rows}
+        rowLinkKey="id"
+        rowLinkPrefix="/hr/employees/"
+        sortable
+        filterable
+        filterPlaceholder="Search by name, code or department…"
+        pageSize={15}
+      />
     </>
   );
 }

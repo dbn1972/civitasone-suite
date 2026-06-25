@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { AccountSummary } from "@civitasone/types";
+import { formatMoney } from "@/lib/formatters";
+import { ConfirmDialog } from "@/app/_components/ds";
 
 type Props = {
   accounts: AccountSummary[];
+  /** Where to go after a successful post (vouchers/new redirects to the GL). */
+  redirectTo?: string;
 };
 
 type JournalLine = {
@@ -26,7 +30,15 @@ function rupeesToPaise(val: string): number {
   return isNaN(n) ? 0 : Math.round(n * 100);
 }
 
-export function JournalEntryForm({ accounts }: Props) {
+type FieldErrors = {
+  voucherNo?: string;
+  narration?: string;
+  postingDate?: string;
+  lines?: Record<number, string>;
+  balance?: string;
+};
+
+export function JournalEntryForm({ accounts, redirectTo }: Props) {
   const defaultDebit  = accounts.find((a) => a.type === "asset")?.code     ?? accounts[0]?.code ?? "1000";
   const defaultCredit = accounts.find((a) => a.type === "liability")?.code ?? accounts[1]?.code ?? "2000";
 
@@ -37,8 +49,10 @@ export function JournalEntryForm({ accounts }: Props) {
     emptyLine(defaultDebit),
     emptyLine(defaultCredit),
   ]);
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   /* ── line helpers ───────────────────────────────────────────── */
   function updateLine(id: number, field: keyof Omit<JournalLine, "id">, value: string) {
@@ -58,44 +72,48 @@ export function JournalEntryForm({ accounts }: Props) {
   /* ── totals ─────────────────────────────────────────────────── */
   const totalDebitPaise  = lines.reduce((s, l) => s + rupeesToPaise(l.debit),  0);
   const totalCreditPaise = lines.reduce((s, l) => s + rupeesToPaise(l.credit), 0);
-  const balanced = totalDebitPaise > 0 && totalDebitPaise === totalCreditPaise;
+  const diffPaise = totalDebitPaise - totalCreditPaise;
+  const balanced = totalDebitPaise > 0 && diffPaise === 0;
 
-  function fmt(paise: number) {
-    return (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+  /* ── validation (per-field) ─────────────────────────────────── */
+  function validate(): FieldErrors {
+    const e: FieldErrors = {};
+    if (!voucherNo.trim()) e.voucherNo = "Voucher number is required.";
+    if (!narration.trim()) e.narration = "Narration is required.";
+    if (!postingDate) e.postingDate = "Posting date is required.";
+    const lineErrs: Record<number, string> = {};
+    lines.forEach((l) => {
+      if (!l.accountCode.trim()) lineErrs[l.id] = "Select an account.";
+      else if (rupeesToPaise(l.debit) > 0 && rupeesToPaise(l.credit) > 0)
+        lineErrs[l.id] = "A line cannot have both a debit and a credit.";
+    });
+    if (Object.keys(lineErrs).length) e.lines = lineErrs;
+    if (!balanced) {
+      e.balance =
+        totalDebitPaise === 0
+          ? "Enter at least one debit and matching credit."
+          : `Journal does not balance — debit ${formatMoney(totalDebitPaise)} vs credit ${formatMoney(totalCreditPaise)} (difference ${formatMoney(Math.abs(diffPaise))}).`;
+    }
+    return e;
   }
 
-  /* ── submit ─────────────────────────────────────────────────── */
-  async function handlePost(e: React.FormEvent) {
+  /* ── request submit → opens confirm (maker-checker) ─────────── */
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setStatus("error");
+      setMessage("Please correct the highlighted fields before posting.");
+      return;
+    }
+    setStatus("idle");
+    setMessage("");
+    setConfirmOpen(true);
+  }
 
-    if (!voucherNo.trim()) {
-      setStatus("error");
-      setMessage("Voucher number is required.");
-      return;
-    }
-    if (!narration.trim()) {
-      setStatus("error");
-      setMessage("Narration is required.");
-      return;
-    }
-    if (!postingDate) {
-      setStatus("error");
-      setMessage("Posting date is required.");
-      return;
-    }
-    if (lines.some((l) => !l.accountCode.trim())) {
-      setStatus("error");
-      setMessage("All lines must have an account code.");
-      return;
-    }
-    if (!balanced) {
-      setStatus("error");
-      setMessage(
-        `Journal does not balance — Debit ₹${fmt(totalDebitPaise)} vs Credit ₹${fmt(totalCreditPaise)}.`
-      );
-      return;
-    }
-
+  /* ── confirmed post ─────────────────────────────────────────── */
+  async function doPost(reason?: string) {
     setStatus("submitting");
     setMessage("");
 
@@ -104,6 +122,7 @@ export function JournalEntryForm({ accounts }: Props) {
       type:        "journal" as const,
       postingDate,
       narration:   narration.trim(),
+      reason:      reason ?? undefined,
       lines: lines.map((l) => ({
         accountCode:  l.accountCode.trim(),
         debitMinor:   rupeesToPaise(l.debit),
@@ -111,86 +130,102 @@ export function JournalEntryForm({ accounts }: Props) {
       })),
     };
 
-    try {
-      const res = await fetch("/api/proxy/v1/finance/journals", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+    const res = await fetch("/api/proxy/v1/finance/journals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-      const text = await res.text();
+    const text = await res.text();
 
-      if (res.status === 200 || res.status === 201 || res.status === 202) {
-        setStatus("accepted");
-        setMessage(
-          res.status === 202
-            ? "Journal entry accepted for processing (202)."
-            : "Journal entry posted successfully."
-        );
-        /* reset form */
-        setVoucherNo("");
-        setNarration("");
-        setPostingDate(new Date().toISOString().slice(0, 10));
-        setLines([emptyLine(defaultDebit), emptyLine(defaultCredit)]);
+    if (res.status === 200 || res.status === 201 || res.status === 202) {
+      setConfirmOpen(false);
+      setStatus("accepted");
+      setMessage(
+        res.status === 202
+          ? "Journal entry accepted for processing (202)."
+          : "Journal entry posted successfully."
+      );
+      if (redirectTo) {
+        window.location.assign(redirectTo);
         return;
       }
-
-      setStatus("error");
-      try {
-        const json = JSON.parse(text);
-        setMessage(json?.message ?? json?.error ?? text ?? `Request failed (${res.status})`);
-      } catch {
-        setMessage(text || `Request failed (${res.status})`);
-      }
-    } catch (err) {
-      setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      /* reset form */
+      setVoucherNo("");
+      setNarration("");
+      setPostingDate(new Date().toISOString().slice(0, 10));
+      setLines([emptyLine(defaultDebit), emptyLine(defaultCredit)]);
+      setErrors({});
+      return;
     }
+
+    let msg: string;
+    try {
+      const json = JSON.parse(text);
+      msg = json?.message ?? json?.error ?? text ?? `Request failed (${res.status})`;
+    } catch {
+      msg = text || `Request failed (${res.status})`;
+    }
+    setStatus("error");
+    setMessage(msg);
+    // Surface the error inside the dialog by throwing for ConfirmDialog's busy/error flow.
+    throw new Error(msg);
   }
+
+  const errId = "jv-form-error";
 
   /* ── render ─────────────────────────────────────────────────── */
   return (
-    <form className="fields" onSubmit={handlePost}>
+    <form className="fields" onSubmit={handleSubmit} noValidate aria-describedby={message ? errId : undefined}>
       {/* ── header fields ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
         <div className="field">
-          <label className="label">Voucher Number</label>
+          <label className="label" htmlFor="jv-voucher">Voucher Number</label>
           <input
+            id="jv-voucher"
             className="input"
             placeholder="e.g. JV-2026-001"
             value={voucherNo}
             onChange={(e) => setVoucherNo(e.target.value)}
-            aria-label="Voucher Number"
+            aria-invalid={errors.voucherNo ? true : undefined}
+            aria-describedby={errors.voucherNo ? "jv-voucher-err" : undefined}
           />
+          {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
         </div>
         <div className="field">
-          <label className="label">Posting Date</label>
+          <label className="label" htmlFor="jv-date">Posting Date</label>
           <input
+            id="jv-date"
             className="input"
             type="date"
             value={postingDate}
             onChange={(e) => setPostingDate(e.target.value)}
-            aria-label="Posting Date"
+            aria-invalid={errors.postingDate ? true : undefined}
+            aria-describedby={errors.postingDate ? "jv-date-err" : undefined}
           />
+          {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
         </div>
       </div>
 
       <div className="field">
-        <label className="label">Narration</label>
+        <label className="label" htmlFor="jv-narration">Narration</label>
         <input
+          id="jv-narration"
           className="input"
           placeholder="Brief description of the transaction"
           value={narration}
           onChange={(e) => setNarration(e.target.value)}
-          aria-label="Narration"
+          aria-invalid={errors.narration ? true : undefined}
+          aria-describedby={errors.narration ? "jv-narration-err" : undefined}
         />
+        {errors.narration && <span id="jv-narration-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.narration}</span>}
       </div>
 
       {/* ── journal lines ── */}
-      <div style={{ marginTop: "16px" }}>
-        <label className="label" style={{ marginBottom: "6px", display: "block" }}>
+      <fieldset style={{ marginTop: "16px", border: 0, padding: 0, margin: 0 }}>
+        <legend className="label" style={{ marginBottom: "6px", padding: 0 }}>
           Journal Lines
-        </label>
+        </legend>
 
         {/* header row */}
         <div
@@ -199,7 +234,7 @@ export function JournalEntryForm({ accounts }: Props) {
             gridTemplateColumns: "2fr 1fr 1fr auto",
             gap: "8px",
             fontSize: "0.75rem",
-            color: "#64748b",
+            color: "var(--ink2, #64748b)",
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.05em",
@@ -212,14 +247,16 @@ export function JournalEntryForm({ accounts }: Props) {
           <span />
         </div>
 
-        {lines.map((line) => (
+        {lines.map((line, idx) => {
+          const lineErr = errors.lines?.[line.id];
+          return (
           <div
             key={line.id}
             style={{
               display: "grid",
               gridTemplateColumns: "2fr 1fr 1fr auto",
               gap: "8px",
-              marginBottom: "6px",
+              marginBottom: lineErr ? "2px" : "6px",
               alignItems: "center",
             }}
           >
@@ -228,7 +265,8 @@ export function JournalEntryForm({ accounts }: Props) {
                 className="input"
                 value={line.accountCode}
                 onChange={(e) => updateLine(line.id, "accountCode", e.target.value)}
-                aria-label="Account Code"
+                aria-label={`Account code, line ${idx + 1}`}
+                aria-invalid={lineErr ? true : undefined}
               >
                 <option value="">— select account —</option>
                 {accounts.map((a) => (
@@ -243,7 +281,8 @@ export function JournalEntryForm({ accounts }: Props) {
                 placeholder="Account code"
                 value={line.accountCode}
                 onChange={(e) => updateLine(line.id, "accountCode", e.target.value)}
-                aria-label="Account Code"
+                aria-label={`Account code, line ${idx + 1}`}
+                aria-invalid={lineErr ? true : undefined}
               />
             )}
             <input
@@ -254,7 +293,7 @@ export function JournalEntryForm({ accounts }: Props) {
               placeholder="0.00"
               value={line.debit}
               onChange={(e) => updateLine(line.id, "debit", e.target.value)}
-              aria-label="Debit amount"
+              aria-label={`Debit amount, line ${idx + 1}`}
             />
             <input
               className="input"
@@ -264,37 +303,36 @@ export function JournalEntryForm({ accounts }: Props) {
               placeholder="0.00"
               value={line.credit}
               onChange={(e) => updateLine(line.id, "credit", e.target.value)}
-              aria-label="Credit amount"
+              aria-label={`Credit amount, line ${idx + 1}`}
             />
             <button
               type="button"
               onClick={() => removeLine(line.id)}
               disabled={lines.length <= 2}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: lines.length <= 2 ? "not-allowed" : "pointer",
-                color: lines.length <= 2 ? "#cbd5e1" : "#ef4444",
-                fontSize: "1.1rem",
-                padding: "0 4px",
-              }}
+              className="btn ghost"
+              style={{ minWidth: 44, minHeight: 44, padding: 0, lineHeight: 1 }}
               title="Remove line"
-              aria-label="Remove line"
+              aria-label={`Remove line ${idx + 1}`}
             >
               ×
             </button>
+            {lineErr && (
+              <span role="alert" style={{ fontSize: "0.75rem", color: "#b91c1c", display: "block", gridColumn: "1 / -1", marginBottom: 4 }}>
+                {lineErr}
+              </span>
+            )}
           </div>
-        ))}
+        );})}
 
         <button
           type="button"
           onClick={addLine}
           className="btn"
-          style={{ marginTop: "4px", fontSize: "0.85rem" }}
+          style={{ marginTop: "4px", minHeight: 44 }}
         >
           + Add Line
         </button>
-      </div>
+      </fieldset>
 
       {/* ── totals ── */}
       <div
@@ -304,37 +342,48 @@ export function JournalEntryForm({ accounts }: Props) {
           gap: "8px",
           marginTop: "8px",
           padding: "8px 0",
-          borderTop: "1px solid #e2e8f0",
+          borderTop: "1px solid var(--line2, #e2e8f0)",
           fontWeight: 600,
           fontSize: "0.9rem",
+          alignItems: "center",
         }}
       >
-        <span style={{ color: "#475569" }}>Totals</span>
-        <span style={{ color: totalDebitPaise > 0 ? "#1e40af" : "#94a3b8" }}>
-          ₹{fmt(totalDebitPaise)}
+        <span style={{ color: "var(--ink2, #475569)" }}>Totals</span>
+        <span className="num" style={{ color: totalDebitPaise > 0 ? "var(--primary-d, #1e40af)" : "#94a3b8" }}>
+          {formatMoney(totalDebitPaise)}
         </span>
-        <span style={{ color: totalCreditPaise > 0 ? "#1e40af" : "#94a3b8" }}>
-          ₹{fmt(totalCreditPaise)}
+        <span className="num" style={{ color: totalCreditPaise > 0 ? "var(--primary-d, #1e40af)" : "#94a3b8" }}>
+          {formatMoney(totalCreditPaise)}
         </span>
         <span
+          role="status"
+          aria-live="polite"
           style={{
-            fontSize: "0.75rem",
-            color: balanced ? "#16a34a" : totalDebitPaise === 0 ? "#94a3b8" : "#dc2626",
+            fontSize: "0.78rem",
+            color: balanced ? "#15803d" : totalDebitPaise === 0 ? "#64748b" : "#b91c1c",
             fontWeight: 700,
-            alignSelf: "center",
+            whiteSpace: "nowrap",
           }}
         >
-          {balanced ? "✓" : totalDebitPaise === 0 ? "—" : "✗"}
+          {balanced ? (
+            <><span aria-hidden="true">✓ </span>Balanced</>
+          ) : totalDebitPaise === 0 ? (
+            "Not started"
+          ) : (
+            <><span aria-hidden="true">✗ </span>Out of balance</>
+          )}
         </span>
       </div>
+
+      {errors.balance && <p role="alert" style={{ fontSize: "0.75rem", color: "#b91c1c", display: "block", marginTop: 4 }}>{errors.balance}</p>}
 
       {/* ── actions ── */}
       <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
         <button
           type="submit"
-          disabled={status === "submitting" || !balanced}
+          disabled={status === "submitting"}
           className="btn primary"
-          title={!balanced ? "Debit and credit totals must match before posting" : undefined}
+          style={{ minHeight: 44 }}
         >
           {status === "submitting" ? "Submitting…" : "Post Journal Entry"}
         </button>
@@ -343,20 +392,54 @@ export function JournalEntryForm({ accounts }: Props) {
       {/* ── feedback ── */}
       {message && (
         <p
-          role="alert"
+          id={errId}
+          role={status === "error" ? "alert" : "status"}
+          aria-live="polite"
           style={{
             fontSize: "0.85rem",
             marginTop: "10px",
             padding: "8px 12px",
             borderRadius: "6px",
             background: status === "error" ? "#fef2f2" : "#f0fdf4",
-            color: status === "error" ? "#dc2626" : "#16a34a",
+            color: status === "error" ? "#b91c1c" : "#15803d",
             border: `1px solid ${status === "error" ? "#fecaca" : "#bbf7d0"}`,
           }}
         >
           {message}
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Post this journal entry?"
+        danger
+        requireReason
+        reasonLabel="Reason / authority for posting (maker-checker)"
+        confirmLabel="Post entry"
+        description={
+          <>
+            <p style={{ margin: "0 0 8px" }}>
+              Posting writes <strong>{lines.length}</strong> balanced lines to the general
+              ledger. This is an irreversible accounting action.
+            </p>
+            <p style={{ margin: 0 }}>
+              Debit <strong>{formatMoney(totalDebitPaise)}</strong> · Credit{" "}
+              <strong>{formatMoney(totalCreditPaise)}</strong>
+              {voucherNo.trim() ? <> · Voucher <strong>{voucherNo.trim()}</strong></> : null}
+            </p>
+          </>
+        }
+        busy={status === "submitting"}
+        errorMessage={status === "error" && confirmOpen ? message : undefined}
+        onConfirm={(reason) => {
+          // ConfirmDialog/useConfirmAction is not in play here; emulate its busy/error
+          // handling by catching the thrown error so the dialog stays open on failure.
+          doPost(reason).catch(() => {/* message already set; dialog shows errorMessage */});
+        }}
+        onCancel={() => {
+          if (status !== "submitting") setConfirmOpen(false);
+        }}
+      />
     </form>
   );
 }

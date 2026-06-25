@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
+import { ConfirmDialog } from "@/app/_components/ds";
 
 type WorkflowTask = {
   id: string;
@@ -25,10 +26,14 @@ function toTasks(payload: unknown): WorkflowTask[] {
   return rows.filter((t) => t.refType && REF_TYPES.has(t.refType) && t.status === "pending");
 }
 
+type Pending = { task: WorkflowTask; decision: "approve" | "reject" };
+
 export function ProcurementApprovalsPanel() {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [dialogError, setDialogError] = useState<string | undefined>(undefined);
 
   const { data: tasks, loading, offline, source, cachedAt, refresh } = useOfflineResource<unknown, WorkflowTask[]>(
     "procurement.approvals.tasks",
@@ -37,28 +42,36 @@ export function ProcurementApprovalsPanel() {
   );
 
   const complete = useCallback(
-    async (taskId: string, decision: "approve" | "reject") => {
-      setBusyId(taskId);
+    async (task: WorkflowTask, decision: "approve" | "reject", reason?: string) => {
+      setBusyId(task.id);
       setMessage("");
+      setDialogError(undefined);
       try {
-        const { response, queued } = await fetchOrQueue(`/v1/workflow/tasks/${taskId}/complete`, {
+        const { response, queued } = await fetchOrQueue(`/v1/workflow/tasks/${task.id}/complete`, {
           method: "POST",
-          body: { decision },
+          // `reason` is captured for the audit trail (mandatory on reject);
+          // the workflow service stores it on the task-completion event.
+          body: decision === "reject" ? { decision, reason } : { decision },
         });
         if (queued) {
+          setPending(null);
           setMessage(`You're offline — ${decision} saved and will submit on reconnect.`);
           return;
         }
         const text = response ? await response.text() : "";
         if (!response || !response.ok) {
-          setMessage(text || `${decision} failed (${response?.status ?? "network"})`);
-          return;
+          const msg = text || `${decision} failed (${response?.status ?? "network"})`;
+          setDialogError(msg);
+          throw new Error(msg);
         }
+        setPending(null);
         setMessage(decision === "approve" ? "Approved via workflow." : "Rejected via workflow.");
         refresh();
         router.refresh();
       } catch (err) {
-        setMessage(err instanceof Error ? err.message : "Network error");
+        const msg = err instanceof Error ? err.message : "Network error";
+        setDialogError(msg);
+        throw err instanceof Error ? err : new Error(msg);
       } finally {
         setBusyId(null);
       }
@@ -77,20 +90,25 @@ export function ProcurementApprovalsPanel() {
       ? `Saved queue${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — offline" : ""}.`
       : null;
 
+  const dialogTask = pending?.task;
+  const isReject = pending?.decision === "reject";
+
   return (
     <div className="card" style={{ marginTop: 18 }}>
       <div className="card-h">
         <h3>Workflow approval queue</h3>
         {cacheNote ? <span style={{ fontSize: 12, color: "#92400e" }}>{cacheNote}</span> : null}
       </div>
-      {message ? <p className="pad" style={{ color: "#047857", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p> : null}
+      {message ? (
+        <p className="pad" role="status" aria-live="polite" style={{ color: "#047857", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p>
+      ) : null}
       <table className="tbl">
         <thead>
           <tr>
-            <th>Task</th>
-            <th>Reference</th>
-            <th>Role</th>
-            <th>Actions</th>
+            <th scope="col">Task</th>
+            <th scope="col">Reference</th>
+            <th scope="col">Role</th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -115,19 +133,19 @@ export function ProcurementApprovalsPanel() {
                   <td>
                     <button
                       type="button"
-                      className="btn primary"
-                      style={{ fontSize: "0.75rem", padding: "4px 10px", marginRight: 6 }}
+                      className="btn primary sm"
+                      style={{ marginRight: 6, minHeight: 36 }}
                       disabled={busyId === task.id}
-                      onClick={() => void complete(task.id, "approve")}
+                      onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task, decision: "approve" }); }}
                     >
                       Approve
                     </button>
                     <button
                       type="button"
-                      className="btn ghost"
-                      style={{ fontSize: "0.75rem", padding: "4px 10px" }}
+                      className="btn ghost sm"
+                      style={{ minHeight: 36 }}
                       disabled={busyId === task.id}
-                      onClick={() => void complete(task.id, "reject")}
+                      onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task, decision: "reject" }); }}
                     >
                       Reject
                     </button>
@@ -138,6 +156,29 @@ export function ProcurementApprovalsPanel() {
           )}
         </tbody>
       </table>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={isReject ? "Reject this approval?" : "Approve this approval?"}
+        description={
+          dialogTask
+            ? isReject
+              ? <>Rejecting <strong>{dialogTask.name}</strong> ({dialogTask.refId ?? "—"}) returns it to the originator. A reason is mandatory and recorded in the audit trail.</>
+              : <>This approves <strong>{dialogTask.name}</strong> ({dialogTask.refId ?? "—"}) and advances the workflow. This action cannot be undone.</>
+            : undefined
+        }
+        confirmLabel={isReject ? "Reject" : "Approve"}
+        danger={isReject}
+        requireReason={isReject}
+        reasonLabel="Reason for rejection (required)"
+        busy={busyId !== null}
+        errorMessage={dialogError}
+        onConfirm={(reason) => {
+          if (!dialogTask || !pending) return;
+          void complete(dialogTask, pending.decision, reason).catch(() => {});
+        }}
+        onCancel={() => { if (busyId === null) { setPending(null); setDialogError(undefined); } }}
+      />
     </div>
   );
 }

@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import type { AttendanceSummaryItem } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatIndianDate } from "@/lib/formatters";
 
 const columns: { key: keyof AttendanceSummaryItem & string; label: string; align?: "left" | "right"; render?: (row: AttendanceSummaryItem) => ReactNode }[] = [
   { key: "employeeName", label: "Employee" },
   { key: "department", label: "Department" },
-  { key: "date", label: "Date" },
+  { key: "date", label: "Date", render: (r) => formatIndianDate(r.date) },
   { key: "checkIn", label: "Check-In", render: (r) => r.checkIn ?? "—" },
   { key: "checkOut", label: "Check-Out", render: (r) => r.checkOut ?? "—" },
   { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} label={r.status.replace("_", " ")} /> },
@@ -35,7 +36,14 @@ export function AttendanceTable({ attendance, source = "api" }: { attendance: At
           {cacheNote}
         </p>
       ) : null}
-      <DataTable<AttendanceSummaryItem> columns={columns} rows={rows} />
+      <DataTable<AttendanceSummaryItem>
+        columns={columns}
+        rows={rows}
+        sortable
+        filterable
+        filterPlaceholder="Filter by employee, department or status…"
+        pageSize={20}
+      />
     </>
   );
 }

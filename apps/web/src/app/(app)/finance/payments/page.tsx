@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getPayments } from "../../../_data/loaders";
 import { PaymentsTable } from "./PaymentsTable";
+import { PaymentActions } from "../_components/FinanceActions";
 
 export default async function PaymentsPage() {
   const { data: payments, source } = await getPayments();
@@ -17,8 +18,7 @@ export default async function PaymentsPage() {
         subtitle="Track all outward payments — NEFT, RTGS, PFMS, cheque."
         actions={
           <>
-            <button className="btn ghost">PFMS Sync</button>
-            <button className="btn primary">+ New Payment</button>
+            <PaymentActions />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }

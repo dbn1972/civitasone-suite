@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StatusPill, EmptyState } from "../../../../_components/ds";
+import { Segmented, DataTable } from "../../../../_components/ds";
 import type { BudgetSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -14,6 +14,17 @@ const TAB_STATUS_MAP: Record<Tab, string[]> = {
   Submitted: ["submitted"],
   Approved: ["approved"],
   Pending: ["pending"],
+};
+
+type Row = {
+  majorHead: string;
+  subHead: string;
+  lastYear: number;
+  proposed: number;
+  expenditure: number;
+  balance: number;
+  financialYear: string;
+  status: string;
 };
 
 export function FormulationTable({ budgets, source = "api" }: { budgets: BudgetSummary[]; source?: "api" | "error" }) {
@@ -30,6 +41,17 @@ export function FormulationTable({ budgets, source = "api" }: { budgets: BudgetS
       ? rows
       : rows.filter((b) => TAB_STATUS_MAP[activeTab].includes(b.status));
 
+  const tableRows: Row[] = filtered.map((b) => ({
+    majorHead: b.majorHead,
+    subHead: b.subHead ?? "—",
+    lastYear: b.releasedAmount,
+    proposed: b.sanctionedAmount,
+    expenditure: b.expenditure,
+    balance: b.balance,
+    financialYear: b.financialYear,
+    status: b.status,
+  }));
+
   const cacheNote =
     offline || fromCache
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
@@ -42,51 +64,27 @@ export function FormulationTable({ budgets, source = "api" }: { budgets: BudgetS
           {cacheNote}
         </p>
       ) : null}
-      <div className="seg">
-        {TABS.map((tab) => (
-          <span
-            key={tab}
-            className={activeTab === tab ? "on" : ""}
-            onClick={() => setActiveTab(tab)}
-            style={{ cursor: "pointer" }}
-          >
-            {tab}
-          </span>
-        ))}
+      <div style={{ marginBottom: 12 }}>
+        <Segmented options={TABS} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState icon="📝" title="No budget estimates" message="No estimates match the selected filter." />
-      ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Major Head</th>
-              <th>Sub Head</th>
-              <th className="num">Last Year (BE)</th>
-              <th className="num">Proposed (BE)</th>
-              <th className="num">Expenditure</th>
-              <th className="num">Balance</th>
-              <th>FY</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((b) => (
-              <tr key={b.id}>
-                <td>{b.majorHead}</td>
-                <td>{b.subHead ?? "—"}</td>
-                <td className="num">₹{(b.releasedAmount / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(b.sanctionedAmount / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(b.expenditure / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(b.balance / 100).toLocaleString("en-IN")}</td>
-                <td>{b.financialYear}</td>
-                <td><StatusPill status={b.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <DataTable<Row>
+        columns={[
+          { key: "majorHead", label: "Major Head" },
+          { key: "subHead", label: "Sub Head" },
+          { key: "lastYear", label: "Last Year (BE)", align: "right", cellType: "amount" },
+          { key: "proposed", label: "Proposed (BE)", align: "right", cellType: "amount" },
+          { key: "expenditure", label: "Expenditure", align: "right", cellType: "amount" },
+          { key: "balance", label: "Balance", align: "right", cellType: "amount" },
+          { key: "financialYear", label: "FY" },
+          { key: "status", label: "Status", cellType: "status" },
+        ]}
+        rows={tableRows}
+        sortable
+        filterable
+        filterPlaceholder="Search budget heads…"
+        pageSize={15}
+      />
     </>
   );
 }

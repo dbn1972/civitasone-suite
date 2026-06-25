@@ -37,6 +37,10 @@ export default async function AppraisalsPage() {
         <DataTable<AppraisalSummary>
           columns={columns}
           rows={appraisals}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, period or reviewer…"
+          pageSize={15}
         />
       </Card>
     </>

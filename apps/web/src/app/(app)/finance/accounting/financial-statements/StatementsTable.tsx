@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Segmented } from "../../../../_components/ds";
 import type { FinancialStatementSummary } from "@civitasone/types";
+import { formatMoney } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
 const STATEMENT_TYPES = ["R&P", "I&E", "Balance Sheet"] as const;
@@ -55,7 +56,7 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
         </p>
       ) : null}
       <div className="card-h" style={{ marginBottom: "1rem" }}>
-        <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>
+        <span style={{ fontWeight: 500, color: "var(--ink2)" }}>
           {TYPE_LABEL[activeType]} · FY 2026-27
         </span>
         <Segmented
@@ -66,7 +67,7 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
+        <div style={{ padding: "2rem", textAlign: "center", color: "var(--ink2)" }}>
           No data for this statement type.
         </div>
       ) : (
@@ -86,30 +87,20 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
               <tr key={st.id}>
                 <td>{st.head}</td>
                 <td style={{ textTransform: "capitalize" }}>{st.type}</td>
-                <td className="num">₹{(st.openingBalance / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(st.receipts / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(st.payments / 100).toLocaleString("en-IN")}</td>
-                <td className="num">₹{(st.closingBalance / 100).toLocaleString("en-IN")}</td>
+                <td className="num" aria-label={`Opening ${formatMoney(st.openingBalance)}`}>{formatMoney(st.openingBalance)}</td>
+                <td className="num" aria-label={`Receipts ${formatMoney(st.receipts)}`}>{formatMoney(st.receipts)}</td>
+                <td className="num" aria-label={`Payments ${formatMoney(st.payments)}`}>{formatMoney(st.payments)}</td>
+                <td className="num" aria-label={`Closing ${formatMoney(st.closingBalance)}`}>{formatMoney(st.closingBalance)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={2}>
-                <strong>Total</strong>
-              </td>
-              <td className="num">
-                <strong>₹{(totalOpening / 100).toLocaleString("en-IN")}</strong>
-              </td>
-              <td className="num">
-                <strong>₹{(totalReceipts / 100).toLocaleString("en-IN")}</strong>
-              </td>
-              <td className="num">
-                <strong>₹{(totalPayments / 100).toLocaleString("en-IN")}</strong>
-              </td>
-              <td className="num">
-                <strong>₹{(totalClosing / 100).toLocaleString("en-IN")}</strong>
-              </td>
+              <td colSpan={2}><strong>Total</strong></td>
+              <td className="num"><strong>{formatMoney(totalOpening)}</strong></td>
+              <td className="num"><strong>{formatMoney(totalReceipts)}</strong></td>
+              <td className="num"><strong>{formatMoney(totalPayments)}</strong></td>
+              <td className="num"><strong>{formatMoney(totalClosing)}</strong></td>
             </tr>
           </tfoot>
         </table>

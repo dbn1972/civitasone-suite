@@ -1,11 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, DataTable, StatusPill } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable } from "../../../../_components/ds";
 import { getPayrollRunById } from "../../../../_data/loaders";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { PayrollRunActions } from "./PayrollRunActions";
-
-function fmtAmount(minorUnits: number) {
-  return `₹${(minorUnits / 100).toLocaleString("en-IN")}`;
-}
 
 type SalarySlipRow = {
   id: string;
@@ -15,7 +12,7 @@ type SalarySlipRow = {
   deductions: number;
   net: number;
   status: string;
-};
+} & Record<string, unknown>;
 
 export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
   const { data: run, source } = await getPayrollRunById(params.id);
@@ -23,68 +20,95 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   if (!run) {
     return (
       <>
-        <PageHeader title="Payroll Run" back="/hr/payroll" />
+        <PageHeader title="Payroll Run" back="/hr/payroll" backLabel="Payroll Runs" />
         {source === "error" && <DataSourceBadge source="error" />}
         <Card padding>
-          <p className="text-center text-slate-400">Payroll run not found.</p>
+          <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0" }}>
+            Payroll run not found. It may have been removed or you may not have access.
+          </p>
         </Card>
       </>
     );
   }
 
-  const slipColumns: { key: keyof SalarySlipRow & string; label: string; align?: "left" | "right"; render?: (row: SalarySlipRow) => React.ReactNode }[] = [
+  const slipColumns: {
+    key: keyof SalarySlipRow & string;
+    label: string;
+    align?: "left" | "right";
+    cellType?: "status" | "amount";
+  }[] = [
     { key: "employeeName", label: "Employee" },
-    { key: "gross", label: "Gross", align: "right", render: (r) => fmtAmount(r.gross) },
-    { key: "deductions", label: "Deductions", align: "right", render: (r) => fmtAmount(r.deductions) },
-    { key: "net", label: "Net", align: "right", render: (r) => fmtAmount(r.net) },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => <StatusPill status={r.status} />,
-    },
+    { key: "gross", label: "Gross", align: "right", cellType: "amount" },
+    { key: "deductions", label: "Deductions", align: "right", cellType: "amount" },
+    { key: "net", label: "Net", align: "right", cellType: "amount" },
+    { key: "status", label: "Status", cellType: "status" },
   ];
+
+  const slipRows = run.salarySlips as SalarySlipRow[];
 
   return (
     <>
-      <PageHeader title="Payroll Run" back="/hr/payroll" />
+      <PageHeader
+        title={`Payroll Run — ${run.payPeriod}`}
+        subtitle={`Run dated ${formatIndianDate(run.runDate)}`}
+        back="/hr/payroll"
+        backLabel="Payroll Runs"
+      />
       {source === "error" && <DataSourceBadge source="error" />}
-      <PayrollRunActions runId={run.id} status={run.status} />
-      <Card title="Run Details" padding>
+      <PayrollRunActions
+        runId={run.id}
+        status={run.status}
+        employeeCount={run.employeeCount}
+        grossAmount={run.grossAmount}
+        netAmount={run.netAmount}
+        payPeriod={run.payPeriod}
+      />
+      <Card title="Run Details">
         <div className="fields">
-          <div className="field">
-            <span className="lbl">Pay Period</span>
-            <span className="val">{run.payPeriod}</span>
+          <div className="fld">
+            <div className="l">Pay Period</div>
+            <div className="v">{run.payPeriod}</div>
           </div>
-          <div className="field">
-            <span className="lbl">Run Date</span>
-            <span className="val">{run.runDate}</span>
+          <div className="fld">
+            <div className="l">Run Date</div>
+            <div className="v">{formatIndianDate(run.runDate)}</div>
           </div>
-          <div className="field">
-            <span className="lbl">Employee Count</span>
-            <span className="val">{run.employeeCount.toLocaleString("en-IN")}</span>
+          <div className="fld">
+            <div className="l">Employee Count</div>
+            <div className="v">{run.employeeCount.toLocaleString("en-IN")}</div>
           </div>
-          <div className="field">
-            <span className="lbl">Status</span>
-            <span className="val"><StatusPill status={run.status} /></span>
+          <div className="fld">
+            <div className="l">Status</div>
+            <div className="v">
+              <span className={`pill ${run.status === "paid" ? "good" : run.status === "draft" ? "mut" : "warn"}`}>
+                {run.status}
+              </span>
+            </div>
           </div>
-          <div className="field">
-            <span className="lbl">Gross Amount</span>
-            <span className="val">{fmtAmount(run.grossAmount)}</span>
+          <div className="fld">
+            <div className="l">Gross Amount</div>
+            <div className="v">{formatMoney(run.grossAmount)}</div>
           </div>
-          <div className="field">
-            <span className="lbl">Deductions</span>
-            <span className="val">{fmtAmount(run.deductions)}</span>
+          <div className="fld">
+            <div className="l">Deductions</div>
+            <div className="v">{formatMoney(run.deductions)}</div>
           </div>
-          <div className="field">
-            <span className="lbl">Net Amount</span>
-            <span className="val">{fmtAmount(run.netAmount)}</span>
+          <div className="fld">
+            <div className="l">Net Amount</div>
+            <div className="v">{formatMoney(run.netAmount)}</div>
           </div>
         </div>
       </Card>
-      <Card title={`Salary Slips (${run.salarySlips.length})`}>
+      <Card title={`Salary Slips (${slipRows.length})`}>
         <DataTable<SalarySlipRow>
           columns={slipColumns}
-          rows={run.salarySlips}
+          rows={slipRows}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee or status…"
+          pageSize={15}
+          rowLinkKey="employeeId"
+          rowLinkPrefix="/hr/employees/"
         />
       </Card>
     </>
