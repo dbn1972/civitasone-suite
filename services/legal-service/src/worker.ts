@@ -7,6 +7,9 @@ import { registerHearingConsumers } from "./modules/hearings/consumer.js";
 import { registerNoticeConsumers } from "./modules/notices/consumer.js";
 import { registerContractConsumers } from "./modules/contracts/consumer.js";
 import { registerSettlementConsumers } from "./modules/settlements/consumer.js";
+import { registerOpinionConsumers } from "./modules/opinions/consumer.js";
+import { registerCounselBriefConsumers } from "./modules/counsel/consumer.js";
+import { registerFilingConsumers } from "./modules/filings/consumer.js";
 
 const log = pino({ name: "legal-worker" });
 
@@ -15,6 +18,9 @@ registerHearingConsumers(queue);
 registerNoticeConsumers(queue);
 registerContractConsumers(queue);
 registerSettlementConsumers(queue);
+registerOpinionConsumers(queue);
+registerCounselBriefConsumers(queue);
+registerFilingConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

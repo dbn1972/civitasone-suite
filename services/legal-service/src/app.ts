@@ -14,6 +14,9 @@ import { contractRoutes } from "./modules/contracts/routes.js";
 import { settlementRoutes } from "./modules/settlements/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { reminderRoutes } from "./modules/reminders/routes.js";
+import { opinionRoutes } from "./modules/opinions/routes.js";
+import { counselBriefRoutes } from "./modules/counsel/routes.js";
+import { filingRoutes } from "./modules/filings/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -34,6 +37,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(settlementRoutes);
   await app.register(dashboardRoutes);
   await app.register(reminderRoutes);
+  await app.register(opinionRoutes);
+  await app.register(counselBriefRoutes);
+  await app.register(filingRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

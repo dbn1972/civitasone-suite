@@ -3,7 +3,6 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import {
   HearingSummaryListSchema,
   CourtOrderSummaryListSchema,
-  LegalOpinionSummaryListSchema,
 } from "@civitasone/schemas/web";
 import * as queries from "./queries.js";
 import type { FastifyInstance } from "fastify";
@@ -54,12 +53,10 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, CourtOrderSummaryListSchema, await queries.listCourtOrderSummaries(ctx.tenantId, q.limit));
   });
 
-  app.get("/v1/legal/opinions", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
-    const q2 = listQuerySchema.parse(req.query);
-    sendValidated(reply, LegalOpinionSummaryListSchema, await queries.listOpinionSummaries(ctx.tenantId, q2.limit));
-  });
+  // NOTE: GET /v1/legal/opinions previously approximated legal opinions from the
+  // orphan hearings.legal_opinions table. The real opinions domain now owns this
+  // route (modules/opinions). Stub removed to eliminate the route conflict and
+  // the semantic approximation flagged in UAT.
 
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
