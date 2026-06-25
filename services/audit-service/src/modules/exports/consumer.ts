@@ -9,6 +9,7 @@ import { COMMANDS, CONSUME_TOPICS, EVENTS, RESOURCE } from "../../topics.js";
 import * as eventsRepo from "../events/repo.js";
 import * as repo from "./repo.js";
 import { MAX_EXPORT_ROWS, PII_EXPORT_ROLES } from "./validators.js";
+import { contentDigest, signManifest, signingKeyId, SIGNATURE_ALG, type ExportManifest } from "./signing.js";
 
 const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
 
@@ -106,6 +107,24 @@ export function registerExportConsumers(queue: Queue): void {
         content = JSON.stringify({ exportId: p.id, from: p.from, to: p.to, includesPii: allowPii, count: projected.length, rows: projected }, null, 2);
       }
 
+      // AUD-2: tamper-evidence. Digest the exact artifact bytes, then sign a
+      // canonical manifest binding that digest to the export identity. Both are
+      // persisted (DB) and written as an offline-verifiable `.sig.json` sidecar.
+      const contentSha256 = contentDigest(content);
+      // Normalize the window to canonical ISO (matches periodFrom/To.toISOString()
+      // used by the /verify endpoint) so the signed manifest is reproducible.
+      const manifestCore = {
+        exportId: p.id, tenantId: p.tenantId,
+        from: new Date(p.from).toISOString(), to: new Date(p.to).toISOString(),
+        format: p.format, includesPii: allowPii, rowCount: projected.length,
+        contentSha256,
+      };
+      const signature = signManifest(manifestCore);
+      const signedAt = new Date();
+      const manifest: ExportManifest = {
+        ...manifestCore, signingKeyId: signingKeyId(), alg: SIGNATURE_ALG,
+      };
+
       const token = randomUUID().replace(/-/g, "");
       const now = Date.now();
       const expiresAt = new Date(now + RETENTION_DAYS * 86_400_000);
@@ -120,6 +139,12 @@ export function registerExportConsumers(queue: Queue): void {
       await writeFile(filePath, content, { encoding: "utf8", mode: 0o600 });
       await chmod(filePath, 0o600);
 
+      // AUD-2: detached signature sidecar — lets a regulator verify the artifact
+      // offline (recompute SHA-256 of the data file, recompute HMAC of manifest).
+      const sigPath = path.join(tenantDir, `${p.id}.sig.json`);
+      await writeFile(sigPath, JSON.stringify({ ...manifest, signature, signedAt: signedAt.toISOString() }, null, 2), { encoding: "utf8", mode: 0o600 });
+      await chmod(sigPath, 0o600);
+
       // tenant-scoped, time-limited download location.
       const downloadPath = `/v1/audit/exports/${p.id}/download?token=${token}`;
 
@@ -129,6 +154,7 @@ export function registerExportConsumers(queue: Queue): void {
         const done = await repo.completeExportVersioned(tx, p.id, p.tenantId, row.version ?? 1, {
           signedUrl: downloadPath, downloadToken: token, rowCount: projected.length,
           retentionUntil: expiresAt, expiresAt, updatedBy: msg.actorId,
+          contentSha256, signature, signedAt, signingKeyId: signingKeyId(), signatureAlg: SIGNATURE_ALG,
         });
         if (done === 1) {
           await audit(tx, msg, "complete", RESOURCE.export, p.id);

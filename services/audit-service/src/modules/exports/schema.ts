@@ -17,6 +17,12 @@ export const auditExports = exportsSchema.table("exports", {
   expiresAt:      timestamp("expires_at", { withTimezone: true }),
   error:          text("error"),
   requestedRoles: text("requested_roles"),
+  // AUD-2 tamper-evidence: content digest + detached HMAC signature over the manifest.
+  contentSha256:  varchar("content_sha256", { length: 64 }),
+  signature:      text("signature"),
+  signedAt:       timestamp("signed_at", { withTimezone: true }),
+  signingKeyId:   varchar("signing_key_id", { length: 64 }),
+  signatureAlg:   varchar("signature_alg", { length: 32 }),
   status:         varchar("status", { length: 24 }).notNull().default("pending"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
