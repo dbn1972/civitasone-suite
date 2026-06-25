@@ -36,6 +36,12 @@ export function registerActivityConsumers(queue: Queue): void {
       });
       if (p.contactId) await contactRepo.touchLastActivity(tx, p.contactId, p.tenantId);
       await emit(tx, msg, EVENTS.activityCreated, { activityId: p.id, contactId: p.contactId }, "create", p.id);
+      // CRM→helpdesk (chain #5): a complaint-type activity opens a support case.
+      // We emit a dedicated, ticket-worthy event carrying the activity id as the
+      // stable case ref; helpdesk idempotently auto-opens a ticket (source=crm).
+      if (p.type === "complaint") {
+        await enqueueCaseOpened(tx, msg, p);
+      }
     });
     await cache.invalidateResource(msg.tenantId, RESOURCE);
     // A new activity increments activitiesToday (and, via touchLastActivity,
@@ -59,6 +65,36 @@ export function registerActivityConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+}
+
+/**
+ * Emit crm.case.opened for a complaint activity (chain #5 producer hop).
+ * Enqueued in the SAME tx/outbox as activityCreated, so it inherits the
+ * inbox-gated (markProcessed) idempotency: a redelivered activity.create
+ * command never re-emits the case event.
+ */
+async function enqueueCaseOpened(
+  tx: unknown,
+  msg: CommandEnvelope,
+  p: ActivityView,
+): Promise<void> {
+  const t = tx as Parameters<typeof enqueue>[0];
+  await enqueue(t, {
+    topic: EVENTS.caseOpened, eventType: EVENTS.caseOpened,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      caseId: p.id,
+      subject: p.subject ?? p.text.slice(0, 200),
+      description: p.text,
+      contactId: p.contactId,
+      dealId: p.dealId,
+    },
+  });
+  await enqueue(t, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "crm", action: "case_opened", resourceType: "activity", resourceId: p.id, outcome: "success" },
   });
 }
 

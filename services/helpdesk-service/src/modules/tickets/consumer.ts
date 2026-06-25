@@ -29,6 +29,15 @@ type CallMissedPayload = {
   tenantId?: string;
 };
 
+/** crm.case.opened event payload (foreign producer — chain #5). */
+type CrmCaseOpenedPayload = {
+  caseId: string;
+  subject?: string;
+  description?: string | null;
+  contactId?: string | null;
+  dealId?: string | null;
+};
+
 function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
@@ -103,6 +112,40 @@ export function registerTicketConsumers(queue: Queue): void {
       openedId = id;
       if (created) {
         await emit(tx, msg, EVENTS.ticketCreated, { ticketId: id, subject: `Missed call callback — ${callId}`, source: SOURCE.telephony, sourceRef: callId }, "create", id);
+      }
+    });
+    if (openedId) {
+      const row = await repo.findById(openedId, msg.tenantId);
+      if (row) await cache.put(keyFor(msg.tenantId, openedId), row);
+      await cache.invalidateResource(msg.tenantId, RESOURCE);
+    }
+  });
+
+  // ---- Chain #5: inbound linkage — a CRM complaint/case auto-opens a ticket --
+  // Same idempotent path as the telephony hop, keyed on
+  // (tenant, source=crm, source_ref=caseId): redelivery yields exactly one ticket.
+  queue.subscribe<CrmCaseOpenedPayload>(CONSUMES.crmCaseOpened, async (msg) => {
+    const caseId = msg.payload.caseId;
+    if (!caseId) return; // malformed event — nothing to link
+    const subject = msg.payload.subject?.trim() || `CRM case — ${caseId}`;
+    let openedId: string | null = null;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const { id, created } = await repo.insertLinkedIdempotent(tx, {
+        tenantId: msg.tenantId,
+        subject,
+        description: msg.payload.description ?? `Auto-opened from crm.case.opened for case ${caseId}.`,
+        priority: "High",
+        status: "open",
+        source: SOURCE.crm,
+        sourceRef: caseId,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+        version: 1,
+      });
+      openedId = id;
+      if (created) {
+        await emit(tx, msg, EVENTS.ticketCreated, { ticketId: id, subject, source: SOURCE.crm, sourceRef: caseId }, "create", id);
       }
     });
     if (openedId) {

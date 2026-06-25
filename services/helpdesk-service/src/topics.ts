@@ -14,11 +14,14 @@ export const EVENTS = {
 export const CONSUMES = {
   // A missed telephony call auto-opens a linked helpdesk ticket (callback request).
   telephonyCallMissed: "telephony.call.missed",
+  // A CRM complaint/case opens a linked helpdesk ticket (chain #5).
+  crmCaseOpened: "crm.case.opened",
 } as const;
 
 /** source tag stamped on tickets auto-opened from a foreign event. */
 export const SOURCE = {
   telephony: "telephony",
+  crm: "crm",
 } as const;
 
 export const SERVICE = "helpdesk";
