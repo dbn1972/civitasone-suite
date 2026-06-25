@@ -1,8 +1,40 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, lte, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { notificationDeliveries, type DeliveryInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * P1-3: recipient-scoped inbox. Returns only deliveries addressed TO this user
+ * (recipient_id), within the tenant — NOT everything the tenant ever sent.
+ */
+export async function findByRecipient(
+  tenantId: string, recipientId: string, limit = 50, offset = 0,
+): Promise<typeof notificationDeliveries.$inferSelect[]> {
+  return db.select().from(notificationDeliveries)
+    .where(and(
+      eq(notificationDeliveries.tenantId, tenantId),
+      eq(notificationDeliveries.recipientId, recipientId),
+    ))
+    .orderBy(desc(notificationDeliveries.createdAt))
+    .limit(limit).offset(offset);
+}
+
+/**
+ * P1-2: durable retry sweep. Returns deliveries whose retry is due
+ * (status='queued' AND next_retry_at <= now). Survives a worker restart because
+ * the due set lives in Postgres, not an in-process setTimeout.
+ */
+export async function findDueRetries(
+  now = new Date(), limit = 100,
+): Promise<typeof notificationDeliveries.$inferSelect[]> {
+  return db.select().from(notificationDeliveries)
+    .where(and(
+      eq(notificationDeliveries.status, "queued"),
+      lte(notificationDeliveries.nextRetryAt, now),
+    ))
+    .limit(limit);
+}
 
 export async function findByUser(tenantId: string, userId: string, limit = 50): Promise<typeof notificationDeliveries.$inferSelect[]> {
   return db.select().from(notificationDeliveries)
@@ -31,15 +63,37 @@ export async function insertDelivery(tx: Writer, row: DeliveryInsert): Promise<v
   await tx.insert(notificationDeliveries).values(row);
 }
 
+/**
+ * P1-2: atomically claim a due retry so concurrent sweeps don't double-publish.
+ * Transitions status `queued`→`retrying` ONLY while it is still due and at the
+ * expected version. Returns true if this caller won the claim.
+ */
+export async function claimDueRetry(
+  id: string, version: number, now = new Date(),
+): Promise<boolean> {
+  // Transition to `sending` (an allowed status) so the row leaves the `queued`
+  // due-set and won't be picked up by a concurrent sweep.
+  const updated = await db.update(notificationDeliveries).set({
+    status: "sending", updatedAt: new Date(), version: version + 1,
+  }).where(and(
+    eq(notificationDeliveries.id, id),
+    eq(notificationDeliveries.version, version),
+    eq(notificationDeliveries.status, "queued"),
+    lte(notificationDeliveries.nextRetryAt, now),
+  )).returning({ id: notificationDeliveries.id });
+  return updated.length > 0;
+}
+
 export async function updateDeliveryStatus(
   tx: Writer, id: string, status: string, actorId: string, version: number,
-  sentAt?: Date, error?: string, errorDetail?: string,
+  sentAt?: Date, error?: string, errorDetail?: string, channel?: string,
 ): Promise<void> {
   await tx.update(notificationDeliveries).set({
     status, updatedBy: actorId, version, updatedAt: new Date(),
     ...(sentAt ? { sentAt } : {}),
     ...(error ? { error } : {}),
     ...(errorDetail ? { errorDetail } : {}),
+    ...(channel ? { channel } : {}),
   }).where(eq(notificationDeliveries.id, id));
 }
 

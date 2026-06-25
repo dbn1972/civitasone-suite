@@ -16,7 +16,8 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
   app.get("/notifications/notifications", async (req, reply) => {
     const ctx = resolveContext(req);
     const q = listQuerySchema.parse(req.query);
-    const rows = await deliveryQueries.listDeliveries(ctx.tenantId, q.limit, q.offset, ctx.actorId);
+    // P1-3: inbox is recipient-scoped — only notifications addressed TO the actor.
+    const rows = await deliveryQueries.listInbox(ctx.tenantId, ctx.actorId, q.limit, q.offset);
     sendValidated(reply, NotificationItemListSchema, rows.map((d) => ({
       id: d.id,
       title: d.templateId,

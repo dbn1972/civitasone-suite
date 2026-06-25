@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import {
   setEmailTransportForTests,
@@ -96,7 +97,7 @@ describe("bulk campaign fan-out", () => {
       if (!campaign) return;
       for (const recipientId of campaign.recipients) {
         await q.publish(COMMANDS.sendNotification, {
-          messageId: `send-${recipientId}`,
+          messageId: randomUUID(),
           type: COMMANDS.sendNotification,
           tenantId: msg.tenantId,
           actorId: msg.actorId,
@@ -121,7 +122,7 @@ describe("bulk campaign fan-out", () => {
     ];
 
     await q.publish(COMMANDS.createCampaign, {
-      messageId: "msg-create-campaign",
+      messageId: randomUUID(),
       type: COMMANDS.createCampaign,
       tenantId: "t1",
       actorId: "admin-1",
@@ -133,7 +134,7 @@ describe("bulk campaign fan-out", () => {
     await new Promise((r) => setTimeout(r, 20));
 
     await q.publish(COMMANDS.sendCampaign, {
-      messageId: "msg-send-campaign",
+      messageId: randomUUID(),
       type: COMMANDS.sendCampaign,
       tenantId: "t1",
       actorId: "admin-1",
@@ -173,7 +174,7 @@ describe("CQRS campaign send end-to-end (MemoryQueue)", () => {
       if (!campaign) return;
       for (const recipientId of campaign.recipients) {
         await q.publish(COMMANDS.sendNotification, {
-          messageId: `fanout-${recipientId}`,
+          messageId: randomUUID(),
           type: COMMANDS.sendNotification,
           tenantId: msg.tenantId,
           actorId: msg.actorId,
@@ -198,7 +199,7 @@ describe("CQRS campaign send end-to-end (MemoryQueue)", () => {
 
     // Step 1: campaign.create (what POST /notifications/campaigns triggers)
     await q.publish(COMMANDS.createCampaign, {
-      messageId: "cqrs-create",
+      messageId: randomUUID(),
       type: COMMANDS.createCampaign,
       tenantId: "t2",
       actorId: "a1",
@@ -211,7 +212,7 @@ describe("CQRS campaign send end-to-end (MemoryQueue)", () => {
 
     // Step 2: campaign.send (what PATCH /campaigns/:id/send triggers)
     await q.publish(COMMANDS.sendCampaign, {
-      messageId: "cqrs-send",
+      messageId: randomUUID(),
       type: COMMANDS.sendCampaign,
       tenantId: "t2",
       actorId: "a1",

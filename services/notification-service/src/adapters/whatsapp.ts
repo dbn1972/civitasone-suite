@@ -1,6 +1,8 @@
 import { pino } from "pino";
 import type { ChannelAdapter, SendParams, SendResult } from "./types.js";
 import { renderBody } from "./render.js";
+import { maskRecipient } from "./mask.js";
+import { postToGateway } from "./http-gateway.js";
 
 const log = pino({ name: "adapter:whatsapp" });
 
@@ -17,8 +19,9 @@ export class WhatsAppAdapter implements ChannelAdapter {
   async send(params: SendParams): Promise<SendResult> {
     const driver = whatsAppDriver();
 
+    // P1-5: fail-closed. A stub driver is NOT a successful send.
     if (driver === "stub") {
-      log.warn({ to: params.recipient }, NOT_CONFIGURED);
+      log.warn({ to: maskRecipient(params.recipient) }, NOT_CONFIGURED);
       return { ok: false, error: NOT_CONFIGURED };
     }
 
@@ -29,13 +32,27 @@ export class WhatsAppAdapter implements ChannelAdapter {
     const token = process.env.META_WHATSAPP_TOKEN;
     const phoneId = process.env.META_WHATSAPP_PHONE_ID;
     if (!token || !phoneId) {
-      log.warn({ to: params.recipient }, NOT_CONFIGURED);
+      // P1-5: missing creds → fail closed, never silently "ok".
+      log.warn({ to: maskRecipient(params.recipient) }, NOT_CONFIGURED);
       return { ok: false, error: NOT_CONFIGURED };
     }
 
-    log.warn({ to: params.recipient }, "meta WhatsApp driver selected but REST client not implemented");
-    void renderBody(params.body, params.variables);
-    return { ok: false, error: "WhatsApp Business API delivery is not implemented yet" };
+    // Real Meta WhatsApp Cloud API call.
+    const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
+    const result = await postToGateway({
+      url,
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      json: {
+        messaging_product: "whatsapp",
+        to: params.recipient,
+        type: "text",
+        text: { body: renderBody(params.body, params.variables) },
+      },
+    });
+    if (result.ok) log.info({ to: maskRecipient(params.recipient) }, "whatsapp sent via meta");
+    else log.warn({ to: maskRecipient(params.recipient), error: result.error }, "meta whatsapp delivery failed");
+    return result;
   }
 }
 

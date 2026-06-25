@@ -1,5 +1,8 @@
 import { pino } from "pino";
 import type { ChannelAdapter, SendParams, SendResult } from "./types.js";
+import { renderBody } from "./render.js";
+import { maskRecipient } from "./mask.js";
+import { postToGateway } from "./http-gateway.js";
 
 const log = pino({ name: "adapter:push" });
 
@@ -12,12 +15,38 @@ export class PushAdapter implements ChannelAdapter {
   async send(params: SendParams): Promise<SendResult> {
     const driver = process.env.NOTIFICATION_PUSH_DRIVER ?? "stub";
 
-    if (driver === "stub" || !process.env.FIREBASE_SERVER_KEY) {
-      log.warn({ to: params.recipient }, NOT_CONFIGURED);
+    // P1-5: fail-closed. Stub driver OR missing server key is NOT a successful send.
+    if (driver === "stub") {
+      log.warn({ to: maskRecipient(params.recipient) }, NOT_CONFIGURED);
       return { ok: false, error: NOT_CONFIGURED };
     }
 
-    return { ok: false, error: "Firebase push delivery is not implemented yet" };
+    if (driver !== "firebase") {
+      return { ok: false, error: `Push driver "${driver}" is not supported; use firebase` };
+    }
+
+    const serverKey = process.env.FIREBASE_SERVER_KEY;
+    if (!serverKey) {
+      log.warn({ to: maskRecipient(params.recipient) }, NOT_CONFIGURED);
+      return { ok: false, error: NOT_CONFIGURED };
+    }
+
+    // Real FCM legacy HTTP call. `recipient` is the device registration token.
+    const result = await postToGateway({
+      url: "https://fcm.googleapis.com/fcm/send",
+      method: "POST",
+      headers: { authorization: `key=${serverKey}` },
+      json: {
+        to: params.recipient,
+        notification: {
+          title: params.subject ?? "Notification",
+          body: renderBody(params.body, params.variables),
+        },
+      },
+    });
+    if (result.ok) log.info({ to: maskRecipient(params.recipient) }, "push sent via firebase");
+    else log.warn({ to: maskRecipient(params.recipient), error: result.error }, "firebase push delivery failed");
+    return result;
   }
 }
 
