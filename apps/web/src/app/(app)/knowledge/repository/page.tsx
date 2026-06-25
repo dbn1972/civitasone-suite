@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { RepositoryClient } from "./RepositoryClient";
 
 export default async function KnowledgeRepositoryPage() {
   const { data: docs, source } = await getKnowledgeDocs();
@@ -24,6 +25,28 @@ export default async function KnowledgeRepositoryPage() {
     if (s === "draft") return "draft";
     return "mut";
   }
+
+  type DocRow = {
+    id: string;
+    title: string;
+    category: string;
+    author: string;
+    version: string;
+    statusLabel: string;
+    statusPill: string;
+    rawCategory: string;
+  };
+
+  const rows: DocRow[] = docs.map((doc) => ({
+    id: doc.id.slice(0, 8).toUpperCase(),
+    title: doc.title,
+    category: doc.category,
+    author: doc.author ?? "—",
+    version: doc.version ?? "—",
+    statusLabel: statusLabel(doc.status),
+    statusPill: statusPillStatus(doc.status),
+    rawCategory: doc.category,
+  }));
 
   return (
     <div className="wrap">
@@ -49,47 +72,8 @@ export default async function KnowledgeRepositoryPage() {
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h">
           <h3>Digital repository</h3>
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Circulars</span>
-            <span>Policies</span>
-            <span>Notifications</span>
-          </div>
         </div>
-        {docs.length === 0 ? (
-          <div className="empty-state">
-            <div className="ic">📂</div>
-            <h4>No documents found</h4>
-            <p>No documents found in the repository.</p>
-          </div>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Doc ID</th>
-                <th>Title</th>
-                <th>Type</th>
-                <th>Dept</th>
-                <th>Version</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.map((doc) => (
-                <tr key={doc.id} className="clickable">
-                  <td><span className="mono">{doc.id.slice(0, 8).toUpperCase()}</span></td>
-                  <td>{doc.title}</td>
-                  <td>{doc.category}</td>
-                  <td>{doc.author ?? "—"}</td>
-                  <td>{doc.version}</td>
-                  <td>
-                    <StatusPill status={statusPillStatus(doc.status)} label={statusLabel(doc.status)} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <RepositoryClient rows={rows} />
         {archived > 0 && (
           <div style={{ padding: "8px 16px", fontSize: "12px", color: "#98a2b3" }}>
             {archived} archived document{archived !== 1 ? "s" : ""} not shown

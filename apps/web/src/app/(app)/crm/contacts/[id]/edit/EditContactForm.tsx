@@ -3,9 +3,23 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type Props = { contactId: string; initial: { name: string; email?: string; phone?: string; organization?: string; designation?: string; city?: string; leadStatus?: string; marketingConsent?: boolean } };
+type Initial = {
+  name: string;
+  email?: string;
+  phone?: string;
+  organization?: string;
+  designation?: string;
+  city?: string;
+  leadStatus?: string;
+  marketingConsent?: boolean;
+};
 
-export default function EditContactPage({ params, initial }: { params: { id: string }; initial: Props["initial"] }) {
+type Props = { params: { id: string }; initial: Initial };
+
+const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
+const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
+
+export default function EditContactForm({ params, initial }: Props) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: initial.name,
@@ -19,11 +33,13 @@ export default function EditContactPage({ params, initial }: { params: { id: str
   });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setMessage("");
+    setError("");
     try {
       const res = await fetch(`/api/proxy/v1/crm/contacts/${params.id}`, {
         method: "PATCH",
@@ -43,7 +59,7 @@ export default function EditContactPage({ params, initial }: { params: { id: str
       setMessage("Contact updated.");
       setTimeout(() => router.push(`/crm/contacts/${params.id}`), 500);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Update failed");
+      setError(e instanceof Error ? e.message : "Could not update the contact.");
     } finally {
       setBusy(false);
     }
@@ -53,17 +69,41 @@ export default function EditContactPage({ params, initial }: { params: { id: str
     <>
       <a className="back" href={`/crm/contacts/${params.id}`}>← Contact</a>
       <div className="ph" style={{ marginTop: 6 }}><h1>Edit Contact</h1></div>
-      {message ? <div className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div> : null}
+      {message ? (
+        <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+      ) : null}
+      {error ? (
+        <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>
+      ) : null}
       <div className="card">
-        <form onSubmit={submit} className="pad">
-          <div className="fields">
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <select value={form.leadStatus} onChange={(e) => setForm({ ...form, leadStatus: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }}>
+        <form onSubmit={submit} className="pad" style={{ display: "grid", gap: 14, maxWidth: 560 }}>
+          <div>
+            <label htmlFor="edit-name" style={labelStyle}>Full name</label>
+            <input id="edit-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+          </div>
+          <div>
+            <label htmlFor="edit-email" style={labelStyle}>Email</label>
+            <input id="edit-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
+          </div>
+          <div>
+            <label htmlFor="edit-phone" style={labelStyle}>Phone</label>
+            <input id="edit-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+          </div>
+          <div>
+            <label htmlFor="edit-company" style={labelStyle}>Organisation</label>
+            <input id="edit-company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} style={inputStyle} />
+          </div>
+          <div>
+            <label htmlFor="edit-designation" style={labelStyle}>Designation</label>
+            <input id="edit-designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} style={inputStyle} />
+          </div>
+          <div>
+            <label htmlFor="edit-city" style={labelStyle}>City</label>
+            <input id="edit-city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} style={inputStyle} />
+          </div>
+          <div>
+            <label htmlFor="edit-leadStatus" style={labelStyle}>Lead status</label>
+            <select id="edit-leadStatus" value={form.leadStatus} onChange={(e) => setForm({ ...form, leadStatus: e.target.value })} style={inputStyle}>
               <option value="new">New</option>
               <option value="contacted">Contacted</option>
               <option value="qualified">Qualified</option>
@@ -71,11 +111,13 @@ export default function EditContactPage({ params, initial }: { params: { id: str
               <option value="customer">Customer</option>
             </select>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
             <input type="checkbox" checked={form.marketingConsent} onChange={(e) => setForm({ ...form, marketingConsent: e.target.checked })} />
-            Marketing consent
+            Marketing consent (DPDP)
           </label>
-          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 16 }}>{busy ? "Saving…" : "Save changes"}</button>
+          <div>
+            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save changes"}</button>
+          </div>
         </form>
       </div>
     </>

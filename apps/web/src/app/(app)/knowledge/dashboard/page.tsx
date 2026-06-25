@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 const BAR_W = 640;
 const BAR_H = 150;
@@ -70,11 +71,18 @@ function docStatusLabel(s: string) {
   return s;
 }
 
+type RecentDocRow = {
+  id: string;
+  title: string;
+  category: string;
+  author: string;
+  createdAt: string;
+  statusLabel: string;
+  statusPill: string;
+};
+
 export default async function KnowledgeDashboardPage() {
   const { data: docs, source } = await getKnowledgeDocs();
-
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const total = docs.length;
   const circulars = docs.filter((d) => d.category?.toLowerCase().includes("circular")).length;
@@ -91,9 +99,18 @@ export default async function KnowledgeDashboardPage() {
 
   const storagePct = total > 0 ? Math.min(100, Math.round((total / 500) * 100)) : 0;
 
-  const recentDocs = [...docs]
+  const recentRows: RecentDocRow[] = [...docs]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
+    .slice(0, 5)
+    .map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      category: doc.category,
+      author: doc.author ?? "—",
+      createdAt: formatIndianDate(doc.createdAt),
+      statusLabel: docStatusLabel(doc.status),
+      statusPill: doc.status === "approved" ? "approved" : doc.status,
+    }));
 
   return (
     <div className="wrap">
@@ -117,11 +134,11 @@ export default async function KnowledgeDashboardPage() {
       </StatGrid>
 
       {total === 0 ? (
-        <div className="empty-state" style={{ marginTop: "18px" }}>
-          <div className="ic">📂</div>
-          <h4>No documents yet</h4>
-          <p>No documents in the repository yet.</p>
-        </div>
+        <EmptyState
+          icon="📂"
+          title="No documents yet"
+          message="No documents in the repository yet."
+        />
       ) : (
         <div className="grid g-main" style={{ marginTop: "18px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
@@ -130,28 +147,23 @@ export default async function KnowledgeDashboardPage() {
                 <h3>Recent publications</h3>
                 <Link className="lnk" href="/knowledge/repository">Repository →</Link>
               </div>
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Document</th>
-                    <th>Type</th>
-                    <th>Dept</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentDocs.map((doc) => (
-                    <tr key={doc.id} className="clickable">
-                      <td>{doc.title}</td>
-                      <td>{doc.category}</td>
-                      <td>{doc.author ?? "—"}</td>
-                      <td>{doc.createdAt?.slice(0, 10)}</td>
-                      <td><StatusPill status={doc.status === "approved" ? "approved" : doc.status} label={docStatusLabel(doc.status)} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<RecentDocRow>
+                columns={[
+                  { key: "title", label: "Document" },
+                  { key: "category", label: "Type" },
+                  { key: "author", label: "Dept" },
+                  { key: "createdAt", label: "Date" },
+                  {
+                    key: "statusLabel",
+                    label: "Status",
+                    render: (row) => <StatusPill status={row.statusPill} label={row.statusLabel} />,
+                  },
+                ]}
+                rows={recentRows}
+                sortable
+                filterable
+                pageSize={15}
+              />
             </div>
 
             <div className="card">
@@ -172,7 +184,8 @@ export default async function KnowledgeDashboardPage() {
               <div className="card-h"><h3>Quick search</h3></div>
               <div className="pad">
                 <div className="tb-search" style={{ maxWidth: "none" }}>
-                  🔎<input placeholder="Search circulars, policies…" readOnly />
+                  <span aria-hidden="true">🔎</span>
+                  <input aria-label="Quick search (open full search to type)" placeholder="Search circulars, policies…" readOnly />
                 </div>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
                   {["travel policy", "reservation", "GFR 2017"].map((term) => (

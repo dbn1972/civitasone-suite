@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeRecords } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { RecordsClient } from "./RecordsClient";
 
 export default async function KnowledgeRecordsPage() {
   const { data: records, source } = await getKnowledgeRecords();
@@ -11,7 +12,6 @@ export default async function KnowledgeRecordsPage() {
   thirtyDaysFromNow.setDate(now.getDate() + 30);
 
   const total = records.length;
-  const active = records.filter((r) => r.status === "active").length;
   const dueForDisposal = records.filter((r) => {
     if (!r.disposalDueDate) return false;
     const dueDate = new Date(r.disposalDueDate);
@@ -33,6 +33,30 @@ export default async function KnowledgeRecordsPage() {
     if (s === "inactive") return "Inactive";
     return s;
   }
+
+  type RecordRow = {
+    id: string;
+    recordNo: string;
+    title: string;
+    type: string;
+    department: string;
+    retentionPeriod: string;
+    statusLabel: string;
+    statusPill: string;
+    rawStatus: string;
+  };
+
+  const rows: RecordRow[] = records.map((rec) => ({
+    id: rec.id,
+    recordNo: rec.recordNo,
+    title: rec.title,
+    type: rec.type,
+    department: rec.department ?? "—",
+    retentionPeriod: rec.retentionPeriod ?? "—",
+    statusLabel: recordStatusLabel(rec.status),
+    statusPill: recordStatusPill(rec.status),
+    rawStatus: rec.status,
+  }));
 
   return (
     <div className="wrap">
@@ -58,36 +82,12 @@ export default async function KnowledgeRecordsPage() {
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h">
           <h3>Retention schedules</h3>
-          <div className="seg"><span className="on">All</span><span>Due</span></div>
         </div>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Record No</th>
-              <th>Title</th>
-              <th>Type</th>
-              <th>Department</th>
-              <th>Retention Period</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.length === 0 ? (
-              <tr><td colSpan={6}><div className="empty-state"><div className="ic">🗃️</div><h4>No records found</h4><p>No retention schedules configured yet.</p></div></td></tr>
-            ) : records.map((rec) => (
-              <tr key={rec.id}>
-                <td><span className="mono">{rec.recordNo}</span></td>
-                <td>{rec.title}</td>
-                <td>{rec.type}</td>
-                <td>{rec.department ?? "—"}</td>
-                <td>{rec.retentionPeriod ?? "—"}</td>
-                <td>
-                  <StatusPill status={recordStatusPill(rec.status)} label={recordStatusLabel(rec.status)} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {records.length === 0 ? (
+          <EmptyState icon="🗃️" title="No records found" message="No retention schedules configured yet." />
+        ) : (
+          <RecordsClient rows={rows} />
+        )}
       </div>
     </div>
   );

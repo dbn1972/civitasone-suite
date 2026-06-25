@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
 
 export default async function KnowledgeListPage() {
   const { data: docs, source } = await getKnowledgeDocs();
@@ -24,6 +24,28 @@ export default async function KnowledgeListPage() {
     if (s === "under_review") return "pending";
     return "mut";
   }
+
+  type DocRow = {
+    id: string;
+    title: string;
+    category: string;
+    author: string;
+    version: string;
+    accessLevel: string;
+    statusLabel: string;
+    statusPill: string;
+  };
+
+  const rows: DocRow[] = docs.map((doc) => ({
+    id: doc.id.slice(0, 8).toUpperCase(),
+    title: doc.title,
+    category: doc.category,
+    author: doc.author ?? "—",
+    version: doc.version ?? "—",
+    accessLevel: doc.accessLevel,
+    statusLabel: statusLabel(doc.status),
+    statusPill: statusPillStatus(doc.status),
+  }));
 
   return (
     <div className="wrap">
@@ -49,40 +71,27 @@ export default async function KnowledgeListPage() {
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h"><h3>Documents</h3></div>
         {docs.length === 0 ? (
-          <div className="empty-state">
-            <div className="ic">📂</div>
-            <h4>No documents found</h4>
-            <p>No documents found in the knowledge base.</p>
-          </div>
+          <EmptyState icon="📂" title="No documents found" message="No documents found in the knowledge base." />
         ) : (
-          <table className="tbl" aria-label="Knowledge documents">
-            <thead>
-              <tr>
-                <th>Doc ID</th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Author</th>
-                <th>Version</th>
-                <th>Access</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.map((doc) => (
-                <tr key={doc.id} className="clickable">
-                  <td><span className="mono">{doc.id.slice(0, 8).toUpperCase()}</span></td>
-                  <td>{doc.title}</td>
-                  <td>{doc.category}</td>
-                  <td>{doc.author ?? "—"}</td>
-                  <td>{doc.version ?? "—"}</td>
-                  <td>{doc.accessLevel}</td>
-                  <td>
-                    <StatusPill status={statusPillStatus(doc.status)} label={statusLabel(doc.status)} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<DocRow>
+            columns={[
+              { key: "id", label: "Doc ID" },
+              { key: "title", label: "Title" },
+              { key: "category", label: "Category" },
+              { key: "author", label: "Author" },
+              { key: "version", label: "Version" },
+              { key: "accessLevel", label: "Access" },
+              {
+                key: "statusLabel",
+                label: "Status",
+                render: (row) => <StatusPill status={row.statusPill} label={row.statusLabel} />,
+              },
+            ]}
+            rows={rows}
+            sortable
+            filterable
+            pageSize={15}
+          />
         )}
       </div>
     </div>
