@@ -149,11 +149,36 @@ function topicToQueueName(topic: string): string {
   return topic.replace(/\./g, "-").slice(0, 80);
 }
 
+// QUE-FANOUT: cross-service fan-out fix. Previously every service that subscribed
+// to a topic polled the SAME topic-named SQS queue -> competing consumers, so a
+// multi-subscriber event (e.g. procurement.grn.accepted, consumed by finance +
+// stock + asset + inventory) was delivered to only ONE service. Now each service
+// gets its OWN queue per topic ("<topic-base>__<service>") and publish() fans a
+// copy out to every subscriber queue it discovers (SNS-style, registry-free).
+const TOPIC_BASE_MAX = 45;
+function topicBaseName(topic: string): string {
+  const raw = (isFifoTopic(topic) ? topic.slice(0, -".fifo".length) : topic).replace(/\./g, "-");
+  return raw.slice(0, TOPIC_BASE_MAX);
+}
+function sanitizeService(service: string): string {
+  return service.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 24);
+}
+function perServiceQueueName(topic: string, service: string): string {
+  const name = `${topicBaseName(topic)}__${sanitizeService(service)}`;
+  return isFifoTopic(topic) ? `${name}.fifo` : name;
+}
+function topicQueuePrefix(topic: string): string {
+  // service-independent prefix so ListQueues finds every subscriber's queue; the
+  // "__" delimiter prevents a shorter topic prefix matching a longer topic.
+  return `${topicBaseName(topic)}__`;
+}
+
 export class SqsQueue implements Queue {
   private client: SQSClient;
   private handlers = new Map<string, Handler[]>();
   private queueUrls = new Map<string, string>();
   private dlqUrls = new Map<string, string>();
+  private subUrlCache = new Map<string, { urls: string[]; exp: number }>();
   private polling = false;
   private pollLoops: Promise<void>[] = [];
   private readonly service: string;
@@ -161,7 +186,20 @@ export class SqsQueue implements Queue {
   private readonly visibilityTimeout: number;
 
   constructor() {
-    this.service = process.env.SERVICE_NAME ?? process.env.npm_package_name ?? "queue-service";
+    // QUE-FANOUT: the per-service queue name needs a DISTINCT service id.
+    // Under pm2, SERVICE_NAME/npm_package_name are unset and process.argv[1]
+    // is the pm2 wrapper, but pm2 sets pm_exec_path to the app's own script
+    // (.../services/<name>/dist/index.js). Derive the service id from it.
+    const fromPath = (p: string | undefined): string | undefined => {
+      const m = (p ?? "").match(/[/\\]services[/\\]([^/\\]+)[/\\]/);
+      return m ? m[1] : undefined;
+    };
+    this.service = process.env.SERVICE_NAME
+      ?? fromPath(process.env.pm_exec_path)
+      ?? fromPath(process.argv[1])
+      ?? process.env.name
+      ?? process.env.npm_package_name
+      ?? "queue-service";
     this.maxReceiveCount = Number(process.env.SQS_MAX_RECEIVE_COUNT ?? 5);
     this.visibilityTimeout = Number(process.env.SQS_VISIBILITY_TIMEOUT ?? 60);
     this.client = new SQSClient({
@@ -177,7 +215,7 @@ export class SqsQueue implements Queue {
   private async getOrCreateQueue(topic: string): Promise<string> {
     const cached = this.queueUrls.get(topic);
     if (cached) return cached;
-    const name = topicToQueueName(topic);
+    const name = perServiceQueueName(topic, this.service);
     const fifo = isFifoTopic(topic);
     await this.client.send(new CreateQueueCommand({
       QueueName: name,
@@ -221,7 +259,7 @@ export class SqsQueue implements Queue {
     // 05-T4: a FIFO source queue requires a FIFO dead-letter queue (the
     // RedrivePolicy target must match the queue type), and the name must keep
     // the `.fifo` suffix.
-    const base = topicToQueueName(topic);
+    const base = perServiceQueueName(topic, this.service);
     const name = fifo
       ? `${base.slice(0, -".fifo".length).slice(0, 71)}-dlq.fifo`
       : `${base.slice(0, 76)}-dlq`;
@@ -235,29 +273,45 @@ export class SqsQueue implements Queue {
     return url;
   }
 
+  // QUE-FANOUT: discover every subscriber's per-service queue for the topic and
+  // send each a copy (cached briefly to avoid ListQueues on every publish).
+  private async resolveSubscriberQueues(topic: string): Promise<string[]> {
+    const now = Date.now();
+    const cached = this.subUrlCache.get(topic);
+    if (cached && cached.exp > now) return cached.urls;
+    const res = await this.client.send(new ListQueuesCommand({
+      QueueNamePrefix: topicQueuePrefix(topic), MaxResults: 1000,
+    }));
+    const urls = (res.QueueUrls ?? []).filter((u) => {
+      const n = u.split("/").pop() ?? "";
+      return !n.endsWith("-dlq") && !n.endsWith("-dlq.fifo");
+    });
+    this.subUrlCache.set(topic, { urls, exp: now + 15000 });
+    return urls;
+  }
+
   async publish<T>(topic: string, input: PublishInput<T>, options?: PublishOptions): Promise<string> {
     const msg = envelope(input);
-    const url = await this.getOrCreateQueue(topic);
-    await this.client.send(new SendMessageCommand({
-      QueueUrl: url,
-      MessageBody: JSON.stringify(msg),
-      MessageAttributes: {
-        messageId:     { DataType: "String", StringValue: msg.messageId },
-        correlationId: { DataType: "String", StringValue: msg.correlationId },
-        type:          { DataType: "String", StringValue: msg.type },
-      },
-      // 05-T4: FIFO ordering. MessageGroupId scopes ordering to a tenant so a
-      // tenant's ledger/journal postings stay strictly ordered without
-      // serialising across tenants. MessageDeduplicationId = messageId gives
-      // broker-side exactly-once within the 5-minute dedup window. Callers may
-      // override either (e.g. group by account) via options.
-      ...(isFifoTopic(topic)
-        ? {
-            MessageGroupId: options?.messageGroupId ?? msg.tenantId,
-            MessageDeduplicationId: options?.messageDeduplicationId ?? msg.messageId,
-          }
-        : {}),
-    }));
+    const urls = await this.resolveSubscriberQueues(topic);
+    const body = JSON.stringify(msg);
+    const attrs = {
+      messageId:     { DataType: "String" as const, StringValue: msg.messageId },
+      correlationId: { DataType: "String" as const, StringValue: msg.correlationId },
+      type:          { DataType: "String" as const, StringValue: msg.type },
+    };
+    // 05-T4: FIFO ordering/dedup preserved per send.
+    const fifoFields = isFifoTopic(topic)
+      ? {
+          MessageGroupId: options?.messageGroupId ?? msg.tenantId,
+          MessageDeduplicationId: options?.messageDeduplicationId ?? msg.messageId,
+        }
+      : {};
+    // Fan out: one copy to every subscribing service's own queue.
+    await Promise.all(urls.map((QueueUrl) =>
+      this.client.send(new SendMessageCommand({
+        QueueUrl, MessageBody: body, MessageAttributes: attrs, ...fifoFields,
+      })),
+    ));
     return msg.messageId;
   }
 
@@ -269,6 +323,15 @@ export class SqsQueue implements Queue {
 
   async start(): Promise<void> {
     this.polling = true;
+    // QUE-FANOUT: pre-create each queue SEQUENTIALLY before starting the poll
+    // loops. Each service now owns a queue per topic, so starting N poll loops
+    // at once fired a burst of ~6*N concurrent SQS calls that could exhaust the
+    // connection pool and leave later queues uncreated. Serial creation is a
+    // one-time boot cost and reliable; pollTopic then hits the cache.
+    for (const topic of this.handlers.keys()) {
+      try { await this.getOrCreateQueue(topic); }
+      catch (err) { this.logHandlerError(topic, null, 0, err); }
+    }
     for (const topic of this.handlers.keys()) {
       this.pollLoops.push(this.pollTopic(topic));
     }
@@ -289,7 +352,19 @@ export class SqsQueue implements Queue {
   }
 
   private async pollTopic(topic: string): Promise<void> {
-    const url = await this.getOrCreateQueue(topic);
+    // QUE-FANOUT: harden queue resolution. Each service now creates its OWN
+    // queue per topic, so there is much more create-work at boot; a transient
+    // LocalStack/SQS error here must RETRY, not become an unhandled rejection
+    // that kills the worker (previously this await was uncaught).
+    let url: string | undefined;
+    while (this.polling && !url) {
+      try { url = await this.getOrCreateQueue(topic); }
+      catch (err) {
+        this.logHandlerError(topic, null, 0, err);
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    if (!url) return;
     const handlers = this.handlers.get(topic) ?? [];
 
     while (this.polling) {
