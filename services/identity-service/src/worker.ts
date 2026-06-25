@@ -6,6 +6,7 @@ import { registerUserConsumers } from "./modules/users/consumer.js";
 import { registerRbacConsumers } from "./modules/rbac/consumer.js";
 import { registerSessionConsumers } from "./modules/sessions/consumer.js";
 import { reapExpiredSessions } from "./modules/sessions/repo.js";
+import { sweepExpiredGrants } from "./modules/breakglass/repo.js";
 import { registerMfaConsumers } from "./modules/mfa/consumer.js";
 import { registerSyncFeederConsumers } from "./modules/sync/feeder.js";
 import * as keycloak from "./shared/keycloak.js";
@@ -31,6 +32,16 @@ const reaper = setInterval(() => {
 }, REAP_INTERVAL_MS);
 reaper.unref?.();
 
+// Break-glass TTL sweep: flip active-but-past-expiry emergency grants to
+// "expired" so elevated access never outlives its TTL.
+const BG_SWEEP_INTERVAL_MS = Number(process.env.BREAK_GLASS_SWEEP_INTERVAL_MS ?? 60000);
+const bgSweeper = setInterval(() => {
+  void sweepExpiredGrants()
+    .then((n) => { if (n > 0) log.warn({ expired: n }, "break-glass grants expired by TTL sweep"); })
+    .catch((err) => log.error({ err: String(err) }, "break-glass sweep failed"));
+}, BG_SWEEP_INTERVAL_MS);
+bgSweeper.unref?.();
+
 // SEC H2: periodic Keycloak deactivation reconciler. Retries any deactivation
 // that the post-commit best-effort call could not confirm (or that crashed
 // before confirmation) so a deactivated user is never left enabled in Keycloak.
@@ -53,6 +64,7 @@ async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(relay);
   clearInterval(reaper);
+  clearInterval(bgSweeper);
   clearInterval(kcReconciler);
   await queue.stop();
   await sqlClient.end();
