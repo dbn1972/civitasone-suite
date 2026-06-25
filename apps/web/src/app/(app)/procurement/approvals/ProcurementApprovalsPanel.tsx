@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { ConfirmDialog, DataTable, EmptyState } from "@/app/_components/ds";
 
 type WorkflowTask = {
   id: string;
@@ -93,6 +93,66 @@ export function ProcurementApprovalsPanel() {
   const dialogTask = pending?.task;
   const isReject = pending?.decision === "reject";
 
+  // Build table rows as plain records for DataTable
+  type TaskRow = {
+    id: string;
+    name: string;
+    refId: string;
+    roleRef: string;
+    _task: WorkflowTask;
+  };
+
+  const tableRows: TaskRow[] = tasks.map((task) => ({
+    id: task.id,
+    name: task.name,
+    refId: task.refId ?? "—",
+    roleRef: task.roleRef ?? "any",
+    _task: task,
+  }));
+
+  const columns: { key: keyof TaskRow; label: string; render?: (row: TaskRow) => React.ReactNode }[] = [
+    { key: "name", label: "Task" },
+    {
+      key: "refId",
+      label: "Reference",
+      render: (row) => {
+        const href = refLink(row._task);
+        return href ? (
+          <Link href={href} className="mono" style={{ color: "#4f46e5" }}>{row.refId}</Link>
+        ) : (
+          <span className="mono">{row.refId}</span>
+        );
+      },
+    },
+    { key: "roleRef", label: "Role" },
+    {
+      key: "id",
+      label: "Actions",
+      render: (row) => (
+        <>
+          <button
+            type="button"
+            className="btn primary sm"
+            style={{ marginRight: 6, minHeight: 36 }}
+            disabled={busyId === row.id}
+            onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task: row._task, decision: "approve" }); }}
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            className="btn ghost sm"
+            style={{ minHeight: 36 }}
+            disabled={busyId === row.id}
+            onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task: row._task, decision: "reject" }); }}
+          >
+            Reject
+          </button>
+        </>
+      ),
+    },
+  ];
+
   return (
     <div className="card" style={{ marginTop: 18 }}>
       <div className="card-h">
@@ -102,60 +162,18 @@ export function ProcurementApprovalsPanel() {
       {message ? (
         <p className="pad" role="status" aria-live="polite" style={{ color: "#047857", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p>
       ) : null}
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th scope="col">Task</th>
-            <th scope="col">Reference</th>
-            <th scope="col">Role</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading && tasks.length === 0 ? (
-            <tr><td colSpan={4} style={{ textAlign: "center", padding: 24, color: "#94a3b8" }}>Loading workflow tasks…</td></tr>
-          ) : tasks.length === 0 ? (
-            <tr><td colSpan={4} style={{ textAlign: "center", padding: 24, color: "#94a3b8" }}>No pending procurement workflow tasks</td></tr>
-          ) : (
-            tasks.map((task) => {
-              const href = refLink(task);
-              return (
-                <tr key={task.id}>
-                  <td>{task.name}</td>
-                  <td>
-                    {href ? (
-                      <Link href={href} className="mono" style={{ color: "#4f46e5" }}>{task.refId}</Link>
-                    ) : (
-                      <span className="mono">{task.refId ?? "—"}</span>
-                    )}
-                  </td>
-                  <td>{task.roleRef ?? "any"}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn primary sm"
-                      style={{ marginRight: 6, minHeight: 36 }}
-                      disabled={busyId === task.id}
-                      onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task, decision: "approve" }); }}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      className="btn ghost sm"
-                      style={{ minHeight: 36 }}
-                      disabled={busyId === task.id}
-                      onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task, decision: "reject" }); }}
-                    >
-                      Reject
-                    </button>
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+
+      {loading && tasks.length === 0 ? (
+        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading workflow tasks…</p>
+      ) : tasks.length === 0 ? (
+        <EmptyState icon="✅" title="No pending tasks" message="No pending procurement workflow tasks at this time." />
+      ) : (
+        <DataTable<TaskRow>
+          columns={columns}
+          rows={tableRows}
+          pageSize={25}
+        />
+      )}
 
       <ConfirmDialog
         open={pending !== null}

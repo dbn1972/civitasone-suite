@@ -66,9 +66,9 @@ export default async function AssetDashboardPage() {
             <div className="card-h"><h3>Quick links</h3></div>
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
               <Link href="/assets/register">+ Register asset manually</Link>
-              <Link href="/assets/depreciation">📉 Run monthly depreciation</Link>
-              <Link href="/assets/verification">🔍 Physical verification</Link>
-              <Link href="/assets/maintenance">🛠️ Maintenance queue</Link>
+              <Link href="/assets/depreciation"><span aria-hidden="true">📉</span> Run monthly depreciation</Link>
+              <Link href="/assets/verification"><span aria-hidden="true">🔍</span> Physical verification</Link>
+              <Link href="/assets/maintenance"><span aria-hidden="true">🛠️</span> Maintenance queue</Link>
             </div>
           </div>
         </div>

@@ -31,7 +31,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
           <>
             <StatusPill status={vendor.empanelmentStatus} label={EMPANELMENT_LABELS[vendor.empanelmentStatus] ?? vendor.empanelmentStatus} />
             {vendor.rating !== undefined && (
-              <span className="pill info">{vendor.rating}/5 ★</span>
+              <span className="pill info">{vendor.rating}/5<span aria-hidden="true"> ★</span><span className="sr-only"> rating out of 5</span></span>
             )}
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>

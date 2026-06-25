@@ -36,7 +36,7 @@ export default async function AssetListPage() {
           fontSize: 13,
         }}
       >
-        🔗 <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
+        <span aria-hidden="true">🔗</span> <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
       </div>
       <StatGrid>
         <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} />

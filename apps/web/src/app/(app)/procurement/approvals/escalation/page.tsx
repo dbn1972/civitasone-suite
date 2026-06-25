@@ -1,4 +1,22 @@
-import { PageHeader, Card } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable } from "../../../../_components/ds";
+
+type EscalationRow = {
+  estimatedValue: string;
+  approvingAuthority: string;
+  escalatesAfter: string;
+};
+
+const ESCALATION_ROWS: EscalationRow[] = [
+  { estimatedValue: "Up to ₹1,00,000", approvingAuthority: "Procurement Officer", escalatesAfter: "2 working days" },
+  { estimatedValue: "₹1,00,000 – ₹10,00,000", approvingAuthority: "Procurement Admin", escalatesAfter: "3 working days" },
+  { estimatedValue: "Above ₹10,00,000", approvingAuthority: "Procurement Admin + Finance", escalatesAfter: "5 working days" },
+];
+
+const ESCALATION_COLUMNS: { key: keyof EscalationRow; label: string }[] = [
+  { key: "estimatedValue", label: "Estimated value" },
+  { key: "approvingAuthority", label: "Approving authority" },
+  { key: "escalatesAfter", label: "Escalates after" },
+];
 
 /**
  * Escalation rules reference. The approval routing itself is configured in the
@@ -15,21 +33,12 @@ export default function EscalationRulesPage() {
         backLabel="Back to Approvals"
       />
 
-      <Card title="Routing thresholds" padding>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th scope="col">Estimated value</th>
-              <th scope="col">Approving authority</th>
-              <th scope="col">Escalates after</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>Up to ₹1,00,000</td><td>Procurement Officer</td><td>2 working days</td></tr>
-            <tr><td>₹1,00,000 – ₹10,00,000</td><td>Procurement Admin</td><td>3 working days</td></tr>
-            <tr><td>Above ₹10,00,000</td><td>Procurement Admin + Finance</td><td>5 working days</td></tr>
-          </tbody>
-        </table>
+      <Card title="Routing thresholds">
+        <DataTable<EscalationRow>
+          columns={ESCALATION_COLUMNS}
+          rows={ESCALATION_ROWS}
+          pageSize={25}
+        />
       </Card>
 
       <Card title="Separation of duties (SoD)" padding>

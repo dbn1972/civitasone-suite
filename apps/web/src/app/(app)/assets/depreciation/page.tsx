@@ -10,13 +10,13 @@ export default function DepreciationRunPage() {
   const [isError, setIsError] = useState(false);
 
   const run = useConfirmAction({
-    onConfirm: async () => {
+    onConfirm: async (reason) => {
       setMessage("");
       setIsError(false);
       const res = await fetch("/api/proxy/v1/asset/depreciation/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ period, depBook }),
+        body: JSON.stringify({ period, depBook, reason }),
       });
       if (!res.ok) throw new Error(await res.text());
       setMessage(`Depreciation run accepted for ${period} — GL journals posted via finance.gl.post.`);

@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
 import { getProcurementGRNById } from "../../../../_data/loaders";
+import { formatIndianDate } from "@/lib/formatters";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -10,6 +11,24 @@ const STATUS_LABELS: Record<string, string> = {
   partially_rejected: "Partially Rejected",
   rejected: "Rejected",
 };
+
+type ItemRow = Record<string, unknown> & {
+  itemCode: string;
+  poItemRef: string;
+  orderedQty: string;
+  receivedQty: string;
+  acceptedQty: string;
+  unit: string;
+};
+
+const ITEM_COLUMNS: { key: keyof ItemRow; label: string; align?: "left" | "right" }[] = [
+  { key: "itemCode", label: "Item code" },
+  { key: "poItemRef", label: "PO item ref" },
+  { key: "orderedQty", label: "Ordered", align: "right" },
+  { key: "receivedQty", label: "Received", align: "right" },
+  { key: "acceptedQty", label: "Accepted", align: "right" },
+  { key: "unit", label: "Unit" },
+];
 
 export default async function GRNDetailPage({ params }: { params: { id: string } }) {
   const { data: grn, source } = await getProcurementGRNById(params.id);
@@ -23,6 +42,15 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
     );
   }
 
+  const itemRows: ItemRow[] = grn.items.map((item) => ({
+    itemCode: item.itemCode,
+    poItemRef: item.poItemRef,
+    orderedQty: String(item.orderedQty),
+    receivedQty: String(item.receivedQty),
+    acceptedQty: String(item.acceptedQty),
+    unit: item.unit,
+  }));
+
   return (
     <>
       <PageHeader
@@ -33,7 +61,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           <>
             <StatusPill
               status={grn.threeWayMatch ? "accepted" : "rejected"}
-              label={grn.threeWayMatch ? "Three-way match ✓" : "Three-way mismatch"}
+              label={grn.threeWayMatch ? "Three-way match" : "Three-way mismatch"}
             />
             <StatusPill status={grn.status} label={STATUS_LABELS[grn.status] ?? grn.status} />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
@@ -57,7 +85,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           </div>
           <div className="field">
             <span className="label">Received date</span>
-            <span>{grn.receivedDate}</span>
+            <span>{formatIndianDate(grn.receivedDate)}</span>
           </div>
           <div className="field">
             <span className="label">Three-way match</span>
@@ -83,7 +111,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
             </div>
             <div className="field">
               <span className="label">Inspection date</span>
-              <span>{grn.inspection.inspectionDate}</span>
+              <span>{formatIndianDate(grn.inspection.inspectionDate)}</span>
             </div>
             {grn.inspection.remarks ? (
               <div className="field">
@@ -97,32 +125,11 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
 
       {grn.items.length > 0 && (
         <Card title="Received items">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Item code</th>
-                <th>PO item ref</th>
-                <th className="num">Ordered</th>
-                <th className="num">Received</th>
-                <th className="num">Accepted</th>
-                <th>Unit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grn.items.map((item, i) => (
-                <tr key={item.id ?? i}>
-                  <td><span className="mono">{item.itemCode}</span></td>
-                  <td><span className="mono">{item.poItemRef}</span></td>
-                  <td className="num">{item.orderedQty}</td>
-                  <td className="num">{item.receivedQty}</td>
-                  <td className="num" style={{ color: item.acceptedQty >= item.orderedQty ? "#16a34a" : "#d97706", fontWeight: 500 }}>
-                    {item.acceptedQty}
-                  </td>
-                  <td>{item.unit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<ItemRow>
+            columns={ITEM_COLUMNS}
+            rows={itemRows}
+            pageSize={50}
+          />
         </Card>
       )}
     </>

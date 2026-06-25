@@ -38,7 +38,7 @@ export default async function GRNPage() {
     vendor: g.vendor,
     receivedDate: formatIndianDate(g.receivedDate),
     itemCount: g.itemCount,
-    match: g.threeWayMatch === undefined ? "—" : g.threeWayMatch ? "✓ Matched" : "✗ Mismatch",
+    match: g.threeWayMatch === undefined ? "—" : g.threeWayMatch ? "Matched" : "Mismatch",
     status: STATUS_LABELS[g.status] ?? g.status,
   }));
 

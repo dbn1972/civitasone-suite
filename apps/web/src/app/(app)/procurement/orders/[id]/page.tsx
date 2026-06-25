@@ -1,8 +1,9 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
 import { getProcurementPOById } from "../../../../_data/loaders";
 import { DispatchPOActions } from "./DispatchPOActions";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -13,6 +14,26 @@ const STATUS_LABELS: Record<string, string> = {
   fully_received: "Fully Received",
   cancelled: "Cancelled",
 };
+
+type LineItemRow = Record<string, unknown> & {
+  itemCode: string;
+  itemName: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  totalPrice: string;
+  grnQty: string;
+};
+
+const LINE_ITEM_COLUMNS: { key: keyof LineItemRow; label: string; align?: "left" | "right" }[] = [
+  { key: "itemCode", label: "Item Code" },
+  { key: "itemName", label: "Item Name" },
+  { key: "quantity", label: "Ordered", align: "right" },
+  { key: "unit", label: "Unit" },
+  { key: "unitPrice", label: "Unit Price", align: "right" },
+  { key: "totalPrice", label: "Total", align: "right" },
+  { key: "grnQty", label: "GRN Qty", align: "right" },
+];
 
 export default async function PODetailPage({ params }: { params: { id: string } }) {
   const { data: po, source } = await getProcurementPOById(params.id);
@@ -25,6 +46,16 @@ export default async function PODetailPage({ params }: { params: { id: string } 
       </>
     );
   }
+
+  const lineRows: LineItemRow[] = po.lineItems.map((item) => ({
+    itemCode: item.itemCode,
+    itemName: item.itemName,
+    quantity: String(item.quantity),
+    unit: item.unit,
+    unitPrice: formatMoney(item.unitPrice),
+    totalPrice: formatMoney(item.totalPrice),
+    grnQty: String(item.grnQty),
+  }));
 
   return (
     <>
@@ -57,15 +88,15 @@ export default async function PODetailPage({ params }: { params: { id: string } 
           </div>
           <div className="field">
             <span className="label">Total Amount</span>
-            <span>₹{(po.totalAmount / 100).toLocaleString("en-IN")}</span>
+            <span>{formatMoney(po.totalAmount)}</span>
           </div>
           <div className="field">
             <span className="label">Order Date</span>
-            <span>{po.orderDate}</span>
+            <span>{formatIndianDate(po.orderDate)}</span>
           </div>
           <div className="field">
             <span className="label">Delivery Date</span>
-            <span>{po.deliveryDate ?? "—"}</span>
+            <span>{po.deliveryDate ? formatIndianDate(po.deliveryDate) : "—"}</span>
           </div>
           <div className="field">
             <span className="label">Status</span>
@@ -76,34 +107,11 @@ export default async function PODetailPage({ params }: { params: { id: string } 
 
       {po.lineItems.length > 0 && (
         <Card title="Line items">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Item Code</th>
-                <th>Item Name</th>
-                <th className="num">Ordered</th>
-                <th>Unit</th>
-                <th className="num">Unit Price</th>
-                <th className="num">Total</th>
-                <th className="num">GRN Qty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {po.lineItems.map((item, i) => (
-                <tr key={i}>
-                  <td><span className="mono">{item.itemCode}</span></td>
-                  <td>{item.itemName}</td>
-                  <td className="num">{item.quantity}</td>
-                  <td>{item.unit}</td>
-                  <td className="num">₹{(item.unitPrice / 100).toLocaleString("en-IN")}</td>
-                  <td className="num">₹{(item.totalPrice / 100).toLocaleString("en-IN")}</td>
-                  <td className="num" style={{ color: item.grnQty >= item.quantity ? "#16a34a" : "#d97706", fontWeight: 500 }}>
-                    {item.grnQty}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<LineItemRow>
+            columns={LINE_ITEM_COLUMNS}
+            rows={lineRows}
+            pageSize={50}
+          />
         </Card>
       )}
     </>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Segmented } from "../../../../_components/ds";
+import { DataTable, Segmented, EmptyState } from "../../../../_components/ds";
 import type { FinancialStatementSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -26,6 +26,8 @@ interface StatementsTableProps {
   source?: "api" | "error";
 }
 
+type StatRow = FinancialStatementSummary & Record<string, unknown>;
+
 export function StatementsTable({ statements, source = "api" }: StatementsTableProps) {
   const [activeType, setActiveType] = useState<StatementType>("R&P");
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<FinancialStatementSummary[]>(
@@ -36,12 +38,12 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
   );
 
   const filterFn = TYPE_FILTER[activeType];
-  const filtered = filterFn ? rows.filter(filterFn) : rows;
+  const filtered = (filterFn ? rows.filter(filterFn) : rows) as StatRow[];
 
-  const totalOpening = filtered.reduce((s, st) => s + st.openingBalance, 0);
-  const totalReceipts = filtered.reduce((s, st) => s + st.receipts, 0);
-  const totalPayments = filtered.reduce((s, st) => s + st.payments, 0);
-  const totalClosing = filtered.reduce((s, st) => s + st.closingBalance, 0);
+  const totalOpening = filtered.reduce((s, st) => s + (st.openingBalance as number), 0);
+  const totalReceipts = filtered.reduce((s, st) => s + (st.receipts as number), 0);
+  const totalPayments = filtered.reduce((s, st) => s + (st.payments as number), 0);
+  const totalClosing = filtered.reduce((s, st) => s + (st.closingBalance as number), 0);
 
   const cacheNote =
     offline || fromCache
@@ -67,43 +69,63 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ padding: "2rem", textAlign: "center", color: "var(--ink2)" }}>
-          No data for this statement type.
-        </div>
+        <EmptyState icon="📊" title="No data for this statement type" message="Select a different statement type above." />
       ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Head</th>
-              <th>Type</th>
-              <th className="num">Opening</th>
-              <th className="num">Receipts</th>
-              <th className="num">Payments</th>
-              <th className="num">Closing</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((st) => (
-              <tr key={st.id}>
-                <td>{st.head}</td>
-                <td style={{ textTransform: "capitalize" }}>{st.type}</td>
-                <td className="num" aria-label={`Opening ${formatMoney(st.openingBalance)}`}>{formatMoney(st.openingBalance)}</td>
-                <td className="num" aria-label={`Receipts ${formatMoney(st.receipts)}`}>{formatMoney(st.receipts)}</td>
-                <td className="num" aria-label={`Payments ${formatMoney(st.payments)}`}>{formatMoney(st.payments)}</td>
-                <td className="num" aria-label={`Closing ${formatMoney(st.closingBalance)}`}>{formatMoney(st.closingBalance)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={2}><strong>Total</strong></td>
-              <td className="num"><strong>{formatMoney(totalOpening)}</strong></td>
-              <td className="num"><strong>{formatMoney(totalReceipts)}</strong></td>
-              <td className="num"><strong>{formatMoney(totalPayments)}</strong></td>
-              <td className="num"><strong>{formatMoney(totalClosing)}</strong></td>
-            </tr>
-          </tfoot>
-        </table>
+        <>
+          <DataTable<StatRow>
+            columns={[
+              { key: "head", label: "Head" },
+              { key: "type", label: "Type", render: (st) => <span style={{ textTransform: "capitalize" }}>{st.type as string}</span> },
+              {
+                key: "openingBalance",
+                label: "Opening",
+                align: "right",
+                render: (st) => (
+                  <span aria-label={`Opening ${formatMoney(st.openingBalance as number)}`}>
+                    {formatMoney(st.openingBalance as number)}
+                  </span>
+                ),
+              },
+              {
+                key: "receipts",
+                label: "Receipts",
+                align: "right",
+                render: (st) => (
+                  <span aria-label={`Receipts ${formatMoney(st.receipts as number)}`}>
+                    {formatMoney(st.receipts as number)}
+                  </span>
+                ),
+              },
+              {
+                key: "payments",
+                label: "Payments",
+                align: "right",
+                render: (st) => (
+                  <span aria-label={`Payments ${formatMoney(st.payments as number)}`}>
+                    {formatMoney(st.payments as number)}
+                  </span>
+                ),
+              },
+              {
+                key: "closingBalance",
+                label: "Closing",
+                align: "right",
+                render: (st) => (
+                  <span aria-label={`Closing ${formatMoney(st.closingBalance as number)}`}>
+                    {formatMoney(st.closingBalance as number)}
+                  </span>
+                ),
+              },
+            ]}
+            rows={filtered}
+            sortable
+          />
+          <div className="dt-toolbar" style={{ justifyContent: "flex-end", borderTop: "1px solid var(--line)" }}>
+            <span style={{ fontSize: 13, color: "var(--ink2)" }}>
+              Total — Opening: <strong>{formatMoney(totalOpening)}</strong> · Receipts: <strong>{formatMoney(totalReceipts)}</strong> · Payments: <strong>{formatMoney(totalPayments)}</strong> · Closing: <strong>{formatMoney(totalClosing)}</strong>
+            </span>
+          </div>
+        </>
       )}
     </div>
   );

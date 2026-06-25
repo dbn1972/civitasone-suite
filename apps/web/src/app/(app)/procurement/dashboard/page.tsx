@@ -48,7 +48,7 @@ export default async function ProcurementDashboardPage() {
               style={{ textDecoration: "none", cursor: "pointer" }}
             >
               <div className="top">
-                <div className="ic" style={{ background: "#eef2ff" }}>{link.icon}</div>
+                <div className="ic" style={{ background: "#eef2ff" }} aria-hidden="true">{link.icon}</div>
               </div>
               <div className="lab">{link.label}</div>
             </Link>

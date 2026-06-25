@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { AccountSummary } from "@civitasone/types";
-import { Card, StatusPill, EmptyState } from "../../../_components/ds";
+import { Card, DataTable, Segmented, StatusPill, EmptyState } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 interface AccountsTableProps {
@@ -12,6 +12,8 @@ interface AccountsTableProps {
 
 type TypeFilter = "all" | "asset" | "liability" | "equity" | "income" | "expense";
 type StatusFilter = "all" | "active" | "inactive";
+
+type AccountRow = AccountSummary & Record<string, unknown>;
 
 export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) {
   const [search, setSearch] = useState("");
@@ -35,47 +37,29 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
     const matchesType = typeFilter === "all" || a.type === typeFilter;
     const matchesStatus = statusFilter === "all" || a.status === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
-  });
+  }) as AccountRow[];
 
   const cacheNote =
     offline || fromCache
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
+  const SEG_OPTIONS = ["All", "Asset", "Liability", "Income", "Expense"] as const;
+  const segValue = typeFilter === "all" ? "All" : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1);
+
+  function handleSegChange(v: string) {
+    setTypeFilter(v === "All" ? "all" : (v.toLowerCase() as TypeFilter));
+  }
+
   return (
     <Card
       title="Chart of Accounts · List of Major & Minor Heads (LMMHA)"
       link={
-        <div className="seg">
-          <span
-            className={typeFilter === "all" ? "on" : ""}
-            onClick={() => setTypeFilter("all")}
-            style={{ cursor: "pointer" }}
-          >
-            All
-          </span>
-          <span
-            className={typeFilter === "asset" ? "on" : ""}
-            onClick={() => setTypeFilter("asset")}
-            style={{ cursor: "pointer" }}
-          >
-            Asset
-          </span>
-          <span
-            className={typeFilter === "liability" ? "on" : ""}
-            onClick={() => setTypeFilter("liability")}
-            style={{ cursor: "pointer" }}
-          >
-            Liability
-          </span>
-          <span
-            className={typeFilter === "income" ? "on" : ""}
-            onClick={() => setTypeFilter("income")}
-            style={{ cursor: "pointer" }}
-          >
-            Income
-          </span>
-        </div>
+        <Segmented
+          options={[...SEG_OPTIONS]}
+          value={segValue}
+          onChange={handleSegChange}
+        />
       }
     >
       {cacheNote ? (
@@ -94,7 +78,9 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
           alignItems: "center",
         }}
       >
+        <label htmlFor="accounts-search" className="sr-only">Search by name or code</label>
         <input
+          id="accounts-search"
           type="search"
           placeholder="Search by name or code…"
           value={search}
@@ -111,27 +97,9 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
             outline: "none",
           }}
         />
+        <label htmlFor="accounts-status" className="sr-only">Filter by status</label>
         <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-          style={{
-            padding: "0.375rem 0.625rem",
-            border: "1px solid var(--border)",
-            borderRadius: "6px",
-            fontSize: "0.875rem",
-            background: "var(--bg)",
-            color: "var(--fg)",
-            cursor: "pointer",
-          }}
-        >
-          <option value="all">All Types</option>
-          <option value="asset">Asset</option>
-          <option value="liability">Liability</option>
-          <option value="equity">Equity</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-        </select>
-        <select
+          id="accounts-status"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           style={{
@@ -162,34 +130,17 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
           message="Try adjusting your search or filters."
         />
       ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Currency</th>
-              <th className="num">Balance</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((account) => (
-              <tr key={account.code}>
-                <td>
-                  <span className="mono">{account.code}</span>
-                </td>
-                <td>{account.name}</td>
-                <td style={{ textTransform: "capitalize" }}>{account.type}</td>
-                <td>{account.currency}</td>
-                <td className="num">₹{account.balanceDisplay}</td>
-                <td>
-                  <StatusPill status={account.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable<AccountRow>
+          columns={[
+            { key: "code", label: "Code", render: (a) => <span className="mono">{a.code}</span> },
+            { key: "name", label: "Name" },
+            { key: "type", label: "Type", render: (a) => <span style={{ textTransform: "capitalize" }}>{a.type as string}</span> },
+            { key: "currency", label: "Currency" },
+            { key: "balanceDisplay", label: "Balance", align: "right", render: (a) => <>₹{a.balanceDisplay}</> },
+            { key: "status", label: "Status", render: (a) => <StatusPill status={a.status as string} /> },
+          ]}
+          rows={filtered}
+        />
       )}
     </Card>
   );

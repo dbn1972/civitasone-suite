@@ -1,6 +1,7 @@
 "use client";
 
 import { Chart } from "../../../_components/Chart";
+import { formatMoney } from "@/lib/formatters";
 
 interface BudgetChartProps {
   utilisationPct: number;
@@ -8,12 +9,12 @@ interface BudgetChartProps {
 }
 
 export function BudgetChart({ utilisationPct, expenditure }: BudgetChartProps) {
-  const utilized = Math.round(expenditure / 100);
+  const utilized = expenditure;
   const remaining = Math.round(utilized * ((100 - utilisationPct) / utilisationPct)) || 0;
 
   const donutData = [
-    { label: "Utilized", value: utilized, color: "#4f46e5" },
-    { label: "Remaining", value: remaining, color: "#e5e7eb" },
+    { label: `Utilized (${formatMoney(utilized)})`, value: utilized, color: "#4f46e5" },
+    { label: `Remaining (${formatMoney(remaining)})`, value: remaining, color: "#e5e7eb" },
   ];
 
   const barData = [

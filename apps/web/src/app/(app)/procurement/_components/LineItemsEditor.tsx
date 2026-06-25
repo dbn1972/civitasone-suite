@@ -45,7 +45,7 @@ export function LineItemsEditor({
     <fieldset style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 14, margin: "8px 0 0" }}>
       <legend style={{ fontSize: 12, fontWeight: 700, padding: "0 6px" }}>Line items</legend>
       <div style={{ overflowX: "auto" }}>
-        <table className="tbl" style={{ minWidth: 640 }}>
+        <table className="tbl-editor" style={{ minWidth: 640, width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th scope="col">Item code</th>
