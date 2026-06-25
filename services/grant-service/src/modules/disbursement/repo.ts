@@ -96,3 +96,19 @@ export async function listInstallmentsByTenant(tenantId: string, limit = 200): P
     .where(eq(grantInstallments.tenantId, tenantId))
     .limit(limit);
 }
+
+/**
+ * Chain #4: installments awaiting a specific project milestone that are eligible
+ * for release. "Releasable" = milestone-linked AND not yet disbursed/initiated
+ * (i.e. still `pending`). Tenant-scoped.
+ */
+export async function findReleasableInstallmentsByMilestone(
+  tx: Writer, milestoneId: string, tenantId: string,
+): Promise<InstallmentRow[]> {
+  return (tx as typeof db).select().from(grantInstallments)
+    .where(and(
+      eq(grantInstallments.milestoneId, milestoneId),
+      eq(grantInstallments.tenantId, tenantId),
+      eq(grantInstallments.status, "pending"),
+    ));
+}
