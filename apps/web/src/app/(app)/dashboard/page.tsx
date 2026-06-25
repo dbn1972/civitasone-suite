@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader } from "../../_components/ds";
+import { PageHeader, EmptyState } from "../../_components/ds";
 import { RoleCommandCenter } from "./RoleCommandCenter";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
@@ -40,25 +40,39 @@ export default function DashboardPage() {
         actions={<Link href="/workflow" className="btn primary">My approvals</Link>}
       />
       <RoleCommandCenter />
-      <div className="card-h" style={{ marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 15 }}>Your modules</h3>
-      </div>
-      <div className="grid g-4">
-        {modules.map(({ icon, label, href, desc, bg }) => (
-          <Link key={href} href={href} style={{ textDecoration: "none", display: "block" }}>
-            <div className="stat" style={{ cursor: "pointer", height: "100%" }}>
-              <div className="top">
-                <div />
-                <div className="ic" style={{ background: bg }}>{icon}</div>
-              </div>
-              <div className="lab">{desc}</div>
-              <div style={{ fontSize: 17, fontWeight: 700, marginTop: 6, letterSpacing: "-0.3px", color: "var(--ink)" }}>
-                {label}
-              </div>
+      <section aria-labelledby="dash-modules-h">
+        <div className="card-h" style={{ marginBottom: 12 }}>
+          <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>Your modules</h2>
+        </div>
+        {modules.length === 0 ? (
+          <div className="card">
+            <div className="pad">
+              <EmptyState
+                icon="🧭"
+                title="No modules assigned yet"
+                message="Your account does not have any modules enabled. Contact your tenant administrator to request access."
+              />
             </div>
-          </Link>
-        ))}
-      </div>
+          </div>
+        ) : (
+          <nav aria-label="Modules" className="grid g-4">
+            {modules.map(({ icon, label, href, desc, bg }) => (
+              <Link key={href} href={href} aria-label={label} style={{ textDecoration: "none", display: "block" }}>
+                <div className="stat" style={{ cursor: "pointer", height: "100%" }}>
+                  <div className="top">
+                    <div />
+                    <div className="ic" style={{ background: bg }} aria-hidden="true">{icon}</div>
+                  </div>
+                  <div className="lab">{desc}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, marginTop: 6, letterSpacing: "-0.3px", color: "var(--ink)" }}>
+                    {label}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </nav>
+        )}
+      </section>
     </>
   );
 }

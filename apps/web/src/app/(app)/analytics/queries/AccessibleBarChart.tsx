@@ -3,11 +3,13 @@
 /**
  * Accessible bar chart (WCAG 2.2 AA).
  *
- * Approach: the visual bars are purely decorative (aria-hidden) and the chart
- * ships its own text alternative — a properly-headed data table inside a
- * <figure>/<figcaption>. Screen-reader and keyboard users get the same data as
- * a real table; sighted users get the bars. Colour is a DS token and never the
- * sole carrier of meaning (every bar is labelled with its value).
+ * Approach: the whole figure is exposed as a single labelled image
+ * (role="img" + aria-label carrying the full data summary), so assistive
+ * tech announces every category and value. The visual bars are decorative
+ * (aria-hidden) and a visible-on-focus text alternative (a description list)
+ * mirrors the same data for AT that prefers structured reading. Colour is a
+ * DS token and never the sole carrier of meaning — every bar is labelled with
+ * its value.
  */
 import { useMemo } from "react";
 
@@ -37,8 +39,10 @@ export function AccessibleBarChart({
     .join(", ")}.`;
 
   return (
-    <figure style={{ margin: 0 }}>
-      <figcaption style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{title}</figcaption>
+    <figure role="img" aria-label={summary} style={{ margin: 0 }}>
+      <figcaption aria-hidden="true" style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+        {title}
+      </figcaption>
 
       {/* Decorative visual representation — hidden from assistive tech. */}
       <div aria-hidden="true" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -67,24 +71,19 @@ export function AccessibleBarChart({
         ))}
       </div>
 
-      {/* Text alternative: the same data as an accessible table. */}
-      <table className="tbl sr-only">
-        <caption>{summary}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Category</th>
-            <th scope="col">Value{unit ? ` (${unit})` : ""}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((d) => (
-            <tr key={d.label}>
-              <th scope="row">{d.label}</th>
-              <td>{d.value.toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Text alternative: the same data as a structured description list,
+          visually hidden but available to assistive tech. */}
+      <dl className="sr-only">
+        {data.map((d) => (
+          <div key={d.label}>
+            <dt>{d.label}</dt>
+            <dd>
+              {d.value.toLocaleString()}
+              {unit ? ` ${unit}` : ""}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </figure>
   );
 }

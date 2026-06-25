@@ -1,42 +1,77 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { ActionButton } from "@/app/_components/ds";
 
+/**
+ * Publishes a new tenant theme revision. Publishing is irreversible — it
+ * promotes the revision to every tenant surface — so it is gated behind a
+ * ConfirmDialog that requires a change reason (maker-checker).
+ */
 export function ThemeActions() {
   const router = useRouter();
+  const nameId = useId();
   const [name, setName] = useState("Published tenant theme");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState("");
 
-  async function publish(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setMessage("");
-    try {
-      const res = await fetch("/api/proxy/v1/themes/publish", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setMessage("Theme revision published.");
-      router.refresh();
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to publish");
-    } finally {
-      setBusy(false);
-    }
+  async function publish(reason?: string) {
+    const res = await fetch("/api/proxy/v1/themes/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, reason }),
+    });
+    if (!res.ok) throw new Error((await res.text()) || "Failed to publish theme revision.");
+    setStatus(`Theme revision “${name}” published.`);
+    router.refresh();
   }
 
+  const canPublish = name.trim().length > 0;
+
   return (
-    <form onSubmit={publish} className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <label className="text-sm font-medium text-slate-700">Revision name</label>
-      <div className="mt-2 flex gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-        <button className="btn primary" disabled={busy}>{busy ? "Publishing..." : "Publish Theme"}</button>
+    <div className="card">
+      <div className="card-h">
+        <h3>Publish theme revision</h3>
       </div>
-      {message ? <p className="mt-2 text-sm text-slate-600">{message}</p> : null}
-    </form>
+      <div className="pad" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+        <div style={{ flex: "1 1 280px", minWidth: 220 }}>
+          <label htmlFor={nameId} style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink2, #475569)", marginBottom: 6 }}>
+            Revision name
+          </label>
+          <input
+            id={nameId}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Spring 2026 branding"
+            style={{
+              width: "100%",
+              borderRadius: 8,
+              border: "1px solid var(--line, #e2e8f0)",
+              padding: "10px 12px",
+              fontSize: 14,
+              minHeight: 44,
+            }}
+          />
+        </div>
+        <ActionButton
+          label="Publish theme"
+          disabled={!canPublish}
+          confirmTitle="Publish this theme revision?"
+          confirmDescription={
+            <>
+              This promotes <strong>“{name.trim() || "the revision"}”</strong> to every tenant
+              surface and cannot be undone. Provide a reason for the audit trail.
+            </>
+          }
+          confirmLabel="Publish"
+          requireReason
+          reasonLabel="Reason for publishing"
+          onConfirm={publish}
+        />
+      </div>
+      <p role="status" aria-live="polite" style={{ minHeight: 20, margin: "0 16px 16px", fontSize: 13, color: "var(--ink2, #475569)" }}>
+        {status}
+      </p>
+    </div>
   );
 }
