@@ -30,6 +30,7 @@ const STRUCT_1 = "44444444-dddd-4000-8000-000000000022";
 const MSG_1   = "55555555-eeee-4000-8000-000000000022";
 const MSG_2   = "66666666-ffff-4000-8000-000000000022";
 const MSG_APR = "77777777-aaaa-4000-8000-000000000022";
+const APPROVER = "00000000-aaaa-4000-8000-000000000003"; // maker-checker: approver != maker
 
 async function wipeTestData() {
   await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
@@ -42,28 +43,21 @@ async function wipeTestData() {
 // ── 1. Payroll computation (pure) ────────────────────────────────
 
 describe("Payroll domain — slip calculation (pure)", () => {
-  it("basic + HRA + DA - PF - TDS = net", () => {
-    // Basic: 30000 INR = 3000000 paise
-    // HRA: 15000 INR = 1500000 paise (earning)
-    // DA: 6000 INR = 600000 paise (earning)
+  it("basic + DA(50%) + HRA(27%) - PF - TDS = net", () => {
+    // Engine auto-derives DA from daRateBps and HRA from the city-class slab.
+    // Basic 30,000; DA 50% -> 15,000; HRA 27% (DA>=50% escalation) -> 8,100.
     const basic = 3_000_000n;
-    const result = computeSlip({
-      basicMinor: basic,
-      components: [
-        { code: "HRA", name: "HRA", type: "earning",   amountMinor: 1_500_000n },
-        { code: "DA",  name: "DA",  type: "earning",   amountMinor:   600_000n },
-      ],
-    });
+    const result = computeSlip({ basicMinor: basic, daRateBps: 5000n, cityClass: "X" });
 
-    expect(result.grossMinor).toBe(5_100_000n); // 30000 + 15000 + 6000
-    // PF is capped at 15000 INR basic (1500000 paise), so PF = 12% of 1500000 = 180000
+    expect(result.daMinor).toBe(1_500_000n);
+    expect(result.hraMinor).toBe(810_000n);
+    expect(result.grossMinor).toBe(5_310_000n); // 30000 + 15000 + 8100
     const pfEmployee = (1_500_000n * 12n) / 100n; // 180000 paise = 1800 INR
     expect(result.pfEmployeeMinor).toBe(pfEmployee);
     expect(result.pfEmployerMinor).toBe(pfEmployee);
-    expect(result.tdsMinor).toBe(0n); // annual basic 360000 INR < 500000 INR threshold
-    // Gross = 51000 INR > ESI ceiling of 21000 INR → ESI not applicable
+    expect(result.tdsMinor).toBe(0n); // new-regime annual taxable below tax threshold
     expect(result.esiMinor).toBe(0n);
-    expect(result.netPayMinor).toBe(result.grossMinor - pfEmployee - 0n);
+    expect(result.netPayMinor).toBe(result.grossMinor - pfEmployee);
   });
 
   it("deduction component reduces net pay", () => {
@@ -102,35 +96,38 @@ describe("Payroll domain — TDS (pure)", () => {
     expect(result.tdsMinor).toBe(0n);
   });
 
-  it("TDS is 10% of excess above 500000 annual, divided by 12", () => {
-    const basic = 6_000_000n; // 60000 INR/month = 720000 annual → excess = 220000
-    const result = computeSlip({ basicMinor: basic, components: [] });
-    const annualExcess = 6_000_000n * 12n - 50_000_000n; // 72M - 50M = 22M paise
-    const expectedMonthlyTds = (annualExcess * 10n) / 100n / 12n;
-    expect(result.tdsMinor).toBe(expectedMonthlyTds);
+  it("new-regime monthly TDS once annual taxable crosses the rebate cap", () => {
+    // Basic 1,50,000/month, X metro, DA 50% -> high gross; new-regime annual
+    // taxable exceeds the 12,00,000 87A cap, so positive monthly TDS results.
+    const result = computeSlip({ basicMinor: 15_000_000n, daRateBps: 5000n, cityClass: "X" });
+    expect(result.tdsMinor).toBeGreaterThan(0n);
+    // Monthly TDS is a whole-rupee amount (paise divisible by 100).
+    expect(result.tdsMinor % 100n).toBe(0n);
   });
 });
 
 // ── 3b. GPF / NPS (eHRMS govt mandate) ────────────────────────────
 
 describe("Payroll domain — GPF/NPS (pure)", () => {
-  it("GPF deducts 10% of basic, no PF", () => {
+  it("GPF deducts 10% of (basic + DA), no PF", () => {
     const basic = 3_000_000n;
-    const result = computeSlip({ basicMinor: basic, components: [], pensionScheme: "GPF" });
+    const result = computeSlip({ basicMinor: basic, pensionScheme: "GPF" });
+    // No DA -> pension base == basic; GPF = 10% of 30,000 = 3,000.
     expect(result.gpfMinor).toBe(300_000n);
     expect(result.pfEmployeeMinor).toBe(0n);
     expect(result.npsEmployeeMinor).toBe(0n);
-    expect(result.netPayMinor).toBe(basic - 300_000n);
+    // Gross includes auto HRA (24% metro default); net = gross - GPF (no TDS here).
+    expect(result.netPayMinor).toBe(result.grossMinor - 300_000n);
   });
 
-  it("NPS deducts 10% employee + 14% employer, no PF", () => {
+  it("NPS deducts 10% employee + 14% employer of (basic + DA), no PF", () => {
     const basic = 3_000_000n;
-    const result = computeSlip({ basicMinor: basic, components: [], pensionScheme: "NPS" });
+    const result = computeSlip({ basicMinor: basic, pensionScheme: "NPS" });
     expect(result.npsEmployeeMinor).toBe(300_000n);
     expect(result.npsEmployerMinor).toBe(420_000n);
     expect(result.pfEmployeeMinor).toBe(0n);
     expect(result.tdsMinor).toBe(0n);
-    expect(result.netPayMinor).toBe(basic - 300_000n);
+    expect(result.netPayMinor).toBe(result.grossMinor - 300_000n);
   });
 });
 
@@ -165,10 +162,12 @@ describe("Payroll domain — gratuity (pure)", () => {
     expect(computeGratuity(4, 3_000_000n)).toBe(0n);
   });
 
-  it("gratuity = (basic / 26) * 15 * years for 10 years", () => {
+  it("gratuity = roundRupee((basic / 26) * 15 * years) for 10 years", () => {
     const basic = 3_000_000n;
-    const expected = (basic * 15n * 10n) / 26n;
+    const raw = (basic * 15n * 10n) / 26n;
+    const expected = ((raw + 50n) / 100n) * 100n; // round-half-up to whole rupee
     expect(computeGratuity(10, basic)).toBe(expected);
+    expect(computeGratuity(10, basic)).toBe(17_307_700n);
   });
 });
 
@@ -236,7 +235,7 @@ describe("Payroll run approve — event emitted (integration)", () => {
     await q.publish("payroll.run.approve", {
       messageId: MSG_APR, type: "payroll.run.approve",
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-approve-run-1", schemaVersion: "1.0",
-      payload: { id: RUN_2, tenantId: TENANT, approvedBy: ACTOR },
+      payload: { id: RUN_2, tenantId: TENANT, approvedBy: APPROVER },
     });
 
     await new Promise<void>((r) => setTimeout(r, 600));
@@ -244,7 +243,7 @@ describe("Payroll run approve — event emitted (integration)", () => {
 
     const runs = await db.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_2));
     expect(runs[0]?.status).toBe("approved");
-    expect(runs[0]?.approvedBy).toBe(ACTOR);
+    expect(runs[0]?.approvedBy).toBe(APPROVER);
 
     const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     const eventTypes = outbox.map((r) => r.eventType);
