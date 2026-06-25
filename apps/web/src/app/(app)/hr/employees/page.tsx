@@ -8,10 +8,10 @@ export default async function EmployeeDirectoryPage() {
   const employees = rawEmployees as EmpRow[];
 
   const total = employees.length;
-  const active = employees.filter((e) => e.status === "active" || e.status === "Active").length;
-  const onLeave = employees.filter(
-    (e) => e.status === "on_leave" || e.status === "On_Leave"
-  ).length;
+  // P1-5: canonical lowercase status contract (see hrms employee/status.ts).
+  const SERVING = new Set(["probation", "confirmed", "deputation"]);
+  const active = employees.filter((e) => SERVING.has(e.status)).length;
+  const onLeave = employees.filter((e) => e.status === "on_leave").length;
   const others = total - active - onLeave;
 
   return (

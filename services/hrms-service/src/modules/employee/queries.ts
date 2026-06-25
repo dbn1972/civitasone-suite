@@ -23,7 +23,7 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
         employeeNo: r.employeeNo,
         name: r.fullName,
         department: deptNameById.get(r.departmentId) ?? r.departmentId.slice(0, 8),
-        status: r.status === "confirmed" || r.status === "active" ? "Active" : r.status,
+        status: r.status, // P1-5: canonical lowercase (see employee/status.ts)
       })),
       pagination: {
         hasMore: rows.length === limit,

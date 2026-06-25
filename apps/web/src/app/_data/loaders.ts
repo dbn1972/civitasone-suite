@@ -415,7 +415,7 @@ function mapEmployees(payload: unknown): EmployeeSummary[] | null {
     const id = toText(row.id) ?? toText(row.empCode);
     const name = toText(row.name);
     const department = toText(row.department) ?? toText(row.dept) ?? "—";
-    const status = toText(row.status) ?? "Active";
+    const status = (toText(row.status) ?? "probation").toLowerCase(); // P1-5 canonical
     if (!id || !name) continue;
     mapped.push({ id, name, department, status });
   }
