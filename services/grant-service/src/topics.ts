@@ -41,6 +41,7 @@ export const EVENTS = {
 /** Topics consumed from other services */
 export const CONSUMED_EVENTS = {
   financePaid: "finance.payment.made",
+  projectMilestoneCompleted: "project.milestone.completed",
 } as const;
 
 export const SERVICE = "grant";

@@ -7,6 +7,7 @@ import { registerApplicationConsumers }   from "./modules/application/consumer.j
 import { registerDisbursementConsumers } from "./modules/disbursement/consumer.js";
 import { registerUtilisationConsumers } from "./modules/utilisation/consumer.js";
 import { registerBeneficiaryConsumers } from "./modules/beneficiary/consumer.js";
+import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 
 const log = pino({ name: "grant-worker" });
 
@@ -15,6 +16,7 @@ registerApplicationConsumers(queue);
 registerDisbursementConsumers(queue);
 registerUtilisationConsumers(queue);
 registerBeneficiaryConsumers(queue);
+registerIntegrationConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

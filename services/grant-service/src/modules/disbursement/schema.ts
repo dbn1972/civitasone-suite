@@ -8,6 +8,7 @@ export const grantInstallments = disbursementSchema.table("grant_installments", 
   id:             uuid("id").primaryKey().defaultRandom(),
   tenantId:       uuid("tenant_id").notNull(),
   applicationId:  uuid("application_id").notNull(),
+  milestoneId:    uuid("milestone_id"),   // chain #4: installment gated on a project milestone (nullable)
   installmentNo:  integer("installment_no").notNull(),
   amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),
