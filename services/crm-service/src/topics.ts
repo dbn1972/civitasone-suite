@@ -25,6 +25,8 @@ export const EVENTS = {
   activityCreated: "crm.activity.created",
   activityUpdated: "crm.activity.updated",
   accountCreated: "crm.account.created",
+  // A logged customer complaint/escalation opens a CRM case (ticket-worthy).
+  caseOpened: "crm.case.opened",
 } as const;
 
 export const SERVICE = "crm";
