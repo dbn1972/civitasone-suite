@@ -8,7 +8,6 @@ import * as repo from "./repo.js";
 import { assertFundReleaseWithinAllocation, assertFundReleaseCanDisburse } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
-const FINANCE_URL = process.env.FINANCE_SERVICE_URL ?? "http://finance-service:3007";
 
 export function registerSchemeConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.schemeCreate, async (msg) => {
