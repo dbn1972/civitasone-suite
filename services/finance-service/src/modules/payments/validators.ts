@@ -50,4 +50,27 @@ export const gemInvoiceMatchBody = z.object({
 });
 export type GemInvoiceMatchBody = z.infer<typeof gemInvoiceMatchBody>;
 
+export const createAdvanceBody = z.object({
+  advanceNo:   z.string().min(1).max(64),
+  purpose:     z.string().min(1).max(500),
+  payee:       z.string().max(200).optional(),
+  type:        z.enum(["employee", "vendor", "other"]).default("employee"),
+  amountMinor: z.number().int().positive(),
+  currency:    z.string().length(3).default("INR"),
+  dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dueDate must be YYYY-MM-DD").optional(),
+});
+export type CreateAdvanceBody = z.infer<typeof createAdvanceBody>;
+
+export const createUCBody = z.object({
+  ucNo:        z.string().min(1).max(64),
+  purpose:     z.string().min(1).max(500),
+  scheme:      z.string().max(200).optional(),
+  grantRef:    z.string().max(200).optional(),
+  amountMinor: z.number().int().positive(),
+  currency:    z.string().length(3).default("INR"),
+  periodFrom:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodFrom must be YYYY-MM-DD").optional(),
+  periodTo:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodTo must be YYYY-MM-DD").optional(),
+});
+export type CreateUCBody = z.infer<typeof createUCBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });

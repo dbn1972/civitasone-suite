@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getTenantModules } from "../../../_data/loaders";
+import { ModuleToggleActions } from "./ModuleToggleActions";
 
 export default async function TenantSettingsPage() {
   const { data: modules, source } = await getTenantModules();
@@ -17,8 +18,7 @@ export default async function TenantSettingsPage() {
         subtitle="Module configuration and toggle state for this tenant."
         actions={
           <>
-            <button className="btn ghost">Audit changes</button>
-            <button className="btn primary">Save changes</button>
+            <a className="btn ghost" href="/tenant-admin/audit">Audit changes</a>
           </>
         }
       />
@@ -30,27 +30,7 @@ export default async function TenantSettingsPage() {
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <div className="grid g-2" style={{ marginTop: 18 }}>
-        <div className="card">
-          <div className="card-h">
-            <h3>Module toggles</h3>
-            <div className="seg"><span className="on">All</span><span>Active</span></div>
-          </div>
-          <div className="pad">
-            {modules.length > 0 ? (
-              modules.map((mod) => (
-                <div key={mod.moduleKey} className="prefrow">
-                  <div>
-                    <div style={{ fontWeight: 500, fontSize: 14 }}>{mod.moduleName}</div>
-                    <div style={{ fontSize: 12, color: "#98a2b3" }}><span className="mono">{mod.moduleKey}</span></div>
-                  </div>
-                  <span className={`pill ${mod.enabled ? "good" : "mut"}`}>{mod.enabled ? "Active" : "Disabled"}</span>
-                </div>
-              ))
-            ) : (
-              <div className="empty-state"><div>🧩</div><h4>No modules</h4><p>Modules will appear here once configured.</p></div>
-            )}
-          </div>
-        </div>
+        <ModuleToggleActions modules={modules} />
         <div className="card">
           <div className="card-h"><h3>Module details</h3></div>
           <table className="tbl">

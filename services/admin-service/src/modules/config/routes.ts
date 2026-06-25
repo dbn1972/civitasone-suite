@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { tenantModulesResponseSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
-import { tenantIdParam, moduleParam, toggleBody, createFlagBody, overrideFlagBody, flagKeyParam } from "./validators.js";
+import { tenantIdParam, moduleParam, moduleKeyParam, toggleBody, createFlagBody, overrideFlagBody, flagKeyParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -15,6 +15,20 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, TENANT_ADMIN);
     sendValidated(reply, tenantModulesResponseSchema, { data: await queries.listTenantModules(ctx.tenantId) });
+  });
+
+  // Tenant-admin module toggle (P0 — settings "Save changes" could not persist).
+  // Scoped to the CALLER's own tenant (ctx.tenantId) — a tenant_admin can toggle
+  // modules for their tenant only; cross-tenant toggling stays on the
+  // super-admin-only PATCH /v1/admin/tenants/:id/modules/:module/toggle route
+  // below. Enqueues the existing admin.module.toggle command (idempotent on the
+  // command id) which the config consumer applies + audits via the outbox.
+  app.post("/v1/admin/tenant/modules/:key/toggle", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, TENANT_ADMIN);
+    const { key } = moduleKeyParam.parse(req.params);
+    const body = toggleBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, ctx.tenantId, key, body.enabled));
   });
 
   app.get("/v1/admin/config", async (req, reply) => {

@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceGLEntries } from "../../../../_data/loaders";
 import { GLTable } from "./GLTable";
+import { PrintExportButton } from "../../_components/PrintExportButton";
 import { formatMoney } from "@/lib/formatters";
 
 export default async function GeneralLedgerPage() {
@@ -19,7 +20,7 @@ export default async function GeneralLedgerPage() {
         subtitle="Double-entry ledger — every debit has a corresponding credit."
         actions={
           <>
-            <button className="btn ghost">Export PDF</button>
+            <PrintExportButton label="Export PDF" documentTitle="General Ledger" />
             <a href="/finance/accounting/vouchers/new" className="btn primary">+ New Voucher</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>

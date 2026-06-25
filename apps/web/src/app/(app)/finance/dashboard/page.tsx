@@ -3,6 +3,8 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getFinanceDashboard } from "../../../_data/loaders";
 import Link from "next/link";
 import { BudgetChart } from "./BudgetChart";
+import { PrintExportButton } from "../_components/PrintExportButton";
+import { FyFilter } from "../_components/FyFilter";
 import { formatMoney } from "@/lib/formatters";
 
 const QUICK_LINKS = [
@@ -28,8 +30,8 @@ export default async function FinanceDashboardPage() {
         subtitle="Budget, expenditure, receipts and treasury — one governed view."
         actions={
           <>
-            <button className="btn ghost">FY 2026-27 ▾</button>
-            <button className="btn primary">Export MIS</button>
+            <FyFilter />
+            <PrintExportButton label="Export MIS" documentTitle="Finance MIS" />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }

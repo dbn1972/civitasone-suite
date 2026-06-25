@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeRecords } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
@@ -42,7 +43,7 @@ export default async function KnowledgeRecordsPage() {
         actions={
           <>
             <button className="btn ghost">Policy</button>
-            <button className="btn primary">+ Schedule</button>
+            <Link href="/knowledge/documents/new?category=Retention%20Schedule" className="btn primary">+ Schedule</Link>
           </>
         }
       />

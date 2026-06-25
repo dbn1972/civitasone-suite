@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getNotificationPreferences } from "../../../_data/loaders";
+import { NotificationPrefActions } from "./NotificationPrefActions";
 
 export default async function NotificationPrefsPage() {
   const { data: prefs, source } = await getNotificationPreferences();
@@ -10,14 +11,6 @@ export default async function NotificationPrefsPage() {
   const smsEnabled = prefs.filter((p) => p.smsEnabled).length;
   const inAppEnabled = prefs.filter((p) => p.inAppEnabled).length;
 
-  const byModule = prefs.reduce<Record<string, typeof prefs>>((acc, p) => {
-    if (!acc[p.module]) acc[p.module] = [];
-    acc[p.module].push(p);
-    return acc;
-  }, {});
-
-  const modules = Object.keys(byModule);
-
   return (
     <div className="wrap">
       <PageHeader
@@ -26,8 +19,7 @@ export default async function NotificationPrefsPage() {
         subtitle="Channel configuration for each event type across all modules."
         actions={
           <>
-            <button className="btn ghost">Reset to defaults</button>
-            <button className="btn primary">Save changes</button>
+            <a className="btn ghost" href="/tenant-admin/audit">Audit changes</a>
           </>
         }
       />
@@ -54,36 +46,7 @@ export default async function NotificationPrefsPage() {
             )}
           </div>
         </div>
-        <div className="card">
-          <div className="card-h"><h3>Channel settings</h3></div>
-          <div className="pad">
-            {modules.length > 0 ? (
-              modules.map((mod) => (
-                <div key={mod}>
-                  <div style={{ fontWeight: 600, fontSize: 12, color: "#667085", textTransform: "uppercase", letterSpacing: "0.05em", padding: "10px 0 6px" }}>
-                    {mod.replace(/_/g, " ")}
-                  </div>
-                  {(byModule[mod] ?? []).map((pref) => (
-                    <div key={pref.id} className="prefrow">
-                      <span style={{ fontSize: 13 }}>{pref.label}</span>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {pref.emailEnabled && <span className="pill info">Email</span>}
-                        {pref.smsEnabled && <span className="pill info">SMS</span>}
-                        {pref.inAppEnabled && <span className="pill info">In-app</span>}
-                        {pref.webhookEnabled && <span className="pill info">Webhook</span>}
-                        {!pref.emailEnabled && !pref.smsEnabled && !pref.inAppEnabled && !pref.webhookEnabled && (
-                          <span className="pill mut">Off</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))
-            ) : (
-              <div className="empty-state"><div>⚙️</div><h4>No channels</h4><p>Channel settings will appear here.</p></div>
-            )}
-          </div>
-        </div>
+        <NotificationPrefActions prefs={prefs} />
       </div>
     </div>
   );

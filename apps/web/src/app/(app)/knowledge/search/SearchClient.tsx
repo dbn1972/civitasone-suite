@@ -43,9 +43,17 @@ function statusLabel(s: string) {
 export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const categories = Array.from(new Set(initialDocs.map((d) => d.category).filter(Boolean))).sort();
+  const statuses = Array.from(new Set(initialDocs.map((d) => d.status).filter(Boolean))).sort();
 
   const results = submitted && query.trim()
     ? initialDocs
+        .filter((doc) => (categoryFilter ? doc.category === categoryFilter : true))
+        .filter((doc) => (statusFilter ? doc.status === statusFilter : true))
         .map((doc) => ({ doc, score: relevanceScore(doc, query.trim()) }))
         .filter((r) => r.score > 0)
         .sort((a, b) => b.score - a.score)
@@ -72,8 +80,49 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
       <PageHeader
         title="Enterprise Search"
         subtitle={`Full-text + metadata search across all documents & modules.`}
-        actions={<button className="btn primary">Advanced filters</button>}
+        actions={
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => setShowFilters((v) => !v)}
+            aria-expanded={showFilters}
+            aria-controls="advanced-filters"
+          >
+            Advanced filters
+          </button>
+        }
       />
+
+      {showFilters && (
+        <div id="advanced-filters" className="card" style={{ marginBottom: "18px" }}>
+          <div className="card-h"><h3>Advanced filters</h3></div>
+          <div className="pad" style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label className="label" htmlFor="filter-category">Category</label>
+              <select id="filter-category" className="inp" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ minHeight: 40 }}>
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label className="label" htmlFor="filter-status">Status</label>
+              <select id="filter-status" className="inp" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ minHeight: 40 }}>
+                <option value="">Any status</option>
+                {statuses.map((s) => (
+                  <option key={s} value={s}>{statusLabel(s)}</option>
+                ))}
+              </select>
+            </div>
+            {(categoryFilter || statusFilter) && (
+              <button type="button" className="btn ghost" onClick={() => { setCategoryFilter(""); setStatusFilter(""); }}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: "18px" }}>
         <div className="pad">

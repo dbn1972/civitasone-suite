@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getMISSummary } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
@@ -18,7 +19,7 @@ export default async function MISDashboardPage() {
         actions={
           <>
             <button className="btn ghost">Export</button>
-            <button className="btn primary">Build Report</button>
+            <Link href="/reports/list/new?reportType=mis" className="btn primary">Build Report</Link>
           </>
         }
       />

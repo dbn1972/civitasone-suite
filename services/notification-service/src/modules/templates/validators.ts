@@ -24,5 +24,18 @@ export const setPrefsBody = z.object({
 });
 export type SetPrefsBody = z.infer<typeof setPrefsBody>;
 
+// Update an existing preference row's channels by its row id (tenant-admin
+// "Save changes" on the notification preferences screen). At least one channel
+// must be present so an empty PATCH is rejected rather than silently no-op.
+export const prefIdParam = z.object({ id: z.string().uuid() });
+export const updatePrefsBody = z.object({
+  inApp: z.boolean().optional(),
+  email: z.boolean().optional(),
+  push:  z.boolean().optional(),
+}).refine((b) => b.inApp !== undefined || b.email !== undefined || b.push !== undefined, {
+  message: "at least one of inApp, email, push required",
+});
+export type UpdatePrefsBody = z.infer<typeof updatePrefsBody>;
+
 export const templateIdParam = z.object({ id: z.string().uuid() });
 export const userIdParam     = z.object({ userId: z.string().uuid() });

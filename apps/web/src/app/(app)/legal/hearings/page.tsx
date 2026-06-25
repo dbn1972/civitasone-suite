@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalHearings } from "../../../_data/loaders";
 import { HearingsTable } from "./HearingsTable";
+import { HearingsActions } from "./HearingsActions";
 
 export default async function LegalHearingsPage() {
   const { data: items, source } = await getLegalHearings();
@@ -20,12 +21,7 @@ export default async function LegalHearingsPage() {
       <PageHeader
         title="Hearings"
         subtitle="Court-wise hearing calendar with prep & reminders."
-        actions={
-          <>
-            <button className="btn ghost">Calendar view</button>
-            <button className="btn primary">Sync cause list</button>
-          </>
-        }
+        actions={<HearingsActions />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🗓️" iconBg="#f1f5f9" label="Hearings (wk)" value={thisWeek} />

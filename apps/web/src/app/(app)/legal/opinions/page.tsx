@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalOpinions } from "../../../_data/loaders";
@@ -20,7 +21,7 @@ export default async function LegalOpinionsPage() {
         actions={
           <>
             <button className="btn ghost">Search precedents</button>
-            <button className="btn primary">+ Seek Opinion</button>
+            <Link href="/legal/opinions/new" className="btn primary">+ Seek Opinion</Link>
           </>
         }
       />

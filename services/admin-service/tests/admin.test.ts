@@ -11,6 +11,7 @@ import { registerTenantConsumers } from "../src/modules/tenants/consumer.js";
 import { registerSupportConsumers, sweepExpiredBreakGlass } from "../src/modules/support/consumer.js";
 import { resolveFeatureFlag } from "../src/modules/config/domain.js";
 import { aggregateHealth } from "../src/modules/health/domain.js";
+import { redactLogLine } from "../src/modules/health/operations.js";
 import { breakGlassExpiresAt, BREAK_GLASS_TTL_MS } from "../src/modules/support/domain.js";
 
 const ACTOR = "00000000-aaaa-4000-8000-000000000001";
@@ -47,6 +48,20 @@ describe("health domain — aggregate (pure)", () => {
       { service: "c", status: "down", httpStatus: 503 },
     ]);
     expect(result.status).toBe("degraded");
+  });
+});
+
+describe("operations dashboard — log safety (pure)", () => {
+  it("redacts credentials and email addresses before exposing log lines", () => {
+    const line = "failed user=ops@example.gov Authorization: Bearer eyJhbGciOi token=abc123 password=secret url=postgres://user:pass@db/app";
+    const redacted = redactLogLine(line);
+    expect(redacted).not.toContain("ops@example.gov");
+    expect(redacted).not.toContain("eyJhbGciOi");
+    expect(redacted).not.toContain("abc123");
+    expect(redacted).not.toContain("password=secret");
+    expect(redacted).not.toContain("user:pass@db");
+    expect(redacted).toContain("<email>");
+    expect(redacted).toContain("<redacted>");
   });
 });
 
@@ -112,7 +127,8 @@ describe("admin-service authz wall — tenant_admin → 403 on platform mutation
   const someTenant = "33333333-aaaa-4000-8000-000000000033";
   const someUuid = "44444444-aaaa-4000-8000-000000000044";
 
-  const cases: Array<{ name: string; method: "POST" | "PATCH"; url: string; payload?: unknown }> = [
+  const cases: Array<{ name: string; method: "GET" | "POST" | "PATCH"; url: string; payload?: unknown }> = [
+    { name: "GET operations dashboard", method: "GET", url: "/v1/admin/operations" },
     { name: "POST /tenants", method: "POST", url: "/v1/admin/tenants", payload: { name: "X", domain: "x.example", edition: "psu", region: "ap-south-1", residency: "IN" } },
     { name: "PATCH tenant edition", method: "PATCH", url: `/v1/admin/tenants/${someTenant}/edition`, payload: { edition: "enterprise" } },
     { name: "PATCH tenant suspend", method: "PATCH", url: `/v1/admin/tenants/${someTenant}/suspend`, payload: { reason: "policy violation here" } },

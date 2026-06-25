@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { financeBills, financePayments, financeAdvances, financeUC, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type UCRow } from "./schema.js";
+import { financeBills, financePayments, financeAdvances, financeUC, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -50,8 +50,26 @@ export async function listAdvancesByTenant(tenantId: string, limit: number): Pro
     .limit(limit);
 }
 
+export async function insertAdvance(tx: Writer, row: AdvanceInsert): Promise<void> {
+  await tx.insert(financeAdvances).values(row);
+}
+
+export async function findAdvanceByIdTx(tx: Writer, id: string): Promise<AdvanceRow | null> {
+  const rows = await (tx as typeof db).select().from(financeAdvances).where(eq(financeAdvances.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listUCsByTenant(tenantId: string, limit: number): Promise<UCRow[]> {
   return db.select().from(financeUC)
     .where(eq(financeUC.tenantId, tenantId))
     .limit(limit);
+}
+
+export async function insertUC(tx: Writer, row: UCInsert): Promise<void> {
+  await tx.insert(financeUC).values(row);
+}
+
+export async function findUCByIdTx(tx: Writer, id: string): Promise<UCRow | null> {
+  const rows = await (tx as typeof db).select().from(financeUC).where(eq(financeUC.id, id)).limit(1);
+  return rows[0] ?? null;
 }

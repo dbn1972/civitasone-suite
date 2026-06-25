@@ -18,8 +18,8 @@ export default async function UCsPage() {
         subtitle="Submit and track UCs for grants and scheme expenditure."
         actions={
           <>
-            <button className="btn ghost">Download Format</button>
-            <button className="btn primary">+ New UC</button>
+            <a href="/finance/expenditure/utilization-certificates/new" className="btn ghost">Download Format</a>
+            <a href="/finance/expenditure/utilization-certificates/new" className="btn primary">+ New UC</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }

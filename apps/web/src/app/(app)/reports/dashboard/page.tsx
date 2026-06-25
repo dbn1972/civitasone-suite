@@ -90,7 +90,7 @@ export default async function ReportsDashboardPage() {
         actions={
           <>
             <button className="btn ghost">Data catalog</button>
-            <button className="btn primary">Build Report</button>
+            <Link href="/reports/list/new" className="btn primary">Build Report</Link>
           </>
         }
       />

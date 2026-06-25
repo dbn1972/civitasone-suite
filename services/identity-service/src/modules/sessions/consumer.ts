@@ -34,6 +34,27 @@ export function registerSessionConsumers(q: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.session, msg.payload.id));
   });
+
+  q.subscribe<{ userId: string }>(COMMANDS.revokeAllSessions, async (msg) => {
+    let revokedIds: string[] = [];
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      revokedIds = await repo.revokeAllForUser(tx, msg.tenantId, msg.payload.userId, msg.actorId);
+      // Emit one aggregate audit event recording the bulk revoke + count. A
+      // zero-count revoke (no active sessions) is still audited as a successful
+      // admin action so the attempt is on the record.
+      await emitAudit(
+        tx, msg, EVENTS.sessionRevokedAll,
+        { userId: msg.payload.userId, revokedCount: revokedIds.length, sessionIds: revokedIds },
+        "revoke_all", msg.payload.userId,
+      );
+    });
+    // Invalidate each revoked session's cache entry so reads never serve a stale
+    // "active" view.
+    for (const id of revokedIds) {
+      await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.session, id));
+    }
+  });
 }
 
 async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {

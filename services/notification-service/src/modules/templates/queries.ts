@@ -28,6 +28,10 @@ export async function listTenantPrefs(tenantId: string, limit: number): Promise<
   ) as Promise<PrefView[]>;
 }
 
+export async function getPrefById(tenantId: string, id: string): Promise<PrefView | null> {
+  return repo.findPrefById(tenantId, id);
+}
+
 export async function listTemplateVersions(tenantId: string, id: string): Promise<TemplateView[]> {
   return cache.getOrLoad<TemplateView[]>(
     cache.makeKey(tenantId, `${RESOURCE.template}_versions`, id),

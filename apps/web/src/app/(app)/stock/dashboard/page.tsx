@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockDashboard } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { PrintExportButton } from "../_components/PrintExportButton";
 
 export default async function StockDashboardPage() {
   const { data, source } = await getStockDashboard();
@@ -13,8 +14,8 @@ export default async function StockDashboardPage() {
         subtitle="SKU tracking, GRN management and inventory valuation."
         actions={
           <>
-            <button className="btn ghost">Export</button>
-            <button className="btn primary">+ New</button>
+            <PrintExportButton label="Export" documentTitle="Stock & Inventory" />
+            <a href="/stock/ledger/new" className="btn primary">+ New</a>
           </>
         }
       />

@@ -28,8 +28,8 @@ export default async function FixedAssetsPage() {
         subtitle="Register, tag (QR) and value fixed assets."
         actions={
           <>
-            <button className="btn ghost">Bulk tag</button>
-            <button className="btn primary">+ Register Asset</button>
+            <a href="/assets/bulk-import" className="btn ghost">Bulk tag</a>
+            <a href="/assets/register" className="btn primary">+ Register Asset</a>
           </>
         }
       />

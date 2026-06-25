@@ -104,7 +104,7 @@ export default async function KnowledgeDashboardPage() {
         actions={
           <>
             <button className="btn ghost">Bulk upload</button>
-            <button className="btn primary">+ Publish Document</button>
+            <Link href="/knowledge/documents/new" className="btn primary">+ Publish Document</Link>
           </>
         }
       />

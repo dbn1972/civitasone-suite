@@ -27,8 +27,8 @@ export default async function InfraAssetsPage() {
         subtitle="Buildings, roads, utilities & public infrastructure register."
         actions={
           <>
-            <button className="btn ghost">Map view</button>
-            <button className="btn primary">+ Add Infra</button>
+            <a href="/assets/locations" className="btn ghost">Map view</a>
+            <a href="/assets/register" className="btn primary">+ Add Infra</a>
           </>
         }
       />

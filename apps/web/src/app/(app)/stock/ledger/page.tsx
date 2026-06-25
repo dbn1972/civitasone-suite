@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockLedger } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PrintExportButton } from "../_components/PrintExportButton";
 
 export default async function StockLedgerPage() {
   const { data: entries, source } = await getStockLedger();
@@ -16,8 +17,8 @@ export default async function StockLedgerPage() {
         subtitle="All receipt, issue, transfer and adjustment transactions."
         actions={
           <>
-            <button className="btn ghost">Export</button>
-            <button className="btn primary">+ New Entry</button>
+            <PrintExportButton label="Export" documentTitle="Stock Ledger" />
+            <a href="/stock/ledger/new" className="btn primary">+ New Entry</a>
           </>
         }
       />

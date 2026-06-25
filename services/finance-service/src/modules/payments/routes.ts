@@ -5,7 +5,7 @@ import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSum
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createBillBody, approveBillBody, initiateEftBody, gemInvoiceMatchBody, idParam } from "./validators.js";
+import { createBillBody, approveBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -49,6 +49,20 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, UCSummaryListSchema, await queries.listUCs(ctx.tenantId, q.limit));
+  });
+
+  app.post("/v1/finance/advances", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const body = createAdvanceBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createAdvance(ctx, body));
+  });
+
+  app.post("/v1/finance/utilization-certificates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const body = createUCBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createUC(ctx, body));
   });
 
   app.post("/v1/finance/bills", async (req, reply) => {

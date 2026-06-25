@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createUserBody, updateUserBody, statusBody, userIdParam, tenantIdQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as sessionCommands from "../sessions/commands.js";
 import * as keycloak from "../../shared/keycloak.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
@@ -78,6 +79,32 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       { id: view.id, tenantId: view.tenantId, email: view.email, name: view.name, active: view.status === "active" },
     );
     return reply.send({ userId: id, keycloak: result });
+  });
+
+  // P0 security — Revoke ALL of a user's active sessions. Admin-gated and
+  // tenant-scoped: we load the user under the caller's tenant first so a
+  // wrong-tenant / unknown id is a 404 and never revokes another tenant's
+  // sessions. The actual bulk revoke + audit happen in the sessions consumer.
+  app.post("/identity/users/:id/sessions/revoke-all", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const { id } = userIdParam.parse(req.params);
+    const view = await queries.getUser(ctx.tenantId, id);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
+    return sendAccepted(reply, acceptedResponseSchema, await sessionCommands.revokeAllSessions(ctx, id));
+  });
+
+  // P0 security — Reset a user's password. Admin-gated and tenant-scoped. The
+  // request is durably recorded via an audit event (outbox) and a best-effort
+  // Keycloak UPDATE_PASSWORD action is triggered. Returns 202 Accepted. See the
+  // consumer + keycloak helper for the honest semantics when Keycloak is off.
+  app.post("/identity/users/:id/reset-password", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const { id } = userIdParam.parse(req.params);
+    const view = await queries.getUser(ctx.tenantId, id);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.requestPasswordReset(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

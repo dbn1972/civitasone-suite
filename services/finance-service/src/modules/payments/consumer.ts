@@ -253,6 +253,55 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await audit(tx, msg, "gem_match", "gem_invoice", p.id);
     });
   });
+
+  queue.subscribe(COMMANDS.advanceCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string;
+      type?: string; amountMinor: number; currency?: string; dueDate?: string;
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertAdvance(tx, {
+        id: p.id, tenantId: p.tenantId, advanceNo: p.advanceNo,
+        // beneficiary is NOT NULL; fall back to the (required) purpose when no payee given.
+        beneficiary: p.payee && p.payee.trim() ? p.payee.trim() : p.purpose,
+        type: p.type ?? "employee",
+        amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        disbursedDate: today,
+        ...(p.dueDate ? { dueDate: p.dueDate } : {}),
+        purpose: p.purpose,
+        status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "create", "advance", p.id);
+    });
+    await cache.invalidateResource(msg.tenantId, "advances");
+  });
+
+  queue.subscribe(COMMANDS.ucCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string;
+      grantRef?: string; amountMinor: number; currency?: string; periodFrom?: string; periodTo?: string;
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertUC(tx, {
+        id: p.id, tenantId: p.tenantId, ucNo: p.ucNo,
+        grantRef: p.grantRef ?? p.scheme ?? null,
+        // grantee is NOT NULL; fall back to the (required) purpose when no scheme given.
+        grantee: p.scheme && p.scheme.trim() ? p.scheme.trim() : p.purpose,
+        amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        periodFrom: p.periodFrom ?? today,
+        periodTo: p.periodTo ?? today,
+        submittedDate: today,
+        purpose: p.purpose,
+        status: "submitted", createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "create", "utilization_certificate", p.id);
+    });
+    await cache.invalidateResource(msg.tenantId, "uc");
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

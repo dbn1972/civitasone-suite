@@ -57,6 +57,15 @@ export async function findPrefsByTenant(tenantId: string, limit: number): Promis
     .limit(limit)).map(toPrefView);
 }
 
+// Tenant-scoped single-pref read by row id (used to authorize an update — a
+// wrong-tenant or unknown id resolves to null → 404, never another tenant's row).
+export async function findPrefById(tenantId: string, id: string): Promise<PrefView | null> {
+  const rows = await db.select().from(notificationPrefs)
+    .where(and(eq(notificationPrefs.id, id), eq(notificationPrefs.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ? toPrefView(rows[0]) : null;
+}
+
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insertTemplate(tx: Writer, row: TemplateInsert): Promise<void> {
@@ -89,4 +98,27 @@ export async function upsertPrefs(tx: Writer, row: PrefInsert): Promise<void> {
 export async function findTemplateByIdTx(tx: Writer, id: string): Promise<TemplateView | null> {
   const rows = await tx.select().from(notificationTemplates).where(eq(notificationTemplates.id, id)).limit(1);
   return rows[0] ? toTemplateView(rows[0]) : null;
+}
+
+// Tenant-scoped channel update of an existing pref row by id. Only the provided
+// channels are changed; the WHERE clause is bounded by tenantId so a forged id
+// from another tenant updates nothing. Returns the count of rows changed.
+export async function updatePrefsById(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+  patch: { inApp?: boolean | undefined; email?: boolean | undefined; push?: boolean | undefined },
+  actorId: string,
+): Promise<number> {
+  const existing = await tx.select().from(notificationPrefs)
+    .where(and(eq(notificationPrefs.id, id), eq(notificationPrefs.tenantId, tenantId)))
+    .limit(1);
+  if (!existing[0]) return 0;
+  const set: Record<string, unknown> = { updatedBy: actorId, updatedAt: new Date(), version: existing[0].version + 1 };
+  if (patch.inApp !== undefined) set.inApp = patch.inApp;
+  if (patch.email !== undefined) set.email = patch.email;
+  if (patch.push !== undefined) set.push = patch.push;
+  await tx.update(notificationPrefs).set(set)
+    .where(and(eq(notificationPrefs.id, id), eq(notificationPrefs.tenantId, tenantId)));
+  return 1;
 }

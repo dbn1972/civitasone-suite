@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createTemplateBody, setPrefsBody, updateTemplateBody, templateIdParam, userIdParam } from "./validators.js";
+import { createTemplateBody, setPrefsBody, updatePrefsBody, updateTemplateBody, templateIdParam, prefIdParam, userIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -47,6 +47,19 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const { userId } = userIdParam.parse(req.params);
     return reply.send(await queries.getUserPrefs(ctx.tenantId, userId));
+  });
+
+  // Tenant-admin "Save changes" on the notification preferences screen. Updates
+  // one existing pref row's channels by id, scoped to the caller's tenant. A
+  // wrong-tenant / unknown id is a 404 (never a cross-tenant write). Admin-gated.
+  app.patch("/notifications/prefs/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const { id } = prefIdParam.parse(req.params);
+    const body = updatePrefsBody.parse(req.body);
+    const existing = await queries.getPrefById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "preference not found");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updatePrefs(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

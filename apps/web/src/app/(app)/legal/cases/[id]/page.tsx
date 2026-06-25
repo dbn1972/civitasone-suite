@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill } from "../../../../_components/ds";
 import { getLegalCaseById } from "../../../../_data/loaders";
+import { CaseActions } from "./CaseActions";
 
 const orderStatusColors: Record<string, string> = {
   pending: "warn",
@@ -36,13 +37,7 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
       <PageHeader
         back="/legal/list"
         title={`${caseData.caseNo} · ${caseData.title}`}
-        actions={
-          <>
-            <button className="btn ghost">Brief counsel</button>
-            <Link href="/legal/opinions" className="btn ghost">Legal opinion →</Link>
-            <button className="btn primary">Upload Affidavit</button>
-          </>
-        }
+        actions={<CaseActions caseId={params.id} />}
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <div className="grid g-main" style={{ alignItems: "start" }}>

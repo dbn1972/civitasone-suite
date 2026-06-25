@@ -4,6 +4,8 @@ export const COMMANDS = {
   deactivateUser:  "identity.user.deactivate",
   createSession:   "identity.session.create",
   revokeSession:   "identity.session.revoke",
+  revokeAllSessions: "identity.session.revoke_all",
+  resetPassword:   "identity.user.reset_password",
   enableMfa:       "identity.mfa.enable",
   // RBAC (wave 2)
   rbacCreateRole:        "identity.rbac.role.create",
@@ -20,6 +22,8 @@ export const EVENTS = {
   userDeactivated: "identity.user.deactivated",
   sessionCreated:  "identity.session.created",
   sessionRevoked:  "identity.session.revoked",
+  sessionRevokedAll: "identity.session.revoked_all",
+  passwordResetRequested: "identity.user.password_reset_requested",
   mfaEnabled:      "identity.mfa.enabled",
   // RBAC (wave 2)
   rbacRoleCreated:        "identity.rbac.role.created",

@@ -1,6 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill } from "../../../../_components/ds";
 import { getAdminUserById } from "../../../../_data/loaders";
+import { UserSecurityActions } from "./UserSecurityActions";
+import { SessionRevokeCell } from "./SessionRevokeCell";
 
 export default async function AdminUserDetailPage({ params }: { params: { id: string } }) {
   const { data: user, source } = await getAdminUserById(params.id);
@@ -22,8 +24,7 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
         subtitle={user.email}
         actions={
           <>
-            <button className="btn ghost">Reset password</button>
-            <button className="btn ghost">Revoke all sessions</button>
+            <UserSecurityActions userId={user.id} />
             {source === "error" && <DataSourceBadge source={source} />}
           </>
         }
@@ -66,7 +67,7 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
                       : s.status === "revoked" ? <span className="pill bad">Revoked</span>
                       : <span className="pill mut">Expired</span>}
                   </td>
-                  <td><span style={{ fontSize: 12, color: "#98a2b3", cursor: "not-allowed" }}>Revoke</span></td>
+                  <td><SessionRevokeCell sessionId={s.id} active={s.status === "active"} /></td>
                 </tr>
               ))}
               {user.sessions.length === 0 && (

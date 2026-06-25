@@ -27,7 +27,7 @@ export default async function CourtOrdersPage() {
         actions={
           <>
             <button className="btn ghost">Contempt watch</button>
-            <button className="btn primary">+ Record Order</button>
+            <Link href="/legal/court-orders/new" className="btn primary">+ Record Order</Link>
           </>
         }
       />

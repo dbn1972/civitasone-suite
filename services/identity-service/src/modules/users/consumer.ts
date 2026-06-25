@@ -93,6 +93,33 @@ export function registerUserConsumers(q: Queue): void {
         .catch((err) => kcLog.error({ userId: msg.payload.id, err: String(err) }, "keycloak deactivate threw — left for reconciler"));
     }
   });
+
+  // Reset password (P0 security). The durable record of the request is the audit
+  // event emitted via the outbox inside this transaction. The actual credential
+  // change is delegated to Keycloak (best-effort, post-commit): when Keycloak is
+  // configured we set the UPDATE_PASSWORD required action; when it is not, the
+  // request is still audited but no credential changes (honest dev behaviour).
+  q.subscribe<{ id: string }>(COMMANDS.resetPassword, async (msg) => {
+    let userEmail: string | null = null;
+    let kcEnabled = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
+      if (!cur) throw new Error(`user ${msg.payload.id} not found`);
+      userEmail = cur.email;
+      kcEnabled = keycloak.isKeycloakEnabled();
+      await emitAudit(
+        tx, msg, EVENTS.passwordResetRequested,
+        { userId: msg.payload.id, keycloakEnabled: kcEnabled },
+        "reset_password", msg.payload.id,
+      );
+    });
+    if (userEmail && kcEnabled) {
+      void keycloak.requestPasswordReset(msg.tenantId, userEmail, kcLog)
+        .then((r) => { if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak password reset"); })
+        .catch((err) => kcLog.error({ userId: msg.payload.id, err: String(err) }, "keycloak password reset threw"));
+    }
+  });
 }
 
 async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {

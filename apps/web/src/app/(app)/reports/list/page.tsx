@@ -20,7 +20,7 @@ export default async function ReportsListPage() {
         actions={
           <>
             <button className="btn ghost">Export</button>
-            <button className="btn primary">+ New Report</button>
+            <Link href="/reports/list/new" className="btn primary">+ New Report</Link>
           </>
         }
       />

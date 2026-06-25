@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockItemById } from "../../../_data/loaders";
 import { StatusPill, EmptyState } from "../../../_components/ds";
+import { PrintExportButton } from "../_components/PrintExportButton";
 
 export default async function StockItemDetailPage({ params }: { params: { id: string } }) {
   const { data: item, source } = await getStockItemById(params.id);
@@ -32,8 +33,8 @@ export default async function StockItemDetailPage({ params }: { params: { id: st
           </h1>
         </div>
         <div className="ph-act">
-          <button className="btn ghost">Print Label</button>
-          <button className="btn primary">+ Stock Entry</button>
+          <PrintExportButton label="Print Label" documentTitle={`${item.itemCode} · ${item.name}`} />
+          <a href={`/stock/ledger/new?itemId=${params.id}`} className="btn primary">+ Stock Entry</a>
         </div>
       </div>
       <div className="grid g-main" style={{ alignItems: "start" }}>

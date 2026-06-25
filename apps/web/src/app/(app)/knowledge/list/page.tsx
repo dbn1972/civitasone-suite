@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
@@ -33,7 +34,7 @@ export default async function KnowledgeListPage() {
         actions={
           <>
             <button className="btn ghost">Import</button>
-            <button className="btn primary">+ New Document</button>
+            <Link href="/knowledge/documents/new" className="btn primary">+ New Document</Link>
           </>
         }
       />

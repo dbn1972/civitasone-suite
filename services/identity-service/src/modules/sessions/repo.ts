@@ -56,6 +56,19 @@ export async function listByTenant(tenantId: string, limit: number): Promise<Ses
   return rows.map(toView);
 }
 
+// Revoke-all (P0 security): flip every still-"active" session for one user
+// (tenant-scoped) to "revoked" in a single statement. Runs inside the caller's
+// transaction so the audit emit and the mutation commit atomically. Returns the
+// ids that transitioned — already-revoked/expired rows are left untouched, which
+// makes a repeat call a no-op (idempotent).
+export async function revokeAllForUser(tx: Writer, tenantId: string, userId: string, actorId: string): Promise<string[]> {
+  const rows = await tx.update(sessions)
+    .set({ status: "revoked", updatedBy: actorId, updatedAt: new Date() })
+    .where(and(eq(sessions.tenantId, tenantId), eq(sessions.userId, userId), eq(sessions.status, "active")))
+    .returning({ id: sessions.id });
+  return rows.map((r) => r.id);
+}
+
 
 // P1-2: expired-session reaper. Flip any still-"active" row whose expiry has
 // passed to "expired". Tenant-agnostic by design (a global housekeeping sweep

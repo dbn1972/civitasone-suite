@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceAdvances } from "../../../../_data/loaders";
 import { AdvancesTable } from "./AdvancesTable";
+import { PrintExportButton } from "../../_components/PrintExportButton";
 import { formatMoney } from "@/lib/formatters";
 
 export default async function AdvancesPage() {
@@ -19,8 +20,8 @@ export default async function AdvancesPage() {
         subtitle="Issue and recover advances against actual expenditure."
         actions={
           <>
-            <button className="btn ghost">Ageing</button>
-            <button className="btn primary">+ New Advance</button>
+            <PrintExportButton label="Ageing" documentTitle="Advance Ageing" />
+            <a href="/finance/expenditure/advances/new" className="btn primary">+ New Advance</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }

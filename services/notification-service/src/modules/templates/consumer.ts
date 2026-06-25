@@ -64,6 +64,30 @@ export function registerTemplateConsumers(q: Queue): void {
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.prefs, msg.payload.userId));
     },
   );
+
+  q.subscribe<{ id: string; tenantId: string; prefId: string; inApp?: boolean; email?: boolean; push?: boolean }>(
+    COMMANDS.updatePrefs, async (msg) => {
+      let changed = 0;
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const p = msg.payload;
+        changed = await repo.updatePrefsById(
+          tx, p.tenantId, p.prefId,
+          { inApp: p.inApp, email: p.email, push: p.push },
+          msg.actorId,
+        );
+        // Audit the admin pref change. (changed===0 means the row vanished
+        // between the route's existence check and the consumer; still record the
+        // attempt so the audit trail is complete.)
+        await emitAudit(tx, msg, EVENTS.prefSet, { prefId: p.prefId, changed }, "update_prefs", p.prefId);
+      });
+      if (changed > 0) {
+        // The tenant prefs listing (default page limit 50) is read-through cached;
+        // drop it so a refresh reflects the new channel state.
+        await cache.invalidate(cache.makeKey(msg.tenantId, `${RESOURCE.prefs}_list`, "50"));
+      }
+    },
+  );
 }
 
 async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {

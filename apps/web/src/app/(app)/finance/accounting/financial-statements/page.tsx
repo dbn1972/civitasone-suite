@@ -2,6 +2,8 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinancialStatements } from "../../../../_data/loaders";
 import { StatementsTable } from "./StatementsTable";
+import { PrintExportButton } from "../../_components/PrintExportButton";
+import { FyFilter } from "../../_components/FyFilter";
 import { formatMoney } from "@/lib/formatters";
 
 export default async function FinancialStatementsPage() {
@@ -19,8 +21,8 @@ export default async function FinancialStatementsPage() {
         subtitle="Receipts &amp; Payments, Income &amp; Expenditure, Balance Sheet."
         actions={
           <>
-            <button className="btn ghost">Export PDF</button>
-            <button className="btn ghost">FY 2026-27 ▾</button>
+            <PrintExportButton label="Export PDF" documentTitle="Financial Statements" />
+            <FyFilter />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }

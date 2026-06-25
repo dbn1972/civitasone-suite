@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockItems } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import Link from "next/link";
 
 export default async function StockListPage() {
   const { data: items, source } = await getStockItems();
@@ -17,7 +18,7 @@ export default async function StockListPage() {
         actions={
           <>
             <button className="btn ghost">Export</button>
-            <button className="btn primary">+ New Item</button>
+            <Link className="btn primary" href="/stock/items/new">+ New Item</Link>
           </>
         }
       />

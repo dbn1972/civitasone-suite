@@ -185,8 +185,7 @@ export async function deactivateUser(tenantId: string, email: string, log?: { wa
 /**
  * Drift reconcile: ensure the realm user exists and its enabled-state matches
  * the desired identity-service status. Used by an admin-triggered reconcile path.
- */
-export async function reconcileUser(u: { id: string; tenantId: string; email: string; name: string; active: boolean }, log?: { warn: (o: unknown, m: string) => void }): Promise<KcResult> {
+ */export async function reconcileUser(u: { id: string; tenantId: string; email: string; name: string; active: boolean }, log?: { warn: (o: unknown, m: string) => void }): Promise<KcResult> {
   const cfg = readConfig();
   if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
   try {
@@ -209,6 +208,52 @@ export async function reconcileUser(u: { id: string; tenantId: string; email: st
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_reconcile_failed", userId: u.id });
     log?.warn({ userId: u.id, err: String(err) }, "keycloak reconcile failed (degraded)");
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
+ * Request a password reset for a federated realm user.
+ *
+ * HONEST SEMANTICS:
+ *   - When Keycloak admin creds ARE configured: we set the UPDATE_PASSWORD
+ *     required action on the realm user so their NEXT login forces a password
+ *     change, and (best-effort) trigger Keycloak's execute-actions-email so the
+ *     user receives the reset link. We never set or learn the password ourselves.
+ *   - When Keycloak is NOT configured (e.g. local/dev, or before the realm is
+ *     wired): this is a logged no-op that returns { skipped: true }. The HTTP
+ *     caller still records the request + emits an audit event and returns 202;
+ *     NO credential is changed in that mode. This is intentional and surfaced to
+ *     the operator via the audit trail.
+ *
+ * Best-effort: never throws — failures are captured + returned as { ok:false }.
+ */
+export async function requestPasswordReset(tenantId: string, email: string, log?: { warn: (o: unknown, m: string) => void }): Promise<KcResult> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, tenantId, email);
+    if (!existing) return { ok: true, reason: "user not present in keycloak" };
+    // 1) Force a password change on next login by setting the required action.
+    const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ requiredActions: ["UPDATE_PASSWORD"] }),
+    });
+    if (!upd.ok && upd.status !== 204) throw new Error(`keycloak set-required-action failed: ${upd.status}`);
+    // 2) Best-effort: email the user the reset/update-password action link. A
+    //    failure here (e.g. SMTP not configured in the realm) must not fail the
+    //    reset — the required action above still enforces the change at login.
+    await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/execute-actions-email`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(["UPDATE_PASSWORD"]),
+    }).catch(() => undefined);
+    return { ok: true, kcUserId: existing.id, reason: "UPDATE_PASSWORD required action set" };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_password_reset_failed", tenantId, email });
+    log?.warn({ tenantId, email, err: String(err) }, "keycloak password reset failed (degraded)");
     return { ok: false, reason: String(err) };
   }
 }

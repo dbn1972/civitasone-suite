@@ -26,8 +26,8 @@ export default async function AssetMaintenancePage() {
         subtitle="Preventive schedules & breakdown jobs with SLA."
         actions={
           <>
-            <button className="btn ghost">Schedule</button>
-            <button className="btn primary">+ Log Job</button>
+            <a href="/assets/maintenance/new" className="btn ghost">Schedule</a>
+            <a href="/assets/maintenance/new" className="btn primary">+ Log Job</a>
           </>
         }
       />

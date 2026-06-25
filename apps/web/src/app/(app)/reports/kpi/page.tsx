@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKPIs } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
@@ -32,7 +33,7 @@ export default async function KPITrackerPage() {
         actions={
           <>
             <button className="btn ghost">Outcome budget</button>
-            <button className="btn primary">Set Targets</button>
+            <Link href="/reports/list/new?reportType=kpi-target" className="btn primary">Set Targets</Link>
           </>
         }
       />

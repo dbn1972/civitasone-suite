@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalCases } from "../../../_data/loaders";
@@ -18,8 +19,8 @@ export default async function LegalCasesListPage() {
         subtitle="Track litigation across courts & tribunals."
         actions={
           <>
-            <button className="btn ghost">Cause list</button>
-            <button className="btn primary">+ New Case</button>
+            <Link href="/legal/hearings" className="btn ghost">Cause list</Link>
+            <Link href="/legal/cases/new" className="btn primary">+ New Case</Link>
           </>
         }
       />

@@ -19,8 +19,8 @@ export default async function BudgetFormulationPage() {
         subtitle="Prepare departmental budget estimates by major/minor head."
         actions={
           <>
-            <button className="btn ghost">Circular</button>
-            <button className="btn primary">+ New Estimate</button>
+            <a href="/finance/budget/formulation/new" className="btn ghost">Circular</a>
+            <a href="/finance/budget/formulation/new" className="btn primary">+ New Estimate</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }

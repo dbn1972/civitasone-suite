@@ -19,6 +19,9 @@ export const COMMANDS = {
   billApprove:          "finance.bill.approve",
   paymentInitiate:      "finance.payment.initiate",
   gemInvoiceMatch:      "finance.gem.einvoice.match",
+  // advances & utilization certificates
+  advanceCreate:        "finance.advance.create",
+  ucCreate:             "finance.uc.create",
 } as const;
 
 export const EVENTS = {

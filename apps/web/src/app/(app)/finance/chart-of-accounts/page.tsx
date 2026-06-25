@@ -16,8 +16,8 @@ export default async function ChartOfAccountsPage() {
         subtitle="Standard government head-of-account structure synced with CGA."
         actions={
           <>
-            <button className="btn ghost">Import LMMHA</button>
-            <button className="btn primary">+ Add Head</button>
+            <a href="/finance/chart-of-accounts/new" className="btn ghost">Import LMMHA</a>
+            <a href="/finance/chart-of-accounts/new" className="btn primary">+ Add Head</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }

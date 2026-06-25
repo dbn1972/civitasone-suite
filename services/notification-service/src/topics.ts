@@ -2,6 +2,7 @@ export const COMMANDS = {
   createTemplate:   "notification.template.create",
   updateTemplate:   "notification.template.update",
   setPrefs:         "notification.prefs.set",
+  updatePrefs:      "notification.prefs.update",
   sendNotification: "notification.send",
   createChannel:    "notification.channel.create",
   createAlertRule:  "notification.alert_rule.create",
