@@ -1,46 +1,35 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { getStockItems } from "../../../_data/loaders";
+import { InventoryStockListClient } from "./InventoryStockListClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function InventoryListPage() {
   const { data: items, source } = await getStockItems();
 
   const lowStockCount = items.filter((i) => i.isLowStock).length;
+  const totalValue = items.reduce((sum, i) => sum + i.totalValue, 0);
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/inventory" className="hover:text-slate-900">Inventory</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Stock Items</span>
-        </nav>
-
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Inventory Items</h1>
-            <p className="mt-1 text-sm text-slate-600">Stock SKUs shared with the inventory module.</p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
-
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Total SKUs</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{items.length.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Low Stock</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">{lowStockCount.toLocaleString("en-IN")}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Detailed view</p>
-            <Link href="/stock/list" className="mt-2 inline-block text-sm font-semibold text-indigo-600 hover:text-indigo-500">
-              Open stock register →
-            </Link>
-          </div>
-        </section>
-      </section>
-    </main>
+    <>
+      <nav aria-label="Breadcrumb" className="back">
+        ← <a href="/inventory">Inventory</a>
+      </nav>
+      <PageHeader
+        title="Stock Items"
+        subtitle="All SKUs shared with the inventory module and their current stock levels."
+      />
+      {source === "error" && <DataSourceBadge source="error" />}
+      <main aria-label="Inventory stock items">
+        <StatGrid>
+          <StatCard icon="📦" iconBg="#f1f5f9" label="Total SKUs" value={items.length} />
+          <StatCard icon="⚠️" iconBg="#fee2e2" label="Low Stock" value={lowStockCount} />
+          <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={formatMoney(totalValue)} />
+        </StatGrid>
+        <InventoryStockListClient items={items} />
+      </main>
+    </>
   );
 }

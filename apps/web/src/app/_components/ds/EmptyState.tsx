@@ -10,7 +10,7 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
   return (
     <div className="empty-state">
-      {icon && <div className="ic">{icon}</div>}
+      {icon && <div className="ic" aria-hidden="true">{icon}</div>}
       <h4>{title}</h4>
       {message && <p>{message}</p>}
       {action}

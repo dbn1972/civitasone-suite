@@ -1,9 +1,26 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard } from "../../../_components/ds";
+import { PageHeader, StatCard, DataTable, EmptyState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { getAuditCompliance } from "../../../_data/loaders";
 import { GenerateReportButton } from "./GenerateReportButton";
+
+type ComplianceRow = {
+  id: string;
+  lawOrRule: string;
+  section?: string;
+  requirement: string;
+  dueDate: string;
+  department?: string;
+  status: string;
+} & Record<string, unknown>;
+
+function StatusCell({ status }: { status: string }) {
+  if (status === "complied") return <span className="pill good">Compliant</span>;
+  if (status === "overdue") return <span className="pill bad">Overdue</span>;
+  if (status === "pending") return <span className="pill warn">In progress</span>;
+  return <span className="pill mut">Planned</span>;
+}
 
 export default async function AuditCompliancePage() {
   const { data: items, source } = await getAuditCompliance();
@@ -16,8 +33,8 @@ export default async function AuditCompliancePage() {
 
   const dpdpItems = items.filter((i) => i.lawOrRule.toLowerCase().includes("dpdp") || i.lawOrRule.toLowerCase().includes("data"));
   const certItems = items.filter((i) => i.lawOrRule.toLowerCase().includes("cert") || i.lawOrRule.toLowerCase().includes("iso") || i.lawOrRule.toLowerCase().includes("ntp"));
-  const displayDpdp = dpdpItems.length > 0 ? dpdpItems : items.slice(0, Math.ceil(items.length / 2));
-  const displayCert = certItems.length > 0 ? certItems : items.slice(Math.ceil(items.length / 2));
+  const displayDpdp: ComplianceRow[] = (dpdpItems.length > 0 ? dpdpItems : items.slice(0, Math.ceil(items.length / 2))) as ComplianceRow[];
+  const displayCert: ComplianceRow[] = (certItems.length > 0 ? certItems : items.slice(Math.ceil(items.length / 2))) as ComplianceRow[];
 
   return (
     <main className="wrap">
@@ -41,47 +58,39 @@ export default async function AuditCompliancePage() {
       <div className="grid g-2">
         <div className="card">
           <div className="card-h"><h3>Compliance requirements</h3></div>
-          <table className="tbl">
-            <thead><tr><th>Law / Rule</th><th>Requirement</th><th>Due</th><th>Status</th></tr></thead>
-            <tbody>
-              {displayDpdp.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.lawOrRule}{item.section ? ` §${item.section}` : ""}</td>
-                  <td>{item.requirement}</td>
-                  <td>{formatIndianDate(item.dueDate)}</td>
-                  <td>
-                    {item.status === "complied" ? <span className="pill good">Compliant</span>
-                      : item.status === "overdue" ? <span className="pill bad">Overdue</span>
-                      : item.status === "pending" ? <span className="pill warn">In progress</span>
-                      : <span className="pill mut">Planned</span>}
-                  </td>
-                </tr>
-              ))}
-              {displayDpdp.length === 0 && <tr><td colSpan={4}><div className="empty-state"><div>📜</div><h4>No items</h4><p>Compliance requirements will appear here once configured.</p></div></td></tr>}
-            </tbody>
-          </table>
+          {displayDpdp.length === 0 ? (
+            <EmptyState icon="📜" title="No items" message="Compliance requirements will appear here once configured." />
+          ) : (
+            <DataTable<ComplianceRow>
+              columns={[
+                {
+                  key: "lawOrRule",
+                  label: "Law / Rule",
+                  render: (item) => <>{item.lawOrRule as string}{item.section ? ` §${item.section as string}` : ""}</>,
+                },
+                { key: "requirement", label: "Requirement" },
+                { key: "dueDate", label: "Due", render: (item) => formatIndianDate(item.dueDate as string) },
+                { key: "status", label: "Status", render: (item) => <StatusCell status={item.status as string} /> },
+              ]}
+              rows={displayDpdp}
+            />
+          )}
         </div>
         <div className="card">
           <div className="card-h"><h3>Regulatory &amp; govt policy</h3></div>
-          <table className="tbl">
-            <thead><tr><th>Law / Rule</th><th>Requirement</th><th>Dept</th><th>Status</th></tr></thead>
-            <tbody>
-              {displayCert.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.lawOrRule}</td>
-                  <td>{item.requirement}</td>
-                  <td>{item.department ?? "—"}</td>
-                  <td>
-                    {item.status === "complied" ? <span className="pill good">Compliant</span>
-                      : item.status === "overdue" ? <span className="pill bad">Overdue</span>
-                      : item.status === "pending" ? <span className="pill warn">In progress</span>
-                      : <span className="pill mut">Planned</span>}
-                  </td>
-                </tr>
-              ))}
-              {displayCert.length === 0 && <tr><td colSpan={4}><div className="empty-state"><div>📋</div><h4>No items</h4><p></p></div></td></tr>}
-            </tbody>
-          </table>
+          {displayCert.length === 0 ? (
+            <EmptyState icon="📋" title="No items" message="Regulatory requirements will appear here once configured." />
+          ) : (
+            <DataTable<ComplianceRow>
+              columns={[
+                { key: "lawOrRule", label: "Law / Rule" },
+                { key: "requirement", label: "Requirement" },
+                { key: "department", label: "Dept", render: (item) => (item.department as string | undefined) ?? "—" },
+                { key: "status", label: "Status", render: (item) => <StatusCell status={item.status as string} /> },
+              ]}
+              rows={displayCert}
+            />
+          )}
         </div>
       </div>
     </main>
