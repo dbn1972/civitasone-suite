@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportsDashboard } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { SpendSegmented } from "./SpendSegmented";
 
 const BAR_W = 640;
 const BAR_H = 160;
@@ -67,7 +68,6 @@ export default async function ReportsDashboardPage() {
 
   const upKpis = data.kpis.filter((k) => k.changeDirection === "up").length;
   const downKpis = data.kpis.filter((k) => k.changeDirection === "down").length;
-  const neutralKpis = data.kpis.filter((k) => !k.changeDirection || k.changeDirection === "neutral").length;
   const modules = [...new Set(data.kpis.map((k) => k.module))].length;
 
   const avgChangePct =
@@ -88,10 +88,7 @@ export default async function ReportsDashboardPage() {
         title="Data &amp; Analytics Layer"
         subtitle="Executive dashboards, KPIs, cross-department warehouse &amp; AI insights."
         actions={
-          <>
-            <button className="btn ghost">Data catalog</button>
-            <Link href="/reports/list/new" className="btn primary">Build Report</Link>
-          </>
+          <Link href="/reports/list/new" className="btn primary">Build Report</Link>
         }
       />
 
@@ -103,18 +100,14 @@ export default async function ReportsDashboardPage() {
       </StatGrid>
 
       {data.kpis.length === 0 ? (
-        <div className="empty-state" style={{ marginTop: "18px" }}>
-          <div className="ic">📊</div>
-          <h4>No KPI data available</h4>
-          <p>The analytics service is compiling data.</p>
-        </div>
+        <EmptyState icon="📊" title="No KPI data available" message="The analytics service is compiling data." />
       ) : (
         <div className="grid g-main" style={{ marginTop: "18px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
             <div className="card">
               <div className="card-h">
                 <h3>Cross-department spend vs outcome</h3>
-                <div className="seg"><span className="on">FY</span><span>QTD</span></div>
+                <SpendSegmented />
               </div>
               <div className="pad"><ModuleBarChart kpis={data.kpis} /></div>
             </div>
@@ -122,9 +115,9 @@ export default async function ReportsDashboardPage() {
             <div className="card">
               <div className="card-h"><h3>Executive dashboards</h3></div>
               <div className="pad" style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <Link className="chip" href="/reports/kpi" style={{ textDecoration: "none" }}>🎯 KPIs →</Link>
-                <Link className="chip" href="/reports/mis" style={{ textDecoration: "none" }}>📊 MIS →</Link>
-                <Link className="chip" href="/reports/list" style={{ textDecoration: "none" }}>📋 Report Jobs →</Link>
+                <Link className="chip" href="/reports/kpi" style={{ textDecoration: "none" }}><span aria-hidden>🎯</span> KPIs <span aria-hidden>→</span></Link>
+                <Link className="chip" href="/reports/mis" style={{ textDecoration: "none" }}><span aria-hidden>📊</span> MIS <span aria-hidden>→</span></Link>
+                <Link className="chip" href="/reports/list" style={{ textDecoration: "none" }}><span aria-hidden>📋</span> Report Jobs <span aria-hidden>→</span></Link>
               </div>
             </div>
           </div>
@@ -149,7 +142,7 @@ export default async function ReportsDashboardPage() {
                   <ul className="list">
                     {alertKpis.map((kpi) => (
                       <li key={kpi.id} className="li">
-                        <span>📉</span>
+                        <span aria-hidden>📉</span>
                         <div style={{ flex: 1, marginLeft: "6px" }}>
                           <div style={{ fontSize: "13px", fontWeight: 650 }}>{kpi.title} · {kpi.module}</div>
                           <div style={{ fontSize: "12px", color: "#98a2b3" }}>
@@ -165,9 +158,6 @@ export default async function ReportsDashboardPage() {
           </div>
         </div>
       )}
-
-      {/* suppress unused var warning */}
-      {neutralKpis >= 0 ? null : null}
     </div>
   );
 }

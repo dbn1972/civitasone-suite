@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKPIs } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { KpiClient } from "./KpiClient";
 
 export default async function KPITrackerPage() {
   const { data: kpis, source } = await getKPIs();
@@ -24,6 +25,28 @@ export default async function KPITrackerPage() {
     return "rejected";
   }
 
+  type KpiRow = {
+    id: string;
+    kpiName: string;
+    module: string;
+    unit: string;
+    period: string;
+    statusLabel: string;
+    statusPill: string;
+    rawStatus: string;
+  };
+
+  const rows: KpiRow[] = kpis.map((kpi) => ({
+    id: kpi.id,
+    kpiName: kpi.kpiName,
+    module: kpi.module,
+    unit: kpi.unit,
+    period: kpi.period,
+    statusLabel: statusLabel(kpi.status),
+    statusPill: statusPill(kpi.status),
+    rawStatus: kpi.status,
+  }));
+
   return (
     <div className="wrap">
       {source === "error" && <DataSourceBadge source={source} />}
@@ -31,10 +54,7 @@ export default async function KPITrackerPage() {
         title="KPI Monitoring"
         subtitle="Department KPIs &amp; outcome indicators with targets."
         actions={
-          <>
-            <button className="btn ghost">Outcome budget</button>
-            <Link href="/reports/list/new?reportType=kpi-target" className="btn primary">Set Targets</Link>
-          </>
+          <Link href="/reports/list/new?reportType=kpi-target" className="btn primary">Set Targets</Link>
         }
       />
 
@@ -48,37 +68,11 @@ export default async function KPITrackerPage() {
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h">
           <h3>KPI monitoring</h3>
-          <div className="seg"><span className="on">All</span><span>Below target</span></div>
         </div>
         {kpis.length === 0 ? (
-          <div className="empty-state">
-            <div className="ic">🎯</div>
-            <h4>No KPI data available</h4>
-            <p>KPIs will appear once the service has processed data.</p>
-          </div>
+          <EmptyState icon="🎯" title="No KPI data available" message="KPIs will appear once the service has processed data." />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>KPI</th>
-                <th>Owner Module</th>
-                <th>Unit</th>
-                <th>Period</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kpis.map((kpi) => (
-                <tr key={kpi.id}>
-                  <td>{kpi.kpiName}</td>
-                  <td>{kpi.module}</td>
-                  <td>{kpi.unit}</td>
-                  <td>{kpi.period}</td>
-                  <td><StatusPill status={statusPill(kpi.status)} label={statusLabel(kpi.status)} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <KpiClient rows={rows} />
         )}
       </div>
     </div>

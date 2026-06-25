@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockDashboard } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
 import { PrintExportButton } from "../_components/PrintExportButton";
+import { formatMoney } from "@/lib/formatters";
 
 export default async function StockDashboardPage() {
   const { data, source } = await getStockDashboard();
@@ -21,7 +22,7 @@ export default async function StockDashboardPage() {
       />
       <StatGrid>
         <StatCard icon="🏬" iconBg="#e6f7f5" label="SKUs" value={data.totalSKUs.toLocaleString("en-IN")} delta="+120" up />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={`₹${(data.inventoryValue / 100).toLocaleString("en-IN")}`} delta="+1.8%" up />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={formatMoney(data.inventoryValue)} delta="+1.8%" up />
         <StatCard icon="⚠️" iconBg="#fffaeb" label="Low Stock" value={data.lowStockAlerts.toLocaleString("en-IN")} />
         <StatCard icon="🚫" iconBg="#fef3f2" label="Stock-outs" value="—" />
       </StatGrid>

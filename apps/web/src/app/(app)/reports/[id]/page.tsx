@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportJobById } from "../../../_data/loaders";
-import { PageHeader, StatusPill } from "../../../_components/ds";
+import { DataTable, EmptyState, PageHeader, StatusPill } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 export default async function ReportDetailPage({ params }: { params: { id: string } }) {
   const { data: job, source } = await getReportJobById(params.id);
@@ -11,11 +12,7 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
       <div className="wrap">
         {source === "error" && <DataSourceBadge source={source} />}
         <PageHeader title="Report not found" back="/reports/list" />
-        <div className="empty-state">
-          <div className="ic">📋</div>
-          <h4>Report job not found</h4>
-          <p>The job may have been deleted or the ID is incorrect.</p>
-        </div>
+        <EmptyState icon="📋" title="Report job not found" message="The job may have been deleted or the ID is incorrect." />
       </div>
     );
   }
@@ -27,6 +24,16 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
       : [];
 
   const visibleRows = job.rows.slice(0, 100);
+
+  type DataRow = Record<string, unknown>;
+
+  const tableRows: DataRow[] = visibleRows.map((row) => {
+    const mapped: DataRow = {};
+    for (const col of displayColumns) {
+      mapped[col] = row[col] ?? "—";
+    }
+    return mapped;
+  });
 
   return (
     <div className="wrap">
@@ -59,11 +66,11 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
         </div>
         <div className="card" style={{ padding: "16px" }}>
           <div className="lab">Requested at</div>
-          <div className="val" style={{ marginTop: "6px", fontSize: "14px" }}>{job.requestedAt}</div>
+          <div className="val" style={{ marginTop: "6px", fontSize: "14px" }}>{formatIndianDate(job.requestedAt)}</div>
         </div>
         <div className="card" style={{ padding: "16px" }}>
           <div className="lab">Completed at</div>
-          <div className="val" style={{ marginTop: "6px", fontSize: "14px" }}>{job.completedAt ?? "—"}</div>
+          <div className="val" style={{ marginTop: "6px", fontSize: "14px" }}>{job.completedAt ? formatIndianDate(job.completedAt) : "—"}</div>
         </div>
       </div>
 
@@ -93,38 +100,19 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
           )}
         </div>
         {displayColumns.length === 0 ? (
-          <div className="empty-state">
-            <div className="ic">📋</div>
-            <h4>{job.status === "completed" ? "No data columns" : "Pending"}</h4>
-            <p>{job.status === "completed" ? "No data columns in this report." : "Data will be available once the report completes."}</p>
-          </div>
+          <EmptyState
+            icon="📋"
+            title={job.status === "completed" ? "No data columns" : "Pending"}
+            message={job.status === "completed" ? "No data columns in this report." : "Data will be available once the report completes."}
+          />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                {displayColumns.map((col) => (
-                  <th key={col}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.length === 0 ? (
-                <tr>
-                  <td colSpan={displayColumns.length} style={{ textAlign: "center", color: "#98a2b3", padding: "24px" }}>
-                    No data rows in this report
-                  </td>
-                </tr>
-              ) : (
-                visibleRows.map((row, i) => (
-                  <tr key={i}>
-                    {displayColumns.map((col) => (
-                      <td key={col}>{row[col] ?? "—"}</td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <DataTable<DataRow>
+            columns={displayColumns.map((col) => ({ key: col as keyof DataRow & string, label: col }))}
+            rows={tableRows}
+            sortable
+            filterable
+            pageSize={15}
+          />
         )}
       </div>
     </div>

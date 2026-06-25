@@ -1,7 +1,15 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockItemById } from "../../../_data/loaders";
-import { StatusPill, EmptyState } from "../../../_components/ds";
+import { StatusPill, EmptyState, DataTable } from "../../../_components/ds";
 import { PrintExportButton } from "../_components/PrintExportButton";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
+
+const LEDGER_COLUMNS = [
+  { key: "date" as const, label: "Date" },
+  { key: "type" as const, label: "Type", cellType: "status" as const },
+  { key: "quantityDisplay" as const, label: "Qty", align: "right" as const },
+  { key: "balance" as const, label: "Balance", align: "right" as const },
+];
 
 export default async function StockItemDetailPage({ params }: { params: { id: string } }) {
   const { data: item, source } = await getStockItemById(params.id);
@@ -17,6 +25,14 @@ export default async function StockItemDetailPage({ params }: { params: { id: st
       </>
     );
   }
+
+  const ledgerRows = item.stockLedger.map((entry) => ({
+    id: entry.id,
+    date: formatIndianDate(entry.date),
+    type: entry.type,
+    quantityDisplay: `${entry.type === "issue" ? "-" : "+"}${entry.quantity.toLocaleString("en-IN")}`,
+    balance: entry.balance.toLocaleString("en-IN"),
+  }));
 
   return (
     <>
@@ -46,8 +62,8 @@ export default async function StockItemDetailPage({ params }: { params: { id: st
               <div className="fld"><div className="l">Unit</div><div className="v">{item.unit}</div></div>
               <div className="fld"><div className="l">On-hand qty</div><div className="v">{item.currentStock.toLocaleString("en-IN")}</div></div>
               <div className="fld"><div className="l">Min level</div><div className="v">{item.minStockLevel.toLocaleString("en-IN")}</div></div>
-              <div className="fld"><div className="l">Unit cost</div><div className="v">₹{(item.unitCost / 100).toLocaleString("en-IN")}</div></div>
-              <div className="fld"><div className="l">Total value</div><div className="v">₹{(item.totalValue / 100).toLocaleString("en-IN")}</div></div>
+              <div className="fld"><div className="l">Unit cost</div><div className="v">{formatMoney(item.unitCost)}</div></div>
+              <div className="fld"><div className="l">Total value</div><div className="v">{formatMoney(item.totalValue)}</div></div>
               <div className="fld"><div className="l">HSN Code</div><div className="v">{item.hsnCode ?? "—"}</div></div>
               <div className="fld"><div className="l">Warehouse</div><div className="v">{item.warehouseLocation ?? "—"}</div></div>
             </div>
@@ -59,28 +75,13 @@ export default async function StockItemDetailPage({ params }: { params: { id: st
             {item.stockLedger.length === 0 ? (
               <EmptyState icon="📋" title="No ledger entries" message="Stock movements for this item will appear here." />
             ) : (
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th className="num">Qty</th>
-                    <th className="num">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {item.stockLedger.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>{entry.date}</td>
-                      <td><StatusPill status={entry.type} label={entry.type} /></td>
-                      <td className="num">
-                        {entry.type === "issue" ? "-" : "+"}{entry.quantity.toLocaleString("en-IN")}
-                      </td>
-                      <td className="num">{entry.balance.toLocaleString("en-IN")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable
+                columns={LEDGER_COLUMNS}
+                rows={ledgerRows}
+                sortable
+                filterable
+                pageSize={15}
+              />
             )}
           </div>
         </div>

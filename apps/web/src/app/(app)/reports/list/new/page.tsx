@@ -19,7 +19,7 @@ export default function NewReportPage({ searchParams }: { searchParams: { report
           className="banner"
           style={{ background: "#fffaeb", border: "1px solid #fde68a", color: "#92400e", borderRadius: 12, padding: "11px 14px", margin: "0 0 16px", fontSize: 13, maxWidth: 820 }}
         >
-          ℹ️ The report service does not expose a KPI-targets command. This target is recorded as a
+          <span aria-hidden>ℹ️</span> The report service does not expose a KPI-targets command. This target is recorded as a
           report job (the closest available command).
         </div>
       )}

@@ -1,7 +1,9 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockLedger } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { PrintExportButton } from "../_components/PrintExportButton";
+import { formatMoney } from "@/lib/formatters";
+import { StockLedgerClient } from "./StockLedgerClient";
 
 export default async function StockLedgerPage() {
   const { data: entries, source } = await getStockLedger();
@@ -24,55 +26,11 @@ export default async function StockLedgerPage() {
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f7f5" label="Total Entries" value={entries.length.toLocaleString("en-IN")} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="Total Receipts" value={`₹${(totalReceipts / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="📤" iconBg="#fef3f2" label="Total Issues" value={`₹${(totalIssues / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="⚖️" iconBg="#eff6ff" label="Net Balance" value={`₹${(netBalance / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="📥" iconBg="#ecfdf3" label="Total Receipts" value={formatMoney(totalReceipts)} />
+        <StatCard icon="📤" iconBg="#fef3f2" label="Total Issues" value={formatMoney(totalIssues)} />
+        <StatCard icon="⚖️" iconBg="#eff6ff" label="Net Balance" value={formatMoney(netBalance)} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h">
-          <h3>Stock ledger</h3>
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Receipts</span>
-            <span>Issues</span>
-          </div>
-        </div>
-        {entries.length === 0 ? (
-          <EmptyState icon="📋" title="No ledger entries" message="Stock movements will appear here." />
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Item</th>
-                <th>Warehouse</th>
-                <th className="num">Qty</th>
-                <th>Type</th>
-                <th className="num">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>{entry.date}</td>
-                  <td>
-                    <span className="mono">{entry.itemCode}</span>
-                    {" "}{entry.itemName}
-                  </td>
-                  <td>{entry.party ?? "—"}</td>
-                  <td className="num">
-                    {entry.type === "issue" ? "-" : "+"}{entry.quantity.toLocaleString("en-IN")}
-                  </td>
-                  <td>
-                    <StatusPill status={entry.type} label={entry.type} />
-                  </td>
-                  <td className="num">{entry.balance.toLocaleString("en-IN")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <StockLedgerClient entries={entries} />
     </>
   );
 }

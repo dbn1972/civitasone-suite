@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportJobs } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
 
 export default async function ReportsListPage() {
   const { data: jobs, source } = await getReportJobs();
@@ -11,6 +11,28 @@ export default async function ReportsListPage() {
   const running = jobs.filter((j) => j.status === "running").length;
   const failed = jobs.filter((j) => j.status === "failed").length;
 
+  type JobRow = {
+    id: string;
+    reportName: string;
+    module: string;
+    requestedBy: string;
+    format: string;
+    statusPill: string;
+    download: string;
+    downloadUrl: string | null;
+  };
+
+  const rows: JobRow[] = jobs.map((j) => ({
+    id: j.id,
+    reportName: j.reportName,
+    module: j.module,
+    requestedBy: j.requestedBy,
+    format: j.format,
+    statusPill: j.status,
+    download: j.status === "completed" && j.downloadUrl ? "Download" : "—",
+    downloadUrl: j.downloadUrl ?? null,
+  }));
+
   return (
     <div className="wrap">
       {source === "error" && <DataSourceBadge source={source} />}
@@ -18,10 +40,7 @@ export default async function ReportsListPage() {
         title="Report Jobs"
         subtitle="All report generation jobs and their status."
         actions={
-          <>
-            <button className="btn ghost">Export</button>
-            <Link href="/reports/list/new" className="btn primary">+ New Report</Link>
-          </>
+          <Link href="/reports/list/new" className="btn primary">+ New Report</Link>
         }
       />
 
@@ -35,49 +54,47 @@ export default async function ReportsListPage() {
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h"><h3>Report jobs</h3></div>
         {jobs.length === 0 ? (
-          <div className="empty-state">
-            <div className="ic">📋</div>
-            <h4>No report jobs found</h4>
-            <p>Jobs will appear here once generated.</p>
-          </div>
+          <EmptyState icon="📋" title="No report jobs found" message="Jobs will appear here once generated." />
         ) : (
-          <table className="tbl" aria-label="Report jobs">
-            <thead>
-              <tr>
-                <th>Report Name</th>
-                <th>Module</th>
-                <th>Requested By</th>
-                <th>Format</th>
-                <th>Status</th>
-                <th>Download</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((j) => (
-                <tr key={j.id} className="clickable">
-                  <td>
-                    <Link href={`/reports/${j.id}`} style={{ color: "var(--primary)", textDecoration: "none" }}>
-                      {j.reportName}
-                    </Link>
-                  </td>
-                  <td>{j.module}</td>
-                  <td>{j.requestedBy}</td>
-                  <td>{j.format}</td>
-                  <td><StatusPill status={j.status} /></td>
-                  <td>
-                    {j.status === "completed" && j.downloadUrl ? (
-                      <a href={j.downloadUrl} target="_blank" rel="noopener noreferrer"
-                        style={{ color: "var(--primary)", fontSize: "13px" }}>
-                        Download
-                      </a>
-                    ) : (
-                      <span style={{ color: "#98a2b3" }}>—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<JobRow>
+            columns={[
+              {
+                key: "reportName",
+                label: "Report Name",
+                render: (row) => (
+                  <Link href={`/reports/${row.id}`} style={{ color: "var(--primary)", textDecoration: "none" }}>
+                    {row.reportName}
+                  </Link>
+                ),
+              },
+              { key: "module", label: "Module" },
+              { key: "requestedBy", label: "Requested By" },
+              { key: "format", label: "Format" },
+              {
+                key: "statusPill",
+                label: "Status",
+                render: (row) => <StatusPill status={row.statusPill} />,
+              },
+              {
+                key: "download",
+                label: "Download",
+                sortable: false,
+                render: (row) =>
+                  row.downloadUrl ? (
+                    <a href={row.downloadUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ color: "var(--primary)", fontSize: "13px" }}>
+                      Download
+                    </a>
+                  ) : (
+                    <span style={{ color: "#98a2b3" }}>—</span>
+                  ),
+              },
+            ]}
+            rows={rows}
+            sortable
+            filterable
+            pageSize={15}
+          />
         )}
       </div>
     </div>
