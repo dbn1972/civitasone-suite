@@ -2,13 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ActionButton } from "../../../../_components/ds";
 
 type Props = { contactId: string; name: string };
+
+const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
+const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 export function ContactDetailActions({ contactId, name }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState({ type: "call", subject: "", text: "" });
 
@@ -16,6 +21,7 @@ export function ContactDetailActions({ contactId, name }: Props) {
     e.preventDefault();
     setBusy(true);
     setMessage("");
+    setError("");
     try {
       const res = await fetch("/api/proxy/v1/crm/activities", {
         method: "POST",
@@ -34,35 +40,67 @@ export function ContactDetailActions({ contactId, name }: Props) {
       setActivity({ type: "call", subject: "", text: "" });
       router.refresh();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Failed");
+      setError(e instanceof Error ? e.message : "Could not log the activity.");
     } finally {
       setBusy(false);
     }
   }
 
+  async function deleteContact() {
+    const res = await fetch(`/api/proxy/v1/crm/contacts/${contactId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error((await res.text()) || "Could not delete the contact.");
+  }
+
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setShowActivity(true)}>Log Activity</button>
-      <a className="btn ghost" href={`/crm/contacts/${contactId}/edit`}>Edit</a>
+      <button type="button" className="btn primary" onClick={() => setShowActivity(true)} style={{ minHeight: 44 }}>
+        Log Activity
+      </button>
+      <a className="btn ghost" href={`/crm/contacts/${contactId}/edit`} style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
+        Edit
+      </a>
+      <ActionButton
+        label="Delete"
+        className="btn danger"
+        danger
+        requireReason
+        reasonLabel="Reason for deletion"
+        confirmTitle={`Delete ${name}?`}
+        confirmDescription="This removes the contact from the CRM. The action is recorded in the audit trail and cannot be undone here."
+        confirmLabel="Delete contact"
+        onConfirm={deleteContact}
+        onSuccess={() => {
+          setMessage("Contact deleted.");
+          setTimeout(() => router.push("/crm/contacts"), 500);
+        }}
+      />
       {showActivity ? (
         <div className="card" style={{ marginTop: 16 }}>
-          <form onSubmit={logActivity} className="pad">
+          <form onSubmit={logActivity} className="pad" style={{ maxWidth: 520 }}>
             <h4 style={{ marginTop: 0 }}>Log activity for {name}</h4>
-            <select value={activity.type} onChange={(e) => setActivity({ ...activity, type: e.target.value })} style={{ width: "100%", padding: 8, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" }}>
+            <label htmlFor="contact-activity-type" style={labelStyle}>Type</label>
+            <select id="contact-activity-type" value={activity.type} onChange={(e) => setActivity({ ...activity, type: e.target.value })} style={inputStyle}>
               <option value="call">Call</option>
               <option value="meeting">Meeting</option>
               <option value="email">Email</option>
               <option value="task">Task</option>
               <option value="note">Note</option>
             </select>
-            <input value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder="Subject" style={{ width: "100%", padding: 8, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <textarea required value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder="Notes" rows={3} style={{ width: "100%", padding: 8, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <button type="submit" className="btn primary" disabled={busy}>{busy ? "Saving…" : "Save activity"}</button>
-            <button type="button" className="btn ghost" style={{ marginLeft: 8 }} onClick={() => setShowActivity(false)}>Cancel</button>
+            <label htmlFor="contact-activity-subject" style={labelStyle}>Subject</label>
+            <input id="contact-activity-subject" value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder="Short summary" style={inputStyle} />
+            <label htmlFor="contact-activity-notes" style={labelStyle}>Notes</label>
+            <textarea id="contact-activity-notes" required value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder="What happened?" rows={3} style={{ ...inputStyle, minHeight: undefined }} />
+            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save activity"}</button>
+            <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowActivity(false)}>Cancel</button>
           </form>
         </div>
       ) : null}
-      {message ? <p style={{ fontSize: 13, color: "#047857", marginTop: 8 }}>{message}</p> : null}
+      {message ? (
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", marginTop: 8 }}>{message}</p>
+      ) : null}
+      {error ? (
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{error}</p>
+      ) : null}
     </>
   );
 }

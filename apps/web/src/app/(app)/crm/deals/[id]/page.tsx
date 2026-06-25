@@ -1,6 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
 import { getDealById } from "../../../../_data/loaders";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { DealDetailActions } from "./DealDetailActions";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: deal, source } = await getDealById(params.id);
@@ -22,14 +24,15 @@ export default async function Page({ params }: { params: { id: string } }) {
     <>
       <PageHeader
         title={`Deal ${deal.dealName}`}
-        subtitle="🎯 Modern sales CRM: leads, deals and pipeline."
+        subtitle="Modern sales CRM: leads, deals and pipeline."
         back="/crm/deals"
         actions={
-          <>
-            <button className="btn primary">Log Activity</button>
-            <button className="btn ghost">Mark Won</button>
-            <button className="btn ghost">Mark Lost</button>
-          </>
+          <DealDetailActions
+            dealId={deal.id}
+            dealName={deal.dealName}
+            {...(deal.contactId ? { contactId: deal.contactId } : {})}
+            status={deal.status}
+          />
         }
       />
       {source === "error" && <DataSourceBadge source={source} />}
@@ -39,11 +42,11 @@ export default async function Page({ params }: { params: { id: string } }) {
             <div className="card-h"><h3>Deal Details</h3></div>
             <div className="fields">
               <div className="fld"><div className="l">Account</div><div className="v">{deal.contactName ?? "—"}</div></div>
-              <div className="fld"><div className="l">Value</div><div className="v">₹{(deal.amount / 100).toLocaleString("en-IN")}</div></div>
+              <div className="fld"><div className="l">Value</div><div className="v">{formatMoney(deal.amount)}</div></div>
               <div className="fld"><div className="l">Stage</div><div className="v"><StatusPill status={deal.stage} label={deal.stage.replace(/_/g, " ")} /></div></div>
               <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={deal.status} /></div></div>
               <div className="fld"><div className="l">Owner</div><div className="v">{deal.owner}</div></div>
-              <div className="fld"><div className="l">Close Date</div><div className="v">{deal.closeDate ?? "—"}</div></div>
+              <div className="fld"><div className="l">Close Date</div><div className="v">{deal.closeDate ? formatIndianDate(deal.closeDate) : "—"}</div></div>
               <div className="fld"><div className="l">Probability</div><div className="v">{deal.probability}%</div></div>
             </div>
           </div>

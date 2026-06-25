@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { PageHeader, StatusPill } from "../../../_components/ds";
+import { useState, useCallback, type ReactNode } from "react";
+import { DataTable, EmptyState, PageHeader, Segmented, StatusPill } from "../../../_components/ds";
 
 type Doc = {
   id: string;
@@ -14,6 +14,15 @@ type Doc = {
   accessLevel: string;
   version: string;
   fileType?: string | null;
+};
+
+type ResultRow = {
+  id: string;
+  titleNode: ReactNode;
+  category: string;
+  sourceModule: ReactNode;
+  relevancePct: number;
+  relevanceBar: ReactNode;
 };
 
 function relevanceScore(doc: Doc, query: string): number {
@@ -40,17 +49,20 @@ function statusLabel(s: string) {
   return s;
 }
 
+const RESULT_SEG_OPTIONS = ["All", "Documents", "Files"];
+
 export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [resultSeg, setResultSeg] = useState("All");
 
   const categories = Array.from(new Set(initialDocs.map((d) => d.category).filter(Boolean))).sort();
   const statuses = Array.from(new Set(initialDocs.map((d) => d.status).filter(Boolean))).sort();
 
-  const results = submitted && query.trim()
+  const matchedDocs = submitted && query.trim()
     ? initialDocs
         .filter((doc) => (categoryFilter ? doc.category === categoryFilter : true))
         .filter((doc) => (statusFilter ? doc.status === statusFilter : true))
@@ -59,6 +71,35 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
         .sort((a, b) => b.score - a.score)
         .map((r) => r.doc)
     : [];
+
+  const maxScore = 24;
+
+  const resultRows: ResultRow[] = matchedDocs.map((doc) => {
+    const score = relevanceScore(doc, query.trim());
+    const pct = Math.min(100, Math.round((score / maxScore) * 100));
+    return {
+      id: doc.id,
+      titleNode: (
+        <div>
+          <div style={{ fontWeight: 600 }}>{doc.title}</div>
+          <div style={{ fontSize: "12px", color: "#98a2b3" }}>{doc.author ?? ""}</div>
+        </div>
+      ),
+      category: doc.category,
+      sourceModule: (
+        <StatusPill status={statusPillStatus(doc.status)} label={statusLabel(doc.status)} />
+      ),
+      relevancePct: pct,
+      relevanceBar: (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="bar" style={{ width: "70px" }}>
+            <i style={{ width: `${pct}%`, background: "#ca8a04" }}></i>
+          </div>
+          <span style={{ fontSize: "12px", fontWeight: 600 }}>{pct}%</span>
+        </div>
+      ),
+    };
+  });
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +169,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
         <div className="pad">
           <form onSubmit={handleSubmit} role="search">
             <div className="tb-search" style={{ maxWidth: "none", fontSize: "15px", padding: "14px 16px" }}>
-              🔎
+              <span aria-hidden="true">🔎</span>
               <input
                 type="search"
                 value={query}
@@ -142,7 +183,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
               {submitted && query && (
                 <span className="chip" style={{ background: "var(--primary-soft)", color: "var(--primary-d)" }}>
-                  Documents {results.length}
+                  Documents {resultRows.length}
                 </span>
               )}
               {["travel policy", "GFR 2017", "recruitment", "procurement"].map((term) => (
@@ -162,64 +203,43 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
       </div>
 
       {!submitted && (
-        <div className="empty-state">
-          <div className="ic">🔎</div>
-          <h4>Search the knowledge repository</h4>
-          <p>Enter keywords or click a suggestion above</p>
-        </div>
+        <EmptyState
+          icon="🔎"
+          title="Search the knowledge repository"
+          message="Enter keywords or click a suggestion above"
+        />
       )}
 
-      {submitted && query.trim() && results.length === 0 && (
-        <div className="empty-state">
-          <div className="ic">🔎</div>
-          <h4>No documents found</h4>
-          <p>No results for &ldquo;{query}&rdquo;. Try different keywords.</p>
-        </div>
+      {submitted && query.trim() && resultRows.length === 0 && (
+        <EmptyState
+          icon="🔎"
+          title="No documents found"
+          message={`No results for "${query}". Try different keywords.`}
+        />
       )}
 
-      {results.length > 0 && (
+      {resultRows.length > 0 && (
         <div className="card">
           <div className="card-h">
             <h3>Results · &ldquo;{query}&rdquo;</h3>
-            <div className="seg"><span className="on">All</span><span>Documents</span><span>Files</span></div>
+            <Segmented
+              options={RESULT_SEG_OPTIONS}
+              value={resultSeg}
+              onChange={setResultSeg}
+            />
           </div>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Result</th>
-                <th>Type</th>
-                <th>Source module</th>
-                <th>Relevance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.map((doc) => {
-                const score = relevanceScore(doc, query.trim());
-                const maxScore = 24;
-                const pct = Math.min(100, Math.round((score / maxScore) * 100));
-                return (
-                  <tr key={doc.id}>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{doc.title}</div>
-                      <div style={{ fontSize: "12px", color: "#98a2b3" }}>{doc.author ?? ""}</div>
-                    </td>
-                    <td>{doc.category}</td>
-                    <td>
-                      <StatusPill status={statusPillStatus(doc.status)} label={statusLabel(doc.status)} />
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div className="bar" style={{ width: "70px" }}>
-                          <i style={{ width: `${pct}%`, background: "#ca8a04" }}></i>
-                        </div>
-                        <span style={{ fontSize: "12px", fontWeight: 600 }}>{pct}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTable<ResultRow>
+            columns={[
+              { key: "titleNode", label: "Result", sortable: false },
+              { key: "category", label: "Type" },
+              { key: "sourceModule", label: "Source module", sortable: false },
+              { key: "relevancePct", label: "Relevance", align: "right", render: (row) => row.relevanceBar as ReactNode },
+            ]}
+            rows={resultRows}
+            sortable
+            filterable
+            pageSize={15}
+          />
         </div>
       )}
     </div>

@@ -1,8 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, EmptyState, DataTable } from "../../../../_components/ds";
 import { getContactById } from "../../../../_data/loaders";
+import { formatIndianDate } from "@/lib/formatters";
 import { ContactDetailActions } from "./ContactDetailActions";
-import Link from "next/link";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: contact, source } = await getContactById(params.id);
@@ -38,7 +38,7 @@ export default async function Page({ params }: { params: { id: string } }) {
               {contact.phone && <div className="fld"><div className="l">Phone</div><div className="v">{contact.phone}</div></div>}
               {contact.email && <div className="fld"><div className="l">Email</div><div className="v">{contact.email}</div></div>}
               {contact.city && <div className="fld"><div className="l">City</div><div className="v">{contact.city}</div></div>}
-              {contact.lastActivityDate && <div className="fld"><div className="l">Last Activity</div><div className="v">{contact.lastActivityDate}</div></div>}
+              {contact.lastActivityDate && <div className="fld"><div className="l">Last Activity</div><div className="v">{formatIndianDate(contact.lastActivityDate)}</div></div>}
               {contact.marketingConsent !== undefined && (
                 <div className="fld"><div className="l">Marketing Consent</div><div className="v">{contact.marketingConsent ? "Yes" : "No"}</div></div>
               )}
@@ -47,20 +47,21 @@ export default async function Page({ params }: { params: { id: string } }) {
           {contact.deals.length > 0 && (
             <div className="card">
               <div className="card-h"><h3>Related Deals</h3></div>
-              <table className="tbl">
-                <thead>
-                  <tr><th>Deal Name</th><th>Stage</th><th>Amount (₹)</th></tr>
-                </thead>
-                <tbody>
-                  {contact.deals.map((deal) => (
-                    <tr key={deal.id} className="clickable">
-                      <td><Link href={`/crm/deals/${deal.id}`}>{deal.dealName}</Link></td>
-                      <td><StatusPill status={deal.stage} label={deal.stage.replace(/_/g, " ")} /></td>
-                      <td className="num">₹{(deal.amount / 100).toLocaleString("en-IN")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable
+                columns={[
+                  { key: "dealName", label: "Deal Name" },
+                  { key: "stage", label: "Stage", cellType: "status" },
+                  { key: "amount", label: "Amount", align: "right", cellType: "amount" },
+                ]}
+                rows={contact.deals.map((deal) => ({
+                  id: deal.id,
+                  dealName: deal.dealName,
+                  stage: deal.stage.replace(/_/g, " "),
+                  amount: deal.amount,
+                }))}
+                rowLinkKey="id"
+                rowLinkPrefix="/crm/deals/"
+              />
             </div>
           )}
         </div>
@@ -81,7 +82,7 @@ export default async function Page({ params }: { params: { id: string } }) {
                   {contact.activityTimeline.map((a) => (
                     <li key={a.id} className={a.status === "completed" ? "done" : "cur"}>
                       <div className="t">{a.type} — {a.subject}</div>
-                      {a.dueDate && <div className="d">{a.dueDate}</div>}
+                      {a.dueDate && <div className="d">{formatIndianDate(a.dueDate)}</div>}
                     </li>
                   ))}
                 </ul>

@@ -1,12 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getDeals } from "../../../_data/loaders";
+import { formatMoney } from "@/lib/formatters";
 import { DealsTable } from "./DealsTable";
-
-function fmtAmount(paise: number): string {
-  const crore = paise / 10_000_000;
-  return crore >= 1 ? `₹${crore.toFixed(1)} Cr` : `₹${(paise / 100).toLocaleString("en-IN")}`;
-}
 
 export default async function Page() {
   const { data: deals, source } = await getDeals();
@@ -22,18 +18,15 @@ export default async function Page() {
         subtitle="Track high-value opportunities across stages."
         back="/crm"
         actions={
-          <>
-            <button className="btn ghost">Export</button>
-            <button className="btn primary">+ New Deal</button>
-          </>
+          <a className="btn primary" href="/crm/deals/new">+ New Deal</a>
         }
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
         <StatCard icon="🎯" iconBg="#fce7ee" label="Total Deals" value={deals.length.toLocaleString("en-IN")} />
-        <StatCard icon="🎯" iconBg="#fce7ee" label="Deals Open" value={openDeals.toLocaleString("en-IN")} delta="+22" up />
-        <StatCard icon="🎯" iconBg="#fce7ee" label="Pipeline" value={fmtAmount(pipelineValue)} delta="+13%" up />
-        <StatCard icon="🎯" iconBg="#fce7ee" label="Won Value" value={fmtAmount(wonValue)} />
+        <StatCard icon="🎯" iconBg="#fce7ee" label="Deals Open" value={openDeals.toLocaleString("en-IN")} />
+        <StatCard icon="🎯" iconBg="#fce7ee" label="Pipeline" value={formatMoney(pipelineValue)} />
+        <StatCard icon="🎯" iconBg="#fce7ee" label="Won Value" value={formatMoney(wonValue)} />
       </StatGrid>
       <DealsTable deals={deals} source={source} />
     </>
