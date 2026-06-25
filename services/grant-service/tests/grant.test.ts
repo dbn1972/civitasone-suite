@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { grantBeneficiaries, grantAadhaarLinks } from "../src/modules/beneficiary/schema.js";
-import { grantEligibilityCriteria } from "../src/modules/scheme/schema.js";
+import { grantEligibilityCriteria, grantSchemes } from "../src/modules/scheme/schema.js";
 import { grantApplications } from "../src/modules/application/schema.js";
 import { grantInstallments, grantDisbursements } from "../src/modules/disbursement/schema.js";
 import { grantUcStatements } from "../src/modules/utilisation/schema.js";
@@ -47,6 +47,7 @@ async function wipe() {
   await db.delete(grantInstallments).where(eq(grantInstallments.tenantId, TENANT));
   await db.delete(grantApplications).where(eq(grantApplications.tenantId, TENANT));
   await db.delete(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.tenantId, TENANT));
+  await db.delete(grantSchemes).where(eq(grantSchemes.tenantId, TENANT));
   await db.delete(grantAadhaarLinks).where(eq(grantAadhaarLinks.tenantId, TENANT));
   await db.delete(grantBeneficiaries).where(eq(grantBeneficiaries.tenantId, TENANT));
   const msgIds = [MSG_BEN, MSG_AAD, MSG_UC, MSG_INST, MSG_DISB];
@@ -75,11 +76,13 @@ describe("Beneficiary domain — Aadhaar masking (DPDP §4)", () => {
     });
     await new Promise((r) => setTimeout(r, 400));
 
+    // Aadhaar is masked at the COMMAND boundary; the consumer receives only
+    // (last4, HMAC token). Mirror that here — raw Aadhaar never hits the queue.
     await q.publish(COMMANDS.beneficiarySeedAadhaar, {
       messageId: MSG_AAD, type: COMMANDS.beneficiarySeedAadhaar,
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-aad",
       schemaVersion: "1.0",
-      payload: { id: "88888888-bbbb-4000-8000-000000000001", tenantId: TENANT, beneficiaryId: BEN, aadhaar: "123456789012" },
+      payload: { id: "88888888-bbbb-4000-8000-000000000001", tenantId: TENANT, beneficiaryId: BEN, aadhaarLast4: last4, aadhaarToken: token },
     });
     await new Promise((r) => setTimeout(r, 400));
 
@@ -150,6 +153,14 @@ describe("Disbursement consumer — CQRS wiring (integration)", () => {
     registerApplicationConsumers(q);
     registerDisbursementConsumers(q);
     await q.start();
+
+    // Seed scheme with budget envelope (P0-5 budget gate must be satisfiable)
+    await db.insert(grantSchemes).values({
+      id: SCHEME, tenantId: TENANT, code: "SCH-CQRS", name: "CQRS Scheme",
+      budgetMinor: 1000000n, disbursedMinor: 0n,
+      minAmountMinor: 0n, maxAmountMinor: 1000000n, currency: "INR", status: "active",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
 
     // Seed approved application directly
     await db.insert(grantApplications).values({
