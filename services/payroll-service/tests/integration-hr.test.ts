@@ -17,6 +17,7 @@ const TENANT = "11111111-bbbb-4000-8000-000000000033";
 const RUN_ID = "22222222-cccc-4000-8000-000000000033";
 const STRUCT = "44444444-dddd-4000-8000-000000000033";
 const EMP_ID = "eeeeeeee-0001-0000-0000-000000000005";
+const APPROVER = "00000000-aaaa-4000-8000-000000000098"; // maker-checker: approver != creator
 
 // Fixed message IDs used in tests — must be purged from _inbox.processed between runs.
 const TEST_MESSAGE_IDS = [
@@ -87,13 +88,44 @@ describe("HR integration consumers", () => {
       actorId: ACTOR,
       correlationId: "corr-apr",
       schemaVersion: "1.0",
-      payload: { id: RUN_ID, tenantId: TENANT, approvedBy: ACTOR },
+      payload: { id: RUN_ID, tenantId: TENANT, approvedBy: APPROVER },
     });
 
     await new Promise((r) => setTimeout(r, 600));
 
     const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     expect(outbox.some((o) => o.topic === EVENTS.runApproved)).toBe(true);
+
+    const approved = await db.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_ID));
+    expect(approved[0]?.status).toBe("approved");
+    expect(approved[0]?.approvedBy).toBe(APPROVER);
     await q.stop();
+  });
+
+  it("rejects self-approval (maker-checker): approver === creator keeps run in processing", async () => {
+    const SELF_RUN = "55555555-aaaa-4000-8000-000000000033";
+    const SELF_MSG = "66666666-bbbb-4000-8000-000000000033";
+    await db.delete(processed).where(eq(processed.messageId, SELF_MSG));
+    await db.insert(payrollRuns).values({
+      id: SELF_RUN, tenantId: TENANT, runNo: "RUN/SELF", month: "2025-07",
+      structureId: STRUCT, totalGrossMinor: 100n, totalNetMinor: 80n,
+      currency: "INR", status: "processing",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
+
+    const q = new MemoryQueue();
+    registerPayrollConsumers(q);
+    await q.start();
+    await q.publish(COMMANDS.runApprove, {
+      messageId: SELF_MSG, type: COMMANDS.runApprove,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-self", schemaVersion: "1.0",
+      payload: { id: SELF_RUN, tenantId: TENANT, approvedBy: ACTOR }, // approver === creator
+    });
+    await new Promise((r) => setTimeout(r, 600));
+    await q.stop();
+
+    const rows = await db.select().from(payrollRuns).where(eq(payrollRuns.id, SELF_RUN));
+    expect(rows[0]?.status).toBe("processing"); // unchanged — self-approval forbidden
+    expect(rows[0]?.approvedBy ?? null).toBeNull();
   });
 });
