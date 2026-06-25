@@ -96,8 +96,17 @@ export function registerRegisterConsumers(queue: Queue): void {
     };
     const fixedAssetItems = (p.items ?? []).filter((i) => i.itemType === "fixed_asset");
     for (const item of fixedAssetItems) {
-      const assetId = randomUUID();
-      const itemMsgId = randomUUID();
+      // IDEMPOTENCY FIX: derive BOTH the asset id and the inbox-dedupe id
+      // deterministically from the stable event identity (grnId + item line),
+      // NOT randomUUID() per delivery. A redelivered procurement.grn.accepted
+      // now hits the SAME itemMsgId -> markProcessed gates it (one asset, one
+      // GL), and the asset id / acq journal id (uuidV5 acq:${assetId}) are
+      // identical across redeliveries. Previously these were random per
+      // delivery, so redelivery silently double-capitalized (duplicate asset
+      // row + duplicate acquisition GL post).
+      const lineKey = `grn-asset:${p.grnId}:${item.itemCode}`;
+      const assetId = uuidV5(lineKey);
+      const itemMsgId = uuidV5(`msg:${lineKey}`);
       const totalCost = BigInt(item.rateMinor) * BigInt(item.acceptedQty || 1);
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, itemMsgId))) return;
