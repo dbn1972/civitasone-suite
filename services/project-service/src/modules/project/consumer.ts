@@ -8,7 +8,6 @@ import * as repo from "./repo.js";
 import { assertTaskTransitionAllowed, assertMilestoneCanComplete } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
-const NOTIFICATION_URL = process.env.NOTIFICATION_SERVICE_URL ?? "http://notification-service:3004";
 
 export function registerProjectConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.projectCreate, async (msg) => {
