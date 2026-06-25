@@ -99,9 +99,28 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       eq(hrmsEmployees.status, "confirmed"),
     ));
 
+    // Idempotency guard: an increment run is keyed on effectiveDate. Employees
+    // who already carry an `increment` service-book entry for this date were
+    // processed by a prior run and MUST be skipped so a re-fire cannot
+    // double-advance pay. Makes the run idempotent per effectiveDate.
+    const priorRows = await db.select({ employeeId: hrmsServiceBookEntries.employeeId })
+      .from(hrmsServiceBookEntries)
+      .where(and(
+        eq(hrmsServiceBookEntries.tenantId, ctx.tenantId),
+        eq(hrmsServiceBookEntries.entryType, "increment"),
+        eq(hrmsServiceBookEntries.effectiveDate, effectiveDate),
+      ));
+    const alreadyIncremented = new Set(priorRows.map((r) => r.employeeId));
+
     const results: Array<Record<string, unknown>> = [];
+    let skipped = 0;
     await db.transaction(async (tx) => {
       for (const e of emps) {
+        if (alreadyIncremented.has(e.id)) {
+          skipped += 1;
+          results.push({ employeeId: e.id, status: "already_incremented" });
+          continue;
+        }
         const basic = Number(e.basicMinor);
         let lvl = 0;
         for (const L of sortedLevels) { if ((ENTRY_PAY_PAISE[L] ?? Infinity) <= basic) lvl = L; }
@@ -124,10 +143,13 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
         }
       }
     });
+    const incremented = results.filter((r) => r.toMinor).length;
+    req.log.info({ event: "pay.annual_increment.run", effectiveDate, dryRun: body.dryRun, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId }, "annual increment run");
     return reply.send({
       effectiveDate, dryRun: body.dryRun,
       employeesScanned: emps.length,
-      incremented: results.filter((r) => r.toMinor).length,
+      incremented,
+      skippedAlreadyIncremented: skipped,
       results,
     });
   });

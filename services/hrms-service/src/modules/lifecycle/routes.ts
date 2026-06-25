@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { hrmsPromotions, hrmsTransfers } from "./schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { createTransferBody, issueOrderBody, relieveBody, joinBody, idParam } from "./validators.js";
+import { createTransferBody, createPromotionBody, issueOrderBody, relieveBody, joinBody, idParam } from "./validators.js";
 import * as repo from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -25,34 +25,35 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/lifecycle/promotions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = req.body as Record<string, unknown>;
+    const body = createPromotionBody.parse(req.body);
     const id = randomUUID();
     await db.transaction(async (tx) => {
       await repo.insertPromotion(tx, {
         id, tenantId: ctx.tenantId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        employeeId: body.employeeId as string,
-        fromDesigId: body.fromDesigId as string,
-        toDesigId: body.toDesigId as string,
-        effectiveDate: body.effectiveDate as string,
-        orderRef: (body.orderRef as string) ?? null,
-        newBasicMinor: body.newBasicMinor ? BigInt(body.newBasicMinor as number) : null,
+        employeeId: body.employeeId,
+        fromDesigId: body.fromDesigId,
+        toDesigId: body.toDesigId,
+        effectiveDate: body.effectiveDate,
+        orderRef: body.orderRef ?? null,
+        newBasicMinor: body.newBasicMinor !== undefined ? BigInt(body.newBasicMinor) : null,
       });
       // Apply the promotion to the employee master (designation + basic pay)
-      const promoSet: Record<string, unknown> = { designationId: body.toDesigId as string, updatedBy: ctx.actorId };
-      if (body.newBasicMinor) promoSet.basicMinor = BigInt(body.newBasicMinor as number);
+      const promoSet: Record<string, unknown> = { designationId: body.toDesigId, updatedBy: ctx.actorId };
+      if (body.newBasicMinor !== undefined) promoSet.basicMinor = BigInt(body.newBasicMinor);
       await tx.update(hrmsEmployees).set(promoSet)
-        .where(eq(hrmsEmployees.id, body.employeeId as string));
+        .where(and(eq(hrmsEmployees.id, body.employeeId), eq(hrmsEmployees.tenantId, ctx.tenantId)));
       // NIC eHRMS: record the event in the service book
       await tx.insert(hrmsServiceBookEntries).values({
         tenantId: ctx.tenantId,
-        employeeId: body.employeeId as string,
+        employeeId: body.employeeId,
         entryType: "promotion",
-        effectiveDate: body.effectiveDate as string,
-        description: `Promotion to designation ${body.toDesigId as string}` + (body.newBasicMinor ? ` at basic Rs ${(Number(body.newBasicMinor) / 100).toLocaleString("en-IN")}` : ""),
+        effectiveDate: body.effectiveDate,
+        description: `Promotion to designation ${body.toDesigId}` + (body.newBasicMinor !== undefined ? ` at basic Rs ${(Number(body.newBasicMinor) / 100).toLocaleString("en-IN")}` : ""),
         recordedBy: ctx.actorId,
-        documentRef: (body.orderRef as string) ?? null,
+        documentRef: body.orderRef ?? null,
       });
     });
+    req.log.info({ event: "lifecycle.promotion.created", promotionId: id, employeeId: body.employeeId, toDesigId: body.toDesigId, actorId: ctx.actorId, tenantId: ctx.tenantId }, "promotion recorded");
     return reply.code(202).send({ id });
   });
 
