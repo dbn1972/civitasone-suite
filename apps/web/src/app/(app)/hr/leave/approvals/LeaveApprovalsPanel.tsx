@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState } from "../../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 type WorkflowTask = {
   id: string;
@@ -14,23 +15,64 @@ type WorkflowTask = {
   refId?: string | null;
 };
 
+type LeaveDetail = {
+  id: string;
+  employeeName: string;
+  leaveType: string;
+  fromDate: string;
+  toDate: string;
+  days: number;
+  reason?: string;
+};
+
+/** A workflow task joined with its leave-application context. */
+type EnrichedTask = WorkflowTask & {
+  employeeName: string;
+  leaveType: string;
+  dates: string;
+  days: number | string;
+  reason: string;
+} & Record<string, unknown>;
+
+type Decision = "approve" | "reject";
+
 export function LeaveApprovalsPanel() {
   const router = useRouter();
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
+  const [leaveById, setLeaveById] = useState<Record<string, LeaveDetail>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
+
+  // Dialog state
+  const [pending, setPending] = useState<{ task: EnrichedTask; decision: Decision } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [dialogError, setDialogError] = useState<string | undefined>();
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50");
-      if (!res.ok) throw new Error(await res.text());
-      const body = await res.json() as { data?: WorkflowTask[] } | WorkflowTask[];
-      const rows = Array.isArray(body) ? body : (body.data ?? []);
-      setTasks(rows.filter((t) => t.refType === "leave_app" && t.status === "pending"));
+      const [taskRes, leaveRes] = await Promise.all([
+        fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50"),
+        fetch("/api/proxy/v1/hrms/leave-requests").catch(() => null),
+      ]);
+
+      if (!taskRes.ok) throw new Error((await taskRes.text()) || `Failed to load tasks (${taskRes.status})`);
+      const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
+      const taskRows = Array.isArray(taskBody) ? taskBody : taskBody.data ?? [];
+      setTasks(taskRows.filter((t) => t.refType === "leave_app" && t.status === "pending"));
+
+      // Leave context is best-effort: a failure here still shows tasks (with IDs).
+      if (leaveRes && leaveRes.ok) {
+        const leaveBody = (await leaveRes.json()) as { data?: LeaveDetail[] } | LeaveDetail[];
+        const leaveRows = Array.isArray(leaveBody) ? leaveBody : leaveBody.data ?? [];
+        const map: Record<string, LeaveDetail> = {};
+        for (const l of leaveRows) if (l?.id) map[l.id] = l;
+        setLeaveById(map);
+      }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to load tasks");
+      setError(err instanceof Error ? err.message : "Failed to load workflow tasks.");
     } finally {
       setLoading(false);
     }
@@ -40,98 +82,173 @@ export function LeaveApprovalsPanel() {
     void loadTasks();
   }, [loadTasks]);
 
-  async function complete(taskId: string, decision: "approve" | "reject") {
-    setBusyId(taskId);
-    setMessage("");
+  const enriched: EnrichedTask[] = useMemo(
+    () =>
+      tasks.map((t) => {
+        const l = t.refId ? leaveById[t.refId] : undefined;
+        return {
+          ...t,
+          employeeName: l?.employeeName ?? "Unknown employee",
+          leaveType: l?.leaveType ?? t.name ?? "—",
+          dates: l ? `${formatIndianDate(l.fromDate)} – ${formatIndianDate(l.toDate)}` : "—",
+          days: l?.days ?? "—",
+          reason: l?.reason ?? "—",
+        };
+      }),
+    [tasks, leaveById],
+  );
+
+  async function complete(taskId: string, decision: Decision, reason?: string) {
+    setBusy(true);
+    setDialogError(undefined);
     try {
       const res = await fetch(`/api/proxy/v1/workflow/tasks/${taskId}/complete`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ decision }),
+        body: JSON.stringify({ decision, reason }),
       });
       const text = await res.text();
       if (!res.ok) {
-        setMessage(text || `${decision} failed (${res.status})`);
+        setDialogError(text || `${decision} failed (${res.status})`);
         return;
       }
-      setMessage(decision === "approve" ? "Leave approved via workflow." : "Leave rejected.");
+      setPending(null);
+      setToast({
+        tone: "good",
+        text: decision === "approve" ? "Leave approved via workflow." : "Leave rejected.",
+      });
       await loadTasks();
       router.refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
 
-  return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-5xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/hr" className="hover:text-slate-900">HR</Link>
-          <span className="mx-2">/</span>
-          <Link href="/hr/leave" className="hover:text-slate-900">Leave</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Approvals</span>
-        </nav>
-
-        <header>
-          <h1 className="text-3xl font-semibold text-slate-900">Leave Approvals</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Pending workflow tasks for leave applications. Completing a task runs policy check and approves leave.
-          </p>
-        </header>
-
-        {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
-
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="px-4 py-3 text-left">Task</th>
-                <th className="px-4 py-3 text-left">Leave App ID</th>
-                <th className="px-4 py-3 text-left">Role</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Loading workflow tasks…</td></tr>
-              ) : tasks.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No pending leave approval tasks</td></tr>
-              ) : (
-                tasks.map((task) => (
-                  <tr key={task.id} className="border-t border-slate-200">
-                    <td className="px-4 py-3">{task.name}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{task.refId ?? "—"}</td>
-                    <td className="px-4 py-3">{task.roleRef ?? "any"}</td>
-                    <td className="px-4 py-3">{task.status}</td>
-                    <td className="px-4 py-3 space-x-2">
-                      <button
-                        type="button"
-                        disabled={busyId === task.id}
-                        onClick={() => void complete(task.id, "approve")}
-                        className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
-                      >
-                        {busyId === task.id ? "…" : "Approve"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busyId === task.id}
-                        onClick={() => void complete(task.id, "reject")}
-                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                      >
-                        Reject
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+  const columns: {
+    key: keyof EnrichedTask & string;
+    label: string;
+    align?: "left" | "right" | "center";
+    sortable?: boolean;
+    render?: (row: EnrichedTask) => React.ReactNode;
+  }[] = [
+    { key: "employeeName", label: "Employee" },
+    { key: "leaveType", label: "Leave Type" },
+    { key: "dates", label: "Dates" },
+    { key: "days", label: "Days", align: "right" },
+    { key: "reason", label: "Reason" },
+    {
+      key: "id",
+      label: "Decision",
+      sortable: false,
+      render: (row) => (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            className="btn primary sm"
+            style={{ minHeight: 44 }}
+            onClick={() => {
+              setDialogError(undefined);
+              setPending({ task: row, decision: "approve" });
+            }}
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            className="btn ghost sm"
+            style={{ minHeight: 44 }}
+            onClick={() => {
+              setDialogError(undefined);
+              setPending({ task: row, decision: "reject" });
+            }}
+          >
+            Reject
+          </button>
         </div>
-      </section>
-    </main>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <PageHeader
+        title="Leave Approvals"
+        subtitle="Pending workflow tasks for leave applications. Completing a task runs the policy check and records the decision."
+        back="/hr/leave"
+        backLabel="Leave"
+      />
+
+      {toast && (
+        <p role="status" aria-live="polite" className={`pill ${toast.tone}`} style={{ margin: "0 0 12px" }}>
+          {toast.text}
+        </p>
+      )}
+
+      <Card title="Pending Leave Approvals">
+        {loading ? (
+          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }} aria-live="polite">
+            Loading workflow tasks…
+          </div>
+        ) : error ? (
+          <EmptyState
+            icon="⚠️"
+            title="Could not load approvals"
+            message={error}
+            action={
+              <button type="button" className="btn ghost" onClick={() => void loadTasks()}>
+                Retry
+              </button>
+            }
+          />
+        ) : enriched.length === 0 ? (
+          <EmptyState
+            icon="✅"
+            title="No pending approvals"
+            message="There are no leave applications awaiting your decision."
+          />
+        ) : (
+          <DataTable<EnrichedTask>
+            columns={columns}
+            rows={enriched}
+            sortable
+            filterable
+            filterPlaceholder="Filter by employee, type or reason…"
+            pageSize={15}
+          />
+        )}
+      </Card>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={pending?.decision === "approve" ? "Approve this leave application?" : "Reject this leave application?"}
+        danger={pending?.decision === "reject"}
+        requireReason
+        reasonLabel={pending?.decision === "approve" ? "Approval remarks (maker-checker)" : "Reason for rejection"}
+        confirmLabel={pending?.decision === "approve" ? "Approve leave" : "Reject leave"}
+        busy={busy}
+        errorMessage={dialogError}
+        description={
+          pending ? (
+            <>
+              {pending.decision === "approve" ? "Approve" : "Reject"} the{" "}
+              <strong>{pending.task.leaveType}</strong> request from{" "}
+              <strong>{pending.task.employeeName}</strong> for{" "}
+              <strong>{pending.task.dates}</strong>
+              {typeof pending.task.days === "number" ? ` (${pending.task.days} day(s))` : ""}.
+              {pending.task.reason !== "—" && (
+                <>
+                  <br />
+                  <span style={{ color: "var(--ink2)" }}>Reason given: {pending.task.reason}</span>
+                </>
+              )}
+            </>
+          ) : null
+        }
+        onConfirm={(reason) => pending && void complete(pending.task.id, pending.decision, reason)}
+        onCancel={() => !busy && setPending(null)}
+      />
+    </>
   );
 }

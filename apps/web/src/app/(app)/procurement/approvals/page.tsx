@@ -1,12 +1,27 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
 import { getProcurementApprovals } from "../../../_data/loaders";
 import { ProcurementApprovalsPanel } from "./ProcurementApprovalsPanel";
+
+type ApprovalRow = {
+  id: string;
+  referenceId: string;
+  owner: string;
+  dueDisplay: string;
+} & Record<string, unknown>;
 
 export default async function ApprovalsPage() {
   const { data: approvals, source } = await getProcurementApprovals();
 
   const overdue = approvals.filter((a) => a.dueDisplay.toLowerCase().includes("overdue") || a.dueDisplay.toLowerCase().includes("today")).length;
+
+  const rows: ApprovalRow[] = approvals.map((a) => ({
+    id: a.id,
+    referenceId: a.referenceId,
+    owner: a.owner,
+    dueDisplay: a.dueDisplay,
+  }));
 
   return (
     <>
@@ -15,7 +30,7 @@ export default async function ApprovalsPage() {
         subtitle="Pending items requiring policy and budget sign-off."
         actions={
           <>
-            <button className="btn ghost">Escalation Rules</button>
+            <Link href="/procurement/approvals/escalation" className="btn ghost">Escalation Rules</Link>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
@@ -28,39 +43,30 @@ export default async function ApprovalsPage() {
         <StatCard icon="📋" iconBg="#ecfdf3" label="Action Required" value={approvals.length} />
       </StatGrid>
 
-      <Card
-        title="Pending approvals"
-        link={
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Indent</span>
-            <span>PO</span>
-          </div>
-        }
-      >
-        {approvals.length === 0 ? (
+      <Card title="Pending approvals">
+        {source === "error" ? (
+          <EmptyState
+            icon="⚠️"
+            title="Couldn’t load approvals"
+            message="The approvals service didn’t respond. Check your connection and try again."
+            action={<Link href="/procurement/approvals" className="btn ghost">Retry</Link>}
+          />
+        ) : rows.length === 0 ? (
           <EmptyState icon="✅" title="No pending approvals" message="All items are up to date." />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Approval ID</th>
-                <th>Reference</th>
-                <th>Owner</th>
-                <th>Due</th>
-              </tr>
-            </thead>
-            <tbody>
-              {approvals.map((item) => (
-                <tr key={item.id}>
-                  <td><span className="mono">{item.id}</span></td>
-                  <td><span className="mono">{item.referenceId}</span></td>
-                  <td>{item.owner}</td>
-                  <td>{item.dueDisplay}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<ApprovalRow>
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder="Filter by reference, owner, due…"
+            pageSize={10}
+            columns={[
+              { key: "id", label: "Approval ID" },
+              { key: "referenceId", label: "Reference" },
+              { key: "owner", label: "Owner" },
+              { key: "dueDisplay", label: "Due" },
+            ]}
+          />
         )}
       </Card>
 

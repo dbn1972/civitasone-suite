@@ -32,7 +32,16 @@ export function PayrollRunsTable({ runs, source = "api" }: { runs: PayrollRunDet
           {cacheNote}
         </p>
       ) : null}
-      <DataTable<PayrollRunDetail> columns={columns} rows={rows} rowLinkKey="id" rowLinkPrefix="/hr/payroll/" />
+      <DataTable<PayrollRunDetail>
+        columns={columns}
+        rows={rows}
+        rowLinkKey="id"
+        rowLinkPrefix="/hr/payroll/"
+        sortable
+        filterable
+        filterPlaceholder="Filter by period or status…"
+        pageSize={12}
+      />
     </>
   );
 }

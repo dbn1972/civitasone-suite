@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StatusPill, EmptyState } from "../../../../_components/ds";
+import { Segmented, DataTable } from "../../../../_components/ds";
 import type { UCSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -15,6 +15,8 @@ const TAB_STATUS_MAP: Record<Tab, string[]> = {
   Pending: ["pending", "rejected"],
   Submitted: ["submitted", "verified"],
 };
+
+type Row = UCSummary & { period: string };
 
 export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "api" | "error" }) {
   const [activeTab, setActiveTab] = useState<Tab>("All");
@@ -30,6 +32,8 @@ export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "
       ? rows
       : rows.filter((u) => TAB_STATUS_MAP[activeTab].includes(u.status));
 
+  const tableRows: Row[] = filtered.map((u) => ({ ...u, period: `${u.periodFrom} – ${u.periodTo}` }));
+
   const cacheNote =
     offline || fromCache
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
@@ -42,49 +46,26 @@ export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "
           {cacheNote}
         </p>
       ) : null}
-      <div className="seg">
-        {TABS.map((tab) => (
-          <span
-            key={tab}
-            className={activeTab === tab ? "on" : ""}
-            onClick={() => setActiveTab(tab)}
-            style={{ cursor: "pointer" }}
-          >
-            {tab}
-          </span>
-        ))}
+      <div style={{ marginBottom: 12 }}>
+        <Segmented options={TABS} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState icon="📋" title="No UCs found" message="No utilization certificates match the selected filter." />
-      ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>UC No</th>
-              <th>Grantee</th>
-              <th>Grant Ref</th>
-              <th>Period</th>
-              <th className="num">Amount</th>
-              <th>Submitted</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u) => (
-              <tr key={u.id}>
-                <td><span className="mono">{u.ucNo}</span></td>
-                <td>{u.grantee}</td>
-                <td>{u.grantRef ?? "—"}</td>
-                <td>{u.periodFrom} – {u.periodTo}</td>
-                <td className="num">₹{(u.amount / 100).toLocaleString("en-IN")}</td>
-                <td>{formatIndianDate(u.submittedDate)}</td>
-                <td><StatusPill status={u.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <DataTable<Row>
+        columns={[
+          { key: "ucNo", label: "UC No", render: (u) => <span className="mono">{u.ucNo}</span> },
+          { key: "grantee", label: "Grantee" },
+          { key: "grantRef", label: "Grant Ref", render: (u) => u.grantRef ?? "—" },
+          { key: "period", label: "Period" },
+          { key: "amount", label: "Amount", align: "right", cellType: "amount" },
+          { key: "submittedDate", label: "Submitted", render: (u) => formatIndianDate(u.submittedDate) },
+          { key: "status", label: "Status", cellType: "status" },
+        ]}
+        rows={tableRows}
+        sortable
+        filterable
+        filterPlaceholder="Search UCs…"
+        pageSize={15}
+      />
     </>
   );
 }

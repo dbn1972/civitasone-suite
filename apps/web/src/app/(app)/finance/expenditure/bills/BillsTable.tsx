@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { StatusPill, EmptyState } from "../../../../_components/ds";
+import { DataTable, StatusPill } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -37,38 +36,24 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
           {cacheNote}
         </p>
       ) : null}
-      {rows.length === 0 ? (
-        <EmptyState icon="🧮" title="No bills found" message="Submit a new bill to get started." />
-      ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Bill</th>
-              <th>Vendor</th>
-              <th>PO Ref</th>
-              <th className="num">Amount</th>
-              <th>Submitted</th>
-              <th>Due</th>
-              <th>3-Way Match</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((b) => (
-              <tr key={b.id} className="clickable">
-                <td><Link href={`/finance/expenditure/bills/${b.id}`} className="row-link"><span className="mono">{b.billNo}</span></Link></td>
-                <td>{b.vendor}</td>
-                <td>{b.poRef ?? "—"}</td>
-                <td className="num">₹{(b.amount / 100).toLocaleString("en-IN")}</td>
-                <td>{formatIndianDate(b.submittedDate)}</td>
-                <td>{b.dueDate ?? "—"}</td>
-                <td><StatusPill status={b.threeWayMatch} label={b.threeWayMatch.replace("_", " ")} /></td>
-                <td><StatusPill status={b.status} label={b.status.replace("_", " ")} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <DataTable<Bill>
+        columns={[
+          { key: "billNo", label: "Bill", render: (b) => <span className="mono">{b.billNo}</span> },
+          { key: "vendor", label: "Vendor" },
+          { key: "poRef", label: "PO Ref", render: (b) => b.poRef ?? "—" },
+          { key: "amount", label: "Amount", align: "right", cellType: "amount" },
+          { key: "submittedDate", label: "Submitted", render: (b) => formatIndianDate(b.submittedDate) },
+          { key: "dueDate", label: "Due", render: (b) => (b.dueDate ? formatIndianDate(b.dueDate) : "—") },
+          { key: "threeWayMatch", label: "3-Way Match", render: (b) => <StatusPill status={b.threeWayMatch} label={b.threeWayMatch.replace("_", " ")} /> },
+          { key: "status", label: "Status", render: (b) => <StatusPill status={b.status} label={b.status.replace("_", " ")} /> },
+        ]}
+        rows={rows}
+        rowHref={(b) => `/finance/expenditure/bills/${b.id}`}
+        sortable
+        filterable
+        filterPlaceholder="Search bills…"
+        pageSize={15}
+      />
     </>
   );
 }

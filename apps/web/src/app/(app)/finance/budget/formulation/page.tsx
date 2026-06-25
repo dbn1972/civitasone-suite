@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceBudgets } from "../../../../_data/loaders";
 import { FormulationTable } from "./FormulationTable";
+import { formatMoney } from "@/lib/formatters";
 
 export default async function BudgetFormulationPage() {
   const { data: budgets, source } = await getFinanceBudgets();
@@ -28,7 +29,7 @@ export default async function BudgetFormulationPage() {
       <StatGrid>
         <StatCard icon="📝" iconBg="#e7edfd" label="Budget Heads" value={budgets.length} />
         <StatCard icon="🏢" iconBg="#eff6ff" label="Major Heads" value={uniqueHeads} delta={`submitted ${budgets.filter(b => b.status === "approved").length}`} up={true} />
-        <StatCard icon="💰" iconBg="#fffaeb" label="Proposed Outlay" value={`₹${(totalSanctioned / 100).toLocaleString("en-IN")}`} up={false} />
+        <StatCard icon="💰" iconBg="#fffaeb" label="Proposed Outlay" value={formatMoney(totalSanctioned)} up={false} />
         <StatCard icon="⏳" iconBg="#fef3f2" label="Pending Review" value={pending} />
       </StatGrid>
 

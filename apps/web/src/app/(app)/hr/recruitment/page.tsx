@@ -1,7 +1,17 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { getJobOpenings } from "../../../_data/loaders";
-import type { JobOpeningSummary } from "@civitasone/types";
+import { formatIndianDate } from "@/lib/formatters";
+
+type Row = {
+  id: string;
+  jobTitle: string;
+  department: string;
+  vacancies: number;
+  applicationsReceived: number;
+  deadline: string;
+  status: string;
+} & Record<string, unknown>;
 
 export default async function RecruitmentPage() {
   const { data: openings, source } = await getJobOpenings();
@@ -11,17 +21,23 @@ export default async function RecruitmentPage() {
   const closed = openings.filter((o) => o.status === "closed").length;
   const totalApplications = openings.reduce((sum, o) => sum + o.applicationsReceived, 0);
 
-  const columns: { key: keyof JobOpeningSummary & string; label: string; align?: "left" | "right"; render?: (row: JobOpeningSummary) => React.ReactNode }[] = [
+  const rows: Row[] = openings.map((o) => ({
+    id: o.id,
+    jobTitle: o.jobTitle,
+    department: o.department,
+    vacancies: o.vacancies,
+    applicationsReceived: o.applicationsReceived,
+    deadline: o.applicationDeadline ? formatIndianDate(o.applicationDeadline) : "—",
+    status: o.status.replace("_", " "),
+  }));
+
+  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
     { key: "jobTitle", label: "Job Title" },
     { key: "department", label: "Department" },
     { key: "vacancies", label: "Vacancies", align: "right" },
     { key: "applicationsReceived", label: "Applications", align: "right" },
-    { key: "applicationDeadline", label: "Deadline", render: (r) => r.applicationDeadline ?? "—" },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => <StatusPill status={r.status} label={r.status.replace("_", " ")} />,
-    },
+    { key: "deadline", label: "Deadline" },
+    { key: "status", label: "Status", cellType: "status" },
   ];
 
   return (
@@ -38,9 +54,13 @@ export default async function RecruitmentPage() {
         <StatCard icon="👥" iconBg="#e6f0ff" label="Applications" value={totalApplications.toLocaleString("en-IN")} />
       </StatGrid>
       <Card title="Job Openings">
-        <DataTable<JobOpeningSummary>
+        <DataTable<Row>
           columns={columns}
-          rows={openings}
+          rows={rows}
+          sortable
+          filterable
+          filterPlaceholder="Filter by title, department or status…"
+          pageSize={15}
         />
       </Card>
     </>

@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Card, StatusPill, EmptyState } from "../../../_components/ds";
+import { useState, useMemo } from "react";
+import { Card, DataTable, Segmented } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Payment = {
   referenceId: string;
+  beneficiary: string;
+  amountDisplay: string;
+  status: string;
+};
+
+type Row = {
+  reference: string;
   beneficiary: string;
   amountDisplay: string;
   status: string;
@@ -20,10 +27,11 @@ function formatReference(ref: string): string {
   return ref;
 }
 
-type Tab = "all" | "pending" | "released";
+const TABS = ["All", "Pending", "Released"] as const;
+type Tab = (typeof TABS)[number];
 
 export function PaymentsTable({ payments, source = "api" }: { payments: Payment[]; source?: "api" | "error" }) {
-  const [activeTab, setActiveTab] = useState<Tab>("all");
+  const [activeTab, setActiveTab] = useState<Tab>("All");
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Payment[]>(
     "finance.payments",
     payments,
@@ -32,10 +40,21 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
   );
 
   const filtered = rows.filter((p) => {
-    if (activeTab === "pending") return p.status === "Pending Approval";
-    if (activeTab === "released") return p.status === "Released";
+    if (activeTab === "Pending") return p.status === "Pending Approval";
+    if (activeTab === "Released") return p.status === "Released";
     return true;
   });
+
+  const tableRows: Row[] = useMemo(
+    () =>
+      filtered.map((p) => ({
+        reference: formatReference(p.referenceId),
+        beneficiary: p.beneficiary,
+        amountDisplay: p.amountDisplay,
+        status: p.status,
+      })),
+    [filtered],
+  );
 
   const cacheNote =
     offline || fromCache
@@ -46,29 +65,11 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
     <Card
       title="Payments register"
       link={
-        <div className="seg">
-          <span
-            className={activeTab === "all" ? "on" : ""}
-            style={{ cursor: "pointer" }}
-            onClick={() => setActiveTab("all")}
-          >
-            All
-          </span>
-          <span
-            className={activeTab === "pending" ? "on" : ""}
-            style={{ cursor: "pointer" }}
-            onClick={() => setActiveTab("pending")}
-          >
-            Pending
-          </span>
-          <span
-            className={activeTab === "released" ? "on" : ""}
-            style={{ cursor: "pointer" }}
-            onClick={() => setActiveTab("released")}
-          >
-            Released
-          </span>
-        </div>
+        <Segmented
+          options={[...TABS]}
+          value={activeTab}
+          onChange={(v) => setActiveTab(v as Tab)}
+        />
       }
     >
       {cacheNote ? (
@@ -76,30 +77,19 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
           {cacheNote}
         </p>
       ) : null}
-      {filtered.length === 0 ? (
-        <EmptyState icon="💳" title="No payments found" message="Payments will appear here once bills are passed." />
-      ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Beneficiary</th>
-              <th className="num">Amount</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((p) => (
-              <tr key={p.referenceId}>
-                <td><span className="mono">{formatReference(p.referenceId)}</span></td>
-                <td>{p.beneficiary}</td>
-                <td className="num">{p.amountDisplay}</td>
-                <td><StatusPill status={p.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <DataTable<Row>
+        columns={[
+          { key: "reference", label: "Reference" },
+          { key: "beneficiary", label: "Beneficiary" },
+          { key: "amountDisplay", label: "Amount", align: "right" },
+          { key: "status", label: "Status", cellType: "status" },
+        ]}
+        rows={tableRows}
+        sortable
+        filterable
+        filterPlaceholder="Search payments…"
+        pageSize={15}
+      />
     </Card>
   );
 }

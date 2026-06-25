@@ -1,6 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceBills } from "../../../../_data/loaders";
+import { formatMoney } from "@/lib/formatters";
+import { BillCreateAction } from "../../_components/FinanceActions";
 import { BillsTable } from "./BillsTable";
 
 export default async function BillsPage() {
@@ -19,7 +21,7 @@ export default async function BillsPage() {
         actions={
           <>
             <button className="btn ghost">Pre-audit rules</button>
-            <button className="btn primary">+ New Bill</button>
+            <BillCreateAction />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
@@ -28,20 +30,11 @@ export default async function BillsPage() {
       <StatGrid>
         <StatCard icon="🧮" iconBg="#e7edfd" label="Bills In Process" value={inProcess} />
         <StatCard icon="⏱" iconBg="#fffaeb" label="Total Bills" value={bills.length} />
-        <StatCard icon="💸" iconBg="#eff6ff" label="Value In Pipeline" value={`₹${(totalAmount / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Paid (MTD)" value={`₹${(paidAmount / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="💸" iconBg="#eff6ff" label="Value In Pipeline" value={formatMoney(totalAmount)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Paid (MTD)" value={formatMoney(paidAmount)} />
       </StatGrid>
 
-      <Card
-        title="Bill processing"
-        link={
-          <div className="seg">
-            <span className="on">All</span>
-            <span>In process</span>
-            <span>Paid</span>
-          </div>
-        }
-      >
+      <Card title="Bill processing">
         <BillsTable bills={bills} source={source} />
       </Card>
     </>

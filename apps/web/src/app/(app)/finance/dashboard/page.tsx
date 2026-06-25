@@ -3,6 +3,7 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getFinanceDashboard } from "../../../_data/loaders";
 import Link from "next/link";
 import { BudgetChart } from "./BudgetChart";
+import { formatMoney } from "@/lib/formatters";
 
 const QUICK_LINKS = [
   { label: "Budget Formulation", href: "/finance/budget/formulation", icon: "📝" },
@@ -47,7 +48,7 @@ export default async function FinanceDashboardPage() {
           icon="📤"
           iconBg="#eff6ff"
           label="Expenditure (YTD)"
-          value={`₹${(data.totalExpenditure / 100).toLocaleString("en-IN")}`}
+          value={formatMoney(data.totalExpenditure)}
           delta={`${data.budgetUtilisationPct.toFixed(1)}%`}
           up={true}
         />

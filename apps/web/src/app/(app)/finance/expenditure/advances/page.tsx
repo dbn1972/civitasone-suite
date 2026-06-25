@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceAdvances } from "../../../../_data/loaders";
 import { AdvancesTable } from "./AdvancesTable";
+import { formatMoney } from "@/lib/formatters";
 
 export default async function AdvancesPage() {
   const { data: advances, source } = await getFinanceAdvances();
@@ -27,8 +28,8 @@ export default async function AdvancesPage() {
 
       <StatGrid>
         <StatCard icon="💵" iconBg="#e7edfd" label="Open Advances" value={openAdvances} />
-        <StatCard icon="📤" iconBg="#eff6ff" label="Outstanding" value={`₹${(totalBalance / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Settled (MTD)" value={`₹${(settled / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="📤" iconBg="#eff6ff" label="Outstanding" value={formatMoney(totalBalance)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Settled (MTD)" value={formatMoney(settled)} />
         <StatCard icon="⚠️" iconBg="#fef3f2" label="Overdue > 90d" value={overdue} />
       </StatGrid>
 

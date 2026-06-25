@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
 import { getProcurementTenders } from "../../../_data/loaders";
+import { formatIndianDate } from "@/lib/formatters";
 
 const TYPE_LABELS: Record<string, string> = {
   open: "Open",
@@ -9,12 +11,36 @@ const TYPE_LABELS: Record<string, string> = {
   gem: "GeM",
 };
 
+type TenderRow = {
+  id: string;
+  tenderNo: string;
+  title: string;
+  typeLabel: string;
+  estimatedValue: number;
+  publishDate: string;
+  bidClosingDate: string;
+  bidsReceived: number;
+  status: string;
+} & Record<string, unknown>;
+
 export default async function TendersPage() {
   const { data: tenders, source } = await getProcurementTenders();
 
   const published = tenders.filter((t) => t.status === "published").length;
   const underEvaluation = tenders.filter((t) => t.status === "evaluation").length;
   const awarded = tenders.filter((t) => t.status === "awarded").length;
+
+  const rows: TenderRow[] = tenders.map((t) => ({
+    id: t.id,
+    tenderNo: t.tenderNo,
+    title: t.title,
+    typeLabel: TYPE_LABELS[t.type] ?? t.type,
+    estimatedValue: t.estimatedValue,
+    publishDate: t.publishDate ? formatIndianDate(t.publishDate) : "—",
+    bidClosingDate: formatIndianDate(t.bidClosingDate),
+    bidsReceived: t.bidsReceived,
+    status: t.status,
+  }));
 
   return (
     <>
@@ -23,8 +49,16 @@ export default async function TendersPage() {
         subtitle="Manage open, limited, and GeM tenders with bid tracking."
         actions={
           <>
-            <button className="btn ghost">CPPP Portal</button>
-            <button className="btn primary">+ New Tender</button>
+            <a
+              className="btn ghost"
+              href="https://eprocure.gov.in/cppp/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              CPPP Portal<span aria-hidden="true"> ↗</span>
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            <Link href="/procurement/tenders/new" className="btn primary">+ New Tender</Link>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
@@ -37,47 +71,41 @@ export default async function TendersPage() {
         <StatCard icon="🏆" iconBg="#eff6ff" label="Awarded" value={awarded} />
       </StatGrid>
 
-      <Card
-        title="Tenders register"
-        link={
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Open</span>
-            <span>GeM</span>
-          </div>
-        }
-      >
-        {tenders.length === 0 ? (
-          <EmptyState icon="🏛️" title="No tenders found" message="Create a new tender to start the procurement process." />
+      <Card title="Tenders register">
+        {source === "error" ? (
+          <EmptyState
+            icon="⚠️"
+            title="Couldn’t load tenders"
+            message="The tender service didn’t respond. Check your connection and try again."
+            action={<Link href="/procurement/tenders" className="btn ghost">Retry</Link>}
+          />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon="🏛️"
+            title="No tenders found"
+            message="Create a new tender to start the procurement process."
+            action={<Link href="/procurement/tenders/new" className="btn primary">+ New Tender</Link>}
+          />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Tender No</th>
-                <th>Title</th>
-                <th>Type</th>
-                <th className="num">Est. Value</th>
-                <th>Published</th>
-                <th>Bid Close</th>
-                <th className="num">Bids</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tenders.map((tender) => (
-                <tr key={tender.id}>
-                  <td><span className="mono">{tender.tenderNo}</span></td>
-                  <td>{tender.title}</td>
-                  <td>{TYPE_LABELS[tender.type] ?? tender.type}</td>
-                  <td className="num">₹{(tender.estimatedValue / 100).toLocaleString("en-IN")}</td>
-                  <td>{tender.publishDate ?? "—"}</td>
-                  <td>{tender.bidClosingDate}</td>
-                  <td className="num">{tender.bidsReceived}</td>
-                  <td><StatusPill status={tender.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<TenderRow>
+            rows={rows}
+            rowLinkKey="id"
+            rowLinkPrefix="/procurement/tenders/"
+            sortable
+            filterable
+            filterPlaceholder="Filter by tender no, title, status…"
+            pageSize={10}
+            columns={[
+              { key: "tenderNo", label: "Tender No" },
+              { key: "title", label: "Title" },
+              { key: "typeLabel", label: "Type" },
+              { key: "estimatedValue", label: "Est. Value", align: "right", cellType: "amount" },
+              { key: "publishDate", label: "Published" },
+              { key: "bidClosingDate", label: "Bid Close" },
+              { key: "bidsReceived", label: "Bids", align: "right" },
+              { key: "status", label: "Status", cellType: "status" },
+            ]}
+          />
         )}
       </Card>
     </>

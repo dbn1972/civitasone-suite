@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
 import { getProcurementGRNs } from "../../../_data/loaders";
-import { ListToolbar } from "../_components/ListToolbar";
-import { paginateList, type ListSearchParams } from "../_components/listUtils";
+import { formatIndianDate } from "@/lib/formatters";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -14,19 +13,34 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
-export default async function GRNPage({ searchParams }: { searchParams: ListSearchParams }) {
-  const pageSize = Math.min(50, Math.max(5, Number.parseInt(searchParams.limit ?? "10", 10) || 10));
-  const offset = (Math.max(1, Number.parseInt(searchParams.page ?? "1", 10) || 1) - 1) * pageSize;
-  const { data: grns, source } = await getProcurementGRNs({
-    limit: pageSize,
-    offset,
-    q: searchParams.q,
-  });
-  const { rows, total, page, limit, pageCount, q } = paginateList(grns, { ...searchParams, limit: String(pageSize) });
+type GRNRow = {
+  id: string;
+  grnNo: string;
+  poRef: string;
+  vendor: string;
+  receivedDate: string;
+  itemCount: number;
+  match: string;
+  status: string;
+} & Record<string, unknown>;
+
+export default async function GRNPage() {
+  const { data: grns, source } = await getProcurementGRNs({ limit: 500 });
 
   const accepted = grns.filter((g) => g.status === "accepted").length;
   const pendingQC = grns.filter((g) => g.status === "quality_check" || g.status === "received").length;
   const rejected = grns.filter((g) => g.status === "rejected" || g.status === "partially_rejected").length;
+
+  const rows: GRNRow[] = grns.map((g) => ({
+    id: g.id,
+    grnNo: g.grnNo,
+    poRef: g.poRef,
+    vendor: g.vendor,
+    receivedDate: formatIndianDate(g.receivedDate),
+    itemCount: g.itemCount,
+    match: g.threeWayMatch === undefined ? "—" : g.threeWayMatch ? "✓ Matched" : "✗ Mismatch",
+    status: STATUS_LABELS[g.status] ?? g.status,
+  }));
 
   return (
     <>
@@ -49,48 +63,39 @@ export default async function GRNPage({ searchParams }: { searchParams: ListSear
       </StatGrid>
 
       <Card title="Goods receipt notes">
-        <div className="pad" style={{ paddingBottom: 0 }}>
-          <ListToolbar basePath="/procurement/grn" total={Math.max(total, grns.length)} page={page} limit={limit} pageCount={pageCount} q={q} />
-        </div>
-        {rows.length === 0 ? (
-          <EmptyState icon="📦" title="No GRNs found" message="Create a new GRN when goods arrive." />
+        {source === "error" ? (
+          <EmptyState
+            icon="⚠️"
+            title="Couldn’t load GRNs"
+            message="The procurement service didn’t respond. Check your connection and try again."
+            action={<Link href="/procurement/grn" className="btn ghost">Retry</Link>}
+          />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon="📦"
+            title="No GRNs found"
+            message="Create a new GRN when goods arrive."
+            action={<Link href="/procurement/grn/new" className="btn primary">+ New GRN</Link>}
+          />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>GRN No</th>
-                <th>PO Ref</th>
-                <th>Vendor</th>
-                <th>Received Date</th>
-                <th className="num">Items</th>
-                <th>Match</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((grn) => (
-                <tr key={grn.id} className="clickable">
-                  <td>
-                    <Link href={`/procurement/grn/${grn.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                      <span className="mono">{grn.grnNo}</span>
-                    </Link>
-                  </td>
-                  <td><span className="mono">{grn.poRef}</span></td>
-                  <td>{grn.vendor}</td>
-                  <td>{grn.receivedDate}</td>
-                  <td className="num">{grn.itemCount}</td>
-                  <td>
-                    {grn.threeWayMatch === undefined ? "—" : (
-                      <span style={{ color: grn.threeWayMatch ? "#16a34a" : "#b91c1c", fontWeight: 500 }}>
-                        {grn.threeWayMatch ? "✓" : "✗"}
-                      </span>
-                    )}
-                  </td>
-                  <td><StatusPill status={grn.status} label={STATUS_LABELS[grn.status] ?? grn.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<GRNRow>
+            rows={rows}
+            rowLinkKey="id"
+            rowLinkPrefix="/procurement/grn/"
+            sortable
+            filterable
+            filterPlaceholder="Filter by GRN no, PO ref, vendor…"
+            pageSize={10}
+            columns={[
+              { key: "grnNo", label: "GRN No" },
+              { key: "poRef", label: "PO Ref" },
+              { key: "vendor", label: "Vendor" },
+              { key: "receivedDate", label: "Received Date" },
+              { key: "itemCount", label: "Items", align: "right" },
+              { key: "match", label: "Match" },
+              { key: "status", label: "Status", cellType: "status" },
+            ]}
+          />
         )}
       </Card>
     </>

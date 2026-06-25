@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceGLEntries } from "../../../../_data/loaders";
 import { GLTable } from "./GLTable";
+import { formatMoney } from "@/lib/formatters";
 
 export default async function GeneralLedgerPage() {
   const { data: entries, source } = await getFinanceGLEntries();
@@ -28,8 +29,8 @@ export default async function GeneralLedgerPage() {
       <StatGrid>
         <StatCard icon="📒" iconBg="#e7edfd" label="Vouchers" value={entries.length} />
         <StatCard icon="🏛️" iconBg="#eff6ff" label="Accounts Active" value={uniqueAccounts} />
-        <StatCard icon="📤" iconBg="#fef3f2" label="Total Debit" value={`₹${(totalDebit / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="Total Credit" value={`₹${(totalCredit / 100).toLocaleString("en-IN")}`} delta={isBalanced ? "Balanced" : "Unbalanced"} up={isBalanced} />
+        <StatCard icon="📤" iconBg="#fef3f2" label="Total Debit" value={formatMoney(totalDebit)} />
+        <StatCard icon="📥" iconBg="#ecfdf3" label="Total Credit" value={formatMoney(totalCredit)} delta={isBalanced ? "Balanced" : "Unbalanced"} up={isBalanced} />
       </StatGrid>
 
       <Card title="General ledger · FY 2026-27">
