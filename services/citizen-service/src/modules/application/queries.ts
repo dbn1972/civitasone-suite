@@ -3,6 +3,27 @@ import * as repo from "./repo.js";
 import * as portalRepo from "../portal/repo.js";
 import type { ApplicationRow } from "./schema.js";
 
+/** Cache JSON-roundtrips timestamp/date columns to ISO strings; coerce safely. */
+function toIso(v: Date | string): string {
+  return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+}
+
+/**
+ * Re-coerce the cached row's date fields so a cache HIT (JSON strings) and a
+ * cache MISS (Date objects) return identical shapes to the API. `deadline` is a
+ * `date` column (string from the driver), so it is normalised to a YYYY-MM-DD
+ * string consistently. (P1-3/P1-4 read-model consistency.)
+ */
+function normalizeApplicationDates<T extends ApplicationRow>(a: T): T {
+  return {
+    ...a,
+    submittedAt: toIso(a.submittedAt) as unknown as T["submittedAt"],
+    createdAt: toIso(a.createdAt) as unknown as T["createdAt"],
+    updatedAt: toIso(a.updatedAt) as unknown as T["updatedAt"],
+    ...(a.deadline != null ? { deadline: String(a.deadline) as unknown as T["deadline"] } : {}),
+  };
+}
+
 export async function getApplication(tenantId: string, id: string): Promise<(ApplicationRow & { history: Awaited<ReturnType<typeof repo.listStatusHistory>>; documents: Awaited<ReturnType<typeof repo.listDocuments>> }) | null> {
   const app = await cache.getOrLoad<ApplicationRow | null>(
     cache.makeKey(tenantId, "application", id),
@@ -13,7 +34,7 @@ export async function getApplication(tenantId: string, id: string): Promise<(App
     repo.listStatusHistory(id),
     repo.listDocuments(id),
   ]);
-  return { ...app, history, documents };
+  return { ...normalizeApplicationDates(app), history, documents };
 }
 
 export async function listApplications(tenantId: string, citizenId: string): Promise<ApplicationRow[]> {
@@ -21,7 +42,7 @@ export async function listApplications(tenantId: string, citizenId: string): Pro
     cache.makeKey(tenantId, "applications", citizenId),
     () => repo.listApplicationsByCitizen(tenantId, citizenId),
   );
-  return rows ?? [];
+  return (rows ?? []).map(normalizeApplicationDates);
 }
 
 /** Officer-only: list applications across the whole tenant (no citizen scoping). */
@@ -32,7 +53,7 @@ export async function listAllApplications(tenantId: string): Promise<Application
 function mapRequestStatus(status: string): "submitted" | "under_review" | "in_progress" | "resolved" | "rejected" {
   if (status === "under_review") return "under_review";
   if (status === "in_progress") return "in_progress";
-  if (status === "resolved" || status === "approved") return "resolved";
+  if (status === "resolved" || status === "approved" || status === "issued") return "resolved";
   if (status === "rejected") return "rejected";
   return "submitted";
 }
@@ -63,8 +84,8 @@ export async function listCitizenRequestSummaries(tenantId: string, limit: numbe
       serviceType: row.serviceId,
       citizenName: p?.name ?? row.citizenId,
       ...(p?.phone ? { citizenPhone: `XXXXXX${p.phone.slice(-4)}` } : {}),
-      submittedAt: new Date(row.submittedAt as unknown as string).toISOString(),
-      ...(row.deadline ? { expectedResolutionDate: row.deadline.toString() } : {}),
+      submittedAt: toIso(row.submittedAt as unknown as string),
+      ...(row.deadline ? { expectedResolutionDate: String(row.deadline) } : {}),
       status: mapRequestStatus(row.status),
     };
   });

@@ -3,6 +3,7 @@ import { ZodError, z } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { safeText } from "../../shared/sanitize.js";
 import * as commands from "../helpdesk/commands.js";
 import * as repo from "../helpdesk/repo.js";
 
@@ -12,7 +13,8 @@ const STAFF_ROLES = [
 ];
 
 const escalateBody = z.object({
-  reason: z.string().min(1).max(1000),
+  // P1-7: capped, control-char-stripped, CSV-injection-guarded free text.
+  reason: safeText({ max: 1000, multiline: true }),
   assignedTo: z.string().uuid().optional(),
 });
 

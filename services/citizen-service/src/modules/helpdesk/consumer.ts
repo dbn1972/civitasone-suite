@@ -51,6 +51,9 @@ export function registerHelpdeskConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ticket = await repo.findTicketByIdTx(tx, p.id, msg.tenantId);
       if (!ticket) return;
+      // P1: state guard — closing an already-closed ticket is a no-op (no
+      // duplicate audit entry / note). Terminal state is immutable.
+      if (ticket.status === "closed") return;
       await repo.updateTicket(tx, p.id, msg.tenantId, { status: "closed", updatedBy: msg.actorId });
       if (p.note) {
         await repo.insertNote(tx, {
@@ -86,6 +89,10 @@ export function registerHelpdeskConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId ?? p.id))) return;
       const ticket = await repo.findTicketByIdTx(tx, p.id, msg.tenantId);
       if (!ticket) return;
+      // P1: state guard — a closed ticket is terminal and cannot be reopened to
+      // "resolved"; re-resolving an already-resolved ticket is a no-op so the
+      // original resolvedAt timestamp is preserved.
+      if (ticket.status === "closed" || ticket.status === "resolved") return;
       await repo.updateTicket(tx, p.id, msg.tenantId, {
         status: "resolved",
         resolvedAt: new Date(),

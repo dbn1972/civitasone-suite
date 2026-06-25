@@ -4,6 +4,25 @@ import * as portalRepo from "../portal/repo.js";
 import type { GrievanceRow } from "./schema.js";
 import type { CitizenRequestSummary } from "@civitasone/types";
 
+/** Cache JSON-roundtrips timestamp columns to ISO strings; coerce safely. */
+function toIso(v: Date | string): string {
+  return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+}
+
+/**
+ * Re-coerce the cached row's timestamps so a cache HIT (JSON strings) and a
+ * cache MISS (Date objects) return identical shapes to the API. Without this,
+ * `createdAt`/`updatedAt` leak as Date on a miss and string on a hit.
+ * (P1-3/P1-4 read-model consistency.)
+ */
+function normalizeGrievanceDates<T extends GrievanceRow>(g: T): T {
+  return {
+    ...g,
+    createdAt: toIso(g.createdAt) as unknown as T["createdAt"],
+    updatedAt: toIso(g.updatedAt) as unknown as T["updatedAt"],
+  };
+}
+
 export async function getGrievance(tenantId: string, id: string): Promise<(GrievanceRow & { actions: Awaited<ReturnType<typeof repo.listActions>> }) | null> {
   const grievance = await cache.getOrLoad<GrievanceRow | null>(
     cache.makeKey(tenantId, "grievance", id),
@@ -11,7 +30,7 @@ export async function getGrievance(tenantId: string, id: string): Promise<(Griev
   );
   if (!grievance || grievance.tenantId !== tenantId) return null;
   const actions = await repo.listActions(id);
-  return { ...grievance, actions };
+  return { ...normalizeGrievanceDates(grievance), actions };
 }
 
 export async function listGrievances(tenantId: string, citizenId: string): Promise<GrievanceRow[]> {
@@ -19,7 +38,7 @@ export async function listGrievances(tenantId: string, citizenId: string): Promi
     cache.makeKey(tenantId, "grievances", citizenId),
     () => repo.listGrievancesByCitizen(tenantId, citizenId),
   );
-  return rows ?? [];
+  return (rows ?? []).map(normalizeGrievanceDates);
 }
 
 /** Officer-only: list grievances across the whole tenant (no citizen scoping). */
@@ -62,7 +81,7 @@ export async function listRequests(tenantId: string, limit: number, offset: numb
       serviceType: row.category,
       citizenName: p?.name ?? row.citizenId,
       ...(p?.phone ? { citizenPhone: `XXXXXX${p.phone.slice(-4)}` } : {}),
-      submittedAt: new Date(row.createdAt as unknown as string).toISOString(),
+      submittedAt: toIso(row.createdAt as unknown as string),
       status: mapRequestStatus(row.status),
     };
   });
