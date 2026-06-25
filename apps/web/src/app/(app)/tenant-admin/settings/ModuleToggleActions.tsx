@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { EmptyState } from "../../../_components/ds";
 
 type ModuleRow = { moduleKey: string; moduleName: string; enabled: boolean; enabledAt?: string | null };
 
@@ -93,7 +94,7 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
             );
           })
         ) : (
-          <div className="empty-state"><div>🧩</div><h4>No modules</h4><p>Modules will appear here once configured.</p></div>
+          <EmptyState icon="🧩" title="No modules" message="Modules will appear here once configured." />
         )}
         <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>{status}</div>
         <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{error}</div>

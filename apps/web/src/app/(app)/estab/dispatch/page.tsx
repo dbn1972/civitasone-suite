@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatusPill, DataTable } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 type DispatchRow = {
   id: string;
@@ -41,29 +42,25 @@ export default function DispatchRegistryPage() {
       />
       <div className="card">
         <div className="card-h"><h3>Dispatch register</h3></div>
-        <table className="tbl">
-          <thead>
-            <tr><th>Dispatch No</th><th>To</th><th>Subject</th><th>Mode</th><th>Date</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: 24 }}>Loading…</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: 24 }}>No dispatches yet</td></tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  <td><span className="mono">{r.dispatchNo}</span></td>
-                  <td>{r.toAddress}</td>
-                  <td>{r.subject}</td>
-                  <td>{r.mode}</td>
-                  <td>{r.dispatchedAt?.slice(0, 10) ?? "—"}</td>
-                  <td><StatusPill status={r.status} label={r.status} /></td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {loading ? (
+          <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        ) : (
+          <DataTable<DispatchRow>
+            columns={[
+              { key: "dispatchNo", label: "Dispatch No", render: (r) => <span className="mono">{r.dispatchNo}</span> },
+              { key: "toAddress", label: "To" },
+              { key: "subject", label: "Subject" },
+              { key: "mode", label: "Mode" },
+              { key: "dispatchedAt", label: "Date", render: (r) => <>{formatIndianDate(r.dispatchedAt)}</> },
+              { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} label={r.status.replace(/_/g, " ")} /> },
+            ]}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder="Filter dispatches…"
+            pageSize={15}
+          />
+        )}
       </div>
     </>
   );

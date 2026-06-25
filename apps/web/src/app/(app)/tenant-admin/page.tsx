@@ -1,22 +1,28 @@
 import { DataSourceBadge } from "../../_components/DataSourceBadge";
-import { PageHeader, StatCard } from "../../_components/ds";
+import { PageHeader, StatCard, DataTable, EmptyState } from "../../_components/ds";
 import { getTenantAdminDashboard } from "../../_data/loaders";
+import { Breadcrumb } from "./Breadcrumb";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 const KPI_ICONS = ["👥", "🧩", "💚", "🎯"];
 const KPI_BG = ["#eff6ff", "#ecfdf3", "#ecfdf3", "#f1f5f9"];
 
 export default async function TenantAdminPage() {
+  const roles = getSessionRoles();
+  const canViewOperations = roles.includes("platform_admin") || roles.includes("super_admin");
   const { data: dashboard, source } = await getTenantAdminDashboard();
   const { kpis, health, modules } = dashboard;
 
   return (
     <div className="wrap">
+      <Breadcrumb items={[{ label: "Tenant Admin" }]} />
       <PageHeader
         title="Tenant Administration"
         subtitle="Manage users, modules, sessions, and security for this workspace."
         actions={
           <>
             <button className="btn ghost">Export report</button>
+            {canViewOperations && <a className="btn ghost" href="/tenant-admin/operations">Operations</a>}
             <button className="btn primary">Invite user</button>
           </>
         }
@@ -33,21 +39,13 @@ export default async function TenantAdminPage() {
             <h3>Service health</h3>
             <span className={`pill ${health.status === "ok" ? "good" : health.status === "degraded" ? "warn" : "bad"}`}>{health.status}</span>
           </div>
-          {health.services.length > 0 ? (
-            <table className="tbl">
-              <thead><tr><th>Service</th><th>Status</th></tr></thead>
-              <tbody>
-                {health.services.map((s) => (
-                  <tr key={s.service}>
-                    <td><span className="mono">{s.service}</span></td>
-                    <td><span className={`pill ${s.status === "ok" ? "good" : s.status === "degraded" ? "warn" : "bad"}`}>{s.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="empty-state"><div>💚</div><h4>No service data</h4><p>Service health will appear once services are monitored.</p></div>
-          )}
+          <DataTable
+            columns={[
+              { key: "service", label: "Service" },
+              { key: "status", label: "Status", cellType: "status" },
+            ]}
+            rows={health.services.map((s) => ({ service: s.service, status: s.status }))}
+          />
         </div>
         <div className="card">
           <div className="card-h">
@@ -64,7 +62,7 @@ export default async function TenantAdminPage() {
               ))}
             </div>
           ) : (
-            <div className="empty-state"><div>🧩</div><h4>No modules</h4><p>Enabled modules will appear here.</p></div>
+            <EmptyState icon="🧩" title="No modules" message="Enabled modules will appear here." />
           )}
         </div>
       </div>

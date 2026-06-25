@@ -1,5 +1,6 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard } from "../../../_components/ds";
+import { PageHeader, StatCard, EmptyState } from "../../../_components/ds";
+import { Breadcrumb } from "../Breadcrumb";
 import { getNotificationPreferences } from "../../../_data/loaders";
 import { NotificationPrefActions } from "./NotificationPrefActions";
 
@@ -13,6 +14,7 @@ export default async function NotificationPrefsPage() {
 
   return (
     <div className="wrap">
+      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Notification Preferences" }]} />
       <PageHeader
         back="/tenant-admin"
         title="Notification Preferences"
@@ -42,7 +44,7 @@ export default async function NotificationPrefsPage() {
                 </div>
               ))
             ) : (
-              <div className="empty-state"><div>🔔</div><h4>No notifications configured</h4><p>Event channel settings will appear here once modules are enabled.</p></div>
+              <EmptyState icon="🔔" title="No notifications configured" message="Event channel settings will appear here once modules are enabled." />
             )}
           </div>
         </div>

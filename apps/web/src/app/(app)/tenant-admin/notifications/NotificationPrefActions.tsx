@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { EmptyState } from "../../../_components/ds";
 
 type Pref = {
   id: string;
@@ -142,7 +143,7 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
             </div>
           ))
         ) : (
-          <div className="empty-state"><div>⚙️</div><h4>No channels</h4><p>Channel settings will appear here.</p></div>
+          <EmptyState icon="⚙️" title="No channels" message="Channel settings will appear here." />
         )}
         <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>{status}</div>
         <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{error}</div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Segmented, ConfirmDialog } from "../../../_components/ds";
+import { Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 type Session = {
@@ -14,7 +14,7 @@ type Session = {
   lastActiveAt: string;
   mfaVerified: boolean;
   status: "active" | "expired" | "revoked";
-};
+} & Record<string, unknown>;
 
 const FILTERS = ["All", "Active", "Revoked"] as const;
 
@@ -83,58 +83,58 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
       {notice ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "#067647", margin: 0, padding: "8px 16px 0" }}>{notice}</p>
       ) : null}
-      <table className="tbl" aria-labelledby="sessions-table-heading">
-        <thead>
-          <tr>
-            <th scope="col">User</th>
-            <th scope="col">Device</th>
-            <th scope="col">Location</th>
-            <th scope="col">Last active</th>
-            <th scope="col">MFA</th>
-            <th scope="col">Status</th>
-            <th scope="col"><span className="sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((s) => (
-            <tr key={s.id}>
-              <td>
-                <div className="who">
-                  <div className="av">{(s.userName ?? s.userEmail).slice(0, 2).toUpperCase()}</div>
-                  <div>
-                    <div className="nm">{s.userName ?? "—"}</div>
-                    <div className="ml">{s.userEmail}</div>
-                  </div>
+      <DataTable<Session>
+        columns={[
+          {
+            key: "userEmail",
+            label: "User",
+            render: (s) => (
+              <div className="who">
+                <div className="av" aria-hidden="true">{(s.userName ?? s.userEmail).slice(0, 2).toUpperCase()}</div>
+                <div>
+                  <div className="nm">{s.userName ?? "—"}</div>
+                  <div className="ml">{s.userEmail}</div>
                 </div>
-              </td>
-              <td>{deviceLabel(s.userAgent)}</td>
-              <td>
+              </div>
+            ),
+          },
+          { key: "userAgent", label: "Device", render: (s) => deviceLabel(s.userAgent) },
+          {
+            key: "ipAddress",
+            label: "Location",
+            render: (s) => (
+              <>
                 {locationLabel(s.ipAddress)}
                 {s.ipAddress ? <div style={{ fontSize: 11, color: "#98a2b3" }}><span className="mono">{s.ipAddress}</span></div> : null}
-              </td>
-              <td>{formatIndianDate(s.lastActiveAt)}</td>
-              <td>{s.mfaVerified ? <span className="pill good">Yes</span> : <span className="pill mut">No</span>}</td>
-              <td>
-                {s.status === "active" ? <span className="pill good">Active</span>
-                  : s.status === "revoked" ? <span className="pill bad">Revoked</span>
-                  : <span className="pill mut">Expired</span>}
-              </td>
-              <td>
-                {s.status === "active"
-                  ? (
-                    <button type="button" className="btn danger sm" disabled={busy} onClick={() => { setError(undefined); setPending(s); }}>
-                      Revoke
-                    </button>
-                  )
-                  : <span style={{ fontSize: 12, color: "#98a2b3" }}>—</span>}
-              </td>
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr><td colSpan={7}><div className="empty-state"><div>🖥️</div><h4>No sessions</h4><p>No sessions match this filter.</p></div></td></tr>
-          )}
-        </tbody>
-      </table>
+              </>
+            ),
+          },
+          { key: "lastActiveAt", label: "Last active", render: (s) => formatIndianDate(s.lastActiveAt) },
+          { key: "mfaVerified", label: "MFA", render: (s) => (s.mfaVerified ? <span className="pill good">Yes</span> : <span className="pill mut">No</span>) },
+          {
+            key: "status",
+            label: "Status",
+            render: (s) =>
+              s.status === "active" ? <span className="pill good">Active</span>
+                : s.status === "revoked" ? <span className="pill bad">Revoked</span>
+                : <span className="pill mut">Expired</span>,
+          },
+          {
+            key: "id",
+            label: "Actions",
+            sortable: false,
+            render: (s) =>
+              s.status === "active"
+                ? (
+                  <button type="button" className="btn danger sm" disabled={busy} onClick={() => { setError(undefined); setPending(s); }}>
+                    Revoke
+                  </button>
+                )
+                : <span style={{ fontSize: 12, color: "#98a2b3" }}>—</span>,
+          },
+        ]}
+        rows={rows}
+      />
 
       <ConfirmDialog
         open={pending !== null}

@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getVehicles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { VehiclesTable, type VehicleRow } from "./VehiclesTable";
 
 export default async function VehiclesPage() {
   const { data: vehicles, source } = await getVehicles();
@@ -8,6 +9,16 @@ export default async function VehiclesPage() {
   const available = vehicles.filter((v) => v.status === "available").length;
   const inUse = vehicles.filter((v) => v.status === "in_use").length;
   const maintenance = vehicles.filter((v) => v.status === "maintenance").length;
+
+  const rows: VehicleRow[] = vehicles.map((v) => ({
+    id: v.id,
+    vehicleNo: v.vehicleNo,
+    model: `${v.make} ${v.model}`,
+    allocatedTo: v.assignedTo ?? "Pool",
+    odometer: `${v.odometerKm.toLocaleString("en-IN")} km`,
+    status: v.status.replace(/_/g, " "),
+    pool: !v.assignedTo,
+  }));
 
   return (
     <>
@@ -34,7 +45,7 @@ export default async function VehiclesPage() {
           fontSize: 13,
         }}
       >
-        🔗 <b>Vehicles are Assets.</b> The vehicle record (value, depreciation) lives in the Asset register; this screen adds fleet operations — allocation, logbook &amp; fuel.
+        <span aria-hidden="true">🔗</span> <b>Vehicles are Assets.</b> The vehicle record (value, depreciation) lives in the Asset register; this screen adds fleet operations — allocation, logbook &amp; fuel.
       </div>
       <StatGrid>
         <StatCard icon="🚗" iconBg="#e6f7f5" label="Fleet" value={total.toLocaleString("en-IN")} />
@@ -43,41 +54,15 @@ export default async function VehiclesPage() {
         <StatCard icon="🔧" iconBg="#fef3f2" label="Under Maintenance" value={maintenance.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h">
-          <h3>Vehicle fleet</h3>
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Pool</span>
-            <span>Assigned</span>
-          </div>
-        </div>
         {vehicles.length === 0 ? (
-          <EmptyState icon="🚗" title="No vehicles found" message="Register vehicles to manage your fleet." />
+          <>
+            <div className="card-h">
+              <h3>Vehicle fleet</h3>
+            </div>
+            <EmptyState icon="🚗" title="No vehicles found" message="Register vehicles to manage your fleet." />
+          </>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Reg no.</th>
-                <th>Model</th>
-                <th>Allocated to</th>
-                <th>Odometer</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vehicles.map((v) => (
-                <tr key={v.id}>
-                  <td><span className="mono">{v.vehicleNo}</span></td>
-                  <td>{v.make} {v.model}</td>
-                  <td>{v.assignedTo ?? "Pool"}</td>
-                  <td>{v.odometerKm.toLocaleString("en-IN")} km</td>
-                  <td>
-                    <StatusPill status={v.status.replace(/_/g, " ")} label={v.status.replace(/_/g, " ")} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <VehiclesTable rows={rows} />
         )}
       </div>
     </>

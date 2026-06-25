@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getInternalHelpdeskTickets } from "../../../_data/loaders";
+import { InternalTicketsTable } from "./InternalTicketsTable";
 
 export default async function Page() {
   const { data: tickets, source } = await getInternalHelpdeskTickets();
@@ -26,38 +27,7 @@ export default async function Page() {
         <StatCard icon="✅" iconBg="#ecfdf5" label="Resolved" value={resolved.toLocaleString("en-IN")} />
         <StatCard icon="🔴" iconBg="#fef2f2" label="Critical" value={critical.toLocaleString("en-IN")} />
       </StatGrid>
-      <div className="card">
-        <div className="card-h">
-          <h3>Internal Tickets</h3>
-          <div className="seg"><span className="on">All</span><span>Open</span><span>Resolved</span></div>
-        </div>
-        {tickets.length === 0 ? (
-          <EmptyState icon="🎫" title="No internal tickets" message="Staff tickets will appear here once submitted." />
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Ticket</th>
-                <th>Subject</th>
-                <th>Priority</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((t) => (
-                <tr key={t.id}>
-                  <td style={{ fontFamily: "monospace" }}>
-                    <a href={`/helpdesk/internal/${t.id}`}>{t.id.slice(0, 8).toUpperCase()}</a>
-                  </td>
-                  <td>{t.subject}</td>
-                  <td><StatusPill status={t.priority.toLowerCase()} label={t.priority} /></td>
-                  <td><StatusPill status={t.status.toLowerCase().replace(/ /g, "_")} label={t.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <InternalTicketsTable tickets={tickets} />
     </>
   );
 }

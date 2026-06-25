@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Segmented, ConfirmDialog } from "../../../_components/ds";
+import { Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 
 type Role = {
   id: string;
@@ -11,7 +10,7 @@ type Role = {
   description?: string;
   isSystemRole: boolean;
   userCount: number;
-};
+} & Record<string, unknown>;
 
 const FILTERS = ["All", "System", "Custom"] as const;
 
@@ -37,35 +36,30 @@ export function RolesTable({ roles }: { roles: Role[] }) {
           <button type="button" className="btn primary sm" onClick={() => setCreateOpen(true)}>+ New Role</button>
         </div>
       </div>
-      <table className="tbl" aria-labelledby="roles-table-heading">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Description</th>
-            <th scope="col">Users</th>
-            <th scope="col">Type</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((role) => (
-            <tr key={role.id}>
-              <td>
-                <Link href={`/tenant-admin/roles/${role.id}`} className="lnk">{role.name}</Link>
-              </td>
-              <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <DataTable<Role>
+        rowHref={(role) => `/tenant-admin/roles/${role.id}`}
+        columns={[
+          { key: "name", label: "Name" },
+          {
+            key: "description",
+            label: "Description",
+            sortable: false,
+            render: (role) => (
+              <span style={{ display: "inline-block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>
                 {role.description ?? "—"}
-              </td>
-              <td>{role.userCount}</td>
-              <td>
-                {role.isSystemRole ? <span className="pill info">System</span> : <span className="pill mut">Custom</span>}
-              </td>
-            </tr>
-          ))}
-          {visible.length === 0 && (
-            <tr><td colSpan={4}><div className="empty-state"><div>🔑</div><h4>No roles</h4><p>No roles match this filter.</p></div></td></tr>
-          )}
-        </tbody>
-      </table>
+              </span>
+            ),
+          },
+          { key: "userCount", label: "Users", align: "right" },
+          {
+            key: "isSystemRole",
+            label: "Type",
+            render: (role) => (role.isSystemRole ? <span className="pill info">System</span> : <span className="pill mut">Custom</span>),
+          },
+        ]}
+        rows={visible}
+        sortable
+      />
 
       <NewRoleDialog
         open={createOpen}

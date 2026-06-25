@@ -13,7 +13,7 @@ export default function SeekOpinionPage() {
         className="banner"
         style={{ background: "#fffaeb", border: "1px solid #fde68a", color: "#92400e", borderRadius: 12, padding: "11px 14px", margin: "0 0 16px", fontSize: 13, maxWidth: 820 }}
       >
-        ℹ️ The legal service does not yet expose a dedicated opinions endpoint. This request is
+        <span aria-hidden="true">ℹ️</span> The legal service does not yet expose a dedicated opinions endpoint. This request is
         recorded as a legal notice (the closest available command) and routed to the addressee.
       </div>
       <SeekOpinionForm />

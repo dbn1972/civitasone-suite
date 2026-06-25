@@ -1,7 +1,20 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill, DataTable, EmptyState } from "../../../../_components/ds";
 import { getHelpdeskTicketById } from "../../../../_data/loaders";
+import { formatIndianDate } from "@/lib/formatters";
+import { SlaBadge } from "../../SlaBadge";
 import { TicketActions } from "./TicketActions";
+import { TicketConversation } from "./TicketConversation";
+
+type CommentRow = {
+  id: string;
+  createdAt: string;
+  author: string;
+  isInternal: boolean;
+  content: string;
+  // DataTable requires Record<string, unknown>
+  authorLabel: string;
+};
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: ticket, source } = await getHelpdeskTicketById(params.id);
@@ -18,6 +31,15 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   const STAGES = ["open", "in_progress", "pending", "resolved", "closed"] as const;
   const currentIdx = STAGES.indexOf(ticket.status as typeof STAGES[number]);
+
+  const commentRows: CommentRow[] = ticket.comments.map((c) => ({
+    id: c.id,
+    createdAt: formatIndianDate(c.createdAt),
+    author: c.author,
+    isInternal: c.isInternal,
+    authorLabel: c.isInternal ? `${c.author} (internal)` : c.author,
+    content: c.content,
+  }));
 
   return (
     <>
@@ -39,37 +61,16 @@ export default async function Page({ params }: { params: { id: string } }) {
               <div className="fld"><div className="l">Priority</div><div className="v"><StatusPill status={ticket.priority} /></div></div>
               <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={ticket.status} label={ticket.status.replace(/_/g, " ")} /></div></div>
               <div className="fld"><div className="l">Channel</div><div className="v">{ticket.channel ?? "—"}</div></div>
-              <div className="fld"><div className="l">SLA</div><div className="v"><StatusPill status={ticket.slaStatus} label={ticket.slaStatus.replace(/_/g, " ")} /></div></div>
+              <div className="fld"><div className="l">SLA</div><div className="v"><SlaBadge status={ticket.slaStatus} /></div></div>
               <div className="fld"><div className="l">Agent</div><div className="v">{ticket.assignedTo ?? "Unassigned"}</div></div>
-              <div className="fld"><div className="l">Created</div><div className="v">{ticket.createdAt.slice(0, 10)}</div></div>
+              <div className="fld"><div className="l">Created</div><div className="v">{formatIndianDate(ticket.createdAt)}</div></div>
             </div>
           </div>
           <div className="card">
             <div className="card-h">
               <h3>Conversation</h3>
-              <div className="seg"><span className="on">Messages</span><span>Notes</span></div>
             </div>
-            {ticket.comments.length === 0 ? (
-              <div style={{ padding: "16px", color: "var(--ink2)" }}>No messages yet.</div>
-            ) : (
-              <table className="tbl">
-                <thead>
-                  <tr><th>Time</th><th>From</th><th>Message</th></tr>
-                </thead>
-                <tbody>
-                  {ticket.comments.map((c) => (
-                    <tr key={c.id}>
-                      <td>{c.createdAt.slice(0, 10)}</td>
-                      <td>
-                        {c.author}
-                        {c.isInternal && <span className="pill mut" style={{ marginLeft: 6, fontSize: 11 }}>internal</span>}
-                      </td>
-                      <td>{c.content}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            <TicketConversation comments={commentRows} />
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

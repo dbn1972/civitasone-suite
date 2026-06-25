@@ -1,6 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
 import { fetchJson } from "../../../../_data/apiClient";
+import { formatIndianDate } from "@/lib/formatters";
+import { SlaBadge } from "../../SlaBadge";
 
 type InternalTicket = {
   id: string;
@@ -63,8 +65,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         <div className="pad fields">
           <div className="fld"><div className="l">Priority</div><div className="v"><StatusPill status={ticket.priority.toLowerCase()} label={ticket.priority} /></div></div>
           <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={ticket.status.toLowerCase().replace(/ /g, "_")} label={ticket.status} /></div></div>
-          <div className="fld"><div className="l">SLA</div><div className="v">{ticket.slaStatus ?? "—"}</div></div>
-          <div className="fld"><div className="l">Due</div><div className="v">{ticket.dueDate?.slice(0, 10) ?? "—"}</div></div>
+          <div className="fld"><div className="l">SLA</div><div className="v">{ticket.slaStatus ? <SlaBadge status={ticket.slaStatus} /> : "—"}</div></div>
+          <div className="fld"><div className="l">Due</div><div className="v">{ticket.dueDate ? formatIndianDate(ticket.dueDate) : "—"}</div></div>
           <div className="fld"><div className="l">Assignee</div><div className="v">{ticket.assignee ?? "Unassigned"}</div></div>
         </div>
       </div>
