@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as contactRepo from "../contacts/repo.js";
+import { invalidateDashboard } from "../dashboard/queries.js";
 import type { DealView } from "./schema.js";
 
 const RESOURCE = "deal";
@@ -36,6 +37,7 @@ export function registerDealConsumers(queue: Queue): void {
     });
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.updateDealStage, async (msg) => {
@@ -47,6 +49,7 @@ export function registerDealConsumers(queue: Queue): void {
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.updateDeal, async (msg) => {
@@ -71,6 +74,7 @@ export function registerDealConsumers(queue: Queue): void {
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.deleteDeal, async (msg) => {
@@ -82,6 +86,7 @@ export function registerDealConsumers(queue: Queue): void {
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 }
 
