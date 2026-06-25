@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { StatusPill, EmptyState } from "../../../_components/ds";
+import { useState } from "react";
+import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Ticket = {
@@ -14,6 +14,18 @@ type Ticket = {
   status: string;
 } & Record<string, unknown>;
 
+type Row = {
+  id: string;
+  ticketNo: string;
+  subject: string;
+  requesterName: string;
+  priority: string;
+  slaStatus: string;
+  status: string;
+};
+
+const TABS = ["All", "Open", "Pending", "Resolved"] as const;
+
 export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Ticket[]>(
     "helpdesk.tickets",
@@ -22,20 +34,38 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
     (d) => d.length === 0,
   );
 
+  const [tab, setTab] = useState<string>("All");
+
   const cacheNote =
     offline || fromCache
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
+  const tableRows: Row[] = rows.map((t) => ({
+    id: t.id,
+    ticketNo: t.ticketNo,
+    subject: t.subject,
+    requesterName: t.requesterName,
+    priority: t.priority,
+    slaStatus: t.slaStatus.replace(/_/g, " "),
+    status: t.status.replace(/_/g, " "),
+  }));
+
+  const filtered =
+    tab === "Open"
+      ? tableRows.filter((r) => /^(open|in progress)$/i.test(r.status))
+      : tab === "Pending"
+        ? tableRows.filter((r) => /pending/i.test(r.status))
+        : tab === "Resolved"
+          ? tableRows.filter((r) => /resolved/i.test(r.status))
+          : tableRows;
+
   return (
     <div className="card">
       <div className="card-h">
         <h3>Tickets</h3>
-        <div className="seg">
-          <span className="on">All</span>
-          <span>Open</span>
-          <span>Pending</span>
-          <span>Resolved</span>
+        <div role="group" aria-label="Filter tickets by status">
+          <Segmented options={[...TABS]} value={tab} onChange={setTab} />
         </div>
       </div>
       {cacheNote ? (
@@ -43,33 +73,26 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
           {cacheNote}
         </p>
       ) : null}
-      {rows.length === 0 ? (
+      {tableRows.length === 0 ? (
         <EmptyState icon="🎫" title="No tickets" message="Citizen tickets will appear here once submitted." />
       ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Ticket No</th>
-              <th>Subject</th>
-              <th>Requester</th>
-              <th>Priority</th>
-              <th>SLA</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((t) => (
-              <tr key={t.id} className="clickable">
-                <td><Link href={`/helpdesk/tickets/${t.id}`}>{t.ticketNo}</Link></td>
-                <td>{t.subject}</td>
-                <td>{t.requesterName}</td>
-                <td><StatusPill status={t.priority} /></td>
-                <td><StatusPill status={t.slaStatus} label={t.slaStatus.replace(/_/g, " ")} /></td>
-                <td><StatusPill status={t.status} label={t.status.replace(/_/g, " ")} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable<Row>
+          columns={[
+            { key: "ticketNo", label: "Ticket No" },
+            { key: "subject", label: "Subject" },
+            { key: "requesterName", label: "Requester" },
+            { key: "priority", label: "Priority", cellType: "status" },
+            { key: "slaStatus", label: "SLA", cellType: "status" },
+            { key: "status", label: "Status", cellType: "status" },
+          ]}
+          rows={filtered}
+          rowLinkKey="id"
+          rowLinkPrefix="/helpdesk/tickets/"
+          sortable
+          filterable
+          filterPlaceholder="Filter tickets…"
+          pageSize={15}
+        />
       )}
     </div>
   );

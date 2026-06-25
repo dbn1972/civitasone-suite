@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatusPill, Segmented, ConfirmDialog } from "../../../_components/ds";
+import { StatusPill, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type AdminUser = {
@@ -56,50 +55,46 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
           {cacheNote}
         </p>
       ) : null}
-      <table className="tbl" aria-labelledby="users-table-heading">
-        <thead>
-          <tr>
-            <th scope="col">User</th>
-            <th scope="col">Department</th>
-            <th scope="col">Role</th>
-            <th scope="col">SSO / MFA</th>
-            <th scope="col">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((user) => (
-            <tr key={user.id}>
-              <td>
-                <Link href={`/tenant-admin/users/${user.id}`}>
-                  <div className="who">
-                    <div className="av">{(user.name ?? user.email).slice(0, 2).toUpperCase()}</div>
-                    <div>
-                      <div className="nm">{user.name ?? "—"}</div>
-                      <div className="ml">{user.email}</div>
-                    </div>
-                  </div>
-                </Link>
-              </td>
-              <td>—</td>
-              <td>{user.roles.length > 0 ? user.roles[0] : "—"}</td>
-              <td>
-                {user.mfaEnabled
-                  ? <span className="pill good">MFA on</span>
-                  : <span className="pill mut">MFA off</span>}
-              </td>
-              <td>
-                {user.status === "active" ? <span className="pill good">Active</span>
-                  : user.status === "suspended" ? <span className="pill bad">Suspended</span>
-                  : user.status === "inactive" ? <span className="pill mut">Inactive</span>
-                  : <StatusPill status={user.status} label={user.status.replace(/_/g, " ")} />}
-              </td>
-            </tr>
-          ))}
-          {visible.length === 0 && (
-            <tr><td colSpan={5}><div className="empty-state"><div>👥</div><h4>No users</h4><p>No users match this filter.</p></div></td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataTable<AdminUser>
+        rowHref={(user) => `/tenant-admin/users/${user.id}`}
+        columns={[
+          {
+            key: "email",
+            label: "User",
+            render: (user) => (
+              <div className="who">
+                <div className="av" aria-hidden="true">{(user.name ?? user.email).slice(0, 2).toUpperCase()}</div>
+                <div>
+                  <div className="nm">{user.name ?? "—"}</div>
+                  <div className="ml">{user.email}</div>
+                </div>
+              </div>
+            ),
+          },
+          { key: "department", label: "Department", sortable: false, render: () => "—" },
+          { key: "roles", label: "Role", render: (user) => (user.roles.length > 0 ? user.roles[0] : "—") },
+          {
+            key: "mfaEnabled",
+            label: "SSO / MFA",
+            render: (user) =>
+              user.mfaEnabled ? <span className="pill good">MFA on</span> : <span className="pill mut">MFA off</span>,
+          },
+          {
+            key: "status",
+            label: "Status",
+            render: (user) =>
+              user.status === "active" ? <span className="pill good">Active</span>
+                : user.status === "suspended" ? <span className="pill bad">Suspended</span>
+                : user.status === "inactive" ? <span className="pill mut">Inactive</span>
+                : <StatusPill status={user.status} label={user.status.replace(/_/g, " ")} />,
+          },
+        ]}
+        rows={visible}
+        sortable
+        filterable
+        filterPlaceholder="Search users…"
+        pageSize={10}
+      />
 
       <InviteUserDialog
         open={inviteOpen}

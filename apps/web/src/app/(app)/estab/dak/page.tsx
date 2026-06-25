@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatusPill, DataTable } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 type InwardRow = {
   id: string;
@@ -25,15 +26,7 @@ export default function DakRegistryPage() {
   const [rows, setRows] = useState<InwardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ dakNo: "", fromAddress: "", subject: "" });
-  const [scanBarcode, setScanBarcode] = useState("");
   const [message, setMessage] = useState("");
-
-  const filteredRows = scanBarcode.trim()
-    ? rows.filter((r) =>
-        (r.barcode ?? "").toLowerCase().includes(scanBarcode.trim().toLowerCase())
-        || r.dakNo.toLowerCase().includes(scanBarcode.trim().toLowerCase()),
-      )
-    : rows;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,6 +86,8 @@ export default function DakRegistryPage() {
     }
   }
 
+  const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 } as const;
+
   return (
     <>
       <PageHeader
@@ -101,27 +96,29 @@ export default function DakRegistryPage() {
         back="/estab/list"
       />
 
-      {message ? (
-        <div className="banner" style={{ background: "#ecfdf3", border: "1px solid #6ee7b7", borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
-          {message}
-        </div>
-      ) : null}
+      <div role="alert" aria-live="polite">
+        {message ? (
+          <div className="banner" style={{ background: "#ecfdf3", border: "1px solid #6ee7b7", borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
+            {message}
+          </div>
+        ) : null}
+      </div>
 
       <div className="card" style={{ marginBottom: 18 }}>
         <div className="card-h"><h3>Register new DAK</h3></div>
         <form onSubmit={registerDak} className="pad">
           <div className="fields">
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l">DAK number</label>
-              <input required value={form.dakNo} onChange={(e) => setForm({ ...form, dakNo: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
+              <label className="l" htmlFor="dak-no">DAK number</label>
+              <input id="dak-no" required value={form.dakNo} onChange={(e) => setForm({ ...form, dakNo: e.target.value })} style={inputStyle} />
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l">From</label>
-              <input required value={form.fromAddress} onChange={(e) => setForm({ ...form, fromAddress: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
+              <label className="l" htmlFor="dak-from">From</label>
+              <input id="dak-from" required value={form.fromAddress} onChange={(e) => setForm({ ...form, fromAddress: e.target.value })} style={inputStyle} />
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l">Subject</label>
-              <input required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
+              <label className="l" htmlFor="dak-subject">Subject</label>
+              <input id="dak-subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} style={inputStyle} />
             </div>
           </div>
           <button type="submit" className="btn primary" style={{ marginTop: 12 }}>Register DAK</button>
@@ -131,49 +128,50 @@ export default function DakRegistryPage() {
       <div className="card">
         <div className="card-h">
           <h3>Inward register</h3>
-          <input
-            value={scanBarcode}
-            onChange={(e) => setScanBarcode(e.target.value)}
-            placeholder="Scan / search barcode or DAK no"
-            style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12, minWidth: 220 }}
-          />
         </div>
-        <table className="tbl">
-          <thead>
-            <tr><th>DAK No</th><th>Barcode</th><th>Source</th><th>From</th><th>Subject</th><th>Received</th><th>Status</th><th>File</th><th>Action</th></tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} style={{ textAlign: "center", padding: 24 }}>Loading…</td></tr>
-            ) : filteredRows.length === 0 ? (
-              <tr><td colSpan={9} style={{ textAlign: "center", padding: 24 }}>No DAK entries</td></tr>
-            ) : (
-              filteredRows.map((r) => (
-                <tr key={r.id}>
-                  <td><span className="mono">{r.dakNo}</span></td>
-                  <td><span className="mono" style={{ fontSize: 11 }}>{r.barcode ?? "—"}</span></td>
-                  <td>{r.sourceSection ?? "manual"}</td>
-                  <td>{r.fromAddress}</td>
-                  <td>{r.subject}</td>
-                  <td>{r.receivedAt?.slice(0, 10) ?? "—"}</td>
-                  <td><StatusPill status={r.status} label={r.status.replace(/_/g, " ")} /></td>
-                  <td>
-                    {r.fileId ? (
-                      <Link href={`/estab/files/${r.fileId}`} className="mono">{r.fileRef ?? r.fileId.slice(0, 8)}</Link>
-                    ) : "—"}
-                  </td>
-                  <td>
-                    {!r.fileId && r.status === "received" ? (
-                      <button type="button" className="btn ghost" style={{ fontSize: "0.75rem" }} onClick={() => void openFile(r.id)}>
-                        Open file
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {loading ? (
+          <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        ) : (
+          <DataTable<InwardRow>
+            columns={[
+              { key: "dakNo", label: "DAK No", render: (r) => <span className="mono">{r.dakNo}</span> },
+              { key: "barcode", label: "Barcode", render: (r) => <span className="mono" style={{ fontSize: 11 }}>{r.barcode ?? "—"}</span> },
+              { key: "sourceSection", label: "Source", render: (r) => <>{r.sourceSection ?? "manual"}</> },
+              { key: "fromAddress", label: "From" },
+              { key: "subject", label: "Subject" },
+              { key: "receivedAt", label: "Received", render: (r) => <>{formatIndianDate(r.receivedAt)}</> },
+              { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} label={r.status.replace(/_/g, " ")} /> },
+              {
+                key: "fileId",
+                label: "File",
+                render: (r) =>
+                  r.fileId ? (
+                    <Link href={`/estab/files/${r.fileId}`} className="mono">{r.fileRef ?? r.fileId.slice(0, 8)}</Link>
+                  ) : (
+                    <>—</>
+                  ),
+              },
+              {
+                key: "id",
+                label: "Action",
+                sortable: false,
+                render: (r) =>
+                  !r.fileId && r.status === "received" ? (
+                    <button type="button" className="btn ghost" style={{ fontSize: "0.75rem", minHeight: 44 }} onClick={() => void openFile(r.id)}>
+                      Open file
+                    </button>
+                  ) : (
+                    <>—</>
+                  ),
+              },
+            ]}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder="Scan / search barcode or DAK no"
+            pageSize={15}
+          />
+        )}
       </div>
     </>
   );

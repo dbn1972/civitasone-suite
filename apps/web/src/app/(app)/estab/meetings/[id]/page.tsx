@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getMeetingById } from "../../../../_data/loaders";
-import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill } from "../../../../_components/ds";
+import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
 
 export default async function MeetingDetailPage({ params }: { params: { id: string } }) {
   const { data: meeting, source } = await getMeetingById(params.id);
@@ -46,26 +47,7 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           {meeting.actionPoints.length > 0 ? (
             <div className="card">
               <div className="card-h"><h3>Action items (MOM)</h3></div>
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Action</th>
-                    <th>Owner</th>
-                    <th>Due</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {meeting.actionPoints.map((ap) => (
-                    <tr key={ap.id}>
-                      <td>{ap.description}</td>
-                      <td>{ap.assignedTo}</td>
-                      <td>{ap.dueDate ?? "—"}</td>
-                      <td><StatusPill status={ap.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ActionPointsTable rows={meeting.actionPoints} />
             </div>
           ) : null}
         </div>
@@ -85,24 +67,7 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           {meeting.attendees.length > 0 ? (
             <div className="card">
               <div className="card-h"><h3>Attendees</h3></div>
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Designation</th>
-                    <th>Present</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {meeting.attendees.map((a, i) => (
-                    <tr key={i}>
-                      <td>{a.name}</td>
-                      <td>{a.designation ?? "—"}</td>
-                      <td><StatusPill status={a.present ? "active" : "rejected"} label={a.present ? "Yes" : "No"} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <AttendeesTable rows={meeting.attendees} />
             </div>
           ) : null}
         </div>

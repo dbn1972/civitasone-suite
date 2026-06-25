@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Segmented } from "../../../_components/ds";
+import { Segmented, DataTable } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { BreakglassActions } from "./BreakglassActions";
 
@@ -13,7 +13,7 @@ type Event = {
   startedAt: string;
   endedAt?: string;
   status: "active" | "ended" | "auto_expired";
-};
+} & Record<string, unknown>;
 
 const FILTERS = ["All", "Active", "Ended"] as const;
 
@@ -34,49 +34,44 @@ export function BreakglassTable({ events }: { events: Event[] }) {
           <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
         </div>
       </div>
-      <table className="tbl" aria-labelledby="bg-table-heading">
-        <thead>
-          <tr>
-            <th scope="col">Requester</th>
-            <th scope="col">Reason</th>
-            <th scope="col">Requested</th>
-            <th scope="col">Duration</th>
-            <th scope="col">Status</th>
-            <th scope="col"><span className="sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((event) => (
-            <tr key={event.id}>
-              <td>
-                <div className="who">
-                  <div className="av">{event.actor.slice(0, 2).toUpperCase()}</div>
-                  <div>
-                    <div className="nm">{event.actor}</div>
-                    <div className="ml">{event.actorEmail}</div>
-                  </div>
+      <DataTable<Event>
+        columns={[
+          {
+            key: "actor",
+            label: "Requester",
+            render: (event) => (
+              <div className="who">
+                <div className="av" aria-hidden="true">{event.actor.slice(0, 2).toUpperCase()}</div>
+                <div>
+                  <div className="nm">{event.actor}</div>
+                  <div className="ml">{event.actorEmail}</div>
                 </div>
-              </td>
-              <td style={{ maxWidth: 200 }}>{event.reason}</td>
-              <td>{formatIndianDate(event.startedAt)}</td>
-              <td>{event.endedAt ? "Ended" : "Ongoing"}</td>
-              <td>
-                {event.status === "active" ? <span className="pill bad">Active</span>
-                  : event.status === "ended" ? <span className="pill good">Ended</span>
-                  : <span className="pill mut">{event.status.replace(/_/g, " ")}</span>}
-              </td>
-              <td>
-                {event.status === "active"
-                  ? <BreakglassActions id={event.id} requester={event.actor} />
-                  : <span style={{ fontSize: 12, color: "#98a2b3" }}>—</span>}
-              </td>
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr><td colSpan={6}><div className="empty-state"><div>🔑</div><h4>No break-glass events</h4><p>No events match this filter.</p></div></td></tr>
-          )}
-        </tbody>
-      </table>
+              </div>
+            ),
+          },
+          { key: "reason", label: "Reason", render: (event) => <span style={{ display: "inline-block", maxWidth: 200 }}>{event.reason}</span> },
+          { key: "startedAt", label: "Requested", render: (event) => formatIndianDate(event.startedAt) },
+          { key: "endedAt", label: "Duration", render: (event) => (event.endedAt ? "Ended" : "Ongoing") },
+          {
+            key: "status",
+            label: "Status",
+            render: (event) =>
+              event.status === "active" ? <span className="pill bad">Active</span>
+                : event.status === "ended" ? <span className="pill good">Ended</span>
+                : <span className="pill mut">{event.status.replace(/_/g, " ")}</span>,
+          },
+          {
+            key: "id",
+            label: "Actions",
+            sortable: false,
+            render: (event) =>
+              event.status === "active"
+                ? <BreakglassActions id={event.id} requester={event.actor} />
+                : <span style={{ fontSize: 12, color: "#98a2b3" }}>—</span>,
+          },
+        ]}
+        rows={rows}
+      />
     </div>
   );
 }

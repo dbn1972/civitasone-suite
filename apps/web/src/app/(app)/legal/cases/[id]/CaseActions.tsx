@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 
 type Panel = "brief" | "affidavit" | null;
 
@@ -14,6 +15,9 @@ type Panel = "brief" | "affidavit" | null;
  *  - "Brief counsel"   → POST /api/v1/legal/cases/:id/reminder  (task/reminder to brief counsel)
  *  - "Upload Affidavit"→ POST /api/v1/legal/cases/:id/orders     (records the affidavit as a case filing)
  * "Legal opinion →" remains a plain navigation link.
+ *
+ * Recording an affidavit is an irreversible case filing, so it is gated behind
+ * an accessible ConfirmDialog (maker-checker).
  */
 export function CaseActions({ caseId }: { caseId: string }) {
   const router = useRouter();
@@ -70,6 +74,29 @@ export function CaseActions({ caseId }: { caseId: string }) {
     }
   }
 
+  // Affidavit recording is irreversible — gate it behind a ConfirmDialog.
+  const affidavitConfirm = useConfirmAction({
+    onConfirm: async () => {
+      const res = await fetch(`/api/proxy/v1/legal/cases/${encodeURIComponent(caseId)}/orders`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          orderType: "affidavit",
+          summary: affidavitSummary.trim(),
+          orderDate: affidavitDate,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Request failed (${res.status})`);
+      }
+    },
+    onSuccess: () => {
+      close();
+      router.refresh();
+    },
+  });
+
   function submitBrief(e: React.FormEvent) {
     e.preventDefault();
     if (briefMessage.trim().length < 1) {
@@ -89,11 +116,8 @@ export function CaseActions({ caseId }: { caseId: string }) {
       setMessage("Affidavit description and filing date are required.");
       return;
     }
-    void post(`/api/proxy/v1/legal/cases/${encodeURIComponent(caseId)}/orders`, {
-      orderType: "affidavit",
-      summary: affidavitSummary.trim(),
-      orderDate: affidavitDate,
-    });
+    setMessage("");
+    affidavitConfirm.trigger();
   }
 
   return (
@@ -161,13 +185,24 @@ export function CaseActions({ caseId }: { caseId: string }) {
                 />
                 <label className="label" htmlFor="affidavitDate">Filing date *</label>
                 <input id="affidavitDate" type="date" className="inp" value={affidavitDate} onChange={(e) => setAffidavitDate(e.target.value)} required style={{ width: "100%", minHeight: 44 }} />
-                <DialogFooter busy={busy} onCancel={close} submitLabel="Record affidavit" />
+                <DialogFooter busy={affidavitConfirm.busy} onCancel={close} submitLabel="Record affidavit" />
                 <Status message={message} />
               </form>
             )}
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={affidavitConfirm.open}
+        title="Record this affidavit?"
+        description="This files the affidavit against the case record and cannot be undone. Confirm the description and filing date are correct."
+        confirmLabel="Record affidavit"
+        busy={affidavitConfirm.busy}
+        errorMessage={affidavitConfirm.error}
+        onConfirm={() => affidavitConfirm.confirm()}
+        onCancel={affidavitConfirm.cancel}
+      />
     </>
   );
 }

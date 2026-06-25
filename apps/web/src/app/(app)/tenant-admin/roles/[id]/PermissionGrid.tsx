@@ -2,18 +2,27 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { DataTable, ConfirmDialog } from "../../../../_components/ds";
 
 export type Perm = { module: string; action: string; resource?: string; allowed: boolean };
 
 const DEFAULT_MODULES = ["finance", "procurement", "hr", "payroll", "projects", "grants", "assets", "audit", "legal", "admin"];
-const ACTIONS = ["read", "create", "update", "delete", "approve", "export"];
+const ACTIONS = ["read", "create", "update", "delete", "approve", "export"] as const;
+type Action = typeof ACTIONS[number];
 
 type CellState = "inherit" | "allow" | "deny";
 
 function key(m: string, a: string): string {
   return `${m}:${a}`;
 }
+
+function cellStyle(st: CellState): React.CSSProperties {
+  if (st === "allow") return { background: "var(--goodbg)", color: "var(--good)", borderColor: "var(--goodbd)" };
+  if (st === "deny") return { background: "var(--badbg)", color: "var(--bad)", borderColor: "var(--badbd)" };
+  return { background: "var(--line2)", color: "var(--ink2)" };
+}
+
+type ModuleRow = { module: string } & Record<string, unknown>;
 
 export function PermissionGrid({
   roleId,
@@ -26,7 +35,6 @@ export function PermissionGrid({
 }) {
   const router = useRouter();
 
-  // Baseline state derived from existing permissions.
   const baseline = useMemo(() => {
     const map: Record<string, CellState> = {};
     for (const p of permissions) {
@@ -59,7 +67,6 @@ export function PermissionGrid({
     const next: CellState = current === "inherit" ? "allow" : current === "allow" ? "deny" : "inherit";
     setDraft((d) => {
       const copy = { ...d };
-      // If the next state equals the baseline, drop the override.
       if ((baseline[k] ?? "inherit") === next) delete copy[k];
       else copy[k] = next;
       return copy;
@@ -67,9 +74,6 @@ export function PermissionGrid({
     setNotice("");
   }
 
-  // Only cells that differ from the baseline AND are allow/deny can be saved
-  // (the backend is additive: POST /policy/roles/:id/permissions). Reverting a
-  // cell to "inherit" cannot be persisted — the backend exposes no removal route.
   const changed = Object.entries(draft).filter(([k, v]) => v !== (baseline[k] ?? "inherit"));
   const savable = changed.filter(([, v]) => v !== "inherit");
   const unremovable = changed.filter(([, v]) => v === "inherit");
@@ -107,6 +111,40 @@ export function PermissionGrid({
     }
   }
 
+  const rows: ModuleRow[] = modules.map((m) => ({ module: m }));
+
+  // Build a column for "Module" and one per action, each with a custom render
+  // that reads from component-level state closures for interactive cycling.
+  const actionColumns = ACTIONS.map((a: Action) => ({
+    key: a as string,
+    label: a.charAt(0).toUpperCase() + a.slice(1),
+    align: "center" as const,
+    sortable: false,
+    render: (row: ModuleRow) => {
+      const m = row.module as string;
+      const st = stateOf(m, a);
+      const isDraft = draft[key(m, a)] !== undefined;
+      return (
+        <button
+          type="button"
+          onClick={() => cycle(m, a)}
+          disabled={!editable}
+          aria-pressed={st !== "inherit"}
+          aria-label={`${m} ${a}: ${st}${isDraft ? " (unsaved)" : ""}`}
+          title={editable ? `Click to change — currently ${st}` : st}
+          style={{
+            minWidth: 64, padding: "4px 8px", borderRadius: 20, fontSize: 11.5, fontWeight: 650,
+            cursor: editable ? "pointer" : "default", border: "1px solid transparent",
+            outline: isDraft ? "2px dashed var(--primary)" : undefined, outlineOffset: 1,
+            ...cellStyle(st),
+          }}
+        >
+          {st === "allow" ? "Allow" : st === "deny" ? "Deny" : "—"}
+        </button>
+      );
+    },
+  }));
+
   return (
     <div className="card">
       <div className="card-h">
@@ -129,46 +167,18 @@ export function PermissionGrid({
         </p>
       ) : null}
 
-      <div className="pad" style={{ overflowX: "auto" }}>
-        <table className="tbl" aria-labelledby="perm-grid-heading">
-          <thead>
-            <tr>
-              <th scope="col">Module</th>
-              {ACTIONS.map((a) => <th key={a} scope="col" style={{ textTransform: "capitalize", textAlign: "center" }}>{a}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {modules.map((m) => (
-              <tr key={m}>
-                <th scope="row" style={{ fontWeight: 600 }}><span className="mono">{m}</span></th>
-                {ACTIONS.map((a) => {
-                  const st = stateOf(m, a);
-                  const isDraft = draft[key(m, a)] !== undefined;
-                  return (
-                    <td key={a} style={{ textAlign: "center" }}>
-                      <button
-                        type="button"
-                        onClick={() => cycle(m, a)}
-                        disabled={!editable}
-                        aria-pressed={st !== "inherit"}
-                        aria-label={`${m} ${a}: ${st}${isDraft ? " (unsaved)" : ""}`}
-                        title={editable ? `Click to change — currently ${st}` : st}
-                        style={{
-                          minWidth: 64, padding: "4px 8px", borderRadius: 20, fontSize: 11.5, fontWeight: 650,
-                          cursor: editable ? "pointer" : "default", border: "1px solid transparent",
-                          outline: isDraft ? "2px dashed var(--primary)" : undefined, outlineOffset: 1,
-                          ...cellStyle(st),
-                        }}
-                      >
-                        {st === "allow" ? "Allow" : st === "deny" ? "Deny" : "—"}
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div aria-labelledby="perm-grid-heading" style={{ overflowX: "auto" }}>
+        <DataTable<ModuleRow>
+          columns={[
+            {
+              key: "module",
+              label: "Module",
+              render: (row) => <span className="mono" style={{ fontWeight: 600 }}>{row.module as string}</span>,
+            },
+            ...actionColumns,
+          ]}
+          rows={rows}
+        />
       </div>
 
       <ConfirmDialog
@@ -193,10 +203,4 @@ export function PermissionGrid({
       />
     </div>
   );
-}
-
-function cellStyle(st: CellState): React.CSSProperties {
-  if (st === "allow") return { background: "var(--goodbg)", color: "var(--good)", borderColor: "var(--goodbd)" };
-  if (st === "deny") return { background: "var(--badbg)", color: "var(--bad)", borderColor: "var(--badbd)" };
-  return { background: "var(--line2)", color: "var(--ink2)" };
 }

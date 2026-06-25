@@ -1,15 +1,24 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getEstabFileById } from "../../../../_data/loaders";
-import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
 import type { EstabFileDetail } from "@civitasone/types";
 
-function noteRowStyle(noteType: string, eSigned: boolean) {
-  if (noteType === "green" || eSigned) return { background: "#f0fdf4", borderLeft: "4px solid #16a34a" };
-  if (noteType === "yellow") return { background: "#fefce8", borderLeft: "4px solid #eab308" };
-  return {};
-}
+type NoteRow = {
+  idx: number;
+  content: string;
+  author: string;
+  type: string;
+  status: string;
+};
+
+type DispatchRow = {
+  dispatchedTo: string;
+  when: string;
+  mode: string;
+};
 
 export default async function EstabFileDetailPage({ params }: { params: { id: string } }) {
   const { data: file, source } = await getEstabFileById(params.id);
@@ -29,6 +38,24 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
   );
 
   const ext = file as EstabFileDetail & { dakNo?: string; dueBy?: string; movementHistory?: Array<{ id: string; toOfficerId: string; movedAt: string; remarks?: string | null }> };
+
+  const noteRows: NoteRow[] = file.noteSheets.map((ns, idx) => {
+    const n = ns as { noteType?: string; noteStatus?: string; eSigned?: boolean };
+    const typeLabel = n.noteType === "green" ? "Green (approved)" : n.noteType === "yellow" ? "Yellow (draft)" : ns.type;
+    return {
+      idx: idx + 1,
+      content: ns.content,
+      author: ns.author,
+      type: `${typeLabel}${n.eSigned ? " · e-Signed" : ""}`,
+      status: (n.noteStatus ?? "—").replace(/_/g, " "),
+    };
+  });
+
+  const dispatchRows: DispatchRow[] = file.dispatchHistory.map((d) => ({
+    dispatchedTo: d.dispatchedTo,
+    when: formatIndianDate(d.timestamp),
+    mode: d.remarks ?? "—",
+  }));
 
   return (
     <>
@@ -63,7 +90,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
               <div className="fld"><div className="l">Classification</div><div className="v">{file.classification.replace(/_/g, " ")}</div></div>
               <div className="fld"><div className="l">Currently with</div><div className="v">{file.currentHolder ?? "—"}</div></div>
               {ext.dueBy ? (
-                <div className="fld"><div className="l">SLA due by</div><div className="v">{ext.dueBy.slice(0, 10)}</div></div>
+                <div className="fld"><div className="l">SLA due by</div><div className="v">{formatIndianDate(ext.dueBy)}</div></div>
               ) : null}
             </div>
           </div>
@@ -78,34 +105,19 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
 
           <div className="card">
             <div className="card-h"><h3>Note sheet</h3></div>
-            {file.noteSheets.length === 0 ? (
+            {noteRows.length === 0 ? (
               <EmptyState icon="📝" title="No notes yet" message="Add a yellow note to start the noting chain." />
             ) : (
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Note</th>
-                    <th>Officer</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {file.noteSheets.map((ns, idx) => {
-                    const ext = ns as { noteType?: string; noteStatus?: string; eSigned?: boolean };
-                    return (
-                      <tr key={ns.id} style={noteRowStyle(ext.noteType ?? "yellow", ext.eSigned ?? false)}>
-                        <td>{idx + 1}</td>
-                        <td>{ns.content}</td>
-                        <td>{ns.author}</td>
-                        <td>{ext.noteType === "green" ? "Green (approved)" : ext.noteType === "yellow" ? "Yellow (draft)" : ns.type}</td>
-                        <td>{ext.noteStatus ?? "—"}{ext.eSigned ? " · e-Signed" : ""}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <DataTable<NoteRow>
+                columns={[
+                  { key: "idx", label: "#", align: "right" },
+                  { key: "content", label: "Note" },
+                  { key: "author", label: "Officer" },
+                  { key: "type", label: "Type" },
+                  { key: "status", label: "Status", cellType: "status" },
+                ]}
+                rows={noteRows}
+              />
             )}
           </div>
         </div>
@@ -119,7 +131,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
                   {ext.movementHistory.map((m, i, arr) => (
                     <li key={m.id} className={i < arr.length - 1 ? "done" : "cur"}>
                       <div className="t">→ Officer {m.toOfficerId.slice(0, 8)}</div>
-                      <div className="d">{m.movedAt.slice(0, 16).replace("T", " ")}{m.remarks ? ` · ${m.remarks}` : ""}</div>
+                      <div className="d">{formatIndianDate(m.movedAt)}{m.remarks ? ` · ${m.remarks}` : ""}</div>
                     </li>
                   ))}
                 </ul>
@@ -129,21 +141,17 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
             </div>
           </div>
 
-          {file.dispatchHistory.length > 0 ? (
+          {dispatchRows.length > 0 ? (
             <div className="card">
               <div className="card-h"><h3>Outward dispatch</h3></div>
-              <table className="tbl">
-                <thead><tr><th>To</th><th>When</th><th>Mode</th></tr></thead>
-                <tbody>
-                  {file.dispatchHistory.map((d) => (
-                    <tr key={d.id}>
-                      <td>{d.dispatchedTo}</td>
-                      <td>{d.timestamp.slice(0, 16).replace("T", " ")}</td>
-                      <td>{d.remarks ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable<DispatchRow>
+                columns={[
+                  { key: "dispatchedTo", label: "To" },
+                  { key: "when", label: "When" },
+                  { key: "mode", label: "Mode" },
+                ]}
+                rows={dispatchRows}
+              />
             </div>
           ) : null}
         </div>

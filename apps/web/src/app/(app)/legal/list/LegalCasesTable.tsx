@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { StatusPill } from "../../../_components/ds";
+import { useMemo, useState, type ReactNode } from "react";
+import { DataTable, Segmented, StatusPill } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type LegalCase = {
@@ -14,6 +14,23 @@ type LegalCase = {
   status: string;
 } & Record<string, unknown>;
 
+const FILTERS = ["All", "High Court", "Adverse risk"] as const;
+
+function caseStatusPill(status: string): ReactNode {
+  switch (status) {
+    case "active":
+      return <span className="pill warn">Pending</span>;
+    case "disposed":
+      return <span className="pill mut">Disposed</span>;
+    case "stayed":
+      return <span className="pill info">Stayed</span>;
+    case "settled":
+      return <span className="pill good">Settled</span>;
+    default:
+      return <StatusPill status={status} />;
+  }
+}
+
 export function LegalCasesTable({ items, source = "api" }: { items: LegalCase[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<LegalCase[]>(
     "legal.cases",
@@ -21,6 +38,14 @@ export function LegalCasesTable({ items, source = "api" }: { items: LegalCase[];
     source,
     (d) => d.length === 0,
   );
+
+  const [filter, setFilter] = useState<string>("All");
+
+  const visible = useMemo(() => {
+    if (filter === "High Court") return rows.filter((r) => r.court.toLowerCase().includes("high court"));
+    if (filter === "Adverse risk") return rows.filter((r) => r.type === "writ" || r.type === "criminal");
+    return rows;
+  }, [rows, filter]);
 
   const cacheNote =
     offline || fromCache
@@ -31,50 +56,30 @@ export function LegalCasesTable({ items, source = "api" }: { items: LegalCase[];
     <div className="card">
       <div className="card-h">
         <h3>Court cases</h3>
-        <div className="seg"><span className="on">All</span><span>High Court</span><span>Adverse risk</span></div>
+        <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
       </div>
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>Case no.</th>
-            <th>Title</th>
-            <th>Court</th>
-            <th>Subject</th>
-            <th>Counsel</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((item) => (
-            <tr key={item.id} className="clickable">
-              <td>
-                <Link href={`/legal/cases/${item.id}`}>
-                  <span className="mono">{item.caseNo}</span>
-                </Link>
-              </td>
-              <td>{item.title}</td>
-              <td>{item.court}</td>
-              <td>{item.type}</td>
-              <td>{item.advocateName ?? "—"}</td>
-              <td>
-                {item.status === "active" ? <span className="pill warn">Pending</span>
-                  : item.status === "disposed" ? <span className="pill mut">Disposed</span>
-                  : item.status === "stayed" ? <span className="pill info">Stayed</span>
-                  : item.status === "settled" ? <span className="pill good">Settled</span>
-                  : <StatusPill status={item.status} />}
-              </td>
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr><td colSpan={6}><div className="empty-state"><div>📁</div><h4>No cases yet</h4><p>Legal cases will appear here once filed.</p></div></td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataTable<LegalCase>
+        columns={[
+          { key: "caseNo", label: "Case no.", render: (r) => <span className="mono">{r.caseNo}</span> },
+          { key: "title", label: "Title" },
+          { key: "court", label: "Court" },
+          { key: "type", label: "Subject" },
+          { key: "advocateName", label: "Counsel", render: (r) => <>{r.advocateName ?? "—"}</> },
+          { key: "status", label: "Status", render: (r) => caseStatusPill(r.status) },
+        ]}
+        rows={visible}
+        rowLinkKey="id"
+        rowLinkPrefix="/legal/cases/"
+        sortable
+        filterable
+        filterPlaceholder="Filter cases…"
+        pageSize={15}
+      />
     </div>
   );
 }

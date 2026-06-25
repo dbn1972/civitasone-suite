@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import Link from "next/link";
-import { PageHeader, StatCard, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatCard, DataTable } from "../../../_components/ds";
 import { getLegalDashboard } from "../../../_data/loaders";
+import { CasesOverviewSeg } from "./CasesOverviewSeg";
 
 export default async function LegalDashboardPage() {
   const { data, source } = await getLegalDashboard();
@@ -27,37 +28,28 @@ export default async function LegalDashboardPage() {
       {source === "error" && <DataSourceBadge source={source} />}
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div className="card">
-            <div className="card-h">
-              <h3>Cases overview</h3>
-              <div className="seg"><span className="on">All</span><span>High Court</span><span>Tribunals</span></div>
-            </div>
-            <div className="pad" style={{ color: "#667085", fontSize: 13 }}>
-              Active cases: {data.activeCases} &nbsp;·&nbsp; Hearings this week: {data.hearingsThisWeek} &nbsp;·&nbsp; Orders pending: {data.ordersPending}
-            </div>
-          </div>
+          <CasesOverviewSeg
+            activeCases={data.activeCases}
+            hearingsThisWeek={data.hearingsThisWeek}
+            ordersPending={data.ordersPending}
+          />
           <div className="card">
             <div className="card-h">
               <h3>Upcoming hearings</h3>
               <a className="lnk" href="/legal/hearings">Calendar →</a>
             </div>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Case</th>
-                  <th>Court</th>
-                  <th>Purpose</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={4} style={{ padding: "20px 16px", textAlign: "center", color: "#98a2b3", fontSize: 13 }}>
-                    {data.hearingsThisWeek > 0 ? `${data.hearingsThisWeek} hearings scheduled this week` : "No upcoming hearings"}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <p className="pad" style={{ color: "#667085", fontSize: 13, margin: 0 }}>
+              {data.hearingsThisWeek > 0 ? `${data.hearingsThisWeek} hearings scheduled this week.` : "No hearings scheduled this week."}
+            </p>
+            <DataTable
+              columns={[
+                { key: "caseNo", label: "Case" },
+                { key: "court", label: "Court" },
+                { key: "purpose", label: "Purpose" },
+                { key: "status", label: "Status", cellType: "status" },
+              ]}
+              rows={[]}
+            />
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

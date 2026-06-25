@@ -1,12 +1,23 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { FilesTable, type FileRow } from "./FilesTable";
 
 export default async function EstabFilesListPage() {
   const { data: files, source } = await getEstabFiles();
   const active = files.filter((f) => f.status === "active").length;
   const pending = files.filter((f) => f.status === "pending").length;
   const closed = files.filter((f) => f.status === "archived" || f.status === "disposed").length;
+
+  const rows: FileRow[] = files.map((f) => ({
+    id: f.id,
+    fileNo: f.fileNo,
+    subject: f.subject,
+    department: f.department ?? "—",
+    currentHolder: f.currentHolder ?? "—",
+    status: f.status.replace(/_/g, " "),
+    statusRaw: f.status,
+  }));
 
   return (
     <>
@@ -35,7 +46,7 @@ export default async function EstabFilesListPage() {
           fontSize: 13,
         }}
       >
-        📁 <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail and SLA on pendency — no physical files.
+        <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail and SLA on pendency — no physical files.
       </div>
       <StatGrid>
         <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={active.toLocaleString("en-IN")} />
@@ -44,46 +55,15 @@ export default async function EstabFilesListPage() {
         <StatCard icon="✅" iconBg="#eff6ff" label="Closed (MTD)" value={closed.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h">
-          <h3>File register &amp; tracking</h3>
-          <div className="seg">
-            <span className="on">All</span>
-            <span>With me</span>
-            <span>In transit</span>
-            <span>Closed</span>
-          </div>
-        </div>
         {files.length === 0 ? (
-          <EmptyState icon="📁" title="No files found" message="No eOffice files created yet." />
+          <>
+            <div className="card-h">
+              <h3>File register &amp; tracking</h3>
+            </div>
+            <EmptyState icon="📁" title="No files found" message="No eOffice files created yet." />
+          </>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>File no.</th>
-                <th>Subject</th>
-                <th>Dept</th>
-                <th>Currently with</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((file) => (
-                <tr key={file.id} className="clickable">
-                  <td>
-                    <a href={`/estab/files/${file.id}`}>
-                      <span className="mono">{file.fileNo}</span>
-                    </a>
-                  </td>
-                  <td>{file.subject}</td>
-                  <td>{file.department ?? "—"}</td>
-                  <td>{file.currentHolder ?? "—"}</td>
-                  <td>
-                    <StatusPill status={file.status.replace(/_/g, " ")} label={file.status.replace(/_/g, " ")} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <FilesTable rows={rows} />
         )}
       </div>
     </>

@@ -1,6 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getMeetings } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
+import { MeetingsTable, type MeetingRow } from "./MeetingsTable";
 
 export default async function MeetingsPage() {
   const { data: meetings, source } = await getMeetings();
@@ -9,6 +11,16 @@ export default async function MeetingsPage() {
   const completed = meetings.filter((m) => m.status === "completed").length;
   const momPending = meetings.filter((m) => m.status === "in_progress").length;
   const totalActions = meetings.length;
+
+  const rows: MeetingRow[] = meetings.map((m) => ({
+    id: m.id,
+    title: m.title,
+    when: `${formatIndianDate(m.scheduledDate)}${m.scheduledTime ? ` · ${m.scheduledTime}` : ""}`,
+    venue: m.venue ?? "—",
+    attendees: m.attendeesCount,
+    status: m.status.replace(/_/g, " "),
+    upcoming: m.scheduledDate >= today,
+  }));
 
   return (
     <>
@@ -30,42 +42,15 @@ export default async function MeetingsPage() {
         <StatCard icon="📊" iconBg="#ecfdf3" label="Compliance" value={completed > 0 ? `${Math.round((completed / meetings.length) * 100)}%` : "—"} delta="+3%" up />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h">
-          <h3>Meetings</h3>
-          <div className="seg">
-            <span className="on">Upcoming</span>
-            <span>Past</span>
-          </div>
-        </div>
         {meetings.length === 0 ? (
-          <EmptyState icon="📅" title="No meetings found" message="Schedule a meeting to get started." />
+          <>
+            <div className="card-h">
+              <h3>Meetings</h3>
+            </div>
+            <EmptyState icon="📅" title="No meetings found" message="Schedule a meeting to get started." />
+          </>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>When</th>
-                <th>Venue</th>
-                <th className="num">Attendees</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {meetings.map((m) => (
-                <tr key={m.id} className="clickable">
-                  <td>
-                    <a href={`/estab/meetings/${m.id}`}>{m.title}</a>
-                  </td>
-                  <td>{m.scheduledDate}{m.scheduledTime ? ` · ${m.scheduledTime}` : ""}</td>
-                  <td>{m.venue ?? "—"}</td>
-                  <td className="num">{m.attendeesCount}</td>
-                  <td>
-                    <StatusPill status={m.status.replace(/_/g, " ")} label={m.status.replace(/_/g, " ")} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <MeetingsTable rows={rows} />
         )}
       </div>
     </>

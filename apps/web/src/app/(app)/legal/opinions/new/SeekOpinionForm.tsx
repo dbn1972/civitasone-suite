@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 
 /**
  * "Seek Opinion" form.
@@ -11,53 +12,54 @@ import { useState } from "react";
  * GET /api/v1/legal/opinions). Per the closest-existing-command rule this posts
  * to POST /api/v1/legal/notices, recording the opinion request as an outbound
  * legal notice. See the note banner on the page.
+ *
+ * Recording the request is irreversible, so submission is gated behind an
+ * accessible ConfirmDialog (maker-checker).
  */
 export function SeekOpinionForm() {
   const router = useRouter();
   const [reference, setReference] = useState("");
   const [subject, setSubject] = useState("");
   const [addressedTo, setAddressedTo] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (subject.trim().length < 3 || !addressedTo.trim()) {
-      setStatus("error");
-      setMessage("Opinion subject (min 3 chars) and addressee are required.");
-      return;
-    }
-    setStatus("submitting");
-    setMessage("");
-    const ref = reference.trim() || `OPN/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 900) + 100)}`;
-    const body = {
-      noticeNo: ref,
-      subject: subject.trim(),
-      partyRef: addressedTo.trim(),
-      direction: "sent" as const,
-    };
-    try {
+  const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
+    onConfirm: async () => {
+      const ref = reference.trim() || `OPN/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 900) + 100)}`;
+      const body = {
+        noticeNo: ref,
+        subject: subject.trim(),
+        partyRef: addressedTo.trim(),
+        direction: "sent" as const,
+      };
       const res = await fetch("/api/proxy/v1/legal/notices", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
-        setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
-        return;
+        const text = await res.text();
+        throw new Error(text || `Request failed (${res.status})`);
       }
+    },
+    onSuccess: () => {
       router.push("/legal/opinions");
       router.refresh();
-    } catch (err) {
-      setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (subject.trim().length < 3 || !addressedTo.trim()) {
+      setMessage("Opinion subject (min 3 chars) and addressee are required.");
+      return;
     }
+    setMessage("");
+    trigger();
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
+    <form onSubmit={handleSubmit} className="card pad" style={{ maxWidth: 820 }} noValidate>
       <div className="fields">
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="reference">Reference no</label>
@@ -75,17 +77,28 @@ export function SeekOpinionForm() {
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "#b91c1c" : "#047857", fontSize: "0.875rem" }}>
+          <p role="alert" style={{ marginTop: 12, color: "#b91c1c", fontSize: "0.875rem" }}>
             {message}
           </p>
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
-          {status === "submitting" ? "Submitting…" : "Submit request"}
+        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          {busy ? "Submitting…" : "Submit request"}
         </button>
         <Link href="/legal/opinions" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
+
+      <ConfirmDialog
+        open={open}
+        title="Submit this opinion request?"
+        description="This records an outbound request to the addressee and cannot be withdrawn. Confirm the subject and addressee are correct."
+        confirmLabel="Submit request"
+        busy={busy}
+        errorMessage={error}
+        onConfirm={() => confirm()}
+        onCancel={cancel}
+      />
     </form>
   );
 }

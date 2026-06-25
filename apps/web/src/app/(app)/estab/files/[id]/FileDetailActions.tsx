@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 
 const DEFAULT_OFFICER = "00000000-0000-0000-0000-000000000099";
 
@@ -47,28 +48,25 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     }
   }
 
-  async function submitForApproval() {
+  async function submitForApproval(remarks?: string) {
     if (!draftNotingId) {
       setMessage("No draft yellow note to submit.");
-      return;
+      throw new Error("No draft yellow note to submit.");
     }
-    setBusy(true);
     setMessage("");
-    try {
-      const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/submit-for-approval`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ notingId: draftNotingId }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setMessage("Submitted — Section Officer review task created (SO → US → DS chain).");
-      router.refresh();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Submit failed");
-    } finally {
-      setBusy(false);
-    }
+    const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/submit-for-approval`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ notingId: draftNotingId, remarks }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    setMessage("Submitted — Section Officer review task created (SO → US → DS chain).");
+    router.refresh();
   }
+
+  const submitConfirm = useConfirmAction({
+    onConfirm: (reason) => submitForApproval(reason),
+  });
 
   async function referBack() {
     setBusy(true);
@@ -103,7 +101,9 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           Write a <span style={{ background: "#fef9c3", padding: "2px 6px", borderRadius: 4 }}>yellow note</span> (draft).
           Submit for approval — on sign-off it becomes a <span style={{ background: "#dcfce7", padding: "2px 6px", borderRadius: 4 }}>green note</span>.
         </p>
+        <label htmlFor="estab-yellow-note" className="l" style={{ fontSize: 12 }}>Yellow note (draft)</label>
         <textarea
+          id="estab-yellow-note"
           value={noteBody}
           onChange={(e) => setNoteBody(e.target.value)}
           rows={4}
@@ -114,12 +114,14 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           <button type="button" className="btn ghost" disabled={busy} onClick={() => void addYellowNote()}>
             Save yellow note
           </button>
-          <button type="button" className="btn primary" disabled={busy || !draftNotingId} onClick={() => void submitForApproval()}>
+          <button type="button" className="btn primary" disabled={busy || submitConfirm.busy || !draftNotingId} onClick={submitConfirm.trigger}>
             Submit for approval
           </button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <label htmlFor="estab-refer-remarks" className="l" style={{ fontSize: 12 }}>Refer-back remarks</label>
           <input
+            id="estab-refer-remarks"
             value={referRemarks}
             onChange={(e) => setReferRemarks(e.target.value)}
             placeholder="Refer-back remarks"
@@ -129,8 +131,22 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
             Refer back
           </button>
         </div>
-        {message ? <p style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
+        <div role="status" aria-live="polite">
+          {message ? <p style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
+        </div>
       </div>
+      <ConfirmDialog
+        open={submitConfirm.open}
+        title="Submit noting for approval?"
+        description="This forwards the draft yellow note up the SO → US → DS approval chain. On final sign-off it becomes a green note. This cannot be undone."
+        confirmLabel="Submit for approval"
+        requireReason
+        reasonLabel="Submission remarks"
+        busy={submitConfirm.busy}
+        errorMessage={submitConfirm.error}
+        onConfirm={submitConfirm.confirm}
+        onCancel={submitConfirm.cancel}
+      />
     </div>
   );
 }

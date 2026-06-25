@@ -1,5 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatCard, StatusPill, EmptyState } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
+import { Breadcrumb } from "../Breadcrumb";
 import { getSubscription } from "../../../_data/loaders";
 
 function formatCurrency(amount: number, currency: string): string {
@@ -16,6 +18,7 @@ export default async function SubscriptionPage() {
 
   return (
     <div className="wrap">
+      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Subscription" }]} />
       <PageHeader
         back="/tenant-admin"
         title="Subscription"
@@ -55,7 +58,7 @@ export default async function SubscriptionPage() {
                   )}
                 </div>
                 <div className="fields">
-                  <div className="fld"><div className="l">Period</div><div className="v">{subscription.currentPeriodStart.slice(0, 10)} – {subscription.currentPeriodEnd.slice(0, 10)}</div></div>
+                  <div className="fld"><div className="l">Period</div><div className="v">{formatIndianDate(subscription.currentPeriodStart)} – {formatIndianDate(subscription.currentPeriodEnd)}</div></div>
                   {subscription.billingEmail && <div className="fld"><div className="l">Billing email</div><div className="v">{subscription.billingEmail}</div></div>}
                   <div className="fld"><div className="l">Currency</div><div className="v">{subscription.currency}</div></div>
                 </div>
@@ -72,7 +75,7 @@ export default async function SubscriptionPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="empty-state"><div>🧩</div><h4>No modules listed</h4><p>Module access will appear here.</p></div>
+                  <EmptyState icon="🧩" title="No modules listed" message="Module access will appear here." />
                 )}
               </div>
             </div>
@@ -80,7 +83,7 @@ export default async function SubscriptionPage() {
         </>
       ) : (
         <div className="card">
-          <div className="empty-state"><div>📋</div><h4>No subscription data</h4><p>Subscription information is unavailable.</p></div>
+          <EmptyState icon="📋" title="No subscription data" message="Subscription information is unavailable." />
         </div>
       )}
     </div>

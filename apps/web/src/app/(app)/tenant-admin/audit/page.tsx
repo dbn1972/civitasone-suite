@@ -1,6 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getTenantAuditLog } from "../../../_data/loaders";
+import { Breadcrumb } from "../Breadcrumb";
+import { AuditLogTable } from "./AuditLogTable";
 
 export default async function TenantAuditPage() {
   const { data: events, source } = await getTenantAuditLog();
@@ -14,6 +16,7 @@ export default async function TenantAuditPage() {
 
   return (
     <div className="wrap">
+      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Audit Log" }]} />
       <PageHeader
         back="/tenant-admin"
         title="Audit Log"
@@ -32,49 +35,17 @@ export default async function TenantAuditPage() {
         <StatCard icon="👥" iconBg="#eff6ff" label="Total Events" value={total} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
-      <div className="card">
-        <div className="card-h">
-          <h3>Activity log</h3>
-          <div className="seg"><span className="on">All</span><span>Failures</span></div>
-        </div>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Actor</th>
-              <th>Action</th>
-              <th>Target</th>
-              <th>Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((event) => (
-              <tr key={event.id}>
-                <td style={{ whiteSpace: "nowrap" }}>{event.timestamp.slice(0, 16).replace("T", " ")}</td>
-                <td>
-                  <div className="who">
-                    <div className="av">{event.actor.slice(0, 2).toUpperCase()}</div>
-                    <div>
-                      <div className="nm">{event.actor}</div>
-                      {event.ipAddress && <div className="ml"><span className="mono">{event.ipAddress}</span></div>}
-                    </div>
-                  </div>
-                </td>
-                <td><span className="mono">{event.action}</span></td>
-                <td>{event.resource ?? "—"}</td>
-                <td>
-                  {event.outcome === "success" ? <span className="pill good">Success</span>
-                    : event.outcome === "failure" ? <span className="pill bad">Failure</span>
-                    : <span className="pill info">{event.outcome}</span>}
-                </td>
-              </tr>
-            ))}
-            {events.length === 0 && (
-              <tr><td colSpan={5}><div className="empty-state"><div>📋</div><h4>No audit events yet</h4><p>Tenant-scoped activity will appear here as actions are performed.</p></div></td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <AuditLogTable
+        events={events.map((event) => ({
+          id: event.id,
+          timestamp: event.timestamp,
+          actor: event.actor,
+          ipAddress: event.ipAddress,
+          action: event.action,
+          resource: event.resource,
+          outcome: event.outcome,
+        }))}
+      />
     </div>
   );
 }

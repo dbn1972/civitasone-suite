@@ -1,6 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getGuesthouseBookings } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
+import { BookingsTable, type BookingRow } from "./BookingsTable";
 
 export default async function GuesthousePage() {
   const { data: bookings, source } = await getGuesthouseBookings();
@@ -9,6 +11,16 @@ export default async function GuesthousePage() {
   const occupied = bookings.filter((b) => b.status === "checked_in").length;
   const pendingApproval = bookings.filter((b) => b.status === "pending").length;
   const upcoming = bookings.filter((b) => b.status === "confirmed" && b.checkInDate > today).length;
+
+  const rows: BookingRow[] = bookings.map((b) => ({
+    id: b.id,
+    bookingNo: b.bookingNo,
+    guest: `${b.guestName}${b.designation ? ` · ${b.designation}` : ""}`,
+    room: b.roomNo ?? b.roomType ?? "—",
+    dates: `${formatIndianDate(b.checkInDate)} – ${formatIndianDate(b.checkOutDate)}`,
+    status: b.status.replace(/_/g, " "),
+    statusRaw: b.status,
+  }));
 
   return (
     <>
@@ -30,41 +42,15 @@ export default async function GuesthousePage() {
         <StatCard icon="🧹" iconBg="#ecfdf3" label="Available Today" value={upcoming.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h">
-          <h3>Bookings</h3>
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Pending</span>
-            <span>In-house</span>
-          </div>
-        </div>
         {bookings.length === 0 ? (
-          <EmptyState icon="🏨" title="No bookings found" message="Guest house bookings will appear here." />
+          <>
+            <div className="card-h">
+              <h3>Bookings</h3>
+            </div>
+            <EmptyState icon="🏨" title="No bookings found" message="Guest house bookings will appear here." />
+          </>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Ref</th>
-                <th>Guest</th>
-                <th>Room</th>
-                <th>Dates</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((b) => (
-                <tr key={b.id}>
-                  <td><span className="mono">{b.bookingNo}</span></td>
-                  <td>{b.guestName}{b.designation ? ` · ${b.designation}` : ""}</td>
-                  <td>{b.roomNo ?? b.roomType ?? "—"}</td>
-                  <td>{b.checkInDate} – {b.checkOutDate}</td>
-                  <td>
-                    <StatusPill status={b.status.replace(/_/g, " ")} label={b.status.replace(/_/g, " ")} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <BookingsTable rows={rows} />
         )}
       </div>
     </>

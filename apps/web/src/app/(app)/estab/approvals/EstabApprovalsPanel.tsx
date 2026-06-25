@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { DataTable, ActionButton } from "../../../_components/ds";
 
 type WorkflowTask = {
   id: string;
@@ -16,7 +17,6 @@ type WorkflowTask = {
 export function EstabApprovalsPanel() {
   const router = useRouter();
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -37,18 +37,15 @@ export function EstabApprovalsPanel() {
 
   useEffect(() => { void loadTasks(); }, [loadTasks]);
 
-  async function complete(taskId: string, decision: "approve" | "reject") {
-    setBusyId(taskId);
-    setMessage("");
-    try {
+  const complete = useCallback(
+    async (taskId: string, decision: "approve" | "reject", reason?: string) => {
       const res = await fetch(`/api/proxy/v1/workflow/tasks/${taskId}/complete`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ decision }),
+        body: JSON.stringify({ decision, reason }),
       });
       if (!res.ok) {
-        setMessage(await res.text() || `${decision} failed`);
-        return;
+        throw new Error((await res.text()) || `${decision} failed`);
       }
       const task = tasks.find((t) => t.id === taskId);
       const role = task?.roleRef ?? "";
@@ -63,51 +60,69 @@ export function EstabApprovalsPanel() {
       }
       await loadTasks();
       router.refresh();
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Network error");
-    } finally {
-      setBusyId(null);
-    }
-  }
+    },
+    [tasks, loadTasks, router],
+  );
 
   return (
     <div className="card" style={{ marginTop: 18 }}>
       <div className="card-h"><h3>File noting approval queue</h3></div>
-      {message ? <p className="pad" style={{ color: "#047857", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p> : null}
-      <table className="tbl">
-        <thead>
-          <tr><th>Task</th><th>File</th><th>Role</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <tr><td colSpan={4} style={{ textAlign: "center", padding: 24, color: "#94a3b8" }}>Loading…</td></tr>
-          ) : tasks.length === 0 ? (
-            <tr><td colSpan={4} style={{ textAlign: "center", padding: 24, color: "#94a3b8" }}>No pending file noting approvals</td></tr>
-          ) : (
-            tasks.map((task) => (
-              <tr key={task.id}>
-                <td>{task.name}</td>
-                <td>
-                  {task.refId ? (
-                    <Link href={`/estab/files/${task.refId}`} className="mono" style={{ color: "#4f46e5" }}>
-                      {task.refId.slice(0, 8)}…
-                    </Link>
-                  ) : "—"}
-                </td>
-                <td>{task.roleRef ?? "estab_deputy_secretary"}</td>
-                <td>
-                  <button type="button" className="btn primary" style={{ fontSize: "0.75rem", padding: "4px 10px", marginRight: 6 }} disabled={busyId === task.id} onClick={() => void complete(task.id, "approve")}>
-                    Approve &amp; e-Sign
-                  </button>
-                  <button type="button" className="btn ghost" style={{ fontSize: "0.75rem", padding: "4px 10px" }} disabled={busyId === task.id} onClick={() => void complete(task.id, "reject")}>
-                    Reject
-                  </button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+      <div role="status" aria-live="polite">
+        {message ? <p className="pad" style={{ color: "#047857", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p> : null}
+      </div>
+      {loading ? (
+        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+      ) : (
+        <DataTable<WorkflowTask>
+          columns={[
+            { key: "name", label: "Task" },
+            {
+              key: "refId",
+              label: "File",
+              render: (task) =>
+                task.refId ? (
+                  <Link href={`/estab/files/${task.refId}`} className="mono" style={{ color: "#4f46e5" }}>
+                    {task.refId.slice(0, 8)}…
+                  </Link>
+                ) : (
+                  <>—</>
+                ),
+            },
+            { key: "roleRef", label: "Role", render: (task) => <>{task.roleRef ?? "estab_deputy_secretary"}</> },
+            {
+              key: "id",
+              label: "Actions",
+              sortable: false,
+              render: (task) => (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <ActionButton
+                    label="Approve & e-Sign"
+                    className="btn primary"
+                    confirmTitle="Approve and e-Sign this noting?"
+                    confirmDescription="This records your DSC e-signature on the file noting and forwards it up the SO → US → DS chain. On final approval the yellow note is promoted to a green note. This cannot be undone."
+                    confirmLabel="Approve & e-Sign"
+                    requireReason
+                    reasonLabel="Approval remarks"
+                    onConfirm={(reason) => complete(task.id, "approve", reason)}
+                  />
+                  <ActionButton
+                    label="Reject"
+                    className="btn ghost"
+                    danger
+                    confirmTitle="Reject this noting?"
+                    confirmDescription="This returns the noting to draft on the file. The maker will need to revise and resubmit."
+                    confirmLabel="Reject"
+                    requireReason
+                    reasonLabel="Reason for rejection"
+                    onConfirm={(reason) => complete(task.id, "reject", reason)}
+                  />
+                </div>
+              ),
+            },
+          ]}
+          rows={tasks}
+        />
+      )}
     </div>
   );
 }

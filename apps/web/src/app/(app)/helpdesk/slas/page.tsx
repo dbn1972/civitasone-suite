@@ -1,7 +1,18 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../_components/ds";
 import { getBreachedSLATickets } from "../../../_data/loaders";
-import Link from "next/link";
+import { formatIndianDate } from "@/lib/formatters";
+
+type TicketRow = {
+  id: string;
+  ticketNo: string;
+  subject: string;
+  requesterName: string;
+  priority: string;
+  status: string;
+  createdAt: string;
+  assignedTo: string;
+};
 
 export default async function Page() {
   const { data: tickets, source } = await getBreachedSLATickets();
@@ -13,6 +24,17 @@ export default async function Page() {
   const sorted = [...breached].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   );
+
+  const rows: TicketRow[] = sorted.map((t) => ({
+    id: t.id,
+    ticketNo: t.ticketNo,
+    subject: t.subject,
+    requesterName: t.requesterName,
+    priority: t.priority,
+    status: t.status.replace(/_/g, " "),
+    createdAt: formatIndianDate(t.createdAt),
+    assignedTo: t.assignedTo ?? "Unassigned",
+  }));
 
   return (
     <>
@@ -30,35 +52,27 @@ export default async function Page() {
       </StatGrid>
       <div className="card">
         <div className="card-h"><h3>Breached SLA tickets</h3></div>
-        {sorted.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState icon="✅" title="All clear — no SLA breaches" message="No tickets have exceeded their SLA threshold." />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Ticket No</th>
-                <th>Subject</th>
-                <th>Requester</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Assigned To</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((t) => (
-                <tr key={t.id} className="clickable">
-                  <td><Link href={`/helpdesk/tickets/${t.id}`}>{t.ticketNo}</Link></td>
-                  <td>{t.subject}</td>
-                  <td>{t.requesterName}</td>
-                  <td><StatusPill status={t.priority} /></td>
-                  <td><StatusPill status={t.status} label={t.status.replace(/_/g, " ")} /></td>
-                  <td>{t.createdAt.slice(0, 10)}</td>
-                  <td>{t.assignedTo ?? "Unassigned"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<TicketRow>
+            columns={[
+              { key: "ticketNo", label: "Ticket No" },
+              { key: "subject", label: "Subject" },
+              { key: "requesterName", label: "Requester" },
+              { key: "priority", label: "Priority", cellType: "status" },
+              { key: "status", label: "Status", cellType: "status" },
+              { key: "createdAt", label: "Created" },
+              { key: "assignedTo", label: "Assigned To" },
+            ]}
+            rows={rows}
+            rowLinkKey="id"
+            rowLinkPrefix="/helpdesk/tickets/"
+            sortable
+            filterable
+            filterPlaceholder="Filter SLA queue…"
+            pageSize={15}
+          />
         )}
       </div>
     </>

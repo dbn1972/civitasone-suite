@@ -1,6 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useMemo, useState, type ReactNode } from "react";
+import { DataTable, Segmented } from "../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Hearing = {
@@ -14,6 +16,21 @@ type Hearing = {
   status: string;
 } & Record<string, unknown>;
 
+const FILTERS = ["This week", "Today"] as const;
+
+function hearingStatusPill(status: string): ReactNode {
+  switch (status) {
+    case "completed":
+      return <span className="pill good">Listed</span>;
+    case "adjourned":
+      return <span className="pill warn">Adjourned</span>;
+    case "cancelled":
+      return <span className="pill bad">Cancelled</span>;
+    default:
+      return <span className="pill info">Listed</span>;
+  }
+}
+
 export function HearingsTable({ items, source = "api" }: { items: Hearing[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Hearing[]>(
     "legal.hearings",
@@ -22,7 +39,16 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
     (d) => d.length === 0,
   );
 
-  const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+  const [filter, setFilter] = useState<string>("This week");
+
+  const visible = useMemo(() => {
+    const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+    const today = new Date().toISOString().slice(0, 10);
+    const weekEnd = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
+    if (filter === "Today") return sorted.filter((r) => r.date === today);
+    if (filter === "This week") return sorted.filter((r) => r.date >= today && r.date <= weekEnd);
+    return sorted;
+  }, [rows, filter]);
 
   const cacheNote =
     offline || fromCache
@@ -33,47 +59,32 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
     <div className="card">
       <div className="card-h">
         <h3>Hearing schedule</h3>
-        <div className="seg"><span className="on">This week</span><span>Today</span></div>
+        <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
       </div>
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>Date &amp; time</th>
-            <th>Case No.</th>
-            <th>Court</th>
-            <th>Purpose</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((item) => (
-            <tr key={item.id}>
-              <td>{item.date}{item.time ? ` · ${item.time}` : ""}</td>
-              <td>
-                <Link href={`/legal/cases/${item.caseId}`} className="lnk">
-                  {item.caseNo}
-                </Link>
-              </td>
-              <td>{item.court}</td>
-              <td>{item.purpose ?? "—"}</td>
-              <td>
-                {item.status === "completed" ? <span className="pill good">Listed</span>
-                  : item.status === "adjourned" ? <span className="pill warn">Adjourned</span>
-                  : item.status === "cancelled" ? <span className="pill bad">Cancelled</span>
-                  : <span className="pill info">Listed</span>}
-              </td>
-            </tr>
-          ))}
-          {sorted.length === 0 && (
-            <tr><td colSpan={5}><div className="empty-state"><div>🗓️</div><h4>No hearings scheduled</h4><p>Court hearings will appear here once added to cases.</p></div></td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataTable<Hearing>
+        columns={[
+          {
+            key: "date",
+            label: "Date & time",
+            render: (r) => <>{formatIndianDate(r.date)}{r.time ? ` · ${r.time}` : ""}</>,
+          },
+          { key: "caseNo", label: "Case No.", render: (r) => <span className="mono">{r.caseNo}</span> },
+          { key: "court", label: "Court" },
+          { key: "purpose", label: "Purpose", render: (r) => <>{r.purpose ?? "—"}</> },
+          { key: "status", label: "Status", render: (r) => hearingStatusPill(r.status) },
+        ]}
+        rows={visible}
+        rowHref={(r) => `/legal/cases/${r.caseId}`}
+        sortable
+        filterable
+        filterPlaceholder="Filter hearings…"
+        pageSize={15}
+      />
     </div>
   );
 }

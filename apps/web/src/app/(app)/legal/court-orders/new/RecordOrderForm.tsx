@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 
 type CaseOption = { id: string; label: string };
 
 /**
  * Records a court order against a case via POST /api/v1/legal/cases/:id/orders
  * (recordOrderBody: orderType, direction?, deptRef?, summary, orderDate).
+ *
+ * Recording an order is irreversible (it directs compliance), so submission is
+ * gated behind an accessible ConfirmDialog (maker-checker).
  */
 export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
   const router = useRouter();
@@ -18,48 +22,45 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
   const [orderDate, setOrderDate] = useState("");
   const [direction, setDirection] = useState("");
   const [deptRef, setDeptRef] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!caseId) {
-      setStatus("error");
-      setMessage("Select a case to record the order against.");
-      return;
-    }
-    if (summary.trim().length < 1 || !orderDate) {
-      setStatus("error");
-      setMessage("Order summary and order date are required.");
-      return;
-    }
-    setStatus("submitting");
-    setMessage("");
-    const body = {
-      orderType: orderType.trim() || "order",
-      summary: summary.trim(),
-      orderDate,
-      direction: direction.trim() || undefined,
-      deptRef: deptRef.trim() || undefined,
-    };
-    try {
+  const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
+    onConfirm: async () => {
+      const body = {
+        orderType: orderType.trim() || "order",
+        summary: summary.trim(),
+        orderDate,
+        direction: direction.trim() || undefined,
+        deptRef: deptRef.trim() || undefined,
+      };
       const res = await fetch(`/api/proxy/v1/legal/cases/${encodeURIComponent(caseId)}/orders`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
-        setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
-        return;
+        const text = await res.text();
+        throw new Error(text || `Request failed (${res.status})`);
       }
+    },
+    onSuccess: () => {
       router.push("/legal/court-orders");
       router.refresh();
-    } catch (err) {
-      setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!caseId) {
+      setMessage("Select a case to record the order against.");
+      return;
     }
+    if (summary.trim().length < 1 || !orderDate) {
+      setMessage("Order summary and order date are required.");
+      return;
+    }
+    setMessage("");
+    trigger();
   }
 
   if (cases.length === 0) {
@@ -73,7 +74,7 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
+    <form onSubmit={handleSubmit} className="card pad" style={{ maxWidth: 820 }} noValidate>
       <div className="fields">
         <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="caseId">Case *</label>
@@ -113,17 +114,28 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "#b91c1c" : "#047857", fontSize: "0.875rem" }}>
+          <p role="alert" style={{ marginTop: 12, color: "#b91c1c", fontSize: "0.875rem" }}>
             {message}
           </p>
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
-          {status === "submitting" ? "Saving…" : "Record order"}
+        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          {busy ? "Saving…" : "Record order"}
         </button>
         <Link href="/legal/court-orders" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
+
+      <ConfirmDialog
+        open={open}
+        title="Record this court order?"
+        description="Recording an order directs the owning department to comply and cannot be undone. Confirm the details are correct."
+        confirmLabel="Record order"
+        busy={busy}
+        errorMessage={error}
+        onConfirm={() => confirm()}
+        onCancel={cancel}
+      />
     </form>
   );
 }
