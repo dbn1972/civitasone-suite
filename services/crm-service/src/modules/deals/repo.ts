@@ -98,7 +98,11 @@ export async function updateStage(tx: Writer, id: string, tenantId: string, stag
   // P1-2: persist probability. Won pins to 100, Lost to 0; otherwise honour an
   // explicit value when supplied, else leave the existing probability intact.
   const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
-  const patch: Record<string, unknown> = { stage, status, updatedAt: new Date(), updatedBy: actorId };
+  // Bump version on every stage transition, consistent with updateDeal/softDelete,
+  // so optimistic-concurrency consumers observe the change (was previously omitted).
+  const patch: Record<string, unknown> = {
+    stage, status, updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1`,
+  };
   if (prob !== undefined) patch.probability = prob;
   await (tx as typeof db).update(deals)
     .set(patch)

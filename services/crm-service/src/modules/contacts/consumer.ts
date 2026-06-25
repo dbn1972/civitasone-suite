@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { invalidateDashboard } from "../dashboard/queries.js";
 import { buildView } from "./commands.js";
 import type { ContactView } from "./schema.js";
 import type { CreateContactBody } from "./validators.js";
@@ -40,6 +41,7 @@ export function registerContactConsumers(queue: Queue): void {
     });
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.updateContact, async (msg) => {
@@ -74,6 +76,7 @@ export function registerContactConsumers(queue: Queue): void {
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.deleteContact, async (msg) => {
@@ -85,6 +88,9 @@ export function registerContactConsumers(queue: Queue): void {
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    // Closes the known stale-count gap: a soft-deleted contact must drop out of
+    // the cached dashboard summary immediately, not after the TTL.
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.mergeContacts, async (msg) => {
@@ -138,6 +144,7 @@ export function registerContactConsumers(queue: Queue): void {
     await cache.invalidate(keyFor(msg.tenantId, p.primaryId));
     await cache.invalidate(keyFor(msg.tenantId, p.duplicateId));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.bulkImportContacts, async (msg) => {
@@ -191,6 +198,7 @@ export function registerContactConsumers(queue: Queue): void {
       );
     });
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await invalidateDashboard(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.createAccount, async (msg) => {

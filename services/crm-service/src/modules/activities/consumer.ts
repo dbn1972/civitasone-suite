@@ -6,6 +6,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as contactRepo from "../contacts/repo.js";
 import * as dealRepo from "../deals/repo.js";
+import { invalidateDashboard } from "../dashboard/queries.js";
 import type { ActivityView } from "./schema.js";
 
 const RESOURCE = "activity";
@@ -37,6 +38,9 @@ export function registerActivityConsumers(queue: Queue): void {
       await emit(tx, msg, EVENTS.activityCreated, { activityId: p.id, contactId: p.contactId }, "create", p.id);
     });
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+    // A new activity increments activitiesToday (and, via touchLastActivity,
+    // can move a contact into the "recent" segment) — drop the cached summary.
+    await invalidateDashboard(msg.tenantId);
     if (msg.payload.contactId) {
       await cache.invalidate(cache.makeKey(msg.tenantId, "contact", msg.payload.contactId));
       await cache.invalidateResource(msg.tenantId, "contact");
