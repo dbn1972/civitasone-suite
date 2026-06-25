@@ -130,6 +130,14 @@ function errorHandler(err: unknown, req: any, reply: any): void {
     void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
     return;
   }
+  // Fastify client errors (e.g. malformed/empty JSON body) carry a 4xx
+  // statusCode — surface them as client errors, not masked 500s.
+  const sc = (err as { statusCode?: number })?.statusCode;
+  if (typeof sc === "number" && sc >= 400 && sc < 500) {
+    const code = (err as { code?: string })?.code ?? "BAD_REQUEST";
+    void reply.code(sc).send({ code, message: (err as Error)?.message ?? "bad request", correlationId, retryable: false });
+    return;
+  }
   req.log.error({ err }, "unhandled error");
   void reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
 }

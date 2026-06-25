@@ -40,3 +40,14 @@ export const separateBody = z.object({
 export type SeparateBody = z.infer<typeof separateBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+// Promotion creation — validated (replaces prior raw body casts in routes.ts).
+export const createPromotionBody = z.object({
+  employeeId:    z.string().uuid(),
+  fromDesigId:   z.string().uuid(),
+  toDesigId:     z.string().uuid(),
+  effectiveDate: DATE,
+  orderRef:      z.string().max(128).optional(),
+  newBasicMinor: z.number().int().positive().max(1_000_000_00).optional(),
+});
+export type CreatePromotionBody = z.infer<typeof createPromotionBody>;
