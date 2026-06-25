@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getAdminUsers } from "../../../_data/loaders";
+import { Breadcrumb } from "../Breadcrumb";
 import { UsersTable } from "./UsersTable";
 
 export default async function AdminUsersPage() {
@@ -13,16 +14,12 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="wrap">
+      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Users" }]} />
       <PageHeader
         back="/tenant-admin"
         title="Manage Users"
         subtitle="Tenant user directory with role assignment and MFA status."
-        actions={
-          <>
-            <button className="btn ghost">Export</button>
-            <button className="btn primary">+ Invite User</button>
-          </>
-        }
+        actions={<button type="button" className="btn ghost">Export</button>}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="👥" iconBg="#f1f5f9" label="Total Users" value={total} />
