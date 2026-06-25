@@ -74,6 +74,21 @@ const FIXTURES = {
   '/api/v1/admin/tenant/modules': { data: [{ name: 'finance' }, { name: 'hr' }, { name: 'procurement' }] },
   '/api/v1/admin/health': { status: 'ok', services: [{ service: 'finance-service', status: 'ok' }] },
   '/api/v1/admin/health/readiness': { overall: 95, productionReady: true, allGreen: true },
+  '/api/v1/admin/operations': {
+    checkedAt: '2024-01-01T00:00:00.000Z',
+    pm2Available: true,
+    summary: { totalProcesses: 3, onlineProcesses: 3, workersOnline: 1, workersTotal: 1, failedJobs: 0, outboxPending: 0, queueHealthy: true },
+    processes: [
+      { name: 'admin', kind: 'service', status: 'online', restarts: 0, cpuPct: 1, memoryMb: 80, uptimeSeconds: 7200 },
+      { name: 'gateway', kind: 'infrastructure', status: 'online', restarts: 0, cpuPct: 2, memoryMb: 90, uptimeSeconds: 7200 },
+      { name: 'admin-worker', kind: 'worker', status: 'online', restarts: 0, cpuPct: 1, memoryMb: 64, uptimeSeconds: 3600 },
+    ],
+    queue: { healthy: true, detail: 'queue health check passed' },
+    schedulers: [{ name: 'Admin break-glass auto-close', ownerProcess: 'admin-worker', schedule: 'Every 60 seconds', status: 'online' }],
+    outbox: { pending: 0 },
+    recentErrors: [],
+    externalMonitorRecommendation: [{ tool: 'Uptime Kuma', purpose: 'External uptime checks for web, gateway, and /ready endpoints' }],
+  },
   '/api/v1/admin/api-keys': [{ id: 'ak1', keyName: 'Integration Key', keyPrefix: 'civ_live', createdBy: 'Admin', createdAt: '2024-01-01T00:00:00Z', status: 'active', scopes: ['read'] }],
   '/api/v1/admin/breakglass': [{ id: 'bg1', actor: 'Admin', actorEmail: 'admin@demo.gov.in', reason: 'Emergency access', startedAt: '2024-01-01T00:00:00Z', status: 'ended' }],
 
