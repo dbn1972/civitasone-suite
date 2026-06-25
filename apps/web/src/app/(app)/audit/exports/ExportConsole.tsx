@@ -285,7 +285,7 @@ export function ExportConsole() {
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {job.download ? (
                     <a className="btn ghost sm" href={`/api/proxy/v1/audit/exports/${job.id}/download?token=${encodeURIComponent(job.download)}`} download>
-                      ⬇ Download artifact
+                      <span aria-hidden="true">⬇</span> Download artifact
                     </a>
                   ) : (
                     <span style={{ fontSize: 12, color: "#667085", alignSelf: "center" }}>
@@ -310,7 +310,7 @@ export function ExportConsole() {
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                    {verify.verified ? "✅ Integrity verified" : "⚠ Integrity check failed"}
+                    {verify.verified ? <><span aria-hidden="true">✅</span> Integrity verified</> : <><span aria-hidden="true">⚠</span> Integrity check failed</>}
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
                     <li>Content hash matches: {verify.contentMatch ? "yes" : "no"}</li>

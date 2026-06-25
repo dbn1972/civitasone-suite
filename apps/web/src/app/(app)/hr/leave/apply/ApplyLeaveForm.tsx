@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 
@@ -32,6 +32,13 @@ export function ApplyLeaveForm({ employees }: Props) {
   const [reason, setReason] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
+
+  const employeeFieldId = useId();
+  const leaveTypeFieldId = useId();
+  const fromDateId = useId();
+  const toDateId = useId();
+  const reasonId = useId();
+  const statusId = useId();
 
   const loadContext = useCallback(async (empId: string) => {
     if (!empId) {
@@ -158,8 +165,9 @@ export function ApplyLeaveForm({ employees }: Props) {
           className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
+            <label htmlFor={employeeFieldId} className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
             <select
+              id={employeeFieldId}
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -177,8 +185,9 @@ export function ApplyLeaveForm({ employees }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Leave Type</label>
+            <label htmlFor={leaveTypeFieldId} className="block text-sm font-medium text-slate-700 mb-1">Leave Type</label>
             <select
+              id={leaveTypeFieldId}
               value={allocId}
               onChange={(e) => setAllocId(e.target.value)}
               disabled={!leaveContext?.allocations.length}
@@ -198,8 +207,9 @@ export function ApplyLeaveForm({ employees }: Props) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">From Date</label>
+              <label htmlFor={fromDateId} className="block text-sm font-medium text-slate-700 mb-1">From Date</label>
               <input
+                id={fromDateId}
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
@@ -207,8 +217,9 @@ export function ApplyLeaveForm({ employees }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">To Date</label>
+              <label htmlFor={toDateId} className="block text-sm font-medium text-slate-700 mb-1">To Date</label>
               <input
+                id={toDateId}
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
@@ -224,8 +235,9 @@ export function ApplyLeaveForm({ employees }: Props) {
           ) : null}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Reason (optional)</label>
+            <label htmlFor={reasonId} className="block text-sm font-medium text-slate-700 mb-1">Reason (optional)</label>
             <textarea
+              id={reasonId}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
@@ -243,7 +255,13 @@ export function ApplyLeaveForm({ employees }: Props) {
           </button>
 
           {message ? (
-            <p className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}>
+            <p
+              id={statusId}
+              role={status === "error" ? "alert" : "status"}
+              aria-live={status === "error" ? "assertive" : "polite"}
+              className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
+            >
+              <span className="font-semibold">{status === "error" ? "Error: " : "Success: "}</span>
               {message}
             </p>
           ) : null}

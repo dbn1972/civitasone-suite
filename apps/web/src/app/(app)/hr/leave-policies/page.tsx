@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, Card, EmptyState, ConfirmDialog } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog } from "../../../_components/ds";
 
 type Policy = {
   id: string;
@@ -24,9 +24,10 @@ type Policy = {
   isActive: boolean;
 };
 
+type PolicyRow = Policy & Record<string, unknown>;
+
 const EMPLOYEE_TYPES = ["permanent", "contractual", "vendor_deputed", "deputation", "consultant"];
 
-/** Maps an employee type to a DS status-pill variant. */
 const TYPE_VARIANT: Record<string, string> = {
   permanent: "info",
   contractual: "warn",
@@ -117,6 +118,7 @@ export default function LeavePoliciesPage() {
   }
 
   const editingPolicy = policies.find((p) => p.id === editId) ?? null;
+  const rows: PolicyRow[] = policies as PolicyRow[];
 
   return (
     <>
@@ -169,100 +171,229 @@ export default function LeavePoliciesPage() {
             message="No leave policies match the selected employee type."
           />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Employee Type</th>
-                <th>Leave Type</th>
-                <th style={{ textAlign: "center" }}>Days/Year</th>
-                <th style={{ textAlign: "center" }}>Max Continuous</th>
-                <th style={{ textAlign: "center" }}>Carry Fwd</th>
-                <th style={{ textAlign: "center" }}>Encashable</th>
-                <th style={{ textAlign: "center" }}>Count Method</th>
-                <th style={{ textAlign: "center" }}>Med Cert</th>
-                <th style={{ textAlign: "center" }}>Sandwich</th>
-                <th style={{ textAlign: "center" }}>Min Service</th>
-                <th style={{ textAlign: "center" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {policies.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    <span className={`pill ${TYPE_VARIANT[p.employeeType] ?? "mut"}`} style={{ textTransform: "capitalize" }}>
-                      {p.employeeType.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>
-                    <span style={{ fontSize: 11, color: "var(--mut)", marginRight: 4 }}>{p.leaveTypeCode}</span>
-                    {p.leaveTypeName}
-                  </td>
-
-                  {editId === p.id ? (
-                    <>
-                      <td style={{ textAlign: "center" }}>
-                        <label className="sr-only" htmlFor={`days-${p.id}`}>Days per year</label>
-                        <input id={`days-${p.id}`} type="number" style={{ width: 64, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }} value={editValues.maxDaysPerYear ?? 0} onChange={(e) => setEditValues({ ...editValues, maxDaysPerYear: Number(e.target.value) })} />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <label className="sr-only" htmlFor={`cont-${p.id}`}>Max continuous days</label>
-                        <input id={`cont-${p.id}`} type="number" style={{ width: 64, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }} value={editValues.maxContinuousDays ?? 0} onChange={(e) => setEditValues({ ...editValues, maxContinuousDays: Number(e.target.value) })} />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <input type="checkbox" aria-label="Carry forward" checked={editValues.carryForward ?? false} onChange={(e) => setEditValues({ ...editValues, carryForward: e.target.checked })} />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <input type="checkbox" aria-label="Encashable" checked={editValues.encashable ?? false} onChange={(e) => setEditValues({ ...editValues, encashable: e.target.checked })} />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <label className="sr-only" htmlFor={`cm-${p.id}`}>Count method</label>
-                        <select id={`cm-${p.id}`} style={{ padding: 6, border: "1px solid var(--line)", borderRadius: 8 }} value={editValues.countMethod ?? "calendar"} onChange={(e) => setEditValues({ ...editValues, countMethod: e.target.value })}>
+          <DataTable<PolicyRow>
+            columns={[
+              {
+                key: "employeeType",
+                label: "Employee Type",
+                render: (p) => (
+                  <span className={`pill ${TYPE_VARIANT[p.employeeType as string] ?? "mut"}`} style={{ textTransform: "capitalize" }}>
+                    {(p.employeeType as string).replace("_", " ")}
+                  </span>
+                ),
+              },
+              {
+                key: "leaveTypeName",
+                label: "Leave Type",
+                render: (p) => (
+                  <>
+                    <span style={{ fontSize: 11, color: "var(--mut)", marginRight: 4 }}>{p.leaveTypeCode as string}</span>
+                    {p.leaveTypeName as string}
+                  </>
+                ),
+              },
+              {
+                key: "maxDaysPerYear",
+                label: "Days/Year",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <>
+                        <label className="sr-only" htmlFor={`days-${p.id as string}`}>Days per year</label>
+                        <input
+                          id={`days-${p.id as string}`}
+                          type="number"
+                          style={{ width: 64, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
+                          value={editValues.maxDaysPerYear ?? 0}
+                          onChange={(e) => setEditValues({ ...editValues, maxDaysPerYear: Number(e.target.value) })}
+                        />
+                      </>
+                    );
+                  }
+                  return <span style={{ fontWeight: 700, color: "var(--primary-d)" }}>{p.maxDaysPerYear as number}</span>;
+                },
+              },
+              {
+                key: "maxContinuousDays",
+                label: "Max Continuous",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <>
+                        <label className="sr-only" htmlFor={`cont-${p.id as string}`}>Max continuous days</label>
+                        <input
+                          id={`cont-${p.id as string}`}
+                          type="number"
+                          style={{ width: 64, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
+                          value={editValues.maxContinuousDays ?? 0}
+                          onChange={(e) => setEditValues({ ...editValues, maxContinuousDays: Number(e.target.value) })}
+                        />
+                      </>
+                    );
+                  }
+                  return <span style={{ color: "var(--ink2)" }}>{p.maxContinuousDays as number}d</span>;
+                },
+              },
+              {
+                key: "carryForward",
+                label: "Carry Fwd",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <input
+                        type="checkbox"
+                        aria-label="Carry forward"
+                        checked={editValues.carryForward ?? false}
+                        onChange={(e) => setEditValues({ ...editValues, carryForward: e.target.checked })}
+                      />
+                    );
+                  }
+                  return p.carryForward ? <span aria-label="Yes">✓</span> : <span aria-label="No">—</span>;
+                },
+              },
+              {
+                key: "encashable",
+                label: "Encashable",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <input
+                        type="checkbox"
+                        aria-label="Encashable"
+                        checked={editValues.encashable ?? false}
+                        onChange={(e) => setEditValues({ ...editValues, encashable: e.target.checked })}
+                      />
+                    );
+                  }
+                  return p.encashable ? <span aria-label="Encashable">💰</span> : <span aria-label="No">—</span>;
+                },
+              },
+              {
+                key: "countMethod",
+                label: "Count Method",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <>
+                        <label className="sr-only" htmlFor={`cm-${p.id as string}`}>Count method</label>
+                        <select
+                          id={`cm-${p.id as string}`}
+                          style={{ padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
+                          value={editValues.countMethod ?? "calendar"}
+                          onChange={(e) => setEditValues({ ...editValues, countMethod: e.target.value })}
+                        >
                           <option value="calendar">Calendar</option>
                           <option value="working_days">Working Days</option>
                         </select>
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <input type="checkbox" aria-label="Requires medical certificate" checked={editValues.requiresMedicalCert ?? false} onChange={(e) => setEditValues({ ...editValues, requiresMedicalCert: e.target.checked })} />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <input type="checkbox" aria-label="Sandwich rule" checked={editValues.sandwichRule ?? false} onChange={(e) => setEditValues({ ...editValues, sandwichRule: e.target.checked })} />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <label className="sr-only" htmlFor={`svc-${p.id}`}>Minimum service months</label>
-                        <input id={`svc-${p.id}`} type="number" style={{ width: 56, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }} value={editValues.minServiceMonths ?? 0} onChange={(e) => setEditValues({ ...editValues, minServiceMonths: Number(e.target.value) })} /> <span style={{ fontSize: 11, color: "var(--mut)" }}>mo</span>
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <div style={{ display: "inline-flex", gap: 6 }}>
-                          <button type="button" className="btn primary sm" disabled={saving} onClick={() => { setSaveError(undefined); setConfirmOpen(true); }}>
-                            Save
-                          </button>
-                          <button type="button" className="btn ghost sm" onClick={() => setEditId(null)}>
-                            Cancel
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={{ textAlign: "center", fontWeight: 700, color: "var(--primary-d)" }}>{p.maxDaysPerYear}</td>
-                      <td style={{ textAlign: "center", color: "var(--ink2)" }}>{p.maxContinuousDays}d</td>
-                      <td style={{ textAlign: "center" }}>{p.carryForward ? <span aria-label="Yes">✓</span> : <span aria-label="No">—</span>}</td>
-                      <td style={{ textAlign: "center" }}>{p.encashable ? <span aria-label="Encashable">💰</span> : <span aria-label="No">—</span>}</td>
-                      <td style={{ textAlign: "center", fontSize: 12 }}>{p.countMethod === "working_days" ? "Working" : "Calendar"}</td>
-                      <td style={{ textAlign: "center", fontSize: 12 }}>{p.requiresMedicalCert ? <span><span aria-hidden="true">⚕️</span> &gt;{p.requiresMedicalCertAfterDays}d</span> : <span aria-label="Not required">—</span>}</td>
-                      <td style={{ textAlign: "center" }}>{p.sandwichRule ? <span aria-label="Yes">✓</span> : <span aria-label="No">—</span>}</td>
-                      <td style={{ textAlign: "center", fontSize: 12, color: "var(--ink2)" }}>{p.minServiceMonths > 0 ? `${p.minServiceMonths}mo` : "—"}</td>
-                      <td style={{ textAlign: "center" }}>
-                        <button type="button" className="btn ghost sm" onClick={() => startEdit(p)}>
-                          Edit
+                      </>
+                    );
+                  }
+                  return <span style={{ fontSize: 12 }}>{(p.countMethod as string) === "working_days" ? "Working" : "Calendar"}</span>;
+                },
+              },
+              {
+                key: "requiresMedicalCert",
+                label: "Med Cert",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <input
+                        type="checkbox"
+                        aria-label="Requires medical certificate"
+                        checked={editValues.requiresMedicalCert ?? false}
+                        onChange={(e) => setEditValues({ ...editValues, requiresMedicalCert: e.target.checked })}
+                      />
+                    );
+                  }
+                  return (p.requiresMedicalCert as boolean)
+                    ? <span><span aria-hidden="true">⚕️</span> &gt;{p.requiresMedicalCertAfterDays as number}d</span>
+                    : <span aria-label="Not required">—</span>;
+                },
+              },
+              {
+                key: "sandwichRule",
+                label: "Sandwich",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <input
+                        type="checkbox"
+                        aria-label="Sandwich rule"
+                        checked={editValues.sandwichRule ?? false}
+                        onChange={(e) => setEditValues({ ...editValues, sandwichRule: e.target.checked })}
+                      />
+                    );
+                  }
+                  return p.sandwichRule ? <span aria-label="Yes">✓</span> : <span aria-label="No">—</span>;
+                },
+              },
+              {
+                key: "minServiceMonths",
+                label: "Min Service",
+                align: "center",
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <>
+                        <label className="sr-only" htmlFor={`svc-${p.id as string}`}>Minimum service months</label>
+                        <input
+                          id={`svc-${p.id as string}`}
+                          type="number"
+                          style={{ width: 56, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
+                          value={editValues.minServiceMonths ?? 0}
+                          onChange={(e) => setEditValues({ ...editValues, minServiceMonths: Number(e.target.value) })}
+                        />
+                        {" "}<span style={{ fontSize: 11, color: "var(--mut)" }}>mo</span>
+                      </>
+                    );
+                  }
+                  return (
+                    <span style={{ fontSize: 12, color: "var(--ink2)" }}>
+                      {(p.minServiceMonths as number) > 0 ? `${p.minServiceMonths as number}mo` : "—"}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: "id",
+                label: "Actions",
+                align: "center",
+                sortable: false,
+                render: (p) => {
+                  if (editId === (p.id as string)) {
+                    return (
+                      <div style={{ display: "inline-flex", gap: 6 }}>
+                        <button
+                          type="button"
+                          className="btn primary sm"
+                          disabled={saving}
+                          onClick={() => { setSaveError(undefined); setConfirmOpen(true); }}
+                        >
+                          Save
                         </button>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        <button type="button" className="btn ghost sm" onClick={() => setEditId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <button type="button" className="btn ghost sm" onClick={() => startEdit(p as Policy)}>
+                      Edit
+                    </button>
+                  );
+                },
+              },
+            ]}
+            rows={rows}
+          />
         )}
       </Card>
 

@@ -1,12 +1,26 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, DataTable, EmptyState, Card } from "../../../_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getStockLedger } from "../../../_data/loaders";
 
+type LedgerEntry = {
+  id: string;
+  itemCode: string;
+  itemName: string;
+  date: string;
+  type: string;
+  quantity: number;
+  totalValue: number;
+  referenceNo?: string;
+  balance: number;
+} & Record<string, unknown>;
+
 const typeColors: Record<string, string> = {
-  receipt: "bg-emerald-50 text-emerald-700",
-  issue: "bg-red-50 text-red-700",
-  transfer: "bg-blue-50 text-blue-700",
-  adjustment: "bg-amber-50 text-amber-700",
+  receipt: "good",
+  issue: "bad",
+  transfer: "info",
+  adjustment: "warn",
 };
 
 export default async function InventoryReconcilePage() {
@@ -21,94 +35,93 @@ export default async function InventoryReconcilePage() {
   const totalAdjusted = adjustments.reduce((s, e) => s + e.quantity, 0);
   const netQty = totalIn - totalOut + totalAdjusted;
 
+  const rows = entries as LedgerEntry[];
+
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-7xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/inventory" className="hover:text-slate-900">Inventory</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Reconciliation</span>
-        </nav>
+    <div className="wrap">
+      <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+        <Link href="/inventory">Inventory</Link>
+        <span aria-hidden="true"> › </span>
+        <span aria-current="page">Reconciliation</span>
+      </nav>
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Inventory Reconciliation</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Compare physical stock movements — receipts, issues and adjustments — to verify ledger balance.
-            </p>
-          </div>
-          {source === "error" ? <DataSourceBadge source={source} /> : null}
-        </header>
+      <PageHeader
+        title="Inventory Reconciliation"
+        subtitle="Compare physical stock movements — receipts, issues and adjustments — to verify ledger balance."
+        actions={source === "error" ? <DataSourceBadge source={source} /> : undefined}
+      />
 
-        {entries.length === 0 && source !== "error" ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-            <p className="text-slate-500">No stock movements to reconcile.</p>
-            <p className="mt-1 text-xs text-slate-400">Record receipts or issues in Stock to begin reconciliation.</p>
-          </div>
-        ) : (
-          <>
-            <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm text-slate-500">Total In (Qty)</p>
-                <p className="mt-1 text-2xl font-bold text-emerald-600">{totalIn.toLocaleString("en-IN")}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm text-slate-500">Total Out (Qty)</p>
-                <p className="mt-1 text-2xl font-bold text-red-600">{totalOut.toLocaleString("en-IN")}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm text-slate-500">Adjustments</p>
-                <p className="mt-1 text-2xl font-bold text-amber-600">{adjustments.length.toLocaleString("en-IN")}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-sm text-slate-500">Net Balance (Qty)</p>
-                <p className={`mt-1 text-2xl font-bold ${netQty >= 0 ? "text-blue-600" : "text-red-600"}`}>
-                  {netQty.toLocaleString("en-IN")}
-                </p>
-              </div>
-            </section>
+      {entries.length === 0 && source !== "error" ? (
+        <EmptyState
+          icon="📦"
+          title="No stock movements to reconcile"
+          message="Record receipts or issues in Stock to begin reconciliation."
+        />
+      ) : (
+        <>
+          <StatGrid>
+            <StatCard icon="📥" iconBg="#ecfdf5" label="Total In (Qty)" value={totalIn.toLocaleString("en-IN")} />
+            <StatCard icon="📤" iconBg="#fef2f2" label="Total Out (Qty)" value={totalOut.toLocaleString("en-IN")} />
+            <StatCard icon="🔧" iconBg="#fffbeb" label="Adjustments" value={adjustments.length.toLocaleString("en-IN")} />
+            <StatCard
+              icon="⚖️"
+              iconBg="#eff6ff"
+              label="Net Balance (Qty)"
+              value={netQty.toLocaleString("en-IN")}
+              up={netQty >= 0}
+            />
+          </StatGrid>
 
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="overflow-x-auto">
-                <table aria-label="Inventory reconciliation ledger" className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-100 text-slate-700">
-                    <tr>
-                      <th scope="col" className="px-4 py-3">Item Code</th>
-                      <th scope="col" className="px-4 py-3">Item Name</th>
-                      <th scope="col" className="px-4 py-3">Date</th>
-                      <th scope="col" className="px-4 py-3">Movement</th>
-                      <th scope="col" className="px-4 py-3 text-right">Quantity</th>
-                      <th scope="col" className="px-4 py-3 text-right">Value (₹)</th>
-                      <th scope="col" className="px-4 py-3">Reference</th>
-                      <th scope="col" className="px-4 py-3 text-right">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map((entry) => (
-                      <tr key={entry.id} className="border-t border-slate-200 hover:bg-slate-50">
-                        <td className="px-4 py-3 font-mono text-xs text-blue-600">{entry.itemCode}</td>
-                        <td className="px-4 py-3 font-medium text-slate-900">{entry.itemName}</td>
-                        <td className="px-4 py-3 text-slate-600">{entry.date}</td>
-                        <td className="px-4 py-3">
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${typeColors[entry.type] ?? "bg-slate-100 text-slate-600"}`}>
-                            {entry.type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-800">
-                          {entry.type === "issue" ? "-" : "+"}{entry.quantity.toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-800">₹{(entry.totalValue / 100).toLocaleString("en-IN")}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{entry.referenceNo ?? "—"}</td>
-                        <td className="px-4 py-3 text-right font-medium text-slate-900">{entry.balance.toLocaleString("en-IN")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </>
-        )}
-      </section>
-    </main>
+          <Card title="Stock ledger">
+            <DataTable<LedgerEntry>
+              columns={[
+                { key: "itemCode", label: "Item Code", render: (e) => <span className="mono" style={{ color: "var(--primary)" }}>{e.itemCode as string}</span> },
+                { key: "itemName", label: "Item Name" },
+                { key: "date", label: "Date", render: (e) => formatIndianDate(e.date as string) },
+                {
+                  key: "type",
+                  label: "Movement",
+                  render: (e) => (
+                    <span className={`pill ${typeColors[e.type as string] ?? "mut"}`} style={{ textTransform: "capitalize" }}>
+                      {e.type as string}
+                    </span>
+                  ),
+                },
+                {
+                  key: "quantity",
+                  label: "Quantity",
+                  align: "right",
+                  render: (e) => (
+                    <>{e.type === "issue" ? "-" : "+"}{(e.quantity as number).toLocaleString("en-IN")}</>
+                  ),
+                },
+                {
+                  key: "totalValue",
+                  label: "Value",
+                  align: "right",
+                  render: (e) => formatMoney(e.totalValue as number),
+                },
+                {
+                  key: "referenceNo",
+                  label: "Reference",
+                  render: (e) => <span className="mono" style={{ fontSize: 12, color: "var(--ink2)" }}>{(e.referenceNo as string | undefined) ?? "—"}</span>,
+                },
+                {
+                  key: "balance",
+                  label: "Balance",
+                  align: "right",
+                  render: (e) => <strong>{(e.balance as number).toLocaleString("en-IN")}</strong>,
+                },
+              ]}
+              rows={rows}
+              filterable
+              filterPlaceholder="Search by item name or code…"
+              pageSize={50}
+              sortable
+            />
+          </Card>
+        </>
+      )}
+    </div>
   );
 }
