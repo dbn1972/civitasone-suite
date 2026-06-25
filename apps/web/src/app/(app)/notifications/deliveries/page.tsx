@@ -1,8 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import type { NotificationDelivery } from "@civitasone/types";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { formatIndianDate } from "@/lib/formatters";
+import { StatusBadge } from "../_components/StatusBadge";
+
+type DeliveryRow = {
+  id: string;
+  notificationTitle: string;
+  recipient: string;
+  channel: string;
+  attemptCount: number;
+  deliveredAt: string;
+  status: string;
+} & Record<string, unknown>;
 
 function toArray(payload: unknown): NotificationDelivery[] {
   if (Array.isArray(payload)) return payload as NotificationDelivery[];
@@ -14,12 +27,16 @@ function toArray(payload: unknown): NotificationDelivery[] {
   return [];
 }
 
+const TABS = ["All", "Failed", "Pending"] as const;
+
 export default function NotificationDeliveriesPage() {
   const { data: deliveries, source, offline, cachedAt, loading } = useOfflineResource<unknown, NotificationDelivery[]>(
     "notifications.deliveries",
     "/notification/deliveries",
     { map: toArray, initialData: [] },
   );
+
+  const [tab, setTab] = useState<string>("All");
 
   const delivered = deliveries.filter((d) => d.status === "delivered").length;
   const failed = deliveries.filter((d) => d.status === "failed").length;
@@ -30,11 +47,28 @@ export default function NotificationDeliveriesPage() {
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
+  const tableRows: DeliveryRow[] = deliveries.map((d) => ({
+    id: d.id,
+    notificationTitle: d.notificationTitle,
+    recipient: d.recipient,
+    channel: d.channel.replace(/_/g, " "),
+    attemptCount: d.attemptCount,
+    deliveredAt: d.deliveredAt ? formatIndianDate(d.deliveredAt) : "—",
+    status: d.status,
+  }));
+
+  const filtered =
+    tab === "Failed"
+      ? tableRows.filter((r) => r.status === "failed")
+      : tab === "Pending"
+        ? tableRows.filter((r) => r.status === "pending")
+        : tableRows;
+
   return (
     <>
       <PageHeader
         title="Notification Deliveries"
-        subtitle="Delivery log for all outgoing notifications."
+        subtitle="Delivery log for all outgoing notifications. Select a row to view delivery status and resend failures."
         back="/notifications/list"
       />
       {cacheNote ? (
@@ -51,7 +85,9 @@ export default function NotificationDeliveriesPage() {
       <div className="card">
         <div className="card-h">
           <h3>Delivery log</h3>
-          <div className="seg"><span className="on">All</span><span>Failed</span><span>Pending</span></div>
+          <div role="group" aria-label="Filter deliveries by status">
+            <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+          </div>
         </div>
         {deliveries.length === 0 ? (
           <EmptyState
@@ -60,30 +96,22 @@ export default function NotificationDeliveriesPage() {
             message={loading ? "Fetching the delivery log." : "Delivery logs will appear here once notifications are sent."}
           />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Notification</th>
-                <th>Recipient</th>
-                <th>Channel</th>
-                <th style={{ textAlign: "right" }}>Attempts</th>
-                <th>Delivered At</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deliveries.map((d) => (
-                <tr key={d.id}>
-                  <td style={{ fontWeight: 500 }}>{d.notificationTitle}</td>
-                  <td>{d.recipient}</td>
-                  <td><StatusPill status={d.channel} label={d.channel.replace(/_/g, " ")} /></td>
-                  <td className="num">{d.attemptCount}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{d.deliveredAt ?? "—"}</td>
-                  <td><StatusPill status={d.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<DeliveryRow>
+            columns={[
+              { key: "notificationTitle", label: "Notification" },
+              { key: "recipient", label: "Recipient" },
+              { key: "channel", label: "Channel" },
+              { key: "attemptCount", label: "Attempts", align: "right" },
+              { key: "deliveredAt", label: "Delivered At" },
+              { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
+            ]}
+            rows={filtered}
+            rowHref={(r) => `/notifications/deliveries/${r.id}`}
+            sortable
+            filterable
+            filterPlaceholder="Filter deliveries…"
+            pageSize={15}
+          />
         )}
       </div>
     </>

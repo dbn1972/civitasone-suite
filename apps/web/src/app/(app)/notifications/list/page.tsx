@@ -1,8 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import type { NotificationItem } from "@civitasone/types";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { formatIndianDate } from "@/lib/formatters";
+import { StatusBadge } from "../_components/StatusBadge";
+
+type NotifRow = {
+  id: string;
+  title: string;
+  module: string;
+  recipient: string;
+  channel: string;
+  status: string;
+  createdAt: string;
+} & Record<string, unknown>;
 
 function toArray(payload: unknown): NotificationItem[] {
   if (Array.isArray(payload)) return payload as NotificationItem[];
@@ -14,12 +27,16 @@ function toArray(payload: unknown): NotificationItem[] {
   return [];
 }
 
+const TABS = ["All", "Unread", "Failed"] as const;
+
 export default function NotificationsListPage() {
   const { data: notifications, source, offline, cachedAt, loading } = useOfflineResource<unknown, NotificationItem[]>(
     "notifications.list",
     "/notification/notifications",
     { map: toArray, initialData: [] },
   );
+
+  const [tab, setTab] = useState<string>("All");
 
   const sent = notifications.filter((n) => n.status === "sent").length;
   const failed = notifications.filter((n) => n.status === "failed").length;
@@ -30,12 +47,36 @@ export default function NotificationsListPage() {
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
+  const tableRows: NotifRow[] = notifications.map((n) => ({
+    id: n.id,
+    title: n.title,
+    module: n.module,
+    recipient: n.recipient,
+    channel: n.channel.replace(/_/g, " "),
+    status: n.status,
+    createdAt: formatIndianDate(n.createdAt),
+  }));
+
+  const filtered =
+    tab === "Unread"
+      ? tableRows.filter((r) => r.status !== "read")
+      : tab === "Failed"
+        ? tableRows.filter((r) => r.status === "failed")
+        : tableRows;
+
   return (
     <>
       <PageHeader
         title="Notifications"
         subtitle="All notification events across the platform."
-        actions={<button className="btn ghost">Settings</button>}
+        actions={
+          <>
+            <a className="btn ghost" href="/notifications/templates">Templates</a>
+            <a className="btn ghost" href="/notifications/deliveries">Deliveries</a>
+            <a className="btn ghost" href="/tenant-admin/notifications">Settings</a>
+            <a className="btn primary" href="/notifications/compose">Send notification</a>
+          </>
+        }
       />
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
@@ -51,7 +92,9 @@ export default function NotificationsListPage() {
       <div className="card">
         <div className="card-h">
           <h3>Notifications</h3>
-          <div className="seg"><span className="on">All</span><span>Unread</span><span>Failed</span></div>
+          <div role="group" aria-label="Filter notifications by status">
+            <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+          </div>
         </div>
         {notifications.length === 0 ? (
           <EmptyState
@@ -64,30 +107,21 @@ export default function NotificationsListPage() {
             }
           />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Module</th>
-                <th>Recipient</th>
-                <th>Channel</th>
-                <th>Status</th>
-                <th>Created At</th>
-              </tr>
-            </thead>
-            <tbody>
-              {notifications.map((n) => (
-                <tr key={n.id}>
-                  <td style={{ fontWeight: 500 }}>{n.title}</td>
-                  <td>{n.module}</td>
-                  <td>{n.recipient}</td>
-                  <td><StatusPill status={n.channel} label={n.channel.replace(/_/g, " ")} /></td>
-                  <td><StatusPill status={n.status} /></td>
-                  <td style={{ whiteSpace: "nowrap" }}>{n.createdAt}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<NotifRow>
+            columns={[
+              { key: "title", label: "Title" },
+              { key: "module", label: "Module" },
+              { key: "recipient", label: "Recipient" },
+              { key: "channel", label: "Channel" },
+              { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
+              { key: "createdAt", label: "Created At" },
+            ]}
+            rows={filtered}
+            sortable
+            filterable
+            filterPlaceholder="Filter notifications…"
+            pageSize={15}
+          />
         )}
       </div>
     </>

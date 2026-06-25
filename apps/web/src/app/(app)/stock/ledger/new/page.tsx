@@ -11,7 +11,14 @@
  */
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+
+const ENTRY_LABELS: Record<string, string> = {
+  receipt: "Receipt",
+  issue: "Issue",
+  transfer: "Transfer",
+  adjustment: "Adjustment",
+};
 
 type ItemRow = { id: string; name?: string; sku?: string | null; itemCode?: string };
 
@@ -31,7 +38,6 @@ export default function NewStockEntryPage() {
   const [rate, setRate] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes] = useState("");
-  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
@@ -54,42 +60,52 @@ export default function NewStockEntryPage() {
     if (presetItemId) setItemId(presetItemId);
   }, [presetItemId]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
+  // The actual irreversible post — gated behind the confirm dialog below.
+  async function postEntry(reason?: string) {
     setMessage("");
     setIsError(false);
-    try {
-      const qtyNum = Math.round(Number(qty || "0"));
-      const rateMinor = Math.round(Number(rate || "0") * 100);
-      const wh = warehouseId.trim();
-      const body: Record<string, unknown> = {
-        entryType,
-        postingDate,
-        notes: notes || undefined,
-        items: [{ itemId, qty: qtyNum, rateMinor }],
-      };
-      if (wh) {
-        if (entryType === "issue") body.fromWarehouseId = wh;
-        else body.toWarehouseId = wh;
-      }
-      const res = await fetch("/api/proxy/v1/stock/entries", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+    const qtyNum = Math.round(Number(qty || "0"));
+    const rateMinor = Math.round(Number(rate || "0") * 100);
+    const wh = warehouseId.trim();
+    const trimmedReason = reason?.trim();
+    const combinedNotes = [notes.trim(), trimmedReason ? `Reason: ${trimmedReason}` : ""]
+      .filter(Boolean)
+      .join(" — ");
+    const body: Record<string, unknown> = {
+      entryType,
+      postingDate,
+      notes: combinedNotes || undefined,
+      items: [{ itemId, qty: qtyNum, rateMinor }],
+    };
+    if (wh) {
+      if (entryType === "issue") body.fromWarehouseId = wh;
+      else body.toWarehouseId = wh;
+    }
+    const res = await fetch("/api/proxy/v1/stock/entries", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+  }
+
+  const post = useConfirmAction({
+    onConfirm: postEntry,
+    onSuccess: () => {
+      setIsError(false);
       setMessage("Stock entry posted.");
       setQty("");
       setRate("");
       router.refresh();
       setTimeout(() => router.push("/stock/ledger"), 700);
-    } catch (e) {
-      setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Submit failed.");
-    } finally {
-      setBusy(false);
-    }
+    },
+  });
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage("");
+    setIsError(false);
+    post.trigger();
   }
 
   return (
@@ -148,11 +164,25 @@ export default function NewStockEntryPage() {
               <input id="se-notes" value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} />
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy || !itemId} aria-busy={busy} style={{ marginTop: 12 }}>
-            {busy ? "Posting…" : "Post entry"}
+          <button type="submit" className="btn primary" disabled={post.busy || !itemId} aria-busy={post.busy} style={{ marginTop: 12 }}>
+            {post.busy ? "Posting…" : "Post entry"}
           </button>
         </form>
       </div>
+      <ConfirmDialog
+        open={post.open}
+        title="Post this stock entry?"
+        description={`This posts a ${ENTRY_LABELS[entryType] ?? entryType} of ${qty || "0"} unit(s) to the stock ledger and cannot be undone. Provide a reason for the audit trail.`}
+        confirmLabel="Post entry"
+        cancelLabel="Cancel"
+        danger
+        requireReason
+        reasonLabel="Reason / reference"
+        busy={post.busy}
+        errorMessage={post.error}
+        onConfirm={post.confirm}
+        onCancel={post.cancel}
+      />
     </>
   );
 }

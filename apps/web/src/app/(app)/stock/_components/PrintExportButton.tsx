@@ -30,7 +30,8 @@ export function PrintExportButton({
 
   return (
     <button type="button" className={className} onClick={handlePrint}>
-      🖨️ {label}
+      <span aria-hidden="true" style={{ marginRight: 6 }}>🖨️</span>
+      {label}
     </button>
   );
 }
