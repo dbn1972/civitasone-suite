@@ -96,19 +96,19 @@ describe("Cross-service chain 1: payroll.run.approved → finance.gl.post", () =
     const msg = await glPosted;
     expect(msg.type).toBe("finance.gl.post");
 
-    const p = msg.payload as { type: string; voucherNo: string; lines: Array<{ accountCode: string; debitMinor: number; creditMinor: number }> };
+    const p = msg.payload as { type: string; voucherNo: string; lines: Array<{ accountCode: string; debitMinor: string | number; creditMinor: string | number }> };
     expect(p.type).toBe("payroll_accrual");
     expect(p.voucherNo).toContain("PAY/2025-04/");
 
     // Double-entry must balance: total debits == total credits.
-    const debit = p.lines.reduce((s, l) => s + l.debitMinor, 0);
-    const credit = p.lines.reduce((s, l) => s + l.creditMinor, 0);
+    const debit = p.lines.reduce((s, l) => s + Number(l.debitMinor), 0);
+    const credit = p.lines.reduce((s, l) => s + Number(l.creditMinor), 0);
     expect(debit).toBe(1000000);
     expect(credit).toBe(1000000);
     // gross debit, net + statutory credit split (800000 + 200000)
-    expect(p.lines.find((l) => l.accountCode === "5001")?.debitMinor).toBe(1000000);
-    expect(p.lines.find((l) => l.accountCode === "2101")?.creditMinor).toBe(800000);
-    expect(p.lines.find((l) => l.accountCode === "2102")?.creditMinor).toBe(200000);
+    expect(Number(p.lines.find((l) => l.accountCode === "5001")?.debitMinor)).toBe(1000000);
+    expect(Number(p.lines.find((l) => l.accountCode === "2101")?.creditMinor)).toBe(800000);
+    expect(Number(p.lines.find((l) => l.accountCode === "2102")?.creditMinor)).toBe(200000);
   });
 });
 
