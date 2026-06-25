@@ -16,6 +16,12 @@ export const tickets = helpdeskSchema.table("tickets", {
   createdBy: uuid("created_by").notNull(),
   updatedBy: uuid("updated_by").notNull(),
   version: integer("version").notNull().default(1),
+  // HD1 — one-shot SLA-breach notification markers (NULL = not yet notified).
+  slaAtRiskNotifiedAt: timestamp("sla_at_risk_notified_at", { withTimezone: true }),
+  slaBreachedNotifiedAt: timestamp("sla_breached_notified_at", { withTimezone: true }),
+  // HD2 — provenance for tickets auto-opened from a foreign producer event.
+  source: varchar("source", { length: 32 }),
+  sourceRef: varchar("source_ref", { length: 128 }),
 });
 
 export type TicketRow = typeof tickets.$inferSelect;

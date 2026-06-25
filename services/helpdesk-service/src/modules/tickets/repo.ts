@@ -1,4 +1,4 @@
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, notInArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tickets, type TicketRow, type TicketInsert, type TicketView } from "./schema.js";
 
@@ -18,16 +18,20 @@ function mapPriority(priority: string): TicketView["priority"] {
   return "Medium";
 }
 
-/** Compute SLA due date (3 business days for High/Critical, 5 for others) and breach status. */
-function computeSla(r: TicketRow): { dueDate: string; slaStatus: "within_sla" | "at_risk" | "breached" } {
-  const priority = r.priority?.toLowerCase() ?? "medium";
-  const slaDays = (priority === "high" || priority === "critical") ? 3 : 5;
+export type SlaStatus = "within_sla" | "at_risk" | "breached";
+
+/** SLA window: 3 business-equivalent days for High/Critical, 5 otherwise. */
+export function slaDays(priority: string | null | undefined): number {
+  const p = priority?.toLowerCase() ?? "medium";
+  return (p === "high" || p === "critical") ? 3 : 5;
+}
+
+/** Compute SLA due date + breach status for a ticket row at a given instant. */
+export function computeSla(r: TicketRow, now: Date = new Date()): { dueDate: string; slaStatus: SlaStatus } {
   const created = new Date(r.createdAt as unknown as string);
-  const due = new Date(created.getTime() + slaDays * 24 * 60 * 60 * 1000);
-  const now = new Date();
+  const due = new Date(created.getTime() + slaDays(r.priority) * 24 * 60 * 60 * 1000);
   const hoursLeft = (due.getTime() - now.getTime()) / (1000 * 60 * 60);
-  const slaStatus: "within_sla" | "at_risk" | "breached" =
-    hoursLeft < 0 ? "breached" : hoursLeft < 24 ? "at_risk" : "within_sla";
+  const slaStatus: SlaStatus = hoursLeft < 0 ? "breached" : hoursLeft < 24 ? "at_risk" : "within_sla";
   return { dueDate: due.toISOString(), slaStatus };
 }
 
@@ -49,6 +53,13 @@ export async function findById(id: string, tenantId: string): Promise<TicketView
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
+}
+
+/** Raw row fetch (tenant-scoped) — used by consumers that need full columns. */
+export async function findRow(id: string, tenantId: string): Promise<TicketRow | null> {
+  const rows = await db.select().from(tickets)
+    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TicketView[]> {
@@ -74,6 +85,128 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insert(tx: Writer, row: TicketInsert): Promise<void> {
   await tx.insert(tickets).values(row);
+}
+
+// ---------------------------------------------------------------------------
+// HD1 — SLA sweeper support
+// ---------------------------------------------------------------------------
+
+/**
+ * Candidate tickets for the SLA-breach sweeper: still-open (not closed/resolved)
+ * and missing at least one SLA notification marker. Whether each is actually
+ * at-risk/breached is decided in-process by computeSla() against `now`.
+ */
+export async function findOpenForSla(batch = 200): Promise<TicketRow[]> {
+  return db.select().from(tickets)
+    .where(and(
+      notInArray(tickets.status, ["closed", "resolved"]),
+      or(isNull(tickets.slaAtRiskNotifiedAt), isNull(tickets.slaBreachedNotifiedAt)),
+    ))
+    .limit(batch);
+}
+
+/**
+ * Stamp the SLA notification marker for `stage` only if still unset — a CAS so
+ * overlapping sweeps (and re-runs) notify exactly once. Returns true if THIS
+ * call claimed the stamp (caller should then emit notify/escalation/audit).
+ */
+export async function markSlaNotified(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  stage: "at_risk" | "breached",
+  now: Date,
+): Promise<boolean> {
+  const col = stage === "breached" ? tickets.slaBreachedNotifiedAt : tickets.slaAtRiskNotifiedAt;
+  const set = stage === "breached"
+    ? { slaBreachedNotifiedAt: now, updatedAt: now }
+    : { slaAtRiskNotifiedAt: now, updatedAt: now };
+  const res = await (tx as typeof db).update(tickets)
+    .set(set)
+    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId), isNull(col)))
+    .returning({ id: tickets.id });
+  return res.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// HD2 — inbound linkage + assignment support
+// ---------------------------------------------------------------------------
+
+/** Look up an existing ticket auto-opened from a foreign (source, source_ref). */
+export async function findBySource(tenantId: string, source: string, sourceRef: string): Promise<TicketRow | null> {
+  const rows = await db.select().from(tickets)
+    .where(and(eq(tickets.tenantId, tenantId), eq(tickets.source, source), eq(tickets.sourceRef, sourceRef)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Idempotently open a ticket linked to a foreign event. Returns the row id
+ * (existing or freshly inserted) and whether it was newly created.
+ *
+ * Two layers of idempotency:
+ *  1. check-then-insert on (tenant, source, source_ref) inside the caller's tx —
+ *     a redelivery that finds an existing linked ticket is a no-op;
+ *  2. the partial UNIQUE index uq_tickets_source_ref is the race backstop: a
+ *     truly-concurrent second insert hits a unique violation, which we catch and
+ *     resolve to the now-existing row. (The partial index can't be an ON CONFLICT
+ *     target via Drizzle, hence the catch instead of onConflictDoNothing.)
+ */
+export async function insertLinkedIdempotent(
+  tx: Writer,
+  row: TicketInsert & { source: string; sourceRef: string },
+): Promise<{ id: string; created: boolean }> {
+  const existing = await findBySourceTx(tx, row.tenantId, row.source, row.sourceRef);
+  if (existing) return { id: existing.id, created: false };
+  try {
+    const res = await (tx as typeof db).insert(tickets).values(row).returning({ id: tickets.id });
+    return { id: res[0]!.id, created: true };
+  } catch (err) {
+    // unique-violation race: another concurrent insert won — resolve to it.
+    if (isUniqueViolation(err)) {
+      const now = await findBySourceTx(tx, row.tenantId, row.source, row.sourceRef);
+      if (now) return { id: now.id, created: false };
+    }
+    throw err;
+  }
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+}
+
+/** findBySource scoped to a transaction (for read-your-write inside the tx). */
+async function findBySourceTx(tx: Writer, tenantId: string, source: string, sourceRef: string): Promise<TicketRow | null> {
+  const rows = await (tx as typeof db).select().from(tickets)
+    .where(and(eq(tickets.tenantId, tenantId), eq(tickets.source, source), eq(tickets.sourceRef, sourceRef)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Assign a ticket to an agent (tenant-scoped). Moves status open→assigned only
+ * if currently open, bumps version. Returns the updated row, or null if the
+ * ticket does not exist in this tenant.
+ */
+export async function assign(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  assigneeId: string,
+  actorId: string,
+  now: Date,
+): Promise<TicketRow | null> {
+  const res = await (tx as typeof db).update(tickets)
+    .set({
+      assigneeId,
+      status: "assigned",
+      updatedBy: actorId,
+      updatedAt: now,
+      version: sql`${tickets.version} + 1`,
+    })
+    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId)))
+    .returning();
+  return res[0] ?? null;
 }
 
 export { mapStatus, mapPriority };
