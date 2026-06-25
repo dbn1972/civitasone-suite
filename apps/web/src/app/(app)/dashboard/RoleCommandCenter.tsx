@@ -71,27 +71,49 @@ export function RoleCommandCenter() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
       {centers.map((center) => (
-        <div key={center.id} className="card">
+        <section key={center.id} className="card" aria-labelledby={`cc-${center.id}-h`}>
           <div className="card-h">
-            <h3>{center.title}</h3>
-            <Link href="/workflow" className="btn ghost" style={{ fontSize: 12 }}>All approvals →</Link>
+            <h2 id={`cc-${center.id}-h`} style={{ margin: 0 }}>{center.title}</h2>
+            <Link href="/workflow" className="btn ghost" style={{ fontSize: 12 }}>
+              All approvals <span aria-hidden="true">→</span>
+            </Link>
           </div>
           <div className="pad">
             <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0, marginBottom: 12 }}>
               What needs your action now — prioritized for your role.
             </p>
             <div className="grid g-2">
-              {center.actions.map((a) => (
-                <Link key={a.href} href={a.href} style={{ textDecoration: "none" }}>
-                  <div className="stat" style={{ cursor: "pointer", borderLeft: a.priority === "urgent" ? "3px solid #dc2626" : "3px solid transparent" }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{a.label}</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{a.note}</div>
-                  </div>
-                </Link>
-              ))}
+              {center.actions.map((a) => {
+                const urgent = a.priority === "urgent";
+                return (
+                  <Link key={a.href} href={a.href} style={{ textDecoration: "none" }}>
+                    <div
+                      className="stat"
+                      style={{
+                        cursor: "pointer",
+                        height: "100%",
+                        borderLeft: urgent ? "3px solid var(--bad)" : "3px solid transparent",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{a.label}</span>
+                        {urgent && (
+                          <span
+                            className="pill warn"
+                            style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em" }}
+                          >
+                            Urgent
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{a.note}</div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
-        </div>
+        </section>
       ))}
     </div>
   );
