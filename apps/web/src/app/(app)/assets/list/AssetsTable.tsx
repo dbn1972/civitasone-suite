@@ -1,6 +1,7 @@
 "use client";
 
-import { StatusPill, EmptyState } from "../../../_components/ds";
+import { useState } from "react";
+import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Asset = {
@@ -12,6 +13,17 @@ type Asset = {
   status: string;
 } & Record<string, unknown>;
 
+type Row = {
+  id: string;
+  assetCode: string;
+  name: string;
+  location: string;
+  currentValue: number;
+  status: string;
+};
+
+const TABS = ["All", "Active", "In maintenance"] as const;
+
 export function AssetsTable({ assets, source = "api" }: { assets: Asset[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Asset[]>(
     "assets.register",
@@ -19,58 +31,59 @@ export function AssetsTable({ assets, source = "api" }: { assets: Asset[]; sourc
     source,
     (d) => d.length === 0,
   );
+  const [tab, setTab] = useState<string>("All");
 
   const cacheNote =
     offline || fromCache
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
+  const tableRows: Row[] = rows.map((a) => ({
+    id: a.id,
+    assetCode: a.assetCode,
+    name: a.name,
+    location: a.location ?? "—",
+    currentValue: a.currentValue,
+    status: a.status.replace(/_/g, " "),
+  }));
+
+  const filtered =
+    tab === "Active"
+      ? tableRows.filter((r) => /^(active|in use)$/i.test(r.status))
+      : tab === "In maintenance"
+        ? tableRows.filter((r) => /maintenance|repair/i.test(r.status))
+        : tableRows;
+
   return (
     <div className="card" style={{ marginTop: 18 }}>
       <div className="card-h">
         <h3>Fixed asset register</h3>
-        <div className="seg">
-          <span className="on">All</span>
-          <span>Untagged</span>
-          <span>AMC due</span>
-        </div>
+        <Segmented options={[...TABS]} value={tab} onChange={setTab} />
       </div>
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}
-      {rows.length === 0 ? (
+      {tableRows.length === 0 ? (
         <EmptyState icon="🖥️" title="No assets found" message="Register assets to build your fixed asset register." />
       ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Asset</th>
-              <th>Item</th>
-              <th>Location</th>
-              <th className="num">Net value</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((asset) => (
-              <tr key={asset.id} className="clickable">
-                <td>
-                  <a href={`/assets/${asset.id}`}>
-                    <span className="mono">{asset.assetCode}</span>
-                  </a>
-                </td>
-                <td>{asset.name}</td>
-                <td>{asset.location ?? "—"}</td>
-                <td className="num">₹{(asset.currentValue / 100).toLocaleString("en-IN")}</td>
-                <td>
-                  <StatusPill status={asset.status.replace(/_/g, " ")} label={asset.status.replace(/_/g, " ")} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable
+          columns={[
+            { key: "assetCode", label: "Asset" },
+            { key: "name", label: "Item" },
+            { key: "location", label: "Location" },
+            { key: "currentValue", label: "Net value", align: "right", cellType: "amount" },
+            { key: "status", label: "Status", cellType: "status" },
+          ]}
+          rows={filtered}
+          rowLinkKey="id"
+          rowLinkPrefix="/assets/"
+          sortable
+          filterable
+          filterPlaceholder="Filter assets…"
+          pageSize={15}
+        />
       )}
     </div>
   );

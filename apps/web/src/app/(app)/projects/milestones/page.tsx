@@ -1,36 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getMilestones } from "../../../_data/loaders";
-import {
-  PageHeader,
-  StatGrid,
-  StatCard,
-  Card,
-  DataTable,
-  StatusPill,
-} from "@/app/_components/ds";
-import type { MilestoneSummary } from "@civitasone/types";
-
-type MilestoneRow = MilestoneSummary & Record<string, unknown>;
-
-const COLUMNS: {
-  key: keyof MilestoneRow & string;
-  label: string;
-  render?: (row: MilestoneRow) => React.ReactNode;
-}[] = [
-  { key: "projectName", label: "Project" },
-  { key: "title", label: "Milestone Title" },
-  { key: "dueDate", label: "Due Date" },
-  {
-    key: "completedDate",
-    label: "Completed Date",
-    render: (r) => (r.completedDate as string | undefined) ?? "—",
-  },
-  {
-    key: "status",
-    label: "Status",
-    render: (r) => <StatusPill status={r.status as string} />,
-  },
-];
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { MilestonesTable, type MilestoneRow } from "./MilestonesTable";
 
 export default async function MilestonesPage() {
   const { data: milestones, source } = await getMilestones();
@@ -55,10 +26,11 @@ export default async function MilestonesPage() {
         <StatCard icon="🔴" iconBg="#fef3f2" label="Delayed" value={delayed} />
       </StatGrid>
       <Card title="Milestones">
-        <DataTable<MilestoneRow>
-          columns={COLUMNS}
-          rows={rows}
-        />
+        {rows.length === 0 ? (
+          <EmptyState icon="📋" title="No milestones" message="No milestones have been defined across projects yet." />
+        ) : (
+          <MilestonesTable rows={rows} />
+        )}
       </Card>
     </>
   );

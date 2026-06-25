@@ -1,16 +1,22 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssetMaintenance } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, DataTable } from "../../../_components/ds";
 
 export default async function AssetMaintenancePage() {
   const { data: records, source } = await getAssetMaintenance();
   const openJobs = records.filter((r) => r.status === "scheduled" || r.status === "in_progress").length;
   const preventive = records.filter((r) => r.maintenanceType === "preventive").length;
   const breakdowns = records.filter((r) => r.maintenanceType === "breakdown").length;
-  const completed = records.filter((r) => r.status === "completed");
-  const avgMttr = completed.length > 0
-    ? "3.4 h"
-    : "—";
+  const completed = records.filter((r) => r.status === "completed").length;
+
+  const rows = records.map((r) => ({
+    assetId: r.assetId,
+    assetCode: r.assetCode,
+    assetName: r.assetName,
+    maintenanceType: r.maintenanceType,
+    vendor: r.vendor ?? "—",
+    status: r.status.replace(/_/g, " "),
+  }));
 
   return (
     <>
@@ -27,50 +33,33 @@ export default async function AssetMaintenancePage() {
       />
       <StatGrid>
         <StatCard icon="🛠️" iconBg="#fdf0e3" label="Open Jobs" value={openJobs.toLocaleString("en-IN")} />
-        <StatCard icon="🔧" iconBg="#eff6ff" label="Preventive (mo)" value={preventive.toLocaleString("en-IN")} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Breakdowns" value={breakdowns.toLocaleString("en-IN")} delta="-2" up />
-        <StatCard icon="⏱" iconBg="#fffaeb" label="MTTR" value={avgMttr} delta="-0.5h" up />
+        <StatCard icon="🔧" iconBg="#eff6ff" label="Preventive" value={preventive.toLocaleString("en-IN")} />
+        <StatCard icon="⚠️" iconBg="#fef3f2" label="Breakdowns" value={breakdowns.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed" value={completed.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">
           <h3>Maintenance jobs</h3>
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Preventive</span>
-            <span>Breakdown</span>
-          </div>
         </div>
-        {records.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState icon="🛠️" title="No maintenance jobs" message="Log maintenance jobs to track asset uptime." />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Job</th>
-                <th>Asset</th>
-                <th>Type</th>
-                <th>Technician / Agency</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <a href={`/assets/${r.assetId}`}>
-                      <span className="mono">{r.assetCode}</span>
-                    </a>
-                  </td>
-                  <td>{r.assetName}</td>
-                  <td>{r.maintenanceType}</td>
-                  <td>{r.vendor ?? "—"}</td>
-                  <td>
-                    <StatusPill status={r.status.replace(/_/g, " ")} label={r.status.replace(/_/g, " ")} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            columns={[
+              { key: "assetCode", label: "Job" },
+              { key: "assetName", label: "Asset" },
+              { key: "maintenanceType", label: "Type" },
+              { key: "vendor", label: "Technician / Agency" },
+              { key: "status", label: "Status", cellType: "status" },
+            ]}
+            rows={rows}
+            rowLinkKey="assetId"
+            rowLinkPrefix="/assets/"
+            sortable
+            filterable
+            filterPlaceholder="Filter jobs…"
+            pageSize={15}
+          />
         )}
       </div>
     </>

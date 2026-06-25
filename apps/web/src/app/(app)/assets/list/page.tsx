@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssets } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { AssetsTable } from "./AssetsTable";
 
 export default async function AssetListPage() {
@@ -38,10 +39,10 @@ export default async function AssetListPage() {
         🔗 <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
       </div>
       <StatGrid>
-        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} delta="+85" up />
+        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} />
         <StatCard icon="🔖" iconBg="#eff6ff" label="Tagged (QR)" value={`${tagged}%`} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={`₹${(grossBlock / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={`₹${(netBlock / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={formatMoney(grossBlock)} />
+        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={formatMoney(netBlock)} />
       </StatGrid>
       <AssetsTable assets={assets} source={source} />
     </>

@@ -1,37 +1,25 @@
-import type { ReactNode } from "react";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { getGrantsDashboard, getGrants } from "../../../_data/loaders";
 import type { GrantSummary } from "@civitasone/types";
 
-type Col = {
+// Server-safe column config: no `render` fns (those cannot cross the
+// Server→Client boundary). Money uses cellType:"amount" (routes through
+// formatMoney) and status uses cellType:"status" (renders StatusPill).
+const columns: {
   key: keyof GrantSummary & string;
   label: string;
-  align?: "left" | "right" | "center";
-  render?: (row: GrantSummary) => ReactNode;
-};
-
-const columns: Col[] = [
+  align?: "left" | "right";
+  cellType?: "status" | "amount";
+  sortable?: boolean;
+}[] = [
   { key: "grantNo", label: "Grant No" },
   { key: "title", label: "Title" },
-  { key: "granteeName", label: "Grantee", render: (row) => row.granteeName ?? "—" },
-  {
-    key: "totalAmount",
-    label: "Total Amount",
-    align: "right",
-    render: (row) => `₹${(row.totalAmount / 100).toLocaleString("en-IN")}`,
-  },
-  {
-    key: "disbursedAmount",
-    label: "Disbursed",
-    align: "right",
-    render: (row) => `₹${(row.disbursedAmount / 100).toLocaleString("en-IN")}`,
-  },
-  {
-    key: "status",
-    label: "Status",
-    render: (row) => <StatusPill status={row.status} />,
-  },
+  { key: "granteeName", label: "Grantee" },
+  { key: "totalAmount", label: "Total Amount", align: "right", cellType: "amount" },
+  { key: "disbursedAmount", label: "Disbursed", align: "right", cellType: "amount" },
+  { key: "status", label: "Status", cellType: "status" },
 ];
 
 export default async function GrantsDashboardPage() {
@@ -56,16 +44,29 @@ export default async function GrantsDashboardPage() {
       {anyError && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="🎁" iconBg="#dcfce7" label="Active Grants" value={activeGrants} />
-        <StatCard icon="💰" iconBg="#f1f5f9" label="Sanctioned (FY)" value={`₹${(sanctionedTotal / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={`₹${(data.disbursedAmount / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="💰" iconBg="#f1f5f9" label="Sanctioned (FY)" value={formatMoney(sanctionedTotal)} />
+        <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={formatMoney(data.disbursedAmount)} />
         <StatCard icon="📋" iconBg="#fef3c7" label="UC Pending" value={data.pendingUCs} />
       </StatGrid>
       <Card title="Grants">
-        <DataTable<GrantSummary>
-          columns={columns}
-          rows={grants}
-          rowHref={(r) => `/grants/${r.id}`}
-        />
+        {grants.length === 0 ? (
+          <EmptyState
+            icon="🎁"
+            title="No grants yet"
+            message="Sanctioned grants will appear here once they are recorded."
+          />
+        ) : (
+          <DataTable<GrantSummary>
+            columns={columns}
+            rows={grants}
+            rowLinkKey="id"
+            rowLinkPrefix="/grants/"
+            sortable
+            filterable
+            filterPlaceholder="Filter grants…"
+            pageSize={10}
+          />
+        )}
       </Card>
     </>
   );

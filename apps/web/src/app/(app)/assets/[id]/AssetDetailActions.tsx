@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 
 type Props = {
   assetId: string;
@@ -60,11 +61,9 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
     }
   }
 
-  async function transfer() {
-    if (!toLocation.trim()) return;
-    setBusy(true);
-    setMessage("");
-    try {
+  // Maker-checker: transfer changes custody/location of a government asset.
+  const transferAction = useConfirmAction({
+    onConfirm: async (reason) => {
       const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/transfer`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -72,22 +71,18 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
           fromLocation: "current",
           toLocation: toLocation.trim(),
           transferDate: new Date().toISOString().slice(0, 10),
+          reason,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       setMessage("Asset transferred.");
       router.refresh();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Transfer failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+    },
+  });
 
-  async function dispose() {
-    setBusy(true);
-    setMessage("");
-    try {
+  // Maker-checker: disposal is GFR-irreversible and posts proceeds to GL.
+  const disposeAction = useConfirmAction({
+    onConfirm: async (reason) => {
       const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/request-disposal`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -96,17 +91,14 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
           disposalMethod: "sale",
           proceedsMinor: Math.round(Number(proceeds || "0") * 100),
           currency: "INR",
+          reason,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       setMessage("Disposal submitted for workflow approval.");
       router.refresh();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Disposal failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+    },
+  });
 
   function printQr() {
     const code = tagCode || barcode || assetId.slice(0, 8);
@@ -118,12 +110,15 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
 
   if (status === "disposed" || status === "written_off") return null;
 
+  const transferDisabled = busy || !toLocation.trim();
+
   return (
     <div className="card">
       <div className="card-h"><h3>Asset actions</h3></div>
       <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input value={tagCode} onChange={(e) => setTagCode(e.target.value)} placeholder="Barcode / QR code" style={{ flex: 1, minWidth: 180, padding: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
+          <label htmlFor="asset-tag-code" className="sr-only">Barcode / QR code</label>
+          <input id="asset-tag-code" value={tagCode} onChange={(e) => setTagCode(e.target.value)} placeholder="Barcode / QR code" style={{ flex: 1, minWidth: 180, padding: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
           <button type="button" className="btn ghost" disabled={busy} onClick={() => void tagAsset()}>Tag</button>
           <button type="button" className="btn ghost" disabled={busy} onClick={printQr}>Print QR</button>
         </div>
@@ -131,15 +126,44 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
           <button type="button" className="btn primary" disabled={busy} onClick={() => void scheduleAmc()}>Schedule AMC</button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-          <input value={toLocation} onChange={(e) => setToLocation(e.target.value)} placeholder="Transfer to location" style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => void transfer()}>Transfer</button>
+          <label htmlFor="asset-transfer-loc" className="sr-only">Transfer to location</label>
+          <input id="asset-transfer-loc" value={toLocation} onChange={(e) => setToLocation(e.target.value)} placeholder="Transfer to location" style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
+          <button type="button" className="btn ghost" disabled={transferDisabled} onClick={transferAction.trigger}>Transfer</button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-          <input value={proceeds} onChange={(e) => setProceeds(e.target.value)} placeholder="Disposal proceeds (₹)" style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => void dispose()}>Request disposal</button>
+          <label htmlFor="asset-proceeds" className="sr-only">Disposal proceeds in rupees</label>
+          <input id="asset-proceeds" value={proceeds} onChange={(e) => setProceeds(e.target.value)} inputMode="decimal" placeholder="Disposal proceeds (₹)" style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
+          <button type="button" className="btn danger" disabled={busy} onClick={disposeAction.trigger}>Request disposal</button>
         </div>
-        {message ? <p style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
+        {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
       </div>
+
+      <ConfirmDialog
+        open={transferAction.open}
+        title="Transfer this asset?"
+        description={<>This reassigns custody of a government asset to <b>{toLocation || "the selected location"}</b> and is logged for audit. Provide a reason to proceed.</>}
+        confirmLabel="Transfer asset"
+        requireReason
+        reasonLabel="Reason for transfer"
+        busy={transferAction.busy}
+        errorMessage={transferAction.error}
+        onConfirm={transferAction.confirm}
+        onCancel={transferAction.cancel}
+      />
+
+      <ConfirmDialog
+        open={disposeAction.open}
+        title="Request disposal of this asset?"
+        description={<>Disposal is <b>GFR-irreversible</b>: it removes the asset from the live register, submits a write-off for approval and posts proceeds to the GL. This cannot be undone. Provide a reason to proceed.</>}
+        confirmLabel="Submit disposal"
+        danger
+        requireReason
+        reasonLabel="Reason for disposal"
+        busy={disposeAction.busy}
+        errorMessage={disposeAction.error}
+        onConfirm={disposeAction.confirm}
+        onCancel={disposeAction.cancel}
+      />
     </div>
   );
 }

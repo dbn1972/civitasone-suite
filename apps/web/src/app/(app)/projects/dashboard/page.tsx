@@ -5,39 +5,10 @@ import {
   StatGrid,
   StatCard,
   Card,
-  DataTable,
-  StatusPill,
+  EmptyState,
 } from "@/app/_components/ds";
-import type { ProjectSummary } from "@civitasone/types";
-
-
-type ProjectRow = Pick<ProjectSummary, "id" | "projectCode" | "name" | "scheme" | "department" | "totalBudget" | "completionPct" | "status"> & Record<string, unknown>;
-
-const PROJECT_COLUMNS: { key: keyof ProjectRow & string; label: string; align?: "left" | "right"; render?: (row: ProjectRow) => React.ReactNode }[] = [
-  { key: "projectCode", label: "Project ID" },
-  { key: "name", label: "Name" },
-  { key: "scheme", label: "Scheme", render: (r) => r.scheme ?? "—" },
-  { key: "department", label: "Dept", render: (r) => r.department ?? "—" },
-  {
-    key: "totalBudget",
-    label: "Budget",
-    align: "right",
-    render: (r) => `₹${((r.totalBudget as number) / 100).toLocaleString("en-IN")}`,
-  },
-  {
-    key: "completionPct",
-    label: "Completion %",
-    align: "right",
-    render: (r) => `${(r.completionPct as number).toFixed(1)}%`,
-  },
-  {
-    key: "status",
-    label: "RAG Status",
-    render: (r) => (
-      <StatusPill status={r.status as string} label={String(r.status)} />
-    ),
-  },
-];
+import { formatMoney } from "@/lib/formatters";
+import { DashboardProjectsTable, type DashboardProjectRow } from "./DashboardProjectsTable";
 
 export default async function ProjectsDashboardPage() {
   const [dashResult, projResult, schemeResult] = await Promise.all([
@@ -52,14 +23,15 @@ export default async function ProjectsDashboardPage() {
   const anyError =
     source === "error" || projResult.source === "error" || schemeResult.source === "error";
 
-  const outlayInCrores = Math.round(data.totalOutlay / 100 / 100000);
+  // totalOutlay is held in paise (minor units). 1 crore = 1e7 rupees = 1e9 paise.
+  const outlayInCrores = Math.round(data.totalOutlay / 1e9);
 
-  const rows: ProjectRow[] = projects.map((p) => ({
+  const rows: DashboardProjectRow[] = projects.map((p) => ({
     id: p.id,
     projectCode: p.projectCode,
     name: p.name,
-    scheme: p.scheme,
-    department: p.department,
+    scheme: p.scheme ?? "—",
+    department: p.department ?? "—",
     totalBudget: p.totalBudget,
     completionPct: p.completionPct,
     status: p.status,
@@ -89,11 +61,15 @@ export default async function ProjectsDashboardPage() {
         />
       </StatGrid>
       <Card title="Projects">
-        <DataTable<ProjectRow>
-          columns={PROJECT_COLUMNS}
-          rows={rows}
-          rowHref={(r) => `/projects/${r.id}`}
-        />
+        {rows.length === 0 ? (
+          <EmptyState
+            icon="📁"
+            title="No projects yet"
+            message="Projects will appear here once schemes are sanctioned and projects created."
+          />
+        ) : (
+          <DashboardProjectsTable rows={rows} />
+        )}
       </Card>
     </>
   );

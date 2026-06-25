@@ -1,56 +1,10 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getProjectById } from "../../../_data/loaders";
-import {
-  PageHeader,
-  Card,
-  DataTable,
-  StatusPill,
-} from "@/app/_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState } from "@/app/_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { ProjectGantt } from "./ProjectGantt";
 import { ProjectDetailActions } from "./ProjectDetailActions";
-import type { ProjectDetail } from "@civitasone/types";
-
-type MilestoneRow = ProjectDetail["milestones"][number] & Record<string, unknown>;
-type FundReleaseRow = ProjectDetail["fundReleases"][number] & Record<string, unknown>;
-
-const MILESTONE_COLUMNS: {
-  key: keyof MilestoneRow & string;
-  label: string;
-  render?: (row: MilestoneRow) => React.ReactNode;
-}[] = [
-  { key: "title", label: "Milestone" },
-  { key: "dueDate", label: "Due Date" },
-  {
-    key: "completedDate",
-    label: "Completed",
-    render: (r) => (r.completedDate as string | undefined) ?? "—",
-  },
-  {
-    key: "status",
-    label: "Status",
-    render: (r) => <StatusPill status={r.status as string} />,
-  },
-];
-
-const FUND_RELEASE_COLUMNS: {
-  key: keyof FundReleaseRow & string;
-  label: string;
-  align?: "left" | "right";
-  render?: (row: FundReleaseRow) => React.ReactNode;
-}[] = [
-  { key: "releaseDate", label: "Release Date" },
-  {
-    key: "amount",
-    label: "Amount",
-    align: "right",
-    render: (r) => `₹${(r.amount as number).toLocaleString("en-IN")}`,
-  },
-  {
-    key: "remarks",
-    label: "Remarks",
-    render: (r) => (r.remarks as string | undefined) ?? "—",
-  },
-];
+import { MilestonesDetailTable, FundReleasesDetailTable } from "./ProjectDetailTables";
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const { data: project, source } = await getProjectById(params.id);
@@ -59,13 +13,19 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     return (
       <>
         <PageHeader title="Project Not Found" back="/projects/list" />
-        <p className="text-slate-500">No project found for the given ID.</p>
+        <Card>
+          <EmptyState
+            icon="🔍"
+            title="Project not found"
+            message="No project exists for the given ID. It may have been removed."
+          />
+        </Card>
       </>
     );
   }
 
-  const milestoneRows: MilestoneRow[] = project.milestones.map((m) => ({ ...m }));
-  const fundReleaseRows: FundReleaseRow[] = project.fundReleases.map((r) => ({ ...r }));
+  const milestoneRows = project.milestones.map((m) => ({ ...m }));
+  const fundReleaseRows = project.fundReleases.map((r) => ({ ...r }));
 
   return (
     <>
@@ -80,30 +40,36 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         <div className="fields">
           <div className="fld"><div className="l">Department</div><div className="v">{project.department ?? "—"}</div></div>
           <div className="fld"><div className="l">Scheme</div><div className="v">{project.scheme ?? "—"}</div></div>
-          <div className="fld"><div className="l">Start Date</div><div className="v">{project.startDate}</div></div>
-          <div className="fld"><div className="l">Expected End</div><div className="v">{project.expectedEndDate ?? "—"}</div></div>
+          <div className="fld"><div className="l">Start Date</div><div className="v">{formatIndianDate(project.startDate)}</div></div>
+          <div className="fld"><div className="l">Expected End</div><div className="v">{formatIndianDate(project.expectedEndDate)}</div></div>
           <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={project.status} /></div></div>
-          <div className="fld"><div className="l">Budget</div><div className="v">₹{project.totalBudget.toLocaleString("en-IN")}</div></div>
-          <div className="fld"><div className="l">Expenditure</div><div className="v">₹{project.expenditure.toLocaleString("en-IN")}</div></div>
+          <div className="fld"><div className="l">Budget</div><div className="v">{formatMoney(project.totalBudget)}</div></div>
+          <div className="fld"><div className="l">Expenditure</div><div className="v">{formatMoney(project.expenditure)}</div></div>
           <div className="fld"><div className="l">Completion %</div><div className="v">{project.completionPct.toFixed(1)}%</div></div>
         </div>
       </Card>
       <Card title="Milestones">
-        <DataTable<MilestoneRow>
-          columns={MILESTONE_COLUMNS}
-          rows={milestoneRows}
-        />
+        {milestoneRows.length === 0 ? (
+          <EmptyState icon="📋" title="No milestones" message="No milestones have been defined for this project." />
+        ) : (
+          <MilestonesDetailTable rows={milestoneRows} />
+        )}
       </Card>
       <Card title="Milestone Timeline">
-        <div style={{ padding: 16 }}>
-          <ProjectGantt milestones={project.milestones} projectStart={project.startDate} projectEnd={project.expectedEndDate} />
-        </div>
+        {project.milestones.length === 0 ? (
+          <EmptyState icon="📈" title="No timeline" message="The timeline appears once milestones are defined." />
+        ) : (
+          <div style={{ padding: 16 }}>
+            <ProjectGantt milestones={project.milestones} projectStart={project.startDate} projectEnd={project.expectedEndDate} />
+          </div>
+        )}
       </Card>
       <Card title="Fund Releases">
-        <DataTable<FundReleaseRow>
-          columns={FUND_RELEASE_COLUMNS}
-          rows={fundReleaseRows}
-        />
+        {fundReleaseRows.length === 0 ? (
+          <EmptyState icon="💰" title="No fund releases" message="No funds have been released against this project yet." />
+        ) : (
+          <FundReleasesDetailTable rows={fundReleaseRows} />
+        )}
       </Card>
     </>
   );

@@ -1,5 +1,6 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { getGrants } from "../../../_data/loaders";
 import { GrantsTable } from "./GrantsTable";
 
@@ -11,17 +12,22 @@ export default async function GrantsListPage() {
 
   return (
     <>
+      <nav aria-label="Breadcrumb" className="back">
+        ← <a href="/grants">Grants</a>
+      </nav>
       <PageHeader title="Grants" subtitle="All grants with lifecycle status." />
       {source === "error" && <DataSourceBadge source="error" />}
-      <StatGrid>
-        <StatCard icon="🎁" iconBg="#dcfce7" label="Total" value={grants.length} />
-        <StatCard icon="✅" iconBg="#f0fdf4" label="Active" value={active} />
-        <StatCard icon="💰" iconBg="#f1f5f9" label="Sanctioned" value={`₹${(totalSanctioned / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={`₹${(totalDisbursed / 100).toLocaleString("en-IN")}`} />
-      </StatGrid>
-      <Card title="Grants List">
-        <GrantsTable grants={grants} source={source} />
-      </Card>
+      <main aria-label="Grants list">
+        <StatGrid>
+          <StatCard icon="🎁" iconBg="#dcfce7" label="Total" value={grants.length} />
+          <StatCard icon="✅" iconBg="#f0fdf4" label="Active" value={active} />
+          <StatCard icon="💰" iconBg="#f1f5f9" label="Sanctioned" value={formatMoney(totalSanctioned)} />
+          <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={formatMoney(totalDisbursed)} />
+        </StatGrid>
+        <Card title="Grants List">
+          <GrantsTable grants={grants} source={source} />
+        </Card>
+      </main>
     </>
   );
 }

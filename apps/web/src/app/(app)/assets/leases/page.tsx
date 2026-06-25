@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageHeader, DataTable, EmptyState } from "../../../_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 type Lease = {
   id: string;
@@ -18,10 +20,13 @@ export default function LeasesPage() {
   const [rows, setRows] = useState<Lease[]>([]);
   const [form, setForm] = useState({ leaseNo: "", lessorName: "", rouCost: "", liability: "", leaseStart: "", leaseEnd: "" });
   const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   async function load() {
     const res = await fetch("/api/proxy/v1/asset/leases");
+    setLoaded(true);
     if (!res.ok) return;
     const body = await res.json() as { data: Lease[] };
     setRows(body.data ?? []);
@@ -33,6 +38,7 @@ export default function LeasesPage() {
     e.preventDefault();
     setBusy(true);
     setMessage("");
+    setIsError(false);
     try {
       const res = await fetch("/api/proxy/v1/asset/leases", {
         method: "POST",
@@ -51,53 +57,85 @@ export default function LeasesPage() {
       setForm({ leaseNo: "", lessorName: "", rouCost: "", liability: "", leaseStart: "", leaseEnd: "" });
       await load();
     } catch (e) {
+      setIsError(true);
       setMessage(e instanceof Error ? e.message : "Register failed");
     } finally {
       setBusy(false);
     }
   }
 
+  const inputStyle = { padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
+  const fieldCol = { display: "flex", flexDirection: "column" as const, gap: 4 };
+
+  const tableRows = rows.map((r) => ({
+    id: r.id,
+    leaseNo: r.leaseNo,
+    lessorName: r.lessorName,
+    rou: formatMoney(r.rouCostMinor),
+    term: `${formatIndianDate(r.leaseStart)} → ${formatIndianDate(r.leaseEnd)}`,
+    asset: r.assetId ? "View" : "—",
+    assetId: r.assetId ?? "",
+  }));
+
   return (
     <>
-      <a className="back" href="/assets">← Assets</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <h1>IFRS 16 Leases</h1>
-        <div className="sub">Right-of-use assets and lease liability tracking.</div>
-      </div>
-      {message ? <div className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div> : null}
+      <PageHeader
+        title="IFRS 16 Leases"
+        subtitle="Right-of-use assets and lease liability tracking."
+        back="/assets"
+        backLabel="Assets"
+      />
+      {message ? (
+        <div role="status" aria-live="polite" className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+      ) : null}
       <div className="card" style={{ marginBottom: 16 }}>
         <form onSubmit={submit} className="pad">
           <div className="fields">
-            <input required placeholder="Lease no." value={form.leaseNo} onChange={(e) => setForm({ ...form, leaseNo: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input required placeholder="Lessor" value={form.lessorName} onChange={(e) => setForm({ ...form, lessorName: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input required placeholder="ROU cost (₹)" value={form.rouCost} onChange={(e) => setForm({ ...form, rouCost: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input required placeholder="Liability (₹)" value={form.liability} onChange={(e) => setForm({ ...form, liability: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input required type="date" value={form.leaseStart} onChange={(e) => setForm({ ...form, leaseStart: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input required type="date" value={form.leaseEnd} onChange={(e) => setForm({ ...form, leaseEnd: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
+            <div style={fieldCol}>
+              <label className="l" htmlFor="lease-no">Lease no.</label>
+              <input id="lease-no" required value={form.leaseNo} onChange={(e) => setForm({ ...form, leaseNo: e.target.value })} style={inputStyle} />
+            </div>
+            <div style={fieldCol}>
+              <label className="l" htmlFor="lease-lessor">Lessor</label>
+              <input id="lease-lessor" required value={form.lessorName} onChange={(e) => setForm({ ...form, lessorName: e.target.value })} style={inputStyle} />
+            </div>
+            <div style={fieldCol}>
+              <label className="l" htmlFor="lease-rou">ROU cost (₹)</label>
+              <input id="lease-rou" required inputMode="decimal" value={form.rouCost} onChange={(e) => setForm({ ...form, rouCost: e.target.value })} style={inputStyle} />
+            </div>
+            <div style={fieldCol}>
+              <label className="l" htmlFor="lease-liab">Liability (₹)</label>
+              <input id="lease-liab" required inputMode="decimal" value={form.liability} onChange={(e) => setForm({ ...form, liability: e.target.value })} style={inputStyle} />
+            </div>
+            <div style={fieldCol}>
+              <label className="l" htmlFor="lease-start">Lease start</label>
+              <input id="lease-start" required type="date" value={form.leaseStart} onChange={(e) => setForm({ ...form, leaseStart: e.target.value })} style={inputStyle} />
+            </div>
+            <div style={fieldCol}>
+              <label className="l" htmlFor="lease-end">Lease end</label>
+              <input id="lease-end" required type="date" value={form.leaseEnd} onChange={(e) => setForm({ ...form, leaseEnd: e.target.value })} style={inputStyle} />
+            </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>Register lease</button>
+          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Registering…" : "Register lease"}</button>
         </form>
       </div>
       <div className="card">
         <div className="card-h"><h3>Active leases</h3></div>
-        <div className="pad">
-          {rows.length === 0 ? <p style={{ fontSize: 13, color: "var(--muted)" }}>No leases yet.</p> : (
-            <table className="tbl">
-              <thead><tr><th>Lease</th><th>Lessor</th><th>ROU</th><th>Term</th><th>Asset</th></tr></thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.leaseNo}</td>
-                    <td>{r.lessorName}</td>
-                    <td>₹{(Number(r.rouCostMinor) / 100).toLocaleString("en-IN")}</td>
-                    <td>{r.leaseStart} → {r.leaseEnd}</td>
-                    <td>{r.assetId ? <a href={`/assets/${r.assetId}`}>View</a> : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        {tableRows.length === 0 ? (
+          <EmptyState icon="📄" title={loaded ? "No leases yet" : "Loading leases…"} message={loaded ? "Register an IFRS 16 lease to track ROU assets and liabilities." : undefined} />
+        ) : (
+          <DataTable
+            columns={[
+              { key: "leaseNo", label: "Lease" },
+              { key: "lessorName", label: "Lessor" },
+              { key: "rou", label: "ROU", align: "right" },
+              { key: "term", label: "Term" },
+              { key: "asset", label: "Asset", render: (r) => (r.assetId ? <a href={`/assets/${r.assetId}`}>View</a> : "—") },
+            ]}
+            rows={tableRows}
+            sortable
+          />
+        )}
       </div>
     </>
   );

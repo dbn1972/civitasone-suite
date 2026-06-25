@@ -15,17 +15,22 @@ export default async function GranteesPage() {
 
   return (
     <>
+      <nav aria-label="Breadcrumb" className="back">
+        ← <a href="/grants">Grants</a>
+      </nav>
       <PageHeader title="Grantees" subtitle="Registered grantee organisations and compliance status." />
       {source === "error" && <DataSourceBadge source="error" />}
-      <StatGrid>
-        <StatCard icon="👤" iconBg="#f1f5f9" label="Total" value={grantees.length} />
-        <StatCard icon="🏢" iconBg="#faf5ff" label="NGOs" value={ngos} />
-        <StatCard icon="🎁" iconBg="#dcfce7" label="Active Grants" value={totalActiveGrants} />
-        <StatCard icon="📋" iconBg="#fef3c7" label="UC Compliance" value={`${avgCompliance.toFixed(1)}%`} />
-      </StatGrid>
-      <Card title="Grantees">
-        <GranteesTable grantees={grantees} source={source} />
-      </Card>
+      <main aria-label="Grantees">
+        <StatGrid>
+          <StatCard icon="👤" iconBg="#f1f5f9" label="Total" value={grantees.length} />
+          <StatCard icon="🏢" iconBg="#faf5ff" label="NGOs" value={ngos} />
+          <StatCard icon="🎁" iconBg="#dcfce7" label="Active Grants" value={totalActiveGrants} />
+          <StatCard icon="📋" iconBg="#fef3c7" label="UC Compliance" value={`${avgCompliance.toFixed(1)}%`} />
+        </StatGrid>
+        <Card title="Grantees">
+          <GranteesTable grantees={grantees} source={source} />
+        </Card>
+      </main>
     </>
   );
 }

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import type { GranteeSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -18,7 +19,7 @@ const columns: Col[] = [
   { key: "type", label: "Type", render: (row) => <StatusPill status={row.type} label={row.type.toUpperCase()} /> },
   { key: "registrationNo", label: "Registration No", render: (row) => row.registrationNo ?? "—" },
   { key: "activeGrants", label: "Active Grants", align: "right" },
-  { key: "totalGrantsReceived", label: "Total Received", align: "right", render: (row) => `₹${(row.totalGrantsReceived / 100).toLocaleString("en-IN")}` },
+  { key: "totalGrantsReceived", label: "Total Received", align: "right", render: (row) => formatMoney(row.totalGrantsReceived) },
   { key: "ucCompliancePct", label: "UC Compliance %", align: "right", render: (row) => `${row.ucCompliancePct.toFixed(1)}%` },
 ];
 
@@ -32,7 +33,7 @@ export function GranteesTable({ grantees, source = "api" }: { grantees: GranteeS
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   return (
@@ -42,7 +43,7 @@ export function GranteesTable({ grantees, source = "api" }: { grantees: GranteeS
           {cacheNote}
         </p>
       ) : null}
-      <DataTable<GranteeSummary> columns={columns} rows={rows} />
+      <DataTable<GranteeSummary> columns={columns} rows={rows} sortable filterable filterPlaceholder="Filter grantees…" pageSize={15} />
     </>
   );
 }
