@@ -29,7 +29,7 @@ export default async function SanctionsPage() {
         <StatCard icon="🖊️" iconBg="#e7edfd" label="Active Sanctions" value={sanctions.length} />
         <StatCard icon="💰" iconBg="#eff6ff" label="Sanctioned (FY)" value={formatMoney(totalAmount)} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={pending} />
-        <StatCard icon="📊" iconBg="#ecfdf3" label="Approved" value={approved} delta="✓" up={true} />
+        <StatCard icon="📊" iconBg="#ecfdf3" label="Approved" value={approved} delta="approved" up={true} />
       </StatGrid>
 
       <Card title="Administrative & financial sanctions">

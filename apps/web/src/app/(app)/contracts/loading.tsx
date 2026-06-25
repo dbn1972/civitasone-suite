@@ -1,16 +1,32 @@
+import type { CSSProperties } from "react";
+
+const shimmer: CSSProperties = {
+  background: "linear-gradient(90deg,var(--panel) 25%,var(--line) 37%,var(--panel) 63%)",
+  backgroundSize: "400% 100%",
+  animation: "contractsShimmer 1.4s ease infinite",
+  borderRadius: 8,
+};
+
+function Bar({ w, h, mb, r }: { w: number | string; h: number; mb?: number; r?: number }) {
+  return <div aria-hidden style={{ ...shimmer, width: w, height: h, marginBottom: mb, borderRadius: r ?? 8 }} />;
+}
+
 export default function ContractsLoading() {
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
+    <div className="wrap" aria-busy="true" aria-label="Loading contracts">
+      <style>{"@keyframes contractsShimmer{0%{background-position:100% 0}100%{background-position:0 0}}"}</style>
+      <div className="ph">
+        <div>
+          <Bar w={280} h={28} mb={8} />
+          <Bar w={360} h={14} />
         </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
       </div>
-    </main>
+      <div className="card" style={{ padding: 16, marginTop: 18 }}>
+        <Bar w={200} h={16} mb={16} />
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Bar key={i} w="100%" h={18} mb={12} />
+        ))}
+      </div>
+    </div>
   );
 }

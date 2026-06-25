@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
 import { getProcurementIndentById } from "../../../../_data/loaders";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -9,6 +10,24 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
   converted_to_po: "Converted to PO",
 };
+
+type LineItemRow = Record<string, unknown> & {
+  itemCode: string;
+  itemName: string;
+  quantity: string;
+  unit: string;
+  estimatedUnitPrice: string;
+  totalPrice: string;
+};
+
+const LINE_ITEM_COLUMNS: { key: keyof LineItemRow; label: string; align?: "left" | "right" }[] = [
+  { key: "itemCode", label: "Item Code" },
+  { key: "itemName", label: "Item Name" },
+  { key: "quantity", label: "Qty", align: "right" },
+  { key: "unit", label: "Unit" },
+  { key: "estimatedUnitPrice", label: "Est. Unit Price", align: "right" },
+  { key: "totalPrice", label: "Total", align: "right" },
+];
 
 export default async function IndentDetailPage({ params }: { params: { id: string } }) {
   const { data: indent, source } = await getProcurementIndentById(params.id);
@@ -21,6 +40,15 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
       </>
     );
   }
+
+  const lineRows: LineItemRow[] = indent.lineItems.map((item) => ({
+    itemCode: item.itemCode,
+    itemName: item.itemName,
+    quantity: String(item.quantity),
+    unit: item.unit,
+    estimatedUnitPrice: formatMoney(item.estimatedUnitPrice),
+    totalPrice: formatMoney(item.totalPrice),
+  }));
 
   return (
     <>
@@ -52,15 +80,15 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
           </div>
           <div className="field">
             <span className="label">Est. Amount</span>
-            <span>₹{(indent.estimatedAmount / 100).toLocaleString("en-IN")}</span>
+            <span>{formatMoney(indent.estimatedAmount)}</span>
           </div>
           <div className="field">
             <span className="label">Request Date</span>
-            <span>{indent.requestDate}</span>
+            <span>{formatIndianDate(indent.requestDate)}</span>
           </div>
           <div className="field">
             <span className="label">Required By</span>
-            <span>{indent.requiredByDate ?? "—"}</span>
+            <span>{indent.requiredByDate ? formatIndianDate(indent.requiredByDate) : "—"}</span>
           </div>
           <div className="field">
             <span className="label">Status</span>
@@ -71,30 +99,11 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
 
       {indent.lineItems.length > 0 && (
         <Card title="Line items">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Item Code</th>
-                <th>Item Name</th>
-                <th className="num">Qty</th>
-                <th>Unit</th>
-                <th className="num">Est. Unit Price</th>
-                <th className="num">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {indent.lineItems.map((item, i) => (
-                <tr key={i}>
-                  <td><span className="mono">{item.itemCode}</span></td>
-                  <td>{item.itemName}</td>
-                  <td className="num">{item.quantity}</td>
-                  <td>{item.unit}</td>
-                  <td className="num">₹{(item.estimatedUnitPrice / 100).toLocaleString("en-IN")}</td>
-                  <td className="num">₹{(item.totalPrice / 100).toLocaleString("en-IN")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<LineItemRow>
+            columns={LINE_ITEM_COLUMNS}
+            rows={lineRows}
+            pageSize={50}
+          />
         </Card>
       )}
 

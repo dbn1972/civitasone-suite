@@ -93,8 +93,6 @@ export default function AssetVerificationPage() {
               { key: "status", label: "Status", cellType: "status" },
             ]}
             rows={tableRows}
-            rowLinkKey="id"
-            rowLinkPrefix="/assets/verification/"
             sortable
           />
         )}

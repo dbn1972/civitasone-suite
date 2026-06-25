@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, Card, DataTable, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
 import { getFinanceBillById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { BillPassPayActions } from "../../../_components/FinanceActions";
@@ -64,28 +64,34 @@ export default async function BillDetailPage({ params }: { params: { id: string 
 
       {bill.lineItems.length > 0 && (
         <Card title="Line items">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th className="num">Qty</th>
-                <th className="num">Unit Price</th>
-                <th className="num">Amount</th>
-                <th>Tax Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bill.lineItems.map((item: { description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string }, i: number) => (
-                <tr key={i}>
-                  <td>{item.description}</td>
-                  <td className="num">{item.quantity}</td>
-                  <td className="num" aria-label={`Unit price ${formatMoney(item.unitPrice)}`}>{formatMoney(item.unitPrice)}</td>
-                  <td className="num" aria-label={`Amount ${formatMoney(item.amount)}`}>{formatMoney(item.amount)}</td>
-                  <td>{item.taxCode ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<{ description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string } & Record<string, unknown>>
+            columns={[
+              { key: "description", label: "Description" },
+              { key: "quantity", label: "Qty", align: "right" },
+              {
+                key: "unitPrice",
+                label: "Unit Price",
+                align: "right",
+                render: (item) => (
+                  <span aria-label={`Unit price ${formatMoney(item.unitPrice as number)}`}>
+                    {formatMoney(item.unitPrice as number)}
+                  </span>
+                ),
+              },
+              {
+                key: "amount",
+                label: "Amount",
+                align: "right",
+                render: (item) => (
+                  <span aria-label={`Amount ${formatMoney(item.amount as number)}`}>
+                    {formatMoney(item.amount as number)}
+                  </span>
+                ),
+              },
+              { key: "taxCode", label: "Tax Code", render: (item) => (item.taxCode as string | undefined) ?? "—" },
+            ]}
+            rows={bill.lineItems as ({ description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string } & Record<string, unknown>)[]}
+          />
         </Card>
       )}
     </>

@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, Card, DataTable, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
 import { getFinanceSanctionById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { SanctionApproveAction } from "../../../_components/FinanceActions";
@@ -68,24 +68,23 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
 
       {sanction.lineItems.length > 0 && (
         <Card title="Line items">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th>Head</th>
-                <th className="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sanction.lineItems.map((item: { description: string; amount: number; head: string }, i: number) => (
-                <tr key={i}>
-                  <td>{item.description}</td>
-                  <td>{item.head}</td>
-                  <td className="num" aria-label={`Amount ${formatMoney(item.amount)}`}>{formatMoney(item.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<{ description: string; amount: number; head: string } & Record<string, unknown>>
+            columns={[
+              { key: "description", label: "Description" },
+              { key: "head", label: "Head" },
+              {
+                key: "amount",
+                label: "Amount",
+                align: "right",
+                render: (item) => (
+                  <span aria-label={`Amount ${formatMoney(item.amount as number)}`}>
+                    {formatMoney(item.amount as number)}
+                  </span>
+                ),
+              },
+            ]}
+            rows={sanction.lineItems as ({ description: string; amount: number; head: string } & Record<string, unknown>)[]}
+          />
         </Card>
       )}
 
