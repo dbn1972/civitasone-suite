@@ -12,6 +12,13 @@ export function registerSupportConsumers(queue: Queue): void {
   queue.subscribe<{ id: string; tenantId: string; ticketId: string; reason: string; actorId: string }>(COMMANDS.breakGlassOpen, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // P0: at most one OPEN grant per tenant. If another grant is already open
+      // (a distinct ticket -> distinct messageId, so markProcessed did not catch
+      // it), this open is a no-op rather than a second concurrent grant. The
+      // partial-unique index is the hard backstop; this guard avoids surfacing
+      // the violation as a poison message.
+      const alreadyOpen = await repo.findOpenByTenant(tx, msg.payload.tenantId);
+      if (alreadyOpen) return;
       const openedAt = new Date();
       const expiresAt = breakGlassExpiresAt(openedAt);
       await repo.insertBreakGlass(tx, {

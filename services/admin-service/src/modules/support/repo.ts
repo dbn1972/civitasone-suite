@@ -10,6 +10,19 @@ export async function insertBreakGlass(tx: Writer, row: AdminBreakGlassLogInsert
   await tx.insert(adminBreakGlassLog).values(row);
 }
 
+// P0: enforce one OPEN grant per tenant. The partial-unique index
+// (admin_break_glass_one_open_per_tenant) is the source of truth; this read lets
+// the consumer short-circuit a duplicate open into a clean no-op instead of
+// relying on a caught unique-violation (which would still poison the message bus
+// when the violation surfaces only at COMMIT).
+export async function findOpenByTenant(tx: Writer, tenantId: string): Promise<BreakGlassRow | undefined> {
+  const rows = await tx.select().from(adminBreakGlassLog)
+    .where(and(eq(adminBreakGlassLog.tenantId, tenantId), isNull(adminBreakGlassLog.closedAt)))
+    .limit(1);
+  return rows[0];
+}
+
+
 // P1-3: only close a still-open grant (closed_at IS NULL guard) and return the
 // row that was actually closed so the caller can emit an event / audit under the
 // grant's own tenant. A re-close matches no row and returns undefined (no-op).

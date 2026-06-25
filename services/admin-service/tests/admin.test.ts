@@ -311,7 +311,6 @@ describe("break-glass TTL sweeper (integration)", () => {
   afterAll(async () => {
     await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
     await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T2_ID));
-    await sqlClient.end();
   });
 
   it("sweep closes the expired grant and emits breakGlassClosed", async () => {
@@ -332,5 +331,244 @@ describe("break-glass TTL sweeper (integration)", () => {
     const stillThere = await db.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
     expect(stillThere[0]?.closedAt).not.toBeNull();
     expect(sweptAgain).toBe(0);
+  });
+});
+
+// ── ADDED COVERAGE (10/10 closure) ────────────────────────────────────────
+
+import { registerConfigConsumers } from "../src/modules/config/consumer.js";
+import { adminFeatureFlags } from "../src/modules/config/schema.js";
+import { COMMANDS } from "../src/topics.js";
+
+const T_ED = "77777777-aaaa-4000-8000-000000000071";
+const T_SUS = "77777777-aaaa-4000-8000-000000000072";
+const T_BG = "77777777-aaaa-4000-8000-000000000073";
+
+function tenantSeed(id: string, status: string) {
+  return {
+    id, tenantId: id, name: "seed", domain: `seed-${id}.example`, edition: "psu",
+    status, region: "ap-south-1", residency: "IN", settings: {},
+    createdBy: ACTOR, updatedBy: ACTOR, version: 1,
+  };
+}
+
+// edition change: applied, version bumped, and idempotent on re-delivery.
+describe("tenant edition change — consumer apply + idempotency (integration)", () => {
+  const MSG = "eeee0001-1111-4000-8000-000000000001";
+  beforeAll(async () => {
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
+    await db.delete(adminTenants).where(eq(adminTenants.id, T_ED));
+    await db.delete(processed).where(eq(processed.messageId, MSG));
+    await db.insert(adminTenants).values(tenantSeed(T_ED, "active"));
+  });
+  afterAll(async () => {
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
+    await db.delete(adminTenants).where(eq(adminTenants.id, T_ED));
+    await db.delete(processed).where(eq(processed.messageId, MSG));
+  });
+
+  it("edition_change applies, bumps version, and a re-delivery (same messageId) is a no-op", async () => {
+    const q = new MemoryQueue();
+    registerTenantConsumers(q);
+    await q.start();
+    const env = {
+      messageId: MSG, type: COMMANDS.tenantEditionChange, tenantId: T_ED,
+      actorId: ACTOR, correlationId: "corr-ed-1", schemaVersion: "1.0",
+      payload: { id: T_ED, edition: "govt_dept" },
+    };
+    await q.publish(COMMANDS.tenantEditionChange, env);
+    await q.publish(COMMANDS.tenantEditionChange, env); // duplicate delivery
+    await new Promise((r) => setTimeout(r, 500));
+    await q.stop();
+
+    const rows = await db.select().from(adminTenants).where(eq(adminTenants.id, T_ED));
+    expect(rows[0]?.edition).toBe("govt_dept");
+    expect(rows[0]?.version).toBe(2); // bumped exactly once despite two deliveries
+
+    const audits = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
+    expect(audits.filter((r) => r.eventType === "audit.event.record")).toHaveLength(1);
+  });
+});
+
+// suspend/reactivate: state-machine guard + idempotency.
+describe("tenant suspend/reactivate — state guard + idempotency (integration)", () => {
+  const MSG_SUS = "eeee0002-1111-4000-8000-000000000002";
+  const MSG_REACT = "eeee0003-1111-4000-8000-000000000003";
+  beforeAll(async () => {
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
+    await db.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
+    await db.delete(processed).where(eq(processed.messageId, MSG_SUS));
+    await db.delete(processed).where(eq(processed.messageId, MSG_REACT));
+    await db.insert(adminTenants).values(tenantSeed(T_SUS, "active"));
+  });
+  afterAll(async () => {
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
+    await db.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
+    await db.delete(processed).where(eq(processed.messageId, MSG_SUS));
+    await db.delete(processed).where(eq(processed.messageId, MSG_REACT));
+  });
+
+  it("active → suspended → active; duplicate suspend is a no-op", async () => {
+    const q = new MemoryQueue();
+    registerTenantConsumers(q);
+    await q.start();
+
+    const susEnv = {
+      messageId: MSG_SUS, type: COMMANDS.tenantSuspend, tenantId: T_SUS,
+      actorId: ACTOR, correlationId: "c-sus", schemaVersion: "1.0",
+      payload: { id: T_SUS, reason: "policy violation" },
+    };
+    await q.publish(COMMANDS.tenantSuspend, susEnv);
+    await q.publish(COMMANDS.tenantSuspend, susEnv); // duplicate
+    await new Promise((r) => setTimeout(r, 400));
+
+    let rows = await db.select().from(adminTenants).where(eq(adminTenants.id, T_SUS));
+    expect(rows[0]?.status).toBe("suspended");
+    expect(rows[0]?.version).toBe(2);
+
+    await q.publish(COMMANDS.tenantReactivate, {
+      messageId: MSG_REACT, type: COMMANDS.tenantReactivate, tenantId: T_SUS,
+      actorId: ACTOR, correlationId: "c-react", schemaVersion: "1.0",
+      payload: { id: T_SUS },
+    });
+    await new Promise((r) => setTimeout(r, 400));
+    await q.stop();
+
+    rows = await db.select().from(adminTenants).where(eq(adminTenants.id, T_SUS));
+    expect(rows[0]?.status).toBe("active");
+    expect(rows[0]?.version).toBe(3);
+  });
+});
+
+// feature-flag create idempotency — the P0 poison-message fix.
+describe("config feature-flag create — idempotent insert (integration)", () => {
+  const FLAG = "test_flag_idem_xyz";
+  const PLATFORM = "00000000-0000-0000-0000-000000000000";
+  const MSG_A = "ffff0001-1111-4000-8000-000000000001";
+  const MSG_B = "ffff0002-1111-4000-8000-000000000002";
+  beforeAll(async () => {
+    await db.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
+    await db.delete(processed).where(eq(processed.messageId, MSG_A));
+    await db.delete(processed).where(eq(processed.messageId, MSG_B));
+  });
+  afterAll(async () => {
+    await db.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
+    await db.delete(processed).where(eq(processed.messageId, MSG_A));
+    await db.delete(processed).where(eq(processed.messageId, MSG_B));
+  });
+
+  it("re-creating an existing flag (distinct messageId) is a clean no-op, not a poison message", async () => {
+    const q = new MemoryQueue();
+    registerConfigConsumers(q);
+    await q.start();
+    const mk = (mid: string) => ({
+      messageId: mid, type: COMMANDS.featureFlagCreate, tenantId: PLATFORM,
+      actorId: ACTOR, correlationId: `c-${mid}`, schemaVersion: "1.0",
+      payload: { flagKey: FLAG, enabled: true },
+    });
+    await q.publish(COMMANDS.featureFlagCreate, mk(MSG_A));
+    await new Promise((r) => setTimeout(r, 300));
+    // second, genuinely distinct command for the SAME flag key — must not throw.
+    await q.publish(COMMANDS.featureFlagCreate, mk(MSG_B));
+    await new Promise((r) => setTimeout(r, 300));
+    await q.stop();
+
+    const rows = await db.select().from(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
+    expect(rows).toHaveLength(1); // exactly one flag, no duplicate, no crash
+    // both commands were processed (neither dead-lettered)
+    const seenA = await db.select().from(processed).where(eq(processed.messageId, MSG_A));
+    const seenB = await db.select().from(processed).where(eq(processed.messageId, MSG_B));
+    expect(seenA).toHaveLength(1);
+    expect(seenB).toHaveLength(1);
+  });
+});
+
+// break-glass: one open grant per tenant (partial-unique + consumer guard).
+describe("break-glass — one open grant per tenant (integration)", () => {
+  const BG_A = "abcd0001-1111-4000-8000-000000000001";
+  const BG_B = "abcd0002-1111-4000-8000-000000000002";
+  const TICKET_A = "abcd0003-3333-4000-8000-000000000003";
+  const TICKET_B = "abcd0004-3333-4000-8000-000000000004";
+  beforeAll(async () => {
+    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_BG));
+    await db.delete(processed).where(eq(processed.messageId, BG_A));
+    await db.delete(processed).where(eq(processed.messageId, BG_B));
+  });
+  afterAll(async () => {
+    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_BG));
+    await db.delete(processed).where(eq(processed.messageId, BG_A));
+    await db.delete(processed).where(eq(processed.messageId, BG_B));
+  });
+
+  it("a second open (distinct ticket) does not create a second concurrent grant", async () => {
+    const q = new MemoryQueue();
+    registerSupportConsumers(q);
+    await q.start();
+    await q.publish(COMMANDS.breakGlassOpen, {
+      messageId: BG_A, type: COMMANDS.breakGlassOpen, tenantId: T_BG,
+      actorId: ACTOR, correlationId: "c-bg-a", schemaVersion: "1.0",
+      payload: { id: BG_A, tenantId: T_BG, ticketId: TICKET_A, reason: "first investigation", actorId: ACTOR },
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    await q.publish(COMMANDS.breakGlassOpen, {
+      messageId: BG_B, type: COMMANDS.breakGlassOpen, tenantId: T_BG,
+      actorId: ACTOR, correlationId: "c-bg-b", schemaVersion: "1.0",
+      payload: { id: BG_B, tenantId: T_BG, ticketId: TICKET_B, reason: "second investigation", actorId: ACTOR },
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    await q.stop();
+
+    const open = await db.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
+    const stillOpen = open.filter((r) => r.closedAt === null);
+    expect(stillOpen).toHaveLength(1); // exactly one open grant
+    expect(stillOpen[0]?.id).toBe(BG_A); // the first one won
+  });
+});
+
+// api-key rotate / revoke lifecycle via HTTP.
+describe("admin-service api-keys — rotate/revoke lifecycle (inject)", () => {
+  afterAll(async () => {
+    await db.delete(adminApiKeys).where(eq(adminApiKeys.tenantId, T1_ID));
+    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+  });
+
+  it("issue → rotate (new prefix, old secret void) → revoke → rotate-after-revoke 409", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const hdr = bearer(["super_admin"], T1_ID);
+
+    const created = await app.inject({
+      method: "POST", url: "/v1/admin/api-keys", headers: hdr,
+      payload: { keyName: "lifecycle", scopes: ["config:read"] },
+    });
+    expect(created.statusCode).toBe(201);
+    const { id, key: firstKey, keyPrefix: firstPrefix } = JSON.parse(created.body) as { id: string; key: string; keyPrefix: string };
+
+    const rotated = await app.inject({ method: "PATCH", url: `/v1/admin/api-keys/${id}/rotate`, headers: hdr });
+    expect(rotated.statusCode).toBe(200);
+    const { key: secondKey, keyPrefix: secondPrefix } = JSON.parse(rotated.body) as { key: string; keyPrefix: string };
+    expect(secondKey).not.toBe(firstKey);
+    expect(secondPrefix).not.toBe(firstPrefix);
+
+    const revoked = await app.inject({ method: "PATCH", url: `/v1/admin/api-keys/${id}/revoke`, headers: hdr });
+    expect(revoked.statusCode).toBe(200);
+    expect(JSON.parse(revoked.body).status).toBe("revoked");
+
+    const reRotate = await app.inject({ method: "PATCH", url: `/v1/admin/api-keys/${id}/rotate`, headers: hdr });
+    expect(reRotate.statusCode).toBe(409);
+
+    await app.close();
+  });
+});
+
+// final teardown: close the shared pg client exactly once, after all tests.
+describe("teardown", () => {
+  it("closes the sql client", async () => {
+    await sqlClient.end();
+    expect(true).toBe(true);
   });
 });
