@@ -51,10 +51,15 @@ export async function upsertModule(tx: Writer, tenantId: string, moduleKey: stri
   }
 }
 
+// P0: feature-flag create must be idempotent at the data layer. A unique index
+// on (tenant_id, flag_key) backstops the create; without ON CONFLICT a genuine
+// re-create of an existing platform flag (distinct messageId, so markProcessed
+// does not dedupe it) raised a unique-violation that poisoned the consumer and
+// dead-lettered the command. Treat a re-create of an existing flag as a no-op.
 export async function insertFlag(tx: Writer, flagKey: string, enabled: boolean, actorId: string): Promise<void> {
   await tx.insert(adminFeatureFlags).values({
     tenantId: PLATFORM, flagKey, enabled, overrides: {}, createdBy: actorId, updatedBy: actorId,
-  });
+  }).onConflictDoNothing({ target: [adminFeatureFlags.tenantId, adminFeatureFlags.flagKey] });
 }
 
 export async function setFlagOverride(tx: Writer, flagKey: string, tenantId: string, enabled: boolean, actorId: string): Promise<void> {

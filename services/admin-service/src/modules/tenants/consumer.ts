@@ -34,7 +34,11 @@ export function registerTenantConsumers(queue: Queue): void {
   queue.subscribe<{ id: string; edition: string }>(COMMANDS.tenantEditionChange, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.update(tx, msg.payload.id, { edition: msg.payload.edition, updatedBy: msg.actorId });
+      const cur = await repo.findByIdTx(tx, msg.payload.id);
+      if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
+      // Bump version on every state mutation so optimistic-concurrency consumers
+      // see edition changes the same way they see suspend/reactivate.
+      await repo.update(tx, msg.payload.id, { edition: msg.payload.edition, updatedBy: msg.actorId, version: cur.version + 1 });
       await audit(tx, msg, "edition_change", msg.payload.id);
     });
     await cache.invalidate(keyFor(msg.payload.id));
