@@ -14,6 +14,10 @@ const GL_TOPIC    = "finance.gl.post";
 // chart of accounts.
 const FIXED_ASSET_CODE  = process.env.ASSET_FIXED_ASSET_CODE ?? "1200";
 const GRN_CLEARING_CODE = process.env.ASSET_GRN_CLEARING_CODE ?? "2070";
+// Offset for a DIRECT asset registration (no GRN/procurement context). Dr
+// Fixed Asset (1200) / Cr this head. Defaults to AP Control (2050); override
+// per a tenant chart of accounts (e.g. Capital Account 3001 for donations).
+const ACQ_OFFSET_CODE   = process.env.ASSET_ACQUISITION_OFFSET_CODE ?? "2050";
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 const DEFAULT_VEHICLE_CATEGORY = "77777777-0001-0000-0000-000000000002";
 
@@ -54,6 +58,31 @@ export function registerRegisterConsumers(queue: Queue): void {
         payload: { assetId: p.id, code: p.code, acquisitionCost: p.acquisitionCost },
       });
       await audit(tx, msg, "create", "asset", p.id);
+      // GAP-FIX: a DIRECT asset registration must hit the books exactly like a
+      // GRN auto-capitalization does -- previously only the GRN path posted an
+      // acquisition journal, so a manually-registered asset existed in the asset
+      // register but never in the GL (carrying amount silently off the balance
+      // sheet). Emit a balanced StandardJournal Dr Fixed Asset (1200) / Cr AP
+      // (2050), with a deterministic uuidV5 id keyed off the assetId so a
+      // redelivered create no-ops in finance (single balanced post, no double).
+      // Skip a zero-cost create so finance never sees a zero-total journal.
+      if (costMinor > 0n) {
+        await enqueue(tx, {
+          topic: GL_TOPIC, eventType: GL_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            id: uuidV5(`acq:${p.id}`),
+            tenantId: msg.tenantId,
+            type: "asset_acquisition",
+            voucherNo: `ACQ/${p.acquisitionDate}/${p.id.slice(0, 8)}`,
+            postingDate: p.acquisitionDate,
+            lines: [
+              { accountCode: FIXED_ASSET_CODE, debitMinor: costMinor.toString(), creditMinor: "0" },
+              { accountCode: ACQ_OFFSET_CODE, debitMinor: "0", creditMinor: costMinor.toString() },
+            ],
+          },
+        });
+      }
       await enqueueDualDepSchedules(tx, msg, p.id, p.tenantId, p.acquisitionDate);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "asset", p.id));
