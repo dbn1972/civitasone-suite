@@ -13,6 +13,8 @@ import { sessionRoutes } from "./modules/sessions/routes.js";
 import { mfaRoutes } from "./modules/mfa/routes.js";
 import { deviceRoutes } from "./modules/devices/routes.js";
 import { syncRoutes } from "./modules/sync/routes.js";
+import { apiKeyRoutes } from "./modules/apikeys/routes.js";
+import { breakGlassRoutes } from "./modules/breakglass/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -32,6 +34,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(mfaRoutes);
   await app.register(deviceRoutes);
   await app.register(syncRoutes);
+  await app.register(apiKeyRoutes);
+  await app.register(breakGlassRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

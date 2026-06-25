@@ -52,10 +52,14 @@ describe("write-via-queue + read-via-cache (identity)", () => {
   it("consumer dedupes repeated messageId", async () => {
     let count = 0;
     queue.subscribe<{ id: string }>("identity.user.touch", async () => { count++; });
-    const opts = { messageId: "same", type: "identity.user.touch", tenantId: "t", actorId: "u", correlationId: "c", schemaVersion: "1.0", payload: { id: "t" } };
+    // messageId must be a valid UUID and the envelope must carry a timestamp, or
+    // parseEnvelope rejects it straight to the DLQ and the handler never runs
+    // (that is what made this assertion flaky/zero before). Same messageId on
+    // both publishes is what the MemoryQueue dedupes on.
+    const opts = { messageId: "11111111-1111-1111-1111-111111111111", type: "identity.user.touch", tenantId: "00000000-0000-0000-0000-000000000001", actorId: "00000000-0000-0000-0000-0000000000aa", correlationId: "c", schemaVersion: "1.0", timestamp: new Date().toISOString(), payload: { id: "t" } };
     await queue.publish("identity.user.touch", opts);
     await queue.publish("identity.user.touch", opts);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 50));
     expect(count).toBe(1);
   });
 });
