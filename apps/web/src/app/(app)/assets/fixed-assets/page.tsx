@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getFixedAssets } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, DataTable } from "../../../_components/ds";
+import { formatMoney } from "@/lib/formatters";
 
 export default async function FixedAssetsPage() {
   const { data: allAssets, source } = await getFixedAssets();
@@ -9,6 +10,15 @@ export default async function FixedAssetsPage() {
   const grossBlock = assets.reduce((sum, a) => sum + a.purchaseCost, 0);
   const netBlock = assets.reduce((sum, a) => sum + a.currentValue, 0);
   const tagged = assets.length > 0 ? Math.round((totalActive / assets.length) * 100) : 0;
+
+  const rows = assets.map((a) => ({
+    id: a.id,
+    assetCode: a.assetCode,
+    name: a.name,
+    location: a.location ?? "—",
+    currentValue: a.currentValue,
+    status: a.status.replace(/_/g, " "),
+  }));
 
   return (
     <>
@@ -38,51 +48,34 @@ export default async function FixedAssetsPage() {
         🔗 <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
       </div>
       <StatGrid>
-        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} delta="+85" up />
+        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} />
         <StatCard icon="🔖" iconBg="#eff6ff" label="Tagged (QR)" value={`${tagged}%`} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={`₹${(grossBlock / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={`₹${(netBlock / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={formatMoney(grossBlock)} />
+        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={formatMoney(netBlock)} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">
           <h3>Fixed asset register</h3>
-          <div className="seg">
-            <span className="on">All</span>
-            <span>Untagged</span>
-            <span>AMC due</span>
-          </div>
         </div>
-        {assets.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState icon="🖥️" title="No fixed assets found" message="Fixed assets will appear here once registered." />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Item</th>
-                <th>Location</th>
-                <th className="num">Net value</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((asset) => (
-                <tr key={asset.id} className="clickable">
-                  <td>
-                    <a href={`/assets/${asset.id}`}>
-                      <span className="mono">{asset.assetCode}</span>
-                    </a>
-                  </td>
-                  <td>{asset.name}</td>
-                  <td>{asset.location ?? "—"}</td>
-                  <td className="num">₹{(asset.currentValue / 100).toLocaleString("en-IN")}</td>
-                  <td>
-                    <StatusPill status={asset.status.replace(/_/g, " ")} label={asset.status.replace(/_/g, " ")} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            columns={[
+              { key: "assetCode", label: "Asset" },
+              { key: "name", label: "Item" },
+              { key: "location", label: "Location" },
+              { key: "currentValue", label: "Net value", align: "right", cellType: "amount" },
+              { key: "status", label: "Status", cellType: "status" },
+            ]}
+            rows={rows}
+            rowLinkKey="id"
+            rowLinkPrefix="/assets/"
+            sortable
+            filterable
+            filterPlaceholder="Filter fixed assets…"
+            pageSize={15}
+          />
         )}
       </div>
     </>

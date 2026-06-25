@@ -1,43 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getProjectFundReleases } from "../../../_data/loaders";
-import {
-  PageHeader,
-  StatGrid,
-  StatCard,
-  Card,
-  DataTable,
-  StatusPill,
-} from "@/app/_components/ds";
-import type { FundReleaseSummary } from "@civitasone/types";
-
-type FundReleaseRow = FundReleaseSummary & Record<string, unknown>;
-
-const COLUMNS: {
-  key: keyof FundReleaseRow & string;
-  label: string;
-  align?: "left" | "right";
-  render?: (row: FundReleaseRow) => React.ReactNode;
-}[] = [
-  { key: "releaseNo", label: "Release No" },
-  { key: "projectName", label: "Project" },
-  {
-    key: "amount",
-    label: "Amount",
-    align: "right",
-    render: (r) => `₹${((r.amount as number) / 100).toLocaleString("en-IN")}`,
-  },
-  { key: "releaseDate", label: "Release Date" },
-  {
-    key: "installmentNo",
-    label: "Installment #",
-    render: (r) => (r.installmentNo as number | undefined) != null ? String(r.installmentNo) : "—",
-  },
-  {
-    key: "status",
-    label: "Status",
-    render: (r) => <StatusPill status={r.status as string} />,
-  },
-];
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
+import { FundReleasesTable, type FundReleaseRow } from "./FundReleasesTable";
 
 export default async function FundReleasesPage() {
   const { data: releases, source } = await getProjectFundReleases();
@@ -57,30 +22,16 @@ export default async function FundReleasesPage() {
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={releases.length} />
-        <StatCard
-          icon="✅"
-          iconBg="#ecfdf3"
-          label="Released"
-          value={`₹${(totalReleased / 100).toLocaleString("en-IN")}`}
-        />
-        <StatCard
-          icon="📄"
-          iconBg="#fffaeb"
-          label="Sanctioned"
-          value={`₹${(totalSanctioned / 100).toLocaleString("en-IN")}`}
-        />
-        <StatCard
-          icon="💰"
-          iconBg="#eff6ff"
-          label="Utilized"
-          value={`₹${(totalUtilized / 100).toLocaleString("en-IN")}`}
-        />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Released" value={formatMoney(totalReleased)} />
+        <StatCard icon="📄" iconBg="#fffaeb" label="Sanctioned" value={formatMoney(totalSanctioned)} />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Utilized" value={formatMoney(totalUtilized)} />
       </StatGrid>
       <Card title="Fund Releases">
-        <DataTable<FundReleaseRow>
-          columns={COLUMNS}
-          rows={rows}
-        />
+        {rows.length === 0 ? (
+          <EmptyState icon="💰" title="No fund releases" message="No funds have been released to projects yet." />
+        ) : (
+          <FundReleasesTable rows={rows} />
+        )}
       </Card>
     </>
   );

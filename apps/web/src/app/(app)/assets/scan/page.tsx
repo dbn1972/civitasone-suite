@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { PageHeader } from "../../../_components/ds";
+import { formatMoney } from "@/lib/formatters";
 
 type ScanResult = {
   id: string;
@@ -36,36 +38,48 @@ export default function MobileScanPage() {
 
   return (
     <>
-      <a className="back" href="/assets">← Assets</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <h1>Barcode Scan</h1>
-        <div className="sub">Field verification — scan or enter asset tag.</div>
-      </div>
+      <PageHeader
+        title="Barcode Scan"
+        subtitle="Field verification — enter or paste an asset tag to look it up."
+        back="/assets"
+        backLabel="Assets"
+      />
       <div className="card">
         <form onSubmit={scan} className="pad">
+          <label htmlFor="scan-input" className="l">Asset tag / barcode</label>
           <input
+            id="scan-input"
             autoFocus
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
-            placeholder="Scan barcode…"
-            style={{ width: "100%", padding: 14, fontSize: 18, borderRadius: 12, border: "2px solid var(--line)", marginBottom: 12 }}
+            placeholder="Type or paste a barcode…"
+            inputMode="text"
+            style={{ width: "100%", padding: 14, fontSize: 18, borderRadius: 12, border: "2px solid var(--line)", margin: "6px 0 6px" }}
           />
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 12px" }}>
+            Use a connected hardware scanner (it types into this field) or enter the tag manually. Live camera capture is not available in this build.
+          </p>
           <button type="submit" className="btn primary" disabled={busy} style={{ width: "100%" }}>{busy ? "Looking up…" : "Lookup asset"}</button>
         </form>
       </div>
-      {error ? <div className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginTop: 16, fontSize: 13 }}>{error}</div> : null}
-      {result ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-h"><h3>{result.name}</h3></div>
-          <div className="pad" style={{ fontSize: 14 }}>
-            <p><strong>Code:</strong> {result.code}</p>
-            <p><strong>Barcode:</strong> {result.barcode}</p>
-            <p><strong>Status:</strong> {result.status}</p>
-            <p><strong>Book value:</strong> ₹{(result.bookValue / 100).toLocaleString("en-IN")}</p>
-            <a className="btn ghost" href={`/assets/${result.id}`} style={{ marginTop: 8, display: "inline-block" }}>Open asset</a>
+
+      <div aria-live="polite" role="status">
+        {error ? (
+          <div className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginTop: 16, fontSize: 13 }}>{error}</div>
+        ) : null}
+        {result ? (
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-h"><h3>{result.name}</h3></div>
+            <div className="pad" style={{ fontSize: 14 }}>
+              <p><strong>Code:</strong> {result.code}</p>
+              <p><strong>Barcode:</strong> {result.barcode}</p>
+              <p><strong>Status:</strong> {result.status}</p>
+              <p><strong>Book value:</strong> {formatMoney(result.bookValue)}</p>
+              <a className="btn ghost" href={`/assets/${result.id}`} style={{ marginTop: 8, display: "inline-block" }}>Open asset</a>
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </>
   );
 }

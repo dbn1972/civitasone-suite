@@ -1,14 +1,24 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { DataTable } from "@/app/_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import type { GrantSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 
-const columns: { key: keyof GrantSummary & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
+type Col = {
+  key: keyof GrantSummary & string;
+  label: string;
+  align?: "left" | "right";
+  cellType?: "status" | "amount";
+  render?: (row: GrantSummary) => ReactNode;
+};
+
+const columns: Col[] = [
   { key: "grantNo", label: "Grant No" },
   { key: "title", label: "Title" },
   { key: "granteeName", label: "Grantee" },
-  { key: "sanctionDate", label: "Sanction Date" },
+  { key: "sanctionDate", label: "Sanction Date", render: (row) => formatIndianDate(row.sanctionDate) },
   { key: "totalAmount", label: "Total (₹)", align: "right", cellType: "amount" },
   { key: "disbursedAmount", label: "Disbursed", align: "right", cellType: "amount" },
   { key: "pendingAmount", label: "Pending", align: "right", cellType: "amount" },
@@ -25,7 +35,7 @@ export function GrantsTable({ grants, source = "api" }: { grants: GrantSummary[]
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   return (
@@ -35,7 +45,16 @@ export function GrantsTable({ grants, source = "api" }: { grants: GrantSummary[]
           {cacheNote}
         </p>
       ) : null}
-      <DataTable<GrantSummary> columns={columns} rows={rows} rowLinkPrefix="/grants/" rowLinkKey="id" />
+      <DataTable<GrantSummary>
+        columns={columns}
+        rows={rows}
+        rowLinkPrefix="/grants/"
+        rowLinkKey="id"
+        sortable
+        filterable
+        filterPlaceholder="Filter grants…"
+        pageSize={15}
+      />
     </>
   );
 }

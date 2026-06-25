@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageHeader, EmptyState } from "../../../_components/ds";
 
 type Location = { id: string; code: string; name: string; orgUnit?: string | null };
 
@@ -8,10 +9,13 @@ export default function LocationsPage() {
   const [rows, setRows] = useState<Location[]>([]);
   const [form, setForm] = useState({ code: "", name: "", orgUnit: "" });
   const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   async function load() {
     const res = await fetch("/api/proxy/v1/asset/locations");
+    setLoaded(true);
     if (!res.ok) return;
     const body = await res.json() as { data: Location[] };
     setRows(body.data ?? []);
@@ -23,6 +27,7 @@ export default function LocationsPage() {
     e.preventDefault();
     setBusy(true);
     setMessage("");
+    setIsError(false);
     try {
       const res = await fetch("/api/proxy/v1/asset/locations", {
         method: "POST",
@@ -38,41 +43,59 @@ export default function LocationsPage() {
       setForm({ code: "", name: "", orgUnit: "" });
       await load();
     } catch (e) {
+      setIsError(true);
       setMessage(e instanceof Error ? e.message : "Create failed");
     } finally {
       setBusy(false);
     }
   }
 
+  const inputStyle = { padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
+  const fieldCol = { display: "flex", flexDirection: "column" as const, gap: 4 };
+
   return (
     <>
-      <a className="back" href="/assets">← Assets</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <h1>Functional Locations</h1>
-        <div className="sub">Plant maintenance hierarchy — org units and equipment locations.</div>
-      </div>
-      {message ? <div className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div> : null}
+      <PageHeader
+        title="Functional Locations"
+        subtitle="Plant maintenance hierarchy — org units and equipment locations."
+        back="/assets"
+        backLabel="Assets"
+      />
+      {message ? (
+        <div role="status" aria-live="polite" className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+      ) : null}
       <div className="card" style={{ marginBottom: 16 }}>
         <form onSubmit={submit} className="pad">
           <div className="fields">
-            <input required placeholder="Location code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
-            <input placeholder="Org unit" value={form.orgUnit} onChange={(e) => setForm({ ...form, orgUnit: e.target.value })} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
+            <div style={fieldCol}>
+              <label className="l" htmlFor="loc-code">Location code</label>
+              <input id="loc-code" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} style={inputStyle} />
+            </div>
+            <div style={fieldCol}>
+              <label className="l" htmlFor="loc-name">Name</label>
+              <input id="loc-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+            </div>
+            <div style={fieldCol}>
+              <label className="l" htmlFor="loc-org">Org unit</label>
+              <input id="loc-org" value={form.orgUnit} onChange={(e) => setForm({ ...form, orgUnit: e.target.value })} style={inputStyle} />
+            </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>Add location</button>
+          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Adding…" : "Add location"}</button>
         </form>
       </div>
       <div className="card">
         <div className="card-h"><h3>Location tree</h3></div>
-        <div className="pad">
-          {rows.length === 0 ? <p style={{ fontSize: 13, color: "var(--muted)" }}>No locations yet.</p> : (
+        {rows.length === 0 ? (
+          <EmptyState icon="📍" title={loaded ? "No locations yet" : "Loading locations…"} message={loaded ? "Add functional locations to build the plant-maintenance hierarchy." : undefined} />
+        ) : (
+          <div className="pad">
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
               {rows.map((r) => (
                 <li key={r.id}><strong>{r.code}</strong> — {r.name}{r.orgUnit ? ` (${r.orgUnit})` : ""}</li>
               ))}
             </ul>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </>
   );
