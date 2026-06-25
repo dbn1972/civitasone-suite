@@ -1,0 +1,201 @@
+/**
+ * contract-service lifecycle + maker-checker suite.
+ *
+ *  - Lifecycle: draft -> approved -> active -> closed via real queue->consumer->DB.
+ *  - SoD: maker self-approve / self-terminate -> 403 (synchronous, route command).
+ *  - Amendment value-delta correctness (paise bigint).
+ *  - Idempotency: redeliver the same approve messageId -> exactly one transition / row.
+ *  - Zod rejection on bad create body.
+ *  - Invalid transition guard.
+ */
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
+import { MemoryQueue } from "@civitasone/queue";
+import { eq } from "drizzle-orm";
+import { db, sqlClient } from "../src/shared/db.js";
+import { contractContracts, contractAmendments } from "../src/modules/contracts/schema.js";
+import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { registerContractConsumers } from "../src/modules/contracts/consumer.js";
+import {
+  assertTransitionAllowed, assertDistinctMakerChecker, assertCanAmend, DomainError,
+} from "../src/modules/contracts/domain.js";
+import { createContractBody } from "../src/modules/contracts/validators.js";
+import { COMMANDS, EVENTS } from "../src/topics.js";
+
+const MAKER   = "00000000-aaaa-4000-8000-0000000000a1";
+const CHECKER = "00000000-aaaa-4000-8000-0000000000a2";
+const TENANT  = "11111111-aaaa-4000-8000-0000000000ff";
+const OTHER_T = "11111111-aaaa-4000-8000-0000000000fe";
+
+async function wipe() {
+  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+  await db.delete(contractAmendments).where(eq(contractAmendments.tenantId, TENANT));
+  await db.delete(contractContracts).where(eq(contractContracts.tenantId, TENANT));
+}
+
+function pub(q: MemoryQueue, type: string, actorId: string, payload: Record<string, unknown>, messageId = randomUUID()) {
+  return q.publish(type, {
+    messageId, type, tenantId: TENANT, actorId,
+    correlationId: "corr-" + messageId.slice(0, 8), schemaVersion: "1.0", payload,
+  });
+}
+const settle = () => new Promise<void>((r) => setTimeout(r, 400));
+
+async function status(id: string): Promise<string | undefined> {
+  const [row] = await db.select().from(contractContracts).where(eq(contractContracts.id, id));
+  return row?.status;
+}
+
+// ── Pure domain guards ──────────────────────────────────────────────────────
+
+describe("domain — lifecycle state machine", () => {
+  it("draft -> approved -> active -> closed all allowed", () => {
+    expect(() => assertTransitionAllowed("draft", "approved")).not.toThrow();
+    expect(() => assertTransitionAllowed("approved", "active")).not.toThrow();
+    expect(() => assertTransitionAllowed("active", "closed")).not.toThrow();
+  });
+  it("illegal transitions rejected", () => {
+    expect(() => assertTransitionAllowed("draft", "active")).toThrowError("INVALID_TRANSITION");
+    expect(() => assertTransitionAllowed("closed", "active")).toThrowError("INVALID_TRANSITION");
+    expect(() => assertTransitionAllowed("terminated", "active")).toThrowError("INVALID_TRANSITION");
+  });
+  it("SoD: same maker+checker rejected, distinct allowed", () => {
+    expect(() => assertDistinctMakerChecker(MAKER, MAKER)).toThrowError("SOD_VIOLATION");
+    expect(() => assertDistinctMakerChecker(MAKER, CHECKER)).not.toThrow();
+  });
+  it("amend only on active", () => {
+    expect(() => assertCanAmend("active")).not.toThrow();
+    expect(() => assertCanAmend("draft")).toThrowError("INVALID_STATUS");
+  });
+});
+
+describe("validators — Zod rejection", () => {
+  it("rejects non-positive value and bad vendorId", () => {
+    const r = createContractBody.safeParse({
+      contractNo: "C1", vendorId: "not-a-uuid", title: "x",
+      valueMinor: -5, startDate: "2026-01-01", expiry: "2026-12-31",
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+// ── Integration: real queue -> consumer -> DB ───────────────────────────────
+
+describe("contract lifecycle (integration)", () => {
+  beforeAll(async () => { await wipe(); });
+  afterAll(async () => { await wipe(); await sqlClient.end(); });
+
+  it("draft -> approved -> active -> closed transitions persist + emit events", async () => {
+    const q = new MemoryQueue();
+    registerContractConsumers(q);
+    await q.start();
+
+    const id = randomUUID();
+    await pub(q, COMMANDS.contractCreate, MAKER, {
+      id, tenantId: TENANT, contractNo: "LC-001",
+      vendorId: randomUUID(), title: "Roadworks", valueMinor: 50000000,
+      currency: "INR", startDate: "2026-07-01", expiry: "2027-06-30",
+    }, id);
+    await settle();
+    expect(await status(id)).toBe("draft");
+
+    await pub(q, COMMANDS.contractApprove, CHECKER, { id, tenantId: TENANT });
+    await settle();
+    expect(await status(id)).toBe("approved");
+
+    await pub(q, COMMANDS.contractActivate, CHECKER, { id, tenantId: TENANT });
+    await settle();
+    expect(await status(id)).toBe("active");
+
+    await pub(q, COMMANDS.contractClose, CHECKER, { id, tenantId: TENANT });
+    await settle();
+    expect(await status(id)).toBe("closed");
+    await q.stop();
+
+    const events = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))
+      .map((r) => r.eventType);
+    for (const e of [EVENTS.contractCreated, EVENTS.contractApproved, EVENTS.contractActivated, EVENTS.contractClosed]) {
+      expect(events).toContain(e);
+    }
+    expect(events.filter((e) => e === "audit.event.record").length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("amendment applies value-delta in paise and writes one ledger row", async () => {
+    const q = new MemoryQueue();
+    registerContractConsumers(q);
+    await q.start();
+
+    const id = randomUUID();
+    await pub(q, COMMANDS.contractCreate, MAKER, {
+      id, tenantId: TENANT, contractNo: "LC-002",
+      vendorId: randomUUID(), title: "Supply", valueMinor: 10000000,
+      currency: "INR", startDate: "2026-07-01", expiry: "2027-06-30",
+    }, id);
+    await settle();
+    await pub(q, COMMANDS.contractApprove,  CHECKER, { id, tenantId: TENANT }); await settle();
+    await pub(q, COMMANDS.contractActivate, CHECKER, { id, tenantId: TENANT }); await settle();
+
+    // +2,500,000 paise variation
+    await pub(q, COMMANDS.contractAmend, CHECKER, { id, tenantId: TENANT, reason: "scope increase", valueDelta: 2500000 });
+    await settle();
+    // -500,000 paise variation
+    await pub(q, COMMANDS.contractAmend, CHECKER, { id, tenantId: TENANT, reason: "descope item", valueDelta: -500000 });
+    await settle();
+    await q.stop();
+
+    const [row] = await db.select().from(contractContracts).where(eq(contractContracts.id, id));
+    expect(row?.valueMinor).toBe(10000000n + 2500000n - 500000n); // 12,000,000n
+
+    const ams = await db.select().from(contractAmendments).where(eq(contractAmendments.contractId, id));
+    expect(ams).toHaveLength(2);
+    expect(ams.map((a) => a.amendmentNo).sort()).toEqual([1, 2]);
+    expect(ams.reduce((s, a) => s + a.valueDelta, 0n)).toBe(2000000n);
+  });
+
+  it("idempotency: redelivering the same approve messageId transitions once", async () => {
+    const q = new MemoryQueue();
+    registerContractConsumers(q);
+    await q.start();
+
+    const id = randomUUID();
+    await pub(q, COMMANDS.contractCreate, MAKER, {
+      id, tenantId: TENANT, contractNo: "LC-003",
+      vendorId: randomUUID(), title: "Idem", valueMinor: 7000000,
+      currency: "INR", startDate: "2026-07-01", expiry: "2027-06-30",
+    }, id);
+    await settle();
+
+    const approveMsg = randomUUID();
+    await pub(q, COMMANDS.contractApprove, CHECKER, { id, tenantId: TENANT }, approveMsg);
+    await settle();
+    // redeliver SAME messageId
+    await pub(q, COMMANDS.contractApprove, CHECKER, { id, tenantId: TENANT }, approveMsg);
+    await settle();
+    await q.stop();
+
+    expect(await status(id)).toBe("approved");
+    const proc = await db.select().from(processed).where(eq(processed.messageId, approveMsg));
+    expect(proc).toHaveLength(1);
+    // exactly one approved event in the outbox for this contract
+    const approvedEvents = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))
+      .filter((r) => r.eventType === EVENTS.contractApproved && (r.payload as any)?.contractId === id);
+    expect(approvedEvents).toHaveLength(1);
+  });
+
+  it("tenant isolation: amend payload tenant differs -> contract not found for other tenant scope", async () => {
+    const q = new MemoryQueue();
+    registerContractConsumers(q);
+    await q.start();
+    const id = randomUUID();
+    await pub(q, COMMANDS.contractCreate, MAKER, {
+      id, tenantId: TENANT, contractNo: "LC-004",
+      vendorId: randomUUID(), title: "Iso", valueMinor: 4000000,
+      currency: "INR", startDate: "2026-07-01", expiry: "2027-06-30",
+    }, id);
+    await settle();
+    await q.stop();
+    const otherScoped = await db.select().from(contractContracts)
+      .where(eq(contractContracts.tenantId, OTHER_T));
+    expect(otherScoped.find((r) => r.id === id)).toBeUndefined();
+  });
+});

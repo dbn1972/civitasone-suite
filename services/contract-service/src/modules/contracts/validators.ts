@@ -21,6 +21,26 @@ export const createContractBody = z.object({
 });
 export type CreateContractBody = z.infer<typeof createContractBody>;
 
+export const approveContractBody = z.object({
+  note: z.string().max(500).optional(),
+});
+export type ApproveContractBody = z.infer<typeof approveContractBody>;
+
+export const activateContractBody = z.object({
+  note: z.string().max(500).optional(),
+});
+export type ActivateContractBody = z.infer<typeof activateContractBody>;
+
+export const closeContractBody = z.object({
+  note: z.string().max(500).optional(),
+});
+export type CloseContractBody = z.infer<typeof closeContractBody>;
+
+export const terminateContractBody = z.object({
+  reason: z.string().min(5).max(500),
+});
+export type TerminateContractBody = z.infer<typeof terminateContractBody>;
+
 export const amendContractBody = z.object({
   reason:     z.string().min(5).max(500),
   valueDelta: z.number().int().default(0),

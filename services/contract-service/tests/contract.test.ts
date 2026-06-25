@@ -83,7 +83,7 @@ describe("Contract consumer — CQRS wiring (integration)", () => {
     const rows = await db.select().from(contractContracts).where(eq(contractContracts.id, CON_1));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.contractNo).toBe("CON-2026-001");
-    expect(rows[0]?.status).toBe("active");
+    expect(rows[0]?.status).toBe("draft");
     expect(rows[0]?.valueMinor).toBe(28600000n);
 
     const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));

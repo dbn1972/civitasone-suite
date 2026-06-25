@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and, lte, gte, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { contractContracts, contractAmendments, type ContractRow, type ContractInsert } from "./schema.js";
 
@@ -10,7 +10,31 @@ export async function findContractById(id: string): Promise<ContractRow | null> 
 }
 
 export async function listContractsByTenant(tenantId: string, limit: number): Promise<ContractRow[]> {
-  return db.select().from(contractContracts).where(eq(contractContracts.tenantId, tenantId)).limit(limit);
+  return db.select().from(contractContracts)
+    .where(eq(contractContracts.tenantId, tenantId))
+    .orderBy(sql`${contractContracts.createdAt} desc`)
+    .limit(limit);
+}
+
+/** Read model: active contracts in force. */
+export async function listActiveByTenant(tenantId: string, limit: number): Promise<ContractRow[]> {
+  return db.select().from(contractContracts)
+    .where(and(eq(contractContracts.tenantId, tenantId), eq(contractContracts.status, "active")))
+    .orderBy(sql`${contractContracts.expiry} asc`)
+    .limit(limit);
+}
+
+/** Read model: active contracts expiring on or before `before` (YYYY-MM-DD). */
+export async function listExpiringByTenant(tenantId: string, before: string, limit: number): Promise<ContractRow[]> {
+  return db.select().from(contractContracts)
+    .where(and(
+      eq(contractContracts.tenantId, tenantId),
+      eq(contractContracts.status, "active"),
+      lte(contractContracts.expiry, before),
+      gte(contractContracts.expiry, sql`current_date`),
+    ))
+    .orderBy(sql`${contractContracts.expiry} asc`)
+    .limit(limit);
 }
 
 export async function findContractByIdTx(tx: Writer, id: string): Promise<ContractRow | null> {
@@ -28,6 +52,12 @@ export async function updateContract(tx: Writer, id: string, patch: Partial<Cont
 
 export async function insertAmendment(tx: Writer, row: typeof contractAmendments.$inferInsert): Promise<void> {
   await tx.insert(contractAmendments).values(row);
+}
+
+export async function listAmendments(contractId: string, tenantId: string): Promise<Array<typeof contractAmendments.$inferSelect>> {
+  return db.select().from(contractAmendments)
+    .where(and(eq(contractAmendments.contractId, contractId), eq(contractAmendments.tenantId, tenantId)))
+    .orderBy(sql`${contractAmendments.amendmentNo} asc`);
 }
 
 export async function countAmendments(tx: Writer, contractId: string): Promise<number> {
