@@ -83,13 +83,40 @@ export async function buildApp(): Promise<FastifyInstance> {
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
 
+  // SEC: CORS must fail closed in production. If CORS_ORIGIN is unset in prod we
+  // refuse to start rather than silently trusting localhost. Outside prod we keep
+  // the localhost dev default so local development is unaffected.
+  const corsOriginEnv = process.env.CORS_ORIGIN;
+  if (process.env.NODE_ENV === "production" && (!corsOriginEnv || corsOriginEnv.trim() === "")) {
+    throw new Error(
+      "CORS_ORIGIN must be set in production; refusing to start with an insecure default.",
+    );
+  }
   await app.register(cors, {
-    origin: (process.env.CORS_ORIGIN ?? "http://localhost:3000").split(","),
+    origin: (corsOriginEnv ?? "http://localhost:3000").split(","),
     credentials: true,
     allowedHeaders: ["content-type", "authorization", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token"],
   });
 
-  await app.register(helmet, { contentSecurityPolicy: false });
+  // SEC: real CSP instead of disabling it. default-src 'self'; no unsafe-eval.
+  // 'unsafe-inline' is permitted for styles only (Next.js injects inline <style>
+  // tags and style attributes); scripts stay strict (no unsafe-inline / unsafe-eval).
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        fontSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+      },
+    },
+  });
   await app.register(rateLimit, {
     global: true,
     max: Number(process.env.GATEWAY_RATE_LIMIT_MAX ?? 1000),

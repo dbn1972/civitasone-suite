@@ -1,0 +1,25 @@
+# CivitasOne — keep build context small & secret-free
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/test-results
+**/e2e-report
+**/*.tsbuildinfo
+.git
+.github
+**/*.log
+.k6-stack-logs
+# never ship secrets
+.env
+.env.*
+!.env.example
+infra/.env
+**/.DS_Store
+egoverp
+egoverp.zip
+figma-prompts
+apps/mobile
+docs
+tests

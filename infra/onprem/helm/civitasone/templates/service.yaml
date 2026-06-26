@@ -1,0 +1,23 @@
+{{- $root := . -}}
+{{- range $name, $cfg := .Values.services }}
+{{- if ne $cfg.http false }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $root.Release.Name }}-{{ $name }}
+  labels:
+    {{- include "civitasone.labels" $root | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: service
+  ports:
+    - name: http
+      port: {{ $cfg.port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}
+{{- end }}

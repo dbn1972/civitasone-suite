@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { roleRoutes } from "./modules/roles/routes.js";
 import { bindingRoutes } from "./modules/bindings/routes.js";
 import { evaluateRoutes } from "./modules/evaluate/routes.js";
+import { abacRoutes } from "./modules/abac/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -26,6 +27,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(roleRoutes);
   await app.register(bindingRoutes);
   await app.register(evaluateRoutes);
+  await app.register(abacRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

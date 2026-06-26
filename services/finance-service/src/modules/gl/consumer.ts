@@ -64,7 +64,15 @@ async function postJournal(
     totalDebit += dr;
   }
   if (totalDebit === 0n) {
-    throw new Error("JOURNAL_ZERO_TOTAL: a journal must have a non-zero total debit");
+    // INT-FIX: an empty (0==0) journal has nothing to post. This occurs when an
+    // upstream producer emits an accrual for a source with zero net movement
+    // (e.g. a payroll run approved with no slips, or an empty stock entry).
+    // Treat it as a harmless no-op: ack and skip posting instead of throwing,
+    // which previously dead-lettered the message and let it retry forever.
+    // Unbalanced journals (dr != cr) are still rejected above by
+    // assertJournalBalances; negative legs are still rejected above. A genuinely
+    // empty journal is noise, not corruption.
+    return;
   }
   const period = journal.postingDate.slice(0, 7);
   const periodStatus = await getPeriodStatus(journal.tenantId, period);

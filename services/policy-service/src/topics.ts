@@ -5,6 +5,9 @@ export const COMMANDS = {
   createBinding:    "policy.binding.create",
   revokeBinding:    "policy.binding.revoke",
   requestBreakglass:"policy.breakglass.request",
+  createAbacRule:   "policy.abac.rule.create",
+  updateAbacRule:   "policy.abac.rule.update",
+  deleteAbacRule:   "policy.abac.rule.delete",
 } as const;
 
 export const EVENTS = {
@@ -14,6 +17,9 @@ export const EVENTS = {
   bindingCreated:     "policy.binding.created",
   bindingRevoked:     "policy.binding.revoked",
   breakglassRequested:"policy.breakglass.requested",
+  abacRuleCreated:    "policy.abac.rule.created",
+  abacRuleUpdated:    "policy.abac.rule.updated",
+  abacRuleDeleted:    "policy.abac.rule.deleted",
 } as const;
 
 export const SERVICE = "policy";
@@ -21,4 +27,5 @@ export const RESOURCE = {
   role:       "role",
   binding:    "binding",
   breakglass: "breakglass",
+  abacRule:   "abac_rule",
 };
