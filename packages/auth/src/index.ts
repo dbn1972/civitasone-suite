@@ -118,7 +118,16 @@ export async function verifyJwt(token: string): Promise<CivitasJwtPayload> {
 // ── Sync verify (HS256 only — used in tests) ────────────────────────────────
 
 export function verifyToken(token: string, secret: string): CivitasJwtPayload {
-  return jwt.verify(token, secret, { algorithms: ["HS256"] }) as CivitasJwtPayload;
+  // SEC REM-06: validate issuer and audience on the HS256 dev/test path as
+  // defense-in-depth. Prevents tokens with wrong iss/aud from being accepted
+  // even in non-production environments.
+  const issuer  = process.env.HS256_TOKEN_ISSUER  ?? "civitasone-dev";
+  const audience = process.env.HS256_TOKEN_AUDIENCE ?? "civitasone";
+  return jwt.verify(token, secret, {
+    algorithms: ["HS256"],
+    issuer,
+    audience,
+  }) as CivitasJwtPayload;
 }
 
 // ── Sign (tests / identity-service bootstrap tokens) ────────────────────────
@@ -128,7 +137,15 @@ export function signToken(
   secret: string,
   expiresIn: string | number = "1h"
 ): string {
-  return jwt.sign(payload, secret, { algorithm: "HS256", expiresIn } as jwt.SignOptions);
+  // SEC REM-06: embed the default iss/aud so tokens produced here are accepted
+  // by verifyToken (which now validates issuer + audience as defense-in-depth).
+  const issuer  = process.env.HS256_TOKEN_ISSUER  ?? "civitasone-dev";
+  const audience = process.env.HS256_TOKEN_AUDIENCE ?? "civitasone";
+  return jwt.sign(
+    { iss: issuer, aud: audience, ...payload },
+    secret,
+    { algorithm: "HS256", expiresIn } as jwt.SignOptions,
+  );
 }
 
 // ── Context extraction ───────────────────────────────────────────────────────

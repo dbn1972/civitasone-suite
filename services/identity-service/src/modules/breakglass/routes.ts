@@ -4,6 +4,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { grantBody, closeBody, grantIdParam, listQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
+import { db } from "../../shared/db.js";
 
 // Break-glass is the most sensitive identity operation: only the highest
 // authority roles may open or close one.
@@ -32,6 +34,31 @@ export async function breakGlassRoutes(app: FastifyInstance): Promise<void> {
     const { id } = grantIdParam.parse(req.params);
     const view = await queries.getGrant(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "break-glass grant not found");
+
+    // SEC REM-07: enforce a hard TTL cap at the route level in addition to the
+    // DB-level expiresAt. If the grant is still "active" but has exceeded
+    // MAX_BREAKGLASS_TTL_SECONDS since it was opened, auto-close it transactionally
+    // and emit an audit event before rejecting the request.
+    const MAX_BREAKGLASS_TTL_MS = Number(process.env.BREAKGLASS_MAX_TTL_SECONDS ?? 3600) * 1000;
+    if (!view.closedAt && view.status === "active" && Date.now() - new Date(view.grantedAt).getTime() > MAX_BREAKGLASS_TTL_MS) {
+      await db.transaction(async (tx) => {
+        const row = await repo.findByIdForUpdate(tx, ctx.tenantId, id);
+        // Only act if the row is still active (guard against concurrent close)
+        if (row && row.status === "active") {
+          await repo.setStatus(tx, ctx.tenantId, id, row.version, {
+            status: "expired", closedBy: ctx.actorId, closeReason: "auto_expired", closedAt: new Date(),
+          });
+          await repo.emitAudit(tx, {
+            eventType: "identity.breakglass.auto_expired",
+            tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+            action: "breakglass_auto_expire", resourceId: id, severity: "critical",
+            payload: { service: "identity", action: "breakglass_auto_expire", resourceType: "breakglass", resourceId: id, outcome: "expired" },
+          });
+        }
+      });
+      return reply.code(403).send({ code: "BREAKGLASS_EXPIRED", message: "Break-glass session has expired and was automatically closed." });
+    }
+
     return reply.send(view);
   });
 

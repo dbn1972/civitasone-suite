@@ -139,7 +139,7 @@
       "description": "Confidential client for service-to-service M2M calls",
       "enabled": true,
       "publicClient": false,
-      "secret": "civitas_svc_secret_dev",
+      "secret": "${KEYCLOAK_SVC_CLIENT_SECRET}",
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
@@ -165,9 +165,9 @@
       "description": "Admin CLI for realm management scripts",
       "enabled": true,
       "publicClient": false,
-      "secret": "civitas_admin_cli_secret_dev",
+      "secret": "${KEYCLOAK_ADMIN_CLI_SECRET}",
       "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true
     }
   ],

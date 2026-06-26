@@ -28,6 +28,53 @@ jobs:
       - run: pnpm turbo lint
 
   # ─────────────────────────────────────────────
+  # Security: scan for known dev/test secrets in source
+  # Fails the build if any hardcoded dev credential is found outside
+  # test/spec/dist/node_modules/infra .env files.
+  # ─────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for known dev secrets in source
+        run: |
+          set -euo pipefail
+          PATTERNS=(
+            "civitas_svc_secret_dev"
+            "civitas_admin_cli_secret_dev"
+            "civitasone-dev-secret"
+            "civitasone-internal-dev-secret"
+            "civitas_kc_dev_pw"
+            "keycloak_dev_pw"
+            "Civitas@123"
+          )
+          FOUND=0
+          for pat in "${PATTERNS[@]}"; do
+            # Search source code only; exclude test fixtures, dist, node_modules, .env files, and this workflow file itself
+            if grep -rn "$pat" \
+                services/ packages/ apps/web/src apps/mobile/lib \
+                --include="*.ts" --include="*.tsx" --include="*.dart" \
+                --include="*.json" --include="*.tf" \
+                2>/dev/null \
+              | grep -v "__tests__\|\.test\.\|\.spec\.\|/dist/\|node_modules\|\.env\|\.env\.example\|keycloak/civitasone-realm\.json"; then
+              echo "FAIL: Known dev secret found in source: $pat"
+              FOUND=1
+            fi
+          done
+          # Also check keycloak realm for the specific placeholder - it should now use ${VAR} not the literal
+          if grep -n '"secret": "civitas_svc_secret_dev"\|"secret": "civitas_admin_cli_secret_dev"' infra/keycloak/civitasone-realm.json 2>/dev/null; then
+            echo "FAIL: Hardcoded Keycloak client secret still in realm JSON (should use \${VAR} placeholder)"
+            FOUND=1
+          fi
+          if [ $FOUND -eq 1 ]; then
+            echo ""
+            echo "❌ Secret scan failed. Replace hardcoded dev secrets with environment variables."
+            exit 1
+          fi
+          echo "✅ Secret scan passed — no hardcoded dev secrets found in source."
+
+  # ─────────────────────────────────────────────
   # Job 2: Unit + integration tests (vitest)
   # Postgres on host port 5435 matches vitest defaults per service.
   # Bootstrap + migrations: scripts/ci/bootstrap-postgres.sh

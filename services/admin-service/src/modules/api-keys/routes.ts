@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { scryptSync, randomBytes, timingSafeEqual, createHash, randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { z } from "zod";
 import { APIKeySummaryListSchema } from "@civitasone/schemas/web";
@@ -21,8 +21,27 @@ const createBody = z.object({
   expiresAt: z.string().datetime().optional(),
 });
 
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
+const SCRYPT_KEYLEN = 64;
+
 function hashKey(secret: string): string {
-  return createHash("sha256").update(secret).digest("hex");
+  // SEC REM-05: memory-hard KDF replacing fast SHA-256. Format: "scrypt:<hex-salt>:<hex-hash>".
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(secret, salt, SCRYPT_KEYLEN, SCRYPT_PARAMS).toString("hex");
+  return `scrypt:${salt}:${hash}`;
+}
+
+function verifyKey(secret: string, stored: string): boolean {
+  // Backward compat: legacy SHA-256 hashes (no "scrypt:" prefix) during rotation window.
+  if (!stored.startsWith("scrypt:")) {
+    const legacy = createHash("sha256").update(secret).digest("hex");
+    return timingSafeEqual(Buffer.from(stored, "hex"), Buffer.from(legacy, "hex"));
+  }
+  const parts = stored.split(":");
+  if (parts.length !== 3 || !parts[1] || !parts[2]) return false;
+  const [, salt, storedHash] = parts;
+  const candidate = scryptSync(secret, salt, SCRYPT_KEYLEN, SCRYPT_PARAMS).toString("hex");
+  return timingSafeEqual(Buffer.from(storedHash, "hex"), Buffer.from(candidate, "hex"));
 }
 
 function newRawKey(): { raw: string; keyPrefix: string } {

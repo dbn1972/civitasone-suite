@@ -80,6 +80,9 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
+    // SEC REM-10: hard cap on inbound body size. Prevents memory-exhaustion attacks
+    // via large-body requests at 1000 TPS. Default 1MB; tune via GATEWAY_BODY_LIMIT env.
+    bodyLimit: Number(process.env.GATEWAY_BODY_LIMIT_BYTES ?? 1_048_576), // 1 MB
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
 
@@ -181,7 +184,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
-  // Stricter rate limit for auth/identity endpoints (10 req/min per IP vs global 1000).
+  // SEC REM-08: Per-IP auth rate limit (10 req/min). Primary brute-force defense is
+  // Keycloak's built-in bruteForceProtected=true (failureFactor:5, lockout after 5
+  // consecutive failures per username). This IP-based limit is the gateway secondary.
+  // For distributed credential stuffing, consider adding per-username Redis counters
+  // or integrating with Keycloak's events API for cross-IP username-based locking.
+  //
+  // keyGenerator: uses sanitized username from the request body when present so that
+  // credential-stuffing attempts targeting the same username from many IPs are also
+  // throttled. Falls back to req.ip for requests without a body (e.g. GET /token/refresh).
   app.route({
     method: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     url: "/api/identity/*",
@@ -189,6 +200,13 @@ export async function buildApp(): Promise<FastifyInstance> {
       rateLimit: {
         max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
         timeWindow: process.env.AUTH_RATE_LIMIT_WINDOW ?? "1 minute",
+        // SEC REM-08: key by username (from body) when present, else IP. This
+        // prevents distributed attacks where the same username is tried from many IPs.
+        keyGenerator: (req) => {
+          const body = req.body as Record<string, unknown> | undefined;
+          const username = typeof body?.username === "string" ? body.username.toLowerCase().trim() : null;
+          return username ? `auth:${username}` : (req.ip ?? "unknown");
+        },
       },
     },
     handler: proxyHandler,
