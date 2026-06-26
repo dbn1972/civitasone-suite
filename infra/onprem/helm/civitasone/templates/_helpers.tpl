@@ -39,3 +39,7 @@ Renders: ConfigMap envFrom values + PORT + DATABASE_URL + secret env keys.
 - configMapRef:
     name: {{ .Release.Name }}-civitasone-config
 {{- end -}}
+
+{{- define "civitasone.selectorLabels" -}}
+app.kubernetes.io/part-of: civitasone
+{{- end -}}
