@@ -10,7 +10,7 @@ export type {
   Queue,
   QueueDriver,
 } from "./bus.js";
-export { MemoryQueue, SqsQueue, createQueue, resolveQueueDriver } from "./bus.js";
+export { MemoryQueue, SqsQueue, createQueue, resolveQueueDriver, NonRetryableError, isNonRetryable } from "./bus.js";
 
 export type {
   QueueAdapter,

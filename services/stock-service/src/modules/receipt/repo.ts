@@ -11,21 +11,27 @@ export async function insertReceipt(tx: Writer, row: typeof stockReceipts.$infer
 export async function lockAvailableQty(
   tx: Writer, tenantId: string, itemId: string, warehouseId: string,
 ): Promise<number> {
-  // Lock the matching receipt rows first (FOR UPDATE is invalid alongside an
-  // aggregate), then aggregate over the locked rows in the outer query.
-  const result = await (tx as typeof db).execute(sql`
-    WITH locked AS (
-      SELECT remaining_qty
-      FROM entry.stock_receipts
-      WHERE item_id = ${itemId}::uuid
-        AND tenant_id = ${tenantId}::uuid
-        AND warehouse_id = ${warehouseId}::uuid
-        AND remaining_qty > 0
-      FOR UPDATE
-    )
-    SELECT COALESCE(SUM(remaining_qty), 0)::int AS available FROM locked
+  // Step 1: Lock the matching rows with FOR UPDATE (no aggregate allowed here).
+  const lockResult = await (tx as typeof db).execute(sql`
+    SELECT id
+    FROM entry.stock_receipts
+    WHERE item_id = ${itemId}::uuid
+      AND tenant_id = ${tenantId}::uuid
+      AND warehouse_id = ${warehouseId}::uuid
+      AND remaining_qty > 0
+    FOR UPDATE
   `);
-  const rows = result as unknown as Array<{ available: number }>;
+  const lockedRows = lockResult as unknown as Array<{ id: string }>;
+  if (lockedRows.length === 0) return 0;
+  const lockedIds = lockedRows.map((r) => r.id);
+
+  // Step 2: Aggregate over the now-locked rows (no FOR UPDATE here).
+  const sumResult = await (tx as typeof db).execute(sql`
+    SELECT COALESCE(SUM(remaining_qty), 0)::int AS available
+    FROM entry.stock_receipts
+    WHERE id = ANY(${lockedIds}::uuid[])
+  `);
+  const rows = sumResult as unknown as Array<{ available: number }>;
   return Number(rows[0]?.available ?? 0);
 }
 

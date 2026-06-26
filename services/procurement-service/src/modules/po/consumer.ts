@@ -129,7 +129,7 @@ export function registerPoConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, poNo, vendorId: p.vendorId,
         indentRef: p.indentRef, sanctionRef: p.sanctionRef ?? null,
         rateContractRef: p.rateContractRef ?? null, gemOrderNo: null,
-        totalMinor, currency: "INR", status: "pending",
+        totalMinor, currency: "INR", status: "draft",
         deliveryDate: p.deliveryDate ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       const itemRows = p.items.map((i) => ({

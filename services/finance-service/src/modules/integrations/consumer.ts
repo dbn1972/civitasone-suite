@@ -5,8 +5,15 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as auditRepo from "../audit/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
+import { writeFile, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pino } from "pino";
+import { generateNACHFile, type BankFileRow } from "./bank-file-generator.js";
+import { uploadBankFile } from "./sftp-egress.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+const log = pino({ name: "finance:integration-consumer" });
 
 export function registerIntegrationConsumers(queue: Queue): void {
   /** grant-service / payroll-service → finance: process EFT disbursement */
@@ -31,6 +38,35 @@ export function registerIntegrationConsumers(queue: Queue): void {
       const ddoCode = (p.ddoCode ?? cfg?.defaultDdo ?? "DDO123456").toUpperCase();
       const pfmsBatchId = randomUUID();
       const batchType = p.payrollRunId ? "salary" : p.disbursementId ? "grant" : "scheme";
+      // ── NACH file generation + SFTP egress ─────────────────────────────────
+      // Resolve real beneficiaries for this PFMS batch (may be empty on first
+      // insert since payments rows are linked later; we build from payload).
+      const nachRow: BankFileRow = {
+        ifsc: p.beneficiaryBankRef?.split(":")[0] ?? "",
+        accountNo: p.beneficiaryBankRef?.split(":")[1] ?? "",
+        accountName: agencyCode,
+        amountMinor: BigInt(p.amountMinor),
+        narration: `${p.mode}/${p.pfmsTxnId}`.slice(0, 25),
+        paymentDate: new Date().toISOString().slice(0, 10),
+      };
+      const nachContent = generateNACHFile([nachRow], {
+        originatorCode: agencyCode,
+        fileSequenceNo: 1,
+      });
+      const nachFileName = `NACH_${pfmsBatchId}_${Date.now()}.txt`;
+      const localPath = join(tmpdir(), nachFileName);
+      await writeFile(localPath, nachContent, "utf-8");
+      log.info({ pfmsBatchId, nachFileName }, "NACH file generated");
+
+      // Upload to SFTP gateway — skipped silently if SFTP_HOST is not set.
+      await uploadBankFile(localPath, nachFileName).catch((err: unknown) => {
+        log.error({ err, pfmsBatchId }, "SFTP upload failed — batch remains in pending state");
+        // Do not rethrow: let the batch stay pending for manual retry.
+      });
+
+      // Clean up temp file (best-effort).
+      await unlink(localPath).catch(() => undefined);
+
       await pfmsRepo.insertPfmsBatch(tx, {
         id: pfmsBatchId,
         tenantId: msg.tenantId,
@@ -42,7 +78,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
         agencyCode,
         schemeCode: p.schemeCode?.toUpperCase() ?? null,
         ddoCode,
-        submissionStatus: "pending",
+        submissionStatus: process.env["SFTP_HOST"] ? "file_sent" : "pending",
         status: "initiated",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,

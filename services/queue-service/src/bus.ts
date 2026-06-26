@@ -40,6 +40,27 @@ export type PublishInput<T> = Omit<CommandEnvelope<T>, "messageId" | "timestamp"
 export type Handler<T = unknown> = (msg: CommandEnvelope<T>) => Promise<void>;
 
 export type QueueDriver = "memory" | "sqs";
+/**
+ * Throw this (or a subclass) from a consumer handler to bypass retry logic
+ * and route the message directly to the DLQ. Use for permanent business
+ * rejections (e.g. DUPLICATE_BID, BIDDING_CLOSED, entity not found) where
+ * retrying will never succeed.
+ */
+export class NonRetryableError extends Error {
+  readonly nonRetryable = true as const;
+  constructor(message: string, public override readonly cause?: unknown) {
+    super(message);
+    this.name = "NonRetryableError";
+  }
+}
+
+/** Type guard: true if the error is flagged as non-retryable. */
+export function isNonRetryable(err: unknown): boolean {
+  return (
+    err instanceof NonRetryableError ||
+    (err instanceof Error && (err as { nonRetryable?: unknown }).nonRetryable === true)
+  );
+}
 
 /**
  * 05-T4: optional publish options. For order-sensitive topics (FIFO) the
@@ -128,7 +149,7 @@ export class MemoryQueue implements Queue {
         await handler(msg);
         return;
       } catch (err) {
-        if (attempt === this.maxAttempts) {
+        if (err instanceof NonRetryableError || attempt === this.maxAttempts) {
           this.seen.delete(key);
           this.dlq.push({ topic, msg, error: err instanceof Error ? err.message : String(err) });
           return;
@@ -417,16 +438,29 @@ export class SqsQueue implements Queue {
           // counted and leaves the message for redelivery; it does NOT silently
           // vanish. Success of all handlers is required before delete.
           let allHandled = true;
+          let nonRetryableHandled = false;
           for (const h of handlers) {
             try {
               await h(msg);
             } catch (err) {
+              if (err instanceof NonRetryableError) {
+                // Permanent domain error — dead-letter immediately without retry.
+                incrementConsumerError(this.service, topic);
+                captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, receiveCount });
+                this.logHandlerError(topic, msg, receiveCount, err);
+                await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error");
+                await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+                nonRetryableHandled = true;
+                break;
+              }
               allHandled = false;
               incrementConsumerError(this.service, topic);
               captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, receiveCount });
               this.logHandlerError(topic, msg, receiveCount, err);
             }
           }
+
+          if (nonRetryableHandled) continue;
 
           if (allHandled) {
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
