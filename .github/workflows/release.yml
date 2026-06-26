@@ -16,6 +16,16 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
+      - name: Verify CI passed on this SHA
+        run: |
+          SHA="${{ github.sha }}"
+          STATUS=$(gh run list --commit "$SHA" --workflow ci.yml --json conclusion --jq '.[0].conclusion' 2>/dev/null || echo "unknown")
+          if [ "$STATUS" != "success" ]; then
+            echo "CI workflow did not pass for $SHA (status: $STATUS). Blocking release."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: QA readiness score (must be ≥95)
         run: node scripts/qa-readiness-score.mjs --min-score 95
       - name: Production readiness score
@@ -46,5 +56,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require(./package.json).version")
           gh release create "v${VERSION}" --generate-notes --title "CivitasOne v${VERSION}"

@@ -34,15 +34,10 @@ async function authenticateLive(page: import('@playwright/test').Page) {
   }]);
 }
 
-const LIVE = process.env.PROCUREMENT_E2E_LIVE === '1';
 
 test.describe('Procurement', () => {
   test.beforeEach(async ({ page }) => {
-    if (LIVE) {
-      await authenticateLive(page);
-    } else {
-      await authenticate(page);
-    }
+    await authenticate(page);
   });
 
   test('vendor list shows column headers including GSTIN', async ({ page }) => {
@@ -52,14 +47,12 @@ test.describe('Procurement', () => {
     await expect(page.getByRole('columnheader', { name: 'GSTIN' })).toBeVisible();
   });
 
-  test('vendor list shows seeded vendor when live', async ({ page }) => {
-    test.skip(!LIVE, 'live stack only');
+  test('vendor list shows seeded vendor', async ({ page }) => {
     await page.goto('/procurement/vendors');
     await expect(page.getByRole('link', { name: /Bharat Electronics/i })).toBeVisible();
   });
 
-  test('vendor detail shows vendor name when live', async ({ page }) => {
-    test.skip(!LIVE, 'live stack only');
+  test('vendor detail shows vendor name', async ({ page }) => {
     await page.goto('/procurement/vendors/eeeeeeee-0001-0000-0000-000000000001');
     await expect(page.getByRole('heading', { name: /Bharat Electronics/i })).toBeVisible();
   });
@@ -99,8 +92,7 @@ test.describe('Procurement', () => {
     await expect(page.getByRole('button', { name: /record grn/i })).toBeVisible();
   });
 
-  test('GRN detail shows three-way match when live', async ({ page }) => {
-    test.skip(!LIVE, 'live stack only');
+  test('GRN detail shows three-way match', async ({ page }) => {
     await page.goto('/procurement/grn/11111111-0002-0000-0000-000000000005');
     await expect(page.getByText(/three-way match/i).first()).toBeVisible();
   });
