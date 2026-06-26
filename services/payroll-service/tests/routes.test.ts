@@ -223,3 +223,103 @@ describe("Payroll disbursement — requires approval state (route + domain)", ()
     await db.delete(processed).where(eq(processed.messageId, MSG_DISBURSE));
   });
 });
+
+// ── Tests 5.1-5.8 promoted from hrms-service e2e (payroll endpoints belong here) ──
+
+describe("GET /v1/payroll/structures — salary structures list", () => {
+  it("returns 200 with array", async () => {
+    const app = await buildApp();
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/structures",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("GET /v1/payroll/statutory/pf — PF records", () => {
+  it("returns 200", async () => {
+    const app = await buildApp();
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/pf",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("GET /v1/payroll/statutory/esi — ESI records", () => {
+  it("returns 200", async () => {
+    const app = await buildApp();
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/esi",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("GET /v1/payroll/statutory/tds — TDS records", () => {
+  it("returns 200", async () => {
+    const app = await buildApp();
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/tds",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("GET /v1/payroll/statutory/gratuity — gratuity records", () => {
+  it("returns 200", async () => {
+    const app = await buildApp();
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/gratuity",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+
+
+describe("GET /v1/payroll/loans — loan management", () => {
+  it("returns 200 with array when empId provided", async () => {
+    const app = await buildApp();
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/loans?empId=00000000-0000-4000-8000-000000000001",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("returns 400 when empId is missing", async () => {
+    const app = await buildApp();
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/loans",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+  });
+});

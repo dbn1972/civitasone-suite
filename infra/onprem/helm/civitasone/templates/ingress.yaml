@@ -20,7 +20,7 @@ spec:
       secretName: {{ .Values.ingress.tls.secretName | quote }}
   {{- end }}
   rules:
-    - host: {{ required "ingress.host is required when ingress.enabled" .Values.ingress.host | quote }}
+    - host: {{ .Values.ingress.host | default "civitasone.example.gov.in" | quote }}
       http:
         paths:
           - path: /api
