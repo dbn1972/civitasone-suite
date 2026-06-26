@@ -75,7 +75,7 @@ jobs:
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh
       - name: Run all service tests
-        run: pnpm turbo test
+        run: pnpm turbo test -- --coverage
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -476,7 +476,7 @@ jobs:
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh
       - name: Run coverage with JSON reporter (thresholds enforced by vitest.config.ts)
-        run: pnpm turbo coverage --reporter=json
+        run: pnpm turbo coverage
       - name: Upload coverage reports
         if: always()
         uses: actions/upload-artifact@v4
