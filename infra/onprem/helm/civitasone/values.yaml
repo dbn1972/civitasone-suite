@@ -131,10 +131,10 @@ web:
     NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080"
 
 ingress:
-  enabled: true
+  enabled: false
   className: nginx
   annotations: {}
-  host: ""                       # REQUIRED per env, e.g. civitasone.example.gov.in
+  host: civitasone.example.gov.in  # default; override per env
   tls:
     enabled: false
     secretName: ""

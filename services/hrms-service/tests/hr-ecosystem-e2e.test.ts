@@ -186,11 +186,13 @@ describe("4. Leave Management", () => {
 // ═══════════════════════════════════════════════════════════
 describe("5. Payroll & Salary", () => {
   it.skip("5.1 List salary structures", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/structures", headers: AUTH });
     expect(r.statusCode).toBe(200);
   });
 
   it.skip("5.2 List payroll runs", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/runs", headers: AUTH });
     expect(r.statusCode).toBe(200);
     const data = Array.isArray(r.json()) ? r.json() : r.json().data ?? [];
@@ -202,31 +204,37 @@ describe("5. Payroll & Salary", () => {
   });
 
   it.skip("5.3 View salary slips", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/salary-slips", headers: AUTH });
     expect(r.statusCode).toBe(200);
   });
 
   it.skip("5.4 PF statutory records available", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/pf", headers: AUTH });
     expect(r.statusCode).toBe(200);
   });
 
   it.skip("5.5 ESI records available", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/esi", headers: AUTH });
     expect(r.statusCode).toBe(200);
   });
 
   it.skip("5.6 TDS records available", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/tds", headers: AUTH });
     expect(r.statusCode).toBe(200);
   });
 
   it.skip("5.7 Gratuity calculation available", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/gratuity", headers: AUTH });
     expect(r.statusCode).toBe(200);
   });
 
   it.skip("5.8 Loan management available", async () => {
+      // SKIP: payroll-service route, not in hrms-service. Covered by payroll-service/tests/routes.test.ts
     const r = await app.inject({ method: "GET", url: "/v1/payroll/loans", headers: AUTH });
     expect(r.statusCode).toBe(200);
   });

@@ -5,6 +5,7 @@ export default defineConfig({
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL: process.env.DATABASE_URL ?? "postgres://identity_svc:identity_dev_pw@localhost:5435/civitas_identity",
+      DB_URL: process.env.DB_URL ?? process.env.DATABASE_URL ?? "postgres://identity_svc:identity_dev_pw@localhost:5435/civitas_identity",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },
