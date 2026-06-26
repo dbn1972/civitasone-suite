@@ -5,6 +5,7 @@ import { DataTable, Segmented } from "@/app/_components/ds";
 
 export type MeetingRow = {
   id: string;
+  meetingNo: string;
   title: string;
   when: string;
   venue: string;
@@ -13,12 +14,16 @@ export type MeetingRow = {
   upcoming: boolean;
 };
 
-const SEGMENTS = ["Upcoming", "Past"];
+const SEGMENTS = ["All", "Upcoming", "Past"];
 
 export function MeetingsTable({ rows }: { rows: MeetingRow[] }) {
-  const [seg, setSeg] = useState("Upcoming");
+  const [seg, setSeg] = useState("All");
 
-  const filtered = rows.filter((r) => (seg === "Upcoming" ? r.upcoming : !r.upcoming));
+  const filtered = rows.filter((r) => {
+    if (seg === "Upcoming") return r.upcoming;
+    if (seg === "Past") return !r.upcoming;
+    return true;
+  });
 
   return (
     <>
@@ -28,6 +33,7 @@ export function MeetingsTable({ rows }: { rows: MeetingRow[] }) {
       </div>
       <DataTable<MeetingRow>
         columns={[
+          { key: "meetingNo", label: "Meeting No" },
           { key: "title", label: "Title" },
           { key: "when", label: "When" },
           { key: "venue", label: "Venue" },

@@ -223,7 +223,7 @@ const FIXTURES: Record<string, unknown> = {
 
   // Billing / subscription
   '/api/v1/billing/subscriptions': null,
-  '/api/v1/billing/plans': [],
+  '/api/v1/billing/plans': [{ id: 'PLN-001', label: 'Basic Plan', sublabel: 'Up to 10 users', status: 'active', meta: 'INR 999/mo' }],
 
   // Other modules — empty arrays for unlisted routes
   '/api/v1/audit/dashboard': { openObservations: 0, riskRegisterItems: 0, cagParas: 0, compliancePct: 0 },
@@ -678,6 +678,17 @@ const FIXTURES: Record<string, unknown> = {
     orders: [],
   },
 
+  '/api/v1/crm/contacts/c0000000-0000-0000-0000-000000000001/detail': {
+    id: 'c0000000-0000-0000-0000-000000000001',
+    name: 'Anita Desai',
+    email: 'anita@example.com',
+    phone: '+91-9876543210',
+    organization: 'GoI Dept',
+    designation: 'Director',
+    tags: [],
+    deals: [],
+    activityTimeline: [],
+  },
   '/api/v1/crm/contacts/c0000000-0000-0000-0000-000000000001': {
     id: 'c0000000-0000-0000-0000-000000000001',
     name: 'Anita Desai',

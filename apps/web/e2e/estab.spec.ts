@@ -90,7 +90,8 @@ test.describe('Estab', () => {
   test('meetings page shows seeded meeting MTG-001', async ({ page }) => {
     await page.goto('/estab/meetings');
     await expect(page.getByRole('cell', { name: 'MTG-001' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Board Meeting' })).toBeVisible();
+    // Title from global-setup seed data
+    await expect(page.getByRole('cell', { name: 'Quarterly Review Board Meeting' })).toBeVisible();
   });
 
   // ── Meeting detail ────────────────────────────────────────────────────────

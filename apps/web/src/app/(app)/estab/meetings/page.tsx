@@ -14,6 +14,7 @@ export default async function MeetingsPage() {
 
   const rows: MeetingRow[] = meetings.map((m) => ({
     id: m.id,
+    meetingNo: m.meetingNo,
     title: m.title,
     when: `${formatIndianDate(m.scheduledDate)}${m.scheduledTime ? ` · ${m.scheduledTime}` : ""}`,
     venue: m.venue ?? "—",

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, DataTable, EmptyState } from "../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { PageHeader, StatCard, EmptyState } from "../../../_components/ds";
 import { getAuditCompliance } from "../../../_data/loaders";
 import { GenerateReportButton } from "./GenerateReportButton";
+import { ComplianceTable } from "./ComplianceTable";
 
 type ComplianceRow = {
   id: string;
@@ -14,13 +14,6 @@ type ComplianceRow = {
   department?: string;
   status: string;
 } & Record<string, unknown>;
-
-function StatusCell({ status }: { status: string }) {
-  if (status === "complied") return <span className="pill good">Compliant</span>;
-  if (status === "overdue") return <span className="pill bad">Overdue</span>;
-  if (status === "pending") return <span className="pill warn">In progress</span>;
-  return <span className="pill mut">Planned</span>;
-}
 
 export default async function AuditCompliancePage() {
   const { data: items, source } = await getAuditCompliance();
@@ -61,19 +54,7 @@ export default async function AuditCompliancePage() {
           {displayDpdp.length === 0 ? (
             <EmptyState icon="📜" title="No items" message="Compliance requirements will appear here once configured." />
           ) : (
-            <DataTable<ComplianceRow>
-              columns={[
-                {
-                  key: "lawOrRule",
-                  label: "Law / Rule",
-                  render: (item) => <>{item.lawOrRule as string}{item.section ? ` §${item.section as string}` : ""}</>,
-                },
-                { key: "requirement", label: "Requirement" },
-                { key: "dueDate", label: "Due", render: (item) => formatIndianDate(item.dueDate as string) },
-                { key: "status", label: "Status", render: (item) => <StatusCell status={item.status as string} /> },
-              ]}
-              rows={displayDpdp}
-            />
+            <ComplianceTable items={displayDpdp} variant="dpdp" />
           )}
         </div>
         <div className="card">
@@ -81,15 +62,7 @@ export default async function AuditCompliancePage() {
           {displayCert.length === 0 ? (
             <EmptyState icon="📋" title="No items" message="Regulatory requirements will appear here once configured." />
           ) : (
-            <DataTable<ComplianceRow>
-              columns={[
-                { key: "lawOrRule", label: "Law / Rule" },
-                { key: "requirement", label: "Requirement" },
-                { key: "department", label: "Dept", render: (item) => (item.department as string | undefined) ?? "—" },
-                { key: "status", label: "Status", render: (item) => <StatusCell status={item.status as string} /> },
-              ]}
-              rows={displayCert}
-            />
+            <ComplianceTable items={displayCert} variant="cert" />
           )}
         </div>
       </div>
