@@ -18,7 +18,6 @@ jobs:
         with: { node-version: '20', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --prod --audit-level=high
-        continue-on-error: true
 
   secret-scan:
     name: Secret Scan

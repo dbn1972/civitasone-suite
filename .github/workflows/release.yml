@@ -20,11 +20,20 @@ jobs:
         run: node scripts/qa-readiness-score.mjs --min-score 95
       - name: Production readiness score
         run: node scripts/production-readiness-score.mjs
-      - name: Service health check (if services running)
+      - name: Staging gateway health probe
         run: |
-          echo "Services must be verified manually on staging before deploy."
-          echo "Gateway registry entry count:"
-          grep -c "prefix:" services/gateway-service/src/registry.ts || true
+          if [ -n "$STAGING_URL" ]; then
+            STATUS=$(curl -sf --max-time 10 "$STAGING_URL/health" -o /dev/null -w "%{http_code}" || echo "000")
+            if [ "$STATUS" != "200" ]; then
+              echo "Staging health probe failed: HTTP $STATUS"
+              exit 1
+            fi
+            echo "Staging gateway healthy: HTTP $STATUS"
+          else
+            echo "STAGING_URL not set — skipping live probe (set it in repo secrets for staging validation)"
+          fi
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}
 
   create-release:
     name: Create GitHub Release
