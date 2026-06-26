@@ -14,7 +14,7 @@ export default async function Page({ searchParams }: { searchParams?: { search?:
     <>
       <PageHeader
         title="Contacts"
-        subtitle="Key people mapped to active and strategic accounts — Oracle/SAP-grade contact master."
+        subtitle="Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master."
         back="/crm"
       />
       {source === "error" && <DataSourceBadge source={source} />}

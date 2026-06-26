@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getProjects } from "../../../_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
@@ -23,7 +24,15 @@ export default async function ProjectsListPage() {
 
   return (
     <>
-      <PageHeader title="Projects" subtitle="All projects with physical progress & RAG status." />
+      <PageHeader
+        title="Projects"
+        subtitle="All projects with physical progress & RAG status."
+        actions={
+          <Link href="/projects/new" className="btn primary">
+            + New Project
+          </Link>
+        }
+      />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📁" iconBg="#eef0fe" label="Active" value={active} />
