@@ -172,3 +172,37 @@ visual pass run (P1-3). Backbone is production-grade; the blockers are UI wiring
 
 ---
 *Gaps identified and recorded. Fixes intentionally NOT applied — awaiting development.*
+
+---
+
+## Scalability + Quality Fixes (P0→P2 program, reviewer-verified, 2026-06-24)
+
+**Commits on `main`:** `04a95b9` (scalability Wave 1) · `7ae3d4a` (test infra) · `eb4562a` (SC-1 completion). All reviewer-verified.
+
+### Fixed items
+
+| Gap | Fix | Commits | Reviewer |
+|---|---|---|---|
+| **SC-1** 70 unbounded queries | `.limit()` on all list repos; financial aggregates → SQL `SUM()`; workflow SoD capped at 50 | 04a95b9, eb4562a | ✅ PASS (re-run after completion) |
+| **SC-3** stampede | `_inflight` Map in `packages/cache`; 3 tests | 04a95b9 | ✅ PASS |
+| **SC-5** per-tenant rate limit | Second `rateLimit` in gateway, keyGenerator on x-tenant-id | 04a95b9 | ✅ PASS |
+| **SC-6** circuit breaker | `packages/circuit-breaker`; 9 tests; zero deps | 04a95b9 | ✅ PASS |
+| **CI gate** | `integration-tests` job (needs: [test]); 56 tests blocking | 04a95b9 | ✅ PASS |
+| **P0 grants error state** | 6 error.tsx + loading.tsx for all grant sub-routes | 04a95b9 | ✅ PASS |
+| **P0 payroll error state** | 5 error.tsx for hr/payroll module | 04a95b9 | ✅ PASS |
+| **P1 root error.tsx** | `apps/web/src/app/error.tsx` — aria-live + correlation ID | 04a95b9 | ✅ PASS |
+| **P1 helpdesk new ticket** | `/tickets/new/` + `NewTicketForm`; list page `<Link>` not `<button>` | 04a95b9 | ✅ PASS |
+| **P1 Playwright device matrix** | 7 projects (chromium/firefox/webkit/tablet×2/mobile×2) | 7ae3d4a | ✅ |
+| **P1 k6 expansion** | 800-VU reads + 200-VU writes; per-endpoint thresholds | 7ae3d4a | ✅ |
+| **P1 HRMS status enum** | Removed `.toLowerCase()` normalization; 4-test contract | 7ae3d4a | ✅ PASS |
+
+### Still open (infra / P2 / next wave)
+- SC-2/SC-4/SC-7: ECS/ALB/RDS/Elasticache/PgBouncer — infra provisioning (not code).
+- SC-9: Admin DLQ visibility + TTL config.
+- Billing/Contracts real journeys (P1-2).
+- Playwright live-backend E2E project.
+- Legal proper endpoints (opinions/brief/affidavit).
+- Telephony→CRM/helpdesk integration test.
+
+### Updated Go/No-Go
+**Conditional GO** — P0 cleared; critical code gaps fixed; 56 integration tests + CI gate + web typecheck clean. Infra scaling (ECS/ALB/RDS) needed before 10M users. CTO: GO for current scale.
