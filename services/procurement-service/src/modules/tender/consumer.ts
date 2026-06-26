@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -75,9 +76,9 @@ export function registerTenderConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const t = await repo.findTenderByIdTx(tx, p.tenderId, p.tenantId);
-      if (!t) throw new Error(`tender ${p.tenderId} not found`);
+      if (!t) throw new NonRetryableError(`tender ${p.tenderId} not found`);
       if (t.status !== "published") {
-        throw new DomainError("BIDDING_CLOSED", `bids accepted only while tender is 'published' (is '${t.status}')`);
+        throw new NonRetryableError(`[BIDDING_CLOSED] bids accepted only while tender is 'published' (is '${t.status}')`);
       }
       // H2: reject late bids — the closing date is the last full day bids are
       // accepted; anything after end-of-day on bidClosingDate is rejected.
@@ -85,14 +86,14 @@ export function registerTenderConsumers(queue: Queue): void {
       if (t.bidClosingDate) {
         const closeMs = Date.parse(`${t.bidClosingDate}T23:59:59.999Z`);
         if (Number.isFinite(closeMs) && Date.now() > closeMs) {
-          throw new DomainError("BIDDING_CLOSED", `bid closing date ${t.bidClosingDate} has passed`);
+          throw new NonRetryableError(`[BIDDING_CLOSED] bid closing date ${t.bidClosingDate} has passed`);
         }
       }
       // H3: one sealed bid per (tenant, tender, vendor). Friendly in-txn check in
       // addition to the UNIQUE index (uq_tender_bids_tenant_tender_vendor).
       const existing = await repo.findBidsByTenderTx(tx, p.tenderId, p.tenantId);
       if (existing.some((b) => b.vendorId === p.vendorId)) {
-        throw new DomainError("DUPLICATE_BID", `vendor ${p.vendorId} has already submitted a bid for this tender`);
+        throw new NonRetryableError(`[DUPLICATE_BID] vendor ${p.vendorId} has already submitted a bid for this tender`);
       }
       const bidNo = await allocateDocNo(tx, p.tenantId, "bid");
       // Technical envelope row — NO financial value stored here.

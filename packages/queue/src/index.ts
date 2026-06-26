@@ -9,6 +9,8 @@ export {
   SqsQueue,
   createQueueClient,
   wrapQueueAsClient,
+  NonRetryableError,
+  isNonRetryable,
 } from "@civitasone/queue-service";
 
 export type {

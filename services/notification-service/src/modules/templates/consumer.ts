@@ -1,4 +1,5 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -51,9 +52,12 @@ export function registerTemplateConsumers(q: Queue): void {
 
   q.subscribe<{ id: string; tenantId: string; userId: string; eventType: string; inApp: boolean; email: boolean; push: boolean }>(
     COMMANDS.setPrefs, async (msg) => {
+      const p = msg.payload;
+      if (typeof p.inApp !== "boolean" || typeof p.email !== "boolean" || typeof p.push !== "boolean") {
+        throw new NonRetryableError("INVALID_PREFS_PAYLOAD", "Missing required boolean fields: inApp, email, push");
+      }
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const p = msg.payload;
         await repo.upsertPrefs(tx, {
           id: p.id, tenantId: p.tenantId, userId: p.userId, eventType: p.eventType,
           inApp: p.inApp, email: p.email, push: p.push,

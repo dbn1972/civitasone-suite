@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
@@ -11,11 +12,11 @@ const AUDIT_TOPIC = "audit.event.record";
 async function validateThreeWayMatch(tenantId: string, poRef: string): Promise<void> {
   const grnCount = await grnRepo.countAcceptedGrnsByPoRef(tenantId, poRef);
   if (grnCount === 0) {
-    throw new Error("THREE_WAY_MATCH_REQUIRED: Payment blocked — no GRN received for this PO. GFR requires goods receipt before payment.");
+    throw new NonRetryableError("THREE_WAY_MATCH_REQUIRED: Payment blocked — no GRN received for this PO. GFR requires goods receipt before payment.", "THREE_WAY_MATCH_REQUIRED");
   }
   const hasInvoice = await grnRepo.hasMatchedThreeWayWithInvoice(tenantId, poRef);
   if (!hasInvoice) {
-    throw new Error("THREE_WAY_MATCH_REQUIRED: Payment blocked — no vendor invoice / three-way match found for this PO.");
+    throw new NonRetryableError("THREE_WAY_MATCH_REQUIRED: Payment blocked — no vendor invoice / three-way match found for this PO.", "THREE_WAY_MATCH_REQUIRED");
   }
 }
 
