@@ -1,0 +1,35 @@
+# Staging environment overrides — apply with: helm upgrade civitasone . -f values.yaml -f values.staging.yaml
+global:
+  env: staging
+
+replicaCount: 1
+
+ingress:
+  host: civitasone-staging.example.gov.in
+  tls:
+    enabled: false
+
+services:
+  finance:
+    replicaCount: 1
+  hrms:
+    replicaCount: 1
+  payroll:
+    replicaCount: 1
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+hpa:
+  enabled: false
+
+pdb:
+  enabled: false
+
+networkPolicy:
+  enabled: true

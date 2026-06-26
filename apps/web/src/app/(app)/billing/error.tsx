@@ -1,57 +1,34 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect } from "react";
 
-interface BillingErrorProps {
-  error: Error & { digest?: string };
-  reset: () => void;
-}
+export default function BillingError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => {
+    console.error("Billing module error:", error);
+  }, [error]);
 
-export default function BillingError({ error, reset }: BillingErrorProps) {
   return (
-    <main
-      role="alert"
-      aria-live="assertive"
-      className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-50 p-8 text-center"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-16 w-16 text-amber-500"
-        aria-hidden="true"
-      >
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        <line x1="12" y1="9" x2="12" y2="13" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
-
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold text-slate-800">Something went wrong</h1>
-        <p className="max-w-md text-slate-500">
-          {error.message || "An unexpected error occurred in the Billing module."}
-        </p>
-        {error.digest && <p className="text-xs text-slate-400">Error ID: {error.digest}</p>}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={reset}
-          className="min-h-[44px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          Try again
-        </button>
-        <Link
-          href="/billing"
-          className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-        >
-          Back to Billing
-        </Link>
+    <main style={{ padding: "32px 0" }}>
+      <div className="card" role="alert" aria-live="assertive" style={{ maxWidth: 560 }}>
+        <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <h1 style={{ margin: 0, fontSize: 20 }}>
+            <span aria-hidden="true">⚠️</span> Something went wrong in Billing
+          </h1>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>
+            We couldn&apos;t load this part of the Billing module. You can retry, or head back to the workspace.
+          </p>
+          {error.digest ? (
+            <p style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>Reference: {error.digest}</p>
+          ) : null}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn primary" onClick={reset} style={{ minHeight: 44 }}>
+              Try again
+            </button>
+            <a className="btn ghost" href="/billing" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
+              Back to Billing
+            </a>
+          </div>
+        </div>
       </div>
     </main>
   );

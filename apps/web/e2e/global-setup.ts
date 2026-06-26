@@ -75,17 +75,17 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/payroll/runs': { data: [] },
   '/api/v1/payroll/salary-slips': [],
 
-  // Procurement vendors — VendorDetailListSchema = z.array(VendorDetailSchema)
+    // Procurement vendors — VendorDetailListSchema = z.array(VendorDetailSchema)
   '/api/v1/procurement/vendors': [
     {
-      id: 'v0000000-0000-0000-0000-000000000001',
-      vendorCode: 'VEN-001',
-      name: 'Tech Supplies Ltd',
-      gstin: '29ABCDE1234F1Z5',
-      category: 'IT',
+      id: 'eeeeeeee-0001-0000-0000-000000000001',
+      vendorCode: 'VEN-BEL-001',
+      name: 'Bharat Electronics',
+      gstin: '27AABCB1234F1Z5',
+      category: 'Electronics',
       empanelmentStatus: 'empanelled',
-      rating: 4.5,
-      contactPerson: 'Rahul Sharma',
+      rating: 4.8,
+      contactPerson: 'Suresh Babu',
     },
   ],
 
@@ -727,6 +727,29 @@ const FIXTURES: Record<string, unknown> = {
     email: 'rahul@techsupplies.com',
     phone: '+91-9988776655',
   },
+  '/api/v1/procurement/vendors/eeeeeeee-0001-0000-0000-000000000001': {
+    id: 'eeeeeeee-0001-0000-0000-000000000001',
+    vendorCode: 'VEN-BEL-001',
+    name: 'Bharat Electronics',
+    gstin: '27AABCB1234F1Z5',
+    category: 'Electronics',
+    empanelmentStatus: 'empanelled',
+    rating: 4.8,
+    contactPerson: 'Suresh Babu',
+    email: 'suresh@bharatelectronics.gov.in',
+    phone: '+91-11-23456789',
+    address: 'New Delhi',
+  },
+
+  '/api/v1/procurement/grn/11111111-0002-0000-0000-000000000005': {
+    id: '11111111-0002-0000-0000-000000000005',
+    status: 'three-way-match-passed',
+    poRef: 'PO-2024-001',
+    invoiceRef: 'INV-2024-001',
+    items: [],
+    threeWayMatch: { status: 'passed', description: 'three-way match verified' },
+  },
+
 
   '/api/identity/users/u0000000-0000-0000-0000-000000000001': {
     id: 'u0000000-0000-0000-0000-000000000001',

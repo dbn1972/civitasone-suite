@@ -33,3 +33,25 @@ groups:
         annotations:
           summary: "DLQ depth critical: {{ $labels.queue_name }}"
           description: "{{ $value }} messages in {{ $labels.queue_name }} — possible runaway consumer failure."
+
+  - name: civitasone.queue.consumer-lag
+    rules:
+      - alert: QueueConsumerStalled
+        expr: sqs_approximate_age_of_oldest_message_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "SQS queue consumer stalled — oldest message {{ $value | humanizeDuration }} old"
+          description: "Queue {{ $labels.queue_name }} has had a message sitting unprocessed for over 15 minutes. Consumer may be down or overwhelmed."
+
+      - alert: QueueConsumerCritical
+        expr: sqs_approximate_age_of_oldest_message_seconds > 3600
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "SQS queue consumer critically stalled — {{ $value | humanizeDuration }} lag"
+          description: "Queue {{ $labels.queue_name }} message age exceeds 1 hour. Immediate investigation required."

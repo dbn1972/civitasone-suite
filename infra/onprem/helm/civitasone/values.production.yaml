@@ -1,0 +1,31 @@
+# Production environment overrides — apply with: helm upgrade civitasone . -f values.yaml -f values.production.yaml
+global:
+  env: production
+
+replicaCount: 2
+
+ingress:
+  host: civitasone.example.gov.in
+  tls:
+    enabled: true
+    secretName: civitasone-tls
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+
+networkPolicy:
+  enabled: true

@@ -9,6 +9,7 @@
 #   ALERTMANAGER_SMTP_PASSWORD (injected from secret manager)
 #   ALERTMANAGER_EMAIL_TO      e.g. ops-team@civitasone.gov.in
 #   ALERTMANAGER_SLACK_WEBHOOK (optional) e.g. https://hooks.slack.com/...
+#   PAGERDUTY_ROUTING_KEY      (injected from secret manager)
 
 global:
   smtp_smarthost: ''
@@ -27,12 +28,12 @@ route:
   repeat_interval: 4h
 
   routes:
-    # Critical alerts (service down, DLQ, outbox) page immediately
+    # Critical alerts page PagerDuty immediately
     - match:
         severity: critical
-      receiver: ops-email
+      receiver: pagerduty-critical
       group_wait: 10s
-      repeat_interval: 1h
+      repeat_interval: 30m
 
     # Warning-level alerts (high error rate) use default batching
     - match:
@@ -57,6 +58,15 @@ receivers:
           <b>Description:</b> {{ .Annotations.description }}<br>
           <b>Starts at:</b> {{ .StartsAt }}</p>
           {{ end }}
+
+  - name: pagerduty-critical
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"
+        severity: critical
+        description: '{{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          description: '{{ .CommonAnnotations.description }}'
 
 # ── Inhibition rules ─────────────────────────────────────────────────────────
 # Suppress downstream alerts when the upstream service is already down.
