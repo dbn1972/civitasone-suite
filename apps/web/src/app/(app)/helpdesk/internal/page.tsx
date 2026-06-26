@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getInternalHelpdeskTickets } from "../../../_data/loaders";
@@ -17,7 +18,7 @@ export default async function Page() {
         subtitle="Staff operations queue via helpdesk-service."
         back="/helpdesk"
         actions={
-          <button className="btn primary">+ New Ticket</button>
+          <Link href="/helpdesk/tickets/new" className="btn primary">+ New Ticket</Link>
         }
       />
       {source === "error" && <DataSourceBadge source={source} />}

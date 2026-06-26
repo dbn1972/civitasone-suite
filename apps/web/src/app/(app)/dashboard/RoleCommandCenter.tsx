@@ -61,6 +61,38 @@ const CENTERS: Array<{
       { label: "Break-glass log", href: "/tenant-admin/breakglass", note: "Emergency access review", priority: "urgent" },
     ],
   },
+  {
+    id: "grants",
+    title: "Grants Command Center",
+    match: (r) => r.some((x) => x.includes("grant")),
+    actions: [
+      { label: "Pending applications", href: "/grants/applications", note: "Appraise or approve grant applications", priority: "urgent" },
+      { label: "Overdue UCs", href: "/grants/utilization", note: "Utilization certificates awaiting verification", priority: "urgent" },
+      { label: "Installments due", href: "/grants/installments", note: "Release pending installments", priority: "normal" },
+      { label: "Scheme register", href: "/grants/schemes", note: "Manage active grant schemes", priority: "normal" },
+    ],
+  },
+  {
+    id: "projects",
+    title: "Projects Command Center",
+    match: (r) => r.some((x) => x.includes("project")),
+    actions: [
+      { label: "Milestones due", href: "/projects/milestones", note: "Track overdue milestones", priority: "urgent" },
+      { label: "Fund releases", href: "/projects/fund-releases", note: "Pending release approvals", priority: "urgent" },
+      { label: "Active projects", href: "/projects/list", note: "Physical & financial progress", priority: "normal" },
+    ],
+  },
+  {
+    id: "legal",
+    title: "Legal Command Center",
+    match: (r) => r.some((x) => x.includes("legal")),
+    actions: [
+      { label: "Upcoming hearings", href: "/legal/hearings", note: "Next 7 days — prepare briefs", priority: "urgent" },
+      { label: "Court orders pending", href: "/legal/court-orders", note: "Compliance action required", priority: "urgent" },
+      { label: "Case register", href: "/legal/list", note: "All active litigation", priority: "normal" },
+      { label: "Legal opinions", href: "/legal/opinions", note: "Pending opinion requests", priority: "normal" },
+    ],
+  },
 ];
 
 export function RoleCommandCenter() {

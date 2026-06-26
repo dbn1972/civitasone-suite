@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { DataTable, Segmented, EmptyState } from "@/app/_components/ds";
+import { DataTable, Segmented, EmptyState, ConfirmDialog } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 interface RTIApplication {
@@ -33,6 +33,8 @@ function daysRemaining(deadline: string | null | undefined, today: string): numb
 }
 
 const CLOSED = new Set(["replied", "closed", "appeal"]);
+/** Statuses that allow transfer under RTI Act §6(3) (within 5 days). */
+const TRANSFERABLE = new Set(["received", "under_review"]);
 
 interface Row extends Record<string, unknown> {
   id: string;
@@ -65,20 +67,37 @@ function clockCell(row: Row) {
   return <span style={{ color, fontWeight: n <= 5 ? 600 : 400 }}>{`${n} day${n === 1 ? "" : "s"} left`}</span>;
 }
 
-const COLUMNS = [
-  { key: "rtiNo" as const, label: "RTI No" },
-  { key: "applicantName" as const, label: "Applicant" },
-  { key: "subject" as const, label: "Subject" },
-  { key: "publicAuthority" as const, label: "Public Authority" },
-  { key: "filedDate" as const, label: "Filed" },
-  { key: "deadlineDate" as const, label: "Deadline" },
-  { key: "daysLeft" as const, label: "Statutory Clock", render: clockCell },
-  { key: "status" as const, label: "Status", cellType: "status" as const },
-  { key: "firstAppeal" as const, label: "1st Appeal?" },
-];
 
 export function RTIClient({ rtis, today }: Props) {
   const [active, setActive] = useState("All");
+  const [transferId, setTransferId] = useState<string | null>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferError, setTransferError] = useState<string | undefined>(undefined);
+
+  async function handleTransfer(toAuthority: string | undefined) {
+    if (!transferId || !toAuthority?.trim()) return;
+    setTransferBusy(true);
+    setTransferError(undefined);
+    try {
+      const res = await fetch(`/api/proxy/v1/citizen/rti/${transferId}/transfer`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ toAuthority: toAuthority.trim() }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        setTransferError(text || `Request failed (${res.status})`);
+        setTransferBusy(false);
+        return;
+      }
+      setTransferBusy(false);
+      setTransferId(null);
+      // Soft-refresh: the server component will revalidate on next navigation.
+    } catch (err) {
+      setTransferError(err instanceof Error ? err.message : "Network error");
+      setTransferBusy(false);
+    }
+  }
 
   const isDue = (r: RTIApplication) =>
     (r.status === "received" || r.status === "under_review" || r.status === "forwarded");
@@ -108,6 +127,37 @@ export function RTIClient({ rtis, today }: Props) {
     firstAppeal: r.isFirstAppeal ? "Yes" : "No",
   }));
 
+  const COLUMNS = [
+    { key: "rtiNo" as const, label: "RTI No" },
+    { key: "applicantName" as const, label: "Applicant" },
+    { key: "subject" as const, label: "Subject" },
+    { key: "publicAuthority" as const, label: "Public Authority" },
+    { key: "filedDate" as const, label: "Filed" },
+    { key: "deadlineDate" as const, label: "Deadline" },
+    { key: "daysLeft" as const, label: "Statutory Clock", render: clockCell },
+    { key: "status" as const, label: "Status", cellType: "status" as const },
+    { key: "firstAppeal" as const, label: "1st Appeal?" },
+    {
+      key: "id" as const,
+      label: "Actions",
+      render: (row: Row) =>
+        TRANSFERABLE.has(row.status) ? (
+          <button
+            type="button"
+            className="btn ghost"
+            style={{ fontSize: "0.8rem", padding: "4px 10px", minHeight: 32 }}
+            onClick={() => {
+              setTransferError(undefined);
+              setTransferId(row.id);
+            }}
+            aria-label={`Transfer RTI ${row.rtiNo} to another public authority`}
+          >
+            Transfer
+          </button>
+        ) : null,
+    },
+  ];
+
   return (
     <div className="card">
       <div className="card-h">
@@ -129,6 +179,23 @@ export function RTIClient({ rtis, today }: Props) {
           rowLinkPrefix="/citizen/rti/"
         />
       )}
+      <ConfirmDialog
+        open={transferId !== null}
+        title="Transfer RTI (§6(3))"
+        description="Transfer this application to the competent public authority within 5 days as required by the RTI Act 2005."
+        confirmLabel="Transfer"
+        requireReason
+        reasonLabel="Transfer to (public authority name)"
+        busy={transferBusy}
+        errorMessage={transferError}
+        onConfirm={(reason) => void handleTransfer(reason)}
+        onCancel={() => {
+          if (!transferBusy) {
+            setTransferId(null);
+            setTransferError(undefined);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -13,6 +13,13 @@ export default async function Page() {
     : 100;
   const open = tickets.filter((t) => t.status === "open" || t.status === "in_progress").length;
 
+  // First Response: not calculable from ticket list data alone (no firstResponseAt field).
+  // Show "—" honestly until a dedicated analytics endpoint provides this metric.
+  const firstResponseDisplay = "—";
+
+  // CSAT: no real CSAT endpoint exists yet — show "—" rather than a hardcoded value.
+  const csatDisplay = "—";
+
   return (
     <>
       <PageHeader
@@ -27,10 +34,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🎫" iconBg="#fff3e0" label="Open Tickets" value={open.toLocaleString("en-IN")} delta="-12" up />
-        <StatCard icon="⏱" iconBg="#fff3e0" label="First Response" value="18m" delta="-4m" up />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="SLA Met" value={`${slaMetPct}%`} delta="+2%" up />
-        <StatCard icon="⭐" iconBg="#fffbeb" label="CSAT" value="4.6" delta="+0.1" up />
+        <StatCard icon="🎫" iconBg="#fff3e0" label="Open Tickets" value={open.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" iconBg="#fff3e0" label="First Response" value={firstResponseDisplay} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="SLA Met" value={`${slaMetPct}%`} />
+        <StatCard icon="⭐" iconBg="#fffbeb" label="CSAT" value={csatDisplay} />
       </StatGrid>
       <TicketsTable tickets={tickets} source={source} />
     </>

@@ -9,6 +9,20 @@ export default async function EstabFilesListPage() {
   const pending = files.filter((f) => f.status === "pending").length;
   const closed = files.filter((f) => f.status === "archived" || f.status === "disposed").length;
 
+  // Avg Pendency: compute from createdDate for pending files (days since creation).
+  const today = Date.now();
+  const pendingFiles = files.filter((f) => f.status === "pending");
+  let avgPendencyDisplay = "—";
+  if (pendingFiles.length > 0) {
+    const totalDays = pendingFiles.reduce((sum, f) => {
+      const d = new Date(f.createdDate);
+      if (isNaN(d.getTime())) return sum;
+      return sum + Math.round((today - d.getTime()) / (1000 * 60 * 60 * 24));
+    }, 0);
+    const avg = Math.round(totalDays / pendingFiles.length);
+    avgPendencyDisplay = `${avg} day${avg === 1 ? "" : "s"}`;
+  }
+
   const rows: FileRow[] = files.map((f) => ({
     id: f.id,
     fileNo: f.fileNo,
@@ -51,7 +65,7 @@ export default async function EstabFilesListPage() {
       </div>
       <StatGrid>
         <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={active.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" iconBg="#fffaeb" label="Avg Pendency" value="—" />
+        <StatCard icon="⏱" iconBg="#fffaeb" label="Avg Pendency" value={avgPendencyDisplay} />
         <StatCard icon="🔴" iconBg="#fef3f2" label="SLA Breached" value={pending.toLocaleString("en-IN")} />
         <StatCard icon="✅" iconBg="#eff6ff" label="Closed (MTD)" value={closed.toLocaleString("en-IN")} />
       </StatGrid>

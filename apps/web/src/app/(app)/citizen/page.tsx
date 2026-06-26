@@ -5,6 +5,7 @@ import { PageShell } from "../../_components/PageShell";
 const citizenTiles: NavTile[] = [
   { title: "Service Requests", href: "/citizen/requests" },
   { title: "RTI Applications", href: "/citizen/rti" },
+  { title: "Grievances", href: "/citizen/grievances" },
   { title: "Feedback", href: "/citizen/feedback" },
 ];
 
