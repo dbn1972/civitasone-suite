@@ -43,9 +43,10 @@ export async function insertComponent(tx: Writer, row: ComponentInsert): Promise
   await tx.insert(projectSchemeComponents).values(row);
 }
 
-export async function listComponentsByScheme(schemeId: string, tenantId: string): Promise<ComponentRow[]> {
+export async function listComponentsByScheme(schemeId: string, tenantId: string, limit = 500): Promise<ComponentRow[]> {
   return db.select().from(projectSchemeComponents)
-    .where(and(eq(projectSchemeComponents.schemeId, schemeId), eq(projectSchemeComponents.tenantId, tenantId)));
+    .where(and(eq(projectSchemeComponents.schemeId, schemeId), eq(projectSchemeComponents.tenantId, tenantId)))
+    .limit(limit);
 }
 
 export async function updateComponentReleasedTx(tx: Writer, id: string, delta: bigint, currentVersion: number): Promise<void> {
@@ -112,9 +113,10 @@ export async function updateFundReleaseTx(tx: Writer, id: string, patch: Partial
   await tx.update(projectFundReleases).set({ ...patch, updatedAt: new Date() }).where(eq(projectFundReleases.id, id));
 }
 
-export async function listFundReleasesByScheme(schemeId: string, tenantId: string): Promise<FundReleaseRow[]> {
+export async function listFundReleasesByScheme(schemeId: string, tenantId: string, limit = 500): Promise<FundReleaseRow[]> {
   return db.select().from(projectFundReleases)
-    .where(and(eq(projectFundReleases.schemeId, schemeId), eq(projectFundReleases.tenantId, tenantId)));
+    .where(and(eq(projectFundReleases.schemeId, schemeId), eq(projectFundReleases.tenantId, tenantId)))
+    .limit(limit);
 }
 
 export async function listFundReleasesByTenant(tenantId: string, limit: number): Promise<FundReleaseRow[]> {

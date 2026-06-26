@@ -5,8 +5,8 @@ import type { GuesthouseInsert, RoomBookingRow, RoomBookingInsert, LibraryBookIn
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findBookingsByRoom(roomId: string): Promise<RoomBookingRow[]> {
-  return db.select().from(estabRoomBookings).where(eq(estabRoomBookings.roomId, roomId));
+export async function findBookingsByRoom(roomId: string, limit = 200): Promise<RoomBookingRow[]> {
+  return db.select().from(estabRoomBookings).where(eq(estabRoomBookings.roomId, roomId)).limit(limit);
 }
 
 export async function insertGuesthouse(tx: Writer, row: GuesthouseInsert): Promise<void> {

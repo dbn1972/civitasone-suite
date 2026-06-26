@@ -96,6 +96,17 @@ export async function buildApp(): Promise<FastifyInstance> {
     timeWindow: process.env.GATEWAY_RATE_LIMIT_WINDOW ?? "1 minute",
   });
 
+  // SC-5: Per-tenant rate limit (second tier, registered after the global one).
+  // keyGenerator identifies the tenant from x-tenant-id header; falls back to
+  // req.ip for unauthenticated / no-tenant traffic so they stay under the global
+  // 1 000 req/min limit rather than getting an extra 200/min allowance.
+  await app.register(rateLimit, {
+    global: false,
+    keyGenerator: (req) => (req.headers["x-tenant-id"] as string) || (req.ip ?? "unknown"),
+    max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
+    timeWindow: "1 minute",
+  });
+
   registerOpsRoutes(app, {
     service: "gateway-service",
     checks: {

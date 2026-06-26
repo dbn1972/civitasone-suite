@@ -18,7 +18,8 @@ export async function findByEmpAndMonth(tenantId: string, employeeId: string, mo
     .where(and(
       eq(hrmsAttendance.tenantId, tenantId),
       eq(hrmsAttendance.employeeId, employeeId),
-    ));
+    ))
+    .limit(500);
   return rows.filter((r) => (r.attendanceDate ?? "").startsWith(month));
 }
 

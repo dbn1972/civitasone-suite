@@ -85,6 +85,57 @@ jobs:
           retention-days: 7
 
   # ─────────────────────────────────────────────
+  # Job 2b: Integration tests (blocking gate)
+  # Depends on the unit-test job. Requires DB access — service containers are
+  # copied exactly from the `test` job so the environment is identical.
+  # ─────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: civitas
+          POSTGRES_PASSWORD: civitas_test
+          POSTGRES_DB: civitas_test
+        ports: ['5435:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+    env:
+      REDIS_URL: redis://localhost:6379
+      QUEUE_DRIVER: memory
+      JWT_SECRET: ci-test-secret-min-32-chars-long
+      JWT_ALGORITHM: HS256
+      NODE_ENV: test
+      PGHOST: localhost
+      PGPORT: '5435'
+      PGUSER: civitas
+      PGPASSWORD: civitas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - name: Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='./packages/*'
+      - name: Bootstrap Postgres (per-service DBs + migrations)
+        run: bash scripts/ci/bootstrap-postgres.sh
+      - name: Run integration tests
+        run: pnpm exec vitest run tests/integration/
+
+  # ─────────────────────────────────────────────
   # Job 3: Architecture guard (no cross-service SQL)
   # ─────────────────────────────────────────────
   arch-guard:

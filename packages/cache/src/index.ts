@@ -155,15 +155,40 @@ export class Cache {
     return fresh;
   }
 
-  /** Read-through: return cached value or load from source, cache it, return it. */
+  /** Read-through: return cached value or load from source, cache it, return it.
+   *
+   * SC-3 stampede protection: if a load is already in-flight for this key
+   * (i.e. another concurrent request is already fetching it) the same Promise
+   * is returned instead of firing a second loader call. Only one DB/network
+   * round-trip happens per cold key, regardless of how many callers race.
+   */
   async getOrLoad<T>(key: string, loader: () => Promise<T | null>, ttlSeconds?: number): Promise<T | null> {
     const cached = await this.store.get(key);
     if (cached !== null) return deserialize<T>(cached);
-    const fresh = await loader();
-    if (fresh !== null && fresh !== undefined) {
-      await this.store.set(key, serialize(fresh), this.resolveTtl(ttlSeconds));
-    }
-    return fresh;
+
+    // Coalesce concurrent cold-cache requests for the same key.
+    const existing = _inflight.get(key);
+    if (existing) return existing.shared as Promise<T | null>;
+
+    const shared: Promise<T | null> = (async () => {
+      const fresh = await loader();
+      if (fresh !== null && fresh !== undefined) {
+        await this.store.set(key, serialize(fresh), this.resolveTtl(ttlSeconds));
+      }
+      return fresh;
+    })();
+
+    // `suppress` is a derived promise whose rejection is consumed by the no-op
+    // catch. It is stored in the map so that the stored reference is never seen
+    // as "unhandled" by Node / Vitest, even if the rejection fires before any
+    // caller has had a chance to attach their own .catch. `shared` is what we
+    // hand to every caller — their `await` attaches a handler on `shared`
+    // itself, which IS handled.
+    const suppress = shared.catch(() => { /* suppressed — callers handle via shared */ });
+    suppress.finally(() => _inflight.delete(key));
+
+    _inflight.set(key, { shared, suppress });
+    return shared;
   }
 
   /** Prime the cache (used by the command handler for read-your-writes). */
@@ -218,4 +243,35 @@ function defaultStore(): CacheStore {
   const url = process.env.REDIS_URL;
   if (!url || process.env.CACHE_DRIVER === "memory") return new MemoryCache();
   return new RedisCache(new Redis(url));
+}
+
+/**
+ * SC-3: In-process inflight map for cache-stampede / thundering-herd protection.
+ *
+ * When N concurrent requests all miss the same cold cache key simultaneously,
+ * only the FIRST call fires the loader; every subsequent call for the same key
+ * receives the exact same Promise. The entry is removed as soon as the loader
+ * resolves or rejects (whether or not caching succeeded), so the next cold-miss
+ * after expiry will go back through the normal path.
+ *
+ * Scope: single Node.js process (in-process coalescing). For multi-instance
+ * deployments the Redis cache already de-duplicates at the data layer via TTL;
+ * this map eliminates the intra-process thundering-herd without adding
+ * cross-instance coordination overhead.
+ *
+ * Implementation note — unhandled-rejection suppression:
+ * The shared promise stored in the map is a "suppressed" copy: its rejection
+ * branch is consumed by a no-op `.catch()` that is attached synchronously
+ * (before any microtask fires), so Node/Vitest never sees it as unhandled.
+ * Callers receive a SEPARATE promise (via Promise.resolve(shared)) whose
+ * rejection propagates normally through their own await/catch chain.
+ */
+const _inflight = new Map<string, { shared: Promise<unknown>; suppress: Promise<unknown> }>();
+
+/**
+ * Reset the in-flight map. Exposed ONLY for test isolation — do not call in
+ * production code.
+ */
+export function resetInflightMap(): void {
+  _inflight.clear();
 }

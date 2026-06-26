@@ -26,9 +26,10 @@ export async function completeWorkOrder(tx: Writer, id: string, tenantId: string
     .where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId)));
 }
 
-export async function listMaintenanceByAsset(tenantId: string, assetId: string) {
+export async function listMaintenanceByAsset(tenantId: string, assetId: string, limit = 500) {
   return db.select().from(assetWorkOrders)
-    .where(and(eq(assetWorkOrders.tenantId, tenantId), eq(assetWorkOrders.assetId, assetId)));
+    .where(and(eq(assetWorkOrders.tenantId, tenantId), eq(assetWorkOrders.assetId, assetId)))
+    .limit(limit);
 }
 
 export async function listMaintenanceByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {

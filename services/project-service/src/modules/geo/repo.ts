@@ -8,9 +8,10 @@ export async function insertGeoTag(tx: Writer, row: GeoTagInsert): Promise<void>
   await tx.insert(projectGeoTags).values(row);
 }
 
-export async function listGeoTagsByProject(projectId: string, tenantId: string): Promise<(typeof projectGeoTags.$inferSelect)[]> {
+export async function listGeoTagsByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectGeoTags.$inferSelect)[]> {
   return db.select().from(projectGeoTags)
-    .where(and(eq(projectGeoTags.projectId, projectId), eq(projectGeoTags.tenantId, tenantId)));
+    .where(and(eq(projectGeoTags.projectId, projectId), eq(projectGeoTags.tenantId, tenantId)))
+    .limit(limit);
 }
 
 export async function insertSitePhoto(tx: Writer, row: SitePhotoInsert): Promise<void> {

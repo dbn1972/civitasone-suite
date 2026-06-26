@@ -11,20 +11,22 @@ export async function insertPhysicalProgress(tx: Writer, row: PhysicalProgressIn
   await tx.insert(projectPhysicalProgress).values(row);
 }
 
-export async function listPhysicalProgressByProject(projectId: string, tenantId: string): Promise<(typeof projectPhysicalProgress.$inferSelect)[]> {
+export async function listPhysicalProgressByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectPhysicalProgress.$inferSelect)[]> {
   return db.select().from(projectPhysicalProgress)
     .where(and(eq(projectPhysicalProgress.projectId, projectId), eq(projectPhysicalProgress.tenantId, tenantId)))
-    .orderBy(desc(projectPhysicalProgress.periodDate));
+    .orderBy(desc(projectPhysicalProgress.periodDate))
+    .limit(limit);
 }
 
 export async function insertFinancialProgress(tx: Writer, row: typeof projectFinancialProgress.$inferInsert): Promise<void> {
   await tx.insert(projectFinancialProgress).values(row);
 }
 
-export async function listFinancialProgressByProject(projectId: string, tenantId: string): Promise<(typeof projectFinancialProgress.$inferSelect)[]> {
+export async function listFinancialProgressByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectFinancialProgress.$inferSelect)[]> {
   return db.select().from(projectFinancialProgress)
     .where(and(eq(projectFinancialProgress.projectId, projectId), eq(projectFinancialProgress.tenantId, tenantId)))
-    .orderBy(desc(projectFinancialProgress.periodDate));
+    .orderBy(desc(projectFinancialProgress.periodDate))
+    .limit(limit);
 }
 
 export async function findDprByProjectAndDate(projectId: string, dprDate: string, tenantId: string): Promise<(typeof projectDprs.$inferSelect) | null> {
@@ -42,10 +44,11 @@ export async function insertDpr(tx: Writer, row: DprInsert): Promise<void> {
   await tx.insert(projectDprs).values(row);
 }
 
-export async function listDprsByProject(projectId: string, tenantId: string): Promise<(typeof projectDprs.$inferSelect)[]> {
+export async function listDprsByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectDprs.$inferSelect)[]> {
   return db.select().from(projectDprs)
     .where(and(eq(projectDprs.projectId, projectId), eq(projectDprs.tenantId, tenantId)))
-    .orderBy(desc(projectDprs.dprDate));
+    .orderBy(desc(projectDprs.dprDate))
+    .limit(limit);
 }
 
 // P0-1 aggregation helpers (run inside the recording tx).

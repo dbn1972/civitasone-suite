@@ -19,9 +19,10 @@ export async function findApplicationByIdTx(tx: Writer, id: string, tenantId: st
   return rows[0] ?? null;
 }
 
-export async function listApplicationsByCitizen(tenantId: string, citizenId: string): Promise<ApplicationRow[]> {
+export async function listApplicationsByCitizen(tenantId: string, citizenId: string, limit = 200): Promise<ApplicationRow[]> {
   return db.select().from(citizenApplications)
-    .where(and(eq(citizenApplications.tenantId, tenantId), eq(citizenApplications.citizenId, citizenId)));
+    .where(and(eq(citizenApplications.tenantId, tenantId), eq(citizenApplications.citizenId, citizenId)))
+    .limit(limit);
 }
 
 export async function listStatusHistory(applicationId: string) {
@@ -50,8 +51,8 @@ export async function insertStatusHistory(tx: Writer, row: StatusHistoryInsert):
   await tx.insert(citizenStatusHistory).values(row);
 }
 
-export async function listOverdueApplications(tenantId: string): Promise<ApplicationRow[]> {
-  return db.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId));
+export async function listOverdueApplications(tenantId: string, limit = 500): Promise<ApplicationRow[]> {
+  return db.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId)).limit(limit);
 }
 
 export async function listApplicationsByTenant(tenantId: string, limit: number): Promise<ApplicationRow[]> {

@@ -12,7 +12,8 @@ export async function insertUcItems(tx: Writer, rows: UcItemInsert[]): Promise<v
   if (rows.length) await tx.insert(projectUcItems).values(rows);
 }
 
-export async function listUcStatementsByScheme(schemeId: string, tenantId: string): Promise<(typeof projectUcStatements.$inferSelect)[]> {
+export async function listUcStatementsByScheme(schemeId: string, tenantId: string, limit = 500): Promise<(typeof projectUcStatements.$inferSelect)[]> {
   return db.select().from(projectUcStatements)
-    .where(and(eq(projectUcStatements.schemeId, schemeId), eq(projectUcStatements.tenantId, tenantId)));
+    .where(and(eq(projectUcStatements.schemeId, schemeId), eq(projectUcStatements.tenantId, tenantId)))
+    .limit(limit);
 }

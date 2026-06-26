@@ -18,10 +18,10 @@ export async function findTemplateById(id: string): Promise<TemplateView | null>
   return rows[0] ? toTemplateView(rows[0]) : null;
 }
 
-export async function findTemplatesByTenant(tenantId: string): Promise<TemplateView[]> {
+export async function findTemplatesByTenant(tenantId: string, limit = 500): Promise<TemplateView[]> {
   return (await db.select().from(notificationTemplates).where(
     and(eq(notificationTemplates.tenantId, tenantId), isNull(notificationTemplates.supersededBy)),
-  )).map(toTemplateView);
+  ).limit(limit)).map(toTemplateView);
 }
 
 export async function findTemplateVersions(id: string): Promise<TemplateView[]> {
@@ -47,8 +47,8 @@ export async function findTemplateVersions(id: string): Promise<TemplateView[]> 
   return versions;
 }
 
-export async function findPrefsByUser(userId: string): Promise<PrefView[]> {
-  return (await db.select().from(notificationPrefs).where(eq(notificationPrefs.userId, userId))).map(toPrefView);
+export async function findPrefsByUser(userId: string, limit = 200): Promise<PrefView[]> {
+  return (await db.select().from(notificationPrefs).where(eq(notificationPrefs.userId, userId)).limit(limit)).map(toPrefView);
 }
 
 export async function findPrefsByTenant(tenantId: string, limit: number): Promise<PrefView[]> {

@@ -66,7 +66,7 @@ export async function linkRisksToPlan(tx: Writer, tenantId: string, planId: stri
   return res.length;
 }
 
-export async function listRisksForPlan(tenantId: string, planId: string): Promise<RiskRow[]> {
+export async function listRisksForPlan(tenantId: string, planId: string, limit = 500): Promise<RiskRow[]> {
   return db.select({
       id: auditRisks.id, tenantId: auditRisks.tenantId, riskCode: auditRisks.riskCode,
       title: auditRisks.title, category: auditRisks.category, likelihood: auditRisks.likelihood,
@@ -78,7 +78,8 @@ export async function listRisksForPlan(tenantId: string, planId: string): Promis
     .from(auditPlanRisks)
     .innerJoin(auditRisks, eq(auditRisks.id, auditPlanRisks.riskId))
     .where(and(eq(auditPlanRisks.tenantId, tenantId), eq(auditPlanRisks.planId, planId)))
-    .orderBy(desc(auditRisks.riskScore));
+    .orderBy(desc(auditRisks.riskScore))
+    .limit(limit);
 }
 
 export async function countLinksForPlan(tenantId: string, planId: string): Promise<number> {

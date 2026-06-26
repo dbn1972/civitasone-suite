@@ -48,18 +48,20 @@ export async function upsertScore(tx: Writer, row: AparScoreInsert): Promise<voi
   });
 }
 
-export async function listScores(tenantId: string, appraisalId: string): Promise<AparScoreRow[]> {
+export async function listScores(tenantId: string, appraisalId: string, limit = 500): Promise<AparScoreRow[]> {
   return db.select().from(hrmsAparScores)
     .where(and(eq(hrmsAparScores.tenantId, tenantId), eq(hrmsAparScores.appraisalId, appraisalId)))
-    .orderBy(asc(hrmsAparScores.attribute));
+    .orderBy(asc(hrmsAparScores.attribute))
+    .limit(limit);
 }
 
 export async function appendHistory(tx: Writer, row: AparStageHistoryInsert): Promise<void> {
   await tx.insert(hrmsAparStageHistory).values(row);
 }
 
-export async function listHistory(tenantId: string, appraisalId: string) {
+export async function listHistory(tenantId: string, appraisalId: string, limit = 500) {
   return db.select().from(hrmsAparStageHistory)
     .where(and(eq(hrmsAparStageHistory.tenantId, tenantId), eq(hrmsAparStageHistory.appraisalId, appraisalId)))
-    .orderBy(asc(hrmsAparStageHistory.createdAt));
+    .orderBy(asc(hrmsAparStageHistory.createdAt))
+    .limit(limit);
 }

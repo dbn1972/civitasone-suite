@@ -18,17 +18,18 @@ export async function findScheduleByAsset(assetId: string, tenantId: string, dep
   return rows[0] ?? null;
 }
 
-export async function findEntriesByAsset(assetId: string, tenantId: string): Promise<DepEntryRow[]> {
+export async function findEntriesByAsset(assetId: string, tenantId: string, limit = 500): Promise<DepEntryRow[]> {
   return db.select().from(assetDepEntries)
-    .where(and(eq(assetDepEntries.assetId, assetId), eq(assetDepEntries.tenantId, tenantId)));
+    .where(and(eq(assetDepEntries.assetId, assetId), eq(assetDepEntries.tenantId, tenantId)))
+    .limit(limit);
 }
 
-export async function findDueEntries(tenantId: string, period: string, depBook?: string): Promise<DepEntryRow[]> {
+export async function findDueEntries(tenantId: string, period: string, depBook?: string, limit = 500): Promise<DepEntryRow[]> {
   // P0-3: filter by tenantId. Without it, a depRun for one tenant posts GL for
   // EVERY tenant due in that period.
   const conditions: SQL[] = [eq(assetDepEntries.tenantId, tenantId), eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt)];
   if (depBook) conditions.push(eq(assetDepEntries.depBook, depBook));
-  return db.select().from(assetDepEntries).where(and(...conditions));
+  return db.select().from(assetDepEntries).where(and(...conditions)).limit(limit);
 }
 
 export async function insertSchedule(tx: Writer, row: DepScheduleInsert): Promise<void> {

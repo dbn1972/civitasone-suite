@@ -4,16 +4,18 @@ import { financePao, financeDdo, type PaoRow, type DdoRow } from "./schema.js";
 
 export type Reader = Pick<typeof db, "select">;
 
-export async function listPao(tenantId: string): Promise<PaoRow[]> {
+export async function listPao(tenantId: string, limit = 500): Promise<PaoRow[]> {
   return db.select().from(financePao)
     .where(eq(financePao.tenantId, tenantId))
-    .orderBy(asc(financePao.paoCode));
+    .orderBy(asc(financePao.paoCode))
+    .limit(limit);
 }
 
-export async function listDdo(tenantId: string): Promise<DdoRow[]> {
+export async function listDdo(tenantId: string, limit = 500): Promise<DdoRow[]> {
   return db.select().from(financeDdo)
     .where(eq(financeDdo.tenantId, tenantId))
-    .orderBy(asc(financeDdo.ddoCode));
+    .orderBy(asc(financeDdo.ddoCode))
+    .limit(limit);
 }
 
 export async function paoExists(tenantId: string, code: string, reader: Reader = db): Promise<boolean> {

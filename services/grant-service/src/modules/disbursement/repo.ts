@@ -16,9 +16,10 @@ export async function findInstallmentByIdTx(tx: Writer, id: string, tenantId: st
   return rows[0] ?? null;
 }
 
-export async function findInstallmentsByApplication(applicationId: string, tenantId: string): Promise<InstallmentRow[]> {
+export async function findInstallmentsByApplication(applicationId: string, tenantId: string, limit = 500): Promise<InstallmentRow[]> {
   return db.select().from(grantInstallments)
-    .where(and(eq(grantInstallments.applicationId, applicationId), eq(grantInstallments.tenantId, tenantId)));
+    .where(and(eq(grantInstallments.applicationId, applicationId), eq(grantInstallments.tenantId, tenantId)))
+    .limit(limit);
 }
 
 export async function findDisbursementsByApplicationId(applicationId: string, tenantId: string): Promise<DisbursementRow[]> {
@@ -27,7 +28,7 @@ export async function findDisbursementsByApplicationId(applicationId: string, te
   const ids = installments.map((i) => i.id);
   const all: DisbursementRow[] = [];
   for (const id of ids) {
-    const rows = await db.select().from(grantDisbursements).where(eq(grantDisbursements.installmentId, id));
+    const rows = await db.select().from(grantDisbursements).where(eq(grantDisbursements.installmentId, id)).limit(500);
     all.push(...rows);
   }
   return all;

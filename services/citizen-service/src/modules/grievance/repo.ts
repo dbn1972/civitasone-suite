@@ -19,9 +19,10 @@ export async function findGrievanceByIdTx(tx: Writer, id: string, tenantId: stri
   return rows[0] ?? null;
 }
 
-export async function listGrievancesByCitizen(tenantId: string, citizenId: string): Promise<GrievanceRow[]> {
+export async function listGrievancesByCitizen(tenantId: string, citizenId: string, limit = 200): Promise<GrievanceRow[]> {
   return db.select().from(citizenGrievances)
-    .where(and(eq(citizenGrievances.tenantId, tenantId), eq(citizenGrievances.citizenId, citizenId)));
+    .where(and(eq(citizenGrievances.tenantId, tenantId), eq(citizenGrievances.citizenId, citizenId)))
+    .limit(limit);
 }
 
 export async function listGrievancesByTenant(tenantId: string, limit: number, offset: number): Promise<GrievanceRow[]> {

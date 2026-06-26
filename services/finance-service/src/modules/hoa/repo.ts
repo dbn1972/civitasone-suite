@@ -4,8 +4,8 @@ import { financeMajorHeads, type MajorHeadRow } from "./schema.js";
 
 export type Reader = Pick<typeof db, "select">;
 
-export async function listMajorHeads(): Promise<MajorHeadRow[]> {
-  return db.select().from(financeMajorHeads).orderBy(asc(financeMajorHeads.code));
+export async function listMajorHeads(limit = 500): Promise<MajorHeadRow[]> {
+  return db.select().from(financeMajorHeads).orderBy(asc(financeMajorHeads.code)).limit(limit);
 }
 
 /** Does a major head with this 4-digit code exist in the master? */

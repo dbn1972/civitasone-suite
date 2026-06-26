@@ -115,10 +115,11 @@ export async function listByTenant(
   return rows.map(toView);
 }
 
-export async function exportAll(tenantId: string): Promise<ContactView[]> {
+export async function exportAll(tenantId: string, limit = 5000): Promise<ContactView[]> {
   const rows = await db.select().from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`))
-    .orderBy(contacts.name);
+    .orderBy(contacts.name)
+    .limit(limit);
   return rows.map(toView);
 }
 
@@ -192,11 +193,12 @@ export async function insertAccount(tx: Writer, row: AccountInsert): Promise<voi
   await tx.insert(accounts).values(row);
 }
 
-export async function listAccounts(tenantId: string): Promise<{ id: string; name: string; industry: string | null }[]> {
+export async function listAccounts(tenantId: string, limit = 500): Promise<{ id: string; name: string; industry: string | null }[]> {
   return db.select({ id: accounts.id, name: accounts.name, industry: accounts.industry })
     .from(accounts)
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active")))
-    .orderBy(accounts.name);
+    .orderBy(accounts.name)
+    .limit(limit);
 }
 
 /** Tenant-scoped existence check for an account (cross-tenant FK guard). */

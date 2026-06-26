@@ -81,8 +81,9 @@ export async function lockedBalance(tx: LockingTx, tenantId: string, account: Gp
   return rows[0]?.balanceMinor ?? account.openingBalanceMinor;
 }
 
-export async function listLedger(tenantId: string, accountId: string): Promise<GpfLedgerRow[]> {
+export async function listLedger(tenantId: string, accountId: string, limit = 500): Promise<GpfLedgerRow[]> {
   return db.select().from(hrmsGpfLedger)
     .where(and(eq(hrmsGpfLedger.tenantId, tenantId), eq(hrmsGpfLedger.accountId, accountId)))
-    .orderBy(asc(hrmsGpfLedger.createdAt));
+    .orderBy(asc(hrmsGpfLedger.createdAt))
+    .limit(limit);
 }

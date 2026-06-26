@@ -11,7 +11,8 @@ export async function findRcById(id: string): Promise<RcRow | null> {
 
 export async function findRcsByItem(tenantId: string, itemCode: string): Promise<RcRow[]> {
   const items = await db.select().from(contractRateItems)
-    .where(and(eq(contractRateItems.tenantId, tenantId), eq(contractRateItems.itemCode, itemCode)));
+    .where(and(eq(contractRateItems.tenantId, tenantId), eq(contractRateItems.itemCode, itemCode)))
+    .limit(100);
   if (!items.length) return [];
   const rcIds = [...new Set(items.map((i) => i.rcId))];
   const rcs: RcRow[] = [];

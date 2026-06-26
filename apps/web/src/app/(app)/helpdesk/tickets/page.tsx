@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getHelpdeskTicketList } from "../../../_data/loaders";
@@ -20,7 +21,7 @@ export default async function Page() {
         actions={
           <>
             <button className="btn ghost">Export</button>
-            <button className="btn primary">+ New Ticket</button>
+            <Link href="/helpdesk/tickets/new" className="btn primary">+ New Ticket</Link>
           </>
         }
       />

@@ -27,10 +27,11 @@ export async function findActiveByEmployee(tenantId: string, employeeId: string)
   return rows[0] ?? null;
 }
 
-export async function listByEmployee(tenantId: string, employeeId: string): Promise<DeputationRow[]> {
+export async function listByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<DeputationRow[]> {
   return db.select().from(hrmsDeputations)
     .where(and(eq(hrmsDeputations.tenantId, tenantId), eq(hrmsDeputations.employeeId, employeeId)))
-    .orderBy(asc(hrmsDeputations.tenureFrom));
+    .orderBy(asc(hrmsDeputations.tenureFrom))
+    .limit(limit);
 }
 
 /**

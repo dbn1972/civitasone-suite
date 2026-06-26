@@ -44,18 +44,20 @@ export async function findLeaveAppsByTenant(tenantId: string, limit = 100): Prom
     .limit(limit);
 }
 
-export async function listLeaveTypesByTenant(tenantId: string): Promise<Array<typeof hrmsLeaveTypes.$inferSelect>> {
-  return db.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, tenantId));
+export async function listLeaveTypesByTenant(tenantId: string, limit = 100): Promise<Array<typeof hrmsLeaveTypes.$inferSelect>> {
+  return db.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, tenantId)).limit(limit);
 }
 
-export async function listAllocsForEmployee(tenantId: string, employeeId: string): Promise<LeaveAllocRow[]> {
+export async function listAllocsForEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LeaveAllocRow[]> {
   return db.select().from(hrmsLeaveAllocs)
-    .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId)));
+    .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId)))
+    .limit(limit);
 }
 
 export async function findApprovedLeaveInMonth(tenantId: string, month: string): Promise<LeaveAppRow[]> {
   const rows = await db.select().from(hrmsLeaveApps)
-    .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.status, "approved")));
+    .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.status, "approved")))
+    .limit(500);
   return rows.filter((r) => (r.fromDate ?? "").startsWith(month) || (r.toDate ?? "").startsWith(month));
 }
 

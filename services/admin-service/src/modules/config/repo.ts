@@ -17,7 +17,7 @@ export async function listModuleKeys(tenantId: string): Promise<string[]> {
 export async function getTenantConfig(tenantId: string): Promise<TenantConfigView | null> {
   const editionRows = await db.select().from(adminEditions).where(eq(adminEditions.tenantId, tenantId)).limit(1);
   const moduleRows = await db.select().from(adminModuleConfigs).where(eq(adminModuleConfigs.tenantId, tenantId));
-  const flagRows = await db.select().from(adminFeatureFlags);
+  const flagRows = await db.select().from(adminFeatureFlags).limit(500);
 
   if (!editionRows[0]) return null;
 
@@ -71,6 +71,6 @@ export async function setFlagOverride(tx: Writer, flagKey: string, tenantId: str
 }
 
 export async function listFlags(): Promise<Array<{ flagKey: string; enabled: boolean; overrides: Record<string, boolean> }>> {
-  const rows = await db.select().from(adminFeatureFlags);
+  const rows = await db.select().from(adminFeatureFlags).limit(500);
   return rows.map((r) => ({ flagKey: r.flagKey, enabled: r.enabled, overrides: r.overrides as Record<string, boolean> }));
 }

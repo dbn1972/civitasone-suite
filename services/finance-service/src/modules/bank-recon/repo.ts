@@ -23,9 +23,10 @@ export async function findStatement(id: string, tenantId: string): Promise<BankS
   return rows[0] ?? null;
 }
 
-export async function linesForStatement(tx: Writer, statementId: string): Promise<BankStatementLineRow[]> {
+export async function linesForStatement(tx: Writer, statementId: string, limit = 500): Promise<BankStatementLineRow[]> {
   return (tx as typeof db).select().from(bankStatementLines)
-    .where(eq(bankStatementLines.statementId, statementId));
+    .where(eq(bankStatementLines.statementId, statementId))
+    .limit(limit);
 }
 
 export async function listStatements(tenantId: string, limit: number) {
@@ -40,7 +41,7 @@ export async function listStatements(tenantId: string, limit: number) {
  * match this statement's lines. Payments with a NULL bank_account_id stay
  * eligible (legacy/untagged), preserving prior behaviour.
  */
-export async function unreconciledPayments(tenantId: string, bankAccountId?: string) {
+export async function unreconciledPayments(tenantId: string, bankAccountId?: string, limit = 500) {
   return db.select({
     id: financePayments.id,
     amountMinor: financePayments.amountMinor,
@@ -53,7 +54,8 @@ export async function unreconciledPayments(tenantId: string, bankAccountId?: str
       ...(bankAccountId
         ? [or(isNull(financePayments.bankAccountId), eq(financePayments.bankAccountId, bankAccountId))!]
         : []),
-    ));
+    ))
+    .limit(limit);
 }
 
 /**
@@ -61,7 +63,7 @@ export async function unreconciledPayments(tenantId: string, bankAccountId?: str
  * lines. H2: scoped to the statement's bank account when supplied; untagged
  * (NULL) challans remain eligible.
  */
-export async function unreconciledChallans(tenantId: string, bankAccountId?: string) {
+export async function unreconciledChallans(tenantId: string, bankAccountId?: string, limit = 500) {
   return db.select({
     id: financeChallans.id,
     amountMinor: financeChallans.amountMinor,
@@ -74,7 +76,8 @@ export async function unreconciledChallans(tenantId: string, bankAccountId?: str
       ...(bankAccountId
         ? [or(isNull(financeChallans.bankAccountId), eq(financeChallans.bankAccountId, bankAccountId))!]
         : []),
-    ));
+    ))
+    .limit(limit);
 }
 
 export async function markLineMatched(tx: Writer, lineId: string, matchType: string, matchId: string): Promise<void> {
@@ -113,6 +116,6 @@ export async function markChallanReconciled(tx: Exec, id: string, lineId: string
 }
 
 /** All lines for a statement (no tx). */
-export async function allLines(statementId: string): Promise<BankStatementLineRow[]> {
-  return db.select().from(bankStatementLines).where(eq(bankStatementLines.statementId, statementId));
+export async function allLines(statementId: string, limit = 500): Promise<BankStatementLineRow[]> {
+  return db.select().from(bankStatementLines).where(eq(bankStatementLines.statementId, statementId)).limit(limit);
 }

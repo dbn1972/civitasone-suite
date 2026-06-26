@@ -19,10 +19,11 @@ export async function findLtc(tenantId: string, id: string): Promise<LtcClaimRow
   return rows[0] ?? null;
 }
 
-export async function listLtcByEmployee(tenantId: string, employeeId: string): Promise<LtcClaimRow[]> {
+export async function listLtcByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LtcClaimRow[]> {
   return db.select().from(hrmsLtcClaims)
     .where(and(eq(hrmsLtcClaims.tenantId, tenantId), eq(hrmsLtcClaims.employeeId, employeeId)))
-    .orderBy(asc(hrmsLtcClaims.submittedAt));
+    .orderBy(asc(hrmsLtcClaims.submittedAt))
+    .limit(limit);
 }
 
 export async function updateLtc(
@@ -47,10 +48,11 @@ export async function findCea(tenantId: string, id: string): Promise<CeaClaimRow
   return rows[0] ?? null;
 }
 
-export async function listCeaByEmployee(tenantId: string, employeeId: string): Promise<CeaClaimRow[]> {
+export async function listCeaByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<CeaClaimRow[]> {
   return db.select().from(hrmsCeaClaims)
     .where(and(eq(hrmsCeaClaims.tenantId, tenantId), eq(hrmsCeaClaims.employeeId, employeeId)))
-    .orderBy(asc(hrmsCeaClaims.submittedAt));
+    .orderBy(asc(hrmsCeaClaims.submittedAt))
+    .limit(limit);
 }
 
 /**

@@ -10,8 +10,8 @@ export async function findSchemeById(id: string, tenantId: string): Promise<Sche
   return rows[0] ?? null;
 }
 
-export async function findCriteriaByScheme(schemeId: string): Promise<CriterionRow[]> {
-  return db.select().from(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.schemeId, schemeId));
+export async function findCriteriaByScheme(schemeId: string, limit = 200): Promise<CriterionRow[]> {
+  return db.select().from(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.schemeId, schemeId)).limit(limit);
 }
 
 export async function insertScheme(tx: Writer, row: SchemeInsert): Promise<void> {

@@ -36,8 +36,8 @@ export async function findById(id: string): Promise<BillingInvoiceRow | undefine
   return rows[0];
 }
 
-export async function itemsByInvoice(invoiceId: string): Promise<BillingInvoiceItemRow[]> {
-  return db.select().from(billingInvoiceItems).where(eq(billingInvoiceItems.invoiceId, invoiceId));
+export async function itemsByInvoice(invoiceId: string, limit = 200): Promise<BillingInvoiceItemRow[]> {
+  return db.select().from(billingInvoiceItems).where(eq(billingInvoiceItems.invoiceId, invoiceId)).limit(limit);
 }
 
 export async function listByTenant(tenantId: string, limit = 100): Promise<BillingInvoiceRow[]> {

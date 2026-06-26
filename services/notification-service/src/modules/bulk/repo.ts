@@ -16,7 +16,7 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export async function findCampaignById(id: string): Promise<CampaignView | null> {
   const rows = await db.select().from(notificationCampaigns).where(eq(notificationCampaigns.id, id)).limit(1);
   if (!rows[0]) return null;
-  const recipients = await db.select().from(notificationCampaignRecipients).where(eq(notificationCampaignRecipients.campaignId, id));
+  const recipients = await db.select().from(notificationCampaignRecipients).where(eq(notificationCampaignRecipients.campaignId, id)).limit(500);
   const deliveredCount = recipients.filter((r) => r.status === "delivered" || r.status === "sent").length;
   return toCampaignView(rows[0], { recipientCount: recipients.length, deliveredCount });
 }
@@ -31,8 +31,8 @@ export async function insertCampaign(tx: Writer, row: CampaignInsert, recipientI
   }
 }
 
-export async function findRecipientsByCampaign(tx: Writer, campaignId: string): Promise<CampaignRecipientView[]> {
-  const rows = await tx.select().from(notificationCampaignRecipients).where(eq(notificationCampaignRecipients.campaignId, campaignId));
+export async function findRecipientsByCampaign(tx: Writer, campaignId: string, limit = 500): Promise<CampaignRecipientView[]> {
+  const rows = await tx.select().from(notificationCampaignRecipients).where(eq(notificationCampaignRecipients.campaignId, campaignId)).limit(limit);
   return rows.map((r) => ({ id: r.id, campaignId: r.campaignId, recipientId: r.recipientId, status: r.status, deliveryId: r.deliveryId }));
 }
 

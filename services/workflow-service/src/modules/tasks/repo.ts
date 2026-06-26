@@ -140,7 +140,8 @@ export async function remapOpenTaskNode(
 /** Number of still-open (pending) tasks on an instance — used for join gating. */
 export async function countOpenTasks(tx: Writer, instanceId: string): Promise<number> {
   const rows = await (tx as typeof db).select().from(tasks)
-    .where(and(eq(tasks.instanceId, instanceId), eq(tasks.status, "pending")));
+    .where(and(eq(tasks.instanceId, instanceId), eq(tasks.status, "pending")))
+    .limit(500);
   return rows.length;
 }
 
@@ -151,7 +152,8 @@ export async function openTasksAtNode(tx: Writer, instanceId: string, nodeKey: s
       eq(tasks.instanceId, instanceId),
       eq(tasks.nodeKey, nodeKey),
       eq(tasks.status, "pending"),
-    ));
+    ))
+    .limit(100);
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;

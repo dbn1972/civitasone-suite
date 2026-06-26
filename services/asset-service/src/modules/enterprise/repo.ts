@@ -42,8 +42,8 @@ export async function findAssetByBarcode(tenantId: string, barcode: string) {
   return rows[0] ?? null;
 }
 
-export async function listAuc(tenantId: string) {
-  return db.select().from(projectAuc).where(eq(projectAuc.tenantId, tenantId));
+export async function listAuc(tenantId: string, limit = 500) {
+  return db.select().from(projectAuc).where(eq(projectAuc.tenantId, tenantId)).limit(limit);
 }
 
 export async function insertAuc(tx: Writer, row: typeof projectAuc.$inferInsert) {
@@ -63,20 +63,20 @@ export async function insertLease(tx: Writer, row: typeof assetLeases.$inferInse
   await tx.insert(assetLeases).values(row);
 }
 
-export async function listLeases(tenantId: string) {
-  return db.select().from(assetLeases).where(eq(assetLeases.tenantId, tenantId));
+export async function listLeases(tenantId: string, limit = 500) {
+  return db.select().from(assetLeases).where(eq(assetLeases.tenantId, tenantId)).limit(limit);
 }
 
 export async function insertImpairment(tx: Writer, row: typeof assetImpairments.$inferInsert) {
   await tx.insert(assetImpairments).values(row);
 }
 
-export async function listImpairments(tenantId: string, assetId: string) {
-  return db.select().from(assetImpairments).where(and(eq(assetImpairments.tenantId, tenantId), eq(assetImpairments.assetId, assetId)));
+export async function listImpairments(tenantId: string, assetId: string, limit = 500) {
+  return db.select().from(assetImpairments).where(and(eq(assetImpairments.tenantId, tenantId), eq(assetImpairments.assetId, assetId))).limit(limit);
 }
 
-export async function listLocations(tenantId: string) {
-  return db.select().from(functionalLocations).where(eq(functionalLocations.tenantId, tenantId));
+export async function listLocations(tenantId: string, limit = 500) {
+  return db.select().from(functionalLocations).where(eq(functionalLocations.tenantId, tenantId)).limit(limit);
 }
 
 export async function insertLocation(tx: Writer, row: typeof functionalLocations.$inferInsert) {

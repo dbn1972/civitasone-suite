@@ -11,9 +11,10 @@ export async function findLoanById(id: string, tenantId: string): Promise<LoanRo
   return rows[0] ?? null;
 }
 
-export async function findLoansByEmployee(tenantId: string, employeeId: string): Promise<LoanRow[]> {
+export async function findLoansByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LoanRow[]> {
   return db.select().from(payrollLoans)
-    .where(and(eq(payrollLoans.tenantId, tenantId), eq(payrollLoans.employeeId, employeeId)));
+    .where(and(eq(payrollLoans.tenantId, tenantId), eq(payrollLoans.employeeId, employeeId)))
+    .limit(limit);
 }
 
 export async function insertLoan(tx: Writer, row: typeof payrollLoans.$inferInsert): Promise<void> {
@@ -34,6 +35,6 @@ export async function insertRepayment(tx: Writer, row: typeof payrollLoanRepayme
 }
 
 export async function countRepayments(tx: Writer, loanId: string): Promise<number> {
-  const rows = await (tx as typeof db).select().from(payrollLoanRepayments).where(eq(payrollLoanRepayments.loanId, loanId));
+  const rows = await (tx as typeof db).select().from(payrollLoanRepayments).where(eq(payrollLoanRepayments.loanId, loanId)).limit(500);
   return rows.length;
 }

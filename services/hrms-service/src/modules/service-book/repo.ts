@@ -4,11 +4,11 @@ import { hrmsServiceBookEntries, type ServiceBookRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "select">;
 
-export async function listServiceBookEntries(tenantId: string, employeeId: string) {
+export async function listServiceBookEntries(tenantId: string, employeeId: string, limit = 500) {
   return db.select().from(hrmsServiceBookEntries).where(and(
     eq(hrmsServiceBookEntries.employeeId, employeeId),
     eq(hrmsServiceBookEntries.tenantId, tenantId),
-  )).orderBy(asc(hrmsServiceBookEntries.effectiveDate));
+  )).orderBy(asc(hrmsServiceBookEntries.effectiveDate)).limit(limit);
 }
 
 export async function insertServiceBookEntry(tx: Writer, row: typeof hrmsServiceBookEntries.$inferInsert): Promise<void> {

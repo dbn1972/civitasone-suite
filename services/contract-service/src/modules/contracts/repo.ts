@@ -54,13 +54,14 @@ export async function insertAmendment(tx: Writer, row: typeof contractAmendments
   await tx.insert(contractAmendments).values(row);
 }
 
-export async function listAmendments(contractId: string, tenantId: string): Promise<Array<typeof contractAmendments.$inferSelect>> {
+export async function listAmendments(contractId: string, tenantId: string, limit = 100): Promise<Array<typeof contractAmendments.$inferSelect>> {
   return db.select().from(contractAmendments)
     .where(and(eq(contractAmendments.contractId, contractId), eq(contractAmendments.tenantId, tenantId)))
-    .orderBy(sql`${contractAmendments.amendmentNo} asc`);
+    .orderBy(sql`${contractAmendments.amendmentNo} asc`)
+    .limit(limit);
 }
 
 export async function countAmendments(tx: Writer, contractId: string): Promise<number> {
-  const rows = await (tx as typeof db).select().from(contractAmendments).where(eq(contractAmendments.contractId, contractId));
+  const rows = await (tx as typeof db).select().from(contractAmendments).where(eq(contractAmendments.contractId, contractId)).limit(500);
   return rows.length;
 }

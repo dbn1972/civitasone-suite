@@ -9,8 +9,8 @@ function toView(r: typeof notificationChannels.$inferSelect): ChannelView {
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findChannelsByTenant(tenantId: string): Promise<ChannelView[]> {
-  return (await db.select().from(notificationChannels).where(eq(notificationChannels.tenantId, tenantId))).map(toView);
+export async function findChannelsByTenant(tenantId: string, limit = 100): Promise<ChannelView[]> {
+  return (await db.select().from(notificationChannels).where(eq(notificationChannels.tenantId, tenantId)).limit(limit)).map(toView);
 }
 
 export async function findDefaultChannel(tenantId: string, type?: string): Promise<ChannelView | null> {

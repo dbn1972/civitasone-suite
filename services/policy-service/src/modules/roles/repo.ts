@@ -15,12 +15,12 @@ export async function findRoleById(id: string): Promise<RoleView | null> {
   return rows[0] ? toRoleView(rows[0]) : null;
 }
 
-export async function findRolesByTenant(tenantId: string): Promise<RoleView[]> {
-  return (await db.select().from(roles).where(eq(roles.tenantId, tenantId))).map(toRoleView);
+export async function findRolesByTenant(tenantId: string, limit = 500): Promise<RoleView[]> {
+  return (await db.select().from(roles).where(eq(roles.tenantId, tenantId)).limit(limit)).map(toRoleView);
 }
 
-export async function findPermsByRole(roleId: string): Promise<PermissionView[]> {
-  return (await db.select().from(permissions).where(eq(permissions.roleId, roleId))).map(toPermView);
+export async function findPermsByRole(roleId: string, limit = 500): Promise<PermissionView[]> {
+  return (await db.select().from(permissions).where(eq(permissions.roleId, roleId)).limit(limit)).map(toPermView);
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;

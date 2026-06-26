@@ -37,10 +37,10 @@ export async function insertPendingRegister(tx: Writer, row: typeof auditPending
   await tx.insert(auditPendingRegister).values(row);
 }
 
-export async function listPendingRegister(tenantId: string, status = "pending"): Promise<PendingRegisterRow[]> {
+export async function listPendingRegister(tenantId: string, status = "pending", limit = 500): Promise<PendingRegisterRow[]> {
   return db.select().from(auditPendingRegister).where(
     and(eq(auditPendingRegister.tenantId, tenantId), eq(auditPendingRegister.status, status)),
-  );
+  ).limit(limit);
 }
 
 // --- P0-4: persistent, tenant-scoped compliance checklists ---

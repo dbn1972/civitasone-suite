@@ -19,10 +19,11 @@ export async function findCase(tenantId: string, id: string): Promise<Disciplina
   return rows[0] ?? null;
 }
 
-export async function listCasesByEmployee(tenantId: string, employeeId: string): Promise<DisciplinaryCaseRow[]> {
+export async function listCasesByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<DisciplinaryCaseRow[]> {
   return db.select().from(hrmsDisciplinaryCases)
     .where(and(eq(hrmsDisciplinaryCases.tenantId, tenantId), eq(hrmsDisciplinaryCases.employeeId, employeeId)))
-    .orderBy(desc(hrmsDisciplinaryCases.createdAt));
+    .orderBy(desc(hrmsDisciplinaryCases.createdAt))
+    .limit(limit);
 }
 
 export async function updateCase(
@@ -48,10 +49,11 @@ export async function appendEvent(
   await tx.insert(hrmsDisciplinaryEvents).values(row);
 }
 
-export async function listEvents(tenantId: string, caseId: string) {
+export async function listEvents(tenantId: string, caseId: string, limit = 500) {
   return db.select().from(hrmsDisciplinaryEvents)
     .where(and(eq(hrmsDisciplinaryEvents.tenantId, tenantId), eq(hrmsDisciplinaryEvents.caseId, caseId)))
-    .orderBy(asc(hrmsDisciplinaryEvents.occurredAt));
+    .orderBy(asc(hrmsDisciplinaryEvents.occurredAt))
+    .limit(limit);
 }
 
 // ---------------- suspensions ----------------
@@ -95,10 +97,11 @@ export async function findSuspension(tenantId: string, id: string): Promise<Susp
   return rows[0] ?? null;
 }
 
-export async function listSuspensionsByEmployee(tenantId: string, employeeId: string): Promise<SuspensionRow[]> {
+export async function listSuspensionsByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<SuspensionRow[]> {
   return db.select().from(hrmsSuspensions)
     .where(and(eq(hrmsSuspensions.tenantId, tenantId), eq(hrmsSuspensions.employeeId, employeeId)))
-    .orderBy(desc(hrmsSuspensions.fromDate));
+    .orderBy(desc(hrmsSuspensions.fromDate))
+    .limit(limit);
 }
 
 export async function updateSuspension(
@@ -132,7 +135,8 @@ export async function activePaySuspendedEmployeeIds(tenantId: string): Promise<M
     // Deterministic regardless of any (now-prevented) duplicate active rows:
     // order by employee then most-recent fromDate, then id, so the Map's
     // last-write-wins picks a stable subsistence% even as a defensive backstop.
-    .orderBy(asc(hrmsSuspensions.employeeId), asc(hrmsSuspensions.fromDate), asc(hrmsSuspensions.id));
+    .orderBy(asc(hrmsSuspensions.employeeId), asc(hrmsSuspensions.fromDate), asc(hrmsSuspensions.id))
+    .limit(500);
   const m = new Map<string, { subsistencePct: string }>();
   for (const r of rows) m.set(r.employeeId, { subsistencePct: r.subsistencePct });
   return m;
