@@ -27,7 +27,25 @@ declare module "fastify" {
 
 const PUBLIC_PATHS = new Set(["/health", "/ready", "/metrics"]);
 
+/**
+ * Boot-time security assertion: in production every service that relies on the
+ * x-internal service-to-service path MUST have a non-empty INTERNAL_SERVICE_SECRET.
+ * Without it the internal-call authentication degrades to "secret === ''" which an
+ * attacker could trivially satisfy. We fail closed at startup instead. The value
+ * is never logged. Outside production the check is skipped so local dev is unaffected.
+ */
+export function assertInternalServiceSecret(): void {
+  if (process.env.NODE_ENV !== "production") return;
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (typeof secret !== "string" || secret.length === 0) {
+    throw new Error(
+      "INTERNAL_SERVICE_SECRET must be set in production; refusing to start.",
+    );
+  }
+}
+
 const authPluginImpl: FastifyPluginAsync = async (fastify) => {
+  assertInternalServiceSecret();
   fastify.decorateRequest("ctx", null);
 
   fastify.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {

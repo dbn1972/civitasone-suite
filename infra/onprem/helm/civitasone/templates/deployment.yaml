@@ -1,0 +1,182 @@
+{{- $root := . -}}
+{{- $prefix := include "civitasone.imagePrefix" . -}}
+{{- range $name, $cfg := .Values.services }}
+{{- $http := ne $cfg.http false }}
+{{- $entry := default "dist/index.js" $cfg.entry }}
+{{- $replicas := default $root.Values.replicaCount $cfg.replicas }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $root.Release.Name }}-{{ $name }}
+  labels:
+    {{- include "civitasone.labels" $root | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: service
+spec:
+  {{- if not $root.Values.autoscaling.enabled }}
+  replicas: {{ $replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/component: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/component: service
+    spec:
+      serviceAccountName: {{ include "civitasone.serviceAccountName" $root }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: "{{ $prefix }}/{{ $name }}-service:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          command: ["node", {{ $entry | quote }}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          {{- if $http }}
+          ports:
+            - name: http
+              containerPort: {{ $cfg.port }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ $root.Release.Name }}-civitasone-config
+          env:
+            - name: PORT
+              value: {{ $cfg.port | quote }}
+            {{- if $cfg.db }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.existingSecret }}
+                  key: DATABASE_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/{{ $cfg.db }}"
+            {{- end }}
+            {{- range $root.Values.secretEnv }}
+            {{- if ne . "DATABASE_PASSWORD" }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.existingSecret }}
+                  key: {{ . }}
+            {{- end }}
+            {{- end }}
+            {{- range (default (list) $cfg.secretEnv) }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.existingSecret }}
+                  key: {{ . }}
+            {{- end }}
+          {{- if $http }}
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          {{- end }}
+          resources:
+            {{- toYaml $root.Values.resources | nindent 12 }}
+{{- if $cfg.worker }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $root.Release.Name }}-{{ $name }}-worker
+  labels:
+    {{- include "civitasone.labels" $root | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}-worker
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}-worker
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}-worker
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "civitasone.serviceAccountName" $root }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}-worker
+          image: "{{ $prefix }}/{{ $name }}-service:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          command: ["node", "dist/worker.js"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: {{ $root.Release.Name }}-civitasone-config
+          env:
+            {{- if $cfg.db }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.existingSecret }}
+                  key: DATABASE_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/{{ $cfg.db }}"
+            {{- end }}
+            {{- range $root.Values.secretEnv }}
+            {{- if ne . "DATABASE_PASSWORD" }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.existingSecret }}
+                  key: {{ . }}
+            {{- end }}
+            {{- end }}
+            {{- range (default (list) $cfg.secretEnv) }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.existingSecret }}
+                  key: {{ . }}
+            {{- end }}
+          resources:
+            {{- toYaml $root.Values.resources | nindent 12 }}
+{{- end }}
+{{- end }}

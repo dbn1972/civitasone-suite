@@ -1,0 +1,1282 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CivitasOne Suite — production docker-compose (generated, additive).
+# Brings up infra (postgres, redis, keycloak, localstack) + all 31 HTTP
+# services + their CQRS workers + queue + gateway + web.
+#
+#   docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d
+#
+# Secrets come from the env file ONLY — every required value uses ${VAR:?}
+# so compose refuses to start if it is unset. No secret literals live here.
+# Images are built from the repo-root Dockerfile (one per service via build
+# args) and apps/web/Dockerfile. Set IMAGE_REGISTRY/IMAGE_TAG to use a registry.
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-image-prefix: &image-prefix ${IMAGE_REGISTRY:-civitasone}
+
+x-svc-defaults: &svc-defaults
+  restart: unless-stopped
+  networks: [civitasone]
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    localstack: { condition: service_healthy }
+
+x-svc-env: &svc-env
+  NODE_ENV: production
+  BIND_HOST: 0.0.0.0
+  REDIS_URL: redis://redis:6379
+  QUEUE_DRIVER: sqs
+  AWS_ENDPOINT_URL: http://localstack:4566
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-south-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+  AWS_S3_BUCKET: ${AWS_S3_BUCKET:-civitasone}
+  JWT_ALGORITHM: RS256
+  KEYCLOAK_URL: http://keycloak:8080
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-civitasone}
+  INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?}
+  DEVICE_TRUST_SECRET: ${DEVICE_TRUST_SECRET:?}
+
+services:
+
+  postgres:
+    image: postgres:16.4-bookworm
+    restart: unless-stopped
+    networks: [civitasone]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:-civitasone}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/bootstrap/bootstrap.generated.sql:/docker-entrypoint-initdb.d/01-bootstrap.sql:ro
+      - ./db/bootstrap/keycloak_bootstrap.sql:/docker-entrypoint-initdb.d/02-keycloak.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-civitasone}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-bookworm
+    restart: unless-stopped
+    networks: [civitasone]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:3.7
+    restart: unless-stopped
+    networks: [civitasone]
+    environment:
+      SERVICES: sqs,s3
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-south-1}
+    volumes:
+      - ./localstack-init:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs list-queues >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    restart: unless-stopped
+    networks: [civitasone]
+    command: ["start", "--optimized", "--hostname-strict=false", "--http-enabled=true", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:?}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/civitasone-realm.json:/opt/keycloak/data/import/realm.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && echo done >&3 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  identity-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/identity-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: identity-service
+        ENTRY: dist/index.js
+        PORT: "3001"
+    environment:
+      <<: *svc-env
+      PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL_IDENTITY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_identity}
+      MFA_ENC_KEY: ${MFA_ENC_KEY:?}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  identity-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/identity-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: identity-service
+        ENTRY: dist/worker.js
+        PORT: "3001"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_IDENTITY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_identity}
+      MFA_ENC_KEY: ${MFA_ENC_KEY:?}
+
+  tenant-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/tenant-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: tenant-service
+        ENTRY: dist/index.js
+        PORT: "3002"
+    environment:
+      <<: *svc-env
+      PORT: "3002"
+      DATABASE_URL: ${DATABASE_URL_TENANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_tenant}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  tenant-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/tenant-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: tenant-service
+        ENTRY: dist/worker.js
+        PORT: "3002"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_TENANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_tenant}
+
+  policy-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/policy-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: policy-service
+        ENTRY: dist/index.js
+        PORT: "3003"
+    environment:
+      <<: *svc-env
+      PORT: "3003"
+      DATABASE_URL: ${DATABASE_URL_POLICY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_policy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  policy-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/policy-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: policy-service
+        ENTRY: dist/worker.js
+        PORT: "3003"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_POLICY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_policy}
+
+  audit-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/audit-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: audit-service
+        ENTRY: dist/index.js
+        PORT: "3004"
+    environment:
+      <<: *svc-env
+      PORT: "3004"
+      DATABASE_URL: ${DATABASE_URL_AUDIT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_audit}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3004/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  audit-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/audit-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: audit-service
+        ENTRY: dist/worker.js
+        PORT: "3004"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_AUDIT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_audit}
+
+  install-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/install-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: install-service
+        ENTRY: dist/index.js
+        PORT: "3005"
+    environment:
+      <<: *svc-env
+      PORT: "3005"
+      DATABASE_URL: ${DATABASE_URL_INSTALL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_install}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3005/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  install-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/install-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: install-service
+        ENTRY: dist/worker.js
+        PORT: "3005"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_INSTALL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_install}
+
+  notification-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/notification-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notification-service
+        ENTRY: dist/index.js
+        PORT: "3006"
+    environment:
+      <<: *svc-env
+      PORT: "3006"
+      DATABASE_URL: ${DATABASE_URL_NOTIFICATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_notification}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3006/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  notification-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/notification-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notification-service
+        ENTRY: dist/worker.js
+        PORT: "3006"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_NOTIFICATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_notification}
+
+  finance-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/finance-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: finance-service
+        ENTRY: dist/index.js
+        PORT: "3007"
+    environment:
+      <<: *svc-env
+      PORT: "3007"
+      DATABASE_URL: ${DATABASE_URL_FINANCE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_finance}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3007/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  finance-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/finance-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: finance-service
+        ENTRY: dist/worker.js
+        PORT: "3007"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_FINANCE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_finance}
+
+  procurement-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/procurement-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: procurement-service
+        ENTRY: dist/index.js
+        PORT: "3008"
+    environment:
+      <<: *svc-env
+      PORT: "3008"
+      DATABASE_URL: ${DATABASE_URL_PROCUREMENT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_procurement}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3008/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  procurement-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/procurement-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: procurement-service
+        ENTRY: dist/worker.js
+        PORT: "3008"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_PROCUREMENT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_procurement}
+
+  contract-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/contract-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: contract-service
+        ENTRY: dist/index.js
+        PORT: "3009"
+    environment:
+      <<: *svc-env
+      PORT: "3009"
+      DATABASE_URL: ${DATABASE_URL_CONTRACT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_contract}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3009/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  contract-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/contract-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: contract-service
+        ENTRY: dist/worker.js
+        PORT: "3009"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_CONTRACT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_contract}
+
+  estab-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/estab-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: estab-service
+        ENTRY: dist/index.js
+        PORT: "3010"
+    environment:
+      <<: *svc-env
+      PORT: "3010"
+      DATABASE_URL: ${DATABASE_URL_ESTAB:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_estab}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3010/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  estab-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/estab-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: estab-service
+        ENTRY: dist/worker.js
+        PORT: "3010"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_ESTAB:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_estab}
+
+  stock-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/stock-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: stock-service
+        ENTRY: dist/index.js
+        PORT: "3011"
+    environment:
+      <<: *svc-env
+      PORT: "3011"
+      DATABASE_URL: ${DATABASE_URL_STOCK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_stock}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3011/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  stock-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/stock-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: stock-service
+        ENTRY: dist/worker.js
+        PORT: "3011"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_STOCK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_stock}
+
+  hrms-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/hrms-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: hrms-service
+        ENTRY: dist/index.js
+        PORT: "3012"
+    environment:
+      <<: *svc-env
+      PORT: "3012"
+      DATABASE_URL: ${DATABASE_URL_HRMS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_hrms}
+      PII_ENC_KEY: ${PII_ENC_KEY:?}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3012/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  hrms-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/hrms-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: hrms-service
+        ENTRY: dist/worker.js
+        PORT: "3012"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_HRMS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_hrms}
+      PII_ENC_KEY: ${PII_ENC_KEY:?}
+
+  payroll-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/payroll-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: payroll-service
+        ENTRY: dist/index.js
+        PORT: "3013"
+    environment:
+      <<: *svc-env
+      PORT: "3013"
+      DATABASE_URL: ${DATABASE_URL_PAYROLL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_payroll}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3013/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  payroll-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/payroll-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: payroll-service
+        ENTRY: dist/worker.js
+        PORT: "3013"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_PAYROLL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_payroll}
+
+  project-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/project-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: project-service
+        ENTRY: dist/index.js
+        PORT: "3014"
+    environment:
+      <<: *svc-env
+      PORT: "3014"
+      DATABASE_URL: ${DATABASE_URL_PROJECT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_project}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3014/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  project-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/project-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: project-service
+        ENTRY: dist/worker.js
+        PORT: "3014"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_PROJECT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_project}
+
+  asset-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/asset-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: asset-service
+        ENTRY: dist/index.js
+        PORT: "3015"
+    environment:
+      <<: *svc-env
+      PORT: "3015"
+      DATABASE_URL: ${DATABASE_URL_ASSET:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_asset}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3015/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  asset-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/asset-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: asset-service
+        ENTRY: dist/worker.js
+        PORT: "3015"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_ASSET:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_asset}
+
+  report-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/report-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: report-service
+        ENTRY: dist/index.js
+        PORT: "3016"
+    environment:
+      <<: *svc-env
+      PORT: "3016"
+      DATABASE_URL: ${DATABASE_URL_REPORT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_report}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3016/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  report-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/report-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: report-service
+        ENTRY: dist/worker.js
+        PORT: "3016"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_REPORT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_report}
+
+  plugin-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/plugin-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: plugin-service
+        ENTRY: dist/index.js
+        PORT: "3017"
+    environment:
+      <<: *svc-env
+      PORT: "3017"
+      DATABASE_URL: ${DATABASE_URL_PLUGIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_plugin}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3017/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  plugin-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/plugin-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: plugin-service
+        ENTRY: dist/worker.js
+        PORT: "3017"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_PLUGIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_plugin}
+
+  theme-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/theme-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: theme-service
+        ENTRY: dist/index.js
+        PORT: "3018"
+    environment:
+      <<: *svc-env
+      PORT: "3018"
+      DATABASE_URL: ${DATABASE_URL_THEME:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_theme}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3018/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  theme-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/theme-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: theme-service
+        ENTRY: dist/worker.js
+        PORT: "3018"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_THEME:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_theme}
+
+  grant-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/grant-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: grant-service
+        ENTRY: dist/index.js
+        PORT: "3019"
+    environment:
+      <<: *svc-env
+      PORT: "3019"
+      DATABASE_URL: ${DATABASE_URL_GRANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_grant}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3019/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  grant-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/grant-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: grant-service
+        ENTRY: dist/worker.js
+        PORT: "3019"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_GRANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_grant}
+
+  citizen-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/citizen-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: citizen-service
+        ENTRY: dist/index.js
+        PORT: "3020"
+    environment:
+      <<: *svc-env
+      PORT: "3020"
+      DATABASE_URL: ${DATABASE_URL_CITIZEN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_citizen}
+      CITIZEN_PII_KEY: ${CITIZEN_PII_KEY:?}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3020/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  citizen-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/citizen-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: citizen-service
+        ENTRY: dist/worker.js
+        PORT: "3020"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_CITIZEN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_citizen}
+      CITIZEN_PII_KEY: ${CITIZEN_PII_KEY:?}
+
+  legal-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/legal-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: legal-service
+        ENTRY: dist/index.js
+        PORT: "3021"
+    environment:
+      <<: *svc-env
+      PORT: "3021"
+      DATABASE_URL: ${DATABASE_URL_LEGAL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_legal}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3021/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  legal-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/legal-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: legal-service
+        ENTRY: dist/worker.js
+        PORT: "3021"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_LEGAL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_legal}
+
+  admin-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/admin-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: admin-service
+        ENTRY: dist/index.js
+        PORT: "3022"
+    environment:
+      <<: *svc-env
+      PORT: "3022"
+      DATABASE_URL: ${DATABASE_URL_ADMIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_admin}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3022/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  admin-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/admin-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: admin-service
+        ENTRY: dist/worker.js
+        PORT: "3022"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_ADMIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_admin}
+
+  billing-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/billing-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: billing-service
+        ENTRY: dist/index.js
+        PORT: "3023"
+    environment:
+      <<: *svc-env
+      PORT: "3023"
+      DATABASE_URL: ${DATABASE_URL_BILLING:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_billing}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3023/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  billing-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/billing-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: billing-service
+        ENTRY: dist/worker.js
+        PORT: "3023"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_BILLING:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_billing}
+
+  crm-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/crm-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: crm-service
+        ENTRY: dist/index.js
+        PORT: "3024"
+    environment:
+      <<: *svc-env
+      PORT: "3024"
+      DATABASE_URL: ${DATABASE_URL_CRM:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_crm}
+      CRM_PII_KEY: ${CRM_PII_KEY:?}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3024/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  crm-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/crm-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: crm-service
+        ENTRY: dist/worker.js
+        PORT: "3024"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_CRM:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_crm}
+      CRM_PII_KEY: ${CRM_PII_KEY:?}
+
+  inventory-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/inventory-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: inventory-service
+        ENTRY: dist/index.js
+        PORT: "3025"
+    environment:
+      <<: *svc-env
+      PORT: "3025"
+      DATABASE_URL: ${DATABASE_URL_INVENTORY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_inventory}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3025/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  inventory-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/inventory-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: inventory-service
+        ENTRY: dist/worker.js
+        PORT: "3025"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_INVENTORY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_inventory}
+
+  telephony-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/telephony-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: telephony-service
+        ENTRY: dist/index.js
+        PORT: "3026"
+    environment:
+      <<: *svc-env
+      PORT: "3026"
+      DATABASE_URL: ${DATABASE_URL_TELEPHONY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_telephony}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3026/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  telephony-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/telephony-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: telephony-service
+        ENTRY: dist/worker.js
+        PORT: "3026"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_TELEPHONY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_telephony}
+
+  helpdesk-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/helpdesk-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: helpdesk-service
+        ENTRY: dist/index.js
+        PORT: "3027"
+    environment:
+      <<: *svc-env
+      PORT: "3027"
+      DATABASE_URL: ${DATABASE_URL_HELPDESK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_helpdesk}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3027/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  helpdesk-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/helpdesk-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: helpdesk-service
+        ENTRY: dist/worker.js
+        PORT: "3027"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_HELPDESK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_helpdesk}
+
+  knowledge-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/knowledge-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: knowledge-service
+        ENTRY: dist/index.js
+        PORT: "3028"
+    environment:
+      <<: *svc-env
+      PORT: "3028"
+      DATABASE_URL: ${DATABASE_URL_KNOWLEDGE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_knowledge}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3028/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  knowledge-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/knowledge-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: knowledge-service
+        ENTRY: dist/worker.js
+        PORT: "3028"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_KNOWLEDGE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_knowledge}
+
+  workflow-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/workflow-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: workflow-service
+        ENTRY: dist/index.js
+        PORT: "3029"
+    environment:
+      <<: *svc-env
+      PORT: "3029"
+      DATABASE_URL: ${DATABASE_URL_WORKFLOW:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_workflow}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3029/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  workflow-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/workflow-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: workflow-service
+        ENTRY: dist/worker.js
+        PORT: "3029"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_WORKFLOW:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_workflow}
+
+  analytics-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/analytics-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: analytics-service
+        ENTRY: dist/index.js
+        PORT: "3031"
+    environment:
+      <<: *svc-env
+      PORT: "3031"
+      DATABASE_URL: ${DATABASE_URL_ANALYTICS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_analytics}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3031/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  analytics-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/analytics-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: analytics-service
+        ENTRY: dist/worker.js
+        PORT: "3031"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_ANALYTICS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_analytics}
+
+  location-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/location-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: location-service
+        ENTRY: dist/index.js
+        PORT: "4012"
+    environment:
+      <<: *svc-env
+      PORT: "4012"
+      DATABASE_URL: ${DATABASE_URL_LOCATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_location}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4012/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  location-worker:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/location-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: location-service
+        ENTRY: dist/worker.js
+        PORT: "4012"
+    environment:
+      <<: *svc-env
+      DATABASE_URL: ${DATABASE_URL_LOCATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_location}
+
+  queue-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/queue-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: queue-service
+        ENTRY: dist/server.js
+        PORT: "3030"
+    environment:
+      <<: *svc-env
+      PORT: "3030"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  gateway-service:
+    <<: *svc-defaults
+    image: ${IMAGE_REGISTRY:-civitasone}/gateway-service:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: gateway-service
+        ENTRY: dist/index.js
+        PORT: "8080"
+    environment:
+      <<: *svc-env
+      PORT: "8080"
+      HOST: 0.0.0.0
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  web:
+    restart: unless-stopped
+    networks: [civitasone]
+    image: ${IMAGE_REGISTRY:-civitasone}/web:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      CIVITASONE_API_BASE_URL: http://gateway-service:8080
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      gateway-service: { condition: service_healthy }
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+networks:
+  civitasone:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:

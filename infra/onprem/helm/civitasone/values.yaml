@@ -1,33 +1,143 @@
-# Default values for CivitasOne Suite on-prem Helm deployment
-# Override per environment with values.staging.yaml / values.production.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CivitasOne Suite — Helm values (on-prem Kubernetes).
+# Override per-env with values.staging.yaml / values.production.yaml.
+# Secrets are NEVER stored here — they come from a pre-existing Kubernetes
+# Secret referenced by `existingSecret`. Set image.registry to your registry.
+# ─────────────────────────────────────────────────────────────────────────────
 
 global:
-  imageRegistry: ""          # e.g. harbor.example.com
+  imageRegistry: ""              # e.g. harbor.example.com (trailing slash added by template)
   imagePullSecrets: []
   storageClass: "standard"
 
+image:
+  registry: "civitasone"         # repo prefix: <registry>/<service>:<tag>
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Default replica count (per-service `replicas` overrides this).
 replicaCount: 1
 
+# Pre-created Kubernetes Secret holding all platform secrets (string keys below).
+# Create it out-of-band, e.g.:
+#   kubectl create secret generic civitasone-secrets \
+#     --from-literal=INTERNAL_SERVICE_SECRET=... --from-literal=DEVICE_TRUST_SECRET=... \
+#     --from-literal=DATABASE_PASSWORD=... --from-literal=MFA_ENC_KEY=... ...
+existingSecret: "civitasone-secrets"
+
+serviceAccount:
+  create: true
+  name: ""                       # defaulted to <release>-civitasone
+  annotations: {}
+
+# Non-secret config shared by every service (rendered into a ConfigMap).
+config:
+  NODE_ENV: "production"
+  BIND_HOST: "0.0.0.0"
+  REDIS_URL: "redis://civitasone-redis:6379"
+  QUEUE_DRIVER: "sqs"
+  AWS_DEFAULT_REGION: "ap-south-1"
+  AWS_ENDPOINT_URL: ""           # empty => real AWS SQS/S3
+  AWS_S3_BUCKET: "civitasone"
+  JWT_ALGORITHM: "RS256"
+  KEYCLOAK_URL: "http://civitasone-keycloak:8080"
+  KEYCLOAK_REALM: "civitasone"
+  LOG_LEVEL: "info"
+  DATABASE_HOST: "civitasone-postgresql"
+  DATABASE_PORT: "5432"
+  DATABASE_USER: "civitasone"
+
+# Secret keys to inject from `existingSecret` into every pod as env vars.
+secretEnv:
+  - INTERNAL_SERVICE_SECRET
+  - DEVICE_TRUST_SECRET
+  - DATABASE_PASSWORD
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "192Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 75
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Service catalog. The templates loop over this map. For each entry:
+#   port      — container port + Service port
+#   db        — per-service database name (DATABASE_URL assembled in template)
+#   replicas  — overrides replicaCount
+#   worker    — true => also render a Deployment running dist/worker.js (no Service)
+#   entry     — runtime entrypoint (default dist/index.js)
+#   secretEnv — extra secret keys (e.g. PII keys) injected from existingSecret
+#   http      — false => no Service / probes (pure worker-style); default true
+# ─────────────────────────────────────────────────────────────────────────────
 services:
-  identity: { port: 3001, replicas: 2 }
-  tenant:   { port: 3002, replicas: 2 }
-  policy:   { port: 3003, replicas: 2 }
-  audit:    { port: 3004, replicas: 2 }
-  install:  { port: 3005, replicas: 1 }
-  queue:    { port: 3000, replicas: 2 }
-  notification: { port: 3006, replicas: 2 }
-  finance:  { port: 3007, replicas: 2 }
-  procurement: { port: 3008, replicas: 2 }
-  inventory: { port: 3009, replicas: 2 }
-  asset:    { port: 3010, replicas: 1 }
-  project:  { port: 3011, replicas: 1 }
-  hrms:     { port: 3012, replicas: 2 }
-  crm:      { port: 3013, replicas: 2 }
-  helpdesk: { port: 3014, replicas: 2 }
-  telephony: { port: 3015, replicas: 1 }
-  report:   { port: 3016, replicas: 2 }
-  plugin:   { port: 3017, replicas: 1 }
-  theme:    { port: 3018, replicas: 1 }
+  identity:     { port: 3001, db: civitas_identity,     replicas: 2, worker: true, secretEnv: [MFA_ENC_KEY] }
+  tenant:       { port: 3002, db: civitas_tenant,       replicas: 2, worker: true }
+  policy:       { port: 3003, db: civitas_policy,       replicas: 2, worker: true }
+  audit:        { port: 3004, db: civitas_audit,        replicas: 2, worker: true }
+  install:      { port: 3005, db: civitas_install,      replicas: 1, worker: true }
+  notification: { port: 3006, db: civitas_notification, replicas: 2, worker: true }
+  finance:      { port: 3007, db: civitas_finance,      replicas: 2, worker: true }
+  procurement:  { port: 3008, db: civitas_procurement,  replicas: 2, worker: true }
+  contract:     { port: 3009, db: civitas_contract,     replicas: 1, worker: true }
+  estab:        { port: 3010, db: civitas_estab,        replicas: 1, worker: true }
+  stock:        { port: 3011, db: civitas_stock,        replicas: 1, worker: true }
+  hrms:         { port: 3012, db: civitas_hrms,         replicas: 2, worker: true, secretEnv: [PII_ENC_KEY] }
+  payroll:      { port: 3013, db: civitas_payroll,      replicas: 1, worker: true }
+  project:      { port: 3014, db: civitas_project,      replicas: 1, worker: true }
+  asset:        { port: 3015, db: civitas_asset,        replicas: 1, worker: true }
+  report:       { port: 3016, db: civitas_report,       replicas: 2, worker: true }
+  plugin:       { port: 3017, db: civitas_plugin,       replicas: 1, worker: true }
+  theme:        { port: 3018, db: civitas_theme,        replicas: 1, worker: true }
+  grant:        { port: 3019, db: civitas_grant,        replicas: 1, worker: true }
+  citizen:      { port: 3020, db: civitas_citizen,      replicas: 2, worker: true, secretEnv: [CITIZEN_PII_KEY] }
+  legal:        { port: 3021, db: civitas_legal,        replicas: 1, worker: true }
+  admin:        { port: 3022, db: civitas_admin,        replicas: 1, worker: true }
+  billing:      { port: 3023, db: civitas_billing,      replicas: 1, worker: true }
+  crm:          { port: 3024, db: civitas_crm,          replicas: 2, worker: true, secretEnv: [CRM_PII_KEY] }
+  inventory:    { port: 3025, db: civitas_inventory,    replicas: 2, worker: true }
+  telephony:    { port: 3026, db: civitas_telephony,    replicas: 1, worker: true }
+  helpdesk:     { port: 3027, db: civitas_helpdesk,     replicas: 2, worker: true }
+  knowledge:    { port: 3028, db: civitas_knowledge,    replicas: 1, worker: true }
+  workflow:     { port: 3029, db: civitas_workflow,     replicas: 2, worker: true }
+  analytics:    { port: 3031, db: civitas_analytics,    replicas: 1, worker: true }
+  location:     { port: 4012, db: civitas_location,     replicas: 1, worker: true }
+  queue:        { port: 3030, replicas: 2, entry: dist/server.js }
+
+# Gateway (public entrypoint to the service mesh).
+gateway:
+  enabled: true
+  port: 8080
+  replicas: 2
+  extraEnv:
+    HOST: "0.0.0.0"
+    CORS_ORIGIN: "http://localhost:3000"
+
+# Web (Next.js). image repo defaults to <registry>/web.
+web:
+  enabled: true
+  port: 3000
+  replicas: 2
+  image: "web"
+  extraEnv:
+    CIVITASONE_API_BASE_URL: "http://civitasone-gateway:8080"
+    NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  host: ""                       # REQUIRED per env, e.g. civitasone.example.gov.in
+  tls:
+    enabled: false
+    secretName: ""
 
 postgresql:
   enabled: true
@@ -41,8 +151,3 @@ redis:
 
 meilisearch:
   enabled: true
-
-ingress:
-  enabled: true
-  className: nginx
-  host: ""   # Set per environment

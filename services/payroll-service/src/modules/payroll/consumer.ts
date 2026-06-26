@@ -362,17 +362,24 @@ export function registerPayrollConsumers(queue: Queue): void {
         approvedAt: new Date(),
         updatedBy: msg.actorId,
       });
-      await enqueue(tx, {
-        topic: EVENTS.runApproved, eventType: EVENTS.runApproved,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          runId: p.id,
-          month: run.month,
-          totalGrossMinor: totalGross.toString(),
-          totalNetMinor: totalNet.toString(),
-          totalEmployerContribMinor: totalEmployerContrib.toString(),
-        },
-      });
+      // INT-FIX: only emit the finance GL accrual trigger when the run actually
+      // accrued something. A run approved with zero slips (gross == 0) has no
+      // salary to post; emitting it produced an all-zero journal that finance
+      // correctly rejected and dead-lettered. The approval + notification below
+      // still proceed; there is simply nothing to accrue to the GL.
+      if (totalGross > 0n) {
+        await enqueue(tx, {
+          topic: EVENTS.runApproved, eventType: EVENTS.runApproved,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            runId: p.id,
+            month: run.month,
+            totalGrossMinor: totalGross.toString(),
+            totalNetMinor: totalNet.toString(),
+            totalEmployerContribMinor: totalEmployerContrib.toString(),
+          },
+        });
+      }
       await enqueue(tx, {
         topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

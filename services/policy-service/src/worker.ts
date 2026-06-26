@@ -4,10 +4,12 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerRoleConsumers } from "./modules/roles/consumer.js";
 import { registerBindingConsumers } from "./modules/bindings/consumer.js";
+import { registerAbacConsumers } from "./modules/abac/consumer.js";
 
 const log = pino({ name: "policy-worker" });
 registerRoleConsumers(queue);
 registerBindingConsumers(queue);
+registerAbacConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("policy-service worker: consumers + outbox relay running");

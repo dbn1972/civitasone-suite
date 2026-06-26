@@ -1,0 +1,15 @@
+CivitasOne Suite deployed as release "{{ .Release.Name }}".
+
+Services:        {{ len .Values.services }} (+ gateway, web)
+Gateway URL:     http://{{ .Release.Name }}-gateway:{{ .Values.gateway.port }}
+{{- if .Values.ingress.enabled }}
+Ingress host:    {{ .Values.ingress.host | default "<set ingress.host>" }}
+{{- end }}
+
+Before deploying, create the secret referenced by existingSecret ({{ .Values.existingSecret }}):
+  kubectl create secret generic {{ .Values.existingSecret }} \
+    --from-literal=INTERNAL_SERVICE_SECRET=... \
+    --from-literal=DEVICE_TRUST_SECRET=... \
+    --from-literal=DATABASE_PASSWORD=... \
+    --from-literal=MFA_ENC_KEY=... --from-literal=PII_ENC_KEY=... \
+    --from-literal=CITIZEN_PII_KEY=... --from-literal=CRM_PII_KEY=...
