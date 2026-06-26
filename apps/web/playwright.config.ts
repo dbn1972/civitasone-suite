@@ -1,3 +1,5 @@
+// CI runs chromium only. To run the full device matrix locally:
+// pnpm --filter @civitasone/web exec playwright test --project=firefox,webkit,tablet-portrait,mobile-portrait
 import { defineConfig, devices } from '@playwright/test';
 
 const MOCK_GATEWAY_PORT = 4001;
@@ -17,7 +19,16 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
+    // Desktop browsers
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    // Tablet
+    { name: 'tablet-portrait', use: { ...devices['iPad (gen 7)'] } },
+    { name: 'tablet-landscape', use: { ...devices['iPad (gen 7) landscape'] } },
+    // Mobile
+    { name: 'mobile-portrait', use: { ...devices['iPhone 14'] } },
+    { name: 'mobile-landscape', use: { ...devices['iPhone 14 landscape'] } },
   ],
   globalSetup: './e2e/global-setup',
   globalTeardown: './e2e/global-teardown',
