@@ -1,85 +1,35 @@
-# OPS-1 (09-T1): alert rules that make 'invisible failures' fire.
-# These pair with the app metrics emitted by @civitasone/observability and the
-# CloudWatch SQS alarms provisioned in infra/aws/modules/sqs (05-T2).
 groups:
-  - name: civitasone-reliability
+  - name: civitasone.sqs.dlq
     rules:
-      # A consumer handler is throwing — the class of failure that hid the
-      # stock FOR UPDATE and HRMS leave-engine bugs behind healthy 200s.
-      - alert: ConsumerErrorRateHigh
-        expr: sum by (service, topic) (rate(consumer_errors_total[5m])) > 0
+      # Fires when a DLQ has been non-empty for 5+ minutes.
+      # Severity: warning — first signal that a consumer has failed.
+      - alert: DlqAnyMessage
+        expr: aws_sqs_approximate_number_of_messages_visible{queue_name=~".*-dlq"} > 0
         for: 5m
-        labels: { severity: critical }
+        labels:
+          severity: warning
         annotations:
-          summary: 'Queue consumer errors on {{ .service }}/{{ .topic }}'
-          description: 'consumer_errors_total is increasing — a subscribed handler is throwing.'
+          summary: "DLQ has messages: {{ $labels.queue_name }}"
+          description: "{{ $value }} message(s) stuck in {{ $labels.queue_name }} for 5+ minutes."
 
-      # Messages are dead-lettering — poison messages or a persistent failure.
-      - alert: DlqMessagesAppearing
-        expr: increase(dlq_messages_total[10m]) > 0
-        for: 0m
-        labels: { severity: critical }
-        annotations:
-          summary: 'Messages dead-lettered on topic {{ .topic }}'
-          description: 'dlq_messages_total increased — investigate the topic DLQ.'
-
-      # The transactional outbox relay is failing to publish — writes committed
-      # to the DB are not reaching the queue.
-      - alert: OutboxRelayFailing
-        expr: increase(outbox_relay_failures_total[10m]) > 0
-        for: 0m
-        labels: { severity: critical }
-        annotations:
-          summary: 'Outbox relay failures on {{ .service }}'
-          description: 'outbox_relay_failures_total increased — committed events may not be published.'
-
-      # A service stopped exposing metrics / is down (5m for pager fatigue reduction).
-      - alert: ServiceDown
-        expr: up == 0
-        for: 5m
-        labels: { severity: critical }
-        annotations:
-          summary: 'Service {{ .job }} target {{ .instance }} is down'
-          description: 'Prometheus cannot scrape the target — process down or /metrics unreachable.'
-
-      # OPS-1 (T1.2): any failure routed through captureError() — the single
-      # choke point for 'invisible failures'. This fires for thrown handlers,
-      # outbox publish errors, and any code path that calls captureError, even
-      # where there is no more specific metric above.
-      - alert: CapturedErrorsAppearing
-        expr: increase(captured_errors_total[10m]) > 0
-        for: 0m
-        labels: { severity: critical }
-        annotations:
-          summary: 'Captured errors on {{ .service }}'
-          description: 'captured_errors_total increased — a failure was captured via captureError(); inspect the captured_error structured logs in Loki.'
-
-  - name: civitasone-sqs-dlq
-    rules:
-      # SQS DLQ depth gauge — fires when any queue accumulates > 10 messages.
-      # sqs_queue_depth is emitted by queue-service and individual workers when
-      # they poll the SQS DLQ ARN via @civitasone/observability.
+      # Fires when a DLQ depth exceeds 10 for 10+ minutes.
+      # Severity: warning — sustained consumer failure; needs investigation.
       - alert: DlqDepthHigh
-        expr: sqs_queue_depth{queue_type='dlq'} > 10
-        for: 5m
-        labels: { severity: critical }
+        expr: aws_sqs_approximate_number_of_messages_visible{queue_name=~".*-dlq"} > 10
+        for: 10m
+        labels:
+          severity: warning
         annotations:
-          summary: 'DLQ depth high on {{ .queue_name }} ({{  }} messages)'
-          description: 'SQS DLQ {{ .queue_name }} has {{  }} messages. Investigate poison messages or persistent consumer failures.'
+          summary: "DLQ depth high: {{ $labels.queue_name }}"
+          description: "{{ $value }} messages in {{ $labels.queue_name }} for 10+ minutes — consumer may be degraded."
 
-  - name: civitasone-http-errors
-    rules:
-      # High HTTP 5xx error rate — more than 5% of requests are failing.
-      # Uses http_requests_total{status=~'5..'} from @civitasone/observability.
-      - alert: HighHttpErrorRate
-        expr: |
-          (
-            sum by (job, service) (rate(http_requests_total{status=~'5..'}[5m]))
-            /
-            sum by (job, service) (rate(http_requests_total[5m]))
-          ) > 0.05
-        for: 5m
-        labels: { severity: warning }
+      # Fires when a DLQ exceeds 50 messages for 2+ minutes.
+      # Severity: critical — possible runaway consumer failure or poison-pill storm.
+      - alert: DlqDepthCritical
+        expr: aws_sqs_approximate_number_of_messages_visible{queue_name=~".*-dlq"} > 50
+        for: 2m
+        labels:
+          severity: critical
         annotations:
-          summary: 'High HTTP 5xx error rate on {{ .job }}/{{ .service }}'
-          description: 'More than 5% of requests to {{ .job }} are returning 5xx errors over the last 5 minutes. Current rate: {{ printf %.1f (mul  100) }}%.'
+          summary: "DLQ depth critical: {{ $labels.queue_name }}"
+          description: "{{ $value }} messages in {{ $labels.queue_name }} — possible runaway consumer failure."

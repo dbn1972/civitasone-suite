@@ -10,5 +10,14 @@ export default defineConfig({
       AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
     },
     testTimeout: 90000,
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 80,
+        functions: 75,
+        branches: 65,
+        statements: 80,
+      },
+    },
   },
 });
