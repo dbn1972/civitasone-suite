@@ -28,7 +28,8 @@ test.describe('Authentication', () => {
     await authenticate(page);
     await page.goto('/dashboard');
     await expect(page).not.toHaveURL(/\/auth\/login/);
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    // Dashboard renders PageHeader title="Command Center"
+    await expect(page.getByRole('heading', { name: 'Command Center' })).toBeVisible();
   });
 
   test('logout clears cookie and redirects to login', async ({ page }) => {

@@ -13,8 +13,9 @@ export default async function EstabFilesListPage() {
     id: f.id,
     fileNo: f.fileNo,
     subject: f.subject,
+    classification: f.classification.replace(/_/g, " "),
     department: f.department ?? "—",
-    currentHolder: f.currentHolder ?? "—",
+    createdBy: f.createdBy,
     status: f.status.replace(/_/g, " "),
     statusRaw: f.status,
   }));

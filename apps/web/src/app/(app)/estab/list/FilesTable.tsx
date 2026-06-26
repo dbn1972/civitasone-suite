@@ -7,8 +7,9 @@ export type FileRow = {
   id: string;
   fileNo: string;
   subject: string;
+  classification: string;
   department: string;
-  currentHolder: string;
+  createdBy: string;
   status: string;
   statusRaw: string;
 };
@@ -39,10 +40,11 @@ export function FilesTable({ rows }: { rows: FileRow[] }) {
       </div>
       <DataTable<FileRow>
         columns={[
-          { key: "fileNo", label: "File no." },
+          { key: "fileNo", label: "File No" },
           { key: "subject", label: "Subject" },
-          { key: "department", label: "Dept" },
-          { key: "currentHolder", label: "Currently with" },
+          { key: "classification", label: "Classification" },
+          { key: "department", label: "Department" },
+          { key: "createdBy", label: "Created By" },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={filtered}
