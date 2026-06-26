@@ -2,13 +2,14 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
-import { registerUserConsumers } from "./modules/users/consumer.js";
-import { registerRbacConsumers } from "./modules/rbac/consumer.js";
+import { registerUserConsumers }    from "./modules/users/consumer.js";
+import { registerRbacConsumers }    from "./modules/rbac/consumer.js";
 import { registerSessionConsumers } from "./modules/sessions/consumer.js";
-import { reapExpiredSessions } from "./modules/sessions/repo.js";
-import { sweepExpiredGrants } from "./modules/breakglass/repo.js";
-import { registerMfaConsumers } from "./modules/mfa/consumer.js";
+import { reapExpiredSessions }      from "./modules/sessions/repo.js";
+import { sweepExpiredGrants }       from "./modules/breakglass/repo.js";
+import { registerMfaConsumers }     from "./modules/mfa/consumer.js";
 import { registerSyncFeederConsumers } from "./modules/sync/feeder.js";
+import { registerIdentityTenantOnboardConsumers } from "./modules/tenant-onboard/consumer.js";
 import * as keycloak from "./shared/keycloak.js";
 import { reconcileDueDeactivations, countPending } from "./shared/kc-reconcile.js";
 
@@ -19,6 +20,7 @@ registerRbacConsumers(queue);
 registerSessionConsumers(queue);
 registerMfaConsumers(queue);
 registerSyncFeederConsumers(queue);
+registerIdentityTenantOnboardConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 
@@ -42,9 +44,7 @@ const bgSweeper = setInterval(() => {
 }, BG_SWEEP_INTERVAL_MS);
 bgSweeper.unref?.();
 
-// SEC H2: periodic Keycloak deactivation reconciler. Retries any deactivation
-// that the post-commit best-effort call could not confirm (or that crashed
-// before confirmation) so a deactivated user is never left enabled in Keycloak.
+// SEC H2: periodic Keycloak deactivation reconciler.
 const KC_RECONCILE_INTERVAL_MS = Number(process.env.KC_RECONCILE_INTERVAL_MS ?? 60000);
 const kcReconciler = setInterval(() => {
   void reconcileDueDeactivations(db, (tenantId, email) => keycloak.deactivateUser(tenantId, email, log))

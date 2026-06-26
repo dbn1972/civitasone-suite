@@ -10,5 +10,14 @@ export default defineConfig({
       CACHE_DRIVER:  "memory",
       FINANCE_SERVICE_URL: "http://localhost:3007",
     },
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 });

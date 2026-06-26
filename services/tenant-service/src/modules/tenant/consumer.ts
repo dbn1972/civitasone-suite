@@ -59,6 +59,48 @@ export function registerTenantConsumers(queue: Queue): void {
     });
     await cache.invalidate(keyFor(msg.payload.id));
   });
+
+  /**
+   * onboardTenant — activates the tenant (draft → active) and emits
+   * tenant.tenant.onboarded so downstream services (finance, identity) can
+   * seed themselves without coupling to the tenant-service DB.
+   *
+   * This command is published by createTenantPipeline immediately after the
+   * createTenant command, so it is typically processed right after the tenant
+   * row exists. The consumer does a findByIdTx; if the row isn't there yet
+   * (race: create command hasn't been processed) it throws and the queue will
+   * redeliver.
+   */
+  queue.subscribe<{
+    tenantId: string;
+    adminEmail: string;
+    adminName: string;
+    edition: string;
+  }>(COMMANDS.onboardTenant, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const p = msg.payload;
+      const cur = await repo.findByIdTx(tx, p.tenantId);
+      if (!cur) throw new Error(`tenant ${p.tenantId} not found — onboard command arrived before create was processed`);
+      // Only advance draft → active. If already active (e.g. redelivery after
+      // partial commit), the domain rule is already satisfied; skip silently.
+      if (cur.status === "draft") {
+        await repo.update(tx, p.tenantId, {
+          status: "active",
+          updatedBy: msg.actorId,
+          version: cur.version + 1,
+        });
+      }
+      // Emit the onboarded event carrying enough context for downstream seeds.
+      await emit(tx, msg, EVENTS.tenantOnboarded, {
+        tenantId: p.tenantId,
+        adminEmail: p.adminEmail,
+        adminName: p.adminName,
+        edition: p.edition,
+      }, "onboard", p.tenantId);
+    });
+    await cache.invalidate(keyFor(msg.payload.tenantId));
+  });
 }
 
 /** Enqueue the domain event + the mandatory audit event (CLAUDE.md §3: every mutation audits). */

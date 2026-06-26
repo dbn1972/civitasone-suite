@@ -18,22 +18,108 @@ rule_files:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: []   # wire an Alertmanager target here in prod
+        - targets:
+            - 'alertmanager:9093'
 
 scrape_configs:
+  # -- Gateway ----------------------------------------------------------------
   - job_name: gateway
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:8080"]
-        labels: { service: gateway }
+      - targets: ['host.docker.internal:8080']
+        labels: { service: gateway, tier: gateway }
 
-  # Domain services bind 127.0.0.1 on their own ports; list them so consumer
-  # error / DLQ / relay-failure metrics are scraped per service.
-  - job_name: civitasone-services
+  # -- Core platform (3001-3006) ----------------------------------------------
+  - job_name: civitasone-core
     metrics_path: /metrics
     static_configs:
       - targets:
-          - "host.docker.internal:3001"  # identity
-          - "host.docker.internal:3007"  # finance
-          - "host.docker.internal:3030"  # queue
-        labels: { tier: backend }
+          - 'host.docker.internal:3001'   # identity
+          - 'host.docker.internal:3002'   # tenant
+          - 'host.docker.internal:3003'   # policy
+          - 'host.docker.internal:3004'   # audit
+          - 'host.docker.internal:3005'   # install
+          - 'host.docker.internal:3006'   # notification
+        labels: { tier: core }
+
+  # -- Finance & procurement (3007-3009) -------------------------------------
+  - job_name: civitasone-finance
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3007'   # finance
+          - 'host.docker.internal:3008'   # procurement
+          - 'host.docker.internal:3009'   # contract
+        labels: { tier: finance }
+
+  # -- Establishment & physical assets (3010-3015) ---------------------------
+  - job_name: civitasone-estab
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3010'   # estab
+          - 'host.docker.internal:3011'   # stock
+          - 'host.docker.internal:3012'   # hrms
+          - 'host.docker.internal:3013'   # payroll
+          - 'host.docker.internal:3014'   # project
+          - 'host.docker.internal:3015'   # asset
+        labels: { tier: estab }
+
+  # -- Reporting & plugins (3016-3018) ----------------------------------------
+  - job_name: civitasone-reporting
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3016'   # report
+          - 'host.docker.internal:3017'   # plugin
+          - 'host.docker.internal:3018'   # theme
+        labels: { tier: reporting }
+
+  # -- Government-specific (3019-3021) ----------------------------------------
+  - job_name: civitasone-gov
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3019'   # grant
+          - 'host.docker.internal:3020'   # citizen
+          - 'host.docker.internal:3021'   # legal
+        labels: { tier: government }
+
+  # -- Admin & billing (3022-3023) --------------------------------------------
+  - job_name: civitasone-admin
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3022'   # admin
+          - 'host.docker.internal:3023'   # billing
+        labels: { tier: admin }
+
+  # -- CRM & operations (3024-3027) -------------------------------------------
+  - job_name: civitasone-crm
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3024'   # crm
+          - 'host.docker.internal:3025'   # inventory
+          - 'host.docker.internal:3026'   # telephony
+          - 'host.docker.internal:3027'   # helpdesk
+        labels: { tier: crm }
+
+  # -- Intelligence & automation (3028-3029) ----------------------------------
+  - job_name: civitasone-intelligence
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3028'   # knowledge
+          - 'host.docker.internal:3029'   # workflow
+        labels: { tier: intelligence }
+
+  # -- Infrastructure services ------------------------------------------------
+  - job_name: civitasone-infra
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3030'   # queue
+          - 'host.docker.internal:3031'   # analytics
+          - 'host.docker.internal:4012'   # location
+        labels: { tier: infra }

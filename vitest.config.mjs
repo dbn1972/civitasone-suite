@@ -10,5 +10,14 @@ export default {
       // Finance service DB (for cross-tenant isolation tests)
       DATABASE_URL: process.env.DATABASE_URL ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance",
     },
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 };

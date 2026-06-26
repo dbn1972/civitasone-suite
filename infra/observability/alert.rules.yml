@@ -1,4 +1,4 @@
-# OPS-1 (09-T1): alert rules that make "invisible failures" fire.
+# OPS-1 (09-T1): alert rules that make 'invisible failures' fire.
 # These pair with the app metrics emitted by @civitasone/observability and the
 # CloudWatch SQS alarms provisioned in infra/aws/modules/sqs (05-T2).
 groups:
@@ -11,8 +11,8 @@ groups:
         for: 5m
         labels: { severity: critical }
         annotations:
-          summary: "Queue consumer errors on {{ $labels.service }}/{{ $labels.topic }}"
-          description: "consumer_errors_total is increasing — a subscribed handler is throwing."
+          summary: 'Queue consumer errors on {{ .service }}/{{ .topic }}'
+          description: 'consumer_errors_total is increasing — a subscribed handler is throwing.'
 
       # Messages are dead-lettering — poison messages or a persistent failure.
       - alert: DlqMessagesAppearing
@@ -20,8 +20,8 @@ groups:
         for: 0m
         labels: { severity: critical }
         annotations:
-          summary: "Messages dead-lettered on topic {{ $labels.topic }}"
-          description: "dlq_messages_total increased — investigate the topic's DLQ."
+          summary: 'Messages dead-lettered on topic {{ .topic }}'
+          description: 'dlq_messages_total increased — investigate the topic DLQ.'
 
       # The transactional outbox relay is failing to publish — writes committed
       # to the DB are not reaching the queue.
@@ -30,20 +30,20 @@ groups:
         for: 0m
         labels: { severity: critical }
         annotations:
-          summary: "Outbox relay failures on {{ $labels.service }}"
-          description: "outbox_relay_failures_total increased — committed events may not be published."
+          summary: 'Outbox relay failures on {{ .service }}'
+          description: 'outbox_relay_failures_total increased — committed events may not be published.'
 
-      # A service stopped exposing metrics / is down.
+      # A service stopped exposing metrics / is down (5m for pager fatigue reduction).
       - alert: ServiceDown
         expr: up == 0
-        for: 2m
+        for: 5m
         labels: { severity: critical }
         annotations:
-          summary: "Service {{ $labels.job }} target {{ $labels.instance }} is down"
-          description: "Prometheus cannot scrape the target — process down or /metrics unreachable."
+          summary: 'Service {{ .job }} target {{ .instance }} is down'
+          description: 'Prometheus cannot scrape the target — process down or /metrics unreachable.'
 
       # OPS-1 (T1.2): any failure routed through captureError() — the single
-      # choke point for "invisible failures". This fires for thrown handlers,
+      # choke point for 'invisible failures'. This fires for thrown handlers,
       # outbox publish errors, and any code path that calls captureError, even
       # where there is no more specific metric above.
       - alert: CapturedErrorsAppearing
@@ -51,6 +51,35 @@ groups:
         for: 0m
         labels: { severity: critical }
         annotations:
-          summary: "Captured errors on {{ $labels.service }}"
-          description: "captured_errors_total increased — a failure was captured via captureError(); inspect the captured_error structured logs in Loki."
+          summary: 'Captured errors on {{ .service }}'
+          description: 'captured_errors_total increased — a failure was captured via captureError(); inspect the captured_error structured logs in Loki.'
 
+  - name: civitasone-sqs-dlq
+    rules:
+      # SQS DLQ depth gauge — fires when any queue accumulates > 10 messages.
+      # sqs_queue_depth is emitted by queue-service and individual workers when
+      # they poll the SQS DLQ ARN via @civitasone/observability.
+      - alert: DlqDepthHigh
+        expr: sqs_queue_depth{queue_type='dlq'} > 10
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: 'DLQ depth high on {{ .queue_name }} ({{  }} messages)'
+          description: 'SQS DLQ {{ .queue_name }} has {{  }} messages. Investigate poison messages or persistent consumer failures.'
+
+  - name: civitasone-http-errors
+    rules:
+      # High HTTP 5xx error rate — more than 5% of requests are failing.
+      # Uses http_requests_total{status=~'5..'} from @civitasone/observability.
+      - alert: HighHttpErrorRate
+        expr: |
+          (
+            sum by (job, service) (rate(http_requests_total{status=~'5..'}[5m]))
+            /
+            sum by (job, service) (rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'High HTTP 5xx error rate on {{ .job }}/{{ .service }}'
+          description: 'More than 5% of requests to {{ .job }} are returning 5xx errors over the last 5 minutes. Current rate: {{ printf %.1f (mul  100) }}%.'

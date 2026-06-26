@@ -11,5 +11,14 @@ export default defineConfig({
       CITIZEN_PII_KEY: "test_pii_master_key_for_vitest_32",
       CITIZEN_PII_SALT: "civitas-citizen-pii",
     },
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 });

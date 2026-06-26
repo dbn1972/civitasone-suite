@@ -13,5 +13,14 @@ export default defineConfig({
       // At-rest PII key for caller/callee phone encryption (test-only value).
       TELEPHONY_PII_KEY: "test_telephony_pii_key_0123456789",
     },
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 });
