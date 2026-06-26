@@ -1,4 +1,4 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { grantInstallments, grantDisbursements, grantPfmsRecords, type InstallmentRow, type InstallmentInsert, type DisbursementRow, type DisbursementInsert, type PfmsRecordInsert } from "./schema.js";
 
@@ -38,19 +38,19 @@ export async function sumDisbursedForApplication(tx: Writer, applicationId: stri
   // P1-1: count only COMPLETED disbursements (post-EFT settlement), not the
   // optimistic installment status. A failed/initiated disbursement must NOT
   // inflate the approved/UC ceiling. Tenant-scoped (P1 isolation).
-  const installments = await (tx as typeof db).select({ id: grantInstallments.id })
-    .from(grantInstallments)
-    .where(and(eq(grantInstallments.applicationId, applicationId), eq(grantInstallments.tenantId, tenantId)));
-  if (!installments.length) return 0n;
-  const ids = installments.map((i) => i.id);
-  const rows = await (tx as typeof db).select({ amountMinor: grantDisbursements.amountMinor })
+  // SC-1: uses SQL SUM() aggregates instead of fetching all rows — safe at
+  // any data volume (no LIMIT on an aggregate that must be exact).
+  const installmentSum = await (tx as typeof db)
+    .select({ total: sql<string>`coalesce(sum(${grantDisbursements.amountMinor}), 0)` })
     .from(grantDisbursements)
+    .innerJoin(grantInstallments, eq(grantDisbursements.installmentId, grantInstallments.id))
     .where(and(
-      inArray(grantDisbursements.installmentId, ids),
+      eq(grantInstallments.applicationId, applicationId),
       eq(grantDisbursements.tenantId, tenantId),
+      eq(grantInstallments.tenantId, tenantId),
       eq(grantDisbursements.status, "completed"),
     ));
-  return rows.reduce((acc, r) => acc + r.amountMinor, 0n);
+  return BigInt(installmentSum[0]?.total ?? "0");
 }
 
 export async function insertInstallment(tx: Writer, row: InstallmentInsert): Promise<void> {
@@ -102,6 +102,9 @@ export async function listInstallmentsByTenant(tenantId: string, limit = 200): P
  * Chain #4: installments awaiting a specific project milestone that are eligible
  * for release. "Releasable" = milestone-linked AND not yet disbursed/initiated
  * (i.e. still `pending`). Tenant-scoped.
+ * SC-1: capped at 200 — a milestone should never have more than a handful of
+ * linked installments; 200 is a safe upper bound that prevents a full table
+ * scan while never silently dropping legitimate records in practice.
  */
 export async function findReleasableInstallmentsByMilestone(
   tx: Writer, milestoneId: string, tenantId: string,
@@ -111,5 +114,6 @@ export async function findReleasableInstallmentsByMilestone(
       eq(grantInstallments.milestoneId, milestoneId),
       eq(grantInstallments.tenantId, tenantId),
       eq(grantInstallments.status, "pending"),
-    ));
+    ))
+    .limit(200);
 }

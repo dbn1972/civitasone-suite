@@ -81,12 +81,15 @@ export async function findByIdTx(tx: Writer, id: string, tenantId: string): Prom
  * Used to block a repeat actor from acting on a downstream step.
  */
 export async function priorActorTasks(tx: Writer, instanceId: string, actorId: string): Promise<TaskRow[]> {
+  // SC-1: bounded — a workflow instance will never have more than a handful of
+  // completed steps for one actor; 50 is a safe upper bound for SoD checks.
   return (tx as typeof db).select().from(tasks)
     .where(and(
       eq(tasks.instanceId, instanceId),
       eq(tasks.status, "completed"),
       eq(tasks.completedBy, actorId),
-    ));
+    ))
+    .limit(50);
 }
 
 /**
@@ -97,12 +100,14 @@ export async function priorActorTasks(tx: Writer, instanceId: string, actorId: s
  * completions rather than racing past them.
  */
 export async function priorActorTasksTx(tx: Writer, instanceId: string, actorId: string): Promise<TaskRow[]> {
+  // SC-1: bounded at 50 — same limit as priorActorTasks.
   return (tx as typeof db).select().from(tasks)
     .where(and(
       eq(tasks.instanceId, instanceId),
       eq(tasks.status, "completed"),
       eq(tasks.completedBy, actorId),
     ))
+    .limit(50)
     .for("update");
 }
 
