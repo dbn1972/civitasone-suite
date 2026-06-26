@@ -24,3 +24,14 @@ export const suspendTenantBody = z.object({
 export type SuspendTenantBody = z.infer<typeof suspendTenantBody>;
 
 export const tenantIdParam = z.object({ tenantId: z.string().uuid() });
+
+export const onboardTenantBody = z.object({
+  name: z.string().min(2).max(200),
+  domain: z.string().min(3).max(253).regex(/^[a-z0-9.-]+$/i, "invalid domain"),
+  edition: z.enum(["small_office", "psu", "govt"]),
+  region: z.string().min(2).max(64),
+  residency: z.string().min(2).max(64),
+  adminEmail: z.string().email().max(254),
+  adminName: z.string().min(2).max(200),
+});
+export type OnboardTenantBody = z.infer<typeof onboardTenantBody>;

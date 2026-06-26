@@ -3,12 +3,14 @@ export const COMMANDS = {
   createTenant: "tenant.tenant.create",
   updateTenant: "tenant.tenant.update",
   suspendTenant: "tenant.tenant.suspend",
+  onboardTenant: "tenant.tenant.onboard",
 } as const;
 
 export const EVENTS = {
   tenantCreated: "tenant.tenant.created",
   tenantUpdated: "tenant.tenant.updated",
   tenantSuspended: "tenant.tenant.suspended",
+  tenantOnboarded: "tenant.tenant.onboarded",
 } as const;
 
 export const SERVICE = "tenant";

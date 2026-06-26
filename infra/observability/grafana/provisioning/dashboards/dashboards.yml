@@ -1,0 +1,12 @@
+apiVersion: 1
+providers:
+- allowUiUpdates: true
+  disableDeletion: false
+  folder: CivitasOne
+  name: CivitasOne
+  options:
+    foldersFromFilesStructure: false
+    path: /etc/grafana/dashboards
+  orgId: 1
+  type: file
+  updateIntervalSeconds: 30

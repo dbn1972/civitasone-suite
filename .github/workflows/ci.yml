@@ -427,6 +427,64 @@ jobs:
       - name: Contract score must be 10/10
         run: node scripts/contract/score.mjs
 
+
+  # ─────────────────────────────────────────────
+  # Job: Coverage gate — fail if below thresholds
+  # Runs after unit tests pass; enforces per-service coverage minimums.
+  # ─────────────────────────────────────────────
+  coverage-gate:
+    name: Coverage Gate
+    runs-on: ubuntu-latest
+    needs: [test]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: civitas
+          POSTGRES_PASSWORD: civitas_test
+          POSTGRES_DB: civitas_test
+        ports: ['5435:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+    env:
+      REDIS_URL: redis://localhost:6379
+      QUEUE_DRIVER: memory
+      JWT_SECRET: ci-test-secret-min-32-chars-long
+      JWT_ALGORITHM: HS256
+      NODE_ENV: test
+      PGHOST: localhost
+      PGPORT: '5435'
+      PGUSER: civitas
+      PGPASSWORD: civitas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - name: Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='./packages/*'
+      - name: Bootstrap Postgres (per-service DBs + migrations)
+        run: bash scripts/ci/bootstrap-postgres.sh
+      - name: Run coverage with JSON reporter (thresholds enforced by vitest.config.ts)
+        run: pnpm turbo coverage --reporter=json
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: '**/coverage/'
+          retention-days: 14
+
   # ─────────────────────────────────────────────
   # Job 11: QA readiness score (informational on PRs)
   # ─────────────────────────────────────────────

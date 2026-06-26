@@ -10,5 +10,14 @@ export default defineConfig({
       CACHE_DRIVER:  "memory",
       AADHAAR_SALT:  "test-aadhaar-salt-for-unit-tests",
     },
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 });

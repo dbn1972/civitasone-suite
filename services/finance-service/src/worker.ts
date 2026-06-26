@@ -2,11 +2,12 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
-import { registerBudgetConsumers }   from "./modules/budget/consumer.js";
-import { registerGlConsumers }       from "./modules/gl/consumer.js";
-import { registerTreasuryConsumers } from "./modules/treasury/consumer.js";
-import { registerPaymentsConsumers } from "./modules/payments/consumer.js";
-import { registerIntegrationConsumers } from "./modules/integrations/consumer.js";
+import { registerBudgetConsumers }        from "./modules/budget/consumer.js";
+import { registerGlConsumers }            from "./modules/gl/consumer.js";
+import { registerTreasuryConsumers }      from "./modules/treasury/consumer.js";
+import { registerPaymentsConsumers }      from "./modules/payments/consumer.js";
+import { registerIntegrationConsumers }   from "./modules/integrations/consumer.js";
+import { registerTenantOnboardConsumers } from "./modules/tenant-onboard/consumer.js";
 
 const log = pino({ name: "finance-worker" });
 
@@ -15,6 +16,7 @@ registerGlConsumers(queue);
 registerTreasuryConsumers(queue);
 registerPaymentsConsumers(queue);
 registerIntegrationConsumers(queue);
+registerTenantOnboardConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

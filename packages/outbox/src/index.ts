@@ -15,9 +15,20 @@
  * be delivered" with no dual-write hole.
  */
 import { pgSchema, uuid, varchar, jsonb, timestamp } from "drizzle-orm/pg-core";
+import type { PgDatabase } from "drizzle-orm/pg-core";
 import { and, eq, isNull } from "drizzle-orm";
+import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import type { Queue } from "@civitasone/queue";
 import { incrementOutboxRelayFailure, captureError } from "@civitasone/observability";
+
+/**
+ * Minimal Drizzle surface accepted by both the full database instance and any
+ * postgres-js transaction. `PgTransaction` extends `PgDatabase`, so
+ * `PostgresJsDatabase<TSchema>` and `PostgresJsTransaction<TFullSchema,TSchema>`
+ * are both assignable here without additional casts at call sites.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DrizzleTx = PgDatabase<PostgresJsQueryResultHKT, any, any>;
 
 export const outbox = pgSchema("_outbox");
 export const inbox = pgSchema("_inbox");
@@ -43,7 +54,7 @@ export const outboxSchema = { outboxMessages, processed };
 
 /** Enqueue an event into the outbox — MUST be called inside the same tx as the business write. */
 export async function enqueue(
-  tx: any, // Drizzle transaction — typed as any to sidestep invariant overload issues
+  tx: DrizzleTx,
   e: { topic: string; eventType: string; tenantId: string; actorId: string; correlationId: string; payload: Record<string, unknown> }
 ): Promise<void> {
   await tx.insert(outboxMessages).values(e);
@@ -55,7 +66,7 @@ export async function enqueue(
  * for the next cycle) instead of aborting the whole batch. Returns the number
  * of rows successfully published.
  */
-export async function relayOnce(db: any, queue: Queue, batch = 100, service = process.env.SERVICE_NAME ?? "service"): Promise<number> {
+export async function relayOnce(db: DrizzleTx, queue: Queue, batch = 100, service = process.env.SERVICE_NAME ?? "service"): Promise<number> {
   const rows = await db.select().from(outboxMessages).where(isNull(outboxMessages.publishedAt)).limit(batch);
   let published = 0;
   for (const row of rows) {
@@ -85,7 +96,7 @@ export async function relayOnce(db: any, queue: Queue, batch = 100, service = pr
  * captured and the loop continues (the old copies rethrew here, which produced
  * an uncaught exception that could kill the relay).
  */
-export function startRelay(db: any, queue: Queue, intervalMs = 500, service = process.env.SERVICE_NAME ?? "service"): NodeJS.Timeout {
+export function startRelay(db: DrizzleTx, queue: Queue, intervalMs = 500, service = process.env.SERVICE_NAME ?? "service"): NodeJS.Timeout {
   return setInterval(() => {
     relayOnce(db, queue, 100, service).catch((err) => {
       incrementOutboxRelayFailure(service);
@@ -95,7 +106,7 @@ export function startRelay(db: any, queue: Queue, intervalMs = 500, service = pr
 }
 
 /** Mark a consumed message processed (idempotency). Returns false if already seen. */
-export async function markProcessed(tx: any, messageId: string): Promise<boolean> {
+export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<boolean> {
   // Atomic claim: ON CONFLICT DO NOTHING + RETURNING is race-free (the old
   // SELECT-then-INSERT could let two concurrent deliveries both pass the check,
   // then one aborts on the PK). Empty return means already processed.

@@ -12,5 +12,14 @@ export default defineConfig({
       NOTIFICATION_SMS_DRIVER: "stub",
       NOTIFICATION_WHATSAPP_DRIVER: "stub",
     },
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 });
