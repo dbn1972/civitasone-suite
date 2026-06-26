@@ -9,6 +9,7 @@ import { assertThreeWayMatchPresent, assertBillPassed, assertValidPaymentMode, n
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists } from "../masters/repo.js";
+import * as pfmsRepo from "../pfms/repo.js";
 import { getPeriodStatus } from "../period-close/routes.js";
 import * as allocRepo from "../budget/allocation-repo.js";
 import { fyFromDate, nextDocNo } from "../hoa/voucher.js";
@@ -33,11 +34,19 @@ export function registerPaymentsConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.billCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
-      ddoCode: string; paoCode?: string;
+      ddoCode?: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
       netMinor: number; poRef?: string; grnRef?: string; billDate?: string;
     };
-    assertValidDdoCode(p.ddoCode);
+    // B1: when the producer (e.g. grn.accepted integration handler) omits ddoCode,
+    // fall back to FINANCE_DEFAULT_DDO_CODE env var, then the tenant PFMS config
+    // defaultDdo, then the constant DDO000001 (prevents dead-lettering every GRN bill).
+    let resolvedDdoCode = p.ddoCode;
+    if (!resolvedDdoCode) {
+      const tenantCfg = await pfmsRepo.getTenantConfig(msg.tenantId);
+      resolvedDdoCode = process.env.FINANCE_DEFAULT_DDO_CODE ?? tenantCfg?.defaultDdo ?? "DDO000001";
+    }
+    assertValidDdoCode(resolvedDdoCode);
     const hasMismatch = !p.poRef || !p.grnRef;
     // C3: derive the period from the bill's OWN posting/value date, not wall-clock.
     // The bill carries an optional billDate (YYYY-MM-DD); when absent we fall back
@@ -59,7 +68,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // HoA: well-formed 18-digit segmentation + major head exists in master
       await assertValidHoAWithMaster(head.hoaCode, reader);
       // DDO/PAO must exist in the per-tenant master (when provided)
-      if (!(await ddoExists(p.tenantId, p.ddoCode.toUpperCase(), reader))) {
+      if (!(await ddoExists(p.tenantId, resolvedDdoCode.toUpperCase(), reader))) {
         throw new Error(`UNKNOWN_DDO: ${p.ddoCode} not found in DDO master`);
       }
       if (p.paoCode && !(await paoExists(p.tenantId, p.paoCode.toUpperCase(), reader))) {
@@ -89,7 +98,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       );
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo, vendorId: p.vendorId,
-        headId: p.headId, ddoCode: p.ddoCode.toUpperCase(),
+        headId: p.headId, ddoCode: resolvedDdoCode.toUpperCase(),
         ...(p.paoCode ? { paoCode: p.paoCode.toUpperCase() } : {}),
         sanctionRef: p.sanctionRef ?? null,
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",

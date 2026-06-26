@@ -18,14 +18,21 @@ import { eq } from "drizzle-orm";
 const AUDIT_TOPIC = "audit.event.record";
 
 type SendPayload = {
-  templateId: string;
-  recipient: string;
+  // Standard shape (required): at least one of templateId or body must be present.
+  templateId?: string;
+  // Legacy audit/legal shape may omit recipient and use recipientId instead.
+  recipient?: string;
   recipientId?: string;
   channel?: string;
   eventType?: string;
   variables?: Record<string, string>;
   deliveryId?: string;
   retryCount?: number;
+  // Legacy direct-body shape (audit-service observation consumer, etc.)
+  subject?: string;
+  body?: string;
+  // Legal cron shape (hearing-reminders)
+  type?: string;
 };
 
 export function registerDeliveryConsumers(q: Queue): void {
@@ -38,14 +45,26 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
   const p = msg.payload;
   const deliveryId = p.deliveryId ?? randomUUID();
   const retryCount = p.retryCount ?? 0;
+
+  // N1: normalize multi-shape payloads into the canonical {templateId, recipient} form.
+  // Legacy audit-service sends {channel, recipient, subject, body} without a templateId.
+  // Legal cron sends {type, recipientId, hearingId, hearingDate} without recipient or templateId.
+  // Both shapes are valid business notifications — we synthesize a templateId (default)
+  // and derive recipient from recipientId when the explicit field is absent.
+  const effectiveRecipient = p.recipient ?? p.recipientId ?? msg.actorId;
   const recipientId = p.recipientId ?? null;
+  const effectiveTemplateId = p.templateId ?? "00000000-0000-4000-8001-000000000000"; // SYSTEM_TEMPLATE_IDS.default
+  const inlineBody = p.body;   // present only on legacy direct-body shape
+  const inlineSubject = p.subject ?? undefined;
 
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
 
-    const templateRows = await tx.select().from(notificationTemplates).where(eq(notificationTemplates.id, p.templateId)).limit(1);
+    const templateRows = p.templateId
+      ? await tx.select().from(notificationTemplates).where(eq(notificationTemplates.id, effectiveTemplateId)).limit(1)
+      : [];
     const template = templateRows[0];
-    const userId = p.recipientId ?? p.recipient;
+    const userId = recipientId ?? effectiveRecipient;
     const prefRows = await tx.select().from(notificationPrefs).where(eq(notificationPrefs.userId, userId));
     const prefs = prefRows.map((r) => ({
       id: r.id, tenantId: r.tenantId, userId: r.userId, eventType: r.eventType,
@@ -70,8 +89,8 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     if (optedOut || channel === CHANNEL_NONE) {
       if (!p.deliveryId) {
         await repo.insertDelivery(tx, {
-          id: deliveryId, tenantId: msg.tenantId, templateId: p.templateId,
-          recipient: p.recipient, recipientId, channel: CHANNEL_NONE, status: "skipped",
+          id: deliveryId, tenantId: msg.tenantId, templateId: effectiveTemplateId,
+          recipient: effectiveRecipient, recipientId, channel: CHANNEL_NONE, status: "skipped",
           retryCount, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
         });
       } else {
@@ -92,21 +111,21 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
 
     if (!p.deliveryId) {
       await repo.insertDelivery(tx, {
-        id: deliveryId, tenantId: msg.tenantId, templateId: p.templateId,
-        recipient: p.recipient, recipientId, channel: preferred, status: "sending",
+        id: deliveryId, tenantId: msg.tenantId, templateId: effectiveTemplateId,
+        recipient: effectiveRecipient, recipientId, channel: preferred, status: "sending",
         retryCount, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
     } else {
       await repo.updateDeliveryStatus(tx, deliveryId, "sending", msg.actorId, retryCount + 1);
     }
 
-    const body = template?.body ?? "(no template body)";
+    const body = inlineBody ?? template?.body ?? "(no template body)";
     const sendResult = await sendWithFallback(attemptChannels, {
-      recipient: p.recipient,
-      subject: template?.subject ?? null,
+      recipient: effectiveRecipient,
+      subject: template?.subject ?? inlineSubject ?? null,
       body,
       tenantId: msg.tenantId,
-      userId: p.recipientId ?? p.recipient,
+      userId: recipientId ?? effectiveRecipient,
       ...(p.variables ? { variables: p.variables } : {}),
     });
 
@@ -131,7 +150,7 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
         topic: EVENTS.permanentlyFailed, eventType: EVENTS.permanentlyFailed, tenantId: msg.tenantId,
         actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
-          deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId, channel: sendResult.channel,
+          deliveryId, templateId: effectiveTemplateId, recipient: effectiveRecipient, recipientId, channel: sendResult.channel,
           retryCount: nextRetry, error: sendResult.error,
         },
       });
@@ -150,12 +169,12 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: EVENTS.delivered, eventType: EVENTS.delivered, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
-      payload: { deliveryId, templateId: p.templateId, recipient: p.recipient, recipientId, channel: sendResult.channel },
+      payload: { deliveryId, templateId: effectiveTemplateId, recipient: effectiveRecipient, recipientId, channel: sendResult.channel },
     });
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
-      payload: { service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId, outcome: "success", recipient: maskRecipient(p.recipient) },
+      payload: { service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId, outcome: "success", recipient: maskRecipient(effectiveRecipient) },
     });
   });
 }

@@ -13,7 +13,7 @@ export class DomainError extends Error {
  * H3: paise can exceed 2^53, so balance is checked in bigint, not float.
  */
 export function assertJournalBalances(lines: JournalLine[]): void {
-  if (lines.length < 2) {
+  if (!lines || lines.length < 2) {
     throw new DomainError("JOURNAL_TOO_FEW_LINES", "a journal requires at least 2 lines");
   }
   const totalDebit  = lines.reduce((acc, l) => acc + BigInt(l.debitMinor),  0n);
