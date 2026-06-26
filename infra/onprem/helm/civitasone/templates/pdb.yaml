@@ -1,0 +1,17 @@
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled (ge (int $svc.replicaCount) 2) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "civitasone.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "civitasone.labels" $ | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "civitasone.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $name }}
+{{- end }}
+{{- end }}

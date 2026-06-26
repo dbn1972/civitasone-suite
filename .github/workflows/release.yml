@@ -20,9 +20,22 @@ jobs:
         run: node scripts/qa-readiness-score.mjs --min-score 95
       - name: Production readiness score
         run: node scripts/production-readiness-score.mjs
-        continue-on-error: true
       - name: Service health check (if services running)
         run: |
           echo "Services must be verified manually on staging before deploy."
           echo "Gateway registry entry count:"
           grep -c "prefix:" services/gateway-service/src/registry.ts || true
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: release-gate
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release create "v${VERSION}" --generate-notes --title "CivitasOne v${VERSION}"
