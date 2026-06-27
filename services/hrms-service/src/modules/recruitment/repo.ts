@@ -86,3 +86,35 @@ export async function updateInterviewScorecard(
     .set({ scorecard, status: "completed", ...(recommendation ? { recommendation } : {}) })
     .where(and(eq(hrmsInterviews.id, id), eq(hrmsInterviews.tenantId, tenantId)));
 }
+
+// --- Public careers (published vacancies) ---
+
+export async function listPublishedOpenings(tenantId: string): Promise<JobOpeningRow[]> {
+  return db.select().from(hrmsJobOpenings)
+    .where(and(
+      eq(hrmsJobOpenings.tenantId, tenantId),
+      eq(hrmsJobOpenings.isPublished, "true"),
+      eq(hrmsJobOpenings.status, "open"),
+    ))
+    .orderBy(desc(hrmsJobOpenings.createdAt))
+    .limit(100);
+}
+
+export async function findPublishedOpening(id: string, tenantId: string): Promise<JobOpeningRow | null> {
+  const rows = await db.select().from(hrmsJobOpenings)
+    .where(and(
+      eq(hrmsJobOpenings.id, id),
+      eq(hrmsJobOpenings.tenantId, tenantId),
+      eq(hrmsJobOpenings.isPublished, "true"),
+      eq(hrmsJobOpenings.status, "open"),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function findJobOpeningById(id: string): Promise<JobOpeningRow | null> {
+  const rows = await db.select().from(hrmsJobOpenings)
+    .where(eq(hrmsJobOpenings.id, id))
+    .limit(1);
+  return rows[0] ?? null;
+}

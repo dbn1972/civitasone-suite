@@ -17,3 +17,40 @@ export async function listJobOpenings(tenantId: string, limit: number) {
     }));
   });
 }
+
+/** Public: list open + published vacancies for a tenant (no auth needed). */
+export async function listPublishedVacancies(tenantId: string) {
+  const rows = await repo.listPublishedOpenings(tenantId);
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    refNo: r.refNo,
+    vacancyType: r.vacancyType,
+    location: r.location,
+    qualification: r.qualification,
+    payRange: r.payRange,
+    vacancies: r.vacancies,
+    description: r.description,
+    postedAt: r.postedAt ?? undefined,
+    closesAt: r.closesAt ?? undefined,
+  }));
+}
+
+/** Public: single vacancy detail (must be published + open). */
+export async function getPublishedVacancy(id: string, tenantId: string) {
+  const row = await repo.findPublishedOpening(id, tenantId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    refNo: row.refNo,
+    vacancyType: row.vacancyType,
+    location: row.location,
+    qualification: row.qualification,
+    payRange: row.payRange,
+    vacancies: row.vacancies,
+    description: row.description,
+    postedAt: row.postedAt ?? undefined,
+    closesAt: row.closesAt ?? undefined,
+  };
+}

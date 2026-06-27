@@ -11,7 +11,7 @@ import { employeeRoutes }   from "./modules/employee/routes.js";
 import { leaveRoutes }      from "./modules/leave/routes.js";
 import { leaveContextRoutes } from "./modules/leave/context-routes.js";
 import { attendanceRoutes } from "./modules/attendance/routes.js";
-import { recruitmentRoutes } from "./modules/recruitment/routes.js";
+import { recruitmentRoutes, publicRecruitmentRoutes } from "./modules/recruitment/routes.js";
 import { trainingRoutes }   from "./modules/training/routes.js";
 import { dashboardRoutes }  from "./modules/dashboard/routes.js";
 import { orgChartRoutes }   from "./modules/orgchart/routes.js";
@@ -61,6 +61,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(leaveContextRoutes);
   await app.register(attendanceRoutes);
   await app.register(recruitmentRoutes);
+  await app.register(publicRecruitmentRoutes);
   await app.register(trainingRoutes);
   await app.register(dashboardRoutes);
   await app.register(orgChartRoutes);

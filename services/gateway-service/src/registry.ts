@@ -27,6 +27,7 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "stock",        prefix: "/api/v1/stock",     upstream: upstream("stock", 3011) },
   { name: "hrms",         prefix: "/api/v1/hrms",      upstream: upstream("hrms", 3012) },
   { name: "hr",           prefix: "/api/v1/hr",        upstream: upstream("hrms", 3012), upstreamPath: "/v1/hrms" },
+  { name: "careers",      prefix: "/api/v1/careers",   upstream: upstream("hrms", 3012) },
   { name: "payroll",      prefix: "/api/v1/payroll",   upstream: upstream("payroll", 3013) },
   { name: "project",      prefix: "/api/v1/project", upstream: upstream("project", 3014), upstreamPath: "/v1/projects" },
   { name: "projects",     prefix: "/api/v1/projects",  upstream: upstream("project", 3014), upstreamPath: "/v1/projects" },

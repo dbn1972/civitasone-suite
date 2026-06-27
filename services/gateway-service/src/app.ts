@@ -32,7 +32,7 @@ const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "
  * must be authenticated at the edge. Only auth-bootstrap (identity login/refresh)
  * and the first-run installer remain public.
  */
-const PUBLIC_PREFIXES = ["/api/identity", "/api/v1/install"];
+const PUBLIC_PREFIXES = ["/api/identity", "/api/v1/install", "/api/v1/careers"];
 
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const pathname = req.url.split("?")[0] ?? "/";

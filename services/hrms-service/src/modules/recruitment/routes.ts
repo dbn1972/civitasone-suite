@@ -5,7 +5,7 @@ import { sendValidated } from "@civitasone/schemas/validate";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createJobOpeningBody, createApplicationBody, offerApplicationBody, hireApplicationBody, idParam } from "./validators.js";
+import { createJobOpeningBody, createApplicationBody, publicApplicationBody, offerApplicationBody, hireApplicationBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -57,6 +57,49 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.hireApplication(ctx, id, body));
+  });
+
+  app.setErrorHandler(errorHandler);
+}
+
+/**
+ * Public careers routes — NO AUTH required. These power the public job board
+ * where external candidates can browse published vacancies and apply.
+ */
+export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<void> {
+  // List published vacancies for a tenant (public, no auth).
+  // Requires x-tenant-id header (set by the gateway for the custom domain or by the web proxy).
+  app.get("/v1/careers/vacancies", { config: { public: true } }, async (req, reply) => {
+    const tenantId = (req.query as { tenantId?: string })?.tenantId
+      || (req.headers["x-tenant-id"] as string | undefined)
+      || "";
+    if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "tenantId is required");
+    const vacancies = await queries.listPublishedVacancies(tenantId);
+    return reply.send({ data: vacancies });
+  });
+
+  // Get a single vacancy's detail (public).
+  app.get("/v1/careers/vacancies/:id", { config: { public: true } }, async (req, reply) => {
+    const tenantId = (req.query as { tenantId?: string })?.tenantId
+      || (req.headers["x-tenant-id"] as string | undefined)
+      || "";
+    if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "tenantId is required");
+    const { id } = idParam.parse(req.params);
+    const vacancy = await queries.getPublishedVacancy(id, tenantId);
+    if (!vacancy) throw new HttpError(404, "NOT_FOUND", "vacancy not found or not published");
+    return reply.send(vacancy);
+  });
+
+  // Apply to a published vacancy (public, no auth). Source = "public_portal".
+  app.post("/v1/careers/apply", { config: { public: true } }, async (req, reply) => {
+    const body = publicApplicationBody.parse(req.body);
+    // Resolve tenant from the vacancy
+    const vacancy = await repo.findJobOpeningById(body.jobOpeningId);
+    if (!vacancy || vacancy.status !== "open" || vacancy.isPublished !== "true") {
+      throw new HttpError(404, "NOT_FOUND", "This vacancy is not accepting applications");
+    }
+    const result = await commands.createPublicApplication(vacancy.tenantId, body);
+    return reply.code(201).send(result);
   });
 
   app.setErrorHandler(errorHandler);

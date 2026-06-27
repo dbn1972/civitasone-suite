@@ -10,13 +10,18 @@ const AUDIT = "audit.event.record";
 
 export function registerRecruitmentConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.jobCreate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; refNo: string; title: string; departmentId: string; designationId?: string; vacancies: number; description?: string; postedAt?: string; closesAt?: string };
+    const p = msg.payload as { id: string; tenantId: string; refNo: string; title: string; departmentId: string; designationId?: string; vacancies: number; description?: string; vacancyType?: string; location?: string; qualification?: string; payRange?: string; isPublished?: boolean; postedAt?: string; closesAt?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertJobOpening(tx, {
         id: p.id, tenantId: p.tenantId, refNo: p.refNo, title: p.title,
         departmentId: p.departmentId, designationId: p.designationId ?? null,
         vacancies: p.vacancies, description: p.description ?? null,
+        vacancyType: p.vacancyType ?? "regular",
+        location: p.location ?? null,
+        qualification: p.qualification ?? null,
+        payRange: p.payRange ?? null,
+        isPublished: p.isPublished ? "true" : "false",
         postedAt: p.postedAt ?? null, closesAt: p.closesAt ?? null, status: "open",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -25,13 +30,17 @@ export function registerRecruitmentConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.applicationCreate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; jobOpeningId: string; applicantName: string; email?: string; mobile?: string; resumeRef?: string };
+    const p = msg.payload as { id: string; tenantId: string; jobOpeningId: string; applicantName: string; email?: string; mobile?: string; resumeRef?: string; qualification?: string; experienceYears?: number; skills?: string[]; source?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertApplication(tx, {
         id: p.id, tenantId: p.tenantId, jobOpeningId: p.jobOpeningId,
         applicantName: p.applicantName, email: p.email ?? null,
         mobile: p.mobile ?? null, resumeRef: p.resumeRef ?? null,
+        qualification: p.qualification ?? null,
+        experienceYears: p.experienceYears ?? null,
+        skills: p.skills ?? null,
+        source: p.source ?? "internal",
         stage: "applied", status: "active",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

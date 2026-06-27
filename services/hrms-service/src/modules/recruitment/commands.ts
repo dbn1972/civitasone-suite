@@ -45,3 +45,27 @@ export async function hireApplication(ctx: RequestContext, applicationId: string
   });
   return { id: employeeId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+import type { PublicApplicationBody } from "./validators.js";
+
+/**
+ * Public application — submitted by an external candidate without authentication.
+ * The tenant is resolved from the vacancy, not from the session. Source = "public_portal".
+ */
+export async function createPublicApplication(tenantId: string, body: PublicApplicationBody): Promise<{ id: string; status: string }> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.applicationCreate, {
+    messageId: id, type: COMMANDS.applicationCreate,
+    tenantId, actorId: "public", correlationId: id, schemaVersion: "1.0",
+    payload: {
+      id, tenantId, jobOpeningId: body.jobOpeningId,
+      applicantName: body.applicantName, email: body.email,
+      mobile: body.mobile ?? null,
+      qualification: body.qualification ?? null,
+      experienceYears: body.experienceYears ?? null,
+      skills: body.skills ?? [],
+      source: "public_portal",
+    },
+  });
+  return { id, status: "received" };
+}
