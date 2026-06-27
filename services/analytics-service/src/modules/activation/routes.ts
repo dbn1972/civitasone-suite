@@ -10,9 +10,11 @@
  * isolation is enforced by the session-derived tenantId (and DB RLS).
  */
 import type { FastifyInstance } from "fastify";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { registerErrorHandler } from "../../shared/errors.js";
 import * as repo from "./repo.js";
+
+const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
 
 const FUNNEL_STEPS = new Set([
   "signin",
@@ -42,6 +44,14 @@ export async function activationRoutes(app: FastifyInstance): Promise<void> {
     if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
     const events = await repo.listActivation(ctx.tenantId);
     return reply.send({ tenantId: ctx.tenantId, events });
+  });
+
+  // Platform-wide funnel across ALL offices — platform admins only.
+  app.get("/v1/analytics/activation/funnel/platform", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PLATFORM_ADMIN);
+    const events = await repo.listActivationAllTenants();
+    return reply.send({ scope: "platform", events });
   });
 
   registerErrorHandler(app);

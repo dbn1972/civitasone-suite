@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { PageHeader, Card, StatGrid, StatCard } from "../../../_components/ds";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { requireAnyRole, getSessionRoles } from "@/lib/auth/roleGuard";
 import { COOKIE } from "@/lib/auth/config";
 import { aggregateFunnel, FUNNEL_STEPS, type ActivationEvent } from "@/lib/activation";
 
@@ -17,44 +17,64 @@ const STEP_LABELS: Record<string, string> = {
   first_transaction: "First real transaction",
 };
 
-/** Fetch the office's durable activation events from analytics-service. */
-async function loadEvents(): Promise<ActivationEvent[]> {
+/**
+ * Fetch activation events. Platform admins get the cross-office (platform) funnel;
+ * everyone else gets their own office's funnel. Returns events + the scope label.
+ */
+async function loadEvents(): Promise<{ events: ActivationEvent[]; platform: boolean }> {
   const token = cookies().get(COOKIE.ACCESS)?.value;
   const base = (process.env.CIVITASONE_API_BASE_URL || "").replace(/\/$/, "");
-  if (!token || !base) return [];
+  if (!token || !base) return { events: [], platform: false };
+
+  const roles = getSessionRoles();
+  const platform = roles.some((r) => /platform_admin|super_admin/.test(r));
+  const path = platform
+    ? "/api/v1/analytics/activation/funnel/platform"
+    : "/api/v1/analytics/activation/funnel";
+
   try {
-    const res = await fetch(`${base}/api/v1/analytics/activation/funnel`, {
+    const res = await fetch(`${base}${path}`, {
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
     });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { tenantId: string; events: { step: string; at: string }[] };
-    return (json.events ?? []).map((e) => ({
-      tenantId: json.tenantId,
+    if (!res.ok) return { events: [], platform };
+    const json = (await res.json()) as {
+      tenantId?: string;
+      events: { step: string; at: string; tenantId?: string }[];
+    };
+    const events = (json.events ?? []).map((e) => ({
+      tenantId: e.tenantId ?? json.tenantId ?? "self",
       step: e.step as ActivationEvent["step"],
       at: e.at,
     }));
+    return { events, platform };
   } catch {
-    return [];
+    return { events: [], platform };
   }
 }
 
 /**
  * Activation dashboard — the north-star view. Shows Time-to-First-Real-Transaction
- * (TTFRT) and where new offices drop off along the golden path. Admin-only.
- * Reads durable events from analytics-service (scoped to this office).
+ * (TTFRT) and where offices drop off along the golden path. Admin-only. Reads
+ * durable events from analytics-service (one office, or platform-wide for platform
+ * admins).
  */
 export default async function ActivationPage() {
   requireAnyRole(["admin", "tenant_admin", "platform_admin", "super_admin"]);
 
-  const agg = aggregateFunnel(await loadEvents());
+  const { events, platform } = await loadEvents();
+  const agg = aggregateFunnel(events);
   const ttfrt = agg.ttfrtMedianMinutes;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Activation"
-        subtitle="How quickly new offices reach their first real transaction, and where they get stuck."
+        subtitle={
+          platform
+            ? "How quickly offices across the platform reach their first real transaction, and where they get stuck."
+            : "How quickly your office reached its first real transaction, and where setup stalled."
+        }
         help="tenant-admin"
       />
 

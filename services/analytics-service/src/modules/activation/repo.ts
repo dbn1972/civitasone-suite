@@ -37,3 +37,23 @@ export async function listActivation(tenantId: string): Promise<ActivationRow[]>
     at: r.at instanceof Date ? r.at.toISOString() : String(r.at),
   }));
 }
+
+export type ActivationRowWithTenant = ActivationRow & { tenantId: string };
+
+/**
+ * Cross-tenant activation events for the platform-wide funnel. Route-gated to
+ * platform admins. NOTE: in a production posture with RLS enforced and the
+ * tenant GUC set, this must run via a BYPASSRLS analytics-reporting role; in
+ * dev/UAT the service role bypasses RLS so it returns all offices' rows.
+ */
+export async function listActivationAllTenants(): Promise<ActivationRowWithTenant[]> {
+  const rows = await db
+    .select({ tenantId: factEvents.tenantId, step: factEvents.eventType, at: factEvents.occurredAt })
+    .from(factEvents)
+    .where(eq(factEvents.source, "activation"));
+  return rows.map((r) => ({
+    tenantId: r.tenantId,
+    step: r.step,
+    at: r.at instanceof Date ? r.at.toISOString() : String(r.at),
+  }));
+}
