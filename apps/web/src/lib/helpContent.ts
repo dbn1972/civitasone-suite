@@ -33,7 +33,24 @@ export type HelpModule = {
   tasks: HelpTask[];
   /** Specialist terms used in this module (looked up in the glossary). */
   terms: string[];
+  /** Module key for tenant enablement gating; null = always available. (R13.2) */
+  moduleKey: string | null;
+  /** True for the nine Major Modules requiring full verifiable coverage. (R3.3) */
+  major: boolean;
 };
+
+/** The nine Major Modules that must each have a complete guide. */
+export const MAJOR_MODULE_SLUGS = [
+  "hr",
+  "payroll",
+  "finance",
+  "procurement",
+  "estab",
+  "grants",
+  "projects",
+  "citizen",
+  "tenant-admin",
+] as const;
 
 export const HELP_MODULES: HelpModule[] = [
   {
@@ -43,6 +60,8 @@ export const HELP_MODULES: HelpModule[] = [
     summary:
       "Look after your office's money — budgets, bills, payments, and the official account books.",
     href: "/finance",
+    moduleKey: "finance",
+    major: true,
     tasks: [
       {
         title: "Record and pay a bill",
@@ -71,7 +90,7 @@ export const HELP_MODULES: HelpModule[] = [
         ],
       },
     ],
-    terms: ["Sanction", "Budget", "GL", "Voucher", "UC", "Advance", "TDS", "PFMS"],
+    terms: ["Sanction", "Budget", "GL", "Voucher", "UC", "Advance", "TDS", "PFMS", "DBT", "3-way match", "BE", "RE"],
   },
   {
     slug: "procurement",
@@ -79,6 +98,8 @@ export const HELP_MODULES: HelpModule[] = [
     title: "Procurement",
     summary: "Buy goods and services the right way — from a request to choosing a supplier to receiving the delivery.",
     href: "/procurement",
+    moduleKey: "procurement",
+    major: true,
     tasks: [
       {
         title: "Raise a request to buy something",
@@ -105,14 +126,16 @@ export const HELP_MODULES: HelpModule[] = [
         ],
       },
     ],
-    terms: ["Indent", "RFQ", "PO", "GRN", "Tender", "Empanelment", "EMD", "Bank guarantee"],
+    terms: ["Indent", "RFQ", "PO", "GRN", "Tender", "Empanelment", "EMD", "Bank guarantee", "Reverse auction"],
   },
   {
     slug: "hr",
     icon: "👥",
-    title: "HR & Payroll",
-    summary: "Manage your people — joining, attendance, leave, salaries, and yearly reviews.",
+    title: "HR",
+    summary: "Manage your people — joining, attendance, leave, transfers, and yearly reviews. (Salaries are in the Payroll guide.)",
     href: "/hr",
+    moduleKey: "hrms",
+    major: true,
     tasks: [
       {
         title: "Apply for leave",
@@ -123,6 +146,34 @@ export const HELP_MODULES: HelpModule[] = [
         ],
       },
       {
+        title: "Fix a wrong attendance entry",
+        steps: [
+          "Open HR, then Regularisation.",
+          "Find the day that's wrong and request a correction.",
+          "Add a short reason and send it for approval.",
+        ],
+      },
+      {
+        title: "Do a yearly performance review (APAR)",
+        steps: [
+          "Open HR, then Appraisals (APAR).",
+          "Start the review for the employee and the year.",
+          "Fill in the assessment and send it on for the next stage.",
+        ],
+      },
+    ],
+    terms: ["APAR", "KRA", "TA-DA", "Deputation", "Regularisation", "LOP"],
+  },
+  {
+    slug: "payroll",
+    icon: "💰",
+    title: "Payroll",
+    summary: "Pay your people correctly — monthly salaries, provident fund and pension, tax, and pay scales.",
+    href: "/hr/payroll",
+    moduleKey: "hrms",
+    major: true,
+    tasks: [
+      {
         title: "Run the monthly payroll",
         steps: [
           "Open HR, then Payroll Runs.",
@@ -130,8 +181,60 @@ export const HELP_MODULES: HelpModule[] = [
           "Check the figures, then send for approval before salaries go out.",
         ],
       },
+      {
+        title: "View or print a salary slip",
+        steps: [
+          "Open HR, then Salary Slips.",
+          "Pick the employee and the month.",
+          "Open the slip to view or print it.",
+        ],
+      },
+      {
+        title: "Check provident fund or pension figures",
+        steps: [
+          "Open HR, then GPF or NPS.",
+          "Pick the employee to see their contributions so far.",
+          "For retirees, open Pensioners to manage the pension order (PPO).",
+        ],
+      },
     ],
-    terms: ["APAR", "GPF", "NPS", "LOP", "Gratuity", "Pay matrix", "Deputation", "Regularisation"],
+    terms: ["GPF", "NPS", "Gratuity", "Pay matrix", "CPC", "ESI", "PT", "PPO", "DDO", "LOP", "TDS"],
+  },
+  {
+    slug: "estab",
+    icon: "🏢",
+    title: "Establishment",
+    summary: "Run the office's day-to-day paperwork — files and notes, post, meetings, vehicles and the guest house.",
+    href: "/estab",
+    moduleKey: "establishment",
+    major: true,
+    tasks: [
+      {
+        title: "Move a file for approval",
+        steps: [
+          "Open Establishment, then Files.",
+          "Open the file and add your note on the note sheet.",
+          "Send it to the next desk for their note or approval.",
+        ],
+      },
+      {
+        title: "Record incoming or outgoing post (DAK)",
+        steps: [
+          "Open Establishment, then the DAK / Dispatch register.",
+          "Add the letter with who it's from or to and the date.",
+          "Mark it to the right desk to act on.",
+        ],
+      },
+      {
+        title: "Record minutes of a meeting",
+        steps: [
+          "Open Establishment, then Meetings.",
+          "Open the meeting and write up the Minutes of Meeting (MOM).",
+          "Save and share with attendees.",
+        ],
+      },
+    ],
+    terms: ["eOffice", "Note sheet", "DAK", "MOM"],
   },
   {
     slug: "grants",
@@ -139,6 +242,8 @@ export const HELP_MODULES: HelpModule[] = [
     title: "Grants",
     summary: "Give out grant money to people and organisations, and track how it's spent.",
     href: "/grants",
+    moduleKey: "grants",
+    major: true,
     tasks: [
       {
         title: "Release a grant payment",
@@ -146,6 +251,14 @@ export const HELP_MODULES: HelpModule[] = [
           "Open Grants and find the approved grant.",
           "Choose the instalment to release.",
           "Send the payment for approval.",
+        ],
+      },
+      {
+        title: "Track a Utilisation Certificate",
+        steps: [
+          "Open Grants, then UC Management.",
+          "Find the grantee and check whether their certificate is due.",
+          "Record it once received and verified.",
         ],
       },
     ],
@@ -157,6 +270,8 @@ export const HELP_MODULES: HelpModule[] = [
     title: "Projects",
     summary: "Plan and track projects — phases, tasks, milestones, and spending against budget.",
     href: "/projects",
+    moduleKey: "projects",
+    major: true,
     tasks: [
       {
         title: "Start a new project",
@@ -166,8 +281,16 @@ export const HELP_MODULES: HelpModule[] = [
           "Break the work into phases and tasks so you can track progress.",
         ],
       },
+      {
+        title: "Update a milestone",
+        steps: [
+          "Open Projects, then Milestones.",
+          "Find the milestone and update its status or date.",
+          "Save — delays show up in the project's status.",
+        ],
+      },
     ],
-    terms: ["DPR", "WBS", "Milestone", "Budget"],
+    terms: ["DPR", "WBS", "Milestone", "Budget", "Beneficiary"],
   },
   {
     slug: "citizen",
@@ -175,6 +298,8 @@ export const HELP_MODULES: HelpModule[] = [
     title: "Citizen Services",
     summary: "Handle requests from the public — information requests, complaints, and services.",
     href: "/citizen",
+    moduleKey: "citizen",
+    major: true,
     tasks: [
       {
         title: "Answer an information request (RTI)",
@@ -201,6 +326,8 @@ export const HELP_MODULES: HelpModule[] = [
     title: "Office Admin",
     summary: "Set up your office — add branches and people, choose what each person can do, and turn modules on or off.",
     href: "/tenant-admin",
+    moduleKey: null,
+    major: true,
     tasks: [
       {
         title: "Add a person and set what they can do",
@@ -214,12 +341,12 @@ export const HELP_MODULES: HelpModule[] = [
         title: "Turn a module on or off",
         steps: [
           "Open Office Admin, then Settings.",
-          "Switch on the parts you use, like Finance or HR.",
+          "Turn on the parts you use, like Finance or HR.",
           "You can change this any time.",
         ],
       },
     ],
-    terms: ["Tenant", "Module", "Role", "MFA", "SSO", "Maker-checker", "Break-glass", "LGD code"],
+    terms: ["Role", "MFA", "SSO", "Maker-checker", "Break-glass", "LGD code"],
   },
 ];
 

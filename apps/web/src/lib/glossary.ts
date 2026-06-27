@@ -19,6 +19,17 @@ export const GLOSSARY: Record<string, string> = {
   Depreciation: "The yearly reduction in an asset's value as it ages.",
   PFMS: "Public Financial Management System — the government's central payment platform.",
   TDS: "Tax Deducted at Source — tax held back from a payment and sent to the tax department.",
+  DBT: "Direct Benefit Transfer — paying scheme money straight into a beneficiary's bank account.",
+  IRN: "Invoice Reference Number — the unique ID a tax invoice gets when registered with the government portal.",
+  UTR: "Unique Transaction Reference — the number that identifies a bank transfer so you can trace it.",
+  NEFT: "National Electronic Funds Transfer — a common way to move money between banks.",
+  RTGS: "Real Time Gross Settlement — a fast bank transfer used for larger amounts.",
+  BE: "Budget Estimate — the money planned for the year before any revision.",
+  RE: "Revised Estimate — the updated budget figure after part of the year has passed.",
+  "3-way match": "Checking the order, the delivery, and the bill agree before a payment is made.",
+  "Form 16A": "A certificate showing tax that was deducted from a payment, given to the payee.",
+  Voted: "Spending that needs Parliament's or the Assembly's approval through a vote.",
+  Charged: "Spending fixed by law that does not need a separate vote.",
 
   // Procurement
   Indent: "A request to buy goods or services, raised before a purchase order.",
@@ -38,8 +49,16 @@ export const GLOSSARY: Record<string, string> = {
   LOP: "Loss of Pay — a day with no salary, usually for unapproved absence.",
   Gratuity: "A one-time payment to an employee on retirement or leaving service.",
   "Pay matrix": "The 7th Pay Commission table that sets salary by grade and level.",
+  CPC: "Central Pay Commission — the body whose recommendations set government pay scales.",
   Deputation: "Temporarily sending an employee to work in another office or organisation.",
   Regularisation: "Correcting a missing or wrong attendance entry, with approval.",
+  PPO: "Pension Payment Order — the document that authorises a retired employee's pension.",
+  DDO: "Drawing and Disbursing Officer — the official who draws and pays out government money.",
+  "DDO Code": "The official code that identifies a Drawing and Disbursing Officer.",
+  ESI: "Employees' State Insurance — a health and benefit scheme for eligible employees.",
+  PT: "Professional Tax — a small state tax deducted from salaries.",
+  KRA: "Key Result Area — the main thing a person is expected to deliver in their role.",
+  "TA-DA": "Travelling Allowance and Daily Allowance — money to cover official travel and trip costs.",
 
   // Grants / Projects
   Grantee: "The person or organisation that receives a grant.",
@@ -57,7 +76,9 @@ export const GLOSSARY: Record<string, string> = {
   Hearing: "A scheduled court date for a case.",
   eOffice: "The paperless file system for moving notes and approvals between desks.",
   "Note sheet": "The running notes and approvals attached to an official file.",
-  Dak: "Incoming post or correspondence received by the office.",
+  Dak: "Incoming and outgoing post or correspondence handled by the office.",
+  DAK: "Incoming and outgoing post or correspondence handled by the office.",
+  MOM: "Minutes of Meeting — the official written record of what a meeting decided.",
 
   // Platform / Admin (kept simple, mostly hidden from clerks)
   Tenant: "Your office or organisation's own private workspace in the system.",
@@ -76,4 +97,12 @@ export function explain(term: string): string | undefined {
   const lower = term.toLowerCase();
   const key = Object.keys(GLOSSARY).find((k) => k.toLowerCase() === lower);
   return key ? GLOSSARY[key] : undefined;
+}
+
+/**
+ * True when a plain-language definition exists for the term. Never throws — safe
+ * to use in coverage checks and to decide whether to surface a HelpTip. (R2.3)
+ */
+export function hasDefinition(term: string): boolean {
+  return explain(term) !== undefined;
 }

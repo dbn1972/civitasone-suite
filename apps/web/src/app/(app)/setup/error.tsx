@@ -1,13 +1,15 @@
 "use client";
-import { EmptyState } from "@/app/_components/ds";
-export default function Error() {
+
+import { RouteError } from "@/app/_components/RouteError";
+
+export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <div className="page-main wrap">
-      <EmptyState
-        icon="🙂"
-        title="We couldn't load your setup steps just now"
-        message="No problem — please refresh the page to try again. Nothing you've set up so far is lost."
-      />
-    </div>
+    <RouteError
+      error={error}
+      reset={reset}
+      backHref="/setup"
+      backLabel="Back to Getting Started"
+      area="Getting Started page"
+    />
   );
 }

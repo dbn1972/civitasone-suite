@@ -1,11 +1,15 @@
 "use client";
 
-import { EmptyState } from "@/app/_components/ds";
+import { RouteError } from "@/app/_components/RouteError";
 
-export default function Error() {
+export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <div className="page-main wrap">
-      <EmptyState icon="⚠️" title="Something went wrong" message="Please try refreshing the page." />
-    </div>
+    <RouteError
+      error={error}
+      reset={reset}
+      backHref="/projects"
+      backLabel="Back to Projects"
+      area="Projects page"
+    />
   );
 }

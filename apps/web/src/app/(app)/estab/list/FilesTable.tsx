@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { DataTable, Segmented } from "@/app/_components/ds";
 
 export type FileRow = {
@@ -54,6 +55,14 @@ export function FilesTable({ rows }: { rows: FileRow[] }) {
         filterable
         filterPlaceholder="Filter files…"
         pageSize={10}
+        emptyIcon="🗂️"
+        emptyTitle="No files yet"
+        emptyMessage="Open a file to start moving notes and approvals between desks."
+        emptyAction={
+          <Link href="/estab/files/new" className="btn primary" style={{ marginTop: 10 }}>
+            Open a new file
+          </Link>
+        }
       />
     </>
   );

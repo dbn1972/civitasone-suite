@@ -3,6 +3,7 @@ import { PageHeader, Card } from "../../_components/ds";
 import { ReplayTourButton } from "./ReplayTourButton";
 import { HELP_MODULES } from "@/lib/helpContent";
 import { GLOSSARY } from "@/lib/glossary";
+import { getEnabledModules, isModuleEnabled } from "@/lib/moduleVisibility";
 
 export const metadata = {
   title: "Help Centre",
@@ -10,10 +11,15 @@ export const metadata = {
 
 /**
  * Help Centre hub — a plain-language home for "how do I…?" questions.
- * Lists a short guide for every module plus a glossary of the specialist words
- * used across the system. Written for a first-time clerk with no training.
+ * Lists a short guide for every module the office uses, plus a glossary of the
+ * specialist words used across the system. Written for a first-time clerk with
+ * no training. Module guides are filtered to the tenant's enabled modules
+ * (R13.2); when enablement is unknown, all are shown.
  */
-export default function HelpPage() {
+export default async function HelpPage() {
+  const enabled = await getEnabledModules();
+  const visibleModules = HELP_MODULES.filter((m) => isModuleEnabled(enabled, m.moduleKey));
+
   const glossaryEntries = Object.entries(GLOSSARY).sort((a, b) =>
     a[0].localeCompare(b[0]),
   );
@@ -28,7 +34,7 @@ export default function HelpPage() {
 
       <h2 style={{ fontSize: 16, margin: "8px 0 12px" }}>Guides by module</h2>
       <div className="grid g-3">
-        {HELP_MODULES.map((m) => (
+        {visibleModules.map((m) => (
           <Link
             key={m.slug}
             href={`/help/${m.slug}`}

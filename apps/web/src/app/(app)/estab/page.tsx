@@ -4,7 +4,8 @@ export default function EstabHubPage() {
   return (
     <ModuleHub
       title="Establishment"
-      description="Administration hub — files, meetings, fleet, guest house and compliance."
+      description="Run the office's day-to-day paperwork — files and notes, post, meetings, vehicles and the guest house."
+      help="estab"
       links={[
         { href: "/estab/dashboard", label: "Dashboard", note: "Overview of all establishment activities" },
         { href: "/estab/list", label: "File Register", note: "Digital file tracking (eOffice)" },

@@ -11,6 +11,8 @@ export { Segmented } from "./Segmented";
 export { Tabs } from "./Tabs";
 export { EmptyState } from "./EmptyState";
 export { HelpTip } from "./HelpTip";
+export { Term } from "./Term";
+export { ErrorState } from "./ErrorState";
 export { Avatar } from "./Avatar";
 export { ProgressBar } from "./ProgressBar";
 export { ConfirmDialog } from "./ConfirmDialog";

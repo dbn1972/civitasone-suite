@@ -27,6 +27,7 @@ export default async function PayrollPage() {
       <PageHeader
         title="Payroll Runs"
         subtitle="Monthly salary processing and statutory run status."
+        help="payroll"
       />
       {source === "error" && <DataSourceBadge source="error" />}
       {structures.length === 0 ? (

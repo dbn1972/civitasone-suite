@@ -61,17 +61,44 @@ export function FirstRunTour() {
     }
   }, []);
 
-  // Move focus into the dialog when it opens, and handle Escape.
+  // Move focus into the dialog when it opens, handle Escape, and trap focus. (R11.2)
   useEffect(() => {
     if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     closeBtnRef.current?.focus();
+
+    const FOCUSABLE =
+      'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") finish();
+      if (e.key === "Escape") {
+        finish();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const node = dialogRef.current;
+      if (!node) return;
+      const focusables = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => el.offsetParent !== null || el === document.activeElement,
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus?.(); // restore focus on close (R11.2)
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, step]);
 
   function remember() {
     try {

@@ -4,18 +4,21 @@ interface DataSourceBadgeProps {
   source: DataSource;
 }
 
+/**
+ * Tells the clerk, in plain words, when they're looking at saved information
+ * because live data couldn't be reached. When everything is healthy we show
+ * nothing — the clerk doesn't need to be told the system is working.
+ * Requirement 5.2 (no "API unavailable" / "Live API" wording).
+ */
 export function DataSourceBadge({ source }: DataSourceBadgeProps) {
-  const isError = source === "error";
+  if (source !== "error") return null;
 
   return (
     <span
-      className={
-        isError
-          ? "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
-          : "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"
-      }
+      className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
+      role="status"
     >
-      {isError ? "API unavailable" : "Live API"}
+      Showing saved information
     </span>
   );
 }

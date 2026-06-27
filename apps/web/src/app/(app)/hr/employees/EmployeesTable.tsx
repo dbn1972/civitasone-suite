@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { DataTable } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -41,6 +42,14 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
         filterable
         filterPlaceholder="Search by name, code or department…"
         pageSize={15}
+        emptyIcon="👥"
+        emptyTitle="No people added yet"
+        emptyMessage="Add the people who work in your office so you can manage their leave, attendance and pay."
+        emptyAction={
+          <Link href="/help/hr" className="btn ghost" style={{ marginTop: 10 }}>
+            How HR works
+          </Link>
+        }
       />
     </>
   );

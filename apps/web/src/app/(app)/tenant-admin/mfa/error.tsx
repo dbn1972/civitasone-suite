@@ -1,3 +1,15 @@
 "use client";
-import { EmptyState } from "@/app/_components/ds";
-export default function Error() { return <div className="page-main wrap"><EmptyState icon="⚠️" title="Something went wrong" message="Please try refreshing the page." /></div>; }
+
+import { RouteError } from "@/app/_components/RouteError";
+
+export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  return (
+    <RouteError
+      error={error}
+      reset={reset}
+      backHref="/tenant-admin"
+      backLabel="Back to Office Admin"
+      area="Office Admin page"
+    />
+  );
+}
