@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+type Priority = "Low" | "Medium" | "High" | "Critical";
+
 export function NewTicketForm() {
   const router = useRouter();
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
-  const [category, setCategory] = useState("");
+  const [priority, setPriority] = useState<Priority>("Medium");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -33,9 +34,6 @@ export function NewTicketForm() {
       description: description.trim(),
       priority,
     };
-    if (category.trim()) {
-      body.category = category.trim();
-    }
 
     try {
       const res = await fetch("/api/proxy/v1/helpdesk/tickets", {
@@ -108,29 +106,15 @@ export function NewTicketForm() {
             id="priority"
             className="inp"
             value={priority}
-            onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+            onChange={(e) => setPriority(e.target.value as Priority)}
             style={{ minHeight: 44 }}
             disabled={isSubmitting}
           >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
           </select>
-        </div>
-
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-          <label className="label" htmlFor="category">
-            Category
-          </label>
-          <input
-            id="category"
-            className="inp"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            style={{ minHeight: 44 }}
-            placeholder="e.g. Infrastructure, IT Support"
-            disabled={isSubmitting}
-          />
         </div>
       </div>
 

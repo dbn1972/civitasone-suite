@@ -8,25 +8,44 @@ import { ConfirmDialog } from "@/app/_components/ds";
 export function CreateProjectForm() {
   const router = useRouter();
 
+  const [code, setCode] = useState("");
   const [projectName, setProjectName] = useState("");
-  const [projectCode, setProjectCode] = useState("");
-  const [department, setDepartment] = useState("");
-  const [scheme, setScheme] = useState("");
   const [startDate, setStartDate] = useState("");
-  const [expectedEndDate, setExpectedEndDate] = useState("");
-  const [totalBudgetRupees, setTotalBudgetRupees] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [sanctionedRupees, setSanctionedRupees] = useState("");
+  const [dprCostRupees, setDprCostRupees] = useState("");
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [invalidField, setInvalidField] = useState<string | null>(null);
 
   function validate(): string | null {
-    if (!projectName.trim()) return "Project name is required.";
-    if (!startDate) return "Start date is required.";
-    if (!expectedEndDate) return "Expected end date is required.";
-    if (expectedEndDate < startDate) return "Expected end date must be on or after start date.";
-    if (!totalBudgetRupees || isNaN(Number(totalBudgetRupees)) || Number(totalBudgetRupees) < 0)
-      return "Total budget must be a non-negative number.";
+    if (!code.trim()) {
+      setInvalidField("code");
+      return "Project code is required.";
+    }
+    if (code.trim().length > 64) {
+      setInvalidField("code");
+      return "Project code must be 64 characters or fewer.";
+    }
+    if (!projectName.trim()) {
+      setInvalidField("projectName");
+      return "Project name is required.";
+    }
+    if (startDate && endDate && endDate < startDate) {
+      setInvalidField("endDate");
+      return "End date must be on or after start date.";
+    }
+    if (sanctionedRupees && (isNaN(Number(sanctionedRupees)) || Number(sanctionedRupees) < 0)) {
+      setInvalidField("sanctionedRupees");
+      return "Sanctioned amount must be a non-negative number.";
+    }
+    if (dprCostRupees && (isNaN(Number(dprCostRupees)) || Number(dprCostRupees) < 0)) {
+      setInvalidField("dprCostRupees");
+      return "DPR cost must be a non-negative number.";
+    }
+    setInvalidField(null);
     return null;
   }
 
@@ -49,14 +68,13 @@ export function CreateProjectForm() {
     setMessage("");
 
     const body: Record<string, unknown> = {
+      code: code.trim(),
       name: projectName.trim(),
-      startDate,
-      expectedEndDate,
-      totalBudget: Math.round(Number(totalBudgetRupees) * 100),
     };
-    if (projectCode.trim()) body.projectCode = projectCode.trim();
-    if (department.trim()) body.department = department.trim();
-    if (scheme.trim()) body.scheme = scheme.trim();
+    if (startDate) body.startDate = startDate;
+    if (endDate) body.endDate = endDate;
+    if (sanctionedRupees) body.sanctionedMinor = Math.round(Number(sanctionedRupees) * 100);
+    if (dprCostRupees) body.dprCostMinor = Math.round(Number(dprCostRupees) * 100);
 
     try {
       const res = await fetch("/api/proxy/v1/projects", {
@@ -88,7 +106,23 @@ export function CreateProjectForm() {
         aria-busy={status === "submitting"}
       >
         <div className="fields">
-          <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+            <label className="label" htmlFor="code">Project code *</label>
+            <input
+              id="code"
+              className="inp"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+              aria-required="true"
+              aria-invalid={invalidField === "code"}
+              maxLength={64}
+              style={{ minHeight: 44 }}
+              placeholder="e.g. PRJ-2024-001"
+            />
+          </div>
+
+          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
             <label className="label" htmlFor="projectName">Project name *</label>
             <input
               id="projectName"
@@ -96,86 +130,67 @@ export function CreateProjectForm() {
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               required
+              aria-required="true"
+              aria-invalid={invalidField === "projectName"}
               style={{ minHeight: 44 }}
               placeholder="e.g. NH-48 Widening Phase II"
             />
           </div>
 
           <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-            <label className="label" htmlFor="projectCode">Project code</label>
-            <input
-              id="projectCode"
-              className="inp"
-              value={projectCode}
-              onChange={(e) => setProjectCode(e.target.value)}
-              style={{ minHeight: 44 }}
-              placeholder="e.g. PRJ-2024-001"
-            />
-          </div>
-
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-            <label className="label" htmlFor="department">Department</label>
-            <input
-              id="department"
-              className="inp"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              style={{ minHeight: 44 }}
-              placeholder="e.g. Public Works"
-            />
-          </div>
-
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-            <label className="label" htmlFor="scheme">Scheme</label>
-            <input
-              id="scheme"
-              className="inp"
-              value={scheme}
-              onChange={(e) => setScheme(e.target.value)}
-              style={{ minHeight: 44 }}
-              placeholder="e.g. PMGSY"
-            />
-          </div>
-
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-            <label className="label" htmlFor="startDate">Start date *</label>
+            <label className="label" htmlFor="startDate">Start date</label>
             <input
               id="startDate"
               type="date"
               className="inp"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              required
               style={{ minHeight: 44 }}
             />
           </div>
 
           <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-            <label className="label" htmlFor="expectedEndDate">Expected end date *</label>
+            <label className="label" htmlFor="endDate">End date</label>
             <input
-              id="expectedEndDate"
+              id="endDate"
               type="date"
               className="inp"
-              value={expectedEndDate}
-              onChange={(e) => setExpectedEndDate(e.target.value)}
-              required
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              aria-invalid={invalidField === "endDate"}
               style={{ minHeight: 44 }}
             />
           </div>
 
           <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-            <label className="label" htmlFor="totalBudgetRupees">Total budget (₹) *</label>
+            <label className="label" htmlFor="sanctionedRupees">Sanctioned amount (₹)</label>
             <input
-              id="totalBudgetRupees"
+              id="sanctionedRupees"
               type="number"
               min="0"
               step="0.01"
               className="inp"
-              value={totalBudgetRupees}
-              onChange={(e) => setTotalBudgetRupees(e.target.value)}
-              required
+              value={sanctionedRupees}
+              onChange={(e) => setSanctionedRupees(e.target.value)}
+              aria-invalid={invalidField === "sanctionedRupees"}
               style={{ minHeight: 44 }}
               placeholder="e.g. 5000000"
+            />
+          </div>
+
+          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+            <label className="label" htmlFor="dprCostRupees">DPR cost (₹)</label>
+            <input
+              id="dprCostRupees"
+              type="number"
+              min="0"
+              step="0.01"
+              className="inp"
+              value={dprCostRupees}
+              onChange={(e) => setDprCostRupees(e.target.value)}
+              aria-invalid={invalidField === "dprCostRupees"}
+              style={{ minHeight: 44 }}
+              placeholder="e.g. 250000"
             />
           </div>
         </div>

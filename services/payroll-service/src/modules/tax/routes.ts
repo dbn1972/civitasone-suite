@@ -10,6 +10,7 @@ import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
+import { createTaxDeclarationBody } from "./validators.js";
 import * as commands from "./commands.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
@@ -176,33 +177,24 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITER_ROLES);
 
-    const body = req.body as {
-      employeeId?: string;
-      fy?: string;
-      regime?: string;
-      section80c?: number;
-      section80d?: number;
-      otherDeductions?: number;
-      rentPaidMinor?: number;
-      prevEmployerSalaryMinor?: number;
-      otherSourcesIncomeMinor?: number;
-      perquisitesMinor?: number;
-    };
+    // Server-side zod validation (was an unchecked cast). ZodError → 400 via the
+    // shared schema error handler.
+    const body = createTaxDeclarationBody.parse(req.body);
 
     const employeeId = enforceEmployeeOwnership(ctx, body.employeeId);
-    if (!body.fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required");
+    // Strict FY check (suffix == (startYear+1) % 100) beyond the regex format.
     parseFy(body.fy);
 
-    const regime = body.regime === "old" ? "old" : "new";
+    const regime = body.regime ?? "new";
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitDeclaration(ctx, {
       employeeId,
       fy: body.fy,
       regime,
-      section80c: body.section80c ?? 0,
-      section80d: body.section80d ?? 0,
-      otherDeductions: body.otherDeductions ?? 0,
-      rentPaidMinor: body.rentPaidMinor ?? 0,
+      section80c: body.section80c,
+      section80d: body.section80d,
+      otherDeductions: body.otherDeductions,
+      rentPaidMinor: body.rentPaidMinor,
       prevEmployerSalaryMinor: body.prevEmployerSalaryMinor,
       otherSourcesIncomeMinor: body.otherSourcesIncomeMinor,
       perquisitesMinor: body.perquisitesMinor,

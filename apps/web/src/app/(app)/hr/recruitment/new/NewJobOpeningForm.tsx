@@ -3,38 +3,64 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function NewJobOpeningForm() {
   const router = useRouter();
 
+  const [refNo, setRefNo] = useState("");
   const [title, setTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [vacancies, setVacancies] = useState(1);
   const [description, setDescription] = useState("");
-  const [closingDate, setClosingDate] = useState("");
+  const [closesAt, setClosesAt] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [invalidField, setInvalidField] = useState<string | null>(null);
 
+  const refNoId = useId();
   const titleId = useId();
   const deptId = useId();
   const vacanciesId = useId();
   const descId = useId();
-  const closingDateId = useId();
+  const closesAtId = useId();
   const statusMsgId = useId();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !departmentId.trim()) {
+    if (!refNo.trim()) {
       setStatus("error");
-      setMessage("Title and Department ID are required.");
+      setInvalidField("refNo");
+      setMessage("Reference No is required.");
+      return;
+    }
+    if (refNo.trim().length > 64) {
+      setStatus("error");
+      setInvalidField("refNo");
+      setMessage("Reference No must be 64 characters or fewer.");
+      return;
+    }
+    if (!title.trim()) {
+      setStatus("error");
+      setInvalidField("title");
+      setMessage("Title is required.");
+      return;
+    }
+    if (!UUID_RE.test(departmentId.trim())) {
+      setStatus("error");
+      setInvalidField("departmentId");
+      setMessage("Department ID must be a valid UUID.");
       return;
     }
     if (vacancies < 1) {
       setStatus("error");
+      setInvalidField("vacancies");
       setMessage("Vacancies must be at least 1.");
       return;
     }
 
     setStatus("submitting");
+    setInvalidField(null);
     setMessage("");
 
     try {
@@ -42,11 +68,12 @@ export function NewJobOpeningForm() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          refNo: refNo.trim(),
           title: title.trim(),
           departmentId: departmentId.trim(),
           vacancies,
           description: description.trim() || undefined,
-          closingDate: closingDate || undefined,
+          closesAt: closesAt || undefined,
         }),
       });
 
@@ -70,10 +97,30 @@ export function NewJobOpeningForm() {
     <form
       onSubmit={handleSubmit}
       className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-2xl"
+      aria-describedby={message ? statusMsgId : undefined}
+      noValidate
     >
       <div>
+        <label htmlFor={refNoId} className="block text-sm font-medium text-slate-700 mb-1">
+          Reference No <span aria-hidden="true">*</span>
+        </label>
+        <input
+          id={refNoId}
+          type="text"
+          value={refNo}
+          onChange={(e) => setRefNo(e.target.value)}
+          placeholder="e.g. JOB-2024-0042"
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          required
+          aria-required="true"
+          aria-invalid={invalidField === "refNo"}
+          maxLength={64}
+        />
+      </div>
+
+      <div>
         <label htmlFor={titleId} className="block text-sm font-medium text-slate-700 mb-1">
-          Title
+          Title <span aria-hidden="true">*</span>
         </label>
         <input
           id={titleId}
@@ -83,21 +130,25 @@ export function NewJobOpeningForm() {
           placeholder="e.g. Senior Software Engineer"
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
+          aria-required="true"
+          aria-invalid={invalidField === "title"}
         />
       </div>
 
       <div>
         <label htmlFor={deptId} className="block text-sm font-medium text-slate-700 mb-1">
-          Department ID
+          Department ID (UUID) <span aria-hidden="true">*</span>
         </label>
         <input
           id={deptId}
           type="text"
           value={departmentId}
           onChange={(e) => setDepartmentId(e.target.value)}
-          placeholder="e.g. DEPT-ENG-01"
+          placeholder="e.g. 3f2504e0-4f89-41d3-9a0c-0305e82c3301"
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
+          aria-required="true"
+          aria-invalid={invalidField === "departmentId"}
         />
       </div>
 
@@ -113,6 +164,7 @@ export function NewJobOpeningForm() {
           onChange={(e) => setVacancies(Number(e.target.value))}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
+          aria-invalid={invalidField === "vacancies"}
         />
       </div>
 
@@ -131,14 +183,14 @@ export function NewJobOpeningForm() {
       </div>
 
       <div>
-        <label htmlFor={closingDateId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={closesAtId} className="block text-sm font-medium text-slate-700 mb-1">
           Closing Date
         </label>
         <input
-          id={closingDateId}
+          id={closesAtId}
           type="date"
-          value={closingDate}
-          onChange={(e) => setClosingDate(e.target.value)}
+          value={closesAt}
+          onChange={(e) => setClosesAt(e.target.value)}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>

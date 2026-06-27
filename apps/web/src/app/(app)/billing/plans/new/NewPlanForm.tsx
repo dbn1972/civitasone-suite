@@ -5,41 +5,61 @@ import { useRouter } from "next/navigation";
 
 const INTERVALS = ["monthly", "quarterly", "yearly"] as const;
 const CURRENCIES = ["INR", "USD", "EUR", "GBP"] as const;
+const CODE_RE = /^[a-z0-9_-]+$/i;
 
 export function NewPlanForm() {
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [code, setCode] = useState("");
   const [amount, setAmount] = useState("");
   const [interval, setInterval] = useState<(typeof INTERVALS)[number]>("monthly");
   const [currency, setCurrency] = useState<(typeof CURRENCIES)[number]>("INR");
+  const [govtExempt, setGovtExempt] = useState(true);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [invalidField, setInvalidField] = useState<string | null>(null);
 
   const nameId = useId();
-  const descId = useId();
+  const codeId = useId();
   const amountId = useId();
   const intervalId = useId();
   const currencyId = useId();
+  const govtExemptId = useId();
   const statusMsgId = useId();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!name.trim()) {
+    if (name.trim().length < 2) {
       setStatus("error");
-      setMessage("Plan name is required.");
+      setInvalidField("name");
+      setMessage("Plan name must be at least 2 characters.");
+      return;
+    }
+    const trimmedCode = code.trim();
+    if (trimmedCode.length < 2 || trimmedCode.length > 64) {
+      setStatus("error");
+      setInvalidField("code");
+      setMessage("Plan code must be between 2 and 64 characters.");
+      return;
+    }
+    if (!CODE_RE.test(trimmedCode)) {
+      setStatus("error");
+      setInvalidField("code");
+      setMessage("Plan code may only contain letters, digits, hyphens, and underscores.");
       return;
     }
     const parsedAmount = parseFloat(amount);
     if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
       setStatus("error");
+      setInvalidField("amount");
       setMessage("Amount must be a positive number.");
       return;
     }
 
     setStatus("submitting");
+    setInvalidField(null);
     setMessage("");
 
     try {
@@ -48,10 +68,10 @@ export function NewPlanForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          description: description.trim() || undefined,
-          amount: parsedAmount,
-          interval,
+          code: trimmedCode,
+          priceMinor: Math.round(parsedAmount * 100),
           currency,
+          govtExempt,
         }),
       });
 
@@ -76,6 +96,7 @@ export function NewPlanForm() {
       onSubmit={handleSubmit}
       className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-2xl"
       aria-describedby={message ? statusMsgId : undefined}
+      noValidate
     >
       <div>
         <label htmlFor={nameId} className="block text-sm font-medium text-slate-700 mb-1">
@@ -89,21 +110,30 @@ export function NewPlanForm() {
           placeholder="e.g. Standard Monthly"
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
+          aria-required="true"
+          aria-invalid={invalidField === "name"}
           autoComplete="off"
         />
       </div>
 
       <div>
-        <label htmlFor={descId} className="block text-sm font-medium text-slate-700 mb-1">
-          Description (optional)
+        <label htmlFor={codeId} className="block text-sm font-medium text-slate-700 mb-1">
+          Plan Code
         </label>
-        <textarea
-          id={descId}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Brief description of this plan"
-          rows={3}
+        <input
+          id={codeId}
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="e.g. standard_monthly"
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          required
+          aria-required="true"
+          aria-invalid={invalidField === "code"}
+          minLength={2}
+          maxLength={64}
+          pattern="[A-Za-z0-9_\-]+"
+          autoComplete="off"
         />
       </div>
 
@@ -122,6 +152,8 @@ export function NewPlanForm() {
             placeholder="0.00"
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             required
+            aria-required="true"
+            aria-invalid={invalidField === "amount"}
           />
         </div>
 
@@ -160,6 +192,19 @@ export function NewPlanForm() {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          id={govtExemptId}
+          type="checkbox"
+          checked={govtExempt}
+          onChange={(e) => setGovtExempt(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+        />
+        <label htmlFor={govtExemptId} className="text-sm font-medium text-slate-700">
+          Government exempt
+        </label>
       </div>
 
       <button

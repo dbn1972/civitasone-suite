@@ -4,11 +4,15 @@ import { useId, useState } from "react";
 import type { EmployeeDetail } from "@civitasone/types";
 
 type EditableFields = {
-  phone?: string;
+  mobile?: string;
   email?: string;
-  reportingTo?: string;
+  managerId?: string;
   payStructureId?: string;
 };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Allows digits, spaces, hyphens, parentheses and an optional leading +; 7-15 digits.
+const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
 
 interface EditEmployeeFormProps {
   employee: EmployeeDetail;
@@ -45,6 +49,7 @@ export function EditEmployeeForm({ employee, onCancel }: EditEmployeeFormProps) 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
+  const [invalidField, setInvalidField] = useState<"mobile" | "email" | null>(null);
 
   const phoneId = `${formId}-phone`;
   const emailId = `${formId}-email`;
@@ -65,12 +70,30 @@ export function EditEmployeeForm({ employee, onCancel }: EditEmployeeFormProps) 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
 
-    // Build changed-fields-only patch
+    // Basic client-side format validation.
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && !EMAIL_RE.test(trimmedEmail)) {
+      setTone("error");
+      setInvalidField("email");
+      setMessage("Enter a valid email address.");
+      return;
+    }
+    const trimmedPhone = phone.trim();
+    if (trimmedPhone && !PHONE_RE.test(trimmedPhone)) {
+      setTone("error");
+      setInvalidField("mobile");
+      setMessage("Enter a valid mobile number.");
+      return;
+    }
+
+    // Build changed-fields-only patch. Keys must match the backend
+    // updateEmployeeBody schema: `mobile` and `managerId` (NOT phone/reportingTo).
     const patch: EditableFields = {};
-    if (phone.trim() !== (employee.phone ?? "")) patch.phone = phone.trim();
-    if (email.trim() !== (employee.email ?? "")) patch.email = email.trim();
-    if (managerId.trim() !== (employee.reportingTo ?? "")) patch.reportingTo = managerId.trim();
+    if (trimmedPhone !== (employee.phone ?? "")) patch.mobile = trimmedPhone;
+    if (trimmedEmail !== (employee.email ?? "")) patch.email = trimmedEmail;
+    if (managerId.trim() !== (employee.reportingTo ?? "")) patch.managerId = managerId.trim();
     if (payStructureId.trim() !== "") patch.payStructureId = payStructureId.trim();
 
     if (Object.keys(patch).length === 0) {
@@ -161,6 +184,7 @@ export function EditEmployeeForm({ employee, onCancel }: EditEmployeeFormProps) 
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+91 98765 43210"
               autoComplete="tel"
+              aria-invalid={invalidField === "mobile"}
               style={inputStyle}
             />
           </div>
@@ -177,6 +201,7 @@ export function EditEmployeeForm({ employee, onCancel }: EditEmployeeFormProps) 
               onChange={(e) => setEmail(e.target.value)}
               placeholder="employee@example.gov.in"
               autoComplete="email"
+              aria-invalid={invalidField === "email"}
               style={inputStyle}
             />
           </div>
