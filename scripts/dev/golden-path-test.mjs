@@ -101,28 +101,36 @@ await test("tx: procurement indent create", async () => {
   });
 });
 
-await test("tx: leave apply (needs seeded allocation)", async () => {
-  // This endpoint requires a real leave allocation to exist. On a fresh office with no
-  // leave-type allocation seeded, it correctly returns 404 ALLOC_NOT_FOUND. We accept
-  // 400/404 as "endpoint exists, validation works, domain precondition not met" — not a
-  // routing/auth failure. A usability participant would first configure leave policies
-  // in the wizard before applying.
-  const res = await fetch(`${GW}/api/v1/hrms/leave-applications`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      employeeId: "00000000-0000-0000-0000-000000000099",
-      leaveTypeId: "00000000-0000-0000-0000-000000000001",
-      allocId: "00000000-0000-0000-0000-000000000001",
-      fromDate: "2026-07-01", toDate: "2026-07-01",
-      daysApplied: 1, reason: "golden-path test",
-    }),
+await test("tx: leave apply (full chain: allocate + apply)", async () => {
+  // Leave requires: (1) a real employee, (2) a real leave type, (3) an allocation.
+  // Use the first seeded employee and the CL (Casual Leave) type; allocate, wait for
+  // the CQRS consumer to persist, then apply.
+  const empsJ = await get("/api/v1/hrms/employees?limit=1");
+  const emps = empsJ.data || empsJ;
+  if (!Array.isArray(emps) || emps.length === 0) throw new Error("no employees seeded");
+  const empId = emps[0].id;
+
+  const typesJ = await get("/api/v1/hrms/leave-types");
+  const types = typesJ.data || typesJ;
+  const cl = types.find(t => t.code === "CL") || types[0];
+  if (!cl) throw new Error("no leave types seeded");
+
+  // Allocate (idempotent — if already allocated, the endpoint may return the existing id)
+  const allocRes = await post("/api/v1/hrms/leave-allocations", {
+    employeeId: empId, leaveTypeId: cl.id, fy: "2026-27", totalDays: 12,
   });
-  // 202 = success (allocation exists); 404 = domain precondition (no allocation seeded);
-  // both confirm the endpoint is reachable and validates correctly.
-  if (![200, 201, 202, 400, 404].includes(res.status)) {
-    throw new Error(`POST /api/v1/hrms/leave-applications -> ${res.status}`);
-  }
+  const allocId = allocRes.body?.id;
+  if (!allocId) throw new Error("allocation not created: " + JSON.stringify(allocRes.body));
+
+  // Wait for CQRS consumer to persist the allocation
+  await new Promise(r => setTimeout(r, 2500));
+
+  // Apply
+  await post("/api/v1/hrms/leave-applications", {
+    employeeId: empId, leaveTypeId: cl.id, allocId,
+    fromDate: "2026-07-21", toDate: "2026-07-21", daysApplied: 1,
+    reason: "golden-path automated test",
+  });
 });
 
 await test("tx: payroll run create", async () => {
