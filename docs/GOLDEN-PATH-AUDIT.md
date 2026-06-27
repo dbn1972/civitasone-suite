@@ -237,9 +237,13 @@ ENABLE_DEV_LOGIN=true` (existing `INTERNAL_SERVICE_SECRET` reused).
 1. ~~`/v1/tenants/current` read does not exist~~ — **CLOSED.** Added
    `GET /v1/tenants/current` to tenant-service (resolves the office from the
    session). All 8 wizard reads now return `200`; org-profile is measurable.
-2. **Sample-data backend** still absent (UI gated off). A full implementation
-   needs an `is_sample` marker across module tables + tenant-scoped seed/clear;
-   scoped as a dedicated bet rather than a quick patch.
+2. **Sample-data backend** — **CLOSED (location module).** Added an `is_sample`
+   marker to `location.locations` (migration 0005) and tenant-scoped
+   `POST/DELETE /v1/locations/sample-data`: seed adds 3 clearly-named "[SAMPLE]"
+   offices (idempotent), clear deletes ONLY `is_sample` rows. Verified end-to-end:
+   3 samples added, 4 real offices retained on clear. Web `SampleDataControls`
+   point here; gated by server env `SAMPLE_DATA_ENABLED` (default off, on in UAT).
+   The pattern (marker + seed/clear) extends mechanically to other modules.
 3. ~~Durable activation storage~~ — **CLOSED.** Activation events now persist in
    analytics-service (`fact_events`, source="activation", idempotent earliest-wins,
    tenant-scoped). Web forwards events via the gateway and the activation dashboard

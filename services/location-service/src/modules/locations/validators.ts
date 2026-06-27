@@ -41,6 +41,7 @@ export const locationViewSchema = z.object({
   type: z.string(),
   lgdCode: z.string().nullable(),
   status: z.string(),
+  isSample: z.boolean(),
   version: z.number().int(),
 });
 

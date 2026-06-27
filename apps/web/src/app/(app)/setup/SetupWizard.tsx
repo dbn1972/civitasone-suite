@@ -25,6 +25,7 @@ export function SetupWizard({
   ready,
   resumeIndex,
   progressUnknown,
+  sampleDataEnabled,
 }: {
   steps: StepView[];
   doneCount: number;
@@ -34,6 +35,8 @@ export function SetupWizard({
   resumeIndex: number;
   /** True when at least one step's status couldn't be determined. (R8.4) */
   progressUnknown: boolean;
+  /** Whether the sample-data ("try it") controls are available (server-gated). */
+  sampleDataEnabled: boolean;
 }) {
   const resumeRef = useRef<HTMLDivElement | null>(null);
 
@@ -153,7 +156,7 @@ export function SetupWizard({
       </div>
 
       <div style={{ marginTop: 18 }}>
-        {process.env.NEXT_PUBLIC_SAMPLE_DATA_ENABLED === "true" && <SampleDataControls />}
+        {sampleDataEnabled && <SampleDataControls />}
       </div>
 
       <p style={{ marginTop: 18, color: "var(--mut)", fontSize: 13 }}>

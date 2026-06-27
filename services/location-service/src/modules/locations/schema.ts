@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const locationSchema = pgSchema("location");
 
@@ -14,6 +14,9 @@ export const locations = locationSchema.table("locations", {
   type: varchar("type", { length: 24 }).notNull().default("office"),
   lgdCode: varchar("lgd_code", { length: 32 }),
   status: varchar("status", { length: 24 }).notNull().default("active"),
+  // Clearly-marked example record a clerk can add to explore, then clear in one
+  // action. Clearing deletes ONLY is_sample rows, never real data.
+  isSample: boolean("is_sample").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -35,6 +38,7 @@ export type LocationView = {
   type: string;
   lgdCode: string | null;
   status: string;
+  isSample: boolean;
   version: number;
 };
 

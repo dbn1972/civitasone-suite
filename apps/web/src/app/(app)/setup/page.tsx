@@ -66,6 +66,7 @@ export default async function SetupPage() {
         ready={ready}
         resumeIndex={resumeIndex}
         progressUnknown={progressUnknown}
+        sampleDataEnabled={process.env.SAMPLE_DATA_ENABLED === "true"}
       />
     </section>
   );

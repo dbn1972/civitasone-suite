@@ -22,9 +22,9 @@ export function SampleDataControls() {
     setBusy("add");
     setMessage(null);
     try {
-      const res = await fetch("/api/proxy/v1/admin/sample-data", { method: "POST" });
+      const res = await fetch("/api/proxy/v1/locations/sample-data", { method: "POST" });
       if (!res.ok) throw new Error();
-      setMessage({ tone: "ok", text: "Example records added. Look for the “Sample” tag on them as you explore." });
+      setMessage({ tone: "ok", text: "Example offices added. Look for the “[SAMPLE]” label on them as you explore." });
     } catch {
       setMessage({ tone: "err", text: "We couldn't add example records just now. Please try again in a moment." });
     } finally {
@@ -36,10 +36,10 @@ export function SampleDataControls() {
     setBusy("clear");
     setClearError(undefined);
     try {
-      const res = await fetch("/api/proxy/v1/admin/sample-data", { method: "DELETE" });
+      const res = await fetch("/api/proxy/v1/locations/sample-data", { method: "DELETE" });
       if (!res.ok) throw new Error();
       setConfirmOpen(false);
-      setMessage({ tone: "ok", text: "Example records removed. Anything you created yourself is untouched." });
+      setMessage({ tone: "ok", text: "Example offices removed. Anything you created yourself is untouched." });
     } catch {
       // R15.6 — keep the dialog open and tell the clerk plainly; offer retry.
       setClearError("We couldn't remove the example records. Please try again.");
@@ -52,8 +52,8 @@ export function SampleDataControls() {
     <Card padding>
       <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Want to try it first?</h3>
       <p style={{ margin: "0 0 12px", color: "var(--mut)", fontSize: 13.5 }}>
-        Add a few safe example records to explore how things work. They&apos;re clearly marked as
-        &ldquo;Sample&rdquo;, and you can clear them in one click — your own records are never touched.
+        Add a few safe example offices to explore how things work. They&apos;re clearly marked
+        &ldquo;[SAMPLE]&rdquo;, and you can clear them in one click — your own records are never touched.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
         <button type="button" className="btn primary" onClick={addSamples} disabled={busy !== null} aria-busy={busy === "add"}>

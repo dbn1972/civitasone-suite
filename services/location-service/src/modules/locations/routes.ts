@@ -6,6 +6,9 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createLocationBody, idParam, locationsListSchema, locationTreeSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
+import { cache } from "../../shared/infra.js";
+import { RESOURCE } from "../../topics.js";
 
 const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin"];
 
@@ -39,6 +42,24 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LOCATION_ROLES);
     sendValidated(reply, locationTreeSchema, await queries.getLocationTree(ctx.tenantId));
+  });
+
+  // Sample data ("try it"): add clearly-marked example offices, or clear them.
+  // Tenant-scoped; clearing removes ONLY this tenant's sample rows (R15).
+  app.post("/v1/locations/sample-data", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_ROLES);
+    const added = await repo.seedSamples(ctx.tenantId, ctx.actorId);
+    await cache.invalidateResource(ctx.tenantId, RESOURCE);
+    return reply.send({ added });
+  });
+
+  app.delete("/v1/locations/sample-data", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_ROLES);
+    const removed = await repo.clearSamples(ctx.tenantId);
+    await cache.invalidateResource(ctx.tenantId, RESOURCE);
+    return reply.send({ removed });
   });
 
   app.get("/v1/locations/:id", async (req, reply) => {

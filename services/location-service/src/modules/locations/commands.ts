@@ -20,6 +20,7 @@ export async function createLocation(ctx: RequestContext, body: CreateLocationBo
     type: body.type,
     lgdCode: body.lgdCode ?? null,
     status: "active",
+    isSample: false,
     version: 1,
   };
 

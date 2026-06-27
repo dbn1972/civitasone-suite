@@ -343,6 +343,7 @@ module.exports = {
         PORT: 3000,
         ...(JWT_SECRET ? { JWT_SECRET } : {}),
         ENABLE_DEV_LOGIN: process.env.ENABLE_DEV_LOGIN ?? "",
+        SAMPLE_DATA_ENABLED: process.env.SAMPLE_DATA_ENABLED ?? "",
         CIVITASONE_API_BASE_URL: "http://127.0.0.1:8080",
         NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8080",
       },

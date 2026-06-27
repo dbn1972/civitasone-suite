@@ -5,8 +5,8 @@ export default async function Page() {
   const { data, source } = await getLocations();
   return (
     <ModuleListPage
-      title="Locations — Locations"
-      description="Read-only list loaded from the Locations service API."
+      title="Offices & branches"
+      description="Your head office and its branches. Add a branch, or switch on example offices from Getting Started to explore."
       rows={data}
       source={source}
     />
