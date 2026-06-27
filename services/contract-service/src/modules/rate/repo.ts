@@ -4,8 +4,9 @@ import { contractRateContracts, contractRateItems, type RcRow, type RcInsert } f
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findRcById(id: string): Promise<RcRow | null> {
-  const rows = await db.select().from(contractRateContracts).where(eq(contractRateContracts.id, id)).limit(1);
+export async function findRcById(id: string, tenantId: string): Promise<RcRow | null> {
+  const rows = await db.select().from(contractRateContracts)
+    .where(and(eq(contractRateContracts.id, id), eq(contractRateContracts.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -17,7 +18,7 @@ export async function findRcsByItem(tenantId: string, itemCode: string): Promise
   const rcIds = [...new Set(items.map((i) => i.rcId))];
   const rcs: RcRow[] = [];
   for (const rcId of rcIds) {
-    const rc = await findRcById(rcId);
+    const rc = await findRcById(rcId, tenantId);
     if (rc) rcs.push(rc);
   }
   return rcs;

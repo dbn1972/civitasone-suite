@@ -23,12 +23,31 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/policy/evaluate", async (req, reply) => {
     const ctx = resolveContext(req);
     const body = evaluateBody.parse(req.body);
-    const actor = body.actor ?? {
-      userId: ctx.actorId,
-      tenantId: ctx.tenantId,
-      roles: ctx.roles,
-    };
 
+    // SAST-002 (CWE-863): NEVER trust a client-supplied actor. The evaluated
+    // principal is derived from the authenticated context (ctx) by default.
+    // A client-supplied body.actor (tenantId/roles) is honoured ONLY when the
+    // caller proves it is a trusted internal service via the internal-trust
+    // headers. The gateway strips `x-internal` / `x-service-secret` from
+    // external clients, so end-user requests can never reach the internal path.
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET;
+    const isInternalCaller =
+      req.headers["x-internal"] === "1" &&
+      typeof internalSecret === "string" &&
+      internalSecret.length > 0 &&
+      req.headers["x-service-secret"] === internalSecret;
+
+    const actor =
+      isInternalCaller && body.actor
+        ? body.actor
+        : {
+            userId: ctx.actorId,
+            tenantId: ctx.tenantId,
+            roles: ctx.roles,
+          };
+
+    // Resolve the granted permissions for the subject from the binding store
+    // (scoped to actor.tenantId), never from client-asserted permissions.
     const granted = await repo.findGrantedPermissions(actor.tenantId, actor.userId, actor.roles);
     const result = evaluateDecision(body.permissionKey, actor.roles, granted);
 

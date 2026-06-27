@@ -11,7 +11,7 @@ export async function createCase(ctx: RequestContext, body: CreateCaseBody): Pro
   await queue.publish(COMMANDS.caseCreate, {
     messageId: id, type: COMMANDS.caseCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { ...body, id, tenantId: ctx.tenantId },
   });
   await cache.put(cache.makeKey(ctx.tenantId, "case", id), { id, ...body, status: "pending" });
   return { id, status: "accepted", correlationId: ctx.correlationId };
@@ -21,7 +21,7 @@ export async function disposeCase(ctx: RequestContext, caseId: string, body: Dis
   await queue.publish(COMMANDS.caseDispose, {
     type: COMMANDS.caseDispose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { caseId, tenantId: ctx.tenantId, ...body },
+    payload: { ...body, caseId, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "case", caseId));
   return { id: caseId, status: "accepted", correlationId: ctx.correlationId };

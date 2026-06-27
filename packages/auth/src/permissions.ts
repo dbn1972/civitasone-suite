@@ -27,6 +27,10 @@ export async function checkPermission(
     headers: {
       "content-type": "application/json",
       "x-internal": "1",
+      // SAST-002: the fail-closed authPlugin rejects x-internal calls unless the
+      // service secret matches INTERNAL_SERVICE_SECRET. Send it under the exact
+      // header name the plugin checks (`x-service-secret`).
+      "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
       "x-tenant-id": ctx.tenantId,
       "x-correlation-id": ctx.correlationId,
     },

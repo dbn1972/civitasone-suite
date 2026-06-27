@@ -4,13 +4,15 @@ import { procurementAuctions, procurementBids, type AuctionRow, type AuctionInse
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function findAuctionById(id: string): Promise<AuctionRow | null> {
-  const rows = await db.select().from(procurementAuctions).where(eq(procurementAuctions.id, id)).limit(1);
+export async function findAuctionById(id: string, tenantId: string): Promise<AuctionRow | null> {
+  const rows = await db.select().from(procurementAuctions)
+    .where(and(eq(procurementAuctions.id, id), eq(procurementAuctions.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
-export async function findAuctionByIdTx(tx: Writer, id: string): Promise<AuctionRow | null> {
-  const rows = await (tx as typeof db).select().from(procurementAuctions).where(eq(procurementAuctions.id, id)).limit(1);
+export async function findAuctionByIdTx(tx: Writer, id: string, tenantId: string): Promise<AuctionRow | null> {
+  const rows = await (tx as typeof db).select().from(procurementAuctions)
+    .where(and(eq(procurementAuctions.id, id), eq(procurementAuctions.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 

@@ -29,7 +29,8 @@ export async function insertChannelConfig(tx: Writer, row: typeof notificationCh
   await tx.insert(notificationChannelConfigs).values(row);
 }
 
-export async function findChannelById(id: string): Promise<ChannelView | null> {
-  const rows = await db.select().from(notificationChannels).where(eq(notificationChannels.id, id)).limit(1);
+export async function findChannelById(id: string, tenantId: string): Promise<ChannelView | null> {
+  const rows = await db.select().from(notificationChannels)
+    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.tenantId, tenantId))).limit(1);
   return rows[0] ? toView(rows[0]) : null;
 }

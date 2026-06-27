@@ -9,8 +9,9 @@ export async function insertItem(tx: Writer, row: ItemInsert): Promise<void> {
   await tx.insert(stockItems).values(row);
 }
 
-export async function findItemById(id: string): Promise<ItemRow | null> {
-  const rows = await db.select().from(stockItems).where(eq(stockItems.id, id)).limit(1);
+export async function findItemById(id: string, tenantId: string): Promise<ItemRow | null> {
+  const rows = await db.select().from(stockItems)
+    .where(and(eq(stockItems.id, id), eq(stockItems.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -21,7 +22,7 @@ export async function findItemsByTenant(tenantId: string, opts?: { category?: st
     .offset(opts?.offset ?? 0);
 }
 
-export async function findItemWithUomById(id: string): Promise<ItemWithUom | null> {
+export async function findItemWithUomById(id: string, tenantId: string): Promise<ItemWithUom | null> {
   const rows = await db
     .select({
       id: stockItems.id,
@@ -44,7 +45,7 @@ export async function findItemWithUomById(id: string): Promise<ItemWithUom | nul
     })
     .from(stockItems)
     .leftJoin(stockUoms, eq(stockItems.uomId, stockUoms.id))
-    .where(eq(stockItems.id, id))
+    .where(and(eq(stockItems.id, id), eq(stockItems.tenantId, tenantId)))
     .limit(1);
   return rows[0] ?? null;
 }

@@ -40,8 +40,8 @@ export function registerAuctionConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const auction = await repo.findAuctionByIdTx(tx, p.auctionId);
-      if (!auction) throw new Error(`auction ${p.auctionId} not found`);
+      const auction = await repo.findAuctionByIdTx(tx, p.auctionId, p.tenantId);
+      if (!auction || auction.tenantId !== p.tenantId) throw new Error(`UNKNOWN_AUCTION: ${p.auctionId} not found for tenant`);
       const effectiveMinor = computeEffectivePrice(BigInt(p.bidMinor), p.isMse, auction.msePreference ?? true);
       await repo.insertBid(tx, {
         id: p.id, auctionId: p.auctionId, tenantId: p.tenantId,
@@ -57,8 +57,8 @@ export function registerAuctionConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const auction = await repo.findAuctionByIdTx(tx, p.id);
-      if (!auction) throw new Error(`auction ${p.id} not found`);
+      const auction = await repo.findAuctionByIdTx(tx, p.id, p.tenantId);
+      if (!auction || auction.tenantId !== p.tenantId) throw new Error(`UNKNOWN_AUCTION: ${p.id} not found for tenant`);
       const bids = await repo.findBidsByAuctionTx(tx, p.id);
 
       // Eligibility (#11): exclude blacklisted / disqualified vendors before ranking.

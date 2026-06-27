@@ -109,9 +109,22 @@ export async function verifyJwt(token: string): Promise<CivitasJwtPayload> {
   const keycloakUrl = process.env.KEYCLOAK_URL ?? "http://civitasone-keycloak:8080";
   const realm = process.env.KEYCLOAK_REALM ?? "civitasone";
 
+  // SAST-004 (CWE-287): validate the token audience on the RS256/prod path
+  // (the HS256 dev/test path already validates aud). Prefer JWT_AUDIENCE, then
+  // the Keycloak client id. In production an unset audience is a fail-closed
+  // misconfiguration; outside production we skip aud validation so local dev
+  // and tests that omit the claim are unaffected.
+  const audience = process.env.JWT_AUDIENCE ?? process.env.KEYCLOAK_CLIENT_ID;
+  if (isProduction() && !audience) {
+    throw new Error(
+      "SAST-004: JWT_AUDIENCE (or KEYCLOAK_CLIENT_ID) must be set in production to validate token audience.",
+    );
+  }
+
   return jwt.verify(token, publicKey, {
     algorithms: ["RS256"],
     issuer: `${keycloakUrl}/realms/${realm}`,
+    ...(audience ? { audience } : {}),
   }) as CivitasJwtPayload;
 }
 

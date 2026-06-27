@@ -20,6 +20,8 @@ export function createDb<TSchema extends Record<string, unknown>>(
 
 export { createSqlClient } from "./pool.js";
 export { assertP95, measureP95, assertIndexUsed } from "./perf.js";
+// SAST-003: RLS defense-in-depth — tenant GUC helpers (staged rollout; see tenant-scope.ts).
+export { withTenantScope, setTenantGuc } from "./tenant-scope.js";
 
 // Re-export drizzle-orm helpers for convenience
 export { sql, eq, and, or, not, asc, desc, inArray, isNull, isNotNull } from "drizzle-orm";

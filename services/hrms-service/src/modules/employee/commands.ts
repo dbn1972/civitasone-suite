@@ -22,7 +22,7 @@ export async function confirmEmployee(ctx: RequestContext, id: string, body: Con
   await queue.publish(COMMANDS.employeeConfirm, {
     type: COMMANDS.employeeConfirm,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { ...body, id, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
@@ -32,7 +32,7 @@ export async function transferEmployee(ctx: RequestContext, id: string, body: Tr
   await queue.publish(COMMANDS.employeeTransfer, {
     type: COMMANDS.employeeTransfer,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { employeeId: id, tenantId: ctx.tenantId, ...body },
+    payload: { ...body, employeeId: id, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
@@ -42,7 +42,7 @@ export async function separateEmployee(ctx: RequestContext, id: string, body: Se
   await queue.publish(COMMANDS.employeeSeparate, {
     type: COMMANDS.employeeSeparate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { employeeId: id, tenantId: ctx.tenantId, ...body },
+    payload: { ...body, employeeId: id, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

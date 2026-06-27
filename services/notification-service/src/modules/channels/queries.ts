@@ -11,10 +11,12 @@ export async function listChannels(tenantId: string): Promise<ChannelView[]> {
 }
 
 export async function getChannel(tenantId: string, id: string): Promise<ChannelView | null> {
-  return cache.getOrLoad<ChannelView>(
+  const view = await cache.getOrLoad<ChannelView>(
     cache.makeKey(tenantId, RESOURCE.channel, id),
-    () => repo.findChannelById(id),
+    () => repo.findChannelById(id, tenantId),
   );
+  // Defense-in-depth: guard against a cross-tenant cache hit.
+  return view && view.tenantId === tenantId ? view : null;
 }
 
 export async function getDefaultChannel(tenantId: string, type?: string): Promise<ChannelView | null> {

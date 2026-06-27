@@ -22,12 +22,12 @@ export function registerRoleConsumers(q: Queue): void {
   q.subscribe<{ id: string; name?: string; description?: string }>(COMMANDS.updateRole, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findRoleByIdTx(tx, msg.payload.id);
-      if (!cur) throw new Error(`role ${msg.payload.id} not found`);
+      const cur = await repo.findRoleByIdTx(tx, msg.payload.id, msg.tenantId);
+      if (!cur || cur.tenantId !== msg.tenantId) throw new Error(`UNKNOWN_ROLE: ${msg.payload.id} not found for tenant`);
       const patch: Record<string, unknown> = { updatedBy: msg.actorId, version: cur.version + 1 };
       if (msg.payload.name !== undefined) patch.name = msg.payload.name;
       if (msg.payload.description !== undefined) patch.description = msg.payload.description;
-      await repo.updateRole(tx, msg.payload.id, patch);
+      await repo.updateRole(tx, msg.payload.id, msg.tenantId, patch);
       await emitAudit(tx, msg, EVENTS.roleUpdated, { roleId: msg.payload.id }, "update", msg.payload.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.role, msg.payload.id));
