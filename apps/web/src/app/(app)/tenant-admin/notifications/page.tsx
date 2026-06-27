@@ -13,7 +13,7 @@ export default async function NotificationPrefsPage() {
   const inAppEnabled = prefs.filter((p) => p.inAppEnabled).length;
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Notification Preferences" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -21,7 +21,7 @@ export default async function NotificationPrefsPage() {
         subtitle="Channel configuration for each event type across all modules."
         actions={
           <>
-            <a className="btn ghost" href="/tenant-admin/audit">Audit changes</a>
+            <a className="btn ghost" href="/tenant-admin/audit" style={{ minHeight: 44 }}>Audit changes</a>
           </>
         }
       />
@@ -50,6 +50,6 @@ export default async function NotificationPrefsPage() {
         </div>
         <NotificationPrefActions prefs={prefs} />
       </div>
-    </div>
+    </main>
   );
 }

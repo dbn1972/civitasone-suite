@@ -77,6 +77,21 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await queries.listFeatureFlags());
   });
 
+  // Internal endpoint for gateway module enforcement (service-to-service).
+  // Authenticates via INTERNAL_SERVICE_SECRET header — no user JWT required.
+  // Falls back to super-admin auth if internal secret not provided.
+  app.get("/v1/admin/tenants/:id/modules-list", async (req, reply) => {
+    const secret = req.headers["x-internal-secret"];
+    if (secret !== process.env.INTERNAL_SERVICE_SECRET) {
+      // Fall back to normal auth if not internal
+      const ctx = resolveContext(req);
+      requireSuperAdmin(ctx);
+    }
+    const { id } = tenantIdParam.parse(req.params);
+    const modules = await queries.listTenantModules(id);
+    return reply.send({ data: modules });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

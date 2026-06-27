@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatMoney } from "@/lib/formatters";
 import { getGrantApplications } from "../_data";
 import { ApplicationsTable } from "./ApplicationsTable";
+import { FilterButton } from "./FilterButton";
 
 export default async function GrantApplicationsPage() {
   const { data: applications, source } = await getGrantApplications();
@@ -23,9 +24,7 @@ export default async function GrantApplicationsPage() {
         back="/grants"
         backLabel="Grants"
         actions={
-          <button type="button" className="btn ghost" aria-label="Filter applications (coming soon)">
-            Filter ▾
-          </button>
+          <FilterButton />
         }
       />
       {source === "error" && <DataSourceBadge source="error" />}

@@ -1,1 +1,0 @@
-../../erpnext-develop/EXECUTION_PLAN.md

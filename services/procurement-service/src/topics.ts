@@ -1,6 +1,7 @@
 export const COMMANDS = {
   indentCreate:    "procurement.indent.create",
   indentApprove:   "procurement.indent.approve",
+  indentReject:    "procurement.indent.reject",
   vendorCreate:    "procurement.vendor.create",
   vendorEmpanel:   "procurement.vendor.empanel",
   vendorBlacklist: "procurement.vendor.blacklist",
@@ -33,6 +34,7 @@ export const COMMANDS = {
 export const EVENTS = {
   tenderRequired:      "procurement.tender.required",
   indentApproved:      "procurement.indent.approved",
+  indentRejected:      "procurement.indent.rejected",
   poApproved:          "procurement.po.approved",
   poBudgetExceeded:    "procurement.po.budget_exceeded",
   poVendorBlacklisted: "procurement.po.vendor_blacklisted",

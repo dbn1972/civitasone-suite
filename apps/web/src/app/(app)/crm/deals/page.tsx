@@ -7,8 +7,8 @@ import { DealsTable } from "./DealsTable";
 export default async function Page() {
   const { data: deals, source } = await getDeals();
 
-  const openDeals = deals.filter((d) => d.status === "open").length;
-  const pipelineValue = deals.filter((d) => d.status === "open").reduce((s, d) => s + d.amount, 0);
+  const openDeals = deals.filter((d) => d.status === "active").length;
+  const pipelineValue = deals.filter((d) => d.status === "active").reduce((s, d) => s + d.amount, 0);
   const wonValue = deals.filter((d) => d.status === "won").reduce((s, d) => s + d.amount, 0);
 
   return (

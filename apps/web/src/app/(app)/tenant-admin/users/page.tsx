@@ -13,13 +13,13 @@ export default async function AdminUsersPage() {
   const mfaEnabled = users.filter((u) => u.mfaEnabled).length;
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Users" }]} />
       <PageHeader
         back="/tenant-admin"
         title="Manage Users"
         subtitle="Tenant user directory with role assignment and MFA status."
-        actions={<button type="button" className="btn ghost">Export</button>}
+        actions={<button type="button" className="btn ghost" style={{ minHeight: 44 }}>Export</button>}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="👥" iconBg="#f1f5f9" label="Total Users" value={total} />
@@ -29,6 +29,6 @@ export default async function AdminUsersPage() {
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <UsersTable users={users} source={source} />
-    </div>
+    </main>
   );
 }

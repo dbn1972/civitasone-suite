@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody } from "./validators.js";
+import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -91,6 +91,14 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = createSanctionBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createSanction(ctx, body));
+  });
+
+  app.patch("/v1/finance/sanctions/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = rejectSanctionBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectSanction(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

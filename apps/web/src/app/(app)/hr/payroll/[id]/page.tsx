@@ -80,7 +80,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           <div className="fld">
             <div className="l">Status</div>
             <div className="v">
-              <span className={`pill ${run.status === "paid" ? "good" : run.status === "draft" ? "mut" : "warn"}`}>
+              <span className={`pill ${run.status === "disbursed" ? "good" : run.status === "draft" ? "mut" : run.status === "failed" ? "bad" : "warn"}`}>
                 {run.status}
               </span>
             </div>

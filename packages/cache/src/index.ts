@@ -196,6 +196,42 @@ export class Cache {
     await this.store.set(key, serialize(value), this.resolveTtl(ttlSeconds));
   }
 
+  /**
+   * Like getOrLoad, but also caches null/undefined results for a shorter TTL
+   * to prevent repeated DB lookups for non-existent records.
+   */
+  async getOrLoadWithNegative<T>(
+    key: string,
+    loader: () => Promise<T | null>,
+    opts?: { ttlSeconds?: number; negativeTtlSeconds?: number },
+  ): Promise<T | null> {
+    const cached = await this.store.get(key);
+    if (cached !== null) {
+      const parsed = deserialize<T | "__NULL__">(cached);
+      if (parsed === "__NULL__") return null;
+      return parsed as T;
+    }
+
+    const existing = _inflight.get(key);
+    if (existing) return existing.shared as Promise<T | null>;
+
+    const shared: Promise<T | null> = (async () => {
+      const fresh = await loader();
+      if (fresh !== null && fresh !== undefined) {
+        await this.store.set(key, serialize(fresh), this.resolveTtl(opts?.ttlSeconds));
+      } else {
+        // Negative cache: store a sentinel for a short TTL
+        await this.store.set(key, serialize("__NULL__"), opts?.negativeTtlSeconds ?? 30);
+      }
+      return fresh;
+    })();
+
+    const suppress = shared.catch(() => { /* suppressed — callers handle via shared */ });
+    suppress.finally(() => _inflight.delete(key));
+    _inflight.set(key, { shared, suppress });
+    return shared;
+  }
+
   /** Invalidate one key or a whole resource prefix (called by the consumer after a write). */
   async invalidate(key: string): Promise<void> { await this.store.del(key); }
   async invalidateResource(tenantId: string, resource: string): Promise<void> {

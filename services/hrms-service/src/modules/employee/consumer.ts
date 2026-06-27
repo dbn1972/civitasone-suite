@@ -157,6 +157,28 @@ export function registerEmployeeConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
   });
+
+  queue.subscribe(COMMANDS.employeeUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string;
+      mobile?: string; email?: string;
+      bankAccountNo?: string; bankIfsc?: string;
+      basicMinor?: string; payStructureId?: string; managerId?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const patch: Parameters<typeof repo.updateEmployee>[2] = { updatedBy: msg.actorId };
+      if (p.mobile      !== undefined) patch.mobile      = p.mobile;
+      if (p.email       !== undefined) patch.email       = p.email;
+      if (p.bankAccountNo !== undefined) patch.bankAccountNo = p.bankAccountNo;
+      if (p.bankIfsc    !== undefined) patch.bankIfsc    = p.bankIfsc;
+      if (p.basicMinor  !== undefined) patch.basicMinor  = BigInt(p.basicMinor);
+      if (p.payStructureId !== undefined) patch.payStructureId = p.payStructureId;
+      await repo.updateEmployee(tx, p.id, patch);
+      await audit(tx, msg, "update", "employee", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

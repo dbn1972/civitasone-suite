@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateEmployeeBody, ConfirmEmployeeBody } from "./validators.js";
+import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody } from "./validators.js";
 import type { TransferBody, SeparateBody } from "../lifecycle/validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -43,6 +43,26 @@ export async function separateEmployee(ctx: RequestContext, id: string, body: Se
     type: COMMANDS.employeeSeparate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { employeeId: id, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function updateEmployee(ctx: RequestContext, id: string, body: UpdateEmployeeBody): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.employeeUpdate, {
+    messageId, type: COMMANDS.employeeUpdate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: {
+      id, tenantId: ctx.tenantId,
+      mobile: body.mobile,
+      email: body.email,
+      bankAccountNo: body.bankAccountNo,
+      bankIfsc: body.bankIfsc,
+      basicMinor: body.basicMinor !== undefined ? body.basicMinor.toString() : undefined,
+      payStructureId: body.payStructureId,
+      managerId: body.managerId,
+    },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

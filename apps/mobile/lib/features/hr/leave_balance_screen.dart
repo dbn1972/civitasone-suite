@@ -14,7 +14,12 @@ class LeaveBalanceScreen extends ConsumerStatefulWidget {
 class _LeaveBalanceScreenState extends ConsumerState<LeaveBalanceScreen> {
   bool _loading = true;
   String? _error;
+  bool _fromCache = false;
   List<_LeaveTypeBalance> _balances = [];
+
+  /// Cache mailbox key used for offline-first storage.
+  static const _cacheMailbox = 'leave_balance';
+  static const _cacheEntityId = 'leave_balance_singleton';
 
   @override
   void initState() {
@@ -26,59 +31,96 @@ class _LeaveBalanceScreenState extends ConsumerState<LeaveBalanceScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _fromCache = false;
     });
     try {
-      // GET /v1/hrms/me/leave-balance
-      await Future.delayed(const Duration(milliseconds: 600));
+      final apiClient = ref.read(apiClientProvider);
+      final res = await apiClient.get<Map<String, dynamic>>(
+        '/v1/hrms/leave-allocations',
+      );
+      final data = (res.data?['data'] as List<dynamic>?) ?? [];
 
-      _balances = [
-        _LeaveTypeBalance(
-          type: 'CL',
-          label: 'Casual Leave',
-          used: 4,
-          total: 12,
-          icon: Icons.wb_sunny,
-        ),
-        _LeaveTypeBalance(
-          type: 'EL',
-          label: 'Earned Leave',
-          used: 5,
-          total: 30,
-          icon: Icons.savings,
-        ),
-        _LeaveTypeBalance(
-          type: 'ML',
-          label: 'Medical Leave',
-          used: 2,
-          total: 10,
-          icon: Icons.local_hospital,
-        ),
-        _LeaveTypeBalance(
-          type: 'SL',
-          label: 'Sick Leave',
-          used: 6,
-          total: 7,
-          icon: Icons.healing,
-        ),
-        _LeaveTypeBalance(
-          type: 'RH',
-          label: 'Restricted Holiday',
-          used: 2,
-          total: 2,
-          icon: Icons.event,
-        ),
-        _LeaveTypeBalance(
-          type: 'CO',
-          label: 'Compensatory Off',
-          used: 0,
-          total: 3,
-          icon: Icons.star,
-        ),
-      ];
+      _balances = data.map((item) {
+        final map = item as Map<String, dynamic>;
+        final totalDays = (map['totalDays'] as num?)?.toInt() ?? 0;
+        final balanceDays = (map['balanceDays'] as num?)?.toInt() ?? 0;
+        final used = totalDays - balanceDays;
+        final code = (map['leaveTypeCode'] as String?) ?? '';
+        return _LeaveTypeBalance(
+          type: code,
+          label: (map['leaveTypeName'] as String?) ?? code,
+          used: used,
+          total: totalDays,
+          icon: _iconForLeaveType(code),
+        );
+      }).toList();
+
+      // Cache to local DB for offline-first access.
+      final db = ref.read(dbProvider).valueOrNull;
+      if (db != null) {
+        await db.upsertEntity(
+          id: _cacheEntityId,
+          mailbox: _cacheMailbox,
+          data: {
+            'balances': data,
+          },
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+        );
+      }
     } catch (e) {
+      // Fall back to cached data when offline / error.
+      final db = ref.read(dbProvider).valueOrNull;
+      if (db != null) {
+        final cached = await db.listEntities(_cacheMailbox);
+        if (cached.isNotEmpty) {
+          final cachedData = cached.first['data'] as Map<String, dynamic>;
+          final items = (cachedData['balances'] as List<dynamic>?) ?? [];
+          _balances = items.map((item) {
+            final map = item as Map<String, dynamic>;
+            final totalDays = (map['totalDays'] as num?)?.toInt() ?? 0;
+            final balanceDays = (map['balanceDays'] as num?)?.toInt() ?? 0;
+            final used = totalDays - balanceDays;
+            final code = (map['leaveTypeCode'] as String?) ?? '';
+            return _LeaveTypeBalance(
+              type: code,
+              label: (map['leaveTypeName'] as String?) ?? code,
+              used: used,
+              total: totalDays,
+              icon: _iconForLeaveType(code),
+            );
+          }).toList();
+          if (mounted) {
+            setState(() {
+              _fromCache = true;
+              _error = null;
+            });
+          }
+          return;
+        }
+      }
       _error = e.toString();
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Map leave type codes to icons.
+  static IconData _iconForLeaveType(String code) {
+    switch (code.toUpperCase()) {
+      case 'CL':
+        return Icons.wb_sunny;
+      case 'EL':
+        return Icons.savings;
+      case 'ML':
+        return Icons.local_hospital;
+      case 'SL':
+        return Icons.healing;
+      case 'RH':
+        return Icons.event;
+      case 'CO':
+        return Icons.star;
+      default:
+        return Icons.calendar_today;
     }
   }
 
@@ -106,6 +148,10 @@ class _LeaveBalanceScreenState extends ConsumerState<LeaveBalanceScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      // Cached data indicator
+                      if (_fromCache) _buildCacheBanner(theme),
+                      if (_fromCache) const SizedBox(height: 12),
+
                       // Summary header
                       _buildSummaryHeader(theme),
                       const SizedBox(height: 20),
@@ -251,6 +297,30 @@ class _LeaveBalanceScreenState extends ConsumerState<LeaveBalanceScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCacheBanner(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off, size: 16, color: Color(0xFFF59E0B)),
+          const SizedBox(width: 8),
+          Text(
+            'Showing cached data',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFFF59E0B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

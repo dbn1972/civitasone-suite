@@ -6,6 +6,8 @@ import rateLimit from "@fastify/rate-limit";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID } from "node:crypto";
 import { resolveRoute } from "./registry.js";
+import { checkModuleEnabled } from "./module-guard.js";
+import { registerResponseMetrics } from "./response-metrics.js";
 
 // x-internal is intentionally absent: external clients must never inject it.
 // The gateway sets it itself only when it originates an internal service call.
@@ -49,6 +51,11 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 
   const { route, remainder: rawRemainder } = resolved;
+
+  // V-01: Module-guard enforcement — reject requests for disabled modules before proxying.
+  const moduleAllowed = await checkModuleEnabled(req, reply, route.name);
+  if (!moduleAllowed) return; // reply already sent with 403
+
   const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
   const remainder = rawRemainder === "/" ? "" : rawRemainder;
   const basePath = route.upstreamPath ?? route.prefix.replace(/^\/api/, "");
@@ -136,6 +143,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
     timeWindow: "1 minute",
   });
+
+  registerResponseMetrics(app);
 
   registerOpsRoutes(app, {
     service: "gateway-service",

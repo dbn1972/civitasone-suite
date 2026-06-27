@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { getJobOpenings } from "../../../_data/loaders";
@@ -41,10 +42,18 @@ export default async function RecruitmentPage() {
   ];
 
   return (
-    <>
+    <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="Recruitment"
         subtitle="Active job openings and application pipeline."
+        actions={
+          <Link
+            href="/hr/recruitment/new"
+            className="btn primary"
+          >
+            + New Opening
+          </Link>
+        }
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
@@ -63,6 +72,6 @@ export default async function RecruitmentPage() {
           pageSize={15}
         />
       </Card>
-    </>
+    </main>
   );
 }

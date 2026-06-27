@@ -28,6 +28,17 @@ export type ConfirmEmployeeBody = z.infer<typeof confirmEmployeeBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+export const updateEmployeeBody = z.object({
+  mobile:         z.string().max(20).optional(),
+  email:          z.string().email().optional(),
+  bankAccountNo:  z.string().optional(),
+  bankIfsc:       z.string().max(16).optional(),
+  basicMinor:     z.bigint().optional(),
+  payStructureId: z.string().uuid().optional(),
+  managerId:      z.string().uuid().optional(),
+});
+export type UpdateEmployeeBody = z.infer<typeof updateEmployeeBody>;
+
 export const employeeQueryParams = z.object({
   empId: z.string().uuid().optional(),
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),

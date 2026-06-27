@@ -17,10 +17,10 @@ The map of governing documents. Read top-down; the higher a doc sits, the more b
 | [ARCHITECTURE.md](../ARCHITECTURE.md) | Execution + cloud + microservice + service architecture; DB-per-service (L1), module-per-schema (L2), write-via-queue / read-via-cache (CQRS), event bus, sagas, outbox. | Vol 3 |
 | [STANDARDS.md](../STANDARDS.md) | API, input/form validation, error states, testing, quality/scalability, observability, coding. | Vol 4, 9, 12, 13, 14, 15 |
 | [SECURITY.md](../SECURITY.md) | Security control matrix, DPDP/CERT-In compliance, SAST program + gate, secure-coding defaults. | Vol 5, 16, SAST Master |
-| [MASTER_BUILD_BRIEF.md](../MASTER_BUILD_BRIEF.md) | What to build, scope, users, journeys, edition matrix. | Vol 10 |
-| [EXECUTION_PLAN.md](../EXECUTION_PLAN.md) | Sprints, tracks, exit gates, team shape. | Vol 1/2 |
+| [MASTER_BUILD_BRIEF.md](../../archive/docs/MASTER_BUILD_BRIEF.md) | What to build, scope, users, journeys, edition matrix. | Vol 10 |
+| [EXECUTION_PLAN.md](../../archive/docs/EXECUTION_PLAN.md) | Sprints, tracks, exit gates, team shape. | Vol 1/2 |
 | [PERFORMANCE_DESIGN.md](../PERFORMANCE_DESIGN.md) | Latency/throughput targets, cache + queue design. | Vol 13 |
-| [`/MODULES_AND_SCHEMA.md`](../../../erpnext-develop/MODULES_AND_SCHEMA.md) | Module catalog, integration map, per-service schema, SoT registry, de-duplication. | (derived) |
+| [`/MODULES_AND_SCHEMA.md`](../../archive/erpnext-develop/MODULES_AND_SCHEMA.md) | Module catalog, integration map, per-service schema, SoT registry, de-duplication. | (derived) |
 
 ## 3. Workflow prompts — one per task type
 

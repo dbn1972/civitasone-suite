@@ -2,10 +2,12 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
+import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
 import { recordPaymentBody, invoiceParam, tenantParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+
+const BILLING_ROLES = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
 
 export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   // Record a payment receipt against a bill.
@@ -30,6 +32,13 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const { id } = tenantParam.parse(req.params);
     return reply.send(await queries.listReceiptsForTenant(id));
+  });
+
+  // Caller-scoped list: returns payments for the authenticated user's tenant.
+  app.get("/v1/billing/payments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
+    return reply.send(await queries.listReceiptsForTenant(ctx.tenantId));
   });
 
   app.setErrorHandler((err, req, reply) => {

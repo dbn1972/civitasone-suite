@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam } from "./validators.js";
+import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody } from "./validators.js";
 import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -91,12 +91,41 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch("/v1/hrms/leave-applications/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
-    if (!ctx.roles.includes("super_admin")) {
-      throw new HttpError(403, "WORKFLOW_REQUIRED", "Approve leave via workflow task inbox (/hr/leave/approvals)");
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    // Managers without HR/super_admin roles must go through the workflow queue
+    if (!ctx.roles.some((r: string) => HR_ROLES.includes(r))) {
+      throw new HttpError(403, "WORKFLOW_REQUIRED", "Direct approval requires HR admin privileges. Use the workflow queue.");
     }
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveLeave(ctx, id));
+  });
+
+  app.patch("/v1/hrms/leave-applications/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    await requirePermissionKey(ctx, "hrms.leave.approve");
+    const { id } = idParam.parse(req.params);
+    const body = rejectLeaveBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectLeave(ctx, id, body.reason));
+  });
+
+  // ── Aliases: some clients use leave-requests, others leave-applications ──
+  app.patch("/v1/hrms/leave-requests/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    await requirePermissionKey(ctx, "hrms.leave.approve");
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveLeave(ctx, id));
+  });
+
+  app.patch("/v1/hrms/leave-requests/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    await requirePermissionKey(ctx, "hrms.leave.approve");
+    const { id } = idParam.parse(req.params);
+    const body = rejectLeaveBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectLeave(ctx, id, body.reason));
   });
 
   app.get("/v1/hrms/leave-applications", async (req, reply) => {

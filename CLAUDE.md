@@ -12,10 +12,11 @@ Every output, every PR, every line of code must follow them. No exceptions.
 - **Editions:** Small Office, PSU, Govt Department — packaged via theme + entitlements at install time, NOT via code forks.
 - **Source of truth (binding, in `docs/`):**
   - `docs/steering/00-STEERING-INDEX.md` (map of all governing docs — start here)
-  - `docs/MASTER_BUILD_BRIEF.md` (what to build) · `docs/EXECUTION_PLAN.md` (how + when)
   - `docs/ARCHITECTURE.md` (architecture L1/L2 + CQRS) · `docs/STANDARDS.md` (API, validation, errors, testing, quality)
   - `docs/SECURITY.md` (security + DPDP/CERT-In + SAST gate) · `docs/PERFORMANCE_DESIGN.md`
-  - `docs/product_prompts/` (Vol 1–16 source templates) · `.claude/prompts` + `.claude/skills` (workflow steering)
+  - `.claude/prompts` + `.claude/skills` (workflow steering)
+  - `docs/FINAL-UAT-GAP-REPORT.md` (current status + scores)
+  - _Archived:_ `archive/docs/MASTER_BUILD_BRIEF.md`, `archive/docs/EXECUTION_PLAN.md`
 
 ---
 

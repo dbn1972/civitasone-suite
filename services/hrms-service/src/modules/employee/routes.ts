@@ -5,7 +5,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, idParam } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody } from "./validators.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -59,6 +59,14 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const emp = await queries.getEmployee(id, ctx.tenantId);
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
     return reply.send(emp);
+  });
+
+  app.patch("/v1/hrms/employees/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateEmployeeBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateEmployee(ctx, id, body));
   });
 
   app.setErrorHandler(errorHandler);

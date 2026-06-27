@@ -96,6 +96,24 @@ export function registerIndentConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "indent", p.id));
   });
+
+  queue.subscribe(COMMANDS.indentReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const indent = await repo.findIndentByIdTx(tx, p.id);
+      if (!indent) throw new Error(`indent ${p.id} not found`);
+      assertTransitionAllowed(indent.status ?? "draft", "rejected");
+      await repo.updateIndent(tx, p.id, { status: "rejected", updatedBy: msg.actorId, version: (indent.version ?? 1) + 1 });
+      await enqueue(tx, {
+        topic: EVENTS.indentRejected, eventType: EVENTS.indentRejected,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { indentId: p.id, tenantId: p.tenantId, reason: p.reason },
+      });
+      await audit(tx, msg, "reject", "indent", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "indent", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

@@ -4,6 +4,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerPayrollConsumers } from "./modules/payroll/consumer.js";
 import { registerLoansConsumers }   from "./modules/loans/consumer.js";
+import { registerTaxConsumers }     from "./modules/tax/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 
@@ -13,6 +14,7 @@ await loadTaxConfig();
 
 registerPayrollConsumers(queue);
 registerLoansConsumers(queue);
+registerTaxConsumers(queue);
 registerIntegrationConsumers(queue);
 
 await queue.start();

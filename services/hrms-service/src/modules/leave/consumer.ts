@@ -125,6 +125,32 @@ export function registerLeaveConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
     if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
   });
+
+  queue.subscribe(COMMANDS.leaveReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; rejectedBy: string; reason: string };
+    let employeeId = "";
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const app = await repo.findLeaveAppById(p.id, p.tenantId);
+      if (!app) throw new Error(`leave app ${p.id} not found`);
+      assertLeaveAppStatusTransition(app.status, "rejected");
+      employeeId = app.employeeId;
+      await repo.updateLeaveApp(tx, p.id, { status: "rejected", updatedBy: msg.actorId });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.leave.rejected",
+          recipient: app.employeeId,
+          recipientId: app.employeeId,
+          variables: { leaveAppId: p.id, reason: p.reason },
+        }),
+      });
+      await audit(tx, msg, "reject", "leave_app", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
+    if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

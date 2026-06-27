@@ -109,7 +109,7 @@ export default async function AdminOperationsPage() {
   const incident = incidentSummary(ops);
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -205,6 +205,6 @@ export default async function AdminOperationsPage() {
       </div>
 
       <p className="muted" style={{ marginTop: 18 }}>Last checked: {formatDate(ops.checkedAt)}. Log excerpts are redacted server-side before display.</p>
-    </div>
+    </main>
   );
 }

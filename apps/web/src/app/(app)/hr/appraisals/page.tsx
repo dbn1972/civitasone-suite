@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { getAppraisals } from "../../../_data/loaders";
@@ -21,10 +22,13 @@ export default async function AppraisalsPage() {
   ];
 
   return (
-    <>
+    <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="Appraisals"
         subtitle="Employee performance review cycle."
+        actions={
+          <Link href="/hr/appraisals/new" className="btn primary">+ New Appraisal</Link>
+        }
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
@@ -43,6 +47,6 @@ export default async function AppraisalsPage() {
           pageSize={15}
         />
       </Card>
-    </>
+    </main>
   );
 }

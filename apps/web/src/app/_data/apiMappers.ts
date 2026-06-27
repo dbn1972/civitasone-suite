@@ -338,18 +338,21 @@ export function mapProcurementGRNDetail(payload: unknown): GRNDetail | null {
   };
 }
 
-const DEAL_STAGES = new Set(["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]);
+const DEAL_STAGES = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
 
 function normalizeDealStage(raw: string | null): DealSummary["stage"] | null {
   if (!raw) return null;
-  const key = raw.toLowerCase().replace(/\s+/g, "_");
-  if (key === "lead") return "prospecting";
-  if (key === "won") return "closed_won";
-  if (key === "lost") return "closed_lost";
+  const key = raw.trim();
+  // Handle exact matches (PascalCase from backend)
   if (DEAL_STAGES.has(key)) return key as DealSummary["stage"];
-  if (key === "proposal") return "proposal";
-  if (key === "negotiation") return "negotiation";
-  return "qualification";
+  // Handle lowercase/snake_case variants
+  const lower = key.toLowerCase().replace(/\s+/g, "_");
+  if (lower === "lead" || lower === "prospecting") return "Lead";
+  if (lower === "proposal" || lower === "qualification") return "Proposal";
+  if (lower === "negotiation") return "Negotiation";
+  if (lower === "won" || lower === "closed_won") return "Won";
+  if (lower === "lost" || lower === "closed_lost") return "Lost";
+  return "Lead";
 }
 
 export function mapDealSummaries(payload: unknown): DealSummary[] | null {
@@ -362,11 +365,11 @@ export function mapDealSummaries(payload: unknown): DealSummary[] | null {
     const dealName = toText(row.dealName) ?? toText(row.name);
     const stage = normalizeDealStage(toText(row.stage));
     if (!id || !dealName || !stage) continue;
-    const rawStatus = (toText(row.status) ?? "open").toLowerCase();
+    const rawStatus = (toText(row.status) ?? "active").toLowerCase();
     const status: DealSummary["status"] =
       rawStatus === "won" || rawStatus === "closed_won" ? "won"
         : rawStatus === "lost" || rawStatus === "closed_lost" ? "lost"
-          : "open";
+          : "active";
     mapped.push({
       id,
       dealName,
@@ -495,15 +498,14 @@ export function mapLegalCaseSummaries(payload: unknown): LegalCaseSummary[] | nu
       caseNoUpper.startsWith("WP") || caseNoUpper.includes("WRIT") ? "writ"
         : caseNoUpper.includes("ARB") ? "arbitration"
           : "other";
-    const rawStatus = (toText(row.status) ?? "active").toLowerCase();
+    const rawStatus = (toText(row.status) ?? "pending").toLowerCase();
     const status: LegalCaseSummary["status"] =
-      rawStatus === "pending" || rawStatus === "active" ? "active"
-        : rawStatus === "disposed" ? "disposed"
-          : rawStatus === "stayed" ? "stayed"
-            : rawStatus === "transferred" ? "transferred"
-              : rawStatus === "dismissed" ? "dismissed"
-                : rawStatus === "settled" ? "settled"
-                  : "active";
+      rawStatus === "pending" || rawStatus === "active" ? "pending"
+        : rawStatus === "disposed" || rawStatus === "dismissed" ? "disposed"
+          : rawStatus === "appealed" || rawStatus === "transferred" ? "appealed"
+            : rawStatus === "stayed" ? "stayed"
+              : rawStatus === "settled" ? "settled"
+                : "pending";
     mapped.push({
       id,
       caseNo,

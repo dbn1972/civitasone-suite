@@ -38,4 +38,31 @@ export function registerAttendanceConsumers(queue: Queue): void {
       });
     });
   });
+
+  queue.subscribe(COMMANDS.regularisationCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; employeeId: string;
+      date: string; requestedStatus: string; reason: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertRegularisation(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        employeeId: p.employeeId,
+        date: p.date,
+        requestedStatus: p.requestedStatus,
+        reason: p.reason,
+        status: "pending",
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "hrms", action: "regularisation_create", resourceType: "attendance_regularisation", resourceId: p.id, outcome: "success" },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "attendance_reg", `list:100`));
+  });
 }

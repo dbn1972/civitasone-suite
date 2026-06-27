@@ -8,9 +8,13 @@ import { taxDeclarations } from "./schema.js";
 import { buildForm16 } from "./form16.js";
 import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import * as commands from "./commands.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer", "employee"];
+const WRITER_ROLES  = [...PAYROLL_ROLES, "employee", "hr_admin"];
 
 /**
  * Parse FY string like "2025-26" to start/end year.
@@ -166,10 +170,11 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
   /**
    * POST /v1/payroll/tax/declarations
    * Employee submits 80C/80D/HRA proof declarations.
+   * CQRS: publishes taxDeclarationSubmit command → 202.
    */
-  app.post("/v1/payroll/tax/declarations", async (req, reply) => {
+  app.post("/v1/payroll/tax-declarations", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...READER_ROLES]);
+    requireRole(ctx, WRITER_ROLES);
 
     const body = req.body as {
       employeeId?: string;
@@ -177,48 +182,71 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       regime?: string;
       section80c?: number;
       section80d?: number;
-      hraClaimed?: number;
-      rentPaid?: number;
       otherDeductions?: number;
-      prevEmployerSalary?: number;
-      prevEmployerTds?: number;
-      otherSourcesIncome?: number;
-      perquisites?: number;
+      rentPaidMinor?: number;
+      prevEmployerSalaryMinor?: number;
+      otherSourcesIncomeMinor?: number;
+      perquisitesMinor?: number;
     };
 
-    // C2: a self-service employee may only file a declaration for THEMSELVES.
     const employeeId = enforceEmployeeOwnership(ctx, body.employeeId);
     if (!body.fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required");
+    parseFy(body.fy);
 
     const regime = body.regime === "old" ? "old" : "new";
 
-    const paise = (v?: number): bigint => BigInt(Math.round((v ?? 0) * 100));
-    const fields = {
-      regime,
-      section80c: paise(body.section80c),
-      section80d: paise(body.section80d),
-      hraClaimed: paise(body.hraClaimed),
-      rentPaidMinor: paise(body.rentPaid),
-      otherDeductions: paise(body.otherDeductions),
-      prevEmployerSalaryMinor: paise(body.prevEmployerSalary),
-      prevEmployerTdsMinor: paise(body.prevEmployerTds),
-      otherSourcesIncomeMinor: paise(body.otherSourcesIncome),
-      perquisitesMinor: paise(body.perquisites),
-    };
-
-    // Upsert declaration
-    await db.insert(taxDeclarations).values({
-      tenantId: ctx.tenantId,
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitDeclaration(ctx, {
       employeeId,
       fy: body.fy,
-      ...fields,
-      status: "submitted",
-      createdBy: ctx.actorId,
-    }).onConflictDoUpdate({
-      target: [taxDeclarations.tenantId, taxDeclarations.employeeId, taxDeclarations.fy],
-      set: { ...fields, status: "submitted" },
-    });
+      regime,
+      section80c: body.section80c ?? 0,
+      section80d: body.section80d ?? 0,
+      otherDeductions: body.otherDeductions ?? 0,
+      rentPaidMinor: body.rentPaidMinor ?? 0,
+      prevEmployerSalaryMinor: body.prevEmployerSalaryMinor,
+      otherSourcesIncomeMinor: body.otherSourcesIncomeMinor,
+      perquisitesMinor: body.perquisitesMinor,
+    }));
+  });
 
-    return reply.code(201).send({ message: "declaration saved", employeeId, fy: body.fy, regime });
+  /**
+   * GET /v1/payroll/tax-declarations?employeeId=<uuid>&fy=<string>
+   * Returns the employee's current declaration for the given FY (or null).
+   */
+  app.get("/v1/payroll/tax-declarations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+
+    const { employeeId: reqEmployeeId, fy } = req.query as { employeeId?: string; fy?: string };
+    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
+    if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required");
+    parseFy(fy);
+
+    const rows = await db.select().from(taxDeclarations)
+      .where(and(
+        eq(taxDeclarations.tenantId, ctx.tenantId),
+        eq(taxDeclarations.employeeId, employeeId),
+        eq(taxDeclarations.fy, fy),
+      ))
+      .limit(1);
+
+    const dec = rows[0] ?? null;
+    if (!dec) return reply.send(null);
+
+    return reply.send({
+      id: dec.id,
+      employeeId: dec.employeeId,
+      fy: dec.fy,
+      regime: dec.regime,
+      section80c: Number(dec.section80c),
+      section80d: Number(dec.section80d),
+      otherDeductions: Number(dec.otherDeductions),
+      rentPaidMinor: Number(dec.rentPaidMinor),
+      prevEmployerSalaryMinor: Number(dec.prevEmployerSalaryMinor),
+      otherSourcesIncomeMinor: Number(dec.otherSourcesIncomeMinor),
+      perquisitesMinor: Number(dec.perquisitesMinor),
+      status: dec.status,
+      createdAt: dec.createdAt,
+    });
   });
 }

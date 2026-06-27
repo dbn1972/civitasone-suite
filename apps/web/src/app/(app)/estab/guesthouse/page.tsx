@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getGuesthouseBookings } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
@@ -30,8 +31,8 @@ export default async function GuesthousePage() {
         subtitle="Room booking, approvals and occupancy management."
         actions={
           <>
-            <button className="btn ghost">Room chart</button>
-            <button className="btn primary">+ New Booking</button>
+            <Link href="/estab/guesthouse?view=chart" className="btn ghost" style={{ minHeight: 44 }}>Room chart</Link>
+            <Link href="/estab/guesthouse/new" className="btn primary" style={{ minHeight: 44 }}>+ New Booking</Link>
           </>
         }
       />

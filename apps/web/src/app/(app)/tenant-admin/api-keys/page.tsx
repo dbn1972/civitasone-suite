@@ -14,7 +14,7 @@ export default async function APIKeysPage() {
   const neverUsed = keys.filter((k) => !k.lastUsedAt).length;
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "API Keys" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -32,6 +32,6 @@ export default async function APIKeysPage() {
         <APIKeysTable keys={keys} />
         <APIKeyActions keys={keys.map((k) => ({ id: k.id, keyName: k.keyName, status: k.status }))} />
       </div>
-    </div>
+    </main>
   );
 }

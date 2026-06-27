@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
-import { payrollRuns } from "../src/modules/payroll/schema.js";
+import { payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import {
@@ -34,6 +34,7 @@ const APPROVER = "00000000-aaaa-4000-8000-000000000003"; // maker-checker: appro
 
 async function wipeTestData() {
   await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+  await db.delete(payrollSlips).where(eq(payrollSlips.tenantId, TENANT));
   await db.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
   await db.delete(processed).where(eq(processed.messageId, MSG_1));
   await db.delete(processed).where(eq(processed.messageId, MSG_2));
@@ -212,12 +213,21 @@ describe("Payroll run consumer — CQRS (integration)", () => {
 // ── 7. CQRS — approve run emits payroll.run.approved ─────────────
 
 describe("Payroll run approve — event emitted (integration)", () => {
+  const SLIP_ID = "88888888-aaaa-4000-8000-000000000022";
   beforeAll(async () => {
     await wipeTestData();
     await db.insert(payrollRuns).values({
       id: RUN_2, tenantId: TENANT, runNo: "RUN-TEST-002", month: "2024-08",
       structureId: STRUCT_1, totalGrossMinor: 0n, totalNetMinor: 0n,
       currency: "INR", status: "processing",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
+    await db.insert(payrollSlips).values({
+      id: SLIP_ID, tenantId: TENANT, runId: RUN_2,
+      employeeId: ACTOR, employeeNo: "EMP-001",
+      basicMinor: 3_000_000n, grossMinor: 5_000_000n,
+      totalDeductionsMinor: 500_000n, netPayMinor: 4_500_000n,
+      currency: "INR", components: [],
       createdBy: ACTOR, updatedBy: ACTOR,
     });
   });

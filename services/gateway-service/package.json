@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@civitasone/auth": "workspace:*",
+    "@civitasone/circuit-breaker": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "@fastify/helmet": "^11.1.1",

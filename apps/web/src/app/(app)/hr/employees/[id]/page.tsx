@@ -1,26 +1,39 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
+import { EditEmployeeToggle } from "./EditEmployeeToggle";
 
 export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
   const { data: employee, source } = await getEmployeeById(params.id);
 
   if (!employee) {
     return (
-      <>
+      <main className="page-main" aria-labelledby="page-heading">
         <PageHeader title="Employee Profile" back="/hr/employees" />
-        {source === "error" && <DataSourceBadge source="error" />}
+        {source === "error" && (
+          <div aria-live="assertive" aria-atomic="true">
+            <DataSourceBadge source="error" />
+          </div>
+        )}
         <Card padding>
           <p className="text-center text-slate-400">Employee not found.</p>
         </Card>
-      </>
+      </main>
     );
   }
 
   return (
-    <>
-      <PageHeader title={employee.name} back="/hr/employees" />
-      {source === "error" && <DataSourceBadge source="error" />}
+    <main className="page-main" aria-labelledby="page-heading">
+      <PageHeader
+        title={employee.name}
+        back="/hr/employees"
+        actions={<EditEmployeeToggle employee={employee} />}
+      />
+      {source === "error" && (
+        <div aria-live="assertive" aria-atomic="true">
+          <DataSourceBadge source="error" />
+        </div>
+      )}
       <Card title="Personal Information" padding>
         <div className="fields">
           <div className="field">
@@ -75,6 +88,6 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           )}
         </div>
       </Card>
-    </>
+    </main>
   );
 }

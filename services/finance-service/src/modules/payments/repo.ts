@@ -59,6 +59,10 @@ export async function findAdvanceByIdTx(tx: Writer, id: string): Promise<Advance
   return rows[0] ?? null;
 }
 
+export async function updateAdvance(tx: Writer, id: string, patch: Partial<AdvanceInsert>): Promise<void> {
+  await tx.update(financeAdvances).set({ ...patch, updatedAt: new Date() }).where(eq(financeAdvances.id, id));
+}
+
 export async function listUCsByTenant(tenantId: string, limit: number): Promise<UCRow[]> {
   return db.select().from(financeUC)
     .where(eq(financeUC.tenantId, tenantId))

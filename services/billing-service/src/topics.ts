@@ -13,6 +13,10 @@ export const COMMANDS = {
   invoiceCancel:        "billing.invoice.cancel",
   invoicePay:           "billing.invoice.pay",
   paymentRecord:        "billing.payment.record",
+  checkoutCreate:       "billing.checkout.create",
+  checkoutVerify:       "billing.checkout.verify",
+  webhookRazorpay:      "billing.webhook.razorpay",
+  dunningRetry:         "billing.dunning.retry",
 } as const;
 
 export const EVENTS = {
@@ -21,6 +25,9 @@ export const EVENTS = {
   invoiceCancelled:    "billing.invoice.cancelled",
   invoicePaid:         "billing.invoice.paid",
   paymentReceived:     "billing.payment.received",
+  checkoutCompleted:   "billing.checkout.completed",
+  checkoutFailed:      "billing.checkout.failed",
+  dunningExhausted:    "billing.dunning.exhausted",
 } as const;
 
 export const SERVICE = "billing";

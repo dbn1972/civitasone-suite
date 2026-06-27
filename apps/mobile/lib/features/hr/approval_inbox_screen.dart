@@ -15,8 +15,13 @@ class ApprovalInboxScreen extends ConsumerStatefulWidget {
 class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
   bool _loading = true;
   String? _error;
+  bool _fromCache = false;
   List<Map<String, dynamic>> _requests = [];
   final Set<String> _processing = {};
+
+  /// Cache mailbox key used for offline-first storage.
+  static const _cacheMailbox = 'leave_approvals';
+  static const _cacheEntityId = 'leave_approvals_singleton';
 
   @override
   void initState() {
@@ -28,50 +33,48 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _fromCache = false;
     });
     try {
-      // GET /v1/hrms/leave-applications?status=pending&reportees=true
-      await Future.delayed(const Duration(milliseconds: 700));
+      final apiClient = ref.read(apiClientProvider);
+      final res = await apiClient.get<Map<String, dynamic>>(
+        '/v1/hrms/leave-requests',
+      );
+      final data = (res.data?['data'] as List<dynamic>?) ?? [];
 
-      _requests = [
-        {
-          'id': 'la-001',
-          'employeeName': 'Priya Sharma',
-          'employeeCode': 'EMP-042',
-          'leaveType': 'Casual Leave',
-          'fromDate': '2025-01-20',
-          'toDate': '2025-01-22',
-          'days': 3,
-          'reason': 'Family function — sister wedding preparations',
-          'appliedAt': '2025-01-15',
-          'status': 'pending',
-        },
-        {
-          'id': 'la-002',
-          'employeeName': 'Rajesh Kumar',
-          'employeeCode': 'EMP-087',
-          'leaveType': 'Sick Leave',
-          'fromDate': '2025-01-18',
-          'toDate': '2025-01-18',
-          'days': 1,
-          'reason': 'Doctor appointment — dental surgery follow-up',
-          'appliedAt': '2025-01-16',
-          'status': 'pending',
-        },
-        {
-          'id': 'la-003',
-          'employeeName': 'Anita Desai',
-          'employeeCode': 'EMP-123',
-          'leaveType': 'Earned Leave',
-          'fromDate': '2025-02-01',
-          'toDate': '2025-02-07',
-          'days': 7,
-          'reason': 'Annual family vacation',
-          'appliedAt': '2025-01-14',
-          'status': 'pending',
-        },
-      ];
+      _requests = data
+          .cast<Map<String, dynamic>>()
+          .where((r) => (r['status'] as String?) == 'pending')
+          .toList();
+
+      // Cache to local DB for offline-first access.
+      final db = ref.read(dbProvider).valueOrNull;
+      if (db != null) {
+        await db.upsertEntity(
+          id: _cacheEntityId,
+          mailbox: _cacheMailbox,
+          data: {'requests': _requests},
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+        );
+      }
     } catch (e) {
+      // Fall back to cached data when offline / error.
+      final db = ref.read(dbProvider).valueOrNull;
+      if (db != null) {
+        final cached = await db.listEntities(_cacheMailbox);
+        if (cached.isNotEmpty) {
+          final cachedData = cached.first['data'] as Map<String, dynamic>;
+          final items = (cachedData['requests'] as List<dynamic>?) ?? [];
+          _requests = items.cast<Map<String, dynamic>>().toList();
+          if (mounted) {
+            setState(() {
+              _fromCache = true;
+              _error = null;
+            });
+          }
+          return;
+        }
+      }
       _error = e.toString();
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -81,9 +84,18 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
   Future<void> _handleAction(String id, bool approve) async {
     setState(() => _processing.add(id));
     try {
-      // PATCH /v1/hrms/leave-applications/:id/approve
-      // Body: { "action": "approve" | "reject" }
-      await Future.delayed(const Duration(milliseconds: 800));
+      final apiClient = ref.read(apiClientProvider);
+      if (approve) {
+        await apiClient.patch<Map<String, dynamic>>(
+          '/v1/hrms/leave-requests/$id/approve',
+          data: {},
+        );
+      } else {
+        await apiClient.patch<Map<String, dynamic>>(
+          '/v1/hrms/leave-requests/$id/reject',
+          data: {'reason': 'rejected by manager'},
+        );
+      }
 
       setState(() {
         _requests.removeWhere((r) => r['id'] == id);
@@ -145,9 +157,17 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
                       onRefresh: _fetchRequests,
                       child: ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount: _requests.length,
-                        itemBuilder: (ctx, i) =>
-                            _buildRequestCard(theme, _requests[i]),
+                        itemCount: _requests.length + (_fromCache ? 1 : 0),
+                        itemBuilder: (ctx, i) {
+                          if (_fromCache && i == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _buildCacheBanner(theme),
+                            );
+                          }
+                          final index = _fromCache ? i - 1 : i;
+                          return _buildRequestCard(theme, _requests[index]);
+                        },
                       ),
                     ),
     );
@@ -310,6 +330,30 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCacheBanner(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off, size: 16, color: Color(0xFFF59E0B)),
+          const SizedBox(width: 8),
+          Text(
+            'Showing cached data',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFFF59E0B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

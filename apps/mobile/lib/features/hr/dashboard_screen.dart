@@ -15,12 +15,17 @@ class HrDashboardScreen extends ConsumerStatefulWidget {
 class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
   bool _loading = true;
   String? _error;
+  bool _fromCache = false;
 
   // KPI data
   int _headcount = 0;
   double _attendancePercent = 0;
   int _pendingLeaves = 0;
   String _todayStatus = 'absent'; // present, absent, on_leave
+
+  /// Cache mailbox key used for offline-first storage.
+  static const _cacheMailbox = 'hr_dashboard';
+  static const _cacheEntityId = 'hr_dashboard_singleton';
 
   @override
   void initState() {
@@ -32,20 +37,92 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _fromCache = false;
     });
-    try {
-      // GET /v1/hrms/dashboard
-      // Simulated API call
-      await Future.delayed(const Duration(milliseconds: 700));
 
-      setState(() {
-        _headcount = 342;
-        _attendancePercent = 91.5;
-        _pendingLeaves = 7;
-        _todayStatus = 'present';
-      });
+    try {
+      final apiClient = ref.read(apiClientProvider);
+
+      // ── 1. Fetch main dashboard KPIs ─────────────────────────────────────
+      final dashRes = await apiClient.get<Map<String, dynamic>>(
+        '/v1/hrms/dashboard',
+      );
+      final dash = dashRes.data!;
+
+      // ── 2. Fetch today's attendance status ────────────────────────────────
+      final now = DateTime.now();
+      final month =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}';
+      String todayStatus = 'absent';
+      try {
+        final attendanceRes = await apiClient.get<Map<String, dynamic>>(
+          '/v1/hrms/attendance',
+          params: {'month': month},
+        );
+        final records =
+            (attendanceRes.data?['records'] as List<dynamic>?) ?? [];
+        final todayStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        for (final rec in records) {
+          if ((rec as Map<String, dynamic>)['date'] == todayStr) {
+            todayStatus = (rec['status'] as String?) ?? 'absent';
+            break;
+          }
+        }
+      } catch (_) {
+        // Attendance fetch is non-fatal; keep 'absent' as default.
+      }
+
+      final dashData = {
+        'headcount': dash['headcount'] as int? ?? 0,
+        'attendanceTodayPct':
+            (dash['attendanceTodayPct'] as num?)?.toDouble() ?? 0.0,
+        'pendingLeaves': dash['pendingLeaves'] as int? ?? 0,
+        'todayStatus': todayStatus,
+      };
+
+      // ── 3. Cache to local DB ──────────────────────────────────────────────
+      final db = ref.read(dbProvider).valueOrNull;
+      if (db != null) {
+        await db.upsertEntity(
+          id: _cacheEntityId,
+          mailbox: _cacheMailbox,
+          data: dashData,
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _headcount = dashData['headcount'] as int;
+          _attendancePercent = dashData['attendanceTodayPct'] as double;
+          _pendingLeaves = dashData['pendingLeaves'] as int;
+          _todayStatus = dashData['todayStatus'] as String;
+        });
+      }
     } catch (e) {
-      _error = e.toString();
+      // ── 4. Fall back to cached data when offline / error ─────────────────
+      final db = ref.read(dbProvider).valueOrNull;
+      if (db != null) {
+        final cached = await db.listEntities(_cacheMailbox);
+        if (cached.isNotEmpty) {
+          final data =
+              cached.first['data'] as Map<String, dynamic>;
+          if (mounted) {
+            setState(() {
+              _headcount = data['headcount'] as int? ?? 0;
+              _attendancePercent =
+                  (data['attendanceTodayPct'] as num?)?.toDouble() ?? 0.0;
+              _pendingLeaves = data['pendingLeaves'] as int? ?? 0;
+              _todayStatus = data['todayStatus'] as String? ?? 'absent';
+              _fromCache = true;
+              _error = null; // suppress error banner; show cache banner instead
+            });
+            return;
+          }
+        }
+      }
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -76,6 +153,11 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      // Cached data indicator
+                      if (_fromCache)
+                        _buildCacheBanner(theme, colorScheme),
+                      if (_fromCache) const SizedBox(height: 12),
+
                       // Today's status
                       _buildTodayStatus(theme, colorScheme),
                       const SizedBox(height: 20),
@@ -97,6 +179,30 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildCacheBanner(ThemeData theme, ColorScheme colorScheme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off, size: 16, color: Color(0xFFF59E0B)),
+          const SizedBox(width: 8),
+          Text(
+            'Showing cached data',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFFF59E0B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

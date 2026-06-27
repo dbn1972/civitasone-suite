@@ -17,7 +17,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     );
   }
 
-  const STAGES = ["prospecting", "qualification", "proposal", "negotiation", "closed_won"] as const;
+  const STAGES = ["Lead", "Proposal", "Negotiation", "Won", "Lost"] as const;
   const currentIdx = STAGES.indexOf(deal.stage as typeof STAGES[number]);
 
   return (

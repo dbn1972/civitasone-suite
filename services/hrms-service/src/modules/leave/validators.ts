@@ -30,6 +30,9 @@ export type ApplyLeaveBody = z.infer<typeof applyLeaveBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+export const rejectLeaveBody = z.object({ reason: z.string().min(1) });
+export type RejectLeaveBody = z.infer<typeof rejectLeaveBody>;
+
 export const leaveQueryParams = z.object({
   empId: z.string().uuid().optional(),
 });

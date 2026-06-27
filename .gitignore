@@ -17,6 +17,8 @@ apps/web/e2e-report/
 # Build artifacts / IDE
 .kiro/
 /test-results/
+.k6-stack-logs/
+/archive/
 # Flutter
 .dart_tool/
 .flutter-plugins

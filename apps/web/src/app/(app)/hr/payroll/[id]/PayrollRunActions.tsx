@@ -15,20 +15,18 @@ type Props = {
   payPeriod: string;
 };
 
-type PendingAction = "approve" | "disburse" | null;
+type PendingAction = "approve" | "disburse" | "revert" | null;
 
 /** Ordered lifecycle of a payroll run, used to render the status stepper. */
 const STAGES: { key: string; label: string }[] = [
   { key: "draft", label: "Draft" },
   { key: "processing", label: "Processing" },
-  { key: "completed", label: "Approved" },
-  { key: "paid", label: "Paid" },
+  { key: "approved", label: "Approved" },
+  { key: "disbursed", label: "Disbursed" },
 ];
 
 function stageIndex(status: string): number {
-  // "approved" is treated as an alias for the completed stage.
-  const normalised = status === "approved" ? "completed" : status;
-  const i = STAGES.findIndex((s) => s.key === normalised);
+  const i = STAGES.findIndex((s) => s.key === status);
   return i === -1 ? 0 : i;
 }
 
@@ -49,13 +47,15 @@ export function PayrollRunActions({
 
   const cur = stageIndex(status);
 
-  async function runAction(action: "approve" | "disburse", reason?: string) {
+  async function runAction(action: "approve" | "disburse" | "revert", reason?: string) {
     setBusy(true);
     setError(undefined);
     const path =
       action === "approve"
         ? `/api/proxy/v1/payroll/runs/${runId}/approve`
-        : `/api/proxy/v1/payroll/runs/${runId}/disburse`;
+        : action === "disburse"
+          ? `/api/proxy/v1/payroll/runs/${runId}/disburse`
+          : `/api/proxy/v1/payroll/runs/${runId}/revert`;
     try {
       const res = await fetch(path, {
         method: "PATCH",
@@ -71,7 +71,9 @@ export function PayrollRunActions({
       setMessage(
         action === "approve"
           ? `Payroll run for ${payPeriod} approved.`
-          : `Disbursement of ${formatMoney(netAmount)} to ${employeeCount} employees initiated.`,
+          : action === "disburse"
+            ? `Disbursement of ${formatMoney(netAmount)} to ${employeeCount} employees initiated.`
+            : `Payroll run for ${payPeriod} reverted to draft.`,
       );
       setPending(null);
       router.refresh();
@@ -83,7 +85,8 @@ export function PayrollRunActions({
   }
 
   const canApprove = status === "processing" || status === "draft";
-  const canDisburse = status === "completed" || status === "approved";
+  const canDisburse = status === "approved";
+  const canRevert = status === "failed";
 
   return (
     <section className="card" style={{ marginBottom: 16 }}>
@@ -95,7 +98,7 @@ export function PayrollRunActions({
         <ol
           className="tl"
           aria-label="Payroll run status"
-          style={{ marginBottom: canApprove || canDisburse ? 18 : 0 }}
+          style={{ marginBottom: canApprove || canDisburse || canRevert ? 18 : 0 }}
         >
           {STAGES.map((s, i) => (
             <li key={s.key} className={i < cur ? "done" : i === cur ? "cur" : ""}>
@@ -105,9 +108,15 @@ export function PayrollRunActions({
               </div>
             </li>
           ))}
+          {status === "failed" && (
+            <li className="cur" style={{ color: "var(--danger, #d32f2f)" }}>
+              <div className="t">Failed</div>
+              <div className="m">Disbursement failed — revert to draft to retry</div>
+            </li>
+          )}
         </ol>
 
-        {(canApprove || canDisburse) && (
+        {(canApprove || canDisburse || canRevert) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {canApprove && (
               <button
@@ -133,6 +142,19 @@ export function PayrollRunActions({
                 }}
               >
                 Disburse Run
+              </button>
+            )}
+            {canRevert && (
+              <button
+                type="button"
+                className="btn secondary"
+                style={{ minHeight: 44 }}
+                onClick={() => {
+                  setError(undefined);
+                  setPending("revert");
+                }}
+              >
+                Revert to Draft
               </button>
             )}
           </div>
@@ -188,6 +210,25 @@ export function PayrollRunActions({
           </>
         }
         onConfirm={(reason) => void runAction("disburse", reason)}
+        onCancel={() => !busy && setPending(null)}
+      />
+
+      <ConfirmDialog
+        open={pending === "revert"}
+        title="Revert this run to draft?"
+        danger
+        requireReason
+        reasonLabel="Reason for revert"
+        confirmLabel="Revert to draft"
+        busy={busy}
+        errorMessage={error}
+        description={
+          <>
+            The payroll run for <strong>{payPeriod}</strong> will be reverted to draft status so
+            it can be corrected and reprocessed. No funds have been disbursed.
+          </>
+        }
+        onConfirm={(reason) => void runAction("revert", reason)}
         onCancel={() => !busy && setPending(null)}
       />
     </section>

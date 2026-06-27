@@ -3,7 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createIndentBody, approveIndentBody, idParam } from "./validators.js";
+import { createIndentBody, approveIndentBody, rejectIndentBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -27,6 +27,14 @@ export async function indentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = approveIndentBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveIndent(ctx, id, body));
+  });
+
+  app.patch("/v1/procurement/indents/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROC_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = rejectIndentBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectIndent(ctx, id, body));
   });
 
   app.get("/v1/procurement/indents/tender-required", async (req, reply) => {

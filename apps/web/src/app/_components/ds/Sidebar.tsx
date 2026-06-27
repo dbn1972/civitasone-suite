@@ -3,59 +3,96 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Avatar } from "./Avatar";
 
-const NAV = [
+type NavItem = {
+  icon: string;
+  label: string;
+  href: string;
+  /** Module key for enablement gating. null = always visible (platform/overview). */
+  moduleKey: string | null;
+};
+
+type NavGroup = {
+  group: string;
+  items: NavItem[];
+};
+
+const NAV: NavGroup[] = [
   {
     group: "OVERVIEW",
-    items: [{ icon: "🏠", label: "Dashboard", href: "/dashboard" }],
+    items: [{ icon: "🏠", label: "Dashboard", href: "/dashboard", moduleKey: null }],
   },
   {
     group: "FINANCE",
-    items: [{ icon: "🏦", label: "Finance", href: "/finance" }],
+    items: [{ icon: "🏦", label: "Finance", href: "/finance", moduleKey: "finance" }],
   },
   {
     group: "OPERATIONS",
     items: [
-      { icon: "👥", label: "HR & Payroll", href: "/hr" },
-      { icon: "🛒", label: "Procurement", href: "/procurement" },
-      { icon: "📊", label: "Projects", href: "/projects" },
-      { icon: "🎁", label: "Grants", href: "/grants" },
-      { icon: "🏢", label: "Establishment", href: "/estab" },
-      { icon: "🏗️", label: "Assets", href: "/assets" },
-      { icon: "📦", label: "Stock", href: "/stock" },
+      { icon: "👥", label: "HR & Payroll", href: "/hr", moduleKey: "hrms" },
+      { icon: "🛒", label: "Procurement", href: "/procurement", moduleKey: "procurement" },
+      { icon: "📊", label: "Projects", href: "/projects", moduleKey: "projects" },
+      { icon: "🎁", label: "Grants", href: "/grants", moduleKey: "grants" },
+      { icon: "🏢", label: "Establishment", href: "/estab", moduleKey: "establishment" },
+      { icon: "🏗️", label: "Assets", href: "/assets", moduleKey: "assets" },
+      { icon: "📦", label: "Stock", href: "/stock", moduleKey: "stock" },
     ],
   },
   {
     group: "CITIZEN SERVICES",
     items: [
-      { icon: "🤝", label: "CRM", href: "/crm" },
-      { icon: "🎧", label: "Helpdesk", href: "/helpdesk" },
-      { icon: "🪪", label: "Citizen Portal", href: "/citizen" },
+      { icon: "🤝", label: "CRM", href: "/crm", moduleKey: "crm" },
+      { icon: "🎧", label: "Helpdesk", href: "/helpdesk", moduleKey: "helpdesk" },
+      { icon: "🪪", label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
     ],
   },
   {
     group: "GOVERNANCE",
     items: [
-      { icon: "🔍", label: "Audit", href: "/audit" },
-      { icon: "⚖️", label: "Legal", href: "/legal" },
+      { icon: "🔍", label: "Audit", href: "/audit", moduleKey: "audit" },
+      { icon: "⚖️", label: "Legal", href: "/legal", moduleKey: "legal" },
     ],
   },
   {
     group: "PLATFORM",
     items: [
-      { icon: "📈", label: "Reports", href: "/reports" },
-      { icon: "📚", label: "Knowledge", href: "/knowledge" },
-      { icon: "🔔", label: "Notifications", href: "/notifications" },
-      { icon: "🛡️", label: "Tenant Admin", href: "/tenant-admin" },
+      { icon: "📈", label: "Reports", href: "/reports", moduleKey: "reports" },
+      { icon: "📚", label: "Knowledge", href: "/knowledge", moduleKey: "knowledge" },
+      { icon: "🔔", label: "Notifications", href: "/notifications", moduleKey: null },
+      { icon: "🛡️", label: "Tenant Admin", href: "/tenant-admin", moduleKey: null },
     ],
   },
 ];
 
-export function Sidebar() {
+export type SidebarProps = {
+  /**
+   * List of enabled module keys for the current tenant.
+   * If undefined/null, all items are shown (backwards compatible — no filtering).
+   */
+  enabledModules?: string[] | null;
+};
+
+export function Sidebar({ enabledModules }: SidebarProps = {}) {
   const pathname = usePathname();
+  const enabledSet = enabledModules ? new Set(enabledModules) : null;
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href + "/");
   }
+
+  function isVisible(item: NavItem): boolean {
+    // No enabledModules data → show everything (backwards compatible)
+    if (!enabledSet) return true;
+    // Items without a moduleKey are always visible (platform/overview)
+    if (item.moduleKey === null) return true;
+    // Otherwise, only show if the module is enabled
+    return enabledSet.has(item.moduleKey);
+  }
+
+  // Filter groups: only render a group if it has at least one visible item
+  const visibleNav = NAV.map(({ group, items }) => ({
+    group,
+    items: items.filter(isVisible),
+  })).filter(({ items }) => items.length > 0);
 
   return (
     <aside className="sb">
@@ -67,7 +104,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="sb-nav">
-        {NAV.map(({ group, items }) => (
+        {visibleNav.map(({ group, items }) => (
           <div key={group}>
             <div className="sb-grp">{group}</div>
             {items.map(({ icon, label, href }) => (

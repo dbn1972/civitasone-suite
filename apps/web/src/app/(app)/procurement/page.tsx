@@ -12,13 +12,19 @@ const procurementTiles: NavTile[] = [
 	{ title: "Contracts", href: "/procurement/contracts", description: "Rate and service contracts" },
 	{ title: "Tenders", href: "/procurement/tenders", description: "Open and limited tenders" },
 	{ title: "Approvals", href: "/procurement/approvals", description: "Pending approvals and sign-offs" },
+	{ title: "Bid Evaluation", href: "/procurement/bid-evaluation", description: "Technical and financial scoring matrix" },
+	{ title: "Reverse Auction", href: "/procurement/reverse-auction", description: "Live and scheduled reverse auctions" },
+	{ title: "GeM", href: "/procurement/gem", description: "Government e-Marketplace integration" },
+	{ title: "EMD & BG", href: "/procurement/emd-bg", description: "EMD and bank guarantee register" },
+	{ title: "Empanelment", href: "/procurement/empanelment", description: "Vendor empanelment management" },
+	{ title: "Pre-Bid", href: "/procurement/pre-bid", description: "Pre-bid conference log" },
 ];
 
 export default function Page() {
 	return (
-		<>
+		<main className="page-main" aria-labelledby="page-heading">
 			<PageHeader title="Procurement" subtitle="Requisitions, vendors, purchase orders, and tenders with approval controls." />
 			<LinkTiles tiles={procurementTiles} columns="four" />
-		</>
+		</main>
 	);
 }

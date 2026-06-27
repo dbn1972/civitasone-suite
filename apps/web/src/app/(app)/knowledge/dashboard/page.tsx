@@ -120,8 +120,8 @@ export default async function KnowledgeDashboardPage() {
         subtitle="Digital repository, records retention &amp; enterprise search."
         actions={
           <>
-            <button className="btn ghost">Bulk upload</button>
-            <Link href="/knowledge/documents/new" className="btn primary">+ Publish Document</Link>
+            <Link href="/knowledge/documents/new?bulk=true" className="btn ghost" style={{ minHeight: 44 }}>Bulk upload</Link>
+            <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>+ Publish Document</Link>
           </>
         }
       />

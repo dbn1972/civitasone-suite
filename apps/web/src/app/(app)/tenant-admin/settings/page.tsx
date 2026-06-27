@@ -13,7 +13,7 @@ export default async function TenantSettingsPage() {
   const disabled = modules.filter((m) => !m.enabled).length;
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Settings & Modules" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -21,7 +21,7 @@ export default async function TenantSettingsPage() {
         subtitle="Module configuration and toggle state for this tenant."
         actions={
           <>
-            <a className="btn ghost" href="/tenant-admin/audit">Audit changes</a>
+            <a className="btn ghost" href="/tenant-admin/audit" style={{ minHeight: 44 }}>Audit changes</a>
           </>
         }
       />
@@ -53,6 +53,6 @@ export default async function TenantSettingsPage() {
           />
         </div>
       </div>
-    </div>
+    </main>
   );
 }

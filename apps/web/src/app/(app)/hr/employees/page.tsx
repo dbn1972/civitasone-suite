@@ -15,7 +15,7 @@ export default async function EmployeeDirectoryPage() {
   const others = total - active - onLeave;
 
   return (
-    <>
+    <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="Employee Directory"
         subtitle="All staff, grades and posting locations."
@@ -30,6 +30,6 @@ export default async function EmployeeDirectoryPage() {
       <Card title="All Employees">
         <EmployeesTable employees={employees} source={source} />
       </Card>
-    </>
+    </main>
   );
 }

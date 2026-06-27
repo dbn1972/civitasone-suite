@@ -6,7 +6,7 @@ import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertDistinctMakerChecker, DomainError } from "./domain.js";
 import { assertModeAllowedForValue, GfrModeError, type ProcurementMode } from "../gfr/mode-bands.js";
-import type { CreateIndentBody, ApproveIndentBody } from "./validators.js";
+import type { CreateIndentBody, ApproveIndentBody, RejectIndentBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -52,6 +52,21 @@ export async function approveIndent(ctx: RequestContext, id: string, body: Appro
     type: COMMANDS.indentApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "indent", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function rejectIndent(ctx: RequestContext, id: string, body: RejectIndentBody): Promise<Accepted> {
+  const indent = await repo.findIndentById(id);
+  if (!indent || indent.tenantId !== ctx.tenantId) {
+    throw new HttpError(404, "NOT_FOUND", "indent not found");
+  }
+
+  await queue.publish(COMMANDS.indentReject, {
+    type: COMMANDS.indentReject,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "indent", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

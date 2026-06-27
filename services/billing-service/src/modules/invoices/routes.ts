@@ -2,7 +2,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
+import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
 import { DomainError } from "./domain.js";
 import {
   generateBody, createInvoiceBody, cancelBody, approveBody,
@@ -10,6 +10,8 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+
+const BILLING_ROLES = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
 
 export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
   // Legacy: auto-generate a usage bill from plan + usage.
@@ -92,6 +94,13 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const { id } = tenantParam.parse(req.params);
     return reply.send(await queries.listInvoices(id));
+  });
+
+  // Caller-scoped list: returns invoices for the authenticated user's tenant.
+  app.get("/v1/billing/invoices", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
+    return reply.send(await queries.listInvoices(ctx.tenantId));
   });
 
   app.setErrorHandler((err, req, reply) => {

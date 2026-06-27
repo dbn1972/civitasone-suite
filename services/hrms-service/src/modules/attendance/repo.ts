@@ -46,3 +46,7 @@ export async function listRegularisationsByTenant(tenantId: string, limit = 100)
     .where(eq(hrmsAttendanceRegularisations.tenantId, tenantId))
     .limit(limit);
 }
+
+export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanceRegularisations.$inferInsert): Promise<void> {
+  await tx.insert(hrmsAttendanceRegularisations).values(row);
+}

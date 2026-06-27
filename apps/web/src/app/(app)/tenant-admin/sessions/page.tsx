@@ -13,13 +13,13 @@ export default async function AdminSessionsPage() {
   const suspicious = sessions.filter((s) => !s.mfaVerified && s.status === "active").length;
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Active Sessions" }]} />
       <PageHeader
         back="/tenant-admin"
         title="Active Sessions"
         subtitle="All active and recent user sessions for this tenant."
-        actions={<button type="button" className="btn ghost">Export</button>}
+        actions={<button type="button" className="btn ghost" style={{ minHeight: 44 }}>Export</button>}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🖥️" iconBg="#f1f5f9" label="Active Sessions" value={active} />
@@ -40,6 +40,6 @@ export default async function AdminSessionsPage() {
           status: s.status,
         }))}
       />
-    </div>
+    </main>
   );
 }

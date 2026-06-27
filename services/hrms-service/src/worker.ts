@@ -8,6 +8,7 @@ import { registerAttendanceConsumers } from "./modules/attendance/consumer.js";
 import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js";
 import { registerTrainingConsumers }   from "./modules/training/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
+import { registerAppraisalConsumers }  from "./modules/appraisals/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 
 const log = pino({ name: "hrms-worker" });
@@ -18,6 +19,7 @@ registerAttendanceConsumers(queue);
 registerRecruitmentConsumers(queue);
 registerTrainingConsumers(queue);
 registerIntegrationConsumers(queue);
+registerAppraisalConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

@@ -5,9 +5,10 @@ import { sendValidated } from "@civitasone/schemas/validate";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createJobOpeningBody, createApplicationBody, offerApplicationBody, idParam } from "./validators.js";
+import { createJobOpeningBody, createApplicationBody, offerApplicationBody, hireApplicationBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
@@ -40,6 +41,22 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = offerApplicationBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.offerApplication(ctx, id, body));
+  });
+
+  app.post("/v1/hrms/applications/:id/hire", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = hireApplicationBody.parse(req.body);
+
+    // Validate the application exists and is in a hireable state
+    const application = await repo.findApplicationById(id, ctx.tenantId);
+    if (!application) throw new HttpError(404, "NOT_FOUND", "Application not found");
+    if (application.stage !== "selected" && application.stage !== "offered") {
+      throw new HttpError(409, "INVALID_STATE", `Cannot hire application in stage "${application.stage}"`);
+    }
+
+    return sendAccepted(reply, acceptedResponseSchema, await commands.hireApplication(ctx, id, body));
   });
 
   app.setErrorHandler(errorHandler);

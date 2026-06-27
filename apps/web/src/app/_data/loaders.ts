@@ -33,10 +33,12 @@ import type {
   PayrollRunDetail,
   PayrollRunFullDetail,
   PayrollRunSummary,
+  PayrollStructure,
   PluginSummary,
   RoleAssignmentSummary,
   SalarySlipSummary,
   SLAQueueSummary,
+  TaxDeclaration,
   TenantSettingSummary,
   TenantUserSummary,
   ThemeTokenSummary,
@@ -127,6 +129,7 @@ import type {
   KnowledgeRecord,
   NotificationItem,
   NotificationDelivery,
+  PensionerSummary,
 } from "@civitasone/types";
 import {
   AppraisalSummaryListSchema,
@@ -142,6 +145,7 @@ import {
   PayrollRunFullDetailSchema,
   paymentsListSchema,
   SalarySlipSummaryListSchema,
+  PayrollStructureListSchema,
   ticketsListSchema,
   metricsListResponseSchema,
   slaListResponseSchema,
@@ -405,6 +409,18 @@ function mapPayments(payload: unknown): PaymentSummary[] | null {
   return mapped.length > 0 ? mapped : null;
 }
 
+const EMPLOYEE_STATUSES = ["probation", "confirmed", "on_leave", "suspended", "deputation", "retired", "separated", "terminated"] as const;
+type EmployeeStatus = typeof EMPLOYEE_STATUSES[number];
+
+function toEmployeeStatus(value: unknown): EmployeeStatus {
+  const s = typeof value === "string" ? value.toLowerCase() : null;
+  // Map legacy/display casing to canonical values
+  if (s === "active") return "confirmed";
+  if (s === "on leave" || s === "on_leave") return "on_leave";
+  const found = EMPLOYEE_STATUSES.find((v) => v === s);
+  return found ?? "probation";
+}
+
 function mapEmployees(payload: unknown): EmployeeSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
@@ -415,7 +431,7 @@ function mapEmployees(payload: unknown): EmployeeSummary[] | null {
     const id = toText(row.id) ?? toText(row.empCode);
     const name = toText(row.name);
     const department = toText(row.department) ?? toText(row.dept) ?? "—";
-    const status = toText(row.status) ?? "probation"; // P1-5: API returns lowercase canonical values directly
+    const status = toEmployeeStatus(row.status);
     if (!id || !name) continue;
     mapped.push({ id, name, department, status });
   }
@@ -1172,8 +1188,28 @@ function moduleLoader(path: string, key: string) {
 export const getLegalCasesLegacy = moduleLoader("/api/v1/legal/cases", "legal.cases");
 export const getProjectsLegacy = moduleLoader("/api/v1/project/projects", "projects.list");
 export const getBillingPlans = moduleLoader("/api/v1/billing/plans", "billing.plans");
+export const getBillingSubscriptions = moduleLoader("/api/v1/billing/subscriptions", "billing.subscriptions");
+export const getBillingInvoices = moduleLoader("/api/v1/billing/invoices", "billing.invoices");
+export const getBillingPayments = moduleLoader("/api/v1/billing/payments", "billing.payments");
+
+export async function getBillingPlanById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
+  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/billing/plans/${id}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "billing.plan_detail",
+    mapResponse: (payload) => (isRecord(payload) ? payload as Record<string, unknown> : null),
+  });
+}
+
 export const getContracts = moduleLoader("/api/v1/contract/contracts", "contract.list");
 export const getRateContracts = moduleLoader("/api/v1/contract/rate-contracts", "contract.rate");
+
+export async function getContractById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
+  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/contract/contracts/${id}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "contract.detail",
+    mapResponse: (payload) => (isRecord(payload) ? payload as Record<string, unknown> : null),
+  });
+}
 export const getInventoryItems = moduleLoader("/api/v1/inventory/items", "inventory.items");
 export const getTelephonyCalls = moduleLoader("/api/v1/telephony/calls", "telephony.calls");
 export const getLocations = moduleLoader("/api/v1/locations", "locations.list");
@@ -1364,6 +1400,15 @@ export async function getPayrollRunById(id: string): Promise<LoaderResult<Payrol
     telemetryKey: "hr.payroll.run.detail",
     responseSchema: PayrollRunFullDetailSchema,
     mapResponse: (p) => (isRecord(p) ? (p as PayrollRunFullDetail) : null),
+  });
+}
+
+export async function getPayrollStructures(): Promise<LoaderResult<PayrollStructure[]>> {
+  return fetchJson<unknown, PayrollStructure[]>("/api/v1/payroll/structures", [], {
+    revalidateSeconds: 300,
+    telemetryKey: "hr.payroll.structures",
+    responseSchema: PayrollStructureListSchema,
+    mapResponse: (p) => getArrayPayload(p) as PayrollStructure[] | null,
   });
 }
 
@@ -1619,14 +1664,14 @@ function mapDeals(payload: unknown): DealSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
   const mapped: DealSummary[] = [];
-  const validStages = new Set(["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]);
-  const validStatuses = new Set(["open", "won", "lost"]);
+  const validStages = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
+  const validStatuses = new Set(["active", "won", "lost"]);
   for (const row of rows) {
     if (!isRecord(row)) continue;
     const id = toText(row.id);
     const dealName = toText(row.dealName) ?? toText(row.name);
     const stage = toText(row.stage);
-    const status = toText(row.status) ?? "open";
+    const status = toText(row.status) ?? "active";
     if (!id || !dealName || !stage || !validStages.has(stage)) continue;
     if (!validStatuses.has(status)) continue;
     mapped.push({
@@ -2568,5 +2613,47 @@ export async function getPayMatrix(): Promise<LoaderResult<PayMatrixLevel[]>> {
     revalidateSeconds: 300,
     telemetryKey: "hrms.payMatrix",
     mapResponse: (p) => (p as { data?: PayMatrixLevel[] })?.data ?? [],
+  });
+}
+
+export async function getSlipById(id: string): Promise<LoaderResult<SalarySlipSummary | null>> {
+  return fetchJson<unknown, SalarySlipSummary | null>(`/api/v1/payroll/slips/${id}`, null, {
+    revalidateSeconds: 60,
+    telemetryKey: "hr.salary-slip.detail",
+    mapResponse: (p) => (isRecord(p) ? (p as SalarySlipSummary) : null),
+  });
+}
+
+export async function getTaxDeclaration(employeeId: string): Promise<LoaderResult<TaxDeclaration | null>> {
+  return fetchJson<unknown, TaxDeclaration | null>(
+    `/api/v1/payroll/tax-declarations?employeeId=${encodeURIComponent(employeeId)}`,
+    null,
+    {
+      revalidateSeconds: 300,
+      telemetryKey: "hr.tax-declaration",
+      mapResponse: (p) => (isRecord(p) ? (p as TaxDeclaration) : null),
+    },
+  );
+}
+
+export async function getAttendanceListByMonth(month?: string): Promise<LoaderResult<AttendanceSummaryItem[]>> {
+  const path = month
+    ? `/api/v1/hrms/attendance?month=${encodeURIComponent(month)}`
+    : "/api/v1/hrms/attendance";
+  return fetchJson<unknown, AttendanceSummaryItem[]>(path, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "hr.attendance.list.filtered",
+    responseSchema: AttendanceSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as AttendanceSummaryItem[] | null,
+  });
+}
+
+// ── Pensioner loaders ─────────────────────────────────────────────────────────
+
+export async function getPensioners(): Promise<LoaderResult<PensionerSummary[]>> {
+  return fetchJson<unknown, PensionerSummary[]>("/api/v1/payroll/pensioners", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "payroll.pensioners",
+    mapResponse: (p) => getArrayPayload(p) as PensionerSummary[] | null,
   });
 }

@@ -28,5 +28,10 @@ export const approveIndentBody = z.object({
 });
 export type ApproveIndentBody = z.infer<typeof approveIndentBody>;
 
+export const rejectIndentBody = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type RejectIndentBody = z.infer<typeof rejectIndentBody>;
+
 export const indentQueryParams = z.object({ tenantId: z.string().uuid().optional() });
 export const idParam = z.object({ id: z.string().uuid() });

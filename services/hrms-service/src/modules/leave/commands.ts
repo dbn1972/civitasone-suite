@@ -46,3 +46,14 @@ export async function approveLeave(ctx: RequestContext, id: string): Promise<Acc
   await cache.invalidate(cache.makeKey(ctx.tenantId, "leave_app", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export async function rejectLeave(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.leaveReject, {
+    messageId, type: COMMANDS.leaveReject,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, rejectedBy: ctx.actorId, reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "leave_app", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

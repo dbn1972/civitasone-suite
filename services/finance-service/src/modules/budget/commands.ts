@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { assertValidFY } from "./domain.js";
 import * as repo from "./repo.js";
 import { db } from "../../shared/db.js";
-import type { CreateBudgetBody, ReappropriateBody, CreateSanctionBody, UpdateHeadHoABody } from "./validators.js";
+import type { CreateBudgetBody, ReappropriateBody, CreateSanctionBody, UpdateHeadHoABody, RejectSanctionBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -45,4 +45,14 @@ export async function updateHeadHoA(ctx: RequestContext, id: string, body: Updat
   if (!head || head.tenantId !== ctx.tenantId) throw new Error("head not found");
   await repo.updateHead(db, id, { hoaCode: body.hoaCode, updatedBy: ctx.actorId });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "accounts", "list:50"));
+}
+
+export async function rejectSanction(ctx: RequestContext, id: string, body: RejectSanctionBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.sanctionReject, {
+    type: COMMANDS.sanctionReject,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }

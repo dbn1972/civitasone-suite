@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
 import { DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { ImportButton } from "./ImportButton";
 
 export default async function KnowledgeListPage() {
   const { data: docs, source } = await getKnowledgeDocs();
@@ -55,8 +56,8 @@ export default async function KnowledgeListPage() {
         subtitle="All documents in the knowledge base."
         actions={
           <>
-            <button className="btn ghost">Import</button>
-            <Link href="/knowledge/documents/new" className="btn primary">+ New Document</Link>
+            <ImportButton />
+            <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>+ New Document</Link>
           </>
         }
       />

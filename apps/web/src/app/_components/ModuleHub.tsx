@@ -18,10 +18,10 @@ export function ModuleHub({ title, description, links, children }: ModuleHubProp
   }));
 
   return (
-    <>
+    <main className="page-main" aria-labelledby="page-heading">
       <PageHeader title={title} subtitle={description} />
       {children}
       <LinkTiles tiles={tiles} columns="three" />
-    </>
+    </main>
   );
 }

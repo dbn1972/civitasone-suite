@@ -1,4 +1,6 @@
 import { cache } from "../../shared/infra.js";
+import { db } from "../../shared/db.js";
+import { sql } from "drizzle-orm";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 import type { AttendanceRow } from "./schema.js";
@@ -54,4 +56,40 @@ export async function listAttendance(tenantId: string, limit: number) {
       hoursWorked: undefined,
     }));
   });
+}
+
+export async function getAttendanceSummaryForMonth(
+  tenantId: string,
+  month: string,
+): Promise<Array<{ date: string; presentCount: number; absentCount: number; lateCount: number }>> {
+  // month format: YYYY-MM
+  const startDate = `${month}-01`;
+  // Compute the actual last day of the month to avoid invalid date errors (e.g. June has 30 days, not 31)
+  const [year, mon] = month.split("-").map(Number) as [number, number];
+  const lastDay = new Date(year, mon, 0).getDate(); // day 0 of next month = last day of this month
+  const endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
+  const rows = (await db.execute(sql`
+    SELECT
+      attendance_date::text AS date,
+      COUNT(*) FILTER (WHERE status IN ('present', 'half_day')) AS present_count,
+      COUNT(*) FILTER (WHERE status = 'absent')                  AS absent_count,
+      COUNT(*) FILTER (WHERE late_mins > 0)                      AS late_count
+    FROM attendance.hrms_attendance
+    WHERE tenant_id = ${tenantId}::uuid
+      AND attendance_date >= ${startDate}::date
+      AND attendance_date <= ${endDate}::date
+    GROUP BY attendance_date
+    ORDER BY attendance_date
+  `)) as unknown as Array<{
+    date: string;
+    present_count: string | number;
+    absent_count: string | number;
+    late_count: string | number;
+  }>;
+  return rows.map((r) => ({
+    date: r.date,
+    presentCount: Number(r.present_count),
+    absentCount: Number(r.absent_count),
+    lateCount: Number(r.late_count),
+  }));
 }

@@ -17,7 +17,7 @@ export default async function SubscriptionPage() {
     : null;
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Subscription" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -25,8 +25,8 @@ export default async function SubscriptionPage() {
         subtitle="Billing plan, usage limits, and module access for this tenant."
         actions={
           <>
-            <button className="btn ghost">Download invoice</button>
-            <button className="btn primary">Upgrade plan</button>
+            <a href="/api/v1/billing/invoices/latest?format=pdf" className="btn ghost" style={{ minHeight: 44 }} download>Download invoice</a>
+            <a href="/billing/plans" className="btn primary" style={{ minHeight: 44 }}>Upgrade plan</a>
           </>
         }
       />
@@ -86,6 +86,6 @@ export default async function SubscriptionPage() {
           <EmptyState icon="📋" title="No subscription data" message="Subscription information is unavailable." />
         </div>
       )}
-    </div>
+    </main>
   );
 }

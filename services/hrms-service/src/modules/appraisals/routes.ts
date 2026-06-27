@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { listQuerySchema } from "@civitasone/schemas/common";
+import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { AppraisalSummaryListSchema } from "@civitasone/schemas/web";
-import { sendValidated } from "@civitasone/schemas/validate";
+import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 
@@ -31,15 +32,12 @@ export async function appraisalRoutes(app: FastifyInstance): Promise<void> {
       reviewerId: z.string().uuid().optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertAppraisal(tx, {
-        id, tenantId: ctx.tenantId, employeeId: body.employeeId,
-        appraisalPeriod: body.appraisalPeriod, status: "self_pending",
-        reviewerId: body.reviewerId ?? null,
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
+    await queue.publish(COMMANDS.appraisalCreate, {
+      messageId: id, type: COMMANDS.appraisalCreate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, employeeId: body.employeeId, appraisalPeriod: body.appraisalPeriod, reviewerId: body.reviewerId ?? null, status: "self_pending" },
     });
-    return reply.code(202).send({ id, status: "self_pending", stage: "APAR initiated" });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   app.patch("/v1/hrms/appraisals/:id/stage", async (req, reply) => {
@@ -50,15 +48,15 @@ export async function appraisalRoutes(app: FastifyInstance): Promise<void> {
       stage: z.enum(APAR_STAGES),
       rating: z.string().optional(),
     }).parse(req.body);
+    // Verify the appraisal exists before publishing the command
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "appraisal not found");
-    await db.transaction(async (tx) => {
-      await repo.updateAppraisal(tx, id, {
-        status: body.stage,
-        rating: body.rating ?? existing.rating,
-        updatedBy: ctx.actorId,
-      });
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.appraisalAdvanceStage, {
+      messageId, type: COMMANDS.appraisalAdvanceStage,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, stage: body.stage, rating: body.rating ?? null },
     });
-    return reply.send({ id, status: body.stage, rating: body.rating ?? existing.rating });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 }

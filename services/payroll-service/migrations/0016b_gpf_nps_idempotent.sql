@@ -1,0 +1,32 @@
+-- 0016b_gpf_nps_idempotent.sql
+-- Purpose: Documentation-only migration that records and resolves the 0005
+--          filename collision in payroll-service.
+--
+-- BACKGROUND — 0005 COLLISION:
+--   Two files share the prefix "0005":
+--     • 0005_gpf_nps.sql            — adds GPF/NPS columns to payroll_slips
+--                                     and creates statutory.payroll_gpf and
+--                                     statutory.payroll_nps tables.
+--     • 0005_world_class_payroll.sql — creates payroll.payroll_arrears,
+--                                     payroll.payroll_bonus,
+--                                     payroll.payroll_professional_tax,
+--                                     payroll.payroll_lwf,
+--                                     payroll.payroll_reimbursements,
+--                                     payroll.payroll_salary_revisions,
+--                                     payroll.payroll_register, and
+--                                     payroll.payroll_ctc_config.
+--
+-- RESOLUTION:
+--   Both 0005_*.sql files use CREATE TABLE IF NOT EXISTS and ADD COLUMN IF NOT
+--   EXISTS throughout, so each is independently idempotent.  Applying both in
+--   either order produces the same final schema.  No functional SQL change is
+--   required.
+--
+--   The canonical execution order is:
+--     0005_gpf_nps.sql  →  0005_world_class_payroll.sql  (alphabetical)
+--   Both must be confirmed as applied in all environments.
+--
+--   This 0016b file serves as the migration-runner no-op entry to ensure this
+--   collision is recorded in the migrations history table of every environment.
+
+SELECT 1;  -- no-op; keeps migration runner satisfied

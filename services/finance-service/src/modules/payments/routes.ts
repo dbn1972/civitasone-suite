@@ -5,7 +5,7 @@ import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSum
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createBillBody, approveBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, idParam } from "./validators.js";
+import { createBillBody, approveBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, adjustAdvanceBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -101,6 +101,14 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = gemInvoiceMatchBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.gemInvoiceMatch(ctx, body));
+  });
+
+  app.patch("/v1/finance/advances/:id/adjust", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = adjustAdvanceBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.adjustAdvance(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

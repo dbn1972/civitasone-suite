@@ -37,6 +37,21 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(result);
   });
 
+  app.get("/v1/admin/queue-metrics", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    // Return queue metrics from env/config — actual SQS metrics come from CloudWatch/Prometheus
+    return reply.send({
+      driver: process.env.QUEUE_DRIVER ?? "memory",
+      visibilityTimeout: Number(process.env.SQS_VISIBILITY_TIMEOUT ?? 60),
+      metrics: {
+        note: "Real-time queue depth available at /metrics (Prometheus scrape) and Grafana dashboards",
+        prometheusEndpoint: "/metrics",
+        grafanaDashboard: "/grafana/d/queue-overview",
+      },
+    });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabCompliance } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
@@ -30,7 +31,7 @@ export default async function CompliancePage() {
       <PageHeader
         title="Action / Decision Compliance"
         subtitle="Track closure of meeting action items & decisions."
-        actions={<button className="btn primary">Reminders</button>}
+        actions={<Link href="/estab/compliance?tab=reminders" className="btn primary" style={{ minHeight: 44 }}>Reminders</Link>}
       />
       <StatGrid>
         <StatCard icon="✅" iconBg="#ecfdf3" label="Compliance Rate" value={`${complianceRate}%`} delta="+3%" up />

@@ -7,7 +7,7 @@ import { LegalCasesTable } from "./LegalCasesTable";
 export default async function LegalCasesListPage() {
   const { data: items, source } = await getLegalCases();
 
-  const active = items.filter((i) => i.status === "active").length;
+  const active = items.filter((i) => i.status === "pending").length;
   const courts = new Set(items.map((i) => i.court)).size;
   const disposed = items.filter((i) => i.status === "disposed").length;
   const adverseRisk = items.filter((i) => i.type === "writ" || i.type === "criminal").length;

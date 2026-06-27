@@ -15,7 +15,7 @@ export default async function TenantAuditPage() {
   const today24h = events.filter((e) => e.timestamp.slice(0, 10) === today).length;
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Audit Log" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -23,8 +23,8 @@ export default async function TenantAuditPage() {
         subtitle="Tenant-scoped audit events — all actor actions and outcomes."
         actions={
           <>
-            <button className="btn ghost">Export</button>
-            <button className="btn ghost">Filter</button>
+            <button className="btn ghost" style={{ minHeight: 44 }}>Export</button>
+            <button className="btn ghost" style={{ minHeight: 44 }}>Filter</button>
           </>
         }
       />
@@ -46,6 +46,6 @@ export default async function TenantAuditPage() {
           outcome: event.outcome,
         }))}
       />
-    </div>
+    </main>
   );
 }

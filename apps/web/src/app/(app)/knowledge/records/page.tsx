@@ -66,8 +66,8 @@ export default async function KnowledgeRecordsPage() {
         subtitle="File retention/weeding rules per record category (GFR/manual)."
         actions={
           <>
-            <button className="btn ghost">Policy</button>
-            <Link href="/knowledge/documents/new?category=Retention%20Schedule" className="btn primary">+ Schedule</Link>
+            <Link href="/knowledge/records?filter=policy" className="btn ghost" style={{ minHeight: 44 }}>Policy</Link>
+            <Link href="/knowledge/documents/new?category=Retention%20Schedule" className="btn primary" style={{ minHeight: 44 }}>+ Schedule</Link>
           </>
         }
       />

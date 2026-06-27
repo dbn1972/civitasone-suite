@@ -16,7 +16,7 @@ export default async function HRDashboardPage() {
   const employees = empResult.data as EmpRow[];
   const openRoles = jobResult.data.filter((j) => j.status === "open").length;
   const onLeaveCount = employees.filter(
-    (e) => e.status === "on_leave" || e.status === "On_Leave"
+    (e) => e.status === "on_leave"
   ).length;
   const anyError =
     source === "error" || empResult.source === "error" || jobResult.source === "error";
@@ -30,7 +30,7 @@ export default async function HRDashboardPage() {
   ];
 
   return (
-    <>
+    <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="HR Dashboard"
         subtitle="People operations overview."
@@ -53,6 +53,6 @@ export default async function HRDashboardPage() {
           rowLinkKey="id"
         />
       </Card>
-    </>
+    </main>
   );
 }

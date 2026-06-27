@@ -24,12 +24,12 @@ type OrderRow = {
 /** Map a case status to a lifecycle stage index (0-based, for 4-stage pipeline). */
 function stageIndex(status: string): number {
   switch (status) {
-    case "active":
+    case "pending":
       return 1; // Filed, in progress
+    case "appealed":
     case "stayed":
       return 2; // Arguments / stay order stage
     case "disposed":
-    case "dismissed":
     case "settled":
       return 3; // Judgment rendered
     default:
@@ -51,14 +51,14 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
   }
 
   const statusLabel =
-    caseData.status === "active"
+    caseData.status === "pending"
       ? "Pending"
       : caseData.status === "disposed"
       ? "Disposed"
       : caseData.status === "stayed"
       ? "Stayed"
-      : caseData.status === "dismissed"
-      ? "Dismissed"
+      : caseData.status === "appealed"
+      ? "Appealed"
       : caseData.status === "settled"
       ? "Settled"
       : caseData.status;

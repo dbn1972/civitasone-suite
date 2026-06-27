@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getVehicles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
@@ -28,8 +29,8 @@ export default async function VehiclesPage() {
         subtitle="Allocation, log books, fuel and maintenance for the fleet."
         actions={
           <>
-            <button className="btn ghost">Allocate</button>
-            <button className="btn primary">+ Add Vehicle</button>
+            <Link href="/estab/vehicles?action=allocate" className="btn ghost" style={{ minHeight: 44 }}>Allocate</Link>
+            <Link href="/estab/vehicles/new" className="btn primary" style={{ minHeight: 44 }}>+ Add Vehicle</Link>
           </>
         }
       />

@@ -34,4 +34,9 @@ export const budgetQueryParams = z.object({
 });
 export type BudgetQueryParams = z.infer<typeof budgetQueryParams>;
 
+export const rejectSanctionBody = z.object({
+  reason: z.string().min(3).max(500),
+});
+export type RejectSanctionBody = z.infer<typeof rejectSanctionBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });

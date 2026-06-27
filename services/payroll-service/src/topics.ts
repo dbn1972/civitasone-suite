@@ -1,10 +1,14 @@
 export const COMMANDS = {
-  structureCreate:  "payroll.structure.create",
-  runCreate:        "payroll.run.create",
-  runApprove:       "payroll.run.approve",
-  runDisburse:      "payroll.run.disburse",
-  loanCreate:       "payroll.loan.create",
-  loanDisburse:     "payroll.loan.disburse",
+  structureCreate:        "payroll.structure.create",
+  runCreate:              "payroll.run.create",
+  runApprove:             "payroll.run.approve",
+  runDisburse:            "payroll.run.disburse",
+  runRevert:              "payroll.run.revert",
+  loanCreate:             "payroll.loan.create",
+  loanDisburse:           "payroll.loan.disburse",
+  taxDeclarationCreate:   "payroll.tax_declaration.create",
+  taxDeclarationUpdate:   "payroll.tax_declaration.update",
+  taxDeclarationSubmit:   "payroll.tax_declaration.submit",
 } as const;
 
 export const EVENTS = {

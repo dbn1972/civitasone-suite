@@ -4,7 +4,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, AttendanceSummaryListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { markAttendanceBody } from "./validators.js";
+import { markAttendanceBody, regularisationCreateBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -24,7 +24,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const q = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).default(new Date().toISOString().slice(0, 7)) }).parse(req.query);
     sendValidated(reply, attendanceSummaryResponseSchema, {
-      data: [{ date: `${q.month}-01`, presentCount: 0, absentCount: 0, lateCount: 0 }],
+      data: await queries.getAttendanceSummaryForMonth(ctx.tenantId, q.month),
     });
   });
 
@@ -46,6 +46,13 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, AttendanceRegularisationListSchema, await queries.listRegularisations(ctx.tenantId, q.limit));
+  });
+
+  app.post("/v1/hrms/attendance/regularisations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const body = regularisationCreateBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createRegularisation(ctx, body));
   });
 
   app.setErrorHandler(errorHandler);

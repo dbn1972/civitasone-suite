@@ -5,6 +5,7 @@ export const COMMANDS = {
   budgetCreate:         "finance.budget.create",
   budgetReappropriate:  "finance.budget.re_appropriate",
   sanctionCreate:       "finance.sanction.create",
+  sanctionReject:       "finance.sanction.reject",
   // gl
   journalPost:          "finance.gl.post",
   journalReverse:       "finance.gl.reverse",
@@ -21,6 +22,7 @@ export const COMMANDS = {
   gemInvoiceMatch:      "finance.gem.einvoice.match",
   // advances & utilization certificates
   advanceCreate:        "finance.advance.create",
+  advanceAdjust:        "finance.advance.adjust",
   ucCreate:             "finance.uc.create",
 } as const;
 

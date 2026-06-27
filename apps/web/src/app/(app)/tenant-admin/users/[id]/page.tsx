@@ -11,15 +11,15 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
 
   if (!user) {
     return (
-      <div className="wrap">
+      <main className="page-main wrap" aria-labelledby="page-heading">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: "Not found" }]} />
         <EmptyState icon="👤" title="User not found" message="This user may have been removed or the ID is invalid." />
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: user.name ?? user.email }]} />
       <PageHeader
         back="/tenant-admin/users"
@@ -56,6 +56,6 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

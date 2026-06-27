@@ -28,4 +28,14 @@ export const offerApplicationBody = z.object({
 });
 export type OfferApplicationBody = z.infer<typeof offerApplicationBody>;
 
+export const hireApplicationBody = z.object({
+  employeeNo:    z.string().min(1).max(32),
+  dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  basicMinor:    z.number().int().nonnegative(),
+  departmentId:  z.string().uuid(),
+  designationId: z.string().uuid(),
+  employeeType:  z.enum(["permanent", "temporary", "contract", "deputation"]).default("permanent"),
+});
+export type HireApplicationBody = z.infer<typeof hireApplicationBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });

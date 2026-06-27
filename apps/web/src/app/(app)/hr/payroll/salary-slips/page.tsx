@@ -10,7 +10,7 @@ export default async function SalarySlipsPage() {
   const totalSlips = slips.length;
   const totalGross = slips.reduce((sum, s) => sum + s.gross, 0);
   const totalNet = slips.reduce((sum, s) => sum + s.net, 0);
-  const draftCount = slips.filter((s) => s.status === "draft").length;
+  const draftCount = slips.filter((s) => s.status === "computed").length;
 
   return (
     <>

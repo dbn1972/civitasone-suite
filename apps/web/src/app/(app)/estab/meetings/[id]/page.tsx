@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getMeetingById } from "../../../../_data/loaders";
 import { PageHeader, StatusPill } from "../../../../_components/ds";
 import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
+import { MeetingActions } from "./MeetingActions";
 
 export default async function MeetingDetailPage({ params }: { params: { id: string } }) {
   const { data: meeting, source } = await getMeetingById(params.id);
@@ -27,8 +28,7 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           </h1>
         </div>
         <div className="ph-act">
-          <button className="btn ghost">Agenda</button>
-          <button className="btn primary">Generate MOM</button>
+          <MeetingActions meetingId={params.id} />
         </div>
       </div>
       <div className="grid g-main" style={{ alignItems: "start" }}>

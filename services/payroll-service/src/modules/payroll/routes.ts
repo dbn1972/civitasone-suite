@@ -74,6 +74,13 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.disburseRun(ctx, id));
   });
 
+  app.patch("/v1/payroll/runs/:id/revert", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id));
+  });
+
   app.get("/v1/payroll/slips/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

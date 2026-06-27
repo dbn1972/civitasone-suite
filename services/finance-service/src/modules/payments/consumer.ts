@@ -311,6 +311,25 @@ export function registerPaymentsConsumers(queue: Queue): void {
     });
     await cache.invalidateResource(msg.tenantId, "uc");
   });
+
+  queue.subscribe(COMMANDS.advanceAdjust, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; adjustedMinor: number; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const advance = await repo.findAdvanceByIdTx(tx, p.id);
+      if (!advance) throw new Error(`advance ${p.id} not found`);
+      const newAdjusted = BigInt(advance.adjustedMinor) + BigInt(p.adjustedMinor);
+      const balance = BigInt(advance.amountMinor) - newAdjusted;
+      const newStatus = balance <= 0n ? "adjusted" : advance.status;
+      await repo.updateAdvance(tx, p.id, {
+        adjustedMinor: newAdjusted,
+        status: newStatus,
+        updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "adjust", "advance", p.id);
+    });
+    await cache.invalidateResource(msg.tenantId, "advances");
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

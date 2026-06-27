@@ -3,7 +3,7 @@ import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateBillBody, ApproveBillBody, InitiateEftBody, GemInvoiceMatchBody, CreateAdvanceBody, CreateUCBody } from "./validators.js";
+import type { CreateBillBody, ApproveBillBody, InitiateEftBody, GemInvoiceMatchBody, CreateAdvanceBody, CreateUCBody, AdjustAdvanceBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -66,5 +66,15 @@ export async function createUC(ctx: RequestContext, body: CreateUCBody): Promise
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function adjustAdvance(ctx: RequestContext, id: string, body: AdjustAdvanceBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.advanceAdjust, {
+    type: COMMANDS.advanceAdjust,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "advance", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -20,3 +20,11 @@ export const attendanceQueryParams = z.object({
   empId: z.string().uuid().optional(),
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
 });
+
+export const regularisationCreateBody = z.object({
+  employeeId:      z.string().uuid(),
+  date:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
+  requestedStatus: z.enum(["present", "absent", "half_day"]),
+  reason:          z.string().min(1),
+});
+export type RegularisationCreateBody = z.infer<typeof regularisationCreateBody>;

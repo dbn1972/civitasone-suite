@@ -1,8 +1,10 @@
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT = "audit.event.record";
 
@@ -50,6 +52,58 @@ export function registerRecruitmentConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "offer", "application", p.applicationId);
     });
+  });
+
+  queue.subscribe(COMMANDS.applicationHire, async (msg) => {
+    const p = msg.payload as {
+      employeeId: string; applicationId: string; tenantId: string;
+      employeeNo: string; dateOfJoining: string; basicMinor: number;
+      departmentId: string; designationId: string; employeeType: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // Fetch application for applicant details
+      const application = await repo.findApplicationById(p.applicationId, p.tenantId);
+      const fullName = application?.applicantName ?? "Unknown";
+      const email = application?.email ?? null;
+      const mobile = application?.mobile ?? null;
+
+      // Update application status to hired
+      await repo.updateApplication(tx, p.applicationId, { stage: "hired", status: "closed" });
+
+      // Create the employee record
+      await employeeRepo.insertEmployee(tx, {
+        id: p.employeeId,
+        tenantId: p.tenantId,
+        employeeNo: p.employeeNo,
+        fullName,
+        departmentId: p.departmentId,
+        designationId: p.designationId,
+        dateOfJoining: p.dateOfJoining,
+        employeeType: p.employeeType as "permanent",
+        basicMinor: BigInt(p.basicMinor),
+        currency: "INR",
+        status: "probation",
+        email,
+        mobile,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+
+      // Emit employeeCreated event (so payroll picks up the new employee)
+      await enqueue(tx, {
+        topic: EVENTS.employeeCreated, eventType: EVENTS.employeeCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { employeeId: p.employeeId, employeeNo: p.employeeNo, tenantId: p.tenantId },
+      });
+
+      await audit(tx, msg, "hire", "application", p.applicationId);
+    });
+
+    // Invalidate caches
+    await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));
+    await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
   });
 }
 

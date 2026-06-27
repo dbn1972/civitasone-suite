@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { RepositoryClient } from "./RepositoryClient";
+import { ImportButton } from "./ImportButton";
 
 export default async function KnowledgeRepositoryPage() {
   const { data: docs, source } = await getKnowledgeDocs();
@@ -56,8 +57,8 @@ export default async function KnowledgeRepositoryPage() {
         subtitle="Circulars, policies &amp; notifications with versioning."
         actions={
           <>
-            <button className="btn ghost">Import</button>
-            <Link href="/knowledge/documents/new" className="btn primary">+ Publish Document</Link>
+            <ImportButton />
+            <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>+ Publish Document</Link>
           </>
         }
       />

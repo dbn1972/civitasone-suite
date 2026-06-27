@@ -12,11 +12,16 @@ export default async function AuditPage() {
   const failures = auditItems.filter((i) => i.outcome === "failure").length;
 
   return (
-    <main className="wrap">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
         <span aria-current="page">Event Log</span>
+      </nav>
+      <nav aria-label="Audit sub-modules" style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        <Link href="/audit/cag" className="btn ghost sm">CAG Audit</Link>
+        <Link href="/audit/vigilance" className="btn ghost sm">Vigilance</Link>
+        <Link href="/audit/investigation" className="btn ghost sm">Investigation</Link>
       </nav>
       <PageHeader
         title="Audit Events"

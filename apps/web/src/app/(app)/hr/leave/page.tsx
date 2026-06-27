@@ -22,7 +22,7 @@ export default async function LeaveManagementPage() {
   ];
 
   return (
-    <>
+    <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="Leave Management"
         subtitle="Review and process employee leave requests."
@@ -46,6 +46,6 @@ export default async function LeaveManagementPage() {
           rows={leaveRequests}
         />
       </Card>
-    </>
+    </main>
   );
 }

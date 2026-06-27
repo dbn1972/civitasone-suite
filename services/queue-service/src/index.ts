@@ -10,48 +10,43 @@
  * ─────────────────────────────────────────────────────────────────
  */
 
-export type QueueAdapter = "sqs" | "kafka" | "rabbitmq";
+// ── Low-level bus abstraction (used by domain services via @civitasone/queue) ──
+export {
+  createQueue,
+  resolveQueueDriver,
+  MemoryQueue,
+  NonRetryableError,
+  isNonRetryable,
+  isFifoTopic,
+  SqsQueue,
+} from "./bus.js";
 
-export interface QueuePublishOptions {
-  queue: string;         // e.g. "prod.finance.gl_entry.posted"
-  payload: unknown;
-  tenantId: string;
-  correlationId: string;
-  idempotencyKey?: string;
-  delaySeconds?: number;
-}
+export type {
+  CommandEnvelope,
+  PublishInput,
+  Handler,
+  Queue,
+  QueueDriver,
+  PublishOptions,
+} from "./bus.js";
 
-export interface QueueConsumeOptions {
-  queue: string;
-  handler: (message: IncomingMessage) => Promise<void>;
-  maxRetries?: number;
-  dlqQueue?: string;
-}
+// ── SQS adapter (used when QUEUE_DRIVER=sqs in production) ──
+// SqsQueue is defined in bus.ts alongside MemoryQueue
 
-export interface IncomingMessage {
-  messageId: string;
-  tenantId: string;
-  payload: unknown;
-  correlationId: string;
-  retryCount: number;
-  receivedAt: Date;
-}
+// ── wrapQueueAsClient bridge ──
+export { wrapQueueAsClient } from "./client-bridge.js";
 
-/**
- * QueueClient — resolved at runtime from QUEUE_ADAPTER env var
- * Implementations live in:
- *   src/adapters/sqs.ts
- *   src/adapters/kafka.ts
- *   src/adapters/rabbitmq.ts
- */
-export interface QueueClient {
-  publish(options: QueuePublishOptions): Promise<void>;
-  consume(options: QueueConsumeOptions): Promise<void>;
-  healthCheck(): Promise<{ healthy: boolean; adapter: QueueAdapter }>;
-}
+// ── High-level QueueClient abstraction (re-exported from types.ts) ──
+export type {
+  QueueAdapter,
+  QueuePublishOptions,
+  QueueConsumeOptions,
+  IncomingMessage,
+  QueueClient,
+} from "./types.js";
 
 // Factory resolved at startup — adapter selected via QUEUE_ADAPTER env var
-export async function createQueueClient(): Promise<QueueClient> {
+export async function createQueueClient(): Promise<import("./types.js").QueueClient> {
   // --- Production SQS safety guard ---
   // AWS_ENDPOINT_URL is set in dev/CI to point at LocalStack. In production it
   // must be absent so the SDK resolves real AWS SQS. If it somehow leaks into a
@@ -78,7 +73,7 @@ export async function createQueueClient(): Promise<QueueClient> {
     }) + "\n"
   );
 
-  const adapter = (process.env.QUEUE_ADAPTER ?? "rabbitmq") as QueueAdapter;
+  const adapter = (process.env.QUEUE_ADAPTER ?? "rabbitmq") as import("./types.js").QueueAdapter;
   switch (adapter) {
     case "sqs":
       return (await import("./adapters/sqs.js")).createSqsClient();

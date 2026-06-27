@@ -4,8 +4,11 @@ export default function Page() {
   return (
     <ModuleHub
       title="Contracts"
-      description="Module workspace — API-backed list views."
-      links={[{ href: "/contracts/list", label: "Contracts", note: "Live data from backend API" }]}
+      description="Manage service, supply, and maintenance contracts."
+      links={[
+        { href: "/contracts/list", label: "Contracts", note: "View and manage all contracts" },
+        { href: "/contracts/rate-contracts", label: "Rate Contracts", note: "Framework agreements with fixed rates" },
+      ]}
     />
   );
 }

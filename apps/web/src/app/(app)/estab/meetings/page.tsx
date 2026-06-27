@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getMeetings } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
@@ -31,8 +32,8 @@ export default async function MeetingsPage() {
         subtitle="Schedule meetings, prepare agenda, capture MOM & track actions."
         actions={
           <>
-            <button className="btn ghost">Calendar</button>
-            <button className="btn primary">+ Schedule</button>
+            <Link href="/estab/meetings?view=calendar" className="btn ghost" style={{ minHeight: 44 }}>Calendar</Link>
+            <Link href="/estab/meetings/new" className="btn primary" style={{ minHeight: 44 }}>+ Schedule</Link>
           </>
         }
       />

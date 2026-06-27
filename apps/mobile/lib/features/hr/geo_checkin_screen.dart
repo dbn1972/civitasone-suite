@@ -27,7 +27,7 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
   static const double _officeLng = 77.2090;
   static const double _geofenceRadiusMeters = 200.0;
 
-  // Result
+  // Result — populated from API response
   String? _resultStatus; // 'within_geofence' or 'outside_geofence'
   double? _distanceMeters;
 
@@ -40,8 +40,36 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
   Future<void> _fetchLocation() async {
     setState(() => _locating = true);
     try {
-      // Simulate geolocator getCurrentPosition
-      // In production: final position = await Geolocator.getCurrentPosition();
+      // TODO(geolocator): Replace this simulation with a real GPS call once
+      // the `geolocator` package is added to pubspec.yaml:
+      //
+      //   geolocator: ^11.0.0  (or latest)
+      //
+      // Then:
+      //   import 'package:geolocator/geolocator.dart';
+      //
+      //   bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      //   if (!serviceEnabled) throw Exception('Location services disabled');
+      //
+      //   LocationPermission permission = await Geolocator.checkPermission();
+      //   if (permission == LocationPermission.denied) {
+      //     permission = await Geolocator.requestPermission();
+      //   }
+      //   if (permission == LocationPermission.deniedForever) {
+      //     throw Exception('Location permission permanently denied');
+      //   }
+      //
+      //   final position = await Geolocator.getCurrentPosition(
+      //     desiredAccuracy: LocationAccuracy.high,
+      //   );
+      //   setState(() {
+      //     _latitude = position.latitude;
+      //     _longitude = position.longitude;
+      //   });
+      //
+      // Also add the required platform permissions:
+      //   Android: ACCESS_FINE_LOCATION in AndroidManifest.xml
+      //   iOS: NSLocationWhenInUseUsageDescription in Info.plist
       await Future.delayed(const Duration(milliseconds: 800));
       setState(() {
         _latitude = 28.6145; // Simulated nearby position
@@ -67,7 +95,23 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
   }
 
   Future<void> _takeSelfie() async {
-    // Simulates camera capture — in production use image_picker
+    // TODO(image_picker): Replace with real camera capture once `image_picker`
+    // is added to pubspec.yaml:
+    //
+    //   image_picker: ^1.1.0  (or latest)
+    //
+    // Then:
+    //   import 'package:image_picker/image_picker.dart';
+    //   final picker = ImagePicker();
+    //   final photo = await picker.pickImage(
+    //     source: ImageSource.camera,
+    //     preferredCameraDevice: CameraDevice.front,
+    //     imageQuality: 80,
+    //   );
+    //   if (photo == null) return; // user cancelled
+    //   // Upload to presigned S3 URL or multipart POST, then store the returned key
+    //   final selfieKey = await _uploadSelfie(photo.path);
+    //   setState(() { _selfieTaken = true; _selfieKey = selfieKey; });
     await Future.delayed(const Duration(milliseconds: 500));
     setState(() {
       _selfieTaken = true;
@@ -100,19 +144,28 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
 
     setState(() => _submitting = true);
     try {
-      final syncEngine = ref.read(syncEngineProvider);
-      if (syncEngine == null) throw Exception('Sync engine not ready');
+      final apiClient = ref.read(apiClientProvider);
 
       // POST /v1/hrms/attendance/geo-check-in
-      // In production this goes through Dio via SyncEngine.
-      // Simulating API response:
-      await Future.delayed(const Duration(seconds: 1));
+      final res = await apiClient.post<Map<String, dynamic>>(
+        '/v1/hrms/attendance/geo-check-in',
+        data: {
+          'latitude': _latitude,
+          'longitude': _longitude,
+          'selfieKey': _selfieKey,
+          'checkInTime': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
 
-      final distance = _calculateDistance();
-      final withinFence = distance <= _geofenceRadiusMeters;
+      final status = res.data?['status'] as String? ?? 'outside_geofence';
+      // Server-computed distance is authoritative when available; fall back to
+      // the local Haversine approximation.
+      final distance =
+          (res.data?['distanceMeters'] as num?)?.toDouble() ??
+          _calculateDistance();
 
       setState(() {
-        _resultStatus = withinFence ? 'within_geofence' : 'outside_geofence';
+        _resultStatus = status;
         _distanceMeters = distance;
       });
     } catch (e) {
@@ -383,4 +436,3 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
     );
   }
 }
-

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { getTrainingPrograms } from "../../../_data/loaders";
@@ -41,10 +42,13 @@ export default async function TrainingPage() {
   ];
 
   return (
-    <>
+    <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="Training Programs"
         subtitle="Capacity building and skill development initiatives."
+        actions={
+          <Link href="/hr/training/new" className="btn primary">+ New Program</Link>
+        }
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
@@ -63,6 +67,6 @@ export default async function TrainingPage() {
           pageSize={15}
         />
       </Card>
-    </>
+    </main>
   );
 }

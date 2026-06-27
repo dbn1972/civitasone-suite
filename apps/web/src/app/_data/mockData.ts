@@ -93,9 +93,9 @@ export const tenantSettings: TenantSettingSummary[] = [
 ];
 
 export const employees: EmployeeSummary[] = [
-  { id: "EMP-001", name: "Anjali Mehra", department: "Finance", status: "Active" },
-  { id: "EMP-002", name: "Rohit Anand", department: "HR", status: "Active" },
-  { id: "EMP-003", name: "Neha Iqbal", department: "Procurement", status: "On Leave" },
+  { id: "EMP-001", name: "Anjali Mehra", department: "Finance", status: "confirmed" },
+  { id: "EMP-002", name: "Rohit Anand", department: "HR", status: "confirmed" },
+  { id: "EMP-003", name: "Neha Iqbal", department: "Procurement", status: "on_leave" },
 ];
 
 export const leaveRequests: LeaveRequestSummary[] = [

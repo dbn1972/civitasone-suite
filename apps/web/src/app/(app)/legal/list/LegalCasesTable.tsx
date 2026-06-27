@@ -18,10 +18,12 @@ const FILTERS = ["All", "High Court", "Adverse risk"] as const;
 
 function caseStatusPill(status: string): ReactNode {
   switch (status) {
-    case "active":
+    case "pending":
       return <span className="pill warn">Pending</span>;
     case "disposed":
       return <span className="pill mut">Disposed</span>;
+    case "appealed":
+      return <span className="pill info">Appealed</span>;
     case "stayed":
       return <span className="pill info">Stayed</span>;
     case "settled":

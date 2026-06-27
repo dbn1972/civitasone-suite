@@ -73,4 +73,10 @@ export const createUCBody = z.object({
 });
 export type CreateUCBody = z.infer<typeof createUCBody>;
 
+export const adjustAdvanceBody = z.object({
+  adjustedMinor: z.number().int().positive(),
+  reason:        z.string().min(3).max(500),
+});
+export type AdjustAdvanceBody = z.infer<typeof adjustAdvanceBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });
