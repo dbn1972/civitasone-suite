@@ -27,7 +27,7 @@ export default async function LegalCasesListPage() {
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="📁" iconBg="#f1f5f9" label="Active Cases" value={active} />
         <StatCard icon="🏛️" iconBg="#eff6ff" label="Courts / Fora" value={courts} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Disposed (FY)" value={disposed} delta="64% favourable" up />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Disposed (FY)" value={disposed} />
         <StatCard icon="⚠️" iconBg="#fef3f2" label="Adverse Risk" value={adverseRisk} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}

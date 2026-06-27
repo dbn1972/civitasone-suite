@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
-import { DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { ImportButton } from "./ImportButton";
+import { KnowledgeDocsTable, type DocRow } from "./KnowledgeDocsTable";
 
 export default async function KnowledgeListPage() {
   const { data: docs, source } = await getKnowledgeDocs();
@@ -25,17 +26,6 @@ export default async function KnowledgeListPage() {
     if (s === "under_review") return "pending";
     return "mut";
   }
-
-  type DocRow = {
-    id: string;
-    title: string;
-    category: string;
-    author: string;
-    version: string;
-    accessLevel: string;
-    statusLabel: string;
-    statusPill: string;
-  };
 
   const rows: DocRow[] = docs.map((doc) => ({
     id: doc.id.slice(0, 8).toUpperCase(),
@@ -74,25 +64,7 @@ export default async function KnowledgeListPage() {
         {docs.length === 0 ? (
           <EmptyState icon="📂" title="No documents found" message="No documents found in the knowledge base." />
         ) : (
-          <DataTable<DocRow>
-            columns={[
-              { key: "id", label: "Doc ID" },
-              { key: "title", label: "Title" },
-              { key: "category", label: "Category" },
-              { key: "author", label: "Author" },
-              { key: "version", label: "Version" },
-              { key: "accessLevel", label: "Access" },
-              {
-                key: "statusLabel",
-                label: "Status",
-                render: (row) => <StatusPill status={row.statusPill} label={row.statusLabel} />,
-              },
-            ]}
-            rows={rows}
-            sortable
-            filterable
-            pageSize={15}
-          />
+          <KnowledgeDocsTable rows={rows} />
         )}
       </div>
     </div>

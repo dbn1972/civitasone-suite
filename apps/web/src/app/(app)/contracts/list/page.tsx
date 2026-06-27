@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getContracts } from "../../../_data/loaders";
+import { ContractsTable } from "./ContractsTable";
 
 type ContractRow = {
   id: string;
@@ -50,31 +51,7 @@ export default async function ContractsListPage() {
         />
       ) : (
         <div className="card">
-          <DataTable<ContractRow>
-            columns={[
-              {
-                key: "label",
-                label: "Title",
-                render: (r) => (
-                  <Link href={`/contracts/${r.id}`} className="lnk">
-                    {r.label}
-                  </Link>
-                ),
-              },
-              { key: "sublabel", label: "Party / Info" },
-              { key: "meta", label: "Type" },
-              {
-                key: "status",
-                label: "Status",
-                render: (r) => {
-                  const s = r.status.toLowerCase();
-                  const cls = s === "active" ? "good" : s === "expired" ? "bad" : "mut";
-                  return <span className={`pill ${cls}`}>{r.status}</span>;
-                },
-              },
-            ]}
-            rows={rows}
-          />
+          <ContractsTable rows={rows} />
         </div>
       )}
     </main>

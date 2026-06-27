@@ -1,8 +1,9 @@
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { PageHeader, Card, DataTable, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
 import { getFinanceBillById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { BillPassPayActions } from "../../../_components/FinanceActions";
+import { BillLineItemsTable } from "./BillLineItemsTable";
 
 export default async function BillDetailPage({ params }: { params: { id: string } }) {
   const { data: bill, source } = await getFinanceBillById(params.id);
@@ -64,32 +65,7 @@ export default async function BillDetailPage({ params }: { params: { id: string 
 
       {bill.lineItems.length > 0 && (
         <Card title="Line items">
-          <DataTable<{ description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string } & Record<string, unknown>>
-            columns={[
-              { key: "description", label: "Description" },
-              { key: "quantity", label: "Qty", align: "right" },
-              {
-                key: "unitPrice",
-                label: "Unit Price",
-                align: "right",
-                render: (item) => (
-                  <span aria-label={`Unit price ${formatMoney(item.unitPrice as number)}`}>
-                    {formatMoney(item.unitPrice as number)}
-                  </span>
-                ),
-              },
-              {
-                key: "amount",
-                label: "Amount",
-                align: "right",
-                render: (item) => (
-                  <span aria-label={`Amount ${formatMoney(item.amount as number)}`}>
-                    {formatMoney(item.amount as number)}
-                  </span>
-                ),
-              },
-              { key: "taxCode", label: "Tax Code", render: (item) => (item.taxCode as string | undefined) ?? "—" },
-            ]}
+          <BillLineItemsTable
             rows={bill.lineItems as ({ description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string } & Record<string, unknown>)[]}
           />
         </Card>

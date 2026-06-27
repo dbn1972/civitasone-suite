@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
-import { DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { RecentDocsTable, type RecentDocRow } from "./RecentDocsTable";
 
 const BAR_W = 640;
 const BAR_H = 150;
@@ -71,16 +72,6 @@ function docStatusLabel(s: string) {
   return s;
 }
 
-type RecentDocRow = {
-  id: string;
-  title: string;
-  category: string;
-  author: string;
-  createdAt: string;
-  statusLabel: string;
-  statusPill: string;
-};
-
 export default async function KnowledgeDashboardPage() {
   const { data: docs, source } = await getKnowledgeDocs();
 
@@ -147,23 +138,7 @@ export default async function KnowledgeDashboardPage() {
                 <h3>Recent publications</h3>
                 <Link className="lnk" href="/knowledge/repository">Repository →</Link>
               </div>
-              <DataTable<RecentDocRow>
-                columns={[
-                  { key: "title", label: "Document" },
-                  { key: "category", label: "Type" },
-                  { key: "author", label: "Dept" },
-                  { key: "createdAt", label: "Date" },
-                  {
-                    key: "statusLabel",
-                    label: "Status",
-                    render: (row) => <StatusPill status={row.statusPill} label={row.statusLabel} />,
-                  },
-                ]}
-                rows={recentRows}
-                sortable
-                filterable
-                pageSize={15}
-              />
+              <RecentDocsTable rows={recentRows} />
             </div>
 
             <div className="card">

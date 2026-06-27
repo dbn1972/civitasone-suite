@@ -367,6 +367,7 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/asset/maintenance': [
     {
       id: 'mnt-001',
+      assetId: 'ast-001',
       assetCode: 'AST-001',
       assetName: 'Dell Laptop XPS 15',
       maintenanceType: 'preventive',
@@ -423,7 +424,7 @@ const FIXTURES: Record<string, unknown> = {
       respondent: 'ABC Construction Ltd',
       counsel: 'Adv. Rajesh Kumar',
       nextHearingDate: '2024-03-15',
-      status: 'active',
+      status: 'pending',
     },
   ],
   '/api/v1/legal/hearings': [],

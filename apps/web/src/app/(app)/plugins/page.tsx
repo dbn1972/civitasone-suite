@@ -1,7 +1,7 @@
 import { DataSourceBadge } from "../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, DataTable, EmptyState } from "../../_components/ds";
+import { PageHeader, StatGrid, StatCard, EmptyState } from "../../_components/ds";
 import { getPlugins } from "../../_data/loaders";
-import { PluginActions } from "./PluginActions";
+import { PluginsTable } from "./PluginsTable";
 
 type PluginRow = {
 	id?: string;
@@ -11,12 +11,6 @@ type PluginRow = {
 
 function isEnabled(status: string) {
 	return status.toLowerCase() === "enabled";
-}
-
-/** Status pill with text label — never colour-only (the .pill dot is decorative). */
-function StatusCell({ status }: { status: string }) {
-	const enabled = isEnabled(status);
-	return <span className={`pill ${enabled ? "good" : "mut"}`}>{enabled ? "Enabled" : "Disabled"}</span>;
 }
 
 export default async function Page() {
@@ -57,27 +51,7 @@ export default async function Page() {
 						message="Tenant plugins will appear here once they are provisioned for your organisation."
 					/>
 				) : (
-					<DataTable<PluginRow>
-						sortable
-						filterable
-						filterPlaceholder="Filter plugins…"
-						columns={[
-							{ key: "name", label: "Plugin" },
-							{
-								key: "status",
-								label: "Status",
-								render: (row) => <StatusCell status={row.status} />,
-							},
-							{
-								key: "id",
-								label: "Actions",
-								sortable: false,
-								align: "right",
-								render: (row) => <PluginActions plugin={row} />,
-							},
-						]}
-						rows={plugins}
-					/>
+					<PluginsTable rows={plugins} />
 				)}
 			</div>
 		</main>

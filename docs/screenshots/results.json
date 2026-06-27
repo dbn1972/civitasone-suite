@@ -1,0 +1,178 @@
+{
+  "capturedAt": "2026-06-27T08:54:09.110Z",
+  "tenant": "District Industries Centre (DIC) — Trial",
+  "results": {
+    "Dashboard": [
+      {
+        "label": "Command Centre",
+        "path": "/dashboard",
+        "file": "dashboard/command-centre.png"
+      }
+    ],
+    "Finance": [
+      {
+        "label": "Dashboard",
+        "path": "/finance/dashboard",
+        "file": "finance/dashboard.png"
+      },
+      {
+        "label": "Chart of Accounts",
+        "path": "/finance/chart-of-accounts",
+        "file": "finance/chart-of-accounts.png"
+      },
+      {
+        "label": "Payments",
+        "path": "/finance/payments",
+        "file": "finance/payments.png"
+      }
+    ],
+    "HR": [
+      {
+        "label": "Dashboard",
+        "path": "/hr/dashboard",
+        "file": "hr/dashboard.png"
+      },
+      {
+        "label": "Employees",
+        "path": "/hr/employees",
+        "file": "hr/employees.png"
+      },
+      {
+        "label": "Org Chart",
+        "path": "/hr/orgchart",
+        "file": "hr/org-chart.png"
+      }
+    ],
+    "Procurement": [
+      {
+        "label": "Dashboard",
+        "path": "/procurement/dashboard",
+        "file": "procurement/dashboard.png"
+      },
+      {
+        "label": "Vendors",
+        "path": "/procurement/vendors",
+        "file": "procurement/vendors.png"
+      }
+    ],
+    "Projects": [
+      {
+        "label": "Projects",
+        "path": "/projects/list",
+        "file": "projects/projects.png"
+      },
+      {
+        "label": "Milestones",
+        "path": "/projects/milestones",
+        "file": "projects/milestones.png"
+      }
+    ],
+    "Grants": [
+      {
+        "label": "Grants",
+        "path": "/grants/list",
+        "file": "grants/grants.png"
+      },
+      {
+        "label": "Grantees",
+        "path": "/grants/grantees",
+        "file": "grants/grantees.png"
+      }
+    ],
+    "Assets": [
+      {
+        "label": "Fixed Assets",
+        "path": "/assets/fixed-assets",
+        "file": "assets/fixed-assets.png"
+      },
+      {
+        "label": "Maintenance",
+        "path": "/assets/maintenance",
+        "file": "assets/maintenance.png"
+      }
+    ],
+    "Citizen": [
+      {
+        "label": "RTI",
+        "path": "/citizen/rti",
+        "file": "citizen/rti.png"
+      },
+      {
+        "label": "Requests",
+        "path": "/citizen/requests",
+        "file": "citizen/requests.png"
+      }
+    ],
+    "CRM": [
+      {
+        "label": "Contacts",
+        "path": "/crm/contacts",
+        "file": "crm/contacts.png"
+      },
+      {
+        "label": "Dashboard",
+        "path": "/crm/dashboard",
+        "file": "crm/dashboard.png"
+      }
+    ],
+    "Audit": [
+      {
+        "label": "Observations",
+        "path": "/audit/observations",
+        "file": "audit/observations.png"
+      }
+    ],
+    "Legal": [
+      {
+        "label": "Cases",
+        "path": "/legal/list",
+        "file": "legal/cases.png"
+      }
+    ],
+    "Establishment": [
+      {
+        "label": "Files (eOffice)",
+        "path": "/estab/list",
+        "file": "establishment/files-eoffice.png"
+      },
+      {
+        "label": "Meetings",
+        "path": "/estab/meetings",
+        "file": "establishment/meetings.png"
+      }
+    ],
+    "Knowledge": [
+      {
+        "label": "Repository",
+        "path": "/knowledge/repository",
+        "file": "knowledge/repository.png"
+      }
+    ],
+    "Stock": [
+      {
+        "label": "Items",
+        "path": "/stock/list",
+        "file": "stock/items.png"
+      }
+    ],
+    "Billing": [
+      {
+        "label": "Plans",
+        "path": "/billing/plans",
+        "file": "billing/plans.png"
+      }
+    ],
+    "TenantAdmin": [
+      {
+        "label": "Users",
+        "path": "/tenant-admin/users",
+        "file": "tenantadmin/users.png"
+      },
+      {
+        "label": "Operations",
+        "path": "/tenant-admin/operations",
+        "file": "tenantadmin/operations.png"
+      }
+    ]
+  }
+}

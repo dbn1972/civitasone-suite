@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportJobs } from "../../../_data/loaders";
-import { DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { ReportJobsTable, type JobRow } from "./ReportJobsTable";
 
 export default async function ReportsListPage() {
   const { data: jobs, source } = await getReportJobs();
@@ -10,17 +11,6 @@ export default async function ReportsListPage() {
   const completed = jobs.filter((j) => j.status === "completed").length;
   const running = jobs.filter((j) => j.status === "running").length;
   const failed = jobs.filter((j) => j.status === "failed").length;
-
-  type JobRow = {
-    id: string;
-    reportName: string;
-    module: string;
-    requestedBy: string;
-    format: string;
-    statusPill: string;
-    download: string;
-    downloadUrl: string | null;
-  };
 
   const rows: JobRow[] = jobs.map((j) => ({
     id: j.id,
@@ -56,45 +46,7 @@ export default async function ReportsListPage() {
         {jobs.length === 0 ? (
           <EmptyState icon="📋" title="No report jobs found" message="Jobs will appear here once generated." />
         ) : (
-          <DataTable<JobRow>
-            columns={[
-              {
-                key: "reportName",
-                label: "Report Name",
-                render: (row) => (
-                  <Link href={`/reports/${row.id}`} style={{ color: "var(--primary)", textDecoration: "none" }}>
-                    {row.reportName}
-                  </Link>
-                ),
-              },
-              { key: "module", label: "Module" },
-              { key: "requestedBy", label: "Requested By" },
-              { key: "format", label: "Format" },
-              {
-                key: "statusPill",
-                label: "Status",
-                render: (row) => <StatusPill status={row.statusPill} />,
-              },
-              {
-                key: "download",
-                label: "Download",
-                sortable: false,
-                render: (row) =>
-                  row.downloadUrl ? (
-                    <a href={row.downloadUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ color: "var(--primary)", fontSize: "13px" }}>
-                      Download
-                    </a>
-                  ) : (
-                    <span style={{ color: "#98a2b3" }}>—</span>
-                  ),
-              },
-            ]}
-            rows={rows}
-            sortable
-            filterable
-            pageSize={15}
-          />
+          <ReportJobsTable rows={rows} />
         )}
       </div>
     </div>

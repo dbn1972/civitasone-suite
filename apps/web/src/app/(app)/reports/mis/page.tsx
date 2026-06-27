@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getMISSummary } from "../../../_data/loaders";
-import { DataTable, EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { MISMetricsTable, type MetricRow } from "./MISMetricsTable";
 
 export default async function MISDashboardPage() {
   const { data: modules, source } = await getMISSummary();
@@ -9,14 +10,6 @@ export default async function MISDashboardPage() {
   const totalMetrics = modules.reduce((s, m) => s + m.metrics.length, 0);
   const positiveTrends = modules.flatMap((m) => m.metrics).filter((m) => m.change?.startsWith("+")).length;
   const negativeTrends = modules.flatMap((m) => m.metrics).filter((m) => m.change?.startsWith("-")).length;
-
-  type MetricRow = {
-    module: string;
-    label: string;
-    value: string;
-    unit: string;
-    change: string;
-  };
 
   const rows: MetricRow[] = modules.flatMap((mod) =>
     mod.metrics.map((m) => ({
@@ -51,31 +44,7 @@ export default async function MISDashboardPage() {
       ) : (
         <div className="card" style={{ marginTop: "18px" }}>
           <div className="card-h"><h3>Cross-department datasets</h3></div>
-          <DataTable<MetricRow>
-            columns={[
-              { key: "module", label: "Module" },
-              { key: "label", label: "Metric" },
-              { key: "value", label: "Value", align: "right" },
-              { key: "unit", label: "Unit" },
-              {
-                key: "change",
-                label: "Change",
-                align: "right",
-                render: (row) => (
-                  <span style={{
-                    color: row.change.startsWith("+") ? "var(--good)" : row.change.startsWith("-") ? "var(--bad)" : undefined,
-                    fontWeight: 500,
-                  }}>
-                    {row.change}
-                  </span>
-                ),
-              },
-            ]}
-            rows={rows}
-            sortable
-            filterable
-            pageSize={15}
-          />
+          <MISMetricsTable rows={rows} />
         </div>
       )}
     </div>

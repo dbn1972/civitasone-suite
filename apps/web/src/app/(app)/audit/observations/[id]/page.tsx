@@ -1,23 +1,10 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, EmptyState } from "../../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getAuditObservationById } from "../../../../_data/loaders";
 import { ObservationActions } from "./ObservationActions";
-
-type ReplyRow = {
-  id: string;
-  repliedBy: string;
-  repliedAt: string;
-  content: string;
-  acceptedByAuditor?: boolean | null;
-} & Record<string, unknown>;
-
-type StepRow = {
-  step: string;
-  by: string;
-  status: string;
-} & Record<string, unknown>;
+import { RepliesTable, StepsTable, type ReplyRow, type StepRow } from "./ObservationTables";
 
 export default async function AuditObservationDetailPage({ params }: { params: { id: string } }) {
   const { data: obs, source } = await getAuditObservationById(params.id);
@@ -73,22 +60,7 @@ export default async function AuditObservationDetailPage({ params }: { params: {
           {obs.replies.length > 0 ? (
             <div className="card">
               <div className="card-h"><h3>Replies</h3></div>
-              <DataTable<ReplyRow>
-                columns={[
-                  { key: "repliedBy", label: "By" },
-                  { key: "repliedAt", label: "Date", render: (r) => formatIndianDate(r.repliedAt as string) },
-                  { key: "content", label: "Note" },
-                  {
-                    key: "acceptedByAuditor",
-                    label: "Status",
-                    render: (r) =>
-                      r.acceptedByAuditor === true ? <span className="pill good">Accepted</span>
-                        : r.acceptedByAuditor === false ? <span className="pill bad">Rejected</span>
-                        : <span className="pill mut">—</span>,
-                  },
-                ]}
-                rows={replyRows}
-              />
+              <RepliesTable rows={replyRows} />
             </div>
           ) : (
             <div className="card">
@@ -98,23 +70,7 @@ export default async function AuditObservationDetailPage({ params }: { params: {
           )}
           <div className="card">
             <div className="card-h"><h3>Action &amp; compliance</h3></div>
-            <DataTable<StepRow>
-              columns={[
-                { key: "step", label: "Step" },
-                { key: "by", label: "By" },
-                {
-                  key: "status",
-                  label: "Status",
-                  render: (r) => {
-                    const s = r.status as string;
-                    if (s === "Done" || s === "Received") return <span className="pill good">{s}</span>;
-                    if (s === "Pending") return <span className="pill warn">{s}</span>;
-                    return <span className="pill mut">{s}</span>;
-                  },
-                },
-              ]}
-              rows={stepRows}
-            />
+            <StepsTable rows={stepRows} />
           </div>
         </div>
         <div className="card">

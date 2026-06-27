@@ -1,18 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, DataTable, EmptyState } from "../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { PageHeader, EmptyState } from "../../../_components/ds";
 import { getAuditExports } from "../../../_data/loaders";
 import { ExportConsole } from "./ExportConsole";
-
-type ExportRow = {
-  id: string;
-  jobType: string;
-  requestedAt: string;
-  format: string;
-  status: string;
-  downloadUrl?: string;
-} & Record<string, unknown>;
+import { ExportsTable, type ExportRow } from "./ExportsTable";
 
 export default async function AuditExportsPage() {
   const { data: items, source } = await getAuditExports();
@@ -39,38 +30,7 @@ export default async function AuditExportsPage() {
         {rows.length === 0 ? (
           <EmptyState icon="📤" title="No export jobs" message="Generated exports will appear here." />
         ) : (
-          <DataTable<ExportRow>
-            columns={[
-              { key: "jobType", label: "Export", render: (item) => <span className="mono">{item.jobType as string}</span> },
-              { key: "requestedAt", label: "Requested", render: (item) => formatIndianDate(item.requestedAt as string) },
-              {
-                key: "format",
-                label: "Format",
-                render: (item) => <span className="pill info">{(item.format as string).toUpperCase()}</span>,
-              },
-              {
-                key: "status",
-                label: "Status",
-                render: (item) => {
-                  const s = item.status as string;
-                  if (s === "completed") return <span className="pill good">Ready</span>;
-                  if (s === "processing") return <span className="pill warn">Generating</span>;
-                  if (s === "failed") return <span className="pill bad">Failed</span>;
-                  return <span className="pill mut">Queued</span>;
-                },
-              },
-              {
-                key: "downloadUrl",
-                label: "Download",
-                sortable: false,
-                render: (item) =>
-                  item.status === "completed" && item.downloadUrl
-                    ? <a href={item.downloadUrl as string} className="lnk" download>Download</a>
-                    : <span style={{ color: "#98a2b3" }}>—</span>,
-              },
-            ]}
-            rows={rows}
-          />
+          <ExportsTable rows={rows} />
         )}
         <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
           <div style={{ fontSize: "12.5px", color: "#475467" }}>Exports are cryptographically signed (HMAC) with a 7-year retention lock (WORM). Use "Verify integrity" to re-validate an artifact against its stored signature.</div>

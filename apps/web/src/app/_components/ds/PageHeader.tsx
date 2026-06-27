@@ -17,7 +17,7 @@ export function PageHeader({ title, subtitle, actions, back, backLabel }: PageHe
       )}
       <div className="ph">
         <div>
-          <h1>{title}</h1>
+          <h1 id="page-heading">{title}</h1>
           {subtitle && <div className="sub">{subtitle}</div>}
         </div>
         {actions && <div className="ph-act">{actions}</div>}

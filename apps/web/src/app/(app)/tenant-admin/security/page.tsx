@@ -1,3 +1,5 @@
+"use client";
+
 import { PageHeader, StatCard, StatGrid, Card, DataTable } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 

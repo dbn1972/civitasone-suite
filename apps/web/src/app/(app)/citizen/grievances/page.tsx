@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, StatusPill } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
 import { getGrievances } from "../_data";
 import type { GrievanceSummary } from "../_data";
+import { GrievancesTable, type GrievanceRow } from "./GrievancesTable";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -16,48 +17,6 @@ function daysRemaining(dueDate: string | null | undefined, today: string): numbe
 }
 
 const CLOSED_STATUSES = new Set(["resolved", "closed", "disposed"]);
-
-interface GrievanceRow extends Record<string, unknown> {
-  id: string;
-  grievanceNo: string;
-  subject: string;
-  complainantName: string;
-  category: string;
-  status: string;
-  daysLeft: number | null;
-}
-
-/** Statutory clock cell — colour AND text (never colour alone, WCAG 1.4.1). */
-function clockCell(row: GrievanceRow) {
-  if (CLOSED_STATUSES.has(row.status.toLowerCase())) {
-    return <span style={{ color: "var(--muted)" }}>Closed</span>;
-  }
-  const n = row.daysLeft;
-  if (n === null) return <span style={{ color: "var(--muted)" }}>—</span>;
-  if (n < 0) {
-    return (
-      <span style={{ color: "#b42318", fontWeight: 600 }}>
-        {`Overdue by ${Math.abs(n)} day${Math.abs(n) === 1 ? "" : "s"}`}
-      </span>
-    );
-  }
-  if (n === 0) return <span style={{ color: "#b42318", fontWeight: 600 }}>Due today</span>;
-  const color = n <= 7 ? "#b54708" : "#067647";
-  return (
-    <span style={{ color, fontWeight: n <= 7 ? 600 : 400 }}>
-      {`${n} day${n === 1 ? "" : "s"} left`}
-    </span>
-  );
-}
-
-const COLUMNS = [
-  { key: "grievanceNo" as const, label: "Grievance No" },
-  { key: "subject" as const, label: "Subject" },
-  { key: "complainantName" as const, label: "Complainant" },
-  { key: "category" as const, label: "Category" },
-  { key: "status" as const, label: "Status", cellType: "status" as const },
-  { key: "daysLeft" as const, label: "Days Left", render: clockCell },
-];
 
 export default async function GrievancesPage() {
   const { data: grievances, source } = await getGrievances();
@@ -114,15 +73,7 @@ export default async function GrievancesPage() {
             <div className="card-h">
               <h3>Grievance Register</h3>
             </div>
-            <DataTable
-              columns={COLUMNS}
-              rows={rows}
-              sortable
-              filterable
-              pageSize={15}
-              rowLinkKey="id"
-              rowLinkPrefix="/citizen/grievances/"
-            />
+            <GrievancesTable rows={rows} />
           </>
         )}
       </div>
