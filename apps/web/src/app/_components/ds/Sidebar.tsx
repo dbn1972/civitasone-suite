@@ -19,7 +19,10 @@ type NavGroup = {
 const NAV: NavGroup[] = [
   {
     group: "OVERVIEW",
-    items: [{ icon: "🏠", label: "Dashboard", href: "/dashboard", moduleKey: null }],
+    items: [
+      { icon: "🏠", label: "Dashboard", href: "/dashboard", moduleKey: null },
+      { icon: "🚀", label: "Getting Started", href: "/setup", moduleKey: null },
+    ],
   },
   {
     group: "FINANCE",

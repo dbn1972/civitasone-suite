@@ -39,6 +39,31 @@ export default function DashboardPage() {
         subtitle="What is happening, what needs action, and what to do next — filtered to your role."
         actions={<Link href="/workflow" className="btn primary">My approvals</Link>}
       />
+      <Link
+        href="/setup"
+        aria-label="New here? Finish setting up your workspace"
+        style={{ textDecoration: "none", display: "block", marginBottom: 18 }}
+      >
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "14px 18px",
+            background: "var(--primary-soft)",
+            border: "1px solid var(--goodbd)",
+            cursor: "pointer",
+          }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 22 }}>🚀</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, color: "var(--ink)" }}>New here? Finish setting up your workspace</div>
+            <div style={{ fontSize: 13, color: "var(--ink2)" }}>A few quick steps to get your office ready — pick up where you left off.</div>
+          </div>
+          <span aria-hidden="true" style={{ color: "var(--primary-d)", fontWeight: 700 }}>→</span>
+        </div>
+      </Link>
       <RoleCommandCenter />
       <section aria-labelledby="dash-modules-h">
         <div className="card-h" style={{ marginBottom: 12 }}>

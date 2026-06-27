@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createLocationBody, idParam, locationsListSchema } from "./validators.js";
+import { createLocationBody, idParam, locationsListSchema, locationTreeSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -14,6 +14,17 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LOCATION_ROLES);
     const body = createLocationBody.parse(req.body);
+    // Hierarchy rule: a supplied parent must exist within the same tenant.
+    if (body.parentId) {
+      const parent = await queries.getLocation(body.parentId, ctx.tenantId);
+      if (!parent) {
+        throw new HttpError(
+          400,
+          "INVALID_PARENT",
+          "The selected parent office does not exist or belongs to another organisation."
+        );
+      }
+    }
     sendAccepted(reply, acceptedResponseSchema, await commands.createLocation(ctx, body));
   });
 
@@ -22,6 +33,12 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LOCATION_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, locationsListSchema, await queries.listLocations(ctx.tenantId, q.limit, q.offset));
+  });
+
+  app.get("/v1/locations/tree", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_ROLES);
+    sendValidated(reply, locationTreeSchema, await queries.getLocationTree(ctx.tenantId));
   });
 
   app.get("/v1/locations/:id", async (req, reply) => {

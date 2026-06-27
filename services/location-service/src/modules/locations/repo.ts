@@ -10,6 +10,9 @@ function toView(r: LocationRow): LocationView {
     addressLine: r.addressLine,
     city: r.city,
     postalCode: r.postalCode,
+    parentId: r.parentId,
+    type: r.type,
+    lgdCode: r.lgdCode,
     status: r.status,
     version: r.version,
   };
@@ -27,6 +30,13 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
     .where(eq(locations.tenantId, tenantId))
     .limit(limit)
     .offset(offset);
+  return rows.map(toView);
+}
+
+/** All locations for a tenant — used to assemble the branch-office tree. */
+export async function listAllByTenant(tenantId: string): Promise<LocationView[]> {
+  const rows = await db.select().from(locations)
+    .where(eq(locations.tenantId, tenantId));
   return rows.map(toView);
 }
 

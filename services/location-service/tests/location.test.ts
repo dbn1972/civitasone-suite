@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";
 import { createLocationBody } from "../src/modules/locations/validators.js";
+import { wouldCreateCycle, isValidLgdCode } from "../src/modules/locations/domain.js";
 
 describe("location validators", () => {
   it("accepts minimal create body", () => {
@@ -12,8 +13,87 @@ describe("location validators", () => {
     expect(body.name).toBe("HQ Office");
   });
 
+  it("defaults type to office", () => {
+    const body = createLocationBody.parse({ name: "HQ Office" });
+    expect(body.type).toBe("office");
+  });
+
+  it("accepts the full hierarchy create body", () => {
+    const body = createLocationBody.parse({
+      name: "District Branch",
+      type: "branch",
+      lgdCode: "123456",
+      parentId: "22222222-bbbb-4000-8000-000000000002",
+    });
+    expect(body.type).toBe("branch");
+    expect(body.lgdCode).toBe("123456");
+    expect(body.parentId).toBe("22222222-bbbb-4000-8000-000000000002");
+  });
+
   it("rejects empty name", () => {
     expect(() => createLocationBody.parse({ name: "" })).toThrow();
+  });
+
+  it("rejects an invalid location type", () => {
+    expect(() => createLocationBody.parse({ name: "X", type: "country" })).toThrow();
+  });
+
+  it("rejects a non-uuid parentId", () => {
+    expect(() => createLocationBody.parse({ name: "X", parentId: "not-a-uuid" })).toThrow();
+  });
+
+  it("rejects a non-numeric LGD code", () => {
+    expect(() => createLocationBody.parse({ name: "X", lgdCode: "AB12" })).toThrow();
+  });
+});
+
+describe("wouldCreateCycle", () => {
+  // a -> (root), b -> a, c -> b
+  const edges = [
+    { id: "a", parentId: null },
+    { id: "b", parentId: "a" },
+    { id: "c", parentId: "b" },
+  ];
+
+  it("allows attaching under a real ancestor that is not a descendant", () => {
+    // new node d under c is fine
+    expect(wouldCreateCycle(edges, "d", "c")).toBe(false);
+  });
+
+  it("allows a top-level node (no parent)", () => {
+    expect(wouldCreateCycle(edges, "a", null)).toBe(false);
+  });
+
+  it("detects self-parenting", () => {
+    expect(wouldCreateCycle(edges, "b", "b")).toBe(true);
+  });
+
+  it("detects a direct child becoming the parent", () => {
+    // making a report to b (its child) is a cycle
+    expect(wouldCreateCycle(edges, "a", "b")).toBe(true);
+  });
+
+  it("detects a deep descendant becoming the parent", () => {
+    // making a report to c (its grandchild) is a cycle
+    expect(wouldCreateCycle(edges, "a", "c")).toBe(true);
+  });
+
+  it("does not loop forever on pre-existing cyclic data", () => {
+    const cyclic = [
+      { id: "x", parentId: "y" },
+      { id: "y", parentId: "x" },
+    ];
+    expect(wouldCreateCycle(cyclic, "z", "x")).toBe(false);
+  });
+});
+
+describe("isValidLgdCode", () => {
+  it("accepts digit-only codes", () => {
+    expect(isValidLgdCode("123456")).toBe(true);
+  });
+  it("rejects non-digit codes", () => {
+    expect(isValidLgdCode("12A4")).toBe(false);
+    expect(isValidLgdCode("")).toBe(false);
   });
 });
 

@@ -9,6 +9,10 @@ export const locations = locationSchema.table("locations", {
   addressLine: varchar("address_line", { length: 500 }),
   city: varchar("city", { length: 120 }),
   postalCode: varchar("postal_code", { length: 16 }),
+  // Branch-office hierarchy: self-referential parent (null = top-level / HQ).
+  parentId: uuid("parent_id"),
+  type: varchar("type", { length: 24 }).notNull().default("office"),
+  lgdCode: varchar("lgd_code", { length: 32 }),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -27,6 +31,9 @@ export type LocationView = {
   addressLine: string | null;
   city: string | null;
   postalCode: string | null;
+  parentId: string | null;
+  type: string;
+  lgdCode: string | null;
   status: string;
   version: number;
 };

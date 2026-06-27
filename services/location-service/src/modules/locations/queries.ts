@@ -2,6 +2,7 @@ import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { LocationView } from "./schema.js";
+import type { LocationTreeNode } from "./validators.js";
 
 export async function getLocation(id: string, tenantId: string): Promise<LocationView | null> {
   return cache.getOrLoad<LocationView>(
@@ -26,4 +27,36 @@ export async function listLocations(
       },
     };
   });
+}
+
+/**
+ * Builds the tenant's branch-office hierarchy as a nested tree (parent -> children)
+ * from the flat location list. Roots are locations with no parent (or whose parent
+ * is not visible to this tenant); children are sorted by name for stable output.
+ */
+export async function getLocationTree(tenantId: string): Promise<{ data: LocationTreeNode[] }> {
+  const rows = await repo.listAllByTenant(tenantId);
+
+  const nodeById = new Map<string, LocationTreeNode>();
+  for (const row of rows) nodeById.set(row.id, { ...row, children: [] });
+
+  const roots: LocationTreeNode[] = [];
+  for (const node of nodeById.values()) {
+    const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      // No parent, or a parent outside this tenant's visibility -> treat as root.
+      roots.push(node);
+    }
+  }
+
+  const byName = (a: LocationTreeNode, b: LocationTreeNode) => a.name.localeCompare(b.name);
+  const sortTree = (nodes: LocationTreeNode[]) => {
+    nodes.sort(byName);
+    for (const n of nodes) sortTree(n.children);
+  };
+  sortTree(roots);
+
+  return { data: roots };
 }
