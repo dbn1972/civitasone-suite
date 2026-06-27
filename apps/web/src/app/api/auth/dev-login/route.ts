@@ -39,18 +39,20 @@ function b64url(o: object): string {
   return Buffer.from(JSON.stringify(o)).toString("base64url");
 }
 
-function mint(u: DevUser): string {
+function mint(u: DevUser, tenantId: string): string {
   const now = Math.floor(Date.now() / 1000);
   const header = b64url({ alg: "HS256", typ: "JWT" });
   const payload = b64url({
     sub: u.sub, iss: "civitasone-dev",
-    tid: TENANT, tenantId: TENANT, sid: "dev-session",
+    tid: tenantId, tenantId, sid: "dev-session",
     email: u.email, name: u.name, roles: u.roles,
     iat: now, exp: now + 60 * 60 * 12,
   });
   const sig = createHmac("sha256", SECRET).update(`${header}.${payload}`).digest("base64url");
   return `${header}.${payload}.${sig}`;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function publicBase(req: Request): string {
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
@@ -67,13 +69,16 @@ export async function POST(req: Request): Promise<NextResponse> {
   const form = await req.formData();
   const username = String(form.get("username") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
+  // Optional: let a usability-test participant sign into a specific fresh office.
+  const tenantInput = String(form.get("tenant") ?? "").trim();
+  const tenantId = UUID_RE.test(tenantInput) ? tenantInput : TENANT;
   const u = USERS[username];
 
   if (!u || u.password !== password) {
     return NextResponse.redirect(new URL("/auth/dev?error=1", base), { status: 303 });
   }
 
-  const token = mint(u);
+  const token = mint(u, tenantId);
   const res = NextResponse.redirect(new URL("/dashboard", base), { status: 303 });
   res.cookies.set("civitasone_at", token, {
     httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12,

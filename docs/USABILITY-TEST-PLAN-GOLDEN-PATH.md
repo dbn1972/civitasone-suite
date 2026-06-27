@@ -46,9 +46,11 @@ Screening: no prior CivitasOne exposure; comfortable reading the UI language
 - **Host:** the UAT box (this environment), fleet running in UAT mode
   (`RUNTIME_NODE_ENV=staging`, `JWT_ALGORITHM=HS256`, `ENABLE_DEV_LOGIN=true`,
   `SAMPLE_DATA_ENABLED=true`).
-- **Access:** `/auth/dev` → sign in. Provision a **fresh tenant per participant**
-  so each starts from a clean setup state (or reset — see §7). Do **not** share one
-  tenant across participants; their funnels and setup state would collide.
+- **Access:** `/auth/dev` → sign in as `superadmin / Civitas@123`, entering the
+  participant's **Office ID** in the optional field so each works in a fresh office.
+  Provision the offices with `node scripts/dev/provision-uat-tenants.mjs 5` (prints
+  a per-participant recipe with Office IDs). Do **not** share one office across
+  participants; their funnels and setup state would collide.
 - **Sample data:** available via Getting Started → "Add example offices" so a
   participant can explore safely; reset removes only `[SAMPLE]` rows.
 - **Instrumentation:** the activation funnel records each step + first transaction.
@@ -124,12 +126,14 @@ Rule: never point at the screen or say a feature name. Silence is data.
 
 ## 7. Reset between participants
 
-- Preferred: a **fresh tenant** per participant (cleanest funnel).
-- If reusing a tenant: clear sample data (Getting Started → "Clear example
-  offices"), and note that real records created during a session remain (they
-  shouldn't be deleted ad hoc — provision fresh instead).
-- Clear the browser session (the first-run tour is `localStorage`-gated; use a
-  fresh profile/incognito so every participant gets the tour).
+- Preferred: a **fresh office per participant** — run
+  `node scripts/dev/provision-uat-tenants.mjs 5` once before the sessions and give
+  each participant their own Office ID (cleanest funnel).
+- If reusing an office: clear sample data (Getting Started → "Clear example
+  offices"); note that real records created during a session remain (don't delete
+  them ad hoc — provision a fresh office instead).
+- Use a fresh browser profile/incognito per participant so the first-run tour
+  (which is `localStorage`-gated) shows every time.
 
 ---
 
