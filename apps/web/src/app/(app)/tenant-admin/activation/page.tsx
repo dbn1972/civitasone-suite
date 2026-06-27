@@ -1,7 +1,8 @@
+import { cookies } from "next/headers";
 import { PageHeader, Card, StatGrid, StatCard } from "../../../_components/ds";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
-import { getActivationEvents } from "@/app/_data/activationStore";
-import { aggregateFunnel, FUNNEL_STEPS } from "@/lib/activation";
+import { COOKIE } from "@/lib/auth/config";
+import { aggregateFunnel, FUNNEL_STEPS, type ActivationEvent } from "@/lib/activation";
 
 export const metadata = { title: "Activation" };
 
@@ -16,14 +17,37 @@ const STEP_LABELS: Record<string, string> = {
   first_transaction: "First real transaction",
 };
 
+/** Fetch the office's durable activation events from analytics-service. */
+async function loadEvents(): Promise<ActivationEvent[]> {
+  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const base = (process.env.CIVITASONE_API_BASE_URL || "").replace(/\/$/, "");
+  if (!token || !base) return [];
+  try {
+    const res = await fetch(`${base}/api/v1/analytics/activation/funnel`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { tenantId: string; events: { step: string; at: string }[] };
+    return (json.events ?? []).map((e) => ({
+      tenantId: json.tenantId,
+      step: e.step as ActivationEvent["step"],
+      at: e.at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Activation dashboard — the north-star view. Shows Time-to-First-Real-Transaction
  * (TTFRT) and where new offices drop off along the golden path. Admin-only.
+ * Reads durable events from analytics-service (scoped to this office).
  */
-export default function ActivationPage() {
+export default async function ActivationPage() {
   requireAnyRole(["admin", "tenant_admin", "platform_admin", "super_admin"]);
 
-  const agg = aggregateFunnel(getActivationEvents());
+  const agg = aggregateFunnel(await loadEvents());
   const ttfrt = agg.ttfrtMedianMinutes;
 
   return (

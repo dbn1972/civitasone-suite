@@ -240,7 +240,12 @@ ENABLE_DEV_LOGIN=true` (existing `INTERNAL_SERVICE_SECRET` reused).
 2. **Sample-data backend** still absent (UI gated off). A full implementation
    needs an `is_sample` marker across module tables + tenant-scoped seed/clear;
    scoped as a dedicated bet rather than a quick patch.
-3. **Durable activation storage** (currently in-memory) → move to analytics-service.
+3. ~~Durable activation storage~~ — **CLOSED.** Activation events now persist in
+   analytics-service (`fact_events`, source="activation", idempotent earliest-wins,
+   tenant-scoped). Web forwards events via the gateway and the activation dashboard
+   reads the durable funnel. Verified events survive a service restart. A
+   cross-tenant/platform-wide funnel view remains a follow-up (RLS scopes to one
+   office today).
 
 ### How to revert to production posture
 

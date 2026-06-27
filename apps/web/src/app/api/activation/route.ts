@@ -1,40 +1,46 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getSessionTenantId, getSessionRoles } from "@/lib/auth/roleGuard";
-import { recordActivationEvent, getActivationEvents, isFunnelStep } from "@/app/_data/activationStore";
-import { aggregateFunnel } from "@/lib/activation";
+import { COOKIE } from "@/lib/auth/config";
+import { isFunnelStep } from "@/app/_data/activationStore";
 
 /**
- * Activation funnel ingestion + read.
+ * Activation funnel ingestion — now DURABLE.
  *
- * POST records one funnel event for the CURRENT office. The tenant id is taken
- * from the session, never from the request body, so events are always correctly
- * tenant-scoped and a client cannot spoof another office (Requirement 13.4 spirit).
- *
- * GET returns the aggregate funnel + TTFRT for the internal activation view.
+ * Forwards the event to analytics-service (via the gateway) using the caller's
+ * session token, so the tenant is derived server-side from the JWT and the event
+ * is persisted in analytics.fact_events (idempotent earliest-wins). The web never
+ * trusts a client-supplied tenant. Instrumentation must never block the UI, so a
+ * forwarding failure is swallowed with a 204.
  */
+function gatewayBase(): string | null {
+  const b = process.env.CIVITASONE_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || null;
+  return b ? b.replace(/\/$/, "") : null;
+}
+
 export async function POST(request: Request) {
-  const tenantId = getSessionTenantId();
-  if (!tenantId) return NextResponse.json({ ok: false }, { status: 401 });
+  const token = cookies().get(COOKIE.ACCESS)?.value;
+  if (!token) return NextResponse.json({ ok: false }, { status: 401 });
 
   let step: unknown;
   try {
-    const body = await request.json();
-    step = body?.step;
+    step = (await request.json())?.step;
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
-
   if (!isFunnelStep(step)) return NextResponse.json({ ok: false }, { status: 400 });
 
-  recordActivationEvent(tenantId, step);
-  return NextResponse.json({ ok: true });
-}
+  const base = gatewayBase();
+  if (!base) return new NextResponse(null, { status: 204 });
 
-export function GET() {
-  // Aggregates are an admin/operator view; gate to admin-ish roles.
-  const roles = getSessionRoles();
-  const allowed = roles.some((r) => /admin|super|platform|operator/i.test(r));
-  if (!allowed) return NextResponse.json({ ok: false }, { status: 403 });
-
-  return NextResponse.json(aggregateFunnel(getActivationEvents()));
+  try {
+    await fetch(`${base}/api/v1/analytics/activation/events`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ step }),
+      cache: "no-store",
+    });
+  } catch {
+    /* never let instrumentation break the UI */
+  }
+  return new NextResponse(null, { status: 204 });
 }
