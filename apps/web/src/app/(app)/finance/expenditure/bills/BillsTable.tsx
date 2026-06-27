@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -53,6 +54,14 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
         filterable
         filterPlaceholder="Search bills…"
         pageSize={15}
+        emptyIcon="🧾"
+        emptyTitle="No bills yet"
+        emptyMessage="When you receive a vendor bill, record it here to pre-audit, approve and pay it."
+        emptyAction={
+          <Link href="/help/finance" className="btn ghost" style={{ marginTop: 10 }}>
+            How bills work
+          </Link>
+        }
       />
     </>
   );

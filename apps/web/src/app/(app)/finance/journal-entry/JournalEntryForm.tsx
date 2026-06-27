@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { HelpTip } from "@/app/_components/ds";
+import { explain } from "@/lib/glossary";
 
 type Props = {
   accounts: AccountSummary[];
@@ -180,7 +182,10 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
       {/* ── header fields ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
         <div className="field">
-          <label className="label" htmlFor="jv-voucher">Voucher Number</label>
+          <label className="label" htmlFor="jv-voucher">
+            Voucher Number
+            <HelpTip term="Voucher">{explain("Voucher")}</HelpTip>
+          </label>
           <input
             id="jv-voucher"
             className="input"
@@ -225,6 +230,9 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
       <fieldset style={{ marginTop: "16px", border: 0, padding: 0, margin: 0 }}>
         <legend className="label" style={{ marginBottom: "6px", padding: 0 }}>
           Journal Lines
+          <HelpTip term="Double-entry">
+            Every entry has two sides — money going out (debit) and money coming in (credit). The two sides must add up to the same total before you can post.
+          </HelpTip>
         </legend>
 
         {/* header row */}

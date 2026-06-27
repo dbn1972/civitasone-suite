@@ -10,6 +10,7 @@ export { StatusPill } from "./StatusPill";
 export { Segmented } from "./Segmented";
 export { Tabs } from "./Tabs";
 export { EmptyState } from "./EmptyState";
+export { HelpTip } from "./HelpTip";
 export { Avatar } from "./Avatar";
 export { ProgressBar } from "./ProgressBar";
 export { ConfirmDialog } from "./ConfirmDialog";

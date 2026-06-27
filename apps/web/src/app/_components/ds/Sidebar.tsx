@@ -22,6 +22,7 @@ const NAV: NavGroup[] = [
     items: [
       { icon: "🏠", label: "Dashboard", href: "/dashboard", moduleKey: null },
       { icon: "🚀", label: "Getting Started", href: "/setup", moduleKey: null },
+      { icon: "❓", label: "Help Centre", href: "/help", moduleKey: null },
     ],
   },
   {

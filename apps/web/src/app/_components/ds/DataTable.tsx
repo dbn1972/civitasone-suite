@@ -33,6 +33,14 @@ interface DataTableProps<T extends Record<string, unknown>> {
   filterPlaceholder?: string;
   /** Opt-in: enable pagination at the given page size. */
   pageSize?: number;
+  /** Guided empty state: icon shown when there are no rows. */
+  emptyIcon?: string;
+  /** Guided empty state: friendly title, e.g. "No bills yet". */
+  emptyTitle?: string;
+  /** Guided empty state: one plain sentence on what to do next. */
+  emptyMessage?: string;
+  /** Guided empty state: a call-to-action (e.g. an "Add your first bill" link/button). */
+  emptyAction?: ReactNode;
 }
 
 function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): ReactNode {
@@ -67,6 +75,10 @@ export function DataTable<T extends Record<string, unknown>>({
   filterable = false,
   filterPlaceholder = "Filter…",
   pageSize,
+  emptyIcon = "📋",
+  emptyTitle = "No records found",
+  emptyMessage = "There are no items to display yet.",
+  emptyAction,
 }: DataTableProps<T>) {
   const router = useRouter();
 
@@ -153,7 +165,7 @@ export function DataTable<T extends Record<string, unknown>>({
       )}
 
       {visible.length === 0 ? (
-        <EmptyState icon="📋" title="No records found" message="There are no items to display yet." />
+        <EmptyState icon={emptyIcon} title={emptyTitle} message={emptyMessage} action={emptyAction} />
       ) : (
         <table className="tbl">
           <thead>

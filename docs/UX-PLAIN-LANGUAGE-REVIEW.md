@@ -108,3 +108,23 @@ without a help layer. We are roughly 70% of the way to true zero-training.
    learn, then clear them with one click.
 5. **A short in-app tour** — a 4–5 step coach-mark walkthrough on first login for each major
    module, building on the `/setup` wizard.
+
+---
+
+## 5. Implementation progress (2026-06-27)
+
+Work delivered against the Top-5 list above:
+
+| Gap | Status | What shipped |
+| --- | --- | --- |
+| 1. Inline help tooltips | **Done (foundation + first screens)** | New accessible `HelpTip` "?" component (`_components/ds/HelpTip.tsx`) and a shared plain-language `glossary.ts` (~60 gov-ERP terms). Wired into the Journal Voucher form (Voucher, double-entry/debit-credit). The component + glossary make adding more tooltips a one-liner. |
+| 2. `/help/{module}` pages | **Done** | New **Help Centre** at `/help` with a guide for every module and a full glossary, plus per-module guides at `/help/[module]` ("what is this for", "how do I…" steps, "words explained"). Added to the sidebar under OVERVIEW. Content lives in `lib/helpContent.ts`, reusing the glossary so wording stays identical to the on-screen tooltips. |
+| 3. Guided empty states | **Done (foundation + first screens)** | `DataTable` now accepts `emptyIcon/emptyTitle/emptyMessage/emptyAction`, so any list can say what to do next with a CTA. Applied to Bills ("No bills yet…") and tightened the Procurement Indents empty state with plain-language copy. |
+| 4. Sample-data toggle | Not started | Tracked for a later wave. |
+| 5. In-app tour | Not started | The `/setup` wizard already provides a guided first run; coach-marks tracked for a later wave. |
+
+**Revised verdict:** with inline help, a reachable Help Centre, and guided empty states in
+place, a non-specialist clerk now has a consistent "what does this mean / what do I do next"
+safety net on the specialist screens. We estimate this moves us from ~70% to ~85% of true
+zero-training. The remaining lift is breadth (tooltips/empty states on every screen) plus the
+sample-data toggle and in-app tour.

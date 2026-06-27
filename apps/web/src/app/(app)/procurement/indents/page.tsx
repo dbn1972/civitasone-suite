@@ -74,8 +74,8 @@ export default async function IndentsPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             icon="📋"
-            title="No indents found"
-            message="Create a new indent to get started."
+            title="No indents yet"
+            message="An indent is a request to buy goods or services. Create your first one to start a purchase."
             action={<Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>}
           />
         ) : (
