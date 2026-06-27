@@ -25,6 +25,17 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, res);
   });
 
+  // READ — the current actor's own tenant (resolved from the session).
+  // Static path registered before the parametric :tenantId route. Powers the
+  // setup wizard's org-profile completion check.
+  app.get("/v1/tenants/current", async (req, reply) => {
+    const ctx = resolveContext(req);
+    if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
+    const view = await queries.getTenant(ctx.tenantId);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "tenant not found");
+    return reply.send(view);
+  });
+
   // READ — any authenticated actor in the tenant (cache-first)
   app.get("/v1/tenants/:tenantId", async (req, reply) => {
     const ctx = resolveContext(req);

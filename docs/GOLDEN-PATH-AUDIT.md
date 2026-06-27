@@ -234,9 +234,12 @@ ENABLE_DEV_LOGIN=true` (existing `INTERNAL_SERVICE_SECRET` reused).
 
 ### Remaining gaps (ranked)
 
-1. **`/v1/tenants/current` read does not exist** → org-profile wizard step shows
-   "Couldn't check". Small backend bet: add a current-tenant profile read.
-2. **Sample-data backend** still absent (UI gated off).
+1. ~~`/v1/tenants/current` read does not exist~~ — **CLOSED.** Added
+   `GET /v1/tenants/current` to tenant-service (resolves the office from the
+   session). All 8 wizard reads now return `200`; org-profile is measurable.
+2. **Sample-data backend** still absent (UI gated off). A full implementation
+   needs an `is_sample` marker across module tables + tenant-scoped seed/clear;
+   scoped as a dedicated bet rather than a quick patch.
 3. **Durable activation storage** (currently in-memory) → move to analytics-service.
 
 ### How to revert to production posture

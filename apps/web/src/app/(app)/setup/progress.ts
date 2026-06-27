@@ -47,11 +47,8 @@ async function countFrom(path: string, telemetryKey: string): Promise<{ source: 
 }
 
 async function evalOrgProfile(): Promise<StepStatus> {
-  // NOTE: there is no fixed-path "current tenant profile" read endpoint yet
-  // (tenant-service exposes /v1/tenants/:tenantId, which needs the tenant id).
-  // Until a /v1/tenants/current (or similar) read exists, this returns "unknown"
-  // on a miss — honest, not fabricated. Tracked as a backend bet in the
-  // golden-path audit. Complete when the tenant profile has a name and address.
+  // Complete when the office exists with a name and is active (reliably available
+  // from /v1/tenants/current), or when an address has been filled into settings.
   const res = await fetchJson<unknown, { ok: boolean }>("/api/v1/tenants/current", { ok: false }, {
     revalidateSeconds: 60,
     telemetryKey: "setup.org_profile",
@@ -59,10 +56,13 @@ async function evalOrgProfile(): Promise<StepStatus> {
       const rec = isRecord(p) && isRecord(p.data) ? p.data : isRecord(p) ? p : null;
       if (!rec) return null;
       const name = typeof rec.name === "string" && rec.name.trim().length > 0;
-      const address =
-        (typeof rec.address === "string" && rec.address.trim().length > 0) ||
-        isRecord(rec.address);
-      return { ok: Boolean(name && address) };
+      const active = rec.status === "active";
+      const settings = isRecord(rec.settings) ? rec.settings : {};
+      const hasAddress =
+        ["address", "addressLine", "city"].some(
+          (k) => typeof settings[k] === "string" && (settings[k] as string).trim().length > 0,
+        ) || isRecord(settings.address);
+      return { ok: Boolean(name && (active || hasAddress)) };
     },
   });
   if (res.source === "error") return "unknown";
