@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { ConfirmDialog } from "../../../_components/ds";
+import { trackActivation } from "@/lib/activation";
 
 type Structure = { id: string; name: string };
 
@@ -56,6 +57,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
       }
       const body = text ? (JSON.parse(text) as { id?: string }) : {};
       setConfirmOpen(false);
+      trackActivation("first_transaction");
       if (body.id) {
         router.push(`/hr/payroll/${body.id}`);
       } else {

@@ -7,10 +7,9 @@ import { Card, ConfirmDialog } from "../../_components/ds";
  * SampleDataControls — let a new office switch on safe example records to explore
  * and learn, then clear them in one action. Requirement 15.
  *
- * - "Add example records" seeds clearly-marked sample data into this office only.
- * - "Clear example records" asks for confirmation (stating exactly what will be
- *   removed), then removes only sample records — real records the clerk created
- *   are kept. The backend endpoints are tenant-scoped.
+ * Seeds BOTH offices (locations) and bills (finance) in one click. Clearing
+ * removes only sample records — real records the clerk created are kept. The
+ * backend endpoints are tenant-scoped.
  */
 export function SampleDataControls() {
   const [busy, setBusy] = useState<null | "add" | "clear">(null);
@@ -22,11 +21,14 @@ export function SampleDataControls() {
     setBusy("add");
     setMessage(null);
     try {
-      const res = await fetch("/api/proxy/v1/locations/sample-data", { method: "POST" });
-      if (!res.ok) throw new Error();
-      setMessage({ tone: "ok", text: "Example offices added. Look for the “[SAMPLE]” label on them as you explore." });
+      const [locRes, finRes] = await Promise.all([
+        fetch("/api/proxy/v1/locations/sample-data", { method: "POST" }),
+        fetch("/api/proxy/v1/finance/bills/sample-data", { method: "POST" }),
+      ]);
+      if (!locRes.ok && !finRes.ok) throw new Error();
+      setMessage({ tone: "ok", text: "Example offices and bills added. Look for the \u201c[SAMPLE]\u201d label on them as you explore." });
     } catch {
-      setMessage({ tone: "err", text: "We couldn't add example records just now. Please try again in a moment." });
+      setMessage({ tone: "err", text: "We couldn\u2019t add example records just now. Please try again in a moment." });
     } finally {
       setBusy(null);
     }
@@ -36,13 +38,16 @@ export function SampleDataControls() {
     setBusy("clear");
     setClearError(undefined);
     try {
-      const res = await fetch("/api/proxy/v1/locations/sample-data", { method: "DELETE" });
-      if (!res.ok) throw new Error();
+      const [locRes, finRes] = await Promise.all([
+        fetch("/api/proxy/v1/locations/sample-data", { method: "DELETE" }),
+        fetch("/api/proxy/v1/finance/bills/sample-data", { method: "DELETE" }),
+      ]);
+      if (!locRes.ok && !finRes.ok) throw new Error();
       setConfirmOpen(false);
-      setMessage({ tone: "ok", text: "Example offices removed. Anything you created yourself is untouched." });
+      setMessage({ tone: "ok", text: "Example records removed. Anything you created yourself is untouched." });
     } catch {
-      // R15.6 — keep the dialog open and tell the clerk plainly; offer retry.
-      setClearError("We couldn't remove the example records. Please try again.");
+      // R15.6 \u2014 keep the dialog open and tell the clerk plainly; offer retry.
+      setClearError("We couldn\u2019t remove the example records. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -52,12 +57,13 @@ export function SampleDataControls() {
     <Card padding>
       <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Want to try it first?</h3>
       <p style={{ margin: "0 0 12px", color: "var(--mut)", fontSize: 13.5 }}>
-        Add a few safe example offices to explore how things work. They&apos;re clearly marked
-        &ldquo;[SAMPLE]&rdquo;, and you can clear them in one click — your own records are never touched.
+        Add a few safe example offices and bills to explore how things work. They&apos;re clearly
+        marked &ldquo;[SAMPLE]&rdquo;, and you can clear them in one click &mdash; your own records
+        are never touched.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
         <button type="button" className="btn primary" onClick={addSamples} disabled={busy !== null} aria-busy={busy === "add"}>
-          {busy === "add" ? "Adding…" : "Add example records"}
+          {busy === "add" ? "Adding\u2026" : "Add example records"}
         </button>
         <button type="button" className="btn ghost" onClick={() => { setClearError(undefined); setConfirmOpen(true); }} disabled={busy !== null}>
           Clear example records
@@ -87,7 +93,8 @@ export function SampleDataControls() {
         description={
           <>
             <p style={{ margin: "0 0 8px" }}>
-              This removes only the records marked <strong>“Sample”</strong> from your office.
+              This removes only the records marked <strong>&ldquo;[SAMPLE]&rdquo;</strong> from your office
+              (offices and bills).
             </p>
             <p style={{ margin: 0 }}>
               Anything you created yourself will be kept. This can&apos;t be undone.

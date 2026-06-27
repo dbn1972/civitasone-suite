@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useState } from "react";
 import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
+import { trackActivation } from "@/lib/activation";
 
 type LeaveAllocation = {
   id: string;
@@ -131,6 +132,7 @@ export function ApplyLeaveForm({ employees }: Props) {
         return;
       }
       setStatus("accepted");
+      trackActivation("first_transaction");
       setMessage("Leave request submitted for approval.");
       setFromDate("");
       setToDate("");

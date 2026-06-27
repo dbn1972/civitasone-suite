@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LineItemsEditor, emptyLineItem, type LineItem } from "../../_components/LineItemsEditor";
+import { trackActivation } from "@/lib/activation";
 
 export function CreateIndentForm() {
   const router = useRouter();
@@ -51,6 +52,7 @@ export function CreateIndentForm() {
         return;
       }
       setStatus("accepted");
+      trackActivation("first_transaction");
       setMessage("Indent submitted for approval via workflow.");
       router.push("/procurement/indents");
       router.refresh();
