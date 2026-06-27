@@ -1,4 +1,5 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { financeBills, financePayments, financeAdvances, financeUC, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert } from "./schema.js";
 
@@ -42,6 +43,53 @@ export async function listBillsByTenant(tenantId: string, limit: number): Promis
 
 export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<void> {
   await tx.insert(financePayments).values(row);
+}
+
+// ── Sample data ("try it") — clearly-marked example bills, safe to clear ──────
+
+const SAMPLE_BILLS: Array<{ billNo: string; grossMinor: bigint; status: string; stage: string }> = [
+  { billNo: "[SAMPLE] BILL-001", grossMinor: 1500000n, status: "pending", stage: "section" },
+  { billNo: "[SAMPLE] BILL-002", grossMinor: 4200000n, status: "under_review", stage: "audit" },
+  { billNo: "[SAMPLE] BILL-003", grossMinor: 980000n, status: "paid", stage: "paid" },
+];
+
+export async function countSampleBills(tenantId: string): Promise<number> {
+  const rows = await db.select({ id: financeBills.id }).from(financeBills)
+    .where(and(eq(financeBills.tenantId, tenantId), eq(financeBills.isSample, true)));
+  return rows.length;
+}
+
+/** Add example bills for a tenant (idempotent). Returns number added. */
+export async function seedSampleBills(tenantId: string, actorId: string): Promise<number> {
+  if ((await countSampleBills(tenantId)) > 0) return 0;
+  const now = new Date();
+  const rows: BillInsert[] = SAMPLE_BILLS.map((b) => ({
+    id: randomUUID(),
+    tenantId,
+    billNo: b.billNo,
+    vendorId: randomUUID(),
+    headId: randomUUID(),
+    grossMinor: b.grossMinor,
+    netMinor: b.grossMinor,
+    stage: b.stage,
+    status: b.status,
+    isSample: true,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: actorId,
+    updatedBy: actorId,
+    version: 1,
+  }));
+  await db.insert(financeBills).values(rows);
+  return rows.length;
+}
+
+/** Remove ONLY this tenant's sample bills. Real bills are never touched. */
+export async function clearSampleBills(tenantId: string): Promise<number> {
+  const removed = await db.delete(financeBills)
+    .where(and(eq(financeBills.tenantId, tenantId), eq(financeBills.isSample, true)))
+    .returning({ id: financeBills.id });
+  return removed.length;
 }
 
 export async function listAdvancesByTenant(tenantId: string, limit: number): Promise<AdvanceRow[]> {

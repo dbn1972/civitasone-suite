@@ -8,6 +8,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createBillBody, approveBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, adjustAdvanceBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
+import { cache } from "../../shared/infra.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
@@ -70,6 +72,24 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = createBillBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createBill(ctx, body));
+  });
+
+  // Sample data ("try it"): add clearly-marked [SAMPLE] bills, or clear them.
+  // Tenant-scoped; clearing removes ONLY this tenant's sample bills (R15).
+  app.post("/v1/finance/bills/sample-data", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const added = await repo.seedSampleBills(ctx.tenantId, ctx.actorId);
+    await cache.invalidateResource(ctx.tenantId, "bills");
+    return reply.send({ added });
+  });
+
+  app.delete("/v1/finance/bills/sample-data", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const removed = await repo.clearSampleBills(ctx.tenantId);
+    await cache.invalidateResource(ctx.tenantId, "bills");
+    return reply.send({ removed });
   });
 
   app.patch("/v1/finance/bills/:id/approve", async (req, reply) => {

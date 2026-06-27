@@ -69,10 +69,11 @@ export async function listPayments(tenantId: string, limit: number, offset: numb
   });
 }
 
-function mapBillStatus(status: string): "pending" | "approved" | "paid" | "rejected" | "under_review" {
-  if (status === "approved") return "approved";
+function mapBillStatus(status: string): "pending" | "passed" | "paid" | "rejected" | "on_hold" | "under_review" {
+  if (status === "approved" || status === "passed") return "passed";
   if (status === "paid") return "paid";
   if (status === "rejected") return "rejected";
+  if (status === "on_hold") return "on_hold";
   if (status === "under_review") return "under_review";
   return "pending";
 }

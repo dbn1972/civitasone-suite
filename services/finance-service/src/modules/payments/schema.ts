@@ -26,6 +26,7 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   schemeCode:  varchar("scheme_code", { length: 20 }),
   stage:       varchar("stage", { length: 32 }).notNull().default("section"),
   status:      varchar("status", { length: 24 }).notNull().default("pending"),
+  isSample:    boolean("is_sample").notNull().default(false),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
