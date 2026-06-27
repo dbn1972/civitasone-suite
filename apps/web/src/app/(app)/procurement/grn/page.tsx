@@ -47,6 +47,7 @@ export default async function GRNPage() {
       <PageHeader
         title="Goods Receipt Notes"
         subtitle="Record and track goods received against purchase orders."
+        help="procurement"
         actions={
           <>
             <Link href="/procurement/grn/new" className="btn primary">+ New GRN</Link>
@@ -73,8 +74,8 @@ export default async function GRNPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             icon="📦"
-            title="No GRNs found"
-            message="Create a new GRN when goods arrive."
+            title="No goods received yet"
+            message="A Goods Received Note (GRN) is the check you do when a delivery arrives against an order. Create one when goods come in."
             action={<Link href="/procurement/grn/new" className="btn primary">+ New GRN</Link>}
           />
         ) : (

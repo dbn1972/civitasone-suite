@@ -19,6 +19,7 @@ export default async function TenantAdminPage() {
       <PageHeader
         title="Tenant Administration"
         subtitle="Manage users, modules, sessions, and security for this workspace."
+        help="tenant-admin"
         actions={
           <>
             <a href="/tenant-admin/audit?export=true" className="btn ghost" style={{ minHeight: 44 }}>Export report</a>

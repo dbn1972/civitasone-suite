@@ -5,6 +5,7 @@ export default function Page() {
     <ModuleHub
       title="Projects & Scheme Management"
       description="DPR tracking, scheme monitoring, fund utilization, milestone oversight and beneficiary management."
+      help="projects"
       links={[
         { href: "/projects/dashboard", label: "Dashboard", note: "PMU overview — RAG status and KPIs" },
         { href: "/projects/list", label: "Projects", note: "All projects with budget and status" },

@@ -64,7 +64,7 @@ const financeSections: NavTile[] = [
 export default function Page() {
 	return (
 		<main className="page-main" aria-labelledby="page-heading">
-			<PageHeader title="Finance" subtitle="Ledgers, budgets, expenditure, treasury, revenue, and statutory reporting." />
+			<PageHeader title="Finance" subtitle="Ledgers, budgets, expenditure, treasury, revenue, and statutory reporting." help="finance" />
 			<LinkTiles tiles={financeSections} columns="four" />
 		</main>
 	);

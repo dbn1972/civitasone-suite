@@ -23,7 +23,7 @@ const procurementTiles: NavTile[] = [
 export default function Page() {
 	return (
 		<main className="page-main" aria-labelledby="page-heading">
-			<PageHeader title="Procurement" subtitle="Requisitions, vendors, purchase orders, and tenders with approval controls." />
+			<PageHeader title="Procurement" subtitle="Requisitions, vendors, purchase orders, and tenders with approval controls." help="procurement" />
 			<LinkTiles tiles={procurementTiles} columns="four" />
 		</main>
 	);

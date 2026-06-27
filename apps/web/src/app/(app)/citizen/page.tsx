@@ -15,7 +15,7 @@ const citizenTiles: NavTile[] = [
 
 export default function Page() {
   return (
-    <PageShell title="Citizen Services" description="Grievances, service requests, and RTI applications.">
+    <PageShell title="Citizen Services" description="Grievances, service requests, and RTI applications." help="citizen">
       <LinkTiles tiles={citizenTiles} />
     </PageShell>
   );

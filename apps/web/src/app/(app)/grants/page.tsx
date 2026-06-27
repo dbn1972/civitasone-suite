@@ -5,6 +5,7 @@ export default function Page() {
     <ModuleHub
       title="Grants"
       description="Grant lifecycle, disbursements, grantee management and utilisation certificates."
+      help="grants"
       links={[
         { href: "/grants/schemes", label: "Schemes", note: "Browse grant schemes and create new ones" },
         { href: "/grants/applications", label: "Applications", note: "All grant applications with approval status" },

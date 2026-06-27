@@ -7,9 +7,11 @@ interface PageHeaderProps {
   actions?: ReactNode;
   back?: string;
   backLabel?: string;
+  /** Optional Help Centre slug — renders a plain-language "How this works" link. */
+  help?: string;
 }
 
-export function PageHeader({ title, subtitle, actions, back, backLabel }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, actions, back, backLabel, help }: PageHeaderProps) {
   return (
     <>
       {back && (
@@ -20,7 +22,21 @@ export function PageHeader({ title, subtitle, actions, back, backLabel }: PageHe
           <h1 id="page-heading">{title}</h1>
           {subtitle && <div className="sub">{subtitle}</div>}
         </div>
-        {actions && <div className="ph-act">{actions}</div>}
+        {(actions || help) && (
+          <div className="ph-act">
+            {actions}
+            {help && (
+              <Link
+                href={`/help/${help}`}
+                className="btn ghost"
+                aria-label="How this works — plain-language help"
+                title="How this works"
+              >
+                ❓ How this works
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

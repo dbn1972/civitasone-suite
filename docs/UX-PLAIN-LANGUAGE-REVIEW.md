@@ -118,13 +118,14 @@ Work delivered against the Top-5 list above:
 | Gap | Status | What shipped |
 | --- | --- | --- |
 | 1. Inline help tooltips | **Done (foundation + first screens)** | New accessible `HelpTip` "?" component (`_components/ds/HelpTip.tsx`) and a shared plain-language `glossary.ts` (~60 gov-ERP terms). Wired into the Journal Voucher form (Voucher, double-entry/debit-credit). The component + glossary make adding more tooltips a one-liner. |
-| 2. `/help/{module}` pages | **Done** | New **Help Centre** at `/help` with a guide for every module and a full glossary, plus per-module guides at `/help/[module]` ("what is this for", "how do I…" steps, "words explained"). Added to the sidebar under OVERVIEW. Content lives in `lib/helpContent.ts`, reusing the glossary so wording stays identical to the on-screen tooltips. |
-| 3. Guided empty states | **Done (foundation + first screens)** | `DataTable` now accepts `emptyIcon/emptyTitle/emptyMessage/emptyAction`, so any list can say what to do next with a CTA. Applied to Bills ("No bills yet…") and tightened the Procurement Indents empty state with plain-language copy. |
+| 2. `/help/{module}` pages | **Done** | New **Help Centre** at `/help` with a guide for every module and a full glossary, plus per-module guides at `/help/[module]` ("what is this for", "how do I…" steps, "words explained"). Added to the sidebar under OVERVIEW. **Every module home now shows a "❓ How this works" link** (via a `help` prop on `PageHeader`/`ModuleHub`/`PageShell`) reaching the right guide. Content lives in `lib/helpContent.ts`, reusing the glossary so wording stays identical to the on-screen tooltips. |
+| 3. Guided empty states | **Done (foundation + first screens)** | `DataTable` now accepts `emptyIcon/emptyTitle/emptyMessage/emptyAction`, so any list can say what to do next with a CTA. Applied to Bills ("No bills yet…"), and plain-language empty states for Procurement Indents ("An indent is a request to buy…") and GRN ("A Goods Received Note is the check you do when a delivery arrives…"). |
 | 4. Sample-data toggle | Not started | Tracked for a later wave. |
-| 5. In-app tour | Not started | The `/setup` wizard already provides a guided first run; coach-marks tracked for a later wave. |
+| 5. In-app tour | **Done** | New first-run **welcome tour** (`dashboard/FirstRunTour.tsx`): a 4-step, skippable, accessible (focus-managed, Escape-to-close) walkthrough shown once on first login, ending with "Start setup". Remembered via `localStorage`. Replayable any time from a "Take the welcome tour again" button in the Help Centre. |
 
-**Revised verdict:** with inline help, a reachable Help Centre, and guided empty states in
-place, a non-specialist clerk now has a consistent "what does this mean / what do I do next"
-safety net on the specialist screens. We estimate this moves us from ~70% to ~85% of true
-zero-training. The remaining lift is breadth (tooltips/empty states on every screen) plus the
-sample-data toggle and in-app tour.
+**Revised verdict:** inline help, a Help Centre reachable from every module, guided empty
+states, and a first-run welcome tour are now in place. A non-specialist clerk gets a guided
+first run, a "How this works" link on every module, plain-language nudges on empty screens,
+and one-click word explanations. We estimate this moves us to ~90% of true zero-training.
+The remaining lift is the sample-data toggle (gap #4) plus extending tooltips and guided
+empty states to the long tail of remaining screens.

@@ -70,7 +70,7 @@ const hrTiles: NavTile[] = [
 export default function Page() {
 	return (
 		<main className="page-main" aria-labelledby="page-heading">
-			<PageHeader title="Human Resources" subtitle="People operations — employees, leave, attendance, payroll, and more." />
+			<PageHeader title="Human Resources" subtitle="People operations — employees, leave, attendance, payroll, and more." help="hr" />
 			<LinkTiles tiles={hrTiles} columns="four" />
 		</main>
 	);

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, EmptyState } from "../../_components/ds";
 import { RoleCommandCenter } from "./RoleCommandCenter";
+import { FirstRunTour } from "./FirstRunTour";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 const MODULES = [
@@ -34,6 +35,7 @@ export default function DashboardPage() {
 
   return (
     <>
+      <FirstRunTour />
       <PageHeader
         title="Command Center"
         subtitle="What is happening, what needs action, and what to do next — filtered to your role."

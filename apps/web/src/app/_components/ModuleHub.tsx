@@ -8,9 +8,11 @@ interface ModuleHubProps {
   description: string;
   links: { href: string; label: string; note?: string }[];
   children?: ReactNode;
+  /** Optional Help Centre slug for a "How this works" link. */
+  help?: string;
 }
 
-export function ModuleHub({ title, description, links, children }: ModuleHubProps) {
+export function ModuleHub({ title, description, links, children, help }: ModuleHubProps) {
   const tiles: NavTile[] = links.map((link) => ({
     title: link.label,
     href: link.href,
@@ -19,7 +21,7 @@ export function ModuleHub({ title, description, links, children }: ModuleHubProp
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
-      <PageHeader title={title} subtitle={description} />
+      <PageHeader title={title} subtitle={description} help={help} />
       {children}
       <LinkTiles tiles={tiles} columns="three" />
     </main>

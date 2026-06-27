@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader, Card } from "../../_components/ds";
+import { ReplayTourButton } from "./ReplayTourButton";
 import { HELP_MODULES } from "@/lib/helpContent";
 import { GLOSSARY } from "@/lib/glossary";
 
@@ -22,6 +23,7 @@ export default function HelpPage() {
       <PageHeader
         title="Help Centre"
         subtitle="Short, plain-language guides for every part of the system. Pick a topic, or look up a word you're unsure about."
+        actions={<ReplayTourButton />}
       />
 
       <h2 style={{ fontSize: 16, margin: "8px 0 12px" }}>Guides by module</h2>
