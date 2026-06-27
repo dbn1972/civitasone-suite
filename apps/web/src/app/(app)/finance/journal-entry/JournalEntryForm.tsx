@@ -6,6 +6,7 @@ import { formatMoney } from "@/lib/formatters";
 import { ConfirmDialog } from "@/app/_components/ds";
 import { HelpTip } from "@/app/_components/ds";
 import { explain } from "@/lib/glossary";
+import { trackActivation } from "@/lib/activation";
 
 type Props = {
   accounts: AccountSummary[];
@@ -143,6 +144,8 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
     if (res.status === 200 || res.status === 201 || res.status === 202) {
       setConfirmOpen(false);
       setStatus("accepted");
+      // Activation funnel: a posted journal is a real first transaction.
+      trackActivation("first_transaction");
       setMessage(
         res.status === 202
           ? "Journal entry accepted for processing (202)."

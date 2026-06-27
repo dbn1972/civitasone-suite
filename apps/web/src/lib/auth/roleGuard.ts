@@ -28,6 +28,14 @@ export function getSessionRoles(): string[] {
   return Array.isArray(payload.roles) ? payload.roles : [];
 }
 
+/** The current office (tenant) id from the session, or null when not signed in. */
+export function getSessionTenantId(): string | null {
+  const token = cookies().get(COOKIE.ACCESS)?.value;
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  return typeof payload.tid === "string" && payload.tid.length > 0 ? payload.tid : null;
+}
+
 export function requireAnyRole(allowed: string[], redirectTo = "/dashboard"): void {
   const sessionRoles = getSessionRoles();
   const hasRole = allowed.some((r) => sessionRoles.includes(r));

@@ -84,6 +84,7 @@ export default async function TenantAdminPage() {
           { href: "/tenant-admin/siem", label: "🔍 SIEM" },
           { href: "/tenant-admin/org-hierarchy", label: "🏛️ Org Hierarchy" },
           { href: "/tenant-admin/readiness", label: "🎯 Readiness" },
+          { href: "/tenant-admin/activation", label: "📈 Activation" },
           { href: "/tenant-admin/install", label: "🧩 Installer" },
           { href: "/tenant-admin/settings", label: "⚙️ Settings" },
           { href: "/tenant-admin/notifications", label: "🔔 Notifications" },

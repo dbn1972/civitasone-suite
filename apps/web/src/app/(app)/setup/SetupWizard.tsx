@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { Card, StatusPill, ProgressBar } from "../../_components/ds";
 import { SampleDataControls } from "./SampleDataControls";
+import { trackActivation, type FunnelStep } from "@/lib/activation";
 import type { WizardStep, StepStatus } from "@/lib/setupSteps";
 
 type StepView = WizardStep & { status: StepStatus };
@@ -39,6 +40,27 @@ export function SetupWizard({
   // Resume: bring the first incomplete step into view on load. (R9.2)
   useEffect(() => {
     resumeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  // Activation funnel: record that the wizard was opened, plus any golden-path
+  // steps that are already complete (the server keeps the earliest timestamp).
+  useEffect(() => {
+    const FUNNEL: Record<string, FunnelStep> = {
+      "org-profile": "org-profile", branches: "branches",
+      departments: "departments", people: "people", modules: "modules",
+    };
+    const completed = steps
+      .filter((s) => s.status === "complete" && FUNNEL[s.key])
+      .map((s) => FUNNEL[s.key]);
+    for (const step of ["wizard_opened" as FunnelStep, ...completed]) {
+      const key = `civitasone.activation.${step}`;
+      try {
+        if (sessionStorage.getItem(key)) continue;
+        sessionStorage.setItem(key, "1");
+      } catch { /* still emit; server dedups */ }
+      trackActivation(step);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   let encouragement: string;
