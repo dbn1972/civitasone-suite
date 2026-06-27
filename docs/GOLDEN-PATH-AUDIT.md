@@ -198,3 +198,62 @@ then `/auth/login` drives the real OIDC flow.
   host is a dev/UAT box (not production with real data), since it means restarting
   ~49 processes and lowering the auth posture.
 
+---
+
+## UAT enablement — RESULT (2026-06-27, executed with approval)
+
+Path A was applied to this host (confirmed dev/UAT). The change is **default-preserving**:
+`ecosystem.config.js` now reads `RUNTIME_NODE_ENV` (default `production`) and the web
+app reads `ENABLE_DEV_LOGIN` (default off), so production posture is unchanged unless
+those env vars are set.
+
+**Fleet restarted with:** `RUNTIME_NODE_ENV=staging NODE_ENV=staging JWT_ALGORITHM=HS256
+ENABLE_DEV_LOGIN=true` (existing `INTERNAL_SERVICE_SECRET` reused).
+
+### Proven end-to-end against live services
+
+- **Auth works.** A dev HS256 token is accepted by the gateway; no-token calls still `401`.
+- **Golden-path wizard reads — 7 of 8 return `200` with real data:**
+
+  | Endpoint | Result |
+  | --- | --- |
+  | `/api/v1/locations` | ✅ 200 (real offices) |
+  | `/api/v1/hrms/org-chart` | ✅ 200 |
+  | `/api/identity/users` | ✅ 200 |
+  | `/api/v1/admin/tenant/modules` | ✅ 200 (real module list) |
+  | `/api/v1/finance/accounts` | ✅ 200 |
+  | `/api/v1/hrms/admin/leave-policies` | ✅ 200 |
+  | `/api/v1/payroll/structures` | ✅ 200 |
+  | `/api/v1/tenants/current` | ❌ 400 — endpoint doesn't exist (org-profile gap) |
+
+- **First real transaction works.** `POST /api/v1/finance/journals` with a balanced
+  voucher returned `{"status":"accepted"}` — the activation moment, end to end.
+- **Web app:** required a production build (`.next` was missing — the real reason the
+  UI never served before, unrelated to auth). After `pnpm --filter @civitasone/web build`
+  and restart, web is online; `/auth/dev` serves `200`; protected routes redirect to login.
+
+### Remaining gaps (ranked)
+
+1. **`/v1/tenants/current` read does not exist** → org-profile wizard step shows
+   "Couldn't check". Small backend bet: add a current-tenant profile read.
+2. **Sample-data backend** still absent (UI gated off).
+3. **Durable activation storage** (currently in-memory) → move to analytics-service.
+
+### How to revert to production posture
+
+The edit is default-preserving, so simply restart without the UAT env vars:
+
+```
+pm2 restart ecosystem.config.js --update-env   # RUNTIME_NODE_ENV unset → production, RS256, dev-login off
+```
+
+(Do not `pm2 save` while in UAT mode, or it becomes the boot state.) For a hard reset:
+`git checkout ecosystem.config.js && pm2 delete all && pm2 start ecosystem.config.js`.
+
+### Net
+
+The #1 blocker is cleared for UAT: a real, authenticated golden path now runs against
+live services, and TTFRT can be measured for real. The only functional gap on the
+critical path is the missing current-tenant read (org-profile); everything else works.
+
+

@@ -55,6 +55,11 @@ function dbUrl(dbUser, dbName) {
 // prod by packages/auth (resolveAlgorithm throws); JWT_SECRET is intentionally
 // NOT set on production processes so the HS256 fallback path is unreachable.
 const JWT_ALGORITHM = process.env.JWT_ALGORITHM ?? "RS256";
+// UAT/validation knob: runtime NODE_ENV the services see. Defaults to
+// "production" so prod posture is unchanged unless RUNTIME_NODE_ENV is set.
+// Setting it to a non-production value (with JWT_ALGORITHM=HS256) enables the
+// dev-login HS256 path for end-to-end golden-path validation.
+const RUNTIME_NODE_ENV = process.env.RUNTIME_NODE_ENV ?? "production";
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://civitasone-keycloak:8080";
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "civitasone";
 const INTERNAL_SERVICE_SECRET = requireSecret("INTERNAL_SERVICE_SECRET");
@@ -161,7 +166,7 @@ function svc(name, port, dbUser, dbName, extra = {}) {
     restart_delay: 3000,
     max_restarts: 10,
     env: {
-      NODE_ENV: "production",
+      NODE_ENV: RUNTIME_NODE_ENV,
       PORT: port,
       ...AUTH_ENV,
       INTERNAL_SERVICE_SECRET,
@@ -185,7 +190,7 @@ function worker(name, dbUser, dbName, extra = {}) {
     restart_delay: 3000,
     max_restarts: 10,
     env: {
-      NODE_ENV: "production",
+      NODE_ENV: RUNTIME_NODE_ENV,
       ...AUTH_ENV,
       INTERNAL_SERVICE_SECRET,
       REDIS_URL: REDIS,
@@ -292,7 +297,7 @@ module.exports = {
       restart_delay: 3000,
       max_restarts: 10,
       env: {
-        NODE_ENV: "production",
+        NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 3030,
         ...AUTH_ENV,
         REDIS_URL: REDIS,
@@ -314,7 +319,7 @@ module.exports = {
       restart_delay: 3000,
       max_restarts: 10,
       env: {
-        NODE_ENV: "production",
+        NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 8080,
         ...AUTH_ENV,
         INTERNAL_SERVICE_SECRET,
@@ -337,6 +342,7 @@ module.exports = {
         NODE_ENV: "production",
         PORT: 3000,
         ...(JWT_SECRET ? { JWT_SECRET } : {}),
+        ENABLE_DEV_LOGIN: process.env.ENABLE_DEV_LOGIN ?? "",
         CIVITASONE_API_BASE_URL: "http://127.0.0.1:8080",
         NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8080",
       },
