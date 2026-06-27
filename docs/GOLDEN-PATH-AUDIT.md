@@ -130,3 +130,71 @@ more polish on screens a clerk may never reach until the golden path is proven.
 - Sample-data UI gated behind `NEXT_PUBLIC_SAMPLE_DATA_ENABLED` until its backend
   exists — no always-failing button shipped.
 - Typecheck clean; web unit suites green.
+
+---
+
+## Auth root cause (resolved diagnosis) — the real reason the golden path is blocked
+
+It is **not** a code bug. It is environment configuration. Evidence from the live fleet:
+
+- The fleet runs with **`NODE_ENV=production`**, **`JWT_ALGORITHM=RS256`**, and no
+  reachable Keycloak (`KEYCLOAK_URL` points at `civitasone-keycloak:8080`).
+- The shared `@civitasone/auth` package verifies **RS256 via Keycloak JWKS** in
+  production. Its HS256 dev fallback is **hard-disabled when `NODE_ENV=production`**
+  (by design — a past security fix).
+- The web app's gate (`(app)/layout.tsx`) only checks for a cookie's *presence*,
+  so pages render — but every API call to the gateway/services is rejected for
+  lack of a valid RS256 token, so loaders return `source:"error"` and the clerk
+  sees "Showing saved information" everywhere.
+- The built-in `dev-login` mints an **HS256** token and is gated behind
+  `ENABLE_DEV_LOGIN=true` (not set). Even if enabled, its token would be rejected
+  because the production fleet won't accept HS256.
+
+**Conclusion:** to get a real end-to-end golden path we must either run a non-prod
+profile that accepts the dev HS256 login, or stand up Keycloak. Flipping the live
+fleet is a shared-system change and must be an explicit, owner-approved action.
+
+### Path A — Staging/UAT profile with dev-login (fast, for validation)
+
+Run the stack as a **non-production** environment so the HS256 dev path works.
+Required env (all three must align):
+
+```
+# services (every service + worker)
+NODE_ENV=staging            # anything other than "production"
+JWT_ALGORITHM=HS256
+JWT_SECRET=civitasone-dev-secret   # must match the web dev-login secret
+
+# web app
+ENABLE_DEV_LOGIN=true
+JWT_SECRET=civitasone-dev-secret
+```
+
+Then sign in at `/auth/dev` (e.g. `superadmin` / `Civitas@123`) and the golden
+path runs against live services. **Must be a separate/clearly-marked environment**
+— never the production posture (it disables prod security like RS256 + fail-closed
+secrets).
+
+### Path B — Real Keycloak (production-faithful, for go-live)
+
+```
+KEYCLOAK_URL=<reachable keycloak>      # e.g. https://auth.example.gov.in
+KEYCLOAK_REALM=civitasone
+# web OIDC
+KEYCLOAK_ISSUER_URL=<KEYCLOAK_URL>/realms/civitasone
+KEYCLOAK_CLIENT_ID=civitasone-web
+KEYCLOAK_REDIRECT_URI=<app-url>/api/auth/callback
+```
+
+Provision the realm + `civitasone-web` client (PKCE, redirect URIs), seed a user,
+then `/auth/login` drives the real OIDC flow.
+
+### Recommendation
+
+- **For usability validation now:** Path A on a dedicated UAT instance. Cheapest
+  way to watch a real clerk complete setup → first transaction and measure TTFRT.
+- **For go-live:** Path B.
+- I will **not** reconfigure the running fleet without explicit approval that this
+  host is a dev/UAT box (not production with real data), since it means restarting
+  ~49 processes and lowering the auth posture.
+
