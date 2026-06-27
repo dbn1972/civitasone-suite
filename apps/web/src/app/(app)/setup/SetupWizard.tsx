@@ -131,7 +131,7 @@ export function SetupWizard({
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <SampleDataControls />
+        {process.env.NEXT_PUBLIC_SAMPLE_DATA_ENABLED === "true" && <SampleDataControls />}
       </div>
 
       <p style={{ marginTop: 18, color: "var(--mut)", fontSize: 13 }}>

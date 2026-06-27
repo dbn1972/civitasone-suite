@@ -47,8 +47,12 @@ async function countFrom(path: string, telemetryKey: string): Promise<{ source: 
 }
 
 async function evalOrgProfile(): Promise<StepStatus> {
-  // Complete when the tenant profile has a name and an address.
-  const res = await fetchJson<unknown, { ok: boolean }>("/api/v1/admin/tenant", { ok: false }, {
+  // NOTE: there is no fixed-path "current tenant profile" read endpoint yet
+  // (tenant-service exposes /v1/tenants/:tenantId, which needs the tenant id).
+  // Until a /v1/tenants/current (or similar) read exists, this returns "unknown"
+  // on a miss — honest, not fabricated. Tracked as a backend bet in the
+  // golden-path audit. Complete when the tenant profile has a name and address.
+  const res = await fetchJson<unknown, { ok: boolean }>("/api/v1/tenants/current", { ok: false }, {
     revalidateSeconds: 60,
     telemetryKey: "setup.org_profile",
     mapResponse: (p) => {
@@ -71,7 +75,9 @@ async function evalBranches(): Promise<StepStatus> {
 }
 
 async function evalDepartments(): Promise<StepStatus> {
-  const { source, count } = await countFrom("/api/v1/hrms/departments", "setup.departments");
+  // No dedicated departments endpoint exists; the org chart is the real signal
+  // that teams/structure have been set up. (/v1/hrms/org-chart)
+  const { source, count } = await countFrom("/api/v1/hrms/org-chart", "setup.departments");
   return listStatus(source, count);
 }
 
@@ -93,7 +99,7 @@ async function evalFinanceYearCoa(): Promise<StepStatus> {
 }
 
 async function evalLeavePolicies(): Promise<StepStatus> {
-  const { source, count } = await countFrom("/api/v1/hrms/leave-policies", "setup.leave_policies");
+  const { source, count } = await countFrom("/api/v1/hrms/admin/leave-policies", "setup.leave_policies");
   return listStatus(source, count);
 }
 
