@@ -34,6 +34,9 @@ class AppShell extends StatelessWidget {
         (label: 'Team Directory', icon: Icons.people, route: '/hr/team'),
         (label: 'Grievances', icon: Icons.feedback, route: '/hr/grievances'),
         (label: 'Job Vacancies', icon: Icons.work, route: '/hr/vacancies'),
+        (label: 'My ID Card', icon: Icons.badge, route: '/hr/id-card'),
+        (label: 'Visiting Card', icon: Icons.contact_page, route: '/hr/visiting-card'),
+        (label: 'Verify ID', icon: Icons.qr_code_scanner, route: '/hr/id-card/verify'),
       ],
     ),
     (

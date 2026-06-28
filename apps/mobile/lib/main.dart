@@ -10,6 +10,8 @@ import 'core/theme/app_colors.dart';
 import 'core/splash_screen.dart';
 import 'core/auth/biometric_lock.dart';
 import 'core/auth/lock_screen.dart';
+import 'core/device_heartbeat.dart';
+import 'core/onboarding_screen.dart';
 import 'features/finance/payments_screen.dart';
 import 'features/finance/journal_screen.dart';
 import 'features/hr/hr_module.dart';
@@ -69,6 +71,13 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
         // ignore: discarded_futures
         syncAllMailboxes(engine);
       }
+      // Device trust heartbeat — report posture to server
+      final heartbeat = DeviceHeartbeat(
+        apiBaseUrl: ref.read(apiBaseProvider),
+        auth: ref.read(authProvider),
+      );
+      // ignore: discarded_futures
+      heartbeat.send();
     }
   }
 
@@ -93,6 +102,10 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
         GoRoute(
           path: '/splash',
           builder: (_, __) => _SplashRouter(auth: ref.read(authProvider)),
+        ),
+        GoRoute(
+          path: '/onboarding',
+          builder: (_, __) => const OnboardingScreen(),
         ),
         GoRoute(
           path: '/login',
@@ -413,11 +426,21 @@ class _SplashRouterState extends State<_SplashRouter> {
     // Give splash a minimum display time (brand impression)
     await Future.delayed(const Duration(milliseconds: 1200));
 
+    if (!mounted) return;
+
+    // First-time install → show onboarding
+    final onboarded = await OnboardingScreen.hasCompleted();
+    if (!onboarded) {
+      context.go('/onboarding');
+      return;
+    }
+
+    // Check for existing session (Gmail-style: persist login)
     final token = await widget.auth.accessToken();
     if (!mounted) return;
 
     if (token != null) {
-      // User has valid session — go to dashboard (biometric lock will be added here)
+      // User has valid session — go to dashboard
       context.go('/dashboard');
     } else {
       // No session — show login
