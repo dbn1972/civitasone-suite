@@ -68,6 +68,18 @@ export function registerBudgetConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
+
+  queue.subscribe(COMMANDS.sanctionSubmitApproval, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const sanction = await repo.findSanctionByIdTx(tx, p.id);
+      if (!sanction || sanction.tenantId !== p.tenantId) return;
+      await repo.updateSanction(tx, p.id, { status: "pending_approval", updatedBy: msg.actorId });
+      await audit(tx, msg, "submit_for_eoffice_approval", "sanction", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

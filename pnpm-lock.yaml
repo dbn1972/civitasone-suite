@@ -885,6 +885,9 @@ importers:
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@civitasone/eoffice-sdk':
+        specifier: workspace:*
+        version: link:../../packages/eoffice-sdk
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events

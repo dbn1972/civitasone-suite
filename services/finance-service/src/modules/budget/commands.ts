@@ -56,3 +56,20 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
   await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * H1 — mark a sanction as submitted to eOffice for administrative approval.
+ * The eFile itself is raised via the eOffice integration; once it is approved
+ * the `finance.sanction.file_decided` callback (see eoffice-consumer) moves the
+ * sanction to `approved`. This transition makes the source state honest while
+ * the file is under approval.
+ */
+export async function submitSanctionForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.sanctionSubmitApproval, {
+    type: COMMANDS.sanctionSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

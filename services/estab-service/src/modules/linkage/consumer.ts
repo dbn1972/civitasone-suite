@@ -126,11 +126,11 @@ export async function emitModuleDecisionCallback(
 ): Promise<void> {
   // Read the file's source linkage
   const rows = await tx.execute(sql`
-    SELECT source_ref_type, source_ref_id, source_context
+    SELECT file_no, source_ref_type, source_ref_id, source_context
     FROM files.estab_files
     WHERE id = ${opts.fileId} AND tenant_id = ${opts.tenantId}
   `);
-  const row = (rows as unknown as Array<{ source_ref_type: string | null; source_ref_id: string | null; source_context: unknown }>)[0];
+  const row = (rows as unknown as Array<{ file_no: string | null; source_ref_type: string | null; source_ref_id: string | null; source_context: unknown }>)[0];
   if (!row?.source_ref_type || !row?.source_ref_id) return; // not a module-linked file
 
   const callbackTopic = MODULE_CALLBACK_TOPICS[row.source_ref_type];
@@ -142,6 +142,7 @@ export async function emitModuleDecisionCallback(
     tenantId: opts.tenantId, actorId: opts.decidedBy, correlationId: opts.correlationId,
     payload: {
       fileId: opts.fileId,
+      fileNo: row.file_no ?? "",
       refType: row.source_ref_type,
       refId: row.source_ref_id,
       decision: opts.decision,

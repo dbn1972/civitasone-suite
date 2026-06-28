@@ -29,3 +29,8 @@ export const DISPATCH = {
 export const SERVICE = "workflow";
 export const INSTANCE_RESOURCE = "instance";
 export const TASK_RESOURCE = "task";
+
+/** Events consumed from other services. */
+export const CONSUMED_EVENTS = {
+  tenantCreated: "tenant.tenant.created",
+} as const;

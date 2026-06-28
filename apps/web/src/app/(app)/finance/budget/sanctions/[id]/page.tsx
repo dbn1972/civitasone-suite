@@ -74,7 +74,8 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
         subject={sanction.subject}
         dept={sanction.majorHead ?? "Finance"}
         amountMinor={sanction.amount}
-        defaultApprovalChain="finance.sanction.standard"
+        defaultApprovalChain="file_noting"
+        notifyPath={`/api/proxy/v1/finance/sanctions/${params.id}/submit-approval`}
       />
 
       {sanction.lineItems.length > 0 && (

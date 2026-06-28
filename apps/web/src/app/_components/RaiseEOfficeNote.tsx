@@ -35,6 +35,12 @@ export type RaiseEOfficeNoteProps = {
   defaultApprovalChain?: string;
   classification?: "top_secret" | "secret" | "confidential" | "public";
   priority?: "normal" | "urgent" | "immediate";
+  /**
+   * Optional source-module endpoint (proxy path) called after a successful
+   * raise so the originating entity can move to "pending approval". Closes the
+   * loop visually until the eOffice decision callback lands.
+   */
+  notifyPath?: string;
 };
 
 type LinkedFile = {
@@ -48,6 +54,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     refType, refId, subject, dept,
     amountMinor, defaultApprovalChain = "estab.generic.standard",
     classification = "confidential", priority = "normal",
+    notifyPath,
   } = props;
 
   const [file, setFile] = useState<LinkedFile | null>(null);
@@ -102,6 +109,15 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       });
       if (!res.ok) throw new Error((await res.text()) || "Failed to raise eFile");
       const body = (await res.json()) as { id?: string; fileNo?: string };
+      // Close the loop on the source side: move the originating entity to
+      // "pending approval" so its own screen reflects the in-flight decision.
+      if (notifyPath) {
+        try {
+          await fetch(notifyPath, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+        } catch {
+          /* best-effort; the eOffice file is already raised */
+        }
+      }
       setMessage(`Raised eFile ${body.fileNo ?? ""} for approval. Routing by amount via the approval matrix.`);
       setOpen(false);
       setNote("");

@@ -4,11 +4,13 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerInstancesConsumers } from "./modules/instances/consumer.js";
 import { registerTasksConsumers } from "./modules/tasks/consumer.js";
+import { registerProvisioningConsumers } from "./modules/provisioning/consumer.js";
 import { startSlaSweeper, startTimerSweeper, startReminderSweeper } from "./modules/tasks/sweeper.js";
 
 const log = pino({ name: "workflow-worker" });
 registerInstancesConsumers(queue);
 registerTasksConsumers(queue);
+registerProvisioningConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 const slaSweeper = startSlaSweeper(Number(process.env.SLA_SWEEP_MS ?? 30_000));

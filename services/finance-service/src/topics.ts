@@ -6,6 +6,7 @@ export const COMMANDS = {
   budgetReappropriate:  "finance.budget.re_appropriate",
   sanctionCreate:       "finance.sanction.create",
   sanctionReject:       "finance.sanction.reject",
+  sanctionSubmitApproval: "finance.sanction.submit_approval",
   // gl
   journalPost:          "finance.gl.post",
   journalReverse:       "finance.gl.reverse",
@@ -42,6 +43,7 @@ export const CONSUMED_EVENTS = {
   payrollRunApproved:       "payroll.run.approved",
   grnAccepted:              "procurement.grn.accepted",
   grantUcSubmitted:         "grant.uc.submitted",
+  sanctionFileDecided:      "finance.sanction.file_decided",
 } as const;
 
 export const SERVICE  = "finance";
