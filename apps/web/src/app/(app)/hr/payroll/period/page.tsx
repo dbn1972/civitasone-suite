@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -11,18 +12,19 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", month: "July 2024", runDate: "28/07/2024", employeesProcessed: "475", grossPayout: "₹3,82,00,000", netPayout: "₹2,95,00,000", deductions: "₹87,00,000", status: "completed" },
-  { id: "2", month: "June 2024", runDate: "28/06/2024", employeesProcessed: "472", grossPayout: "₹3,78,00,000", netPayout: "₹2,92,00,000", deductions: "₹86,00,000", status: "completed" },
-  { id: "3", month: "May 2024", runDate: "28/05/2024", employeesProcessed: "470", grossPayout: "₹3,76,00,000", netPayout: "₹2,90,00,000", deductions: "₹86,00,000", status: "completed" },
-  { id: "4", month: "April 2024", runDate: "28/04/2024", employeesProcessed: "468", grossPayout: "₹3,74,00,000", netPayout: "₹2,89,00,000", deductions: "₹85,00,000", status: "completed" },
-  { id: "5", month: "August 2024", runDate: "—", employeesProcessed: "—", grossPayout: "—", netPayout: "—", deductions: "—", status: "pending" },
-  { id: "6", month: "March 2024", runDate: "28/03/2024", employeesProcessed: "465", grossPayout: "₹3,72,00,000", netPayout: "₹2,88,00,000", deductions: "₹84,00,000", status: "completed" },
-];
+async function getData(): Promise<Row[]> {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/finance/periods", [], {
+    telemetryKey: "finance.periods",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+  return r.data;
+}
 
-export default function PayrollPeriodPage() {
-  const completed = items.filter((i) => i.status === "completed").length;
-  const pending = items.filter((i) => i.status === "pending").length;
+export default async function PayrollPeriodPage() {
+  const items = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
     { key: "month", label: "Month" },
@@ -38,14 +40,10 @@ export default function PayrollPeriodPage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Payroll Periods" subtitle="Monthly payroll run history and processing status." back="/hr" />
       <StatGrid>
-        <StatCard icon="📅" iconBg="#e6f0ff" label="Total Periods" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Processed" value={completed} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="👥" iconBg="#f5f5f5" label="Current Headcount" value="475" />
+        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Payroll Periods</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by month or status…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
       </div>
     </main>
   );
