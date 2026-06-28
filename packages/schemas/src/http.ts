@@ -34,6 +34,16 @@ export function createFastifyErrorHandler(getHttpError?: (err: unknown) => HttpE
       });
       return;
     }
+    // Catch JSON parse errors (malformed request body) — Fastify throws SyntaxError
+    if (err instanceof SyntaxError && "statusCode" in err) {
+      void reply.code(400).send({
+        code: "MALFORMED_BODY",
+        message: "The request body could not be parsed. Please send valid JSON.",
+        correlationId,
+        retryable: false,
+      });
+      return;
+    }
     const http = getHttpError?.(err);
     if (http) {
       void reply.code(http.status).send({ code: http.code, message: http.message, correlationId, retryable: false });

@@ -189,7 +189,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     try {
       done(null, body ? JSON.parse(body as string) : {});
     } catch (err) {
-      done(err as Error, undefined);
+      // Return 400 for malformed JSON — never 500.
+      const syntaxErr = err as Error & { statusCode?: number };
+      syntaxErr.statusCode = 400;
+      done(syntaxErr, undefined);
     }
   });
 

@@ -200,9 +200,13 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
     errors.push(`Insufficient balance: requested ${computedDays} days (computed) but only ${input.currentBalance} days available`);
   }
 
-  // R9: Max continuous days
-  if (computedDays > policy.maxContinuousDays) {
-    errors.push(`Exceeds maximum continuous ${policy.name}: ${computedDays} days > allowed ${policy.maxContinuousDays} days`);
+  // R9: Max continuous days — the calendar span (absence from office) must not
+  // exceed the policy's maxContinuousDays, regardless of how many are "counted"
+  // as leave (working days vs calendar method). CCS defines "continuous" as the
+  // full absence period including weekends/holidays in between.
+  const calendarSpan = countCalendarDays(input.fromDate, input.toDate);
+  if (calendarSpan > policy.maxContinuousDays) {
+    errors.push(`Exceeds maximum continuous ${policy.name}: ${calendarSpan} calendar days absent > allowed ${policy.maxContinuousDays} days`);
   }
 
   // R10: Max accumulation warning
