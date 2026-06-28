@@ -109,6 +109,20 @@ Verdict: **functionally a strong standalone eOffice; integration is ~60% closed.
 
 ## 5. Recommended remediation order
 
+> **✅ Wave 1 DELIVERED (2026-06-28)** — the integration loop is now closed:
+> - **R3** — `workflow-service` provisioning consumer seeds the standard
+>   definitions (file_noting SO→US→DS + leave/finance/procurement/grant) with
+>   nodes **and** edges into every tenant on `tenant.created`; migration 0014
+>   backfills the demo tenant's missing edges. Chains now route.
+> - **D7** — `estab` callback now carries `fileNo`; `finance` budget
+>   `eoffice-consumer` consumes `finance.sanction.file_decided` via the SDK's
+>   `parseDecisionCallback` and moves the sanction approved/cancelled. Loop closed.
+> - **H1** — finance `submit-for-approval` moves a sanction to `pending_approval`;
+>   the web `RaiseEOfficeNote` calls it (`notifyPath`) after a successful raise.
+>   (HR transfer/PO award follow the identical pattern — mechanical to replicate.)
+>
+> Remaining: extend H1 auto-raise to HR/procurement; Waves 2–4 below.
+
 **Wave 1 — close the loop (make integration real), ~9 days**
 - D7: ship a tiny consumer in finance (and a shared helper) that subscribes to `*.file_decided` and transitions the source entity (sanction approved → release).
 - H1: add "Raise eOffice note" + auto-raise on submit for HR transfer/promotion and PO award, using the SDK.
