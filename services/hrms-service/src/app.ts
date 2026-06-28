@@ -119,6 +119,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(documentOcrRoutes);
   const { nluChatbotRoutes } = await import("./modules/ai-ml/nlu-chatbot.js");
   await app.register(nluChatbotRoutes);
+  const { recruitmentAiRoutes } = await import("./modules/ai-ml/recruitment-ai.js");
+  await app.register(recruitmentAiRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
