@@ -26,6 +26,10 @@ import 'expense_claim_screen.dart';
 import 'documents_vault_screen.dart';
 import 'travel_request_screen.dart';
 import 'social_feed_screen.dart';
+import 'pulse_survey_screen.dart';
+import 'goals_screen.dart';
+import 'leaderboard_screen.dart';
+import 'ai_assistant_screen.dart';
 
 export 'attendance_screen.dart';
 export 'employees_screen.dart';
@@ -50,6 +54,10 @@ export 'expense_claim_screen.dart';
 export 'documents_vault_screen.dart';
 export 'travel_request_screen.dart';
 export 'social_feed_screen.dart';
+export 'pulse_survey_screen.dart';
+export 'goals_screen.dart';
+export 'leaderboard_screen.dart';
+export 'ai_assistant_screen.dart';
 
 /// Shell routes — shown inside the bottom-nav AppShell.
 List<GoRoute> hrShellRoutes() => [
@@ -128,6 +136,22 @@ List<GoRoute> hrShellRoutes() => [
       GoRoute(
         path: '/hr/social',
         builder: (_, __) => const SocialFeedScreen(),
+      ),
+      GoRoute(
+        path: '/hr/pulse',
+        builder: (_, __) => const PulseSurveyScreen(),
+      ),
+      GoRoute(
+        path: '/hr/goals',
+        builder: (_, __) => const GoalsScreen(),
+      ),
+      GoRoute(
+        path: '/hr/leaderboard',
+        builder: (_, __) => const LeaderboardScreen(),
+      ),
+      GoRoute(
+        path: '/hr/assistant',
+        builder: (_, __) => const AiAssistantScreen(),
       ),
     ];
 
