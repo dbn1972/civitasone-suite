@@ -116,6 +116,16 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(payment);
   });
 
+  // H1 (payment) — submit a payment to eOffice for administrative approval. The
+  // eFile is raised via the eOffice integration; the decision returns on
+  // finance.payment.file_decided and moves the payment to released/cancelled.
+  app.post("/v1/finance/payments/:id/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitPaymentForApproval(ctx, id));
+  });
+
   app.post("/v1/finance/gem/einvoice/match", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);

@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 /**
  * Device Trust & Compliance Module.
@@ -45,7 +45,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/devices/heartbeat — report device info + compliance state */
   app.post("/v1/hrms/devices/heartbeat", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = deviceReportSchema.parse(req.body);
     const now = new Date().toISOString();
     const ip = req.ip ?? "";
@@ -54,7 +54,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     const existing = await sqlClient.query(
       `SELECT trust_status, blocked_reason FROM hrms.trusted_devices
        WHERE tenant_id = $1 AND user_id = $2 AND device_id = $3`,
-      [ctx.tenantId, ctx.userId, body.deviceId],
+      [ctx.tenantId, ctx.actorId, body.deviceId],
     );
 
     if (existing.rows[0]?.trust_status === "blocked") {
@@ -100,7 +100,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
         flagged_reason = $14, last_seen_at = $15, last_ip = $16,
         login_count = hrms.trusted_devices.login_count + 1`,
       [
-        randomUUID(), ctx.tenantId, ctx.userId, body.deviceId,
+        randomUUID(), ctx.tenantId, ctx.actorId, body.deviceId,
         body.deviceName, body.platform, body.osVersion, body.appVersion,
         body.isRooted ?? false, body.hasScreenLock ?? true,
         body.isEncrypted ?? true, body.biometricAvailable ?? false,
@@ -114,7 +114,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     const activeDevices = await sqlClient.query(
       `SELECT COUNT(*)::int AS count FROM hrms.trusted_devices
        WHERE tenant_id = $1 AND user_id = $2 AND trust_status = 'trusted'`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
     if ((activeDevices.rows[0]?.count ?? 0) > MAX_DEVICES_PER_USER) {
       // Auto-block the oldest device (not the current one)
@@ -125,7 +125,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
            WHERE tenant_id = $1 AND user_id = $2 AND trust_status = 'trusted' AND device_id != $3
            ORDER BY last_seen_at ASC LIMIT 1
          )`,
-        [ctx.tenantId, ctx.userId, body.deviceId],
+        [ctx.tenantId, ctx.actorId, body.deviceId],
       );
     }
 
@@ -133,7 +133,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)
        VALUES ($1, $2, $3, 'heartbeat', $4, $5)`,
-      [ctx.tenantId, body.deviceId, ctx.userId, JSON.stringify({ flags, appVersion: body.appVersion }), ip],
+      [ctx.tenantId, body.deviceId, ctx.actorId, JSON.stringify({ flags, appVersion: body.appVersion }), ip],
     );
 
     // If rooted and policy says block → deny access
@@ -156,7 +156,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/devices/admin — all devices accessing org data */
   app.get("/v1/hrms/devices/admin", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { status, platform, search } = req.query as { status?: string; platform?: string; search?: string };
 
     let where = "WHERE d.tenant_id = $1";
@@ -207,14 +207,14 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   /** PATCH /v1/hrms/devices/:id/block — block a specific device */
   app.patch("/v1/hrms/devices/:id/block", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
     await sqlClient.query(
       `UPDATE hrms.trusted_devices SET trust_status = 'blocked', blocked_by = $1, blocked_at = NOW(), blocked_reason = $2
        WHERE id = $3 AND tenant_id = $4`,
-      [ctx.userId, reason ?? "Blocked by admin", id, ctx.tenantId],
+      [ctx.actorId, reason ?? "Blocked by admin", id, ctx.tenantId],
     );
 
     // Log the block event
@@ -223,7 +223,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
       await sqlClient.query(
         `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)
          VALUES ($1, $2, $3, 'blocked', $4, $5)`,
-        [ctx.tenantId, device.rows[0].device_id, device.rows[0].user_id, JSON.stringify({ reason, blockedBy: ctx.userId }), req.ip],
+        [ctx.tenantId, device.rows[0].device_id, device.rows[0].user_id, JSON.stringify({ reason, blockedBy: ctx.actorId }), req.ip],
       );
     }
 
@@ -234,7 +234,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   /** PATCH /v1/hrms/devices/:id/unblock — restore access */
   app.patch("/v1/hrms/devices/:id/unblock", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
 
     await sqlClient.query(
@@ -250,7 +250,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/devices/:deviceId/activity — activity log for a device */
   app.get("/v1/hrms/devices/:deviceId/activity", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { deviceId } = req.params as { deviceId: string };
 
     const rows = await sqlClient.query(
@@ -268,14 +268,14 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/devices/policy — current compliance policy */
   app.get("/v1/hrms/devices/policy", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const policy = await getPolicy(ctx.tenantId);
     return reply.send({ data: policy });
   });
 
   /** PATCH /v1/hrms/devices/policy — update compliance policy */
   app.patch("/v1/hrms/devices/policy", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = policyUpdateSchema.parse(req.body);
 
     await sqlClient.query(
@@ -307,7 +307,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/devices/me — list my registered devices */
   app.get("/v1/hrms/devices/me", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     const rows = await sqlClient.query(
       `SELECT id, device_id, device_name, platform, os_version, app_version,
@@ -315,7 +315,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
        FROM hrms.trusted_devices
        WHERE tenant_id = $1 AND user_id = $2
        ORDER BY last_seen_at DESC`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
 
     return reply.send({ data: rows.rows });

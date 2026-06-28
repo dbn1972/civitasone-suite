@@ -25,8 +25,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 const chatSchema = z.object({
   message: z.string().min(1).max(500),
@@ -143,7 +143,7 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/chat — intelligent HR chatbot with NLU */
   app.post("/v1/hrms/ai/chat", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = chatSchema.parse(req.body);
 
     // Classify intent
@@ -158,7 +158,7 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
           `SELECT leave_type_code, leave_type_name, total_days, balance_days
            FROM hrms.leave_allocations
            WHERE tenant_id = $1 AND employee_id = (SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
-          [ctx.userId, ctx.tenantId],
+          [ctx.actorId, ctx.tenantId],
         );
         if (rows.rowCount && rows.rowCount > 0) {
           const summary = rows.rows.map((r: any) => `• ${r.leave_type_name}: **${r.balance_days}** of ${r.total_days} days`).join("\n");
@@ -194,7 +194,7 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
            FROM hrms.employees e1
            JOIN hrms.employees e2 ON e2.id = e1.reporting_to AND e2.tenant_id = e1.tenant_id
            WHERE e1.user_id = $1 AND e1.tenant_id = $2`,
-          [ctx.userId, ctx.tenantId],
+          [ctx.actorId, ctx.tenantId],
         );
         if (emp.rowCount && emp.rowCount > 0) {
           const m = emp.rows[0];

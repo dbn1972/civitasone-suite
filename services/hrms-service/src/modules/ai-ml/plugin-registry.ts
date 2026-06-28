@@ -18,8 +18,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 // ─── All available ML plugins ─────────────────────────────────────────────────
 
@@ -179,7 +179,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
 
   /** GET /v1/hrms/ai/plugins — list all AI plugins with status for this tenant */
   app.get("/v1/hrms/ai/plugins", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     // Get tenant-specific configs
     const configs = await sqlClient.query(
@@ -237,7 +237,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
 
   /** PATCH /v1/hrms/ai/plugins/:pluginId — update plugin config (enable/disable/threshold) */
   app.patch("/v1/hrms/ai/plugins/:pluginId", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { pluginId } = req.params as { pluginId: string };
     const body = configUpdateSchema.parse(req.body);
 
@@ -270,7 +270,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
 
   /** GET /v1/hrms/ai/plugins/:pluginId/stats — detailed stats for a plugin */
   app.get("/v1/hrms/ai/plugins/:pluginId/stats", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { pluginId } = req.params as { pluginId: string };
 
     // Daily prediction counts (last 30 days)
@@ -320,7 +320,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
 
   /** POST /v1/hrms/ai/plugins/:pluginId/feedback — human feedback on a prediction */
   app.post("/v1/hrms/ai/plugins/:pluginId/feedback", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { pluginId } = req.params as { pluginId: string };
     const body = z.object({
       predictionId: z.string().uuid(),
@@ -331,7 +331,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     await sqlClient.query(
       `UPDATE hrms.ai_prediction_log SET outcome = $1, feedback_notes = $2, feedback_by = $3, feedback_at = NOW()
        WHERE id = $4 AND tenant_id = $5 AND plugin_id = $6`,
-      [body.outcome, body.notes ?? null, ctx.userId, body.predictionId, ctx.tenantId, pluginId],
+      [body.outcome, body.notes ?? null, ctx.actorId, body.predictionId, ctx.tenantId, pluginId],
     );
 
     return reply.send({ status: "feedback_recorded" });
@@ -339,7 +339,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
 
   /** GET /v1/hrms/ai/plugins/summary — admin dashboard summary */
   app.get("/v1/hrms/ai/plugins/summary", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     const [totals] = await sqlClient.query(
       `SELECT

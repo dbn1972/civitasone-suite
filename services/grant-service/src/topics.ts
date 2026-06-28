@@ -12,6 +12,7 @@ export const COMMANDS = {
   // disbursement
   installmentCreate:      "grant.installment.create",
   disbursementInitiate:   "grant.disbursement.initiate",
+  disbursementSubmitApproval: "grant.disbursement.submit_approval",
   pfmsReconcile:          "grant.pfms.reconcile",
   // utilisation
   ucSubmit:               "grant.uc.submit",
@@ -42,6 +43,7 @@ export const EVENTS = {
 export const CONSUMED_EVENTS = {
   financePaid: "finance.payment.made",
   projectMilestoneCompleted: "project.milestone.completed",
+  disbursementFileDecided: "grant.disbursement.file_decided",
 } as const;
 
 export const SERVICE = "grant";

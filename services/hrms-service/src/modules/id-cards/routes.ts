@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createHmac } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 
 /**
@@ -69,7 +69,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/id-cards — issue a new ID card */
   app.post("/v1/hrms/id-cards", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = issueCardSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -88,7 +88,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     // Get issuer name
     const issuerRow = await sqlClient.query(
       `SELECT first_name, last_name FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     const issuerName = issuerRow.rows[0]
       ? `${issuerRow.rows[0].first_name} ${issuerRow.rows[0].last_name}`.trim()
@@ -111,18 +111,19 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
         body.validFrom ?? new Date().toISOString().split("T")[0],
         body.validUntil,
         body.accessZones ?? [], body.accessHours ?? "09:00-18:00",
-        qrPayload, ctx.userId, issuerName, now,
+        qrPayload, ctx.actorId, issuerName, now,
       ],
     );
 
     // Notify holder if they're an employee
     if (body.employeeId) {
-      await queue.send("notification.send", {
-        eventId: randomUUID(),
-        eventType: "hrms.id_card.issued",
+      await queue.publish("notification.send", {
+        messageId: randomUUID(),
+        type: "hrms.id_card.issued",
+        schemaVersion: "1.0",
         tenantId: ctx.tenantId,
         correlationId: ctx.correlationId,
-        actorId: ctx.userId,
+        actorId: ctx.actorId,
         timestamp: now,
         payload: {
           templateId: "00000000-0000-4000-8001-000000000000",
@@ -142,7 +143,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/id-cards — list all cards (HR admin view) */
   app.get("/v1/hrms/id-cards", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { type, status, search } = req.query as { type?: string; status?: string; search?: string };
 
     let where = "WHERE tenant_id = $1";
@@ -169,12 +170,12 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/id-cards/me — get my active ID card with QR */
   app.get("/v1/hrms/id-cards/me", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     // Find employee ID for current user
     const empRow = await sqlClient.query(
       `SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     const employeeId = empRow.rows[0]?.id;
     if (!employeeId) throw new HttpError(404, "NOT_FOUND", "Employee record not found");
@@ -200,7 +201,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/id-cards/verify — verify a card by scanning QR code */
   app.post("/v1/hrms/id-cards/verify", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = verifySchema.parse(req.body);
 
     const { cardId, valid } = verifyQrPayload(body.qrPayload);
@@ -232,14 +233,14 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.id_card_verifications (tenant_id, card_id, verified_by, location, result, latitude, longitude)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [ctx.tenantId, cardId, ctx.userId, body.location ?? "", result, body.latitude ?? null, body.longitude ?? null],
+      [ctx.tenantId, cardId, ctx.actorId, body.location ?? "", result, body.latitude ?? null, body.longitude ?? null],
     );
 
     // Update card verification stats
     await sqlClient.query(
       `UPDATE hrms.id_cards SET verification_count = verification_count + 1, last_verified_at = NOW(), last_verified_by = $1, updated_at = NOW()
        WHERE id = $2`,
-      [ctx.userId, cardId],
+      [ctx.actorId, cardId],
     );
 
     return reply.send({
@@ -264,7 +265,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** PATCH /v1/hrms/id-cards/:id/suspend — temporarily suspend a card */
   app.patch("/v1/hrms/id-cards/:id/suspend", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
@@ -279,14 +280,14 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** PATCH /v1/hrms/id-cards/:id/revoke — permanently revoke a card */
   app.patch("/v1/hrms/id-cards/:id/revoke", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
     await sqlClient.query(
       `UPDATE hrms.id_cards SET status = 'revoked', revoked_by = $1, revoked_reason = $2, revoked_at = NOW(), updated_at = NOW()
        WHERE id = $3 AND tenant_id = $4 AND status IN ('active', 'suspended')`,
-      [ctx.userId, reason ?? "revoked", id, ctx.tenantId],
+      [ctx.actorId, reason ?? "revoked", id, ctx.tenantId],
     );
 
     return reply.send({ id, status: "revoked" });
@@ -294,7 +295,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** PATCH /v1/hrms/id-cards/:id/reactivate — reactivate a suspended card */
   app.patch("/v1/hrms/id-cards/:id/reactivate", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
 
     await sqlClient.query(

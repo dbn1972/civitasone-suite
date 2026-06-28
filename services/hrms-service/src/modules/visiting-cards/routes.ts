@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 /**
  * Digital Visiting Card Module.
@@ -44,7 +44,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/visiting-card/me — my digital visiting card */
   app.get("/v1/hrms/visiting-card/me", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     // Get employee profile
     const emp = await sqlClient.query(
@@ -58,7 +58,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
        LEFT JOIN public.tenants t ON t.id = e.tenant_id
        WHERE e.user_id = $1 AND e.tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
 
     if (emp.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
@@ -120,13 +120,13 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** PATCH /v1/hrms/visiting-card/me — customize my card */
   app.patch("/v1/hrms/visiting-card/me", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = updateCardSchema.parse(req.body);
 
     // Get employee ID
     const empRow = await sqlClient.query(
       `SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     if (empRow.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     const employeeId = empRow.rows[0].id;
@@ -215,12 +215,12 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/visiting-card/me/share — record that card was shared */
   app.post("/v1/hrms/visiting-card/me/share", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { method } = (req.body as any) ?? {}; // whatsapp, email, qr, nfc, copy
 
     const empRow = await sqlClient.query(
       `SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     if (empRow.rowCount === 0) return reply.send({ status: "ok" });
 
@@ -236,7 +236,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/visiting-card/me/signature — HTML email signature */
   app.get("/v1/hrms/visiting-card/me/signature", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     const emp = await sqlClient.query(
       `SELECT e.first_name, e.last_name, e.designation, e.department, e.email, e.phone, e.photo_url,
@@ -244,7 +244,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
        FROM hrms.employees e
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
        WHERE e.user_id = $1 AND e.tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     if (emp.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     const e = emp.rows[0];

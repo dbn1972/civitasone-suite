@@ -41,3 +41,21 @@ export async function reconcilePfms(ctx: RequestContext, body: PfmsReconcileBody
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * Mark a disbursement as submitted to eOffice for administrative approval.
+ * The eFile is raised via the eOffice integration (source_ref_type
+ * "grant_disbursement"); once it is decided the `grant.disbursement.file_decided`
+ * callback (see eoffice-consumer) moves the disbursement to its approved
+ * (initiated) / cancelled state. This transition keeps the source state honest
+ * while the file is under approval.
+ */
+export async function submitDisbursementForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.disbursementSubmitApproval, {
+    type: COMMANDS.disbursementSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "disbursement", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

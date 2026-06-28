@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 /**
  * Pulse Surveys — quick anonymous engagement check-ins.
@@ -50,14 +50,14 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/pulse-surveys — create a pulse survey (HR admin) */
   app.post("/v1/hrms/pulse-surveys", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = pulseCreateSchema.parse(req.body);
     const id = randomUUID();
 
     await sqlClient.query(
       `INSERT INTO hrms.pulse_surveys (id, tenant_id, question, category, anonymous, created_by, created_at, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)`,
-      [id, ctx.tenantId, body.question, body.category ?? "engagement", body.anonymous ?? true, ctx.userId, body.expiresAt ?? null],
+      [id, ctx.tenantId, body.question, body.category ?? "engagement", body.anonymous ?? true, ctx.actorId, body.expiresAt ?? null],
     );
 
     return reply.code(201).send({ id, status: "created" });
@@ -65,7 +65,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/pulse-surveys — list active surveys for current employee */
   app.get("/v1/hrms/pulse-surveys", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     const rows = await sqlClient.query(
       `SELECT s.id, s.question, s.category, s.anonymous, s.created_at,
@@ -74,7 +74,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
        FROM hrms.pulse_surveys s
        WHERE s.tenant_id = $1 AND s.is_active = true AND (s.expires_at IS NULL OR s.expires_at > NOW())
        ORDER BY s.created_at DESC LIMIT 20`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
 
     return reply.send({ data: rows.rows });
@@ -82,7 +82,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/pulse-surveys/:id/respond — submit pulse response */
   app.post("/v1/hrms/pulse-surveys/:id/respond", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const body = pulseRespondSchema.parse(req.body);
 
@@ -98,14 +98,14 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
       `INSERT INTO hrms.pulse_responses (tenant_id, survey_id, respondent_id, score, comment, responded_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (survey_id, respondent_id) DO UPDATE SET score = $4, comment = $5, responded_at = NOW()`,
-      [ctx.tenantId, id, ctx.userId, body.score, body.comment ?? null],
+      [ctx.tenantId, id, ctx.actorId, body.score, body.comment ?? null],
     );
 
     // Award leaderboard points for responding
     await sqlClient.query(
       `INSERT INTO hrms.leaderboard_points (tenant_id, employee_id, points, reason, source_id, awarded_at)
        VALUES ($1, $2, 5, 'survey_responded', $3, NOW())`,
-      [ctx.tenantId, ctx.userId, id],
+      [ctx.tenantId, ctx.actorId, id],
     );
 
     return reply.send({ status: "submitted" });
@@ -113,7 +113,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/pulse-surveys/:id/results — survey results (aggregated) */
   app.get("/v1/hrms/pulse-surveys/:id/results", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
 
     const stats = await sqlClient.query(
@@ -146,7 +146,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/goals — create a goal */
   app.post("/v1/hrms/goals", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = goalCreateSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -154,7 +154,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.goals (id, tenant_id, employee_id, title, description, category, key_results, due_date, period, parent_goal_id, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)`,
-      [id, ctx.tenantId, ctx.userId, body.title, body.description ?? "", body.category ?? "individual",
+      [id, ctx.tenantId, ctx.actorId, body.title, body.description ?? "", body.category ?? "individual",
        JSON.stringify(body.keyResults ?? []), body.dueDate ?? null, body.period ?? null, body.parentGoalId ?? null, now],
     );
 
@@ -163,7 +163,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/goals — list my goals */
   app.get("/v1/hrms/goals", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const status = (req.query as any)?.status ?? "active";
 
     const rows = await sqlClient.query(
@@ -171,7 +171,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
        FROM hrms.goals
        WHERE tenant_id = $1 AND employee_id = $2 AND ($3 = 'all' OR status = $3)
        ORDER BY created_at DESC`,
-      [ctx.tenantId, ctx.userId, status],
+      [ctx.tenantId, ctx.actorId, status],
     );
 
     return reply.send({
@@ -185,14 +185,14 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/goals/:id/checkin — log progress check-in */
   app.post("/v1/hrms/goals/:id/checkin", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const body = goalCheckinSchema.parse(req.body);
 
     // Verify ownership
     const goal = await sqlClient.query(
       `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
-      [id, ctx.tenantId, ctx.userId],
+      [id, ctx.tenantId, ctx.actorId],
     );
     if (goal.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Goal not found");
 
@@ -200,7 +200,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.goal_checkins (goal_id, tenant_id, employee_id, progress, note, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
-      [id, ctx.tenantId, ctx.userId, body.progress, body.note ?? ""],
+      [id, ctx.tenantId, ctx.actorId, body.progress, body.note ?? ""],
     );
 
     // Update goal progress
@@ -215,7 +215,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
       await sqlClient.query(
         `INSERT INTO hrms.leaderboard_points (tenant_id, employee_id, points, reason, source_id, awarded_at)
          VALUES ($1, $2, 50, 'goal_completed', $3, NOW())`,
-        [ctx.tenantId, ctx.userId, id],
+        [ctx.tenantId, ctx.actorId, id],
       );
     }
 
@@ -224,7 +224,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/goals/:id/checkins — list check-in history */
   app.get("/v1/hrms/goals/:id/checkins", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
 
     const rows = await sqlClient.query(
@@ -242,7 +242,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/leaderboard — ranked employees by recognition points */
   app.get("/v1/hrms/leaderboard", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const period = (req.query as any)?.period ?? "month"; // month, quarter, year, all
 
     let dateFilter = "";
@@ -278,7 +278,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     const myPoints = await sqlClient.query(
       `SELECT COALESCE(SUM(points), 0)::int AS total FROM hrms.leaderboard_points
        WHERE tenant_id = $1 AND employee_id = $2 ${dateFilter}`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
 
     return reply.send({
@@ -290,20 +290,20 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/leaderboard/my-points — my points breakdown */
   app.get("/v1/hrms/leaderboard/my-points", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
 
     const breakdown = await sqlClient.query(
       `SELECT reason, SUM(points)::int AS total, COUNT(*)::int AS count
        FROM hrms.leaderboard_points
        WHERE tenant_id = $1 AND employee_id = $2
        GROUP BY reason ORDER BY total DESC`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
 
     const total = await sqlClient.query(
       `SELECT COALESCE(SUM(points), 0)::int AS total FROM hrms.leaderboard_points
        WHERE tenant_id = $1 AND employee_id = $2`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
 
     return reply.send({
@@ -319,7 +319,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/assistant — AI-powered HR assistant */
   app.post("/v1/hrms/assistant", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { message } = req.body as { message?: string };
     if (!message || message.trim().length < 2) {
       throw new HttpError(400, "INVALID_INPUT", "Message is required");
@@ -334,7 +334,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
         `SELECT leave_type_code, leave_type_name, total_days, balance_days
          FROM hrms.leave_allocations
          WHERE tenant_id = $1 AND employee_id = (SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
-        [ctx.userId, ctx.tenantId],
+        [ctx.actorId, ctx.tenantId],
       );
       if (bal.rowCount && bal.rowCount > 0) {
         const summary = bal.rows.map((r: any) => `${r.leave_type_name}: ${r.balance_days}/${r.total_days} days`).join("\n");
@@ -370,7 +370,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     else if (query.includes("manager") || query.includes("reporting to") || query.includes("who is my")) {
       const emp = await sqlClient.query(
         `SELECT reporting_to FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
-        [ctx.userId, ctx.tenantId],
+        [ctx.actorId, ctx.tenantId],
       );
       if (emp.rows[0]?.reporting_to) {
         const mgr = await sqlClient.query(

@@ -36,6 +36,16 @@ export async function disbursementRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.reconcilePfms(ctx, body));
   });
 
+  // Submit a disbursement to eOffice for administrative approval. The eFile is
+  // raised via the eOffice integration; the decision returns on
+  // grant.disbursement.file_decided and moves the disbursement to initiated/cancelled.
+  app.post("/v1/grants/disbursements/:id/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, GRANT_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitDisbursementForApproval(ctx, id));
+  });
+
   app.get("/v1/grants/installments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

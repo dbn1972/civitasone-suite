@@ -330,6 +330,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
     });
     await cache.invalidateResource(msg.tenantId, "advances");
   });
+
+  queue.subscribe(COMMANDS.paymentSubmitApproval, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const payment = await repo.findPaymentByIdTx(tx, p.id);
+      if (!payment || payment.tenantId !== p.tenantId) return;
+      await repo.updatePayment(tx, p.id, { status: "pending_approval", updatedBy: msg.actorId });
+      await audit(tx, msg, "submit_for_eoffice_approval", "payment", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

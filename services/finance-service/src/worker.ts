@@ -7,6 +7,7 @@ import { registerEOfficeDecisionConsumers } from "./modules/budget/eoffice-consu
 import { registerGlConsumers }            from "./modules/gl/consumer.js";
 import { registerTreasuryConsumers }      from "./modules/treasury/consumer.js";
 import { registerPaymentsConsumers }      from "./modules/payments/consumer.js";
+import { registerPaymentEOfficeDecisionConsumers } from "./modules/payments/eoffice-consumer.js";
 import { registerIntegrationConsumers }   from "./modules/integrations/consumer.js";
 import { registerTenantOnboardConsumers } from "./modules/tenant-onboard/consumer.js";
 
@@ -17,6 +18,7 @@ registerEOfficeDecisionConsumers(queue);
 registerGlConsumers(queue);
 registerTreasuryConsumers(queue);
 registerPaymentsConsumers(queue);
+registerPaymentEOfficeDecisionConsumers(queue);
 registerIntegrationConsumers(queue);
 registerTenantOnboardConsumers(queue);
 

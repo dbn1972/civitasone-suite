@@ -27,3 +27,25 @@ export const db = drizzle(sqlClient, {
 });
 
 export type Db = typeof db;
+
+/**
+ * node-postgres-style adapter over the postgres-js client.
+ *
+ * Several modules (social, device-trust, id-cards, visiting-cards, ai-ml) issue
+ * raw parameterised SQL using the classic `pg` `query(text, params)` shape that
+ * returns `{ rows, rowCount }`. postgres-js instead exposes a tagged-template
+ * client (`sql\`...\``) plus `sql.unsafe(text, params)` which resolves to a
+ * row-list array. This thin wrapper bridges the two so the existing raw-SQL
+ * handlers keep their behaviour while remaining type-safe.
+ */
+export const sqlPool = {
+  async query<T = any>(
+    text: string,
+    params: readonly unknown[] = [],
+  ): Promise<{ rows: T[]; rowCount: number }> {
+    const result = await sqlClient.unsafe(text, params as unknown as never[]);
+    const rows = result as unknown as T[];
+    const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+    return { rows, rowCount };
+  },
+};

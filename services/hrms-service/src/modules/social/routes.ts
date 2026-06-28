@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
 import { cache, queue } from "../../shared/infra.js";
-import { sqlClient } from "../../shared/db.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 /**
  * Social Feed Module — peer recognition (kudos), birthdays, new joinees,
@@ -53,7 +53,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/kudos — give kudos to a colleague */
   app.post("/v1/hrms/kudos", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = kudosCreateSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -71,7 +71,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // Get giver name
     const giverRow = await sqlClient.query(
       `SELECT first_name, last_name FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     const giverName = giverRow.rows[0]
       ? `${giverRow.rows[0].first_name} ${giverRow.rows[0].last_name}`.trim()
@@ -80,16 +80,17 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.social_kudos (id, tenant_id, giver_id, receiver_id, giver_name, receiver_name, badge, message, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, ctx.tenantId, ctx.userId, body.receiverId, giverName, receiverName, body.badge, body.message, now],
+      [id, ctx.tenantId, ctx.actorId, body.receiverId, giverName, receiverName, body.badge, body.message, now],
     );
 
     // Emit notification event
-    await queue.send("notification.send", {
-      eventId: randomUUID(),
-      eventType: "hrms.kudos.received",
+    await queue.publish("notification.send", {
+      messageId: randomUUID(),
+      type: "hrms.kudos.received",
+      schemaVersion: "1.0",
       tenantId: ctx.tenantId,
       correlationId: ctx.correlationId,
-      actorId: ctx.userId,
+      actorId: ctx.actorId,
       timestamp: now,
       payload: {
         templateId: "00000000-0000-4000-8001-000000000000",
@@ -102,14 +103,14 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     });
 
     // Invalidate feed cache
-    await cache.del(`social:feed:${ctx.tenantId}`);
+    await cache.invalidate(`social:feed:${ctx.tenantId}`);
 
     return reply.code(201).send({ id, status: "created" });
   });
 
   /** GET /v1/hrms/kudos/feed — organization-wide kudos feed */
   app.get("/v1/hrms/kudos/feed", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const limit = Math.min(Number((req.query as any)?.limit ?? 50), 100);
 
     const rows = await sqlClient.query(
@@ -127,7 +128,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       `SELECT 
          (SELECT COUNT(*) FROM hrms.social_kudos WHERE receiver_id = $1 AND tenant_id = $2) AS received,
          (SELECT COUNT(*) FROM hrms.social_kudos WHERE giver_id = $1 AND tenant_id = $2) AS given`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
 
     return reply.send({
@@ -151,7 +152,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/social/feed — combined feed: kudos + birthdays + new joinees + announcements */
   app.get("/v1/hrms/social/feed", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const limit = Math.min(Number((req.query as any)?.limit ?? 30), 50);
     const feed: any[] = [];
 
@@ -243,7 +244,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/announcements — create an org announcement (HR admin only) */
   app.post("/v1/hrms/announcements", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = announcementCreateSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -251,7 +252,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // Get author name
     const authorRow = await sqlClient.query(
       `SELECT first_name, last_name FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     const authorName = authorRow.rows[0]
       ? `${authorRow.rows[0].first_name} ${authorRow.rows[0].last_name}`.trim()
@@ -260,17 +261,17 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.social_announcements (id, tenant_id, title, body, category, pinned, created_by, created_by_name, created_at, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [id, ctx.tenantId, body.title, body.body, body.category, body.pinned ?? false, ctx.userId, authorName, now, body.expiresAt ?? null],
+      [id, ctx.tenantId, body.title, body.body, body.category, body.pinned ?? false, ctx.actorId, authorName, now, body.expiresAt ?? null],
     );
 
-    await cache.del(`social:feed:${ctx.tenantId}`);
+    await cache.invalidate(`social:feed:${ctx.tenantId}`);
 
     return reply.code(201).send({ id, status: "created" });
   });
 
   /** GET /v1/hrms/announcements — list announcements */
   app.get("/v1/hrms/announcements", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const rows = await sqlClient.query(
       `SELECT id, title, body, category, pinned, created_by_name AS author, created_at AS "createdAt"
        FROM hrms.social_announcements
@@ -285,7 +286,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/birthdays/today — today's birthdays */
   app.get("/v1/hrms/birthdays/today", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const today = new Date();
     const mm = today.getMonth() + 1;
     const dd = today.getDate();
@@ -312,17 +313,18 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/birthdays/:id/wish — send birthday wish */
   app.post("/v1/hrms/birthdays/:id/wish", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const { message } = (req.body as any) ?? {};
 
     // Send push notification as birthday wish
-    await queue.send("notification.send", {
-      eventId: randomUUID(),
-      eventType: "hrms.birthday.wish",
+    await queue.publish("notification.send", {
+      messageId: randomUUID(),
+      type: "hrms.birthday.wish",
+      schemaVersion: "1.0",
       tenantId: ctx.tenantId,
       correlationId: ctx.correlationId,
-      actorId: ctx.userId,
+      actorId: ctx.actorId,
       timestamp: new Date().toISOString(),
       payload: {
         templateId: "00000000-0000-4000-8001-000000000000",
@@ -341,7 +343,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/travel-requests — submit travel request for reporting manager approval */
   app.post("/v1/hrms/travel-requests", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = travelRequestSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -349,21 +351,22 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.travel_requests (id, tenant_id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $10)`,
-      [id, ctx.tenantId, ctx.userId, body.purpose, body.destination, body.fromDate, body.toDate, body.advanceRequired ?? 0, body.mode ?? "rail", now],
+      [id, ctx.tenantId, ctx.actorId, body.purpose, body.destination, body.fromDate, body.toDate, body.advanceRequired ?? 0, body.mode ?? "rail", now],
     );
 
     // Queue for reporting manager approval notification
     const manager = await sqlClient.query(
       `SELECT reporting_to FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.userId, ctx.tenantId],
+      [ctx.actorId, ctx.tenantId],
     );
     if (manager.rows[0]?.reporting_to) {
-      await queue.send("notification.send", {
-        eventId: randomUUID(),
-        eventType: "hrms.travel.requested",
+      await queue.publish("notification.send", {
+        messageId: randomUUID(),
+        type: "hrms.travel.requested",
+        schemaVersion: "1.0",
         tenantId: ctx.tenantId,
         correlationId: ctx.correlationId,
-        actorId: ctx.userId,
+        actorId: ctx.actorId,
         timestamp: now,
         payload: {
           templateId: "00000000-0000-4000-8001-000000000000",
@@ -381,37 +384,38 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/travel-requests — list my travel requests */
   app.get("/v1/hrms/travel-requests", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const rows = await sqlClient.query(
       `SELECT id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at
        FROM hrms.travel_requests
        WHERE tenant_id = $1 AND employee_id = $2
        ORDER BY created_at DESC`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
     return reply.send({ data: rows.rows });
   });
 
   /** PATCH /v1/hrms/travel-requests/:id/approve — reporting manager approves */
   app.patch("/v1/hrms/travel-requests/:id/approve", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const now = new Date().toISOString();
 
     const result = await sqlClient.query(
       `UPDATE hrms.travel_requests SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
        WHERE id = $3 AND tenant_id = $4 AND status = 'pending' RETURNING employee_id`,
-      [ctx.userId, now, id, ctx.tenantId],
+      [ctx.actorId, now, id, ctx.tenantId],
     );
     if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
 
     // Notify employee
-    await queue.send("notification.send", {
-      eventId: randomUUID(),
-      eventType: "hrms.travel.approved",
+    await queue.publish("notification.send", {
+      messageId: randomUUID(),
+      type: "hrms.travel.approved",
+      schemaVersion: "1.0",
       tenantId: ctx.tenantId,
       correlationId: ctx.correlationId,
-      actorId: ctx.userId,
+      actorId: ctx.actorId,
       timestamp: now,
       payload: {
         templateId: "00000000-0000-4000-8001-000000000000",
@@ -427,7 +431,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** PATCH /v1/hrms/travel-requests/:id/reject — reporting manager rejects */
   app.patch("/v1/hrms/travel-requests/:id/reject", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
     const now = new Date().toISOString();
@@ -435,7 +439,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const result = await sqlClient.query(
       `UPDATE hrms.travel_requests SET status = 'rejected', rejection_reason = $1, approved_by = $2, approved_at = $3, updated_at = $3
        WHERE id = $4 AND tenant_id = $5 AND status = 'pending' RETURNING employee_id`,
-      [reason ?? "", ctx.userId, now, id, ctx.tenantId],
+      [reason ?? "", ctx.actorId, now, id, ctx.tenantId],
     );
     if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
 
@@ -446,7 +450,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/expenses — submit expense claim */
   app.post("/v1/hrms/expenses", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = expenseClaimSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -454,7 +458,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     await sqlClient.query(
       `INSERT INTO hrms.expense_claims (id, tenant_id, employee_id, category, amount, description, expense_date, receipt_key, travel_request_id, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $10)`,
-      [id, ctx.tenantId, ctx.userId, body.category, body.amount, body.description ?? "", body.date, body.receiptKey ?? null, body.travelRequestId ?? null, now],
+      [id, ctx.tenantId, ctx.actorId, body.category, body.amount, body.description ?? "", body.date, body.receiptKey ?? null, body.travelRequestId ?? null, now],
     );
 
     return reply.code(202).send({ id, status: "pending" });
@@ -462,27 +466,27 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/expenses — list my expense claims */
   app.get("/v1/hrms/expenses", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const rows = await sqlClient.query(
       `SELECT id, category, amount, description, expense_date AS date, receipt_key AS "receiptKey", status, created_at
        FROM hrms.expense_claims
        WHERE tenant_id = $1 AND employee_id = $2
        ORDER BY created_at DESC`,
-      [ctx.tenantId, ctx.userId],
+      [ctx.tenantId, ctx.actorId],
     );
     return reply.send({ data: rows.rows });
   });
 
   /** PATCH /v1/hrms/expenses/:id/approve — approve expense claim */
   app.patch("/v1/hrms/expenses/:id/approve", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
     const now = new Date().toISOString();
 
     await sqlClient.query(
       `UPDATE hrms.expense_claims SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
        WHERE id = $3 AND tenant_id = $4 AND status = 'pending'`,
-      [ctx.userId, now, id, ctx.tenantId],
+      [ctx.actorId, now, id, ctx.tenantId],
     );
 
     return reply.send({ id, status: "approved" });
@@ -492,7 +496,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/devices/register — register FCM/APNs token for push notifications */
   app.post("/v1/hrms/devices/register", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { token, platform, deviceId } = req.body as { token: string; platform: string; deviceId: string };
 
     if (!token || !platform || !deviceId) {
@@ -503,7 +507,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       `INSERT INTO hrms.push_devices (id, tenant_id, user_id, device_id, token, platform, registered_at, last_seen_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
        ON CONFLICT (tenant_id, user_id, device_id) DO UPDATE SET token = $5, last_seen_at = NOW()`,
-      [randomUUID(), ctx.tenantId, ctx.userId, deviceId, token, platform],
+      [randomUUID(), ctx.tenantId, ctx.actorId, deviceId, token, platform],
     );
 
     return reply.send({ status: "registered" });
@@ -513,7 +517,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   /** GET /v1/hrms/orgchart — hierarchical org chart */
   app.get("/v1/hrms/orgchart", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const rootId = (req.query as any)?.rootId;
 
     const rows = await sqlClient.query(

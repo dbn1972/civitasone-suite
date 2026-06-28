@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
+import { TransferWithApproval } from "./TransferWithApproval";
 
 type Row = {
   id: string;
@@ -42,7 +43,7 @@ export default async function TransferPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Transfer Orders" subtitle="Employee transfer orders and relieving status." back="/hr" />
+      <PageHeader title="Transfer Orders" subtitle="Employee transfer orders and relieving status." back="/hr" actions={<TransferWithApproval />} />
       <StatGrid>
         <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Transfers" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Completed" value={completed} />

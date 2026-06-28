@@ -78,3 +78,20 @@ export async function adjustAdvance(ctx: RequestContext, id: string, body: Adjus
   await cache.invalidate(cache.makeKey(ctx.tenantId, "advance", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * H1 (payment) — mark a payment as submitted to eOffice for administrative
+ * approval. The eFile is raised via the eOffice integration; once approved the
+ * `finance.payment.file_decided` callback (see eoffice-consumer) moves the
+ * payment to `released`. This transition makes the source state honest while
+ * the file is under approval.
+ */
+export async function submitPaymentForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.paymentSubmitApproval, {
+    type: COMMANDS.paymentSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "payment", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

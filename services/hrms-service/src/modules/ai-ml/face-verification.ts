@@ -17,8 +17,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 const verifySchema = z.object({
   employeeId: z.string().uuid(),
@@ -75,7 +75,7 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
 
   /** POST /v1/hrms/ai/face/enroll — enroll employee face (store embedding) */
   app.post("/v1/hrms/ai/face/enroll", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = enrollSchema.parse(req.body);
 
     // Extract embedding from the enrollment photo
@@ -100,7 +100,7 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
 
   /** POST /v1/hrms/ai/face/verify — verify selfie against enrolled face */
   app.post("/v1/hrms/ai/face/verify", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = verifySchema.parse(req.body);
 
     // Get enrolled embedding
@@ -145,7 +145,7 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
 
   /** GET /v1/hrms/ai/face/status/:employeeId — check enrollment status */
   app.get("/v1/hrms/ai/face/status/:employeeId", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const { employeeId } = req.params as { employeeId: string };
 
     const row = await sqlClient.query(

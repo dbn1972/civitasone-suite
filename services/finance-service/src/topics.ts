@@ -20,6 +20,7 @@ export const COMMANDS = {
   billCreate:           "finance.bill.create",
   billApprove:          "finance.bill.approve",
   paymentInitiate:      "finance.payment.initiate",
+  paymentSubmitApproval: "finance.payment.submit_approval",
   gemInvoiceMatch:      "finance.gem.einvoice.match",
   // advances & utilization certificates
   advanceCreate:        "finance.advance.create",
@@ -44,6 +45,7 @@ export const CONSUMED_EVENTS = {
   grnAccepted:              "procurement.grn.accepted",
   grantUcSubmitted:         "grant.uc.submitted",
   sanctionFileDecided:      "finance.sanction.file_decided",
+  paymentFileDecided:       "finance.payment.file_decided",
 } as const;
 
 export const SERVICE  = "finance";

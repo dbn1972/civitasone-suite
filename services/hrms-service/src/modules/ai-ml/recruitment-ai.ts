@@ -26,8 +26,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getRequestContext, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
+import { sqlPool as sqlClient } from "../../shared/db.js";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -270,7 +270,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/recruitment/score-jd — AI scores job description quality */
   app.post("/v1/hrms/ai/recruitment/score-jd", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = jdScoreSchema.parse(req.body);
     const result = scoreJobDescription(body);
     return reply.send({ data: result });
@@ -278,7 +278,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/recruitment/parse-resume — extract structured data from resume */
   app.post("/v1/hrms/ai/recruitment/parse-resume", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = resumeParseSchema.parse(req.body);
     const parsed = await parseResume(body.resumeKey);
 
@@ -326,7 +326,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/recruitment/batch-screen — score + auto-shortlist multiple candidates */
   app.post("/v1/hrms/ai/recruitment/batch-screen", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = batchScreenSchema.parse(req.body);
 
     // Get vacancy JD
@@ -383,7 +383,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/recruitment/interview-questions — generate tailored questions */
   app.post("/v1/hrms/ai/recruitment/interview-questions", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = interviewQuestionsSchema.parse(req.body);
 
     // Get JD
@@ -421,7 +421,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/recruitment/interview-summary — AI summarizes interview notes */
   app.post("/v1/hrms/ai/recruitment/interview-summary", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = z.object({
       candidateId: z.string().uuid(),
       vacancyId: z.string().uuid(),

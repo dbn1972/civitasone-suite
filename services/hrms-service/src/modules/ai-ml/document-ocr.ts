@@ -15,7 +15,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getRequestContext } from "../../shared/context.js";
+import { resolveContext } from "../../shared/context.js";
 
 const ocrRequestSchema = z.object({
   imageKey: z.string().min(1).max(512), // S3 key
@@ -110,7 +110,7 @@ export async function documentOcrRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/ocr/extract — extract text + structure from uploaded document */
   app.post("/v1/hrms/ai/ocr/extract", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = ocrRequestSchema.parse(req.body);
 
     const result = await performOcr(body.imageKey, body.documentType);
@@ -132,7 +132,7 @@ export async function documentOcrRoutes(app: FastifyInstance): Promise<void> {
 
   /** POST /v1/hrms/ai/ocr/batch — batch OCR for multiple documents */
   app.post("/v1/hrms/ai/ocr/batch", async (req, reply) => {
-    const ctx = getRequestContext(req);
+    const ctx = resolveContext(req);
     const body = z.object({
       documents: z.array(ocrRequestSchema).min(1).max(10),
     }).parse(req.body);

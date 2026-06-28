@@ -274,6 +274,20 @@ export function registerDisbursementConsumers(queue: Queue): void {
       await audit(tx, msg, "pfms_reconcile", "grant_pfms_records", (msg.payload as any).id ?? "batch");
     });
   });
+
+  // Mark a disbursement as submitted to eOffice for administrative approval.
+  // The decision returns on grant.disbursement.file_decided (see eoffice-consumer).
+  queue.subscribe(COMMANDS.disbursementSubmitApproval, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const disbursement = await repo.findDisbursementByIdTx(tx, p.id, p.tenantId);
+      if (!disbursement) return;
+      await repo.updateDisbursement(tx, p.id, { status: "pending_approval", updatedBy: msg.actorId });
+      await audit(tx, msg, "submit_for_eoffice_approval", "grant_disbursement", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "disbursement", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {

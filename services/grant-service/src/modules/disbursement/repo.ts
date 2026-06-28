@@ -76,6 +76,12 @@ export async function findDisbursementByPfmsTxnId(pfmsTxnId: string, tenantId: s
   return rows[0] ?? null;
 }
 
+export async function findDisbursementByIdTx(tx: Writer, id: string, tenantId: string): Promise<DisbursementRow | null> {
+  const rows = await (tx as typeof db).select().from(grantDisbursements)
+    .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertPfmsRecord(tx: Writer, row: PfmsRecordInsert): Promise<void> {
   await tx.insert(grantPfmsRecords).values(row);
 }

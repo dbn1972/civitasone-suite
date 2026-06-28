@@ -20,6 +20,15 @@ export async function findPaymentById(id: string): Promise<PaymentRow | null> {
   return rows[0] ?? null;
 }
 
+export async function findPaymentByIdTx(tx: Writer, id: string): Promise<PaymentRow | null> {
+  const rows = await (tx as typeof db).select().from(financePayments).where(eq(financePayments.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updatePayment(tx: Writer, id: string, patch: Partial<PaymentInsert>): Promise<void> {
+  await tx.update(financePayments).set({ ...patch, updatedAt: new Date() }).where(eq(financePayments.id, id));
+}
+
 export async function insertBill(tx: Writer, row: BillInsert): Promise<void> {
   await tx.insert(financeBills).values(row);
 }
