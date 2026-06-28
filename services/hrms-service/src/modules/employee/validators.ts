@@ -14,7 +14,7 @@ export const createEmployeeBody = z.object({
   email:         z.string().email().optional(),
   bankAccountNo: z.string().optional(),
   bankIfsc:      z.string().max(16).optional(),
-  employeeType:  z.enum(["permanent", "temporary", "contract", "deputation"]).default("permanent"),
+  employeeType:  z.enum(["permanent", "temporary", "contract", "deputation", "intern", "apprentice", "volunteer"]).default("permanent"),
   basicMinor:    z.number().int().nonnegative().default(0),
   currency:      z.string().length(3).default("INR"),
   payStructureId: z.string().uuid().optional(),

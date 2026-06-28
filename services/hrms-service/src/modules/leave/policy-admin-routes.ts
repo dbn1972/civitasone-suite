@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 
 const HR_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
-const employeeTypeEnum = z.enum(["permanent", "contractual", "vendor_deputed", "deputation", "consultant", "temporary"]);
+const employeeTypeEnum = z.enum(["permanent", "contractual", "vendor_deputed", "deputation", "consultant", "temporary", "intern", "apprentice", "volunteer"]);
 const countMethodEnum = z.enum(["calendar", "working_days"]);
 
 const createPolicyBody = z.object({
