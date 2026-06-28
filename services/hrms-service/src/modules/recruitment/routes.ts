@@ -35,6 +35,52 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createApplication(ctx, body));
   });
 
+  // Talent pool: search all applications across openings (filter by skill, experience, source).
+  app.get("/v1/hrms/talent-pool", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const q = req.query as { skill?: string; minExp?: string; source?: string; limit?: string };
+    const rows = await repo.searchApplications(ctx.tenantId, {
+      skill: q.skill || undefined,
+      minExp: q.minExp ? Number(q.minExp) : undefined,
+      source: q.source || undefined,
+    }, Math.min(200, Number(q.limit) || 100));
+    return reply.send({
+      data: rows.map((r) => ({
+        id: r.id,
+        applicantName: r.applicantName,
+        email: r.email,
+        mobile: r.mobile,
+        qualification: r.qualification,
+        experienceYears: r.experienceYears,
+        skills: r.skills,
+        source: r.source,
+        stage: r.stage,
+        jobOpeningId: r.jobOpeningId,
+        appliedAt: r.appliedAt,
+      })),
+    });
+  });
+
+  // Recruitment dashboard stats (vacancy counts, source breakdown).
+  app.get("/v1/hrms/recruitment/dashboard", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const openings = await repo.listJobOpeningsByTenant(ctx.tenantId, 500);
+    const sourceCounts = await repo.countApplicationsBySource(ctx.tenantId);
+    const open = openings.filter((o) => o.status === "open").length;
+    const published = openings.filter((o) => o.isPublished === "true").length;
+    const internships = openings.filter((o) => o.vacancyType === "internship" || o.vacancyType === "apprenticeship").length;
+    return reply.send({
+      totalOpenings: openings.length,
+      openVacancies: open,
+      publishedVacancies: published,
+      internshipsApprenticeships: internships,
+      applicationsInternal: sourceCounts.internal,
+      applicationsPublic: sourceCounts.public,
+    });
+  });
+
   app.patch("/v1/hrms/applications/:id/offer", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);

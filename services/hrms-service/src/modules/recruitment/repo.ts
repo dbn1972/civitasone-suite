@@ -118,3 +118,42 @@ export async function findJobOpeningById(id: string): Promise<JobOpeningRow | nu
     .limit(1);
   return rows[0] ?? null;
 }
+
+// --- Talent Pool (resume bank / candidate search) ---
+
+export async function searchApplications(
+  tenantId: string,
+  filters: { skill?: string; minExp?: number; source?: string },
+  limit = 100,
+): Promise<ApplicationRow[]> {
+  const conds = [eq(hrmsApplications.tenantId, tenantId)];
+  if (filters.source) conds.push(eq(hrmsApplications.source, filters.source));
+  // Skill filter uses array containment (requires GIN index).
+  // For simplicity, we filter in JS after fetch (acceptable for <10k rows per tenant).
+  let rows = await db.select().from(hrmsApplications)
+    .where(and(...conds))
+    .orderBy(desc(hrmsApplications.appliedAt))
+    .limit(limit * 2); // over-fetch to compensate for JS filters
+
+  if (filters.skill) {
+    const s = filters.skill.toLowerCase();
+    rows = rows.filter((r) => (r.skills as string[] | null)?.some((sk) => sk.toLowerCase().includes(s)));
+  }
+  if (filters.minExp !== undefined) {
+    rows = rows.filter((r) => (r.experienceYears ?? 0) >= filters.minExp!);
+  }
+  return rows.slice(0, limit);
+}
+
+export async function countApplicationsBySource(tenantId: string): Promise<{ internal: number; public: number }> {
+  const rows = await db.select({ source: hrmsApplications.source, count: sql<number>`count(*)::int` })
+    .from(hrmsApplications)
+    .where(eq(hrmsApplications.tenantId, tenantId))
+    .groupBy(hrmsApplications.source);
+  let internal = 0, pub = 0;
+  for (const r of rows) {
+    if (r.source === "public_portal") pub = r.count;
+    else internal += r.count;
+  }
+  return { internal, public: pub };
+}

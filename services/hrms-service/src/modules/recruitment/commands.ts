@@ -54,9 +54,11 @@ import type { PublicApplicationBody } from "./validators.js";
  */
 export async function createPublicApplication(tenantId: string, body: PublicApplicationBody): Promise<{ id: string; status: string }> {
   const id = randomUUID();
+  // Public applications use a system actor UUID (the actorId column is uuid type).
+  const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
   await queue.publish(COMMANDS.applicationCreate, {
     messageId: id, type: COMMANDS.applicationCreate,
-    tenantId, actorId: "public", correlationId: id, schemaVersion: "1.0",
+    tenantId, actorId: SYSTEM_ACTOR, correlationId: id, schemaVersion: "1.0",
     payload: {
       id, tenantId, jobOpeningId: body.jobOpeningId,
       applicantName: body.applicantName, email: body.email,
