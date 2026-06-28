@@ -1,0 +1,36 @@
+import { eq, and, asc } from "drizzle-orm";
+import { db } from "../../shared/db.js";
+import { estabFileOperator } from "./schema.js";
+import type { OperatorRow, OperatorInsert } from "./schema.js";
+
+export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+export async function findOperatorById(id: string, tenantId: string): Promise<OperatorRow | null> {
+  const rows = await db.select().from(estabFileOperator)
+    .where(and(eq(estabFileOperator.id, id), eq(estabFileOperator.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listOperators(tenantId: string, limit: number): Promise<OperatorRow[]> {
+  return db.select().from(estabFileOperator)
+    .where(eq(estabFileOperator.tenantId, tenantId))
+    .orderBy(asc(estabFileOperator.division), asc(estabFileOperator.deskRole))
+    .limit(limit);
+}
+
+/** Active desks for a given employee (an employee may hold desks in >1 division). */
+export async function findActiveOperatorsForEmployee(tenantId: string, employeeId: string): Promise<OperatorRow[]> {
+  return db.select().from(estabFileOperator).where(and(
+    eq(estabFileOperator.tenantId, tenantId),
+    eq(estabFileOperator.employeeId, employeeId),
+    eq(estabFileOperator.active, true),
+  ));
+}
+
+export async function insertOperator(tx: Writer, row: OperatorInsert): Promise<void> {
+  await tx.insert(estabFileOperator).values(row);
+}
+
+export async function updateOperator(tx: Writer, id: string, patch: Partial<OperatorInsert>): Promise<void> {
+  await tx.update(estabFileOperator).set({ ...patch, updatedAt: new Date() }).where(eq(estabFileOperator.id, id));
+}

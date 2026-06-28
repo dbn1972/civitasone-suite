@@ -31,6 +31,19 @@ export const COMMANDS = {
   fileFromModule:       "estab.file.from_module",
   approvalRuleCreate:   "estab.approval_rule.create",
   approvalRuleUpdate:   "estab.approval_rule.update",
+  dfaCreate:            "estab.dfa.create",
+  dfaUpdate:            "estab.dfa.update",
+  dfaSubmit:            "estab.dfa.submit",
+  dfaApprove:           "estab.dfa.approve",
+  dfaReturn:            "estab.dfa.return",
+  dfaSign:              "estab.dfa.sign",
+  dfaDispatch:          "estab.dfa.dispatch",
+  addressCreate:        "estab.address.create",
+  handoverCreate:       "estab.handover.create",
+  migrationRegister:    "estab.migration.register",
+  migrationLink:        "estab.migration.link",
+  operatorEnrol:        "estab.operator.enrol",
+  operatorUpdate:       "estab.operator.update",
 } as const;
 
 /**

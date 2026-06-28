@@ -15,6 +15,11 @@ import { legalRoutes }     from "./modules/legal/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { linkageRoutes }   from "./modules/linkage/routes.js";
 import { approvalRulesRoutes } from "./modules/approval-rules/routes.js";
+import { dfaRoutes }        from "./modules/dfa/routes.js";
+import { handoverRoutes }   from "./modules/handover/routes.js";
+import { migrationRoutes }  from "./modules/migration/routes.js";
+import { operatorRoutes }   from "./modules/operators/routes.js";
+import { notificationRoutes } from "./modules/notifications/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -37,6 +42,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(linkageRoutes);
   await app.register(approvalRulesRoutes);
+  await app.register(dfaRoutes);
+  await app.register(handoverRoutes);
+  await app.register(migrationRoutes);
+  await app.register(operatorRoutes);
+  await app.register(notificationRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

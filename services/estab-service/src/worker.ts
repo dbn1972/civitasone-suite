@@ -10,6 +10,10 @@ import { registerLegalConsumers }     from "./modules/legal/consumer.js";
 import { registerRtiIntakeConsumers } from "./modules/legal/intake-consumer.js";
 import { registerLinkageConsumers }   from "./modules/linkage/consumer.js";
 import { registerApprovalRuleConsumers } from "./modules/approval-rules/consumer.js";
+import { registerDfaConsumers }       from "./modules/dfa/consumer.js";
+import { registerHandoverConsumers }  from "./modules/handover/consumer.js";
+import { registerMigrationConsumers } from "./modules/migration/consumer.js";
+import { registerOperatorConsumers }  from "./modules/operators/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -21,6 +25,10 @@ registerLegalConsumers(queue);
 registerRtiIntakeConsumers(queue);
 registerLinkageConsumers(queue);
 registerApprovalRuleConsumers(queue);
+registerDfaConsumers(queue);
+registerHandoverConsumers(queue);
+registerMigrationConsumers(queue);
+registerOperatorConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
