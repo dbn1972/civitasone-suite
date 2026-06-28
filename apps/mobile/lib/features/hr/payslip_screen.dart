@@ -122,6 +122,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
   }
 
   Widget _buildSlipCard(ThemeData theme, Map<String, dynamic> slip) {
+    final slipId = slip['id'] as String? ?? slip['month'] as String;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -134,13 +135,16 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withOpacity(0.1),
+                  Hero(
+                    tag: 'payslip_icon_$slipId',
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.receipt_long, color: Color(0xFF6366F1)),
+                    child: Icon(Icons.receipt_long, color: theme.colorScheme.primary),
+                  ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -156,7 +160,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                         Text(
                           'Net Pay: ${_formatCurrency(slip['netPay'] as double)}',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF22C55E),
+                            color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),

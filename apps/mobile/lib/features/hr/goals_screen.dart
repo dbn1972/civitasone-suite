@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
+import '../../core/theme/app_colors.dart';
 
 /// Goals / OKR tracking — set goals, track progress, check-in.
 /// GET /v1/hrms/goals
@@ -35,24 +36,37 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
 
   Future<void> _checkin(String goalId, int progress) async {
     final controller = TextEditingController();
+    int sliderProgress = progress;
     final result = await showDialog<int>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Progress Check-in'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Update progress: $progress%'),
-          Slider(
-            value: progress.toDouble(),
-            min: 0, max: 100, divisions: 20,
-            label: '$progress%',
-            onChanged: (v) {},
-          ),
-          TextField(controller: controller, decoration: const InputDecoration(hintText: 'Note (optional)'), maxLines: 2),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, progress), child: const Text('Save')),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Progress Check-in'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Update progress: $sliderProgress%',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Slider(
+              value: sliderProgress.toDouble(),
+              min: 0, max: 100, divisions: 20,
+              label: '$sliderProgress%',
+              onChanged: (v) => setDialogState(() => sliderProgress = v.round()),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'Note (optional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, sliderProgress), child: const Text('Save')),
+          ],
+        ),
       ),
     );
     if (result == null) return;
@@ -62,10 +76,10 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
       _fetchGoals();
       if (mounted && result >= 100) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🎉 Goal completed! +50 points'), backgroundColor: Color(0xFF15803D)));
+          SnackBar(content: const Text('🎉 Goal completed! +50 points'), backgroundColor: Theme.of(context).extension<AppColors>()?.snackbarSuccess ?? const Color(0xFF15803D)));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Theme.of(context).colorScheme.error));
     }
   }
 

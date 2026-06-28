@@ -120,14 +120,14 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE0E7FF),
+                                color: Theme.of(ctx).colorScheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 '${data['days'] ?? '?'} days',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF4338CA),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(ctx).colorScheme.onPrimaryContainer,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

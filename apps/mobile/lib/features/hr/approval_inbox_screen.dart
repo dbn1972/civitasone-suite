@@ -189,11 +189,11 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                   child: Text(
                     (request['employeeName'] as String).substring(0, 1),
-                    style: const TextStyle(
-                      color: Color(0xFF6366F1),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -221,7 +221,7 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withOpacity(0.1),
+                    color: Theme.of(context).colorScheme.tertiaryContainer,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -229,7 +229,7 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: Colors.amber.shade800,
+                      color: Theme.of(context).colorScheme.onTertiaryContainer,
                     ),
                   ),
                 ),
