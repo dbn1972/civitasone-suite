@@ -7,6 +7,9 @@ import 'core/background_sync.dart';
 import 'core/providers.dart';
 import 'core/shell/app_shell.dart';
 import 'core/theme/app_colors.dart';
+import 'core/splash_screen.dart';
+import 'core/auth/biometric_lock.dart';
+import 'core/auth/lock_screen.dart';
 import 'features/finance/payments_screen.dart';
 import 'features/finance/journal_screen.dart';
 import 'features/hr/hr_module.dart';
@@ -68,13 +71,24 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
   Widget build(BuildContext context) {
     final ref = this.ref;
     final router = GoRouter(
-      initialLocation: '/login',
+      initialLocation: '/splash',
       redirect: (context, state) async {
+        final path = state.matchedLocation;
+
+        // Splash screen handles its own transition
+        if (path == '/splash') return null;
+
+        // Check if user has a valid session (Gmail-style: token persists)
         final token = await ref.read(authProvider).accessToken();
-        if (token == null && state.matchedLocation != '/login') return '/login';
+        if (token == null && path != '/login') return '/login';
+        if (token != null && path == '/login') return '/dashboard';
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/splash',
+          builder: (_, __) => _SplashRouter(auth: ref.read(authProvider)),
+        ),
         GoRoute(
           path: '/login',
           builder: (_, __) => LoginScreen(auth: ref.read(authProvider)),
@@ -366,4 +380,41 @@ class DashboardScreen extends StatelessWidget {
     (label: 'Projects', icon: Icons.folder, route: '/projects', color: Color(0xFFEC4899), description: 'Tasks, milestones, resources'),
     (label: 'MIS Reports', icon: Icons.bar_chart, route: '/mis', color: Color(0xFF10B981), description: 'Analytics, dashboards'),
   ];
+}
+
+/// Splash → checks token → routes to dashboard or login.
+/// Gmail-style: if refresh token exists, skip login, just show biometric lock.
+class _SplashRouter extends StatefulWidget {
+  const _SplashRouter({required this.auth});
+  final PkceAuthService auth;
+
+  @override
+  State<_SplashRouter> createState() => _SplashRouterState();
+}
+
+class _SplashRouterState extends State<_SplashRouter> {
+  @override
+  void initState() {
+    super.initState();
+    _checkSession();
+  }
+
+  Future<void> _checkSession() async {
+    // Give splash a minimum display time (brand impression)
+    await Future.delayed(const Duration(milliseconds: 1200));
+
+    final token = await widget.auth.accessToken();
+    if (!mounted) return;
+
+    if (token != null) {
+      // User has valid session — go to dashboard (biometric lock will be added here)
+      context.go('/dashboard');
+    } else {
+      // No session — show login
+      context.go('/login');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => const SplashScreen();
 }
