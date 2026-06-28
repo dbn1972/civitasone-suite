@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/auth/pkce_auth.dart';
 import 'core/background_sync.dart';
 import 'core/providers.dart';
@@ -107,6 +108,15 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
     return MaterialApp.router(
       title: 'CivitasOne Suite',
       routerConfig: router,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('hi'),
+      ],
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF6366F1),
