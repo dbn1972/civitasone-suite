@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -11,17 +12,20 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "Rajesh Verma", department: "Finance", category: "Office Supplies", amount: "₹4,500", claimDate: "10/07/2024", description: "Printer cartridges and paper", status: "approved" },
-  { id: "2", employee: "Priya Sharma", department: "HR", category: "Training", amount: "₹15,000", claimDate: "05/07/2024", description: "Workshop registration fee", status: "approved" },
-  { id: "3", employee: "Amit Patel", department: "IT", category: "Equipment", amount: "₹32,000", claimDate: "12/07/2024", description: "External monitor and keyboard", status: "pending" },
-  { id: "4", employee: "Sunita Rao", department: "Legal", category: "Travel", amount: "₹8,750", claimDate: "18/06/2024", description: "Court visit — auto and meals", status: "approved" },
-  { id: "5", employee: "Vikram Singh", department: "Admin", category: "Maintenance", amount: "₹22,000", claimDate: "01/07/2024", description: "Office AC repair", status: "rejected" },
-  { id: "6", employee: "Deepak Kumar", department: "IT", category: "Software", amount: "₹12,500", claimDate: "20/07/2024", description: "Annual license renewal", status: "pending" },
-  { id: "7", employee: "Kavita Nair", department: "Procurement", category: "Travel", amount: "₹6,200", claimDate: "15/07/2024", description: "Vendor site visit", status: "pending" },
-];
+async function getData(): Promise<Row[]> {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/expense-claims", [], {
+    telemetryKey: "hr.expenses",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+  return r.data;
+}
 
-export default function ExpensesPage() {
+export default async function ExpensesPage() {
+  const items = await getData();
+
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const rejected = items.filter((i) => i.status === "rejected").length;

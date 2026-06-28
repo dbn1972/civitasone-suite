@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -11,16 +12,20 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "Rajesh Verma", fromOffice: "Finance, Delhi", toOffice: "Accounts, Lucknow", transferDate: "15/03/2024", orderNo: "TR/2024/0341", relievingDate: "30/03/2024", status: "completed" },
-  { id: "2", employee: "Sunita Rao", fromOffice: "Legal, Hyderabad", toOffice: "Legal, Chennai", transferDate: "01/04/2024", orderNo: "TR/2024/0398", relievingDate: "—", status: "pending" },
-  { id: "3", employee: "Deepak Kumar", fromOffice: "IT, Bangalore", toOffice: "IT, Pune", transferDate: "10/05/2024", orderNo: "TR/2024/0415", relievingDate: "25/05/2024", status: "completed" },
-  { id: "4", employee: "Anita Deshmukh", fromOffice: "Admin, Mumbai", toOffice: "Admin, Nagpur", transferDate: "20/06/2024", orderNo: "TR/2024/0467", relievingDate: "—", status: "pending" },
-  { id: "5", employee: "Suresh Reddy", fromOffice: "Procurement, Chennai", toOffice: "Procurement, Kochi", transferDate: "05/02/2024", orderNo: "TR/2024/0189", relievingDate: "18/02/2024", status: "completed" },
-  { id: "6", employee: "Kavita Nair", fromOffice: "HR, Delhi", toOffice: "HR, Kolkata", transferDate: "12/07/2024", orderNo: "TR/2024/0501", relievingDate: "—", status: "approved" },
-];
+async function getData(): Promise<Row[]> {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/transfers", [], {
+    telemetryKey: "hr.transfer",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+  return r.data;
+}
 
-export default function TransferPage() {
+export default async function TransferPage() {
+  const items = await getData();
+
   const completed = items.filter((i) => i.status === "completed").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;

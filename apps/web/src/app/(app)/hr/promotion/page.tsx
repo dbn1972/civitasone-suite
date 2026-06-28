@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -11,16 +12,20 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "Priya Sharma", department: "HR", fromGrade: "Level 7", toGrade: "Level 8", effectiveDate: "01/04/2024", orderNo: "PR/2024/0112", status: "approved" },
-  { id: "2", employee: "Amit Patel", department: "IT", fromGrade: "Level 8", toGrade: "Level 9", effectiveDate: "01/04/2024", orderNo: "PR/2024/0113", status: "approved" },
-  { id: "3", employee: "Sunita Rao", department: "Legal", fromGrade: "Level 10", toGrade: "Level 11", effectiveDate: "01/07/2024", orderNo: "PR/2024/0187", status: "pending" },
-  { id: "4", employee: "Vikram Singh", department: "Admin", fromGrade: "Level 5", toGrade: "Level 6", effectiveDate: "01/04/2024", orderNo: "PR/2024/0114", status: "approved" },
-  { id: "5", employee: "Deepak Kumar", department: "IT", fromGrade: "Level 9", toGrade: "Level 10", effectiveDate: "01/07/2024", orderNo: "PR/2024/0188", status: "pending" },
-  { id: "6", employee: "Kavita Nair", department: "Finance", fromGrade: "Level 6", toGrade: "Level 7", effectiveDate: "01/01/2024", orderNo: "PR/2024/0045", status: "completed" },
-];
+async function getData(): Promise<Row[]> {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/promotions", [], {
+    telemetryKey: "hr.promotion",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+  return r.data;
+}
 
-export default function PromotionPage() {
+export default async function PromotionPage() {
+  const items = await getData();
+
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const completed = items.filter((i) => i.status === "completed").length;

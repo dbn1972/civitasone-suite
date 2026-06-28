@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -11,16 +12,20 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "R.K. Mehta", department: "Finance", designation: "Director", dob: "15/08/1964", superannuationDate: "31/08/2024", separationType: "Superannuation", status: "pending" },
-  { id: "2", employee: "S.N. Prasad", department: "Admin", designation: "Under Secretary", dob: "22/09/1964", superannuationDate: "30/09/2024", separationType: "Superannuation", status: "pending" },
-  { id: "3", employee: "K.L. Sharma", department: "Accounts", designation: "Sr. Accounts Officer", dob: "10/10/1964", superannuationDate: "31/10/2024", separationType: "Superannuation", status: "pending" },
-  { id: "4", employee: "M. Venkatesh", department: "IT", designation: "Joint Director", dob: "05/12/1964", superannuationDate: "31/12/2024", separationType: "Superannuation", status: "pending" },
-  { id: "5", employee: "P.S. Rawat", department: "Legal", designation: "Law Officer", dob: "18/03/1964", superannuationDate: "31/03/2024", separationType: "Superannuation", status: "completed" },
-  { id: "6", employee: "A.K. Joshi", department: "Procurement", designation: "Deputy Director", dob: "28/06/1964", superannuationDate: "30/06/2024", separationType: "VRS", status: "completed" },
-];
+async function getData(): Promise<Row[]> {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/retirements", [], {
+    telemetryKey: "hr.retirement",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+  return r.data;
+}
 
-export default function RetirementPage() {
+export default async function RetirementPage() {
+  const items = await getData();
+
   const upcoming = items.filter((i) => i.status === "pending").length;
   const completed = items.filter((i) => i.status === "completed").length;
   const vrs = items.filter((i) => i.separationType === "VRS").length;

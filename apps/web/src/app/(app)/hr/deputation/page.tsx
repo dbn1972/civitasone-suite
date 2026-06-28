@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -11,16 +12,20 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "Amit Patel", parentOrg: "MeitY", deputationOrg: "NIC, Delhi", fromDate: "10/01/2024", toDate: "09/01/2026", period: "2 years", status: "active" },
-  { id: "2", employee: "Rekha Gupta", parentOrg: "DoT", deputationOrg: "TRAI, Noida", fromDate: "01/06/2023", toDate: "31/05/2025", period: "2 years", status: "active" },
-  { id: "3", employee: "Manoj Tiwari", parentOrg: "MoF", deputationOrg: "NITI Aayog", fromDate: "15/04/2022", toDate: "14/04/2024", period: "2 years", status: "completed" },
-  { id: "4", employee: "Neha Kapoor", parentOrg: "MoD", deputationOrg: "DRDO, Hyderabad", fromDate: "01/08/2024", toDate: "31/07/2026", period: "2 years", status: "pending" },
-  { id: "5", employee: "Suresh Reddy", parentOrg: "MHA", deputationOrg: "NDMA, Delhi", fromDate: "20/03/2023", toDate: "19/03/2025", period: "2 years", status: "active" },
-  { id: "6", employee: "Anita Deshmukh", parentOrg: "MoHFW", deputationOrg: "AIIMS, Delhi", fromDate: "01/09/2024", toDate: "31/08/2026", period: "2 years", status: "pending" },
-];
+async function getData(): Promise<Row[]> {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/deputation", [], {
+    telemetryKey: "hr.deputation",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+  return r.data;
+}
 
-export default function DeputationPage() {
+export default async function DeputationPage() {
+  const items = await getData();
+
   const active = items.filter((i) => i.status === "active").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const completed = items.filter((i) => i.status === "completed").length;
