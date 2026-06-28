@@ -6,6 +6,7 @@ import {
   decisionCallbackPayload,
 } from "./contracts.js";
 import { callbackTopicFor, callbackTopicsFor, parseDecisionCallback } from "./callbacks.js";
+import { onDecision } from "./decision-handler.js";
 
 const REF_ID = "11111111-1111-1111-1111-111111111111";
 const OFFICER = "22222222-2222-2222-2222-222222222222";
@@ -154,5 +155,33 @@ describe("parseDecisionCallback", () => {
 
   it("schema is exported for consumers", () => {
     expect(decisionCallbackPayload).toBeDefined();
+  });
+});
+
+describe("onDecision dispatcher", () => {
+  const cb = {
+    fileId: REF_ID, fileNo: "FIN/2026/1", refType: "procurement_po",
+    refId: REF_ID, decision: "approved", decidedBy: OFFICER, decidedAt: new Date().toISOString(),
+  };
+
+  it("routes approved/rejected/returned to the right handler with ctx passthrough", async () => {
+    const calls: string[] = [];
+    const dispatch = onDecision<{ tag: string }>({
+      onApproved: (_c, ctx) => { calls.push("approved:" + ctx.tag); },
+      onRejected: () => { calls.push("rejected"); },
+      onReturned: () => { calls.push("returned"); },
+    });
+    expect(await dispatch(cb, { tag: "tx1" })).toEqual({ handled: true, decision: "approved" });
+    expect(await dispatch({ ...cb, decision: "rejected" }, { tag: "x" })).toEqual({ handled: true, decision: "rejected" });
+    expect(calls).toEqual(["approved:tx1", "rejected"]);
+  });
+
+  it("reports invalid payloads and missing handlers", async () => {
+    let invalidErr = "";
+    const dispatch = onDecision({ onInvalid: (e) => { invalidErr = e; } });
+    expect(await dispatch({ bad: true }, null)).toEqual({ handled: false, reason: "invalid" });
+    expect(invalidErr.length).toBeGreaterThan(0);
+    // valid payload but no handler registered for "approved"
+    expect(await dispatch(cb, null)).toEqual({ handled: false, reason: "no_handler" });
   });
 });

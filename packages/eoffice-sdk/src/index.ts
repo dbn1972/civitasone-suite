@@ -47,6 +47,12 @@ export {
 } from "./callbacks.js";
 
 export {
+  onDecision,
+  type DecisionHandlers,
+  type DecisionDispatchResult,
+} from "./decision-handler.js";
+
+export {
   SOURCE_REF_TYPES,
   CLASSIFICATIONS,
   PRIORITIES,
