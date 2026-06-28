@@ -1,0 +1,99 @@
+/**
+ * Custom Employee Type Master — tenants can define ANY employee category.
+ *
+ * Instead of a hardcoded enum, each tenant manages their own types:
+ * "Permanent", "Contract", "Intern", "Visiting Faculty", "Fellow",
+ * "Part-time", "Apprentice", "Volunteer", etc.
+ *
+ * Each type carries metadata: whether they get leave, whether they run through
+ * payroll, what their default probation period is, etc.
+ */
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+
+const HR_ROLES = ["hr_admin", "super_admin", "admin"];
+
+const employeeSchema = pgSchema("employee");
+const employeeTypeMaster = employeeSchema.table("hrms_employee_types", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  code: varchar("code", { length: 24 }).notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  description: varchar("description", { length: 500 }),
+  // Configuration flags
+  eligibleForLeave: boolean("eligible_for_leave").notNull().default(true),
+  eligibleForPayroll: boolean("eligible_for_payroll").notNull().default(true),
+  eligibleForAppraisal: boolean("eligible_for_appraisal").notNull().default(true),
+  defaultProbationMonths: integer("default_probation_months").notNull().default(0),
+  maxContractMonths: integer("max_contract_months"),  // null = unlimited
+  payMode: varchar("pay_mode", { length: 16 }).notNull().default("monthly"), // monthly|hourly|consolidated|stipend|none
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+const createBody = z.object({
+  code: z.string().min(1).max(24),
+  name: z.string().min(2).max(120),
+  description: z.string().max(500).optional(),
+  eligibleForLeave: z.boolean().default(true),
+  eligibleForPayroll: z.boolean().default(true),
+  eligibleForAppraisal: z.boolean().default(true),
+  defaultProbationMonths: z.number().int().nonnegative().default(0),
+  maxContractMonths: z.number().int().positive().optional(),
+  payMode: z.enum(["monthly", "hourly", "consolidated", "stipend", "none"]).default("monthly"),
+  sortOrder: z.number().int().nonnegative().default(0),
+});
+
+export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
+  // List all employee types for this tenant
+  app.get("/v1/hrms/employee-types", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "manager", "officer"]);
+    const rows = await db.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, ctx.tenantId));
+    return reply.send({ data: rows });
+  });
+
+  // Create a new employee type
+  app.post("/v1/hrms/employee-types", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = createBody.parse(req.body);
+    const id = randomUUID();
+    await db.insert(employeeTypeMaster).values({
+      id, tenantId: ctx.tenantId, ...body,
+      description: body.description ?? null,
+      maxContractMonths: body.maxContractMonths ?? null,
+      createdBy: ctx.actorId,
+    }).onConflictDoNothing();
+    return reply.code(201).send({ id, status: "created" });
+  });
+
+  // Update an employee type
+  app.patch("/v1/hrms/employee-types/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = createBody.partial().parse(req.body);
+    const patch: Record<string, unknown> = {};
+    if (body.code !== undefined) patch.code = body.code;
+    if (body.name !== undefined) patch.name = body.name;
+    if (body.description !== undefined) patch.description = body.description ?? null;
+    if (body.eligibleForLeave !== undefined) patch.eligibleForLeave = body.eligibleForLeave;
+    if (body.eligibleForPayroll !== undefined) patch.eligibleForPayroll = body.eligibleForPayroll;
+    if (body.eligibleForAppraisal !== undefined) patch.eligibleForAppraisal = body.eligibleForAppraisal;
+    if (body.defaultProbationMonths !== undefined) patch.defaultProbationMonths = body.defaultProbationMonths;
+    if (body.maxContractMonths !== undefined) patch.maxContractMonths = body.maxContractMonths;
+    if (body.payMode !== undefined) patch.payMode = body.payMode;
+    if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder;
+    await db.update(employeeTypeMaster).set(patch as any).where(eq(employeeTypeMaster.id, id));
+    return reply.send({ id, status: "updated" });
+  });
+}

@@ -1683,3 +1683,5 @@ export const NotificationDeliverySchema = z.object({
   status: z.enum(["pending", "delivered", "failed", "bounced"]),
 });
 export const NotificationDeliveryListSchema = z.array(NotificationDeliverySchema);
+
+export const PayrollStructureListSchema = z.array(z.object({ id: z.string(), name: z.string() }));

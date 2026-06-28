@@ -86,6 +86,7 @@ export default async function TenantAdminPage() {
           { href: "/tenant-admin/readiness", label: "🎯 Readiness" },
           { href: "/tenant-admin/activation", label: "📈 Activation" },
           { href: "/tenant-admin/platform-config", label: "⚙️ Platform Config" },
+          { href: "/tenant-admin/org-type", label: "🏢 Org Type" },
           { href: "/tenant-admin/install", label: "🧩 Installer" },
           { href: "/tenant-admin/settings", label: "⚙️ Settings" },
           { href: "/tenant-admin/notifications", label: "🔔 Notifications" },
