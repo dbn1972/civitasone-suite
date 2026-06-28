@@ -1,0 +1,70 @@
+/**
+ * Department + Designation master CRUD — needed for first-time tenant setup
+ * so employees can be properly classified.
+ */
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { hrmsDepartments, hrmsDesignations } from "./schema.js";
+
+const HR_ROLES = ["hr_admin", "super_admin", "admin"];
+
+const createDeptBody = z.object({
+  code: z.string().min(1, "Department code is required").max(20),
+  name: z.string().min(2, "Department name is required").max(200),
+  parentId: z.string().uuid().optional(),
+});
+
+const createDesignationBody = z.object({
+  code: z.string().min(1, "Designation code is required").max(20),
+  name: z.string().min(2, "Designation name is required").max(200),
+  level: z.number().int().nonnegative().optional(),
+  payGrade: z.string().max(30).optional(),
+});
+
+export async function mastersRoutes(app: FastifyInstance): Promise<void> {
+  // ── Departments ──
+  app.get("/v1/hrms/departments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const rows = await db.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, ctx.tenantId));
+    return reply.send({ data: rows });
+  });
+
+  app.post("/v1/hrms/departments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = createDeptBody.parse(req.body);
+    const id = randomUUID();
+    await db.insert(hrmsDepartments).values({
+      id, tenantId: ctx.tenantId, code: body.code, name: body.name,
+      parentId: body.parentId ?? null,
+      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    });
+    return reply.code(201).send({ id, status: "created" });
+  });
+
+  // ── Designations ──
+  app.get("/v1/hrms/designations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const rows = await db.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, ctx.tenantId));
+    return reply.send({ data: rows });
+  });
+
+  app.post("/v1/hrms/designations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = createDesignationBody.parse(req.body);
+    const id = randomUUID();
+    await db.insert(hrmsDesignations).values({
+      id, tenantId: ctx.tenantId, code: body.code, name: body.name,
+      level: body.level ?? 0, payGrade: body.payGrade ?? null,
+      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    });
+    return reply.code(201).send({ id, status: "created" });
+  });
+}

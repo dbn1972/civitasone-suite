@@ -44,7 +44,7 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
       skill: q.skill || undefined,
       minExp: q.minExp ? Number(q.minExp) : undefined,
       source: q.source || undefined,
-    }, Math.min(200, Number(q.limit) || 100));
+    } as { skill?: string; minExp?: number; source?: string }, Math.min(200, Number(q.limit) || 100));
     return reply.send({
       data: rows.map((r) => ({
         id: r.id,
