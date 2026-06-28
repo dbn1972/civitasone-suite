@@ -101,19 +101,24 @@ This contract is **uniform across modules** — adding a new decision type is: p
 
 | Decision | source_ref_type | Raise | Callback consumer |
 |----------|-----------------|:-----:|:-----------------:|
-| Finance sanction | `finance_sanction` | ✅ | ✅ (Wave 1) |
-| Finance payment | `finance_payment` | ☐ | ☐ |
+| Finance sanction | `finance_sanction` | ✅ | ✅ |
+| Finance payment | `finance_payment` | ✅ (API) | ✅ |
 | Re-appropriation | `finance_reappropriation` | ☐ | ☐ |
-| Procurement award/PO | `procurement_award` / `procurement_po` | ☐ | ☐ |
+| Procurement award/PO | `procurement_po` | ✅ | ✅ |
 | HR promotion | `hr_promotion` | ☐ | ☐ |
-| HR transfer | `hr_transfer` | ☐ | ☐ |
+| HR transfer | `hr_transfer` | ✅ | ✅ |
 | HR disciplinary | `hr_disciplinary` | ☐ | ☐ |
-| Grant scheme/disbursement | `grant_scheme` / `grant_disbursement` | ☐ | ☐ |
+| Grant scheme/disbursement | `grant_disbursement` | ✅ (API) | ✅ |
 | Asset disposal | `asset_disposal` | ☐ | ☐ |
 | Legal opinion | `legal_opinion` | ☐ | ☐ |
 | Contract award | `contract_award` | ☐ | ☐ |
 
-All 15 `source_ref_type`s and callback topics already exist in the SDK; only the per-module raise button + `file_decided` consumer remain. This is the bulk of "link every decision."
+**Wired end-to-end (2026-06-28):** finance sanction (web+API), procurement PO
+(web+API), HR transfer (web+API), finance payment (API), grant disbursement
+(API). Each follows the identical raise → `*.file_decided` → execute pattern via
+`@civitasone/eoffice-sdk` (`onDecision`/`parseDecisionCallback`). Remaining
+types (re-appropriation, HR promotion/disciplinary, asset disposal, legal
+opinion, contract award) are the same ~½-day pattern each.
 
 ---
 
