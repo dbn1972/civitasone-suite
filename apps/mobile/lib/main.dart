@@ -203,61 +203,123 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+/// Dashboard — employee's home screen with quick actions + today's summary.
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
-  static const _modules = [
-    (label: 'Approvals', icon: Icons.approval, route: '/procurement/approvals', color: Color(0xFF6366F1)),
-    (label: 'Finance', icon: Icons.account_balance, route: '/finance/payments', color: Color(0xFF22C55E)),
-    (label: 'HR', icon: Icons.people, route: '/hr/employees', color: Color(0xFFF59E0B)),
-    (label: 'Procurement', icon: Icons.shopping_cart, route: '/procurement/indents', color: Color(0xFFEF4444)),
-    (label: 'CRM', icon: Icons.contacts, route: '/crm/contacts', color: Color(0xFF8B5CF6)),
-    (label: 'Helpdesk', icon: Icons.support_agent, route: '/helpdesk/tickets', color: Color(0xFF06B6D4)),
-    (label: 'Projects', icon: Icons.folder, route: '/projects', color: Color(0xFFEC4899)),
-    (label: 'MIS', icon: Icons.bar_chart, route: '/mis', color: Color(0xFF10B981)),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('CivitasOne'),
-        centerTitle: false,
-      ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 1.2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+    final theme = Theme.of(context);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Greeting
+        Text(
+          'Good ${_greeting()}',
+          style: theme.textTheme.headlineSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
-        itemCount: _modules.length,
-        itemBuilder: (ctx, i) {
-          final m = _modules[i];
-          return InkWell(
-            onTap: () => context.go(m.route),
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              decoration: BoxDecoration(
-                color: m.color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: m.color.withOpacity(0.3)),
-              ),
+        const SizedBox(height: 4),
+        Text(
+          'What would you like to do today?',
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 20),
+
+        // Quick actions grid
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 4,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.85,
+          children: _quickActions.map((a) {
+            return InkWell(
+              onTap: () => context.go(a.route),
+              borderRadius: BorderRadius.circular(12),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(m.icon, size: 36, color: m.color),
-                  const SizedBox(height: 8),
-                  Text(m.label,
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: a.color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(a.icon, color: a.color, size: 24),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(a.label,
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontWeight: FontWeight.w600, color: m.color)),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: theme.colorScheme.onSurface)),
                 ],
               ),
-            ),
-          );
-        },
-      ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+
+        // Module cards
+        Text('Modules',
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        ..._modules.map((m) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                onTap: () => context.go(m.route),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: m.color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(m.icon, color: m.color, size: 22),
+                ),
+                title: Text(m.label,
+                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                subtitle: Text(m.description,
+                    style: TextStyle(
+                        fontSize: 12, color: theme.colorScheme.outline)),
+                trailing: const Icon(Icons.chevron_right,
+                    color: Color(0xFF94A3B8)),
+              ),
+            )),
+      ],
     );
   }
+
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
+  }
+
+  static const _quickActions = [
+    (label: 'Check In', icon: Icons.location_on, route: '/hr/geo-checkin', color: Color(0xFF22C55E)),
+    (label: 'Leave', icon: Icons.event_note, route: '/hr/leave/apply', color: Color(0xFF6366F1)),
+    (label: 'Payslip', icon: Icons.receipt_long, route: '/hr/payslips', color: Color(0xFFF59E0B)),
+    (label: 'Approvals', icon: Icons.task_alt, route: '/hr/approvals', color: Color(0xFFEF4444)),
+    (label: 'Holidays', icon: Icons.event, route: '/hr/holidays', color: Color(0xFF8B5CF6)),
+    (label: 'Vacancies', icon: Icons.work, route: '/hr/vacancies', color: Color(0xFF06B6D4)),
+    (label: 'Loans', icon: Icons.account_balance_wallet, route: '/hr/loans', color: Color(0xFFEC4899)),
+    (label: 'Team', icon: Icons.people, route: '/hr/team', color: Color(0xFF10B981)),
+  ];
+
+  static const _modules = [
+    (label: 'HR & Self-Service', icon: Icons.people, route: '/hr/dashboard', color: Color(0xFFF59E0B), description: 'Leave, attendance, payslip, profile'),
+    (label: 'Finance', icon: Icons.account_balance, route: '/finance/payments', color: Color(0xFF22C55E), description: 'Payments, journals, vouchers'),
+    (label: 'Procurement', icon: Icons.shopping_cart, route: '/procurement/indents', color: Color(0xFFEF4444), description: 'Indents, POs, approvals'),
+    (label: 'CRM', icon: Icons.contacts, route: '/crm/contacts', color: Color(0xFF8B5CF6), description: 'Contacts, deals, pipeline'),
+    (label: 'Helpdesk', icon: Icons.support_agent, route: '/helpdesk/tickets', color: Color(0xFF06B6D4), description: 'Tickets, SLA, support'),
+    (label: 'Projects', icon: Icons.folder, route: '/projects', color: Color(0xFFEC4899), description: 'Tasks, milestones, resources'),
+    (label: 'MIS Reports', icon: Icons.bar_chart, route: '/mis', color: Color(0xFF10B981), description: 'Analytics, dashboards'),
+  ];
 }

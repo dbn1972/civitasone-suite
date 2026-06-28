@@ -14,6 +14,13 @@ import 'dashboard_screen.dart';
 import 'leave_balance_screen.dart';
 import 'approval_inbox_screen.dart';
 import 'profile_photo_screen.dart';
+import 'grievance_screen.dart';
+import 'vacancies_screen.dart';
+import 'holiday_calendar_screen.dart';
+import 'employee_profile_screen.dart';
+import 'loan_status_screen.dart';
+import 'announcements_screen.dart';
+import 'team_directory_screen.dart';
 
 export 'attendance_screen.dart';
 export 'employees_screen.dart';
@@ -26,6 +33,13 @@ export 'dashboard_screen.dart';
 export 'leave_balance_screen.dart';
 export 'approval_inbox_screen.dart';
 export 'profile_photo_screen.dart';
+export 'grievance_screen.dart';
+export 'vacancies_screen.dart';
+export 'holiday_calendar_screen.dart';
+export 'employee_profile_screen.dart';
+export 'loan_status_screen.dart';
+export 'announcements_screen.dart';
+export 'team_directory_screen.dart';
 
 /// Shell routes — shown inside the bottom-nav AppShell.
 List<GoRoute> hrShellRoutes() => [
@@ -56,6 +70,34 @@ List<GoRoute> hrShellRoutes() => [
       GoRoute(
         path: '/hr/approvals',
         builder: (_, __) => const ApprovalInboxScreen(),
+      ),
+      GoRoute(
+        path: '/hr/grievances',
+        builder: (_, __) => const GrievanceScreen(),
+      ),
+      GoRoute(
+        path: '/hr/vacancies',
+        builder: (_, __) => const VacanciesScreen(),
+      ),
+      GoRoute(
+        path: '/hr/holidays',
+        builder: (_, __) => const HolidayCalendarScreen(),
+      ),
+      GoRoute(
+        path: '/hr/profile',
+        builder: (_, __) => const EmployeeProfileScreen(),
+      ),
+      GoRoute(
+        path: '/hr/loans',
+        builder: (_, __) => const LoanStatusScreen(),
+      ),
+      GoRoute(
+        path: '/hr/team',
+        builder: (_, __) => const TeamDirectoryScreen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (_, __) => const AnnouncementsScreen(),
       ),
     ];
 
