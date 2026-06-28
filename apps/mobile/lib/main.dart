@@ -109,7 +109,14 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF6366F1),
+        brightness: Brightness.light,
       ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF6366F1),
+        brightness: Brightness.dark,
+      ),
+      themeMode: ThemeMode.system,
     );
   }
 }
