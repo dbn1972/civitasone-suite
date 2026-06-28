@@ -96,6 +96,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);
   await app.register((await import("./modules/employee/employee-types-routes.js")).employeeTypeRoutes);
+  await app.register((await import("./modules/employee/loans-routes.js")).loansRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
