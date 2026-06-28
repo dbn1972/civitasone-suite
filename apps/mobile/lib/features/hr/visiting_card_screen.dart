@@ -103,6 +103,7 @@ class _State extends ConsumerState<VisitingCardScreen> {
     final suffix = c['suffix'] as String? ?? '';
     final designation = c['designation'] as String? ?? '';
     final department = c['department'] as String? ?? '';
+    final orgName = c['orgName'] as String? ?? department;
     final tier = c['cardTier'] as String? ?? 'indigo';
     final gradient = _tierGradient(tier);
     final textColor = _tierTextColor(tier);
@@ -119,7 +120,7 @@ class _State extends ConsumerState<VisitingCardScreen> {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Org branding
+          // Org branding — shows COMPANY NAME not product name
           Row(children: [
             Container(
               padding: const EdgeInsets.all(6),
@@ -127,7 +128,7 @@ class _State extends ConsumerState<VisitingCardScreen> {
               child: Icon(Icons.account_balance, size: 16, color: textColor),
             ),
             const SizedBox(width: 8),
-            Text('CivitasOne', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor.withOpacity(0.7))),
+            Flexible(child: Text(orgName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor.withOpacity(0.7)), overflow: TextOverflow.ellipsis)),
             const Spacer(),
             // Tier badge
             Container(

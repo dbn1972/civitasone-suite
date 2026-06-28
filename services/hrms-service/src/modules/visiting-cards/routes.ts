@@ -52,9 +52,11 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
               e.phone, e.employee_code, e.photo_url, e.branch,
               vc.display_name, vc.suffix, vc.title_override, vc.alt_phone, vc.alt_email,
               vc.website, vc.linkedin, vc.twitter, vc.address, vc.tagline,
-              vc.show_personal_phone, vc.card_tier, vc.share_count, vc.scan_count
+              vc.show_personal_phone, vc.card_tier, vc.share_count, vc.scan_count,
+              t.name AS org_name
        FROM hrms.employees e
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
+       LEFT JOIN public.tenants t ON t.id = e.tenant_id
        WHERE e.user_id = $1 AND e.tenant_id = $2`,
       [ctx.userId, ctx.tenantId],
     );
@@ -64,13 +66,15 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
     const name = e.display_name || `${e.first_name} ${e.last_name}`.trim();
     const tier = e.card_tier || inferTier(e.designation ?? "");
+    const orgName = e.org_name || e.department || "";
 
     // Generate vCard string
     const vcard = generateVCard({
       name: name,
       suffix: e.suffix,
       title: e.title_override || e.designation,
-      org: e.department,
+      org: orgName,
+      department: e.department,
       phone: e.phone,
       altPhone: e.show_personal_phone ? e.alt_phone : undefined,
       email: e.email,
@@ -90,6 +94,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
         suffix: e.suffix,
         designation: e.title_override || e.designation,
         department: e.department,
+        orgName,
         branch: e.branch,
         employeeCode: e.employee_code,
         phone: e.phone,
@@ -282,6 +287,7 @@ function generateVCard(opts: {
   suffix?: string;
   title?: string;
   org?: string;
+  department?: string;
   phone?: string;
   altPhone?: string;
   email?: string;
@@ -298,7 +304,13 @@ function generateVCard(opts: {
   ];
 
   if (opts.title) lines.push(`TITLE:${opts.title}`);
-  if (opts.org) lines.push(`ORG:${opts.org}`);
+  if (opts.org) {
+    // ORG format: Company;Department
+    const orgLine = opts.department && opts.department !== opts.org
+      ? `${opts.org};${opts.department}`
+      : opts.org;
+    lines.push(`ORG:${orgLine}`);
+  }
   if (opts.phone) lines.push(`TEL;TYPE=WORK:${opts.phone}`);
   if (opts.altPhone) lines.push(`TEL;TYPE=CELL:${opts.altPhone}`);
   if (opts.email) lines.push(`EMAIL;TYPE=WORK:${opts.email}`);
