@@ -12,6 +12,30 @@
 
 **Verdict: ~70% already done.** The gaps are mostly UI polish and 6 supporting features — NOT architecture. No rebuild needed.
 
+---
+
+## ✅ Phase 1 — Deep integration: DELIVERED (2026-06-28)
+
+The functional deep-integration goal is now met. Shipped:
+
+- **G1 — `@civitasone/eoffice-sdk`**: typed client (`EOfficeClient.raiseFile`,
+  `getFileByRef`, `getDecisionLog`, `resolveApprovalChain`) + single-source-of-truth
+  contracts (`SOURCE_REF_TYPES`, `MODULE_CALLBACK_TOPICS`, decision-callback schema).
+  estab-service now imports these, eliminating contract drift. 11 unit tests.
+- **G2 — config-driven approval matrix**: `files.estab_approval_rule` (migration 0008),
+  amount-band resolver (max-exclusive, unbounded open-end, most-specific-band-wins),
+  CQRS admin routes + `/resolve` preview, and the linkage consumer now auto-routes the
+  approval chain from `source_context.amountMinor`. Admin UI at `/estab/approval-matrix`.
+  4 resolver tests.
+- **G5 — in-module raise control**: `<RaiseEOfficeNote>` reusable web component (live
+  status badge + raise-for-approval form), wired into the finance sanction detail page;
+  drops into PO/transfer/grant/legal screens with prop changes only.
+
+Remaining work is signing (Phase 2), premium UI (Phase 3) and completeness features
+(Phase 4) — none of which block deep integration.
+
+---
+
 | Layer | Match | Effort to Close |
 |-------|:-----:|:---------------:|
 | Domain model | 85% | Low |
@@ -96,11 +120,11 @@
 
 | # | Gap | What's Missing | Effort | Priority |
 |---|-----|----------------|--------|----------|
-| G1 | **eoffice-sdk package** | `@civitasone/eoffice-sdk` typed client: `eOffice.raiseFile({...})` so modules integrate in 3 lines instead of raw HTTP | 2 days | High |
-| G2 | **Approval matrix table + UI** | `estab_approval_rule` (module, sourceType, minAmount, maxAmount, steps) + resolver + admin page | 4 days | High |
+| G1 | ~~**eoffice-sdk package**~~ | ✅ DELIVERED 2026-06-28 | — | Done |
+| G2 | ~~**Approval matrix table + UI**~~ | ✅ DELIVERED 2026-06-28 | — | Done |
 | G3 | **DFA (Draft For Approval) entity** | Outgoing communication editor: template → type/upload → recipients → lifecycle dfa→approved→signed | 4 days | Medium |
 | G4 | **e-Sign OTP + DSC adapters** | `Signer` interface; Aadhaar e-Sign OTP flow (mobile), DSC token (desktop); `estab_signature` entity | 5 days | High |
-| G5 | **In-module "Raise eOffice note" buttons** | Action + status badge inside Finance PO, HR transfer, Procurement award screens | 3 days | High |
+| G5 | ~~**In-module "Raise eOffice note" buttons**~~ | ✅ DELIVERED 2026-06-28 (RaiseEOfficeNote, wired into finance sanction) | — | Done |
 | G6 | **24-screen premium UI** | Port mockup design system (navy/saffron/green tokens), two-pane File Inner Page, Noting editor, approvals queue | 10-15 days | Medium |
 | G7 | **Supporting features** | Address book, transfer/handover, paper→electronic migration, acknowledgement generator, part/volume guided flow | 6 days | Low |
 | G8 | **eOffice notifications center** | Unified stream: signature requested, overdue, pull-back, dispatch follow-up | 2 days | Medium |
