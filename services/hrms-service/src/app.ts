@@ -107,6 +107,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);
   await app.register((await import("./modules/employee/employee-types-routes.js")).employeeTypeRoutes);
   await app.register((await import("./modules/employee/loans-routes.js")).loansRoutes);
+  const { medicalClaimsRoutes } = await import("./modules/medical/routes.js");
+  await app.register(medicalClaimsRoutes);
+  const { workforcePlanningRoutes } = await import("./modules/workforce-planning/routes.js");
+  await app.register(workforcePlanningRoutes);
+  const { aiPredictionsRoutes } = await import("./modules/ai-predictions/routes.js");
+  await app.register(aiPredictionsRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

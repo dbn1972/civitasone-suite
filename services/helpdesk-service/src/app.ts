@@ -24,6 +24,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(ticketRoutes);
   await app.register(slaRoutes);
+  const { slaEngineRoutes } = await import("./modules/sla-engine/routes.js");
+  await app.register(slaEngineRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
