@@ -32,6 +32,7 @@ import 'leaderboard_screen.dart';
 import 'ai_assistant_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_verify_screen.dart';
+import 'visiting_card_screen.dart';
 
 export 'attendance_screen.dart';
 export 'employees_screen.dart';
@@ -62,6 +63,7 @@ export 'leaderboard_screen.dart';
 export 'ai_assistant_screen.dart';
 export 'id_card_screen.dart';
 export 'id_card_verify_screen.dart';
+export 'visiting_card_screen.dart';
 
 /// Shell routes — shown inside the bottom-nav AppShell.
 List<GoRoute> hrShellRoutes() => [
@@ -164,6 +166,10 @@ List<GoRoute> hrShellRoutes() => [
       GoRoute(
         path: '/hr/id-card/verify',
         builder: (_, __) => const IdCardVerifyScreen(),
+      ),
+      GoRoute(
+        path: '/hr/visiting-card',
+        builder: (_, __) => const VisitingCardScreen(),
       ),
     ];
 
