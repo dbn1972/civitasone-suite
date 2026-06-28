@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
+import '../../core/screen_security.dart';
 
 /// Digital ID Card — employee self-service view + QR for gate verification.
 /// GET /v1/hrms/id-cards/me — my active card
@@ -19,7 +20,10 @@ class _IdCardScreenState extends ConsumerState<IdCardScreen> {
   bool _showQr = false;
 
   @override
-  void initState() { super.initState(); _fetchCard(); }
+  void initState() { super.initState(); ScreenSecurity.enableProtection(); _fetchCard(); }
+
+  @override
+  void dispose() { ScreenSecurity.disableProtection(); super.dispose(); }
 
   Future<void> _fetchCard() async {
     setState(() { _loading = true; _error = null; });

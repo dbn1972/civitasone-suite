@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
+import '../../core/screen_security.dart';
 
 /// Payslip listing and detail view.
 /// GET /v1/payroll/salary-slips — list all slips for current employee
@@ -20,7 +21,14 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
   @override
   void initState() {
     super.initState();
+    ScreenSecurity.enableProtection(); // Prevent salary screenshot
     _fetchSlips();
+  }
+
+  @override
+  void dispose() {
+    ScreenSecurity.disableProtection();
+    super.dispose();
   }
 
   Future<void> _fetchSlips() async {

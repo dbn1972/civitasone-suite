@@ -109,6 +109,26 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
       ],
     );
 
+    // SEC: Enforce max device limit (3 devices per user) — prevent credential sharing
+    const MAX_DEVICES_PER_USER = 3;
+    const activeDevices = await sqlClient.query(
+      `SELECT COUNT(*)::int AS count FROM hrms.trusted_devices
+       WHERE tenant_id = $1 AND user_id = $2 AND trust_status = 'trusted'`,
+      [ctx.tenantId, ctx.userId],
+    );
+    if ((activeDevices.rows[0]?.count ?? 0) > MAX_DEVICES_PER_USER) {
+      // Auto-block the oldest device (not the current one)
+      await sqlClient.query(
+        `UPDATE hrms.trusted_devices SET trust_status = 'blocked', blocked_reason = 'max_devices_exceeded'
+         WHERE id = (
+           SELECT id FROM hrms.trusted_devices
+           WHERE tenant_id = $1 AND user_id = $2 AND trust_status = 'trusted' AND device_id != $3
+           ORDER BY last_seen_at ASC LIMIT 1
+         )`,
+        [ctx.tenantId, ctx.userId, body.deviceId],
+      );
+    }
+
     // Log activity
     await sqlClient.query(
       `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)

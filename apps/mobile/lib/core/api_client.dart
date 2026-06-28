@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'auth/pkce_auth.dart';
 
@@ -37,6 +38,15 @@ class ApiClient {
       onRequest: _onRequest,
       onError: _onError,
     ));
+
+    // SEC: Only log in debug mode — never log tokens/bodies in release
+    if (kDebugMode) {
+      _dio.interceptors.add(LogInterceptor(
+        requestBody: false, // Never log request bodies (may contain PII)
+        responseBody: false,
+        requestHeader: false, // Never log auth headers
+      ));
+    }
   }
 
   // ─── Interceptors ────────────────────────────────────────────────────────────
