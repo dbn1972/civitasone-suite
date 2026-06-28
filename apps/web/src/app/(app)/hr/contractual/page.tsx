@@ -1,4 +1,20 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+
+type ApiEmployee = {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  department?: string;
+  agency?: string;
+  designation?: string;
+  contractFrom?: string;
+  contractTo?: string;
+  employmentType?: string;
+  type?: string;
+  status: string;
+};
 
 type Row = {
   id: string;
@@ -11,19 +27,52 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", name: "Sunil Yadav", department: "IT", agency: "TCS iON", designation: "Software Developer", contractFrom: "01/04/2024", contractTo: "31/03/2025", status: "active" },
-  { id: "2", name: "Ritu Mishra", department: "Admin", agency: "Manpower Group", designation: "Data Entry Operator", contractFrom: "01/01/2024", contractTo: "31/12/2024", status: "active" },
-  { id: "3", name: "Mohd Irfan", department: "IT", agency: "Wipro", designation: "Network Engineer", contractFrom: "15/02/2024", contractTo: "14/02/2025", status: "active" },
-  { id: "4", name: "Lakshmi S.", department: "HR", agency: "Randstad", designation: "HR Executive", contractFrom: "01/06/2024", contractTo: "30/11/2024", status: "active" },
-  { id: "5", name: "Rohan Das", department: "Finance", agency: "KPMG", designation: "Accounts Assistant", contractFrom: "01/04/2023", contractTo: "31/03/2024", status: "completed" },
-  { id: "6", name: "Farhan Sheikh", department: "Procurement", agency: "Manpower Group", designation: "Procurement Asst.", contractFrom: "01/07/2024", contractTo: "30/06/2025", status: "active" },
-];
+function formatDate(dateStr: string | undefined): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
 
-export default function ContractualPage() {
+function mapContractual(apiItems: ApiEmployee[]): Row[] {
+  return apiItems
+    .filter((e) => {
+      const t = (e.employmentType ?? e.type ?? "").toLowerCase();
+      return t === "contract" || t === "contractual";
+    })
+    .map((e) => ({
+      id: e.id,
+      name: e.name ?? ([e.firstName, e.lastName].filter(Boolean).join(" ") || e.id),
+      department: e.department ?? "—",
+      agency: e.agency ?? "—",
+      designation: e.designation ?? "—",
+      contractFrom: formatDate(e.contractFrom),
+      contractTo: formatDate(e.contractTo),
+      status: e.status,
+    }));
+}
+
+async function getContractual(): Promise<Row[]> {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=50", [], {
+    telemetryKey: "hr.contractual",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiEmployee[] })?.data;
+      return Array.isArray(arr) ? mapContractual(arr as ApiEmployee[]) : null;
+    },
+  });
+  return res.data;
+}
+
+export default async function ContractualPage() {
+  const items = await getContractual();
+
   const active = items.filter((i) => i.status === "active").length;
-  const completed = items.filter((i) => i.status === "completed").length;
-  const agencies = new Set(items.map((i) => i.agency)).size;
+  const completed = items.filter((i) => i.status === "completed" || i.status === "expired").length;
+  const agencies = new Set(items.map((i) => i.agency).filter((a) => a !== "—")).size;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "name", label: "Name" },

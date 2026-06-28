@@ -1,4 +1,16 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+
+type ApiStructure = {
+  id: string;
+  name: string;
+  grade?: string;
+  components?: string;
+  basicPayRange?: string;
+  effectiveDate?: string;
+  employeeCount?: number;
+  status: string;
+};
 
 type Row = {
   id: string;
@@ -11,18 +23,38 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", name: "Group A — Level 10+", grade: "Level 10–14", components: "Basic, DA, HRA, TA, NPS", basicPay: "₹56,100–₹2,25,000", effectiveDate: "01/01/2024", employees: "45", status: "active" },
-  { id: "2", name: "Group B — Level 6–9", grade: "Level 6–9", components: "Basic, DA, HRA, TA, NPS", basicPay: "₹35,400–₹1,42,400", effectiveDate: "01/01/2024", employees: "120", status: "active" },
-  { id: "3", name: "Group C — Level 1–5", grade: "Level 1–5", components: "Basic, DA, HRA, TA, NPS", basicPay: "₹18,000–₹1,12,400", effectiveDate: "01/01/2024", employees: "310", status: "active" },
-  { id: "4", name: "Contractual Staff", grade: "Consolidated", components: "Consolidated Pay", basicPay: "₹25,000–₹75,000", effectiveDate: "01/04/2024", employees: "85", status: "active" },
-  { id: "5", name: "Deputation — Level 12+", grade: "Level 12–14", components: "Basic, DA, Deputation Allowance", basicPay: "₹78,800–₹2,25,000", effectiveDate: "01/01/2024", employees: "12", status: "active" },
-  { id: "6", name: "Pre-revision (6th CPC)", grade: "PB-2/PB-3", components: "Basic, DA, HRA, TA", basicPay: "₹9,300–₹34,800", effectiveDate: "01/01/2016", employees: "0", status: "completed" },
-];
+function mapStructures(apiItems: ApiStructure[]): Row[] {
+  return apiItems.map((s) => ({
+    id: s.id,
+    name: s.name,
+    grade: s.grade ?? "—",
+    components: s.components ?? "—",
+    basicPay: s.basicPayRange ?? "—",
+    effectiveDate: s.effectiveDate ?? "—",
+    employees: s.employeeCount != null ? String(s.employeeCount) : "—",
+    status: s.status,
+  }));
+}
 
-export default function SalaryStructurePage() {
+async function getStructures(): Promise<Row[]> {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/payroll/structures", [], {
+    telemetryKey: "hr.salary-structures",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiStructure[] })?.data;
+      return Array.isArray(arr) ? mapStructures(arr as ApiStructure[]) : null;
+    },
+  });
+  return res.data;
+}
+
+export default async function SalaryStructurePage() {
+  const items = await getStructures();
+
   const active = items.filter((i) => i.status === "active").length;
-  const totalEmployees = items.reduce((sum, i) => sum + parseInt(i.employees), 0);
+  const totalEmployees = items.reduce((sum, i) => {
+    const n = parseInt(i.employees);
+    return sum + (isNaN(n) ? 0 : n);
+  }, 0);
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "name", label: "Structure Name" },

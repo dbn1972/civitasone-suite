@@ -1,4 +1,15 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+
+type ApiHoliday = {
+  id: string;
+  date: string;
+  day?: string;
+  name: string;
+  type: string;
+  applicableTo?: string;
+  status?: string;
+};
 
 type Row = {
   id: string;
@@ -10,18 +21,52 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", date: "26/01/2024", day: "Friday", name: "Republic Day", type: "Gazetted", applicableTo: "All", status: "active" },
-  { id: "2", date: "29/03/2024", day: "Friday", name: "Good Friday", type: "Gazetted", applicableTo: "All", status: "active" },
-  { id: "3", date: "11/04/2024", day: "Thursday", name: "Idul Fitr", type: "Gazetted", applicableTo: "All", status: "active" },
-  { id: "4", date: "17/04/2024", day: "Wednesday", name: "Ram Navami", type: "Gazetted", applicableTo: "All", status: "active" },
-  { id: "5", date: "15/08/2024", day: "Thursday", name: "Independence Day", type: "Gazetted", applicableTo: "All", status: "active" },
-  { id: "6", date: "02/10/2024", day: "Wednesday", name: "Mahatma Gandhi Jayanti", type: "Gazetted", applicableTo: "All", status: "active" },
-  { id: "7", date: "01/11/2024", day: "Friday", name: "Diwali", type: "Gazetted", applicableTo: "All", status: "active" },
-  { id: "8", date: "25/12/2024", day: "Wednesday", name: "Christmas", type: "Gazetted", applicableTo: "All", status: "active" },
-];
+function getDayName(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("en-IN", { weekday: "long" });
+  } catch {
+    return "—";
+  }
+}
 
-export default function HolidaysPage() {
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
+
+function mapHolidays(apiHolidays: ApiHoliday[]): Row[] {
+  return apiHolidays.map((h) => ({
+    id: h.id,
+    date: formatDate(h.date),
+    day: h.day ?? getDayName(h.date),
+    name: h.name,
+    type: h.type ?? "Gazetted",
+    applicableTo: h.applicableTo ?? "All",
+    status: h.status ?? "active",
+  }));
+}
+
+async function getHolidays(): Promise<Row[]> {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/holidays", [], {
+    telemetryKey: "hr.holidays",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiHoliday[] })?.data;
+      return Array.isArray(arr) ? mapHolidays(arr as ApiHoliday[]) : null;
+    },
+  });
+  return res.data;
+}
+
+export default async function HolidaysPage() {
+  const items = await getHolidays();
+
   const gazetted = items.filter((i) => i.type === "Gazetted").length;
   const restricted = items.filter((i) => i.type === "Restricted").length;
 

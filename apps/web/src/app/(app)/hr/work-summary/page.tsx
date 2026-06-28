@@ -1,4 +1,20 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+
+type ApiWorkSummary = {
+  id: string;
+  employeeId?: string;
+  employeeName?: string;
+  department?: string;
+  period?: string;
+  periodFrom?: string;
+  periodTo?: string;
+  periodType?: string;
+  tasksCompleted?: number;
+  totalTasks?: number;
+  rating?: number;
+  status: string;
+};
 
 type Row = {
   id: string;
@@ -11,20 +27,53 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "Rajesh Verma", department: "Finance", period: "01/07 – 07/07/2024", periodType: "Weekly", tasksCompleted: "12/14", rating: "4/5", status: "approved" },
-  { id: "2", employee: "Priya Sharma", department: "HR", period: "01/07 – 07/07/2024", periodType: "Weekly", tasksCompleted: "8/8", rating: "5/5", status: "approved" },
-  { id: "3", employee: "Amit Patel", department: "IT", period: "01/07 – 31/07/2024", periodType: "Monthly", tasksCompleted: "45/50", rating: "4/5", status: "pending" },
-  { id: "4", employee: "Sunita Rao", department: "Legal", period: "08/07 – 14/07/2024", periodType: "Weekly", tasksCompleted: "6/7", rating: "4/5", status: "approved" },
-  { id: "5", employee: "Vikram Singh", department: "Admin", period: "01/07 – 31/07/2024", periodType: "Monthly", tasksCompleted: "30/38", rating: "3/5", status: "pending" },
-  { id: "6", employee: "Deepak Kumar", department: "IT", period: "15/07 – 21/07/2024", periodType: "Weekly", tasksCompleted: "10/10", rating: "5/5", status: "approved" },
-  { id: "7", employee: "Meera Iyer", department: "Accounts", period: "15/07 – 21/07/2024", periodType: "Weekly", tasksCompleted: "9/11", rating: "—", status: "pending" },
-];
+function formatDateRange(from?: string, to?: string): string {
+  if (!from && !to) return "—";
+  try {
+    const fmtDate = (s: string) => {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return s;
+      return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    };
+    if (from && to) return `${fmtDate(from)} – ${fmtDate(to)}`;
+    return from ? fmtDate(from) : fmtDate(to!);
+  } catch {
+    return `${from ?? ""} – ${to ?? ""}`;
+  }
+}
 
-export default function WorkSummaryPage() {
+function mapWorkSummaries(apiItems: ApiWorkSummary[]): Row[] {
+  return apiItems.map((s) => ({
+    id: s.id,
+    employee: s.employeeName ?? s.employeeId ?? "—",
+    department: s.department ?? "—",
+    period: s.period ?? formatDateRange(s.periodFrom, s.periodTo),
+    periodType: s.periodType ?? "—",
+    tasksCompleted: s.tasksCompleted != null && s.totalTasks != null
+      ? `${s.tasksCompleted}/${s.totalTasks}`
+      : "—",
+    rating: s.rating != null ? `${s.rating}/5` : "—",
+    status: s.status,
+  }));
+}
+
+async function getWorkSummaries(): Promise<Row[]> {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/work-summaries", [], {
+    telemetryKey: "hr.work-summaries",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiWorkSummary[] })?.data;
+      return Array.isArray(arr) ? mapWorkSummaries(arr as ApiWorkSummary[]) : null;
+    },
+  });
+  return res.data;
+}
+
+export default async function WorkSummaryPage() {
+  const items = await getWorkSummaries();
+
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
-  const weekly = items.filter((i) => i.periodType === "Weekly").length;
+  const weekly = items.filter((i) => i.periodType.toLowerCase() === "weekly").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },

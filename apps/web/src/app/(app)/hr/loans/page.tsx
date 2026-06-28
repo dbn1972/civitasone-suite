@@ -1,4 +1,19 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+
+type ApiLoan = {
+  id: string;
+  employeeId: string;
+  employeeName?: string;
+  department?: string;
+  loanType: string;
+  sanctionedAmountMinor: number;
+  emiMinor: number;
+  outstandingMinor: number;
+  totalEmis: number;
+  emisPaid: number;
+  status: string;
+};
 
 type Row = {
   id: string;
@@ -11,19 +26,41 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "Rajesh Verma", department: "Finance", loanType: "House Building Advance", sanctionedAmount: "₹25,00,000", emi: "₹18,500", balance: "₹19,50,000", status: "active" },
-  { id: "2", employee: "Priya Sharma", department: "HR", loanType: "Motor Car Advance", sanctionedAmount: "₹7,50,000", emi: "₹12,000", balance: "₹3,60,000", status: "active" },
-  { id: "3", employee: "Amit Patel", department: "IT", loanType: "Computer Advance", sanctionedAmount: "₹1,00,000", emi: "₹5,000", balance: "₹25,000", status: "active" },
-  { id: "4", employee: "Sunita Rao", department: "Legal", loanType: "Festival Advance", sanctionedAmount: "₹30,000", emi: "₹3,000", balance: "₹0", status: "completed" },
-  { id: "5", employee: "Vikram Singh", department: "Admin", loanType: "House Building Advance", sanctionedAmount: "₹20,00,000", emi: "₹15,000", balance: "₹18,00,000", status: "active" },
-  { id: "6", employee: "Deepak Kumar", department: "IT", loanType: "Motor Car Advance", sanctionedAmount: "₹8,00,000", emi: "—", balance: "—", status: "pending" },
-];
+function formatINR(minor: number): string {
+  if (!minor && minor !== 0) return "—";
+  return `₹${(minor / 100).toLocaleString("en-IN")}`;
+}
 
-export default function LoansPage() {
+function mapLoans(apiLoans: ApiLoan[]): Row[] {
+  return apiLoans.map((l) => ({
+    id: l.id,
+    employee: l.employeeName ?? l.employeeId,
+    department: l.department ?? "—",
+    loanType: l.loanType,
+    sanctionedAmount: formatINR(l.sanctionedAmountMinor),
+    emi: l.emiMinor ? formatINR(l.emiMinor) : "—",
+    balance: l.outstandingMinor != null ? formatINR(l.outstandingMinor) : "—",
+    status: l.status,
+  }));
+}
+
+async function getLoans(): Promise<Row[]> {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/loans", [], {
+    telemetryKey: "hr.loans",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiLoan[] })?.data;
+      return Array.isArray(arr) ? mapLoans(arr as ApiLoan[]) : null;
+    },
+  });
+  return res.data;
+}
+
+export default async function LoansPage() {
+  const items = await getLoans();
+
   const active = items.filter((i) => i.status === "active").length;
   const pending = items.filter((i) => i.status === "pending").length;
-  const completed = items.filter((i) => i.status === "completed").length;
+  const completed = items.filter((i) => i.status === "completed" || i.status === "closed").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },

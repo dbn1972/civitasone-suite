@@ -1,4 +1,19 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+
+type ApiAdvance = {
+  id: string;
+  employeeId: string;
+  employeeName?: string;
+  department?: string;
+  amountMinor: number;
+  purpose: string;
+  recoveryMonths: number;
+  emiMinor: number;
+  recoveredMinor: number;
+  requestDate?: string;
+  status: string;
+};
 
 type Row = {
   id: string;
@@ -11,19 +26,43 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", employee: "Rajesh Verma", department: "Finance", amount: "₹50,000", purpose: "Medical Emergency", requestDate: "05/06/2024", recoverySchedule: "5 instalments", status: "approved" },
-  { id: "2", employee: "Priya Sharma", department: "HR", amount: "₹30,000", purpose: "Personal", requestDate: "12/06/2024", recoverySchedule: "3 instalments", status: "active" },
-  { id: "3", employee: "Amit Patel", department: "IT", amount: "₹75,000", purpose: "Transfer Expenses", requestDate: "20/06/2024", recoverySchedule: "6 instalments", status: "pending" },
-  { id: "4", employee: "Sunita Rao", department: "Legal", amount: "₹25,000", purpose: "Festival", requestDate: "01/05/2024", recoverySchedule: "2 instalments", status: "completed" },
-  { id: "5", employee: "Vikram Singh", department: "Admin", amount: "₹40,000", purpose: "Medical", requestDate: "15/07/2024", recoverySchedule: "4 instalments", status: "pending" },
-  { id: "6", employee: "Meera Iyer", department: "Accounts", amount: "₹60,000", purpose: "Personal", requestDate: "28/05/2024", recoverySchedule: "6 instalments", status: "active" },
-];
+function formatINR(minor: number): string {
+  if (!minor && minor !== 0) return "—";
+  return `₹${(minor / 100).toLocaleString("en-IN")}`;
+}
 
-export default function AdvancesPage() {
-  const active = items.filter((i) => i.status === "active").length;
+function mapAdvances(apiAdvances: ApiAdvance[]): Row[] {
+  return apiAdvances.map((a) => ({
+    id: a.id,
+    employee: a.employeeName ?? a.employeeId,
+    department: a.department ?? "—",
+    amount: formatINR(a.amountMinor),
+    purpose: a.purpose ?? "—",
+    requestDate: a.requestDate ?? "—",
+    recoverySchedule: a.recoveryMonths ? `${a.recoveryMonths} instalments` : "—",
+    status: a.status,
+  }));
+}
+
+async function getAdvances(): Promise<Row[]> {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
+    telemetryKey: "hr.advances",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiAdvance[] })?.data;
+      return Array.isArray(arr) ? mapAdvances(arr as ApiAdvance[]) : null;
+    },
+  });
+  return res.data;
+}
+
+export default async function AdvancesPage() {
+  const items = await getAdvances();
+
+  const active = items.filter((i) => i.status === "active" || i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
-  const totalAmount = "₹2,80,000";
+  const totalDisbursed = items.length > 0
+    ? `${items.length} advances`
+    : "—";
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -42,7 +81,7 @@ export default function AdvancesPage() {
         <StatCard icon="💸" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
         <StatCard icon="▶️" iconBg="#e6f7f0" label="Active Recovery" value={active} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="💰" iconBg="#f5f5f5" label="Total Disbursed" value={totalAmount} />
+        <StatCard icon="💰" iconBg="#f5f5f5" label="Total Disbursed" value={totalDisbursed} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Advances Register</h3></div>

@@ -1,4 +1,20 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+
+type ApiEmployee = {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  institution?: string;
+  department?: string;
+  periodFrom?: string;
+  periodTo?: string;
+  mentor?: string;
+  employmentType?: string;
+  type?: string;
+  status: string;
+};
 
 type Row = {
   id: string;
@@ -12,19 +28,53 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-const items: Row[] = [
-  { id: "1", name: "Aditya Krishnan", institution: "IIT Delhi", department: "IT", periodFrom: "01/06/2024", periodTo: "31/08/2024", mentor: "Amit Patel", type: "Intern", status: "active" },
-  { id: "2", name: "Shruti Pandey", institution: "IIFT Delhi", department: "Finance", periodFrom: "15/05/2024", periodTo: "15/08/2024", mentor: "Rajesh Verma", type: "Intern", status: "active" },
-  { id: "3", name: "Mohd Zaid", institution: "Jamia Millia", department: "Legal", periodFrom: "01/07/2024", periodTo: "30/09/2024", mentor: "Sunita Rao", type: "Intern", status: "active" },
-  { id: "4", name: "Tanvi Sharma", institution: "ITI Pusa", department: "IT", periodFrom: "01/04/2024", periodTo: "30/09/2024", mentor: "Deepak Kumar", type: "Apprentice", status: "active" },
-  { id: "5", name: "Rajat Meena", institution: "Govt Polytechnic", department: "Admin", periodFrom: "01/04/2024", periodTo: "31/03/2025", mentor: "Vikram Singh", type: "Apprentice", status: "active" },
-  { id: "6", name: "Neha Tiwari", institution: "Delhi University", department: "HR", periodFrom: "01/01/2024", periodTo: "31/03/2024", mentor: "Priya Sharma", type: "Intern", status: "completed" },
-];
+function formatDate(dateStr: string | undefined): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
 
-export default function InternsPage() {
+function mapInterns(apiItems: ApiEmployee[]): Row[] {
+  return apiItems
+    .filter((e) => {
+      const t = (e.employmentType ?? e.type ?? "").toLowerCase();
+      return t === "intern" || t === "apprentice" || t === "internship" || t === "apprenticeship";
+    })
+    .map((e) => ({
+      id: e.id,
+      name: e.name ?? ([e.firstName, e.lastName].filter(Boolean).join(" ") || e.id),
+      institution: e.institution ?? "—",
+      department: e.department ?? "—",
+      periodFrom: formatDate(e.periodFrom),
+      periodTo: formatDate(e.periodTo),
+      mentor: e.mentor ?? "—",
+      type: (e.employmentType ?? e.type ?? "Intern").replace(/^./, (c) => c.toUpperCase()),
+      status: e.status,
+    }));
+}
+
+async function getInterns(): Promise<Row[]> {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=50", [], {
+    telemetryKey: "hr.interns",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiEmployee[] })?.data;
+      return Array.isArray(arr) ? mapInterns(arr as ApiEmployee[]) : null;
+    },
+  });
+  return res.data;
+}
+
+export default async function InternsPage() {
+  const items = await getInterns();
+
   const active = items.filter((i) => i.status === "active").length;
-  const interns = items.filter((i) => i.type === "Intern").length;
-  const apprentices = items.filter((i) => i.type === "Apprentice").length;
+  const interns = items.filter((i) => i.type.toLowerCase() === "intern" || i.type.toLowerCase() === "internship").length;
+  const apprentices = items.filter((i) => i.type.toLowerCase() === "apprentice" || i.type.toLowerCase() === "apprenticeship").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "name", label: "Name" },
