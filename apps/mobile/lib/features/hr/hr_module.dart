@@ -21,6 +21,9 @@ import 'employee_profile_screen.dart';
 import 'loan_status_screen.dart';
 import 'announcements_screen.dart';
 import 'team_directory_screen.dart';
+import 'kudos_screen.dart';
+import 'expense_claim_screen.dart';
+import 'documents_vault_screen.dart';
 
 export 'attendance_screen.dart';
 export 'employees_screen.dart';
@@ -40,6 +43,9 @@ export 'employee_profile_screen.dart';
 export 'loan_status_screen.dart';
 export 'announcements_screen.dart';
 export 'team_directory_screen.dart';
+export 'kudos_screen.dart';
+export 'expense_claim_screen.dart';
+export 'documents_vault_screen.dart';
 
 /// Shell routes — shown inside the bottom-nav AppShell.
 List<GoRoute> hrShellRoutes() => [
@@ -98,6 +104,18 @@ List<GoRoute> hrShellRoutes() => [
       GoRoute(
         path: '/notifications',
         builder: (_, __) => const AnnouncementsScreen(),
+      ),
+      GoRoute(
+        path: '/hr/kudos',
+        builder: (_, __) => const KudosScreen(),
+      ),
+      GoRoute(
+        path: '/hr/expenses',
+        builder: (_, __) => const ExpenseClaimScreen(),
+      ),
+      GoRoute(
+        path: '/hr/documents',
+        builder: (_, __) => const DocumentsVaultScreen(),
       ),
     ];
 
