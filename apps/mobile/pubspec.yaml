@@ -24,6 +24,22 @@ dependencies:
   path: ^1.9.0
   connectivity_plus: ^6.0.3
   uuid: ^4.4.0
+  # QR code generation for ID cards and visiting cards
+  qr_flutter: ^4.1.0
+  # Real GPS for geo-fenced attendance
+  geolocator: ^12.0.0
+  # Camera for selfie/receipt capture
+  image_picker: ^1.1.0
+  # Biometric app lock
+  local_auth: ^2.2.0
+  # Device info for compliance heartbeat
+  device_info_plus: ^10.1.0
+  # Share files (vCard, images)
+  share_plus: ^9.0.0
+  # URL launcher (phone, email, maps)
+  url_launcher: ^6.2.0
+  # Push notifications
+  # firebase_messaging: ^15.0.0  # Uncomment when Firebase project is configured
   # MOB-1c (02-T3): background sync so queued mutations flush without the user
   # reopening the screen.
   workmanager: ^0.5.2

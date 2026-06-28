@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/providers.dart';
 import '../../core/auth/biometric_lock.dart';
+import 'legal_screen.dart';
 
 /// Settings — security, preferences, about.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -129,12 +130,20 @@ class _State extends ConsumerState<SettingsScreen> {
         ListTile(
           leading: Icon(Icons.shield_outlined, color: theme.colorScheme.primary),
           title: const Text('Privacy Policy'),
-          onTap: () {},
+          onTap: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => const LegalScreen(type: LegalDocType.privacy))),
         ),
         ListTile(
           leading: Icon(Icons.description, color: theme.colorScheme.primary),
-          title: const Text('Terms of Service'),
-          onTap: () {},
+          title: const Text('Terms of Use'),
+          onTap: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => const LegalScreen(type: LegalDocType.terms))),
+        ),
+        ListTile(
+          leading: Icon(Icons.security, color: theme.colorScheme.primary),
+          title: const Text('Security Practices'),
+          onTap: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => const LegalScreen(type: LegalDocType.security))),
         ),
         const Divider(),
 
