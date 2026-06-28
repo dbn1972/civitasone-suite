@@ -5,6 +5,7 @@ import 'core/auth/pkce_auth.dart';
 import 'core/background_sync.dart';
 import 'core/providers.dart';
 import 'core/shell/app_shell.dart';
+import 'core/theme/app_colors.dart';
 import 'features/finance/payments_screen.dart';
 import 'features/finance/journal_screen.dart';
 import 'features/hr/hr_module.dart';
@@ -110,11 +111,36 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF6366F1),
         brightness: Brightness.light,
+        extensions: const [AppColors.light],
+        // Accessibility: larger default text for govt officers
+        textTheme: const TextTheme(
+          bodySmall: TextStyle(fontSize: 12),
+          bodyMedium: TextStyle(fontSize: 14),
+          bodyLarge: TextStyle(fontSize: 16),
+          titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          labelSmall: TextStyle(fontSize: 12),
+          labelMedium: TextStyle(fontSize: 13),
+          labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF6366F1),
         brightness: Brightness.dark,
+        extensions: const [AppColors.dark],
+        textTheme: const TextTheme(
+          bodySmall: TextStyle(fontSize: 12),
+          bodyMedium: TextStyle(fontSize: 14),
+          bodyLarge: TextStyle(fontSize: 16),
+          titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          labelSmall: TextStyle(fontSize: 12),
+          labelMedium: TextStyle(fontSize: 13),
+          labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
       ),
       themeMode: ThemeMode.system,
     );
@@ -239,10 +265,10 @@ class DashboardScreen extends StatelessWidget {
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 4,
+          crossAxisCount: 3,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 0.85,
+          childAspectRatio: 0.95,
           children: _quickActions.map((a) {
             return InkWell(
               onTap: () => context.go(a.route),
@@ -262,7 +288,7 @@ class DashboardScreen extends StatelessWidget {
                   Text(a.label,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: theme.colorScheme.onSurface)),
                 ],

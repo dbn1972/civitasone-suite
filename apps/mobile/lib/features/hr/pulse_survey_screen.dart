@@ -153,13 +153,22 @@ class _EmojiButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(emoji, style: const TextStyle(fontSize: 32)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
-      ]),
+    return Semantics(
+      label: 'Rate $label',
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 56,
+          height: 64,
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(emoji, style: const TextStyle(fontSize: 28)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+          ]),
+        ),
+      ),
     );
   }
 }

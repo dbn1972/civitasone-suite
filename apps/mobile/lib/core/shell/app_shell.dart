@@ -144,8 +144,6 @@ class AppShell extends StatelessWidget {
                   Navigator.of(context).pop();
                   context.go(item.route);
                 },
-                dense: true,
-                visualDensity: VisualDensity.compact,
               ),
           ],
         ],
