@@ -102,6 +102,29 @@ describe("EOfficeClient.getFileByRef", () => {
   });
 });
 
+describe("EOfficeClient.resolveApprovalChain", () => {
+  it("returns null when the matrix has no match", async () => {
+    const fetchImpl = mockFetch(200, { data: null });
+    const client = new EOfficeClient({ baseUrl: "http://estab", token: "t", fetchImpl });
+    expect(await client.resolveApprovalChain("finance_sanction", 1000)).toBeNull();
+  });
+
+  it("parses a resolved approval", async () => {
+    const fetchImpl = mockFetch(200, {
+      data: {
+        ruleId: "r1",
+        label: "PO 5L–50L",
+        workflowDefinitionCode: "wf.director_cto",
+        startNodeKey: "review",
+        steps: [{ role: "director", label: "Director" }],
+      },
+    });
+    const client = new EOfficeClient({ baseUrl: "http://estab", token: "t", fetchImpl });
+    const r = await client.resolveApprovalChain("finance_sanction", 1_000_000_00);
+    expect(r?.workflowDefinitionCode).toBe("wf.director_cto");
+  });
+});
+
 describe("parseDecisionCallback", () => {
   it("accepts a valid payload", () => {
     const r = parseDecisionCallback({

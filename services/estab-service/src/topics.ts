@@ -29,6 +29,8 @@ export const COMMANDS = {
   rtiCreate:            "estab.rti.create",
   rtiRespond:           "estab.rti.respond",
   fileFromModule:       "estab.file.from_module",
+  approvalRuleCreate:   "estab.approval_rule.create",
+  approvalRuleUpdate:   "estab.approval_rule.update",
 } as const;
 
 /**

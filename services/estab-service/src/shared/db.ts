@@ -5,6 +5,7 @@ import { schema as committeeModule }  from "../modules/committee/schema.js";
 import { schema as assetsModule }     from "../modules/assets/schema.js";
 import { schema as facilitiesModule } from "../modules/facilities/schema.js";
 import { schema as legalModule }      from "../modules/legal/schema.js";
+import { schema as approvalRulesModule } from "../modules/approval-rules/schema.js";
 import { outboxSchema }               from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -13,7 +14,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://estab_svc:***@ho
 export const sqlClient = createSqlClient(url);
 
 export const db = drizzle(sqlClient, {
-  schema: { ...filesModule, ...committeeModule, ...assetsModule, ...facilitiesModule, ...legalModule, ...outboxSchema },
+  schema: { ...filesModule, ...committeeModule, ...assetsModule, ...facilitiesModule, ...legalModule, ...approvalRulesModule, ...outboxSchema },
 });
 
 export type Db = typeof db;

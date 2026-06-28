@@ -15,9 +15,11 @@ import {
   raiseFileInput,
   acceptedResult,
   fileByRefResult,
+  resolvedApproval,
   type RaiseFileInput,
   type AcceptedResult,
   type FileByRef,
+  type ResolvedApproval,
   type SourceRefType,
 } from "./contracts.js";
 
@@ -112,6 +114,19 @@ export class EOfficeClient {
     const json = await this.request("GET", `/v1/estab/files/${encodeURIComponent(fileId)}/decision-log`);
     const env = json as { data?: DecisionLogEntry[] };
     return env.data ?? [];
+  }
+
+  /**
+   * Preview which approval chain the amount-band matrix would apply for a
+   * (sourceType, amount). Returns null when no rule matches (the caller must
+   * supply an explicit approvalChain when raising the file).
+   */
+  async resolveApprovalChain(refType: SourceRefType, amountMinor: number): Promise<ResolvedApproval | null> {
+    const qs = new URLSearchParams({ sourceType: refType, amountMinor: String(amountMinor) });
+    const json = await this.request("GET", `/v1/estab/approval-rules/resolve?${qs.toString()}`);
+    const env = json as { data?: unknown };
+    if (env.data == null) return null;
+    return resolvedApproval.parse(env.data);
   }
 
   private async resolveToken(): Promise<string> {

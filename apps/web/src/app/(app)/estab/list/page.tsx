@@ -45,6 +45,7 @@ export default async function EstabFilesListPage() {
             <a className="btn ghost" href="/estab/dak">Dak / Receipts</a>
             <a className="btn ghost" href="/estab/dispatch">Dispatch</a>
             <a className="btn ghost" href="/estab/approvals">Approvals</a>
+            <a className="btn ghost" href="/estab/approval-matrix">Approval Matrix</a>
             <a className="btn primary" href="/estab/files/new">+ Create File</a>
           </>
         }

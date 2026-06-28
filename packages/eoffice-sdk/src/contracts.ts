@@ -123,3 +123,14 @@ export const decisionCallbackPayload = z.object({
   decidedAt: z.string(),
 });
 export type DecisionCallback = z.infer<typeof decisionCallbackPayload>;
+
+// ─── Approval resolution (amount-band matrix preview) ─────────────────────────
+
+export const resolvedApproval = z.object({
+  ruleId: z.string(),
+  label: z.string(),
+  workflowDefinitionCode: z.string(),
+  startNodeKey: z.string(),
+  steps: z.array(z.object({ role: z.string(), label: z.string() })),
+});
+export type ResolvedApproval = z.infer<typeof resolvedApproval>;

@@ -7,6 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, MODULE_CALLBACK_TOPICS } from "../../topics.js";
 import { computeFileDueBy } from "../files/domain.js";
 import * as repo from "../files/repo.js";
+import { resolveApproval } from "../approval-rules/resolver.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -31,6 +32,16 @@ export function registerLinkageConsumers(queue: Queue): void {
       approvalChain: string; initialNote: string; sourceContext: Record<string, unknown>;
     };
 
+    // Resolve the approval chain by amount band (config-driven matrix). If a
+    // rule matches the source type + amount, it overrides the supplied chain;
+    // otherwise the explicitly-provided approval_chain is used as the fallback.
+    const amountMinor = typeof p.sourceContext?.["amountMinor"] === "number"
+      ? (p.sourceContext["amountMinor"] as number)
+      : 0;
+    const resolved = await resolveApproval(p.tenantId, p.sourceRefType, amountMinor);
+    const effectiveChain = resolved?.workflowDefinitionCode ?? p.approvalChain;
+    const effectiveStartNode = resolved?.startNodeKey ?? "review";
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const dueBy = computeFileDueBy();
@@ -50,7 +61,7 @@ export function registerLinkageConsumers(queue: Queue): void {
         SET source_ref_type = ${p.sourceRefType},
             source_ref_id   = ${p.sourceRefId},
             initiated_by    = ${p.initiatedBy},
-            approval_chain  = ${p.approvalChain},
+            approval_chain  = ${effectiveChain},
             source_context  = ${JSON.stringify(p.sourceContext)}::jsonb
         WHERE id = ${p.id} AND tenant_id = ${p.tenantId}
       `);
@@ -74,8 +85,8 @@ export function registerLinkageConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           name: `${p.sourceRefType} — ${p.fileNo}`,
           status: "active",
-          definitionCode: p.approvalChain,
-          startNodeKey: "review",
+          definitionCode: effectiveChain,
+          startNodeKey: effectiveStartNode,
           initialTaskName: "Review & Recommend",
           version: 1,
           refType: "estab_file",
@@ -92,7 +103,7 @@ export function registerLinkageConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { service: "estab", action: "raise_from_module", resourceType: "file", resourceId: p.id, outcome: "success", metadata: { sourceRefType: p.sourceRefType, sourceRefId: p.sourceRefId } },
+        payload: { service: "estab", action: "raise_from_module", resourceType: "file", resourceId: p.id, outcome: "success", metadata: { sourceRefType: p.sourceRefType, sourceRefId: p.sourceRefId, approvalChain: effectiveChain, resolvedRuleId: resolved?.ruleId ?? null } },
       });
     });
 

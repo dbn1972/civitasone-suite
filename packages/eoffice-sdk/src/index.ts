@@ -57,6 +57,7 @@ export {
   acceptedResult,
   fileByRefResult,
   decisionCallbackPayload,
+  resolvedApproval,
   type SourceRefType,
   type Classification,
   type Priority,
@@ -66,4 +67,5 @@ export {
   type AcceptedResult,
   type FileByRef,
   type DecisionCallback,
+  type ResolvedApproval,
 } from "./contracts.js";
