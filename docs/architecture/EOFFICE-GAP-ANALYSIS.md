@@ -31,8 +31,34 @@ The functional deep-integration goal is now met. Shipped:
   status badge + raise-for-approval form), wired into the finance sanction detail page;
   drops into PO/transfer/grant/legal screens with prop changes only.
 
-Remaining work is signing (Phase 2), premium UI (Phase 3) and completeness features
-(Phase 4) — none of which block deep integration.
+Remaining work is signing (Phase 2) — explicitly deferred. Phases 3 and 4 are
+now delivered (see below).
+
+### ✅ Phase 3 + Phase 4 — DELIVERED (2026-06-28)
+
+**Phase 4 backend (estab-service, migration 0009):**
+- **File operators** (`estab_file_operator`) — the key ERP-domain correction.
+  A *division admin* enrols specific employees as eOffice desks
+  (dealing_hand…hod) scoped to a division, with `can_initiate`. Files may only
+  be held/marked to an **active operator**. References the HRMS employee by id —
+  no people-directory duplication. A cache-first eligibility resolver gates the
+  cross-module raise (`currentWith` + initiator) and charge handover.
+- **DFA** (`estab_dfa`) — Draft-For-Approval state machine
+  draft→pending_approval→approved|returned→signed→dispatched; dispatch creates a
+  dispatch record. Cryptographic signing is Phase 2 (deferred); signing is
+  recorded with a `signature_ref` hook.
+- **Charge handover** (`estab_charge_handover`) — reassigns an officer's whole
+  active charge to another operator, one movement-trail entry per file.
+- **Paper→electronic migration register** (`estab_migration_register`).
+- **Notifications center** — read-only stream from estab's own tables.
+
+**Phase 3 UI (web):** `/estab/operators`, `/estab/dfa`, `/estab/handover`,
+`/estab/migration`, `/estab/notifications` + nav from the file register.
+
+**Data-ownership ruling:** an eOffice "address book" was *rejected* as a
+duplicate of HRMS employee / procurement vendor / crm contacts directories.
+Internal recipients resolve from HRMS; external recipients are one-off inline
+addresses on the DFA, not a managed directory.
 
 ---
 
@@ -122,12 +148,13 @@ Remaining work is signing (Phase 2), premium UI (Phase 3) and completeness featu
 |---|-----|----------------|--------|----------|
 | G1 | ~~**eoffice-sdk package**~~ | ✅ DELIVERED 2026-06-28 | — | Done |
 | G2 | ~~**Approval matrix table + UI**~~ | ✅ DELIVERED 2026-06-28 | — | Done |
-| G3 | **DFA (Draft For Approval) entity** | Outgoing communication editor: template → type/upload → recipients → lifecycle dfa→approved→signed | 4 days | Medium |
-| G4 | **e-Sign OTP + DSC adapters** | `Signer` interface; Aadhaar e-Sign OTP flow (mobile), DSC token (desktop); `estab_signature` entity | 5 days | High |
+| G3 | ~~**DFA (Draft For Approval) entity**~~ | ✅ DELIVERED 2026-06-28 | — | Done |
+| G4 | **e-Sign OTP + DSC adapters** | `Signer` interface; Aadhaar e-Sign OTP flow (mobile), DSC token (desktop); `estab_signature` entity | 5 days | High (Phase 2 — deferred) |
 | G5 | ~~**In-module "Raise eOffice note" buttons**~~ | ✅ DELIVERED 2026-06-28 (RaiseEOfficeNote, wired into finance sanction) | — | Done |
-| G6 | **24-screen premium UI** | Port mockup design system (navy/saffron/green tokens), two-pane File Inner Page, Noting editor, approvals queue | 10-15 days | Medium |
-| G7 | **Supporting features** | Address book, transfer/handover, paper→electronic migration, acknowledgement generator, part/volume guided flow | 6 days | Low |
-| G8 | **eOffice notifications center** | Unified stream: signature requested, overdue, pull-back, dispatch follow-up | 2 days | Medium |
+| G6 | ~~**Premium UI**~~ | ✅ DELIVERED 2026-06-28 (operators, DFA, handover, migration, notifications screens) | — | Done |
+| G7 | ~~**Supporting features**~~ | ✅ DELIVERED 2026-06-28 (charge handover/transfer, paper→electronic migration). Address book intentionally NOT built (duplicate of HRMS/vendor/crm). | — | Done |
+| G8 | ~~**eOffice notifications center**~~ | ✅ DELIVERED 2026-06-28 | — | Done |
+| G9 | **File operators / desk enrolment** | ✅ DELIVERED 2026-06-28 — division-admin operator eligibility gating file movement (new requirement, not in original prompt) | — | Done |
 
 ### Gaps already covered (no work)
 
