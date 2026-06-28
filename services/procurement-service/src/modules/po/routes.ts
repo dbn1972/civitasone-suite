@@ -42,6 +42,16 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.dispatchPo(ctx, id, body));
   });
 
+  // Submit a PO to eOffice for administrative approval. The eFile is raised via
+  // the eOffice integration; the decision returns on procurement.po.file_decided
+  // and moves the PO to approved/cancelled.
+  app.post("/v1/procurement/pos/:id/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROC_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitPoForApproval(ctx, id));
+  });
+
   app.post("/v1/procurement/pos/gem", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);

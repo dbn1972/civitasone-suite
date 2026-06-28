@@ -8,6 +8,7 @@ export const COMMANDS = {
   poCreate:        "procurement.po.create",
   poApprove:       "procurement.po.approve",
   poDispatch:      "procurement.po.dispatch",
+  poSubmitApproval: "procurement.po.submit_approval",
   gemOrderCreate:  "procurement.gem_order.create",
   grnCreate:       "procurement.grn.create",
   auctionCreate:   "procurement.auction.create",
@@ -63,6 +64,7 @@ export const FINANCE_GL_POST = "finance.gl.post";
 /** Topics consumed from other services */
 export const CONSUMED_EVENTS = {
   legalContractCleared: "legal.contract_review.cleared",
+  poFileDecided:        "procurement.po.file_decided",
 } as const;
 
 export const SERVICE = "procurement";

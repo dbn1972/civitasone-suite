@@ -3,6 +3,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerEmployeeConsumers }   from "./modules/employee/consumer.js";
+import { registerEOfficeDecisionConsumers } from "./modules/lifecycle/eoffice-consumer.js";
 import { registerLeaveConsumers }      from "./modules/leave/consumer.js";
 import { registerAttendanceConsumers } from "./modules/attendance/consumer.js";
 import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js";
@@ -14,6 +15,7 @@ import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 const log = pino({ name: "hrms-worker" });
 
 registerEmployeeConsumers(queue);
+registerEOfficeDecisionConsumers(queue);
 registerLeaveConsumers(queue);
 registerAttendanceConsumers(queue);
 registerRecruitmentConsumers(queue);

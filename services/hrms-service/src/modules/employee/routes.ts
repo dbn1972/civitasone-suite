@@ -44,6 +44,17 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.transferEmployee(ctx, id, body));
   });
 
+  // eOffice loop — submit a transfer for administrative approval. Records a
+  // transfer request in `pending_approval` and returns its id (used as the
+  // eFile source_ref_id). The decision returns on hrms.transfer.file_decided.
+  app.post("/v1/hrms/employees/:id/transfer/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = transferBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitTransferForApproval(ctx, id, body));
+  });
+
   app.patch("/v1/hrms/employees/:id/separate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);

@@ -2,6 +2,7 @@ export const COMMANDS = {
   employeeCreate:       "hrms.employee.create",
   employeeConfirm:      "hrms.employee.confirm",
   employeeTransfer:     "hrms.employee.transfer",
+  employeeTransferSubmitApproval: "hrms.employee.transfer.submit_approval",
   employeeSeparate:     "hrms.employee.separate",
   employeeUpdate:       "hrms.employee.update",
   leaveTypeCreate:      "hrms.leave_type.create",
@@ -31,6 +32,10 @@ export const EVENTS = {
 
 export const CONSUMED_EVENTS = {
   tenantCreated: "tenant.tenant.created",
+  // eOffice (estab-service) decision callback for an HR transfer eFile
+  // (source_ref_type "hr_transfer"). Closes the approval loop — see
+  // modules/lifecycle/eoffice-consumer.ts.
+  transferFileDecided: "hrms.transfer.file_decided",
 } as const;
 
 export const SERVICE = "hrms";

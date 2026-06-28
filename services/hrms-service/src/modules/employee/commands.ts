@@ -38,6 +38,25 @@ export async function transferEmployee(ctx: RequestContext, id: string, body: Tr
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * Submit an employee transfer to eOffice for administrative approval. Instead
+ * of mutating the employee master directly (as `transferEmployee` does), this
+ * records a transfer request in `pending_approval` state and returns its id.
+ * The eFile is raised against that id (source_ref_type "hr_transfer"); the
+ * decision returns on `hrms.transfer.file_decided` and the eoffice-consumer
+ * either executes the posting (approved) or cancels the request (rejected).
+ */
+export async function submitTransferForApproval(ctx: RequestContext, id: string, body: TransferBody): Promise<Accepted> {
+  const transferId = randomUUID();
+  await queue.publish(COMMANDS.employeeTransferSubmitApproval, {
+    messageId: transferId, type: COMMANDS.employeeTransferSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { ...body, id: transferId, employeeId: id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "transfer", transferId));
+  return { id: transferId, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function separateEmployee(ctx: RequestContext, id: string, body: SeparateBody): Promise<Accepted> {
   await queue.publish(COMMANDS.employeeSeparate, {
     type: COMMANDS.employeeSeparate,

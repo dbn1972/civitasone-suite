@@ -3,6 +3,7 @@ import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../..
 import { getProcurementPOById } from "../../../../_data/loaders";
 import { DispatchPOActions } from "./DispatchPOActions";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
+import { RaiseEOfficeNote } from "../../../../_components/RaiseEOfficeNote";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -104,6 +105,16 @@ export default async function PODetailPage({ params }: { params: { id: string } 
           </div>
         </div>
       </Card>
+
+      <RaiseEOfficeNote
+        refType="procurement_po"
+        refId={po.id}
+        subject={`PO ${po.poNo} — ${po.vendor}`}
+        dept="Procurement"
+        amountMinor={po.totalAmount}
+        defaultApprovalChain="file_noting"
+        notifyPath={`/api/proxy/v1/procurement/pos/${po.id}/submit-approval`}
+      />
 
       {po.lineItems.length > 0 && (
         <Card title="Line items">

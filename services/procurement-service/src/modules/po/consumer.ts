@@ -208,6 +208,23 @@ export function registerPoConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
   });
 
+  // Submit a PO to eOffice for administrative approval — moves it to the
+  // pending state while the eFile is under approval. The decision returns on
+  // procurement.po.file_decided (see eoffice-consumer) and moves it to
+  // approved/cancelled.
+  queue.subscribe(COMMANDS.poSubmitApproval, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
+      if (!po || po.tenantId !== p.tenantId) return;
+      assertTransitionAllowed(po.status ?? "draft", "pending");
+      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "pending", updatedBy: msg.actorId });
+      await audit(tx, msg, "submit_for_eoffice_approval", "po", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
+  });
+
   queue.subscribe(COMMANDS.gemOrderCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;

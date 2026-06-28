@@ -35,3 +35,20 @@ export async function createGemOrder(ctx: RequestContext, body: GemOrderBody): P
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * Submit a PO to eOffice for administrative approval. The eFile is raised via
+ * the eOffice integration; once the file is decided, the
+ * `procurement.po.file_decided` callback (see eoffice-consumer) moves the PO to
+ * approved/cancelled. This transition makes the source state honest while the
+ * file is under approval.
+ */
+export async function submitPoForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.poSubmitApproval, {
+    type: COMMANDS.poSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "po", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

@@ -85,6 +85,30 @@ export function registerEmployeeConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
   });
 
+  // eOffice loop — record a transfer REQUEST in `pending_approval` rather than
+  // mutating the employee master. The eFile is raised against this transfer id
+  // (source_ref_type "hr_transfer"); the decision arrives on
+  // hrms.transfer.file_decided and is applied by the eoffice-consumer.
+  queue.subscribe(COMMANDS.employeeTransferSubmitApproval, async (msg) => {
+    const p = msg.payload as {
+      id: string; employeeId: string; tenantId: string; fromDeptId: string; toDeptId: string;
+      fromDesigId?: string; toDesigId?: string; effectiveDate: string; orderRef?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await lifecycleRepo.insertTransfer(tx, {
+        id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
+        fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
+        fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+        effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
+        status: "pending_approval",
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "submit_for_eoffice_approval", "transfer", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "transfer", p.id));
+  });
+
   queue.subscribe(COMMANDS.employeeSeparate, async (msg) => {
     const p = msg.payload as {
       employeeId: string; tenantId: string; separationType: string;
