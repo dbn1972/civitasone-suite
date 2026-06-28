@@ -13,6 +13,7 @@ export { EmptyState } from "./EmptyState";
 export { HelpTip } from "./HelpTip";
 export { Term } from "./Term";
 export { ErrorState } from "./ErrorState";
+export { FileUpload } from "./FileUpload";
 export { Avatar } from "./Avatar";
 export { ProgressBar } from "./ProgressBar";
 export { ConfirmDialog } from "./ConfirmDialog";
