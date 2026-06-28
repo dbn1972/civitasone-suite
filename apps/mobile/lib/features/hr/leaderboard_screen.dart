@@ -127,7 +127,7 @@ class _LeaderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isTop3 = rank <= 3;
-    final rankColors = [Colors.transparent, const Color(0xFFF59E0B), const Color(0xFF94A3B8), const Color(0xFFCD7F32)];
+    final rankColors = [Colors.transparent, theme.colorScheme.tertiary, theme.colorScheme.outline, theme.colorScheme.tertiary];
     final rankColor = isTop3 ? rankColors[rank] : theme.colorScheme.outline;
 
     return Padding(

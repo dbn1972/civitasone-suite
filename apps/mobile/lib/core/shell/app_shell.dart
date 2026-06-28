@@ -89,11 +89,11 @@ class AppShell extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
+                    color: theme.colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.account_balance,
-                      color: Color(0xFF6366F1), size: 22),
+                  child: Icon(Icons.account_balance,
+                      color: theme.colorScheme.primary, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -139,7 +139,7 @@ class AppShell extends StatelessWidget {
                 title: Text(item.label),
                 selected: location.startsWith(item.route),
                 selectedTileColor:
-                    const Color(0xFF6366F1).withOpacity(0.05),
+                    theme.colorScheme.primary.withOpacity(0.05),
                 onTap: () {
                   Navigator.of(context).pop();
                   context.go(item.route);

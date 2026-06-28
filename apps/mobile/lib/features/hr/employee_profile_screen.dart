@@ -193,7 +193,7 @@ class _EmployeeProfileScreenState
             label: 'Leave\nBalance',
             value: '$leaveBalance',
             icon: Icons.beach_access,
-            color: const Color(0xFF22C55E),
+            color: theme.colorScheme.primary,
           ),
         ),
         const SizedBox(width: 10),
@@ -202,7 +202,7 @@ class _EmployeeProfileScreenState
             label: 'Pending\nApprovals',
             value: '$pendingApprovals',
             icon: Icons.pending_actions,
-            color: const Color(0xFFF59E0B),
+            color: theme.colorScheme.tertiary,
           ),
         ),
         const SizedBox(width: 10),
@@ -211,7 +211,7 @@ class _EmployeeProfileScreenState
             label: 'Loan\nBalance',
             value: '₹${(loanOutstanding / 100).toStringAsFixed(0)}',
             icon: Icons.account_balance_wallet,
-            color: const Color(0xFF6366F1),
+            color: theme.colorScheme.primary,
           ),
         ),
       ],
@@ -219,13 +219,14 @@ class _EmployeeProfileScreenState
   }
 
   Widget _buildQuickActions(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     final actions = [
-      (label: 'Apply Leave', icon: Icons.event_note, route: '/hr/leave/apply', color: const Color(0xFF6366F1)),
-      (label: 'View Payslips', icon: Icons.receipt_long, route: '/hr/payslips', color: const Color(0xFF22C55E)),
-      (label: 'Mark Attendance', icon: Icons.location_on, route: '/hr/geo-checkin', color: const Color(0xFFF59E0B)),
-      (label: 'Holidays', icon: Icons.event, route: '/hr/holidays', color: const Color(0xFFEF4444)),
-      (label: 'Vacancies', icon: Icons.work, route: '/hr/vacancies', color: const Color(0xFF8B5CF6)),
-      (label: 'Grievances', icon: Icons.feedback, route: '/hr/grievances', color: const Color(0xFF06B6D4)),
+      (label: 'Apply Leave', icon: Icons.event_note, route: '/hr/leave/apply', color: colorScheme.primary),
+      (label: 'View Payslips', icon: Icons.receipt_long, route: '/hr/payslips', color: colorScheme.primary),
+      (label: 'Mark Attendance', icon: Icons.location_on, route: '/hr/geo-checkin', color: colorScheme.tertiary),
+      (label: 'Holidays', icon: Icons.event, route: '/hr/holidays', color: colorScheme.error),
+      (label: 'Vacancies', icon: Icons.work, route: '/hr/vacancies', color: colorScheme.secondary),
+      (label: 'Grievances', icon: Icons.feedback, route: '/hr/grievances', color: colorScheme.tertiary),
     ];
 
     return Card(
@@ -315,7 +316,7 @@ class _EmployeeProfileScreenState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+            Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
             const SizedBox(height: 16),
             Text('Unable to load profile',
                 style: theme.textTheme.titleMedium),

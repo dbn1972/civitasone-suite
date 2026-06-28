@@ -96,8 +96,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                           ]),
                           const SizedBox(height: 6),
                           Row(children: [
-                            const Icon(Icons.category_outlined,
-                                size: 14, color: Color(0xFF94A3B8)),
+                            Icon(Icons.category_outlined,
+                                size: 14, color: Theme.of(ctx).colorScheme.outline),
                             const SizedBox(width: 4),
                             Text(
                               _leaveTypeLabel(data['leaveType'] as String?),
@@ -108,8 +108,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen> {
                           ]),
                           const SizedBox(height: 4),
                           Row(children: [
-                            const Icon(Icons.calendar_today,
-                                size: 14, color: Color(0xFF94A3B8)),
+                            Icon(Icons.calendar_today,
+                                size: 14, color: Theme.of(ctx).colorScheme.outline),
                             const SizedBox(width: 4),
                             Text(
                               '${data['fromDate'] ?? '—'} → ${data['toDate'] ?? '—'}',
@@ -213,14 +213,14 @@ class _ErrorState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+          Icon(Icons.wifi_off, size: 64, color: Theme.of(context).colorScheme.error),
           const SizedBox(height: 16),
           Text('Unable to load data',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline)),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: onRetry,

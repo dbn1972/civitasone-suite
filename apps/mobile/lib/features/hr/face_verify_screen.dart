@@ -199,9 +199,9 @@ class _FaceVerifyScreenState extends ConsumerState<FaceVerifyScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: _passed == true
-                ? const Color(0xFF22C55E)
+                ? colorScheme.primary
                 : _passed == false
-                    ? Colors.red.shade300
+                    ? colorScheme.error
                     : colorScheme.outlineVariant,
             width: 3,
           ),
@@ -268,7 +268,7 @@ class _FaceVerifyScreenState extends ConsumerState<FaceVerifyScreen> {
 
   Widget _buildResultCard(ThemeData theme, ColorScheme colorScheme) {
     final passed = _passed ?? false;
-    final resultColor = passed ? const Color(0xFF22C55E) : Colors.red;
+    final resultColor = passed ? colorScheme.primary : colorScheme.error;
     final scorePercent = ((_score ?? 0) * 100).toStringAsFixed(1);
 
     return Card(

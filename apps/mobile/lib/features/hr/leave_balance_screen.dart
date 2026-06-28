@@ -197,11 +197,11 @@ class _LeaveBalanceScreenState extends ConsumerState<LeaveBalanceScreen> {
     // Color coding: green if >50% available, orange if <25%, red if 0
     Color statusColor;
     if (available <= 0) {
-      statusColor = const Color(0xFFEF4444); // Red
+      statusColor = theme.colorScheme.error;
     } else if (percent < 0.25) {
-      statusColor = const Color(0xFFF59E0B); // Orange
+      statusColor = theme.colorScheme.tertiary;
     } else {
-      statusColor = const Color(0xFF22C55E); // Green
+      statusColor = theme.colorScheme.primary;
     }
 
     return Card(
@@ -305,18 +305,18 @@ class _LeaveBalanceScreenState extends ConsumerState<LeaveBalanceScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withOpacity(0.08),
+        color: theme.colorScheme.tertiary.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+        border: Border.all(color: theme.colorScheme.tertiary.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.wifi_off, size: 16, color: Color(0xFFF59E0B)),
+          Icon(Icons.wifi_off, size: 16, color: theme.colorScheme.tertiary),
           const SizedBox(width: 8),
           Text(
             'Showing cached data',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFFF59E0B),
+              color: theme.colorScheme.tertiary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -332,11 +332,11 @@ class _LeaveBalanceScreenState extends ConsumerState<LeaveBalanceScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+            Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
             const SizedBox(height: 16),
             Text('Unable to load leave balance', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            Text(_error!, style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _fetchBalance,

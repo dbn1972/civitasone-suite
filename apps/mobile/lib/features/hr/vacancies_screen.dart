@@ -160,8 +160,8 @@ class _VacanciesScreenState extends ConsumerState<VacanciesScreen>
               label: Text(f.$2),
               selected: selected,
               onSelected: (_) => setState(() => _filterType = f.$1),
-              selectedColor: const Color(0xFF6366F1).withOpacity(0.15),
-              checkmarkColor: const Color(0xFF6366F1),
+              selectedColor: theme.colorScheme.primary.withOpacity(0.15),
+              checkmarkColor: theme.colorScheme.primary,
             ),
           );
         }).toList(),
@@ -200,8 +200,8 @@ class _VacanciesScreenState extends ConsumerState<VacanciesScreen>
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: const Color(0xFF22C55E).withOpacity(0.1),
-              child: const Icon(Icons.check, color: Color(0xFF22C55E)),
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              child: Icon(Icons.check, color: theme.colorScheme.primary),
             ),
             title: Text(v['title'] as String? ?? 'Position'),
             subtitle: Text(
@@ -215,19 +215,20 @@ class _VacanciesScreenState extends ConsumerState<VacanciesScreen>
   }
 
   Widget _applicationStatusChip(String status) {
+    final theme = Theme.of(context);
     Color color;
     switch (status) {
       case 'shortlisted':
-        color = const Color(0xFF22C55E);
+        color = theme.colorScheme.primary;
         break;
       case 'rejected':
-        color = const Color(0xFFEF4444);
+        color = theme.colorScheme.error;
         break;
       case 'interview':
-        color = const Color(0xFFF59E0B);
+        color = theme.colorScheme.tertiary;
         break;
       default:
-        color = const Color(0xFF6366F1);
+        color = theme.colorScheme.primary;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -280,7 +281,7 @@ class _VacanciesScreenState extends ConsumerState<VacanciesScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
@@ -316,14 +317,14 @@ class _VacanciesScreenState extends ConsumerState<VacanciesScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+            Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
             const SizedBox(height: 16),
             Text('Unable to load vacancies',
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(_error!,
                 style:
-                    const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                    TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _fetchVacancies,
@@ -376,11 +377,11 @@ class _VacancyCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _typeColor(type).withOpacity(0.1),
+                    color: _typeColor(theme, type).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(_typeIcon(type),
-                      color: _typeColor(type), size: 24),
+                      color: _typeColor(theme, type), size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -414,7 +415,7 @@ class _VacancyCard extends StatelessWidget {
                   tooltip: 'Share with friends',
                   style: IconButton.styleFrom(
                     backgroundColor:
-                        const Color(0xFF6366F1).withOpacity(0.05),
+                        theme.colorScheme.primary.withOpacity(0.05),
                   ),
                 ),
               ],
@@ -427,14 +428,14 @@ class _VacancyCard extends StatelessWidget {
               runSpacing: 6,
               children: [
                 _MetaChip(
-                    icon: Icons.location_on, label: location, color: const Color(0xFF06B6D4)),
+                    icon: Icons.location_on, label: location, color: theme.colorScheme.tertiary),
                 _MetaChip(
-                    icon: Icons.people, label: '$positions posts', color: const Color(0xFF22C55E)),
+                    icon: Icons.people, label: '$positions posts', color: theme.colorScheme.primary),
                 _MetaChip(
-                    icon: Icons.badge, label: type, color: _typeColor(type)),
+                    icon: Icons.badge, label: type, color: _typeColor(theme, type)),
                 if (payLevel.isNotEmpty)
                   _MetaChip(
-                      icon: Icons.payments, label: payLevel, color: const Color(0xFFF59E0B)),
+                      icon: Icons.payments, label: payLevel, color: theme.colorScheme.tertiary),
               ],
             ),
 
@@ -444,22 +445,22 @@ class _VacancyCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444).withOpacity(0.05),
+                  color: theme.colorScheme.error.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: const Color(0xFFEF4444).withOpacity(0.2)),
+                      color: theme.colorScheme.error.withOpacity(0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.timer, size: 14,
-                        color: Color(0xFFEF4444)),
+                    Icon(Icons.timer, size: 14,
+                        color: theme.colorScheme.error),
                     const SizedBox(width: 6),
                     Text(
                       'Last date: $lastDate',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFFEF4444),
+                          color: theme.colorScheme.error,
                           fontWeight: FontWeight.w500),
                     ),
                   ],
@@ -479,8 +480,8 @@ class _VacancyCard extends StatelessWidget {
                           icon: const Icon(Icons.check, size: 18),
                           label: const Text('Applied'),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF22C55E),
-                            side: const BorderSide(color: Color(0xFF22C55E)),
+                            foregroundColor: theme.colorScheme.primary,
+                            side: BorderSide(color: theme.colorScheme.primary),
                           ),
                         )
                       : FilledButton.icon(
@@ -503,20 +504,20 @@ class _VacancyCard extends StatelessWidget {
     );
   }
 
-  Color _typeColor(String type) {
+  Color _typeColor(ThemeData theme, String type) {
     switch (type) {
       case 'regular':
-        return const Color(0xFF22C55E);
+        return theme.colorScheme.primary;
       case 'contractual':
-        return const Color(0xFFF59E0B);
+        return theme.colorScheme.tertiary;
       case 'deputation':
-        return const Color(0xFF6366F1);
+        return theme.colorScheme.primary;
       case 'internship':
-        return const Color(0xFF06B6D4);
+        return theme.colorScheme.tertiary;
       case 'apprenticeship':
-        return const Color(0xFF8B5CF6);
+        return theme.colorScheme.secondary;
       default:
-        return const Color(0xFF64748B);
+        return theme.colorScheme.onSurfaceVariant;
     }
   }
 
@@ -616,7 +617,7 @@ class _ShareSheet extends StatelessWidget {
               _ShareOption(
                 icon: Icons.sms,
                 label: 'SMS',
-                color: const Color(0xFF6366F1),
+                color: theme.colorScheme.primary,
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -627,7 +628,7 @@ class _ShareSheet extends StatelessWidget {
               _ShareOption(
                 icon: Icons.email,
                 label: 'Email',
-                color: const Color(0xFFEF4444),
+                color: theme.colorScheme.error,
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -638,7 +639,7 @@ class _ShareSheet extends StatelessWidget {
               _ShareOption(
                 icon: Icons.copy,
                 label: 'Copy Link',
-                color: const Color(0xFF64748B),
+                color: theme.colorScheme.onSurfaceVariant,
                 onTap: () {
                   // In production: Clipboard.setData(ClipboardData(text: url))
                   Navigator.pop(context);

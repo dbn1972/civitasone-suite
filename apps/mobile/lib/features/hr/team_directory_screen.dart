@@ -204,7 +204,7 @@ class _TeamDirectoryScreenState extends ConsumerState<TeamDirectoryScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+          Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
           const SizedBox(height: 16),
           Text('Unable to load directory',
               style: theme.textTheme.titleMedium),
@@ -233,14 +233,15 @@ class _DeptChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: FilterChip(
         label: Text(label, style: const TextStyle(fontSize: 12)),
         selected: selected,
         onSelected: (_) => onTap(),
-        selectedColor: const Color(0xFF6366F1).withOpacity(0.15),
-        checkmarkColor: const Color(0xFF6366F1),
+        selectedColor: theme.colorScheme.primary.withOpacity(0.15),
+        checkmarkColor: theme.colorScheme.primary,
         padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
     );
@@ -273,14 +274,14 @@ class _EmployeeCard extends StatelessWidget {
             CircleAvatar(
               radius: 24,
               backgroundColor:
-                  const Color(0xFF6366F1).withOpacity(0.1),
+                  theme.colorScheme.primary.withOpacity(0.1),
               backgroundImage:
                   photoUrl != null ? NetworkImage(photoUrl) : null,
               child: photoUrl == null
                   ? Text(
                       name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                          color: Color(0xFF6366F1),
+                      style: TextStyle(
+                          color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold),
                     )
                   : null,
@@ -315,8 +316,8 @@ class _EmployeeCard extends StatelessWidget {
                 icon: const Icon(Icons.phone, size: 20),
                 style: IconButton.styleFrom(
                   backgroundColor:
-                      const Color(0xFF22C55E).withOpacity(0.1),
-                  foregroundColor: const Color(0xFF22C55E),
+                      theme.colorScheme.primary.withOpacity(0.1),
+                  foregroundColor: theme.colorScheme.primary,
                 ),
               ),
             if (email.isNotEmpty)
@@ -330,8 +331,8 @@ class _EmployeeCard extends StatelessWidget {
                 icon: const Icon(Icons.email, size: 20),
                 style: IconButton.styleFrom(
                   backgroundColor:
-                      const Color(0xFF6366F1).withOpacity(0.1),
-                  foregroundColor: const Color(0xFF6366F1),
+                      theme.colorScheme.primary.withOpacity(0.1),
+                  foregroundColor: theme.colorScheme.primary,
                 ),
               ),
           ],

@@ -122,12 +122,12 @@ class _GrievanceListTab extends ConsumerWidget {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: _categoryColor(category)
+                                color: _categoryColor(ctx, category)
                                     .withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(_categoryIcon(category),
-                                  color: _categoryColor(category), size: 20),
+                                  color: _categoryColor(ctx, category), size: 20),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -176,21 +176,21 @@ class _GrievanceListTab extends ConsumerWidget {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF59E0B)
+                                  color: theme.colorScheme.tertiary
                                       .withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(Icons.cloud_upload,
                                         size: 10,
-                                        color: Color(0xFFF59E0B)),
-                                    SizedBox(width: 4),
+                                        color: theme.colorScheme.tertiary),
+                                    const SizedBox(width: 4),
                                     Text('Syncing',
                                         style: TextStyle(
                                             fontSize: 10,
-                                            color: Color(0xFFF59E0B))),
+                                            color: theme.colorScheme.tertiary)),
                                   ],
                                 ),
                               ),
@@ -209,22 +209,23 @@ class _GrievanceListTab extends ConsumerWidget {
     );
   }
 
-  Color _categoryColor(String category) {
+  Color _categoryColor(BuildContext context, String category) {
+    final theme = Theme.of(context);
     switch (category.toLowerCase()) {
       case 'workplace_safety':
-        return const Color(0xFFEF4444);
+        return theme.colorScheme.error;
       case 'harassment':
-        return const Color(0xFFDC2626);
+        return theme.colorScheme.error;
       case 'pay_discrepancy':
-        return const Color(0xFFF59E0B);
+        return theme.colorScheme.tertiary;
       case 'transfer':
-        return const Color(0xFF6366F1);
+        return theme.colorScheme.primary;
       case 'promotion':
-        return const Color(0xFF8B5CF6);
+        return theme.colorScheme.secondary;
       case 'facilities':
-        return const Color(0xFF06B6D4);
+        return theme.colorScheme.tertiary;
       default:
-        return const Color(0xFF64748B);
+        return theme.colorScheme.onSurfaceVariant;
     }
   }
 
@@ -352,7 +353,7 @@ class _GrievanceFileTabState extends ConsumerState<_GrievanceFileTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error: $e'), backgroundColor: Colors.red),
+              content: Text('Error: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -373,22 +374,22 @@ class _GrievanceFileTabState extends ConsumerState<_GrievanceFileTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withOpacity(0.05),
+              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: const Color(0xFF6366F1).withOpacity(0.2)),
+                  color: theme.colorScheme.primary.withOpacity(0.2)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline,
-                    color: Color(0xFF6366F1), size: 20),
+                Icon(Icons.info_outline,
+                    color: theme.colorScheme.primary, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Your grievance will be routed to the appropriate authority. '
                     'You can track its status in the "My Grievances" tab.',
                     style: theme.textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF6366F1)),
+                        color: theme.colorScheme.primary),
                   ),
                 ),
               ],

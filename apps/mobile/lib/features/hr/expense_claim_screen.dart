@@ -150,17 +150,17 @@ class _ExpenseClaimScreenState extends ConsumerState<ExpenseClaimScreen>
       children: [
         Expanded(
           child: _SummaryChip(
-              label: 'Total', value: _fmt(total), color: const Color(0xFF6366F1)),
+              label: 'Total', value: _fmt(total), color: theme.colorScheme.primary),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _SummaryChip(
-              label: 'Pending', value: _fmt(pending), color: const Color(0xFFF59E0B)),
+              label: 'Pending', value: _fmt(pending), color: theme.colorScheme.tertiary),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _SummaryChip(
-              label: 'Approved', value: _fmt(approved), color: const Color(0xFF22C55E)),
+              label: 'Approved', value: _fmt(approved), color: theme.colorScheme.primary),
         ),
       ],
     );
@@ -172,7 +172,7 @@ class _ExpenseClaimScreenState extends ConsumerState<ExpenseClaimScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+          Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
           const SizedBox(height: 16),
           Text('Unable to load claims', style: theme.textTheme.titleMedium),
           const SizedBox(height: 16),
@@ -240,11 +240,11 @@ class _ClaimCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: _categoryColor(category).withOpacity(0.1),
+                color: _categoryColor(theme, category).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(_categoryIcon(category),
-                  color: _categoryColor(category), size: 22),
+                  color: _categoryColor(theme, category), size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -258,8 +258,8 @@ class _ClaimCard extends StatelessWidget {
                               ?.copyWith(fontWeight: FontWeight.w600)),
                       if (hasReceipt) ...[
                         const SizedBox(width: 6),
-                        const Icon(Icons.attach_file, size: 14,
-                            color: Color(0xFF22C55E)),
+                        Icon(Icons.attach_file, size: 14,
+                            color: theme.colorScheme.primary),
                       ],
                     ],
                   ),
@@ -291,22 +291,22 @@ class _ClaimCard extends StatelessWidget {
     );
   }
 
-  Color _categoryColor(String cat) {
+  Color _categoryColor(ThemeData theme, String cat) {
     switch (cat.toLowerCase()) {
       case 'travel':
-        return const Color(0xFF6366F1);
+        return theme.colorScheme.primary;
       case 'food':
-        return const Color(0xFFF59E0B);
+        return theme.colorScheme.tertiary;
       case 'accommodation':
-        return const Color(0xFF8B5CF6);
+        return theme.colorScheme.secondary;
       case 'transport':
-        return const Color(0xFF06B6D4);
+        return theme.colorScheme.tertiary;
       case 'medical':
-        return const Color(0xFFEF4444);
+        return theme.colorScheme.error;
       case 'stationery':
-        return const Color(0xFF22C55E);
+        return theme.colorScheme.primary;
       default:
-        return const Color(0xFF64748B);
+        return theme.colorScheme.onSurfaceVariant;
     }
   }
 
@@ -461,7 +461,7 @@ class _NewClaimTabState extends ConsumerState<_NewClaimTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -564,7 +564,7 @@ class _NewClaimTabState extends ConsumerState<_NewClaimTab> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: _receiptKey != null
-                            ? const Color(0xFF22C55E).withOpacity(0.1)
+                            ? theme.colorScheme.primary.withOpacity(0.1)
                             : theme.colorScheme.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -573,7 +573,7 @@ class _NewClaimTabState extends ConsumerState<_NewClaimTab> {
                             ? Icons.check_circle
                             : Icons.camera_alt,
                         color: _receiptKey != null
-                            ? const Color(0xFF22C55E)
+                            ? theme.colorScheme.primary
                             : theme.colorScheme.outline,
                         size: 28,
                       ),
@@ -599,7 +599,7 @@ class _NewClaimTabState extends ConsumerState<_NewClaimTab> {
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+                    const Icon(Icons.chevron_right),
                   ],
                 ),
               ),

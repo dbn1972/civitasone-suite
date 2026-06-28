@@ -161,7 +161,7 @@ class _KudosScreenState extends ConsumerState<KudosScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+          Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
           const SizedBox(height: 16),
           Text('Unable to load feed', style: theme.textTheme.titleMedium),
           const SizedBox(height: 16),
@@ -226,10 +226,10 @@ class _KudosCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 18,
                   backgroundColor:
-                      const Color(0xFFF59E0B).withOpacity(0.1),
+                      theme.colorScheme.tertiary.withOpacity(0.1),
                   child: Text(giverName[0],
-                      style: const TextStyle(
-                          color: Color(0xFFF59E0B),
+                      style: TextStyle(
+                          color: theme.colorScheme.tertiary,
                           fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(width: 8),
@@ -282,7 +282,7 @@ class _KudosCard extends StatelessWidget {
                         fontSize: 11, color: theme.colorScheme.outline)),
                 const Spacer(),
                 Icon(Icons.favorite,
-                    size: 14, color: const Color(0xFFEF4444).withOpacity(0.6)),
+                    size: 14, color: theme.colorScheme.error.withOpacity(0.6)),
                 const SizedBox(width: 4),
                 Text('$reactions',
                     style: TextStyle(
@@ -313,36 +313,37 @@ class _BadgeIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     IconData icon;
     Color color;
     switch (badge) {
       case 'star':
         icon = Icons.star;
-        color = const Color(0xFFF59E0B);
+        color = theme.colorScheme.tertiary;
         break;
       case 'rocket':
         icon = Icons.rocket_launch;
-        color = const Color(0xFF6366F1);
+        color = theme.colorScheme.primary;
         break;
       case 'heart':
         icon = Icons.favorite;
-        color = const Color(0xFFEF4444);
+        color = theme.colorScheme.error;
         break;
       case 'trophy':
         icon = Icons.emoji_events;
-        color = const Color(0xFF22C55E);
+        color = theme.colorScheme.primary;
         break;
       case 'fire':
         icon = Icons.local_fire_department;
-        color = const Color(0xFFEF4444);
+        color = theme.colorScheme.error;
         break;
       case 'lightning':
         icon = Icons.bolt;
-        color = const Color(0xFFF59E0B);
+        color = theme.colorScheme.tertiary;
         break;
       default:
         icon = Icons.thumb_up;
-        color = const Color(0xFF6366F1);
+        color = theme.colorScheme.primary;
     }
 
     return Container(
@@ -447,7 +448,7 @@ class _GiveKudosTabState extends ConsumerState<_GiveKudosTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -468,18 +469,18 @@ class _GiveKudosTabState extends ConsumerState<_GiveKudosTab> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                const Color(0xFFF59E0B).withOpacity(0.05),
-                const Color(0xFFEC4899).withOpacity(0.05),
+                theme.colorScheme.tertiary.withOpacity(0.05),
+                theme.colorScheme.tertiary.withOpacity(0.05),
               ],
             ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-                color: const Color(0xFFF59E0B).withOpacity(0.2)),
+                color: theme.colorScheme.tertiary.withOpacity(0.2)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.emoji_events,
-                  color: Color(0xFFF59E0B), size: 28),
+              Icon(Icons.emoji_events,
+                  color: theme.colorScheme.tertiary, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -544,12 +545,12 @@ class _GiveKudosTabState extends ConsumerState<_GiveKudosTab> {
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(0xFFF59E0B).withOpacity(0.15)
+                      ? theme.colorScheme.tertiary.withOpacity(0.15)
                       : theme.colorScheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: selected
-                        ? const Color(0xFFF59E0B)
+                        ? theme.colorScheme.tertiary
                         : theme.colorScheme.outlineVariant,
                     width: selected ? 2 : 1,
                   ),
@@ -601,7 +602,7 @@ class _GiveKudosTabState extends ConsumerState<_GiveKudosTab> {
           label: Text(_submitting ? 'Sending…' : 'Send Kudos 🎉'),
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            backgroundColor: const Color(0xFFF59E0B),
+            backgroundColor: theme.colorScheme.tertiary,
           ),
         ),
       ],

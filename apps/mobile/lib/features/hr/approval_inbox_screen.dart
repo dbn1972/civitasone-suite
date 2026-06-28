@@ -112,7 +112,7 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Action failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Action failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -136,7 +136,7 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
                   '${_requests.length} pending',
                   style: const TextStyle(fontSize: 12, color: Colors.white),
                 ),
-                backgroundColor: const Color(0xFFF59E0B),
+                backgroundColor: theme.colorScheme.tertiary,
                 side: BorderSide.none,
               ),
             ),
@@ -242,7 +242,7 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
             // Leave details
             Row(
               children: [
-                const Icon(Icons.category_outlined, size: 14, color: Color(0xFF94A3B8)),
+                Icon(Icons.category_outlined, size: 14, color: theme.colorScheme.outline),
                 const SizedBox(width: 4),
                 Text(
                   request['leaveType'] as String,
@@ -254,14 +254,14 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE0E7FF),
+                    color: theme.colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     '${request['days']} day${(request['days'] as int) == 1 ? '' : 's'}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF4338CA),
+                      color: theme.colorScheme.onPrimaryContainer,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -271,7 +271,7 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.calendar_today, size: 14, color: Color(0xFF94A3B8)),
+                Icon(Icons.calendar_today, size: 14, color: theme.colorScheme.outline),
                 const SizedBox(width: 4),
                 Text(
                   '${request['fromDate']} → ${request['toDate']}',
@@ -301,8 +301,8 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
                     icon: const Icon(Icons.close, size: 18),
                     label: const Text('Reject'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(color: theme.colorScheme.error),
                     ),
                   ),
                 ),
@@ -322,7 +322,7 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
                         : const Icon(Icons.check, size: 18),
                     label: const Text('Approve'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF22C55E),
+                      backgroundColor: theme.colorScheme.primary,
                     ),
                   ),
                 ),
@@ -338,18 +338,18 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withOpacity(0.08),
+        color: theme.colorScheme.tertiary.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+        border: Border.all(color: theme.colorScheme.tertiary.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.wifi_off, size: 16, color: Color(0xFFF59E0B)),
+          Icon(Icons.wifi_off, size: 16, color: theme.colorScheme.tertiary),
           const SizedBox(width: 8),
           Text(
             'Showing cached data',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFFF59E0B),
+              color: theme.colorScheme.tertiary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -385,11 +385,11 @@ class _ApprovalInboxScreenState extends ConsumerState<ApprovalInboxScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+            Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
             const SizedBox(height: 16),
             Text('Unable to load requests', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            Text(_error!, style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _fetchRequests,

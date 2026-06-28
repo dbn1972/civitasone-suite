@@ -219,13 +219,13 @@ class _LoanStatusScreenState extends ConsumerState<LoanStatusScreen>
     Color statusColor;
     switch (status) {
       case 'active':
-        statusColor = const Color(0xFF22C55E);
+        statusColor = theme.colorScheme.primary;
         break;
       case 'closed':
-        statusColor = const Color(0xFF64748B);
+        statusColor = theme.colorScheme.onSurfaceVariant;
         break;
       default:
-        statusColor = const Color(0xFFF59E0B);
+        statusColor = theme.colorScheme.tertiary;
     }
 
     return Card(
@@ -241,11 +241,11 @@ class _LoanStatusScreenState extends ConsumerState<LoanStatusScreen>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
+                    color: theme.colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(_loanIcon(loanType),
-                      color: const Color(0xFF6366F1), size: 22),
+                      color: theme.colorScheme.primary, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -295,9 +295,9 @@ class _LoanStatusScreenState extends ConsumerState<LoanStatusScreen>
               child: LinearProgressIndicator(
                 value: totalEmis > 0 ? paidEmis / totalEmis : 0,
                 backgroundColor:
-                    const Color(0xFF6366F1).withOpacity(0.1),
+                    theme.colorScheme.primary.withOpacity(0.1),
                 valueColor:
-                    const AlwaysStoppedAnimation(Color(0xFF6366F1)),
+                    AlwaysStoppedAnimation(theme.colorScheme.primary),
                 minHeight: 6,
               ),
             ),
@@ -360,9 +360,9 @@ class _LoanStatusScreenState extends ConsumerState<LoanStatusScreen>
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: const Color(0xFFF59E0B).withOpacity(0.1),
-              child: const Icon(Icons.payments,
-                  color: Color(0xFFF59E0B)),
+              backgroundColor: theme.colorScheme.tertiary.withOpacity(0.1),
+              child: Icon(Icons.payments,
+                  color: theme.colorScheme.tertiary),
             ),
             title: Text(
                 'Advance: ${_fmt(amount)}',
@@ -376,9 +376,9 @@ class _LoanStatusScreenState extends ConsumerState<LoanStatusScreen>
               value: amount > 0 ? repaid / amount : 0,
               strokeWidth: 3,
               backgroundColor:
-                  const Color(0xFFF59E0B).withOpacity(0.1),
+                  theme.colorScheme.tertiary.withOpacity(0.1),
               valueColor:
-                  const AlwaysStoppedAnimation(Color(0xFFF59E0B)),
+                  AlwaysStoppedAnimation(theme.colorScheme.tertiary),
             ),
           ),
         );
@@ -392,7 +392,7 @@ class _LoanStatusScreenState extends ConsumerState<LoanStatusScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+          Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
           const SizedBox(height: 16),
           Text('Unable to load data', style: theme.textTheme.titleMedium),
           const SizedBox(height: 16),

@@ -186,18 +186,18 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withOpacity(0.08),
+        color: colorScheme.tertiary.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+        border: Border.all(color: colorScheme.tertiary.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.wifi_off, size: 16, color: Color(0xFFF59E0B)),
+          Icon(Icons.wifi_off, size: 16, color: colorScheme.tertiary),
           const SizedBox(width: 8),
           Text(
             'Showing cached data',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFFF59E0B),
+              color: colorScheme.tertiary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -213,17 +213,17 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
 
     switch (_todayStatus) {
       case 'present':
-        statusColor = const Color(0xFF22C55E);
+        statusColor = colorScheme.primary;
         statusIcon = Icons.check_circle;
         statusLabel = 'Present';
         break;
       case 'on_leave':
-        statusColor = const Color(0xFFF59E0B);
+        statusColor = colorScheme.tertiary;
         statusIcon = Icons.beach_access;
         statusLabel = 'On Leave';
         break;
       default:
-        statusColor = const Color(0xFFEF4444);
+        statusColor = colorScheme.error;
         statusIcon = Icons.cancel;
         statusLabel = 'Absent';
     }
@@ -290,6 +290,7 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
   }
 
   Widget _buildKpiGrid(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     return Row(
       children: [
         Expanded(
@@ -297,7 +298,7 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
             title: 'Headcount',
             value: '$_headcount',
             icon: Icons.people,
-            color: const Color(0xFF6366F1),
+            color: colorScheme.primary,
           ),
         ),
         const SizedBox(width: 12),
@@ -306,7 +307,7 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
             title: 'Attendance',
             value: '${_attendancePercent.toStringAsFixed(1)}%',
             icon: Icons.trending_up,
-            color: const Color(0xFF22C55E),
+            color: colorScheme.primary,
           ),
         ),
         const SizedBox(width: 12),
@@ -315,7 +316,7 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
             title: 'Pending\nLeaves',
             value: '$_pendingLeaves',
             icon: Icons.pending_actions,
-            color: const Color(0xFFF59E0B),
+            color: colorScheme.tertiary,
           ),
         ),
       ],
@@ -327,19 +328,19 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
       (
         label: 'Apply Leave',
         icon: Icons.event_note,
-        color: const Color(0xFF6366F1),
+        color: colorScheme.primary,
         route: '/hr/leave/apply',
       ),
       (
         label: 'Mark Attendance',
         icon: Icons.location_on,
-        color: const Color(0xFF22C55E),
+        color: colorScheme.primary,
         route: '/hr/geo-checkin',
       ),
       (
         label: 'View Payslip',
         icon: Icons.receipt_long,
-        color: const Color(0xFFF59E0B),
+        color: colorScheme.tertiary,
         route: '/hr/payslips',
       ),
     ];
@@ -359,7 +360,7 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
               child: Icon(a.icon, color: a.color),
             ),
             title: Text(a.label, style: const TextStyle(fontWeight: FontWeight.w500)),
-            trailing: const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+            trailing: Icon(Icons.chevron_right, color: colorScheme.outline),
           ),
         );
       }).toList(),
@@ -373,11 +374,11 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+            Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
             const SizedBox(height: 16),
             Text('Unable to load dashboard', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            Text(_error!, style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _fetchDashboard,

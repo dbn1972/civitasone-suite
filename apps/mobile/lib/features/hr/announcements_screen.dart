@@ -124,7 +124,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+            Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
             const SizedBox(height: 16),
             Text('Unable to load notifications',
                 style: theme.textTheme.titleMedium),
@@ -159,27 +159,27 @@ class _NotificationCard extends StatelessWidget {
     IconData typeIcon;
     switch (type) {
       case 'approval':
-        typeColor = const Color(0xFFF59E0B);
+        typeColor = theme.colorScheme.tertiary;
         typeIcon = Icons.approval;
         break;
       case 'leave':
-        typeColor = const Color(0xFF22C55E);
+        typeColor = theme.colorScheme.primary;
         typeIcon = Icons.event_note;
         break;
       case 'payroll':
-        typeColor = const Color(0xFF6366F1);
+        typeColor = theme.colorScheme.primary;
         typeIcon = Icons.receipt_long;
         break;
       case 'announcement':
-        typeColor = const Color(0xFFEF4444);
+        typeColor = theme.colorScheme.error;
         typeIcon = Icons.campaign;
         break;
       case 'grievance':
-        typeColor = const Color(0xFF06B6D4);
+        typeColor = theme.colorScheme.tertiary;
         typeIcon = Icons.feedback;
         break;
       default:
-        typeColor = const Color(0xFF64748B);
+        typeColor = theme.colorScheme.onSurfaceVariant;
         typeIcon = Icons.info_outline;
     }
 

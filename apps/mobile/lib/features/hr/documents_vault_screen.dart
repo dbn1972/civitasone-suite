@@ -108,7 +108,7 @@ class _DocumentsVaultScreenState extends ConsumerState<DocumentsVaultScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Downloading $name…'),
-        backgroundColor: const Color(0xFF6366F1),
+        backgroundColor: Theme.of(context).colorScheme.primary,
       ),
     );
     // In production: fetch presigned URL and open in browser/viewer
@@ -141,7 +141,7 @@ class _DocumentsVaultScreenState extends ConsumerState<DocumentsVaultScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off, size: 64, color: Color(0xFFEF4444)),
+          Icon(Icons.wifi_off, size: 64, color: theme.colorScheme.error),
           const SizedBox(height: 16),
           Text('Unable to load documents',
               style: theme.textTheme.titleMedium),
@@ -177,10 +177,10 @@ class _DocumentCard extends StatelessWidget {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: _typeColor(type).withOpacity(0.1),
+            color: _typeColor(theme, type).withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(_typeIcon(type), color: _typeColor(type), size: 24),
+          child: Icon(_typeIcon(type), color: _typeColor(theme, type), size: 24),
         ),
         title: Text(name,
             style: theme.textTheme.bodyMedium
@@ -194,8 +194,8 @@ class _DocumentCard extends StatelessWidget {
           onPressed: onDownload,
           icon: const Icon(Icons.download),
           style: IconButton.styleFrom(
-            backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
-            foregroundColor: const Color(0xFF6366F1),
+            backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+            foregroundColor: theme.colorScheme.primary,
           ),
         ),
         onTap: onDownload,
@@ -209,22 +209,22 @@ class _DocumentCard extends StatelessWidget {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
   }
 
-  Color _typeColor(String type) {
+  Color _typeColor(ThemeData theme, String type) {
     switch (type.toLowerCase()) {
       case 'pdf':
-        return const Color(0xFFEF4444);
+        return theme.colorScheme.error;
       case 'jpg':
       case 'jpeg':
       case 'png':
-        return const Color(0xFF22C55E);
+        return theme.colorScheme.primary;
       case 'doc':
       case 'docx':
-        return const Color(0xFF6366F1);
+        return theme.colorScheme.primary;
       case 'xls':
       case 'xlsx':
-        return const Color(0xFF22C55E);
+        return theme.colorScheme.primary;
       default:
-        return const Color(0xFF64748B);
+        return theme.colorScheme.onSurfaceVariant;
     }
   }
 

@@ -78,7 +78,7 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Location error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Location error: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -171,7 +171,7 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Check-in failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Check-in failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -242,15 +242,15 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
             height: 160,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF22C55E).withOpacity(0.1),
+              color: colorScheme.primary.withOpacity(0.1),
               border: Border.all(
-                color: const Color(0xFF22C55E).withOpacity(0.5),
+                color: colorScheme.primary.withOpacity(0.5),
                 width: 2,
               ),
             ),
           ),
           // Office marker
-          const Icon(Icons.business, size: 28, color: Color(0xFF6366F1)),
+          Icon(Icons.business, size: 28, color: colorScheme.primary),
           // User marker
           if (_latitude != null)
             Positioned(
@@ -258,8 +258,8 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
               left: 120,
               child: Container(
                 padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF6366F1),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.person, size: 16, color: Colors.white),
@@ -296,7 +296,7 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
           children: [
             Icon(
               _latitude != null ? Icons.location_on : Icons.location_searching,
-              color: _latitude != null ? const Color(0xFF22C55E) : Colors.grey,
+              color: _latitude != null ? theme.colorScheme.primary : theme.colorScheme.outline,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -340,13 +340,13 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
               height: 56,
               decoration: BoxDecoration(
                 color: _selfieTaken
-                    ? const Color(0xFF22C55E).withOpacity(0.1)
+                    ? colorScheme.primary.withOpacity(0.1)
                     : colorScheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 _selfieTaken ? Icons.check_circle : Icons.camera_alt,
-                color: _selfieTaken ? const Color(0xFF22C55E) : colorScheme.outline,
+                color: _selfieTaken ? colorScheme.primary : colorScheme.outline,
                 size: 28,
               ),
             ),
@@ -384,7 +384,7 @@ class _GeoCheckinScreenState extends ConsumerState<GeoCheckinScreen> {
 
   Widget _buildResultCard(ThemeData theme, ColorScheme colorScheme) {
     final isInside = _resultStatus == 'within_geofence';
-    final resultColor = isInside ? const Color(0xFF22C55E) : const Color(0xFFF59E0B);
+    final resultColor = isInside ? colorScheme.primary : colorScheme.tertiary;
 
     return Card(
       color: resultColor.withOpacity(0.05),

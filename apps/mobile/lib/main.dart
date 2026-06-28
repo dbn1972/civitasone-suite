@@ -166,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign-in failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Sign-in failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -176,6 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -186,29 +187,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.1),
+                  color: theme.colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.account_balance,
-                    size: 36, color: Color(0xFF6366F1)),
+                child: Icon(Icons.account_balance,
+                    size: 36, color: theme.colorScheme.primary),
               ),
               const SizedBox(height: 24),
               Text('CivitasOne Suite',
-                  style: Theme.of(context)
+                  style: theme
                       .textTheme
                       .headlineSmall
                       ?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(
                 'Government · PSU · Enterprise',
-                style: Theme.of(context)
+                style: theme
                     .textTheme
                     .bodyMedium
-                    ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                    ?.copyWith(color: theme.colorScheme.outline),
               ),
               const SizedBox(height: 8),
-              const Text('PKCE · device trust · offline sync',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+              Text('PKCE · device trust · offline sync',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
@@ -320,8 +321,8 @@ class DashboardScreen extends StatelessWidget {
                 subtitle: Text(m.description,
                     style: TextStyle(
                         fontSize: 12, color: theme.colorScheme.outline)),
-                trailing: const Icon(Icons.chevron_right,
-                    color: Color(0xFF94A3B8)),
+                trailing: Icon(Icons.chevron_right,
+                    color: theme.colorScheme.outline),
               ),
             )),
       ],

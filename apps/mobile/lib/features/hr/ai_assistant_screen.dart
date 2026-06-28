@@ -99,10 +99,10 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(children: [
-          Icon(Icons.smart_toy, size: 22, color: Color(0xFF6366F1)),
-          SizedBox(width: 8),
-          Text('HR Assistant'),
+        title: Row(children: [
+          Icon(Icons.smart_toy, size: 22, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          const Text('HR Assistant'),
         ]),
         actions: [
           IconButton(
@@ -124,12 +124,12 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
             itemCount: _messages.length + (_sending ? 1 : 0),
             itemBuilder: (_, i) {
               if (i == _messages.length) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Row(children: [
-                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                    SizedBox(width: 12),
-                    Text('Thinking…', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                    const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 12),
+                    Text('Thinking…', style: TextStyle(color: theme.colorScheme.outline, fontSize: 13)),
                   ]),
                 );
               }
@@ -150,7 +150,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                 child: ActionChip(
                   label: Text(s, style: const TextStyle(fontSize: 12)),
                   onPressed: () => _send(s),
-                  backgroundColor: const Color(0xFF6366F1).withOpacity(0.05),
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.05),
                 ),
               )).toList(),
             ),
@@ -222,10 +222,10 @@ class _MessageBubble extends StatelessWidget {
             Container(
               width: 32, height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
+                color: theme.colorScheme.primary.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.smart_toy, size: 18, color: Color(0xFF6366F1)),
+              child: Icon(Icons.smart_toy, size: 18, color: theme.colorScheme.primary),
             ),
             const SizedBox(width: 8),
           ],
@@ -235,7 +235,7 @@ class _MessageBubble extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isBot
                     ? theme.colorScheme.surfaceContainerLow
-                    : const Color(0xFF6366F1),
+                    : theme.colorScheme.primary,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
@@ -246,7 +246,7 @@ class _MessageBubble extends StatelessWidget {
               child: Text(
                 message.text,
                 style: TextStyle(
-                  color: isBot ? theme.colorScheme.onSurface : Colors.white,
+                  color: isBot ? theme.colorScheme.onSurface : theme.colorScheme.onPrimary,
                   fontSize: 14,
                 ),
               ),
