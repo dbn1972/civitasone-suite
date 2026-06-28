@@ -65,7 +65,7 @@ class AppShell extends StatelessWidget {
         (label: 'Contracts', icon: Icons.assignment, route: '/contracts/milestones'),
         (label: 'Knowledge Base', icon: Icons.menu_book, route: '/knowledge'),
         (label: 'Reports', icon: Icons.bar_chart, route: '/reports'),
-        (label: 'Estab Files', icon: Icons.description, route: '/estab/files'),
+        (label: 'eFile', icon: Icons.folder_copy, route: '/estab/files'),
         (label: 'MIS', icon: Icons.analytics, route: '/mis'),
       ],
     ),

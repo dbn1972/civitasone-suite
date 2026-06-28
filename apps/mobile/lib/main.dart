@@ -24,6 +24,7 @@ import 'features/helpdesk/tickets_screen.dart';
 import 'features/helpdesk/ticket_create_screen.dart';
 import 'features/projects/projects_screen.dart';
 import 'features/estab/files_screen.dart';
+import 'features/estab/efile_screen.dart';
 import 'features/mis/mis_screen.dart';
 import 'features/assets/asset_scan_screen.dart';
 import 'features/contracts/contract_milestones_screen.dart';
@@ -125,7 +126,7 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/crm/deals', builder: (_, __) => const DealsScreen()),
             GoRoute(path: '/helpdesk/tickets', builder: (_, __) => const TicketsScreen()),
             GoRoute(path: '/projects', builder: (_, __) => const ProjectsScreen()),
-            GoRoute(path: '/estab/files', builder: (_, __) => const EstabFilesScreen()),
+            GoRoute(path: '/estab/files', builder: (_, __) => const EFileScreen()),
             GoRoute(path: '/mis', builder: (_, __) => const MisScreen()),
             GoRoute(path: '/assets/scan', builder: (_, __) => const AssetScanScreen()),
             GoRoute(path: '/contracts/milestones', builder: (_, __) => const ContractMilestonesScreen()),
