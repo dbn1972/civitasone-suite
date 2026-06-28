@@ -1,0 +1,5 @@
+# Large external reference material — kept locally, not committed.
+*.pdf
+eoffice_manual_text.txt
+eoffice_manual_flat.txt
+_extract.py
