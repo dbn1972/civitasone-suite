@@ -41,6 +41,10 @@ interface DataTableProps<T extends Record<string, unknown>> {
   emptyMessage?: string;
   /** Guided empty state: a call-to-action (e.g. an "Add your first bill" link/button). */
   emptyAction?: ReactNode;
+  /** Opt-in: show a "Download CSV" button in the toolbar. */
+  exportable?: boolean;
+  /** Filename for CSV export (without extension). */
+  exportFilename?: string;
 }
 
 function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): ReactNode {
@@ -79,6 +83,8 @@ export function DataTable<T extends Record<string, unknown>>({
   emptyTitle = "No records found",
   emptyMessage = "There are no items to display yet.",
   emptyAction,
+  exportable = false,
+  exportFilename = "export",
 }: DataTableProps<T>) {
   const router = useRouter();
 
@@ -144,23 +150,48 @@ export function DataTable<T extends Record<string, unknown>>({
     }
   };
 
+  function downloadCsv() {
+    const header = columns.map((c) => c.label).join(",");
+    const csvRows = sorted.map((row) =>
+      columns.map((col) => {
+        const val = String(row[col.key] ?? "").replace(/"/g, '""');
+        return val.includes(",") || val.includes('"') || val.includes("\n") ? `"${val}"` : val;
+      }).join(",")
+    );
+    const csv = [header, ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${exportFilename}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
-      {filterable && (
-        <div className="dt-toolbar">
-          <div className="dt-filter">
-            <span aria-hidden="true" style={{ fontSize: 13 }}>🔍</span>
-            <input
-              type="text"
-              value={filter}
-              placeholder={filterPlaceholder}
-              aria-label={filterPlaceholder}
-              onChange={(e) => {
-                setFilter(e.target.value);
-                setPage(0);
-              }}
-            />
-          </div>
+      {(filterable || exportable) && (
+        <div className="dt-toolbar" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {filterable && (
+            <div className="dt-filter" style={{ flex: 1 }}>
+              <span aria-hidden="true" style={{ fontSize: 13 }}>🔍</span>
+              <input
+                type="text"
+                value={filter}
+                placeholder={filterPlaceholder}
+                aria-label={filterPlaceholder}
+                onChange={(e) => {
+                  setFilter(e.target.value);
+                  setPage(0);
+                }}
+              />
+            </div>
+          )}
+          {exportable && sorted.length > 0 && (
+            <button type="button" className="btn ghost sm" onClick={downloadCsv} style={{ whiteSpace: "nowrap" }}>
+              ⬇ CSV
+            </button>
+          )}
         </div>
       )}
 

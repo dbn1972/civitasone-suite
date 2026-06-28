@@ -85,8 +85,9 @@ export default async function IndentsPage() {
             rowLinkPrefix="/procurement/indents/"
             sortable
             filterable
-            filterPlaceholder="Filter by indent no, department, requester…"
+        filterPlaceholder="Filter by indent no, department, requester…"
             pageSize={10}
+            exportable
             columns={[
               { key: "indentNo", label: "Indent No" },
               { key: "requestedBy", label: "Requested By" },

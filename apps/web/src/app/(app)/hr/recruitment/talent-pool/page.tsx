@@ -95,8 +95,9 @@ export default async function TalentPoolPage({
             rows={rows}
             sortable
             filterable
-            filterPlaceholder="Filter by name, email, skills…"
+        filterPlaceholder="Filter by name, email, skills…"
             pageSize={20}
+            exportable
           />
         )}
       </Card>

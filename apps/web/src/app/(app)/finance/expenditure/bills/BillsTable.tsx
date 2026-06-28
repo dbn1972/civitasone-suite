@@ -54,6 +54,7 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
         filterable
         filterPlaceholder="Search bills…"
         pageSize={15}
+        exportable
         emptyIcon="🧾"
         emptyTitle="No bills yet"
         emptyMessage="When you receive a vendor bill, record it here to pre-audit, approve and pay it."

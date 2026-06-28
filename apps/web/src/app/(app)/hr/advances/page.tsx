@@ -85,7 +85,8 @@ export default async function AdvancesPage() {
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Advances Register</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or purpose…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable exportable
+        filterPlaceholder="Filter by employee or purpose…" pageSize={15} />
       </div>
     </main>
   );

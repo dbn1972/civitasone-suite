@@ -42,6 +42,7 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
         filterable
         filterPlaceholder="Search by name, code or department…"
         pageSize={15}
+        exportable
         emptyIcon="👥"
         emptyTitle="No people added yet"
         emptyMessage="Add the people who work in your office so you can manage their leave, attendance and pay."

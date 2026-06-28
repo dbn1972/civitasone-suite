@@ -85,8 +85,9 @@ export default async function GRNPage() {
             rowLinkPrefix="/procurement/grn/"
             sortable
             filterable
-            filterPlaceholder="Filter by GRN no, PO ref, vendor…"
+        filterPlaceholder="Filter by GRN no, PO ref, vendor…"
             pageSize={10}
+            exportable
             columns={[
               { key: "grnNo", label: "GRN No" },
               { key: "poRef", label: "PO Ref" },

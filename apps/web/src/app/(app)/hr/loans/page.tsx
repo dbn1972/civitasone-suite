@@ -83,7 +83,8 @@ export default async function LoansPage() {
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Loans Register</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, loan type or status…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable exportable
+        filterPlaceholder="Filter by employee, loan type or status…" pageSize={15} />
       </div>
     </main>
   );
