@@ -48,6 +48,8 @@ export const hrmsPromotions = lifecycleSchema.table("hrms_promotions", {
   version:       integer("version").notNull().default(1),
 });
 
+export type PromotionRow = typeof hrmsPromotions.$inferSelect;
+
 export const hrmsSeparations = lifecycleSchema.table("hrms_separations", {
   id:               uuid("id").primaryKey().defaultRandom(),
   tenantId:         uuid("tenant_id").notNull(),

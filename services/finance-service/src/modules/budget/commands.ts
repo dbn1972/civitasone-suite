@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { assertValidFY } from "./domain.js";
 import * as repo from "./repo.js";
 import { db } from "../../shared/db.js";
-import type { CreateBudgetBody, ReappropriateBody, CreateSanctionBody, UpdateHeadHoABody, RejectSanctionBody } from "./validators.js";
+import type { CreateBudgetBody, ReappropriateBody, CreateSanctionBody, UpdateHeadHoABody, RejectSanctionBody, SubmitReappropriationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -71,5 +71,24 @@ export async function submitSanctionForApproval(ctx: RequestContext, id: string)
     payload: { id, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * Submit a budget re-appropriation to eOffice for administrative approval.
+ * Creates the re-appropriation request in status `pending_approval` (the route
+ * `:id` is the request id / eFile refId). The eFile is raised via the eOffice
+ * integration; once it is approved the `finance.reappropriation.file_decided`
+ * callback (see reappropriation-eoffice-consumer) moves the request to
+ * `approved` AND applies the change to the target budget's reMinor — so the
+ * approval actually executes the re-appropriation.
+ */
+export async function submitReappropriationForApproval(ctx: RequestContext, id: string, body: SubmitReappropriationBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.reappropriationSubmitApproval, {
+    messageId: id, type: COMMANDS.reappropriationSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "reappropriation", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

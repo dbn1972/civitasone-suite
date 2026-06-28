@@ -39,4 +39,19 @@ export const rejectSanctionBody = z.object({
 });
 export type RejectSanctionBody = z.infer<typeof rejectSanctionBody>;
 
+/**
+ * Submit a budget re-appropriation to eOffice for administrative approval.
+ * Creates the re-appropriation request (status pending_approval); the route
+ * `:id` becomes the request id / eFile refId. `amountMinor` is the new
+ * revised-estimate target (paise) applied to the target budget on approval —
+ * same semantics as the direct re_appropriate path's `reMinor`.
+ */
+export const submitReappropriationBody = z.object({
+  budgetId:    z.string().uuid(),
+  headId:      z.string().uuid().optional(),
+  amountMinor: z.number().int().nonnegative(),
+  reason:      z.string().min(3).max(500),
+});
+export type SubmitReappropriationBody = z.infer<typeof submitReappropriationBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });

@@ -3,11 +3,13 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerContractConsumers } from "./modules/contracts/consumer.js";
+import { registerEOfficeDecisionConsumers } from "./modules/contracts/eoffice-consumer.js";
 import { registerRateConsumers }     from "./modules/rate/consumer.js";
 
 const log = pino({ name: "contract-worker" });
 
 registerContractConsumers(queue);
+registerEOfficeDecisionConsumers(queue);
 registerRateConsumers(queue);
 
 await queue.start();

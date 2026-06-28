@@ -1,6 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { financeBudgets, financeSanctions, financeHeads, type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow } from "./schema.js";
+import { financeBudgets, financeSanctions, financeHeads, financeReappropriations, type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow, type ReappropriationRow, type ReappropriationInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -56,6 +56,26 @@ export async function updateSanction(tx: Writer, id: string, patch: Partial<Sanc
 
 export async function findSanctionByIdTx(tx: Writer, id: string): Promise<SanctionRow | null> {
   const rows = await (tx as typeof db).select().from(financeSanctions).where(eq(financeSanctions.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+// ── re-appropriation request reads/writes (consumer only for writes) ─────────
+
+export async function insertReappropriation(tx: Writer, row: ReappropriationInsert): Promise<void> {
+  await tx.insert(financeReappropriations).values(row);
+}
+
+export async function updateReappropriation(tx: Writer, id: string, patch: Partial<ReappropriationInsert>): Promise<void> {
+  await tx.update(financeReappropriations).set({ ...patch, updatedAt: new Date() }).where(eq(financeReappropriations.id, id));
+}
+
+export async function findReappropriationByIdTx(tx: Writer, id: string): Promise<ReappropriationRow | null> {
+  const rows = await (tx as typeof db).select().from(financeReappropriations).where(eq(financeReappropriations.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function findReappropriationById(id: string): Promise<ReappropriationRow | null> {
+  const rows = await db.select().from(financeReappropriations).where(eq(financeReappropriations.id, id)).limit(1);
   return rows[0] ?? null;
 }
 

@@ -51,3 +51,15 @@ export const createPromotionBody = z.object({
   newBasicMinor: z.number().int().positive().max(1_000_000_00).optional(),
 });
 export type CreatePromotionBody = z.infer<typeof createPromotionBody>;
+
+// promotionBody is the shared shape consumed by employee/commands.ts
+// (employeeId comes from the URL there) — DO NOT add employeeId here. Mirrors
+// transferBody for the eOffice submit-for-approval loop.
+export const promotionBody = z.object({
+  fromDesigId:   z.string().uuid(),
+  toDesigId:     z.string().uuid(),
+  effectiveDate: DATE,
+  orderRef:      z.string().max(128).optional(),
+  newBasicMinor: z.number().int().positive().max(1_000_000_00).optional(),
+});
+export type PromotionBody = z.infer<typeof promotionBody>;

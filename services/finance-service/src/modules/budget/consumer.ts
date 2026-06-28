@@ -80,6 +80,20 @@ export function registerBudgetConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
+
+  queue.subscribe(COMMANDS.reappropriationSubmitApproval, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; budgetId: string; headId?: string; amountMinor: number; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertReappropriation(tx, {
+        id: p.id, tenantId: p.tenantId, budgetId: p.budgetId, headId: p.headId ?? null,
+        amountMinor: BigInt(p.amountMinor), reason: p.reason, status: "pending_approval",
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "submit_for_eoffice_approval", "reappropriation", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "reappropriation", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

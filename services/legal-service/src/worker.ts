@@ -8,6 +8,7 @@ import { registerNoticeConsumers } from "./modules/notices/consumer.js";
 import { registerContractConsumers } from "./modules/contracts/consumer.js";
 import { registerSettlementConsumers } from "./modules/settlements/consumer.js";
 import { registerOpinionConsumers } from "./modules/opinions/consumer.js";
+import { registerOpinionEOfficeDecisionConsumers } from "./modules/opinions/eoffice-consumer.js";
 import { registerCounselBriefConsumers } from "./modules/counsel/consumer.js";
 import { registerFilingConsumers } from "./modules/filings/consumer.js";
 
@@ -19,6 +20,7 @@ registerNoticeConsumers(queue);
 registerContractConsumers(queue);
 registerSettlementConsumers(queue);
 registerOpinionConsumers(queue);
+registerOpinionEOfficeDecisionConsumers(queue);
 registerCounselBriefConsumers(queue);
 registerFilingConsumers(queue);
 

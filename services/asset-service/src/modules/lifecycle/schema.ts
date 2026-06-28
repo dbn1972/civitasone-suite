@@ -54,11 +54,32 @@ export const assetDisposals = lifecycleSchema.table("asset_disposals", {
   version:        integer("version").notNull().default(1),
 });
 
+// Staging row for a disposal awaiting eOffice administrative approval.
+// Created by `asset.disposal.submit_approval`; effected (asset → disposed, GL
+// posted, asset_disposals written) once the `asset.disposal.file_decided`
+// callback returns "approved". The table already exists (migration 0005,
+// "workflow disposal"); this model wires it into Drizzle.
+export const pendingDisposals = lifecycleSchema.table("pending_disposals", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  assetId:        uuid("asset_id").notNull(),
+  disposalDate:   date("disposal_date").notNull(),
+  disposalMethod: varchar("disposal_method", { length: 32 }).notNull(),
+  proceedsMinor:  bigint("proceeds_minor", { mode: "bigint" }).notNull().default(0n),
+  currency:       char("currency", { length: 3 }).notNull().default("INR"),
+  notes:          text("notes"),
+  workflowStatus: varchar("workflow_status", { length: 24 }).notNull().default("pending"),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:      uuid("created_by").notNull(),
+});
+
 export type AcquisitionRow    = typeof assetAcquisitions.$inferSelect;
 export type AcquisitionInsert = typeof assetAcquisitions.$inferInsert;
 export type TransferRow       = typeof assetTransfers.$inferSelect;
 export type TransferInsert    = typeof assetTransfers.$inferInsert;
 export type DisposalRow       = typeof assetDisposals.$inferSelect;
 export type DisposalInsert    = typeof assetDisposals.$inferInsert;
+export type PendingDisposalRow    = typeof pendingDisposals.$inferSelect;
+export type PendingDisposalInsert = typeof pendingDisposals.$inferInsert;
 
-export const schema = { assetAcquisitions, assetTransfers, assetDisposals };
+export const schema = { assetAcquisitions, assetTransfers, assetDisposals, pendingDisposals };

@@ -109,6 +109,31 @@ export function registerEmployeeConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "transfer", p.id));
   });
 
+  // eOffice loop — record a promotion REQUEST in `pending_approval` rather than
+  // mutating the employee master. The eFile is raised against this promotion id
+  // (source_ref_type "hr_promotion"); the decision arrives on
+  // hrms.promotion.file_decided and is applied by the promotion eoffice-consumer.
+  queue.subscribe(COMMANDS.employeePromotionSubmitApproval, async (msg) => {
+    const p = msg.payload as {
+      id: string; employeeId: string; tenantId: string;
+      fromDesigId: string; toDesigId: string; effectiveDate: string;
+      orderRef?: string; newBasicMinor?: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await lifecycleRepo.insertPromotion(tx, {
+        id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
+        fromDesigId: p.fromDesigId, toDesigId: p.toDesigId,
+        effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
+        newBasicMinor: p.newBasicMinor !== undefined ? BigInt(p.newBasicMinor) : null,
+        status: "pending_approval",
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "submit_for_eoffice_approval", "promotion", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "promotion", p.id));
+  });
+
   queue.subscribe(COMMANDS.employeeSeparate, async (msg) => {
     const p = msg.payload as {
       employeeId: string; tenantId: string; separationType: string;

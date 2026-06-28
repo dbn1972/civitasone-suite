@@ -34,6 +34,16 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.issueOpinion(ctx, id, body));
   });
 
+  // Submit an opinion to eOffice for administrative approval. The eFile is raised
+  // via the eOffice integration; the decision returns on legal.opinion.file_decided
+  // and moves the opinion to issued/rejected.
+  app.post("/v1/legal/opinions/:id/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LEGAL_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitOpinionForApproval(ctx, id));
+  });
+
   app.get("/v1/legal/opinions/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

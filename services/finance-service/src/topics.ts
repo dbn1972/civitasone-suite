@@ -4,6 +4,7 @@ export const COMMANDS = {
   // budget
   budgetCreate:         "finance.budget.create",
   budgetReappropriate:  "finance.budget.re_appropriate",
+  reappropriationSubmitApproval: "finance.reappropriation.submit_approval",
   sanctionCreate:       "finance.sanction.create",
   sanctionReject:       "finance.sanction.reject",
   sanctionSubmitApproval: "finance.sanction.submit_approval",
@@ -46,6 +47,7 @@ export const CONSUMED_EVENTS = {
   grantUcSubmitted:         "grant.uc.submitted",
   sanctionFileDecided:      "finance.sanction.file_decided",
   paymentFileDecided:       "finance.payment.file_decided",
+  reappropriationFileDecided: "finance.reappropriation.file_decided",
 } as const;
 
 export const SERVICE  = "finance";

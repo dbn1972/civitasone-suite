@@ -30,6 +30,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import {
   canTransition, penaltyClassOf, MINOR_PENALTIES, MAJOR_PENALTIES,
   type CaseStatus, type CaseAction,
@@ -202,6 +203,44 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       ...(body.penaltyDetail ? { penaltyDetail: body.penaltyDetail } : {}),
     }, body.notes ?? null);
     return reply.send({ id: caseId, status: to, penaltyClass: pclass, penaltyType: body.penaltyType });
+  });
+
+  // eOffice loop — submit a PROPOSED penalty for administrative approval. Rather
+  // than imposing the penalty directly (POST .../penalty), this validates the
+  // proposed penalty + state and publishes a command that moves the case to
+  // `pending_approval`. The eFile is raised against the case id (source_ref_type
+  // "hr_disciplinary"); the decision returns on hrms.disciplinary.file_decided
+  // and is applied by the eoffice-consumer.
+  app.post("/v1/hrms/disciplinary/:id/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = z.object({
+      penaltyType: z.string().min(1).max(48),
+      penaltyDetail: z.string().max(2000).optional(),
+      penaltyDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      notes: z.string().max(2000).optional(),
+    }).parse(req.body);
+    const c = await mustCase(ctx.tenantId, id);
+    const pclass = penaltyClassOf(body.penaltyType);
+    if (!pclass) {
+      throw new HttpError(400, "UNKNOWN_PENALTY",
+        `unknown penalty '${body.penaltyType}'. minor: [${[...MINOR_PENALTIES].join(", ")}]; major: [${[...MAJOR_PENALTIES].join(", ")}]`);
+    }
+    // A major penalty cannot be imposed in a minor proceeding.
+    if (c.proceedingType === "minor" && pclass === "major") {
+      throw new HttpError(409, "PENALTY_MISMATCH", "a major penalty cannot be imposed in a minor proceeding");
+    }
+    // Validate the case is in a state from which a penalty may be proposed.
+    const check = canTransition(
+      c.status as CaseStatus, "submit_for_approval", c.proceedingType as "minor" | "major");
+    if (!check.ok) throw new HttpError(409, "WRONG_STATE", check.reason ?? "invalid transition");
+    const accepted = await commands.submitDisciplinaryForApproval(ctx, id, {
+      penaltyType: body.penaltyType, penaltyClass: pclass, penaltyDate: body.penaltyDate,
+      ...(body.penaltyDetail ? { penaltyDetail: body.penaltyDetail } : {}),
+      ...(body.notes ? { notes: body.notes } : {}),
+    });
+    return reply.code(202).send(accepted);
   });
 
   app.post("/v1/hrms/disciplinary-cases/:caseId/appeal", async (req, reply) => {

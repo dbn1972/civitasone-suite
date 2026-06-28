@@ -105,3 +105,21 @@ export async function amendContract(ctx: RequestContext, id: string, body: Amend
   await inval(ctx, id);
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * Mark a draft contract as submitted to eOffice for administrative award approval.
+ * The eFile itself is raised via the eOffice integration; once it is approved the
+ * `contract.award.file_decided` callback (see eoffice-consumer) moves the contract
+ * to `approved` (award signed). This transition makes the source state honest while
+ * the file is under approval.
+ */
+export async function submitContractForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  await loadScoped(ctx, id);
+  await queue.publish(COMMANDS.contractSubmitApproval, {
+    messageId: randomUUID(), type: COMMANDS.contractSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  await inval(ctx, id);
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

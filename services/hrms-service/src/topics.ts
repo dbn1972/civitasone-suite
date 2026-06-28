@@ -3,6 +3,8 @@ export const COMMANDS = {
   employeeConfirm:      "hrms.employee.confirm",
   employeeTransfer:     "hrms.employee.transfer",
   employeeTransferSubmitApproval: "hrms.employee.transfer.submit_approval",
+  employeePromotionSubmitApproval: "hrms.employee.promotion.submit_approval",
+  disciplinarySubmitApproval: "hrms.disciplinary.submit_approval",
   employeeSeparate:     "hrms.employee.separate",
   employeeUpdate:       "hrms.employee.update",
   leaveTypeCreate:      "hrms.leave_type.create",
@@ -36,6 +38,12 @@ export const CONSUMED_EVENTS = {
   // (source_ref_type "hr_transfer"). Closes the approval loop — see
   // modules/lifecycle/eoffice-consumer.ts.
   transferFileDecided: "hrms.transfer.file_decided",
+  // eOffice decision callback for an HR promotion eFile
+  // (source_ref_type "hr_promotion"). See modules/lifecycle/promotion-eoffice-consumer.ts.
+  promotionFileDecided: "hrms.promotion.file_decided",
+  // eOffice decision callback for an HR disciplinary eFile
+  // (source_ref_type "hr_disciplinary"). See modules/disciplinary/eoffice-consumer.ts.
+  disciplinaryFileDecided: "hrms.disciplinary.file_decided",
 } as const;
 
 export const SERVICE = "hrms";

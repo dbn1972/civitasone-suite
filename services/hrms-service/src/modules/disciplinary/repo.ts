@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import {
@@ -38,6 +38,34 @@ export async function updateCase(
   if ((res as { rowCount?: number }).rowCount === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "case was modified by another request; reload and retry");
   }
+}
+
+/**
+ * Guarded status transition for a disciplinary case (mirrors lifecycle's
+ * `transitionTransfer`). Only flips status when the current status is in
+ * `from`; bumps version + updatedAt. Returns the updated row, or null when the
+ * guard rejected (wrong state / not found / wrong tenant). Used by the eOffice
+ * decision consumer to apply an approval/rejection idempotently and
+ * tenant-safely without an optimistic-version round-trip.
+ */
+export async function transitionCase(
+  tx: Writer, tenantId: string, id: string, actorId: string,
+  opts: { from: string[]; to: string; set?: Partial<DisciplinaryCaseInsert> },
+): Promise<DisciplinaryCaseRow | null> {
+  const rows = await tx.update(hrmsDisciplinaryCases)
+    .set({
+      ...opts.set,
+      status: opts.to,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: sql`${hrmsDisciplinaryCases.version} + 1`,
+    })
+    .where(and(
+      eq(hrmsDisciplinaryCases.tenantId, tenantId),
+      eq(hrmsDisciplinaryCases.id, id),
+      inArray(hrmsDisciplinaryCases.status, opts.from)))
+    .returning();
+  return rows[0] ?? null;
 }
 
 export async function appendEvent(

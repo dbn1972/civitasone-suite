@@ -36,3 +36,20 @@ export async function issueOpinion(ctx: RequestContext, opinionId: string, body:
   await cache.invalidate(cache.makeKey(ctx.tenantId, "opinion", opinionId));
   return { id: opinionId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * Submit a legal opinion to eOffice for administrative approval. The eFile is
+ * raised via the eOffice integration; once the approval chain concludes the
+ * `legal.opinion.file_decided` callback (see eoffice-consumer) moves the opinion
+ * to issued/rejected. This transition makes the source state honest while the
+ * file is under approval.
+ */
+export async function submitOpinionForApproval(ctx: RequestContext, opinionId: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.opinionSubmitApproval, {
+    type: COMMANDS.opinionSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { opinionId, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "opinion", opinionId));
+  return { id: opinionId, status: "accepted", correlationId: ctx.correlationId };
+}

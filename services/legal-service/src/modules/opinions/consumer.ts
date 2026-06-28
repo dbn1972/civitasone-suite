@@ -65,6 +65,20 @@ export function registerOpinionConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId));
   });
+
+  queue.subscribe(COMMANDS.opinionSubmitApproval, async (msg) => {
+    const p = msg.payload as { opinionId: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const op = await repo.findOpinionByIdTx(tx, p.opinionId);
+      if (!op || op.tenantId !== p.tenantId) return;
+      await repo.updateOpinion(tx, p.opinionId, {
+        status: "pending_approval", updatedBy: msg.actorId, version: (op.version ?? 1) + 1,
+      });
+      await audit(tx, msg, "submit_for_eoffice_approval", "legal_opinion", p.opinionId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId));
+  });
 }
 
 async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {

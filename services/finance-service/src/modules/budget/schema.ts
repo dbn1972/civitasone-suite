@@ -86,11 +86,38 @@ export const financeSanctions = budgetSchema.table("finance_sanctions", {
   version:        integer("version").notNull().default(1),
 });
 
+/**
+ * Re-appropriation request — a standalone, status-bearing entity so a budget
+ * re-appropriation can be routed through eOffice for administrative approval
+ * before it touches the target budget. `reappropriateBudget` applies a change
+ * directly; this request defers that effect until the eOffice file is decided.
+ *
+ * `amount_minor` carries the new revised-estimate target (paise) to set on the
+ * target budget's `re_minor` when the request is approved — same semantics as
+ * the `reMinor` field on the direct re-appropriation path.
+ */
+export const financeReappropriations = budgetSchema.table("finance_reappropriations", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  budgetId:     uuid("budget_id").notNull(),       // target budget whose re_minor is updated on approval
+  headId:       uuid("head_id"),                   // reference head (nullable — for audit/reporting)
+  amountMinor:  bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
+  reason:       text("reason").notNull(),
+  status:       varchar("status", { length: 24 }).notNull().default("pending_approval"), // pending_approval|approved|rejected
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:    uuid("created_by").notNull(),
+  updatedBy:    uuid("updated_by").notNull(),
+  version:      integer("version").notNull().default(1),
+});
+
 export type HeadRow      = typeof financeHeads.$inferSelect;
 export type HeadInsert   = typeof financeHeads.$inferInsert;
 export type BudgetRow    = typeof financeBudgets.$inferSelect;
 export type BudgetInsert = typeof financeBudgets.$inferInsert;
 export type SanctionRow  = typeof financeSanctions.$inferSelect;
 export type SanctionInsert = typeof financeSanctions.$inferInsert;
+export type ReappropriationRow    = typeof financeReappropriations.$inferSelect;
+export type ReappropriationInsert = typeof financeReappropriations.$inferInsert;
 
-export const schema = { financeHeads, financeBudgets, financeDemands, financeSchemes, financeSanctions };
+export const schema = { financeHeads, financeBudgets, financeDemands, financeSchemes, financeSanctions, financeReappropriations };

@@ -4,6 +4,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerRegisterConsumers }     from "./modules/register/consumer.js";
 import { registerLifecycleConsumers }    from "./modules/lifecycle/consumer.js";
+import { registerDisposalEOfficeDecisionConsumers } from "./modules/lifecycle/eoffice-consumer.js";
 import { registerDepreciationConsumers } from "./modules/depreciation/consumer.js";
 import { registerMaintenanceConsumers }  from "./modules/maintenance/consumer.js";
 import { registerInsuranceConsumers }    from "./modules/insurance/consumer.js";
@@ -14,6 +15,7 @@ const log = pino({ name: "asset-worker" });
 
 registerRegisterConsumers(queue);
 registerLifecycleConsumers(queue);
+registerDisposalEOfficeDecisionConsumers(queue);
 registerDepreciationConsumers(queue);
 registerMaintenanceConsumers(queue);
 registerInsuranceConsumers(queue);

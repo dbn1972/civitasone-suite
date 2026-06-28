@@ -77,6 +77,16 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.amendContract(ctx, id, body));
   });
 
+  // Submit a draft contract to eOffice for administrative award approval. The
+  // eFile is raised via the eOffice integration; the decision returns on
+  // contract.award.file_decided and moves the contract to approved/terminated.
+  app.post("/v1/contract/contracts/:id/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CONTRACT_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitContractForApproval(ctx, id));
+  });
+
   // ── Read models ──────────────────────────────────────────────────────────
   app.get("/v1/contract/contracts", async (req, reply) => {
     const ctx = resolveContext(req);

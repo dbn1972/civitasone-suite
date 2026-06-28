@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
 import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody } from "./validators.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
+import { promotionBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -53,6 +54,17 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = transferBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitTransferForApproval(ctx, id, body));
+  });
+
+  // eOffice loop — submit a promotion for administrative approval. Records a
+  // promotion request in `pending_approval` and returns its id (used as the
+  // eFile source_ref_id). The decision returns on hrms.promotion.file_decided.
+  app.post("/v1/hrms/employees/:id/promotion/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = promotionBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitPromotionForApproval(ctx, id, body));
   });
 
   app.patch("/v1/hrms/employees/:id/separate", async (req, reply) => {

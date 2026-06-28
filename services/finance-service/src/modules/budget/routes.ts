@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody } from "./validators.js";
+import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -109,6 +109,19 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitSanctionForApproval(ctx, id));
+  });
+
+  // Submit a budget re-appropriation to eOffice for administrative approval.
+  // Creates the re-appropriation request (status pending_approval); `:id` is the
+  // request id / eFile refId. The decision returns on
+  // finance.reappropriation.file_decided and, on approval, applies the change to
+  // the target budget's reMinor (see reappropriation-eoffice-consumer).
+  app.post("/v1/finance/reappropriations/:id/submit-approval", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = submitReappropriationBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitReappropriationForApproval(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

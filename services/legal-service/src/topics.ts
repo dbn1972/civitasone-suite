@@ -12,6 +12,7 @@ export const COMMANDS = {
   opinionSeek:          "legal.opinion.seek",
   opinionDraft:         "legal.opinion.draft",
   opinionIssue:         "legal.opinion.issue",
+  opinionSubmitApproval: "legal.opinion.submit_approval",
   counselBriefAssign:   "legal.counsel_brief.assign",
   filingRecord:         "legal.filing.record",
 } as const;
@@ -22,6 +23,12 @@ export const EVENTS = {
   opinionIssued:          "legal.opinion.issued",
   counselBriefAssigned:   "legal.counsel_brief.assigned",
   filingRecorded:         "legal.filing.recorded",
+} as const;
+
+/** Topics consumed from other services (cross-service stitching) */
+export const CONSUMED_EVENTS = {
+  // eOffice decision callback for legal opinions raised into the approval backbone.
+  opinionFileDecided: "legal.opinion.file_decided",
 } as const;
 
 export const SERVICE = "legal";

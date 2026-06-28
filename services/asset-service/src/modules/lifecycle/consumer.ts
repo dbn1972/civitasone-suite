@@ -91,6 +91,43 @@ export function registerLifecycleConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "asset", p.assetId));
   });
+
+  // Submit an asset disposal to eOffice for administrative approval. Creates a
+  // pending disposal (workflow_status "pending"); it stays staged until the
+  // `asset.disposal.file_decided` callback (see eoffice-consumer) effects or
+  // cancels it. The asset is NOT moved to "disposed" yet — that only happens on
+  // an approved decision.
+  queue.subscribe(COMMANDS.disposalSubmitApproval, async (msg) => {
+    const p = msg.payload as {
+      id: string; assetId: string; tenantId: string;
+      disposalDate: string; disposalMethod: string;
+      proceedsMinor: number; currency: string; notes?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
+      if (!asset) throw new Error("ASSET_NOT_FOUND_OR_CROSS_TENANT: cannot submit a missing or cross-tenant asset for disposal");
+      assertAssetDisposable(asset.status);
+      // GFR Rule 173: a write-off/disposal needs committee approval on record
+      // before it can be raised into eOffice for administrative approval.
+      const approval = await verificationRepo.findApprovedWriteoff(p.tenantId, p.assetId);
+      if (!approval) {
+        throw new Error("COMMITTEE_APPROVAL_REQUIRED: Asset write-off requires committee approval per GFR Rule 173.");
+      }
+      const existing = await repo.findActivePendingDisposal(tx, p.tenantId, p.assetId);
+      if (existing) {
+        throw new Error("DISPOSAL_ALREADY_PENDING: a disposal for this asset is already awaiting an eOffice decision");
+      }
+      await repo.insertPendingDisposal(tx, {
+        id: p.id, tenantId: p.tenantId, assetId: p.assetId,
+        disposalDate: p.disposalDate, disposalMethod: p.disposalMethod,
+        proceedsMinor: BigInt(p.proceedsMinor), currency: p.currency,
+        notes: p.notes ?? null, workflowStatus: "pending", createdBy: msg.actorId,
+      });
+      await audit(tx, msg, "submit_for_eoffice_approval", "asset_disposal", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "asset", p.assetId));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

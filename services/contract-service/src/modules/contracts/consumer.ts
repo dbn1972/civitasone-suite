@@ -163,6 +163,23 @@ export function registerContractConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
   });
+
+  // ── submit for eOffice award approval: draft → pending_approval ──────────
+  queue.subscribe(COMMANDS.contractSubmitApproval, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const contract = await repo.findContractByIdTx(tx, p.id);
+      if (!contract || contract.tenantId !== p.tenantId) return;
+      // Only a draft contract can be submitted to eOffice for award approval.
+      if (contract.status !== "draft") return;
+      await repo.updateContract(tx, p.id, {
+        status: "pending_approval", updatedBy: msg.actorId, version: (contract.version ?? 1) + 1,
+      });
+      await audit(tx, msg, "submit_for_eoffice_approval", "contract", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

@@ -3,7 +3,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody } from "./validators.js";
-import type { TransferBody, SeparateBody } from "../lifecycle/validators.js";
+import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -55,6 +55,26 @@ export async function submitTransferForApproval(ctx: RequestContext, id: string,
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "transfer", transferId));
   return { id: transferId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * Submit an employee promotion to eOffice for administrative approval. Mirrors
+ * `submitTransferForApproval`: rather than mutating the employee master, it
+ * records a promotion request in `pending_approval` state and returns its id.
+ * The eFile is raised against that id (source_ref_type "hr_promotion"); the
+ * decision returns on `hrms.promotion.file_decided` and the eoffice-consumer
+ * either effects the promotion (approved → new designation/pay) or cancels the
+ * request (rejected).
+ */
+export async function submitPromotionForApproval(ctx: RequestContext, id: string, body: PromotionBody): Promise<Accepted> {
+  const promotionId = randomUUID();
+  await queue.publish(COMMANDS.employeePromotionSubmitApproval, {
+    messageId: promotionId, type: COMMANDS.employeePromotionSubmitApproval,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { ...body, id: promotionId, employeeId: id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "promotion", promotionId));
+  return { id: promotionId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function separateEmployee(ctx: RequestContext, id: string, body: SeparateBody): Promise<Accepted> {

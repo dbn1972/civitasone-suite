@@ -6,6 +6,7 @@
  *   charge_memo_issued  articles of charge / charge memo served
  *   inquiry_appointed   inquiry officer (and presenting officer) appointed
  *   finding_recorded    inquiry report / finding recorded (guilty / not / partly)
+ *   pending_approval    proposed penalty submitted to eOffice for approval
  *   penalty_imposed     disciplinary authority imposes a minor/major penalty
  *   appeal_filed        the employee files a statutory appeal
  *   appeal_decided      appellate authority decides (upheld/modified/set_aside)
@@ -15,14 +16,20 @@
  * Minor-penalty proceedings (CCA Rule 16) need not have a full oral inquiry, so
  * a 'minor' case may go opened -> charge_memo_issued -> penalty_imposed. Major
  * penalties (Rule 14) require the inquiry path.
+ *
+ * eOffice loop: a proposed penalty may be routed for formal approval —
+ * submit_for_approval moves the case to pending_approval; the eOffice decision
+ * then either imposes the penalty (approved) or drops the case (rejected). See
+ * modules/disciplinary/eoffice-consumer.ts.
  */
 
 export type CaseStatus =
   | "opened" | "charge_memo_issued" | "inquiry_appointed" | "finding_recorded"
-  | "penalty_imposed" | "appeal_filed" | "appeal_decided" | "closed" | "dropped";
+  | "pending_approval" | "penalty_imposed" | "appeal_filed" | "appeal_decided"
+  | "closed" | "dropped";
 
 export type CaseAction =
-  | "issue_charge_memo" | "appoint_inquiry" | "record_finding"
+  | "issue_charge_memo" | "appoint_inquiry" | "record_finding" | "submit_for_approval"
   | "impose_penalty" | "file_appeal" | "decide_appeal" | "close" | "drop";
 
 interface Transition {
@@ -36,11 +43,19 @@ const TRANSITIONS: Readonly<Record<CaseAction, Transition[]>> = Object.freeze({
   issue_charge_memo: [{ from: "opened", to: "charge_memo_issued" }],
   appoint_inquiry: [{ from: "charge_memo_issued", to: "inquiry_appointed", requiresProceeding: "major" }],
   record_finding: [{ from: "inquiry_appointed", to: "finding_recorded" }],
+  submit_for_approval: [
+    // major: a recorded finding precedes the proposed penalty
+    { from: "finding_recorded", to: "pending_approval" },
+    // minor: a full inquiry is not mandatory, propose straight after charge memo
+    { from: "charge_memo_issued", to: "pending_approval", requiresProceeding: "minor" },
+  ],
   impose_penalty: [
     // major: after a recorded finding
     { from: "finding_recorded", to: "penalty_imposed" },
     // minor: a full inquiry is not mandatory, penalty straight after charge memo
     { from: "charge_memo_issued", to: "penalty_imposed", requiresProceeding: "minor" },
+    // eOffice-approved penalty: applied from the pending_approval holding state
+    { from: "pending_approval", to: "penalty_imposed" },
   ],
   file_appeal: [{ from: "penalty_imposed", to: "appeal_filed" }],
   decide_appeal: [{ from: "appeal_filed", to: "appeal_decided" }],
@@ -53,6 +68,8 @@ const TRANSITIONS: Readonly<Record<CaseAction, Transition[]>> = Object.freeze({
     { from: "charge_memo_issued", to: "dropped" },
     { from: "inquiry_appointed", to: "dropped" },
     { from: "finding_recorded", to: "dropped" },
+    // eOffice-rejected proposed penalty: case is dropped (closed, no action)
+    { from: "pending_approval", to: "dropped" },
   ],
 });
 
