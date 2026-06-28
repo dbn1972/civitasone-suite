@@ -6,6 +6,7 @@ export const COMMANDS = {
   fileClose:            "estab.file.close",
   notingAdd:            "estab.noting.add",
   notingSubmit:         "estab.noting.submit",
+  notingSign:           "estab.noting.sign",
   inwardOpenFile:       "estab.inward.open_file",
   dispatchCreate:       "estab.dispatch.create",
   inwardRegister:       "estab.inward.register",

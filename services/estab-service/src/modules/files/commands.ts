@@ -50,6 +50,22 @@ export async function submitNotingForApproval(
   return { id: body.notingId, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * Sign (green) a specific noting authored at this officer's level. Each level's
+ * note is individually signed and tamper-evidently hash-chained, so the file
+ * accumulates a chain of green notes (SO → US → DS), matching eFile fidelity —
+ * not a single note greened only at the end.
+ */
+export async function signNoting(ctx: RequestContext, fileId: string, notingId: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.notingSign, {
+    type: COMMANDS.notingSign,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { fileId, notingId, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
+  return { id: notingId, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function openFileFromInward(
   ctx: RequestContext,
   inwardId: string,

@@ -3,6 +3,7 @@ import { getAssetById } from "../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable } from "../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { AssetDetailActions } from "./AssetDetailActions";
+import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 
 export default async function AssetDetailPage({ params }: { params: { id: string } }) {
   const { data: asset, source } = await getAssetById(params.id);
@@ -112,6 +113,16 @@ export default async function AssetDetailPage({ params }: { params: { id: string
           ) : null}
         </div>
       </div>
+
+      <RaiseEOfficeNote
+        refType="asset_disposal"
+        refId={asset.id}
+        subject={`Disposal — ${asset.assetCode} · ${asset.name}`}
+        dept={asset.department ?? "Assets"}
+        amountMinor={asset.currentValue}
+        defaultApprovalChain="file_noting"
+        notifyPath={`/api/proxy/v1/assets/disposals/${asset.id}/submit-approval`}
+      />
     </>
   );
 }

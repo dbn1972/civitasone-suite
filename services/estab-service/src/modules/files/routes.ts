@@ -1,7 +1,7 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   idParam, createFileBody, addNotingBody, moveFileBody, closeFileBody,
@@ -14,6 +14,7 @@ import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
 import { isTopSecret } from "./domain.js";
 import { enqueue } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
+import { isActiveOperator } from "../operators/eligibility.js";
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
@@ -42,11 +43,25 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitNotingForApproval(ctx, id, body));
   });
 
+  // G2 — sign (green) a specific noting at this officer's level. The file
+  // accumulates a hash-chained chain of green notes (SO → US → DS).
+  app.post("/v1/estab/files/:id/notings/:notingId/sign", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const { notingId } = z.object({ notingId: z.string().uuid() }).parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.signNoting(ctx, id, notingId));
+  });
+
   app.patch("/v1/estab/files/:id/move", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = moveFileBody.parse(req.body);
+    // O6 — a file may only be marked to an ACTIVE enrolled eOffice operator.
+    if (!(await isActiveOperator(ctx.tenantId, body.toOfficer))) {
+      throw new HttpError(422, "NOT_AN_OPERATOR", "the receiving officer is not an active eOffice operator; enrol them in the division first");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.moveFile(ctx, id, body));
   });
 

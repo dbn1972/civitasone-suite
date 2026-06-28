@@ -68,6 +68,29 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     onConfirm: (reason) => submitForApproval(reason),
   });
 
+  async function signNote() {
+    if (!draftNotingId) {
+      setMessage("No draft note to sign.");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/notings/${draftNotingId}/sign`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setMessage("Note signed — recorded as a green note in the file's hash-chained noting trail.");
+      router.refresh();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Sign failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function referBack() {
     setBusy(true);
     setMessage("");
@@ -116,6 +139,10 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           </button>
           <button type="button" className="btn primary" disabled={busy || submitConfirm.busy || !draftNotingId} onClick={submitConfirm.trigger}>
             Submit for approval
+          </button>
+          <button type="button" className="btn ghost" disabled={busy || !draftNotingId} onClick={() => void signNote()}
+            title="Sign this note at your level — adds a green, hash-chained note (SO → US → DS)">
+            Sign note (green)
           </button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>

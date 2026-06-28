@@ -1,10 +1,11 @@
 import { randomUUID, createHash } from "node:crypto";
+import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
-import { computeFileDueBy } from "./domain.js";
+import { computeFileDueBy, computeNotingHash } from "./domain.js";
 import * as repo from "./repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 
@@ -220,6 +221,48 @@ export function registerFilesConsumers(queue: Queue): void {
         decision: "rejected", decidedBy: p.rejectedBy,
       });
       await audit(tx, msg, "reject", "file", p.fileId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+  });
+
+  queue.subscribe(COMMANDS.notingSign, async (msg) => {
+    const p = msg.payload as { fileId: string; notingId: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const noting = await repo.findNotingById(p.notingId, p.tenantId);
+      if (!noting || noting.fileId !== p.fileId) return;
+      // Already-signed notes are immutable (DB trigger also enforces this).
+      if (noting.noteStatus === "approved" || noting.eSigned) return;
+
+      // Hash-chain: link this green note to the previous green note on the file.
+      const prevRows = await tx.execute(sql`
+        SELECT dsc_hash, chain_seq
+        FROM files.estab_notings
+        WHERE tenant_id = ${p.tenantId} AND file_id = ${p.fileId}
+          AND note_type = 'green' AND chain_seq IS NOT NULL
+        ORDER BY chain_seq DESC
+        LIMIT 1
+      `);
+      const prev = (prevRows as unknown as Array<{ dsc_hash: string | null; chain_seq: number | null }>)[0];
+      const prevHash = prev?.dsc_hash ?? "";
+      const chainSeq = (prev?.chain_seq ?? 0) + 1;
+
+      const signedAt = new Date();
+      const signatureRef = `DSC-${msg.actorId.slice(0, 8)}-${signedAt.getTime()}`;
+      const dscHash = computeNotingHash(noting.id, noting.body, msg.actorId, prevHash, signedAt.getTime());
+
+      // Green + sign + chain. prev_hash/chain_seq are migration-0007 columns
+      // outside the Drizzle model, so written via raw SQL (like linkage source refs).
+      await tx.execute(sql`
+        UPDATE files.estab_notings
+        SET note_type = 'green', note_status = 'approved', e_signed = true,
+            signed_at = ${signedAt}, signature_ref = ${signatureRef}, dsc_hash = ${dscHash},
+            prev_hash = ${prevHash === "" ? null : prevHash}, chain_seq = ${chainSeq},
+            updated_by = ${msg.actorId}, updated_at = ${signedAt}
+        WHERE id = ${p.notingId} AND tenant_id = ${p.tenantId}
+      `);
+
+      await audit(tx, msg, "sign_noting", "noting", p.notingId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
   });

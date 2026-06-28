@@ -3,6 +3,7 @@ import { PageHeader, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { getContractById } from "../../../_data/loaders";
+import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -46,6 +47,15 @@ export default async function ContractDetailPage({ params }: { params: { id: str
 
   const statusLower = status.toLowerCase();
   const statusCls = statusLower === "active" ? "good" : statusLower === "expired" ? "bad" : "mut";
+
+  const deptVal = field(contract, "department", "dept");
+  const dept = deptVal !== "—" ? deptVal : "Procurement";
+  const amountMinor =
+    typeof rawValue === "number"
+      ? rawValue
+      : typeof rawValue === "string" && rawValue.trim() !== "" && Number.isFinite(Number(rawValue))
+        ? Number(rawValue)
+        : undefined;
 
   return (
     <main className="wrap" aria-labelledby="page-heading">
@@ -98,6 +108,16 @@ export default async function ContractDetailPage({ params }: { params: { id: str
           )}
         </div>
       </div>
+
+      <RaiseEOfficeNote
+        refType="contract_award"
+        refId={params.id}
+        subject={`Contract award — ${title}`}
+        dept={dept}
+        defaultApprovalChain="file_noting"
+        notifyPath={`/api/proxy/v1/contract/contracts/${params.id}/submit-approval`}
+        {...(amountMinor != null ? { amountMinor } : {})}
+      />
     </main>
   );
 }

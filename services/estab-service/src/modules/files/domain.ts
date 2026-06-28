@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export class DomainError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
@@ -33,4 +35,21 @@ export function mapNoteTypeForUi(noteType: string, eSigned: boolean): "note" | "
 
 export function isTopSecret(classification: string): boolean {
   return classification === "top_secret";
+}
+
+/**
+ * Tamper-evident noting signature hash. Each green note links to the previous
+ * green note's hash (prevHash), forming a per-file chain SO → US → DS that a
+ * DBA cannot silently rewrite without breaking every subsequent link.
+ */
+export function computeNotingHash(
+  notingId: string,
+  body: string,
+  officerId: string,
+  prevHash: string,
+  signedAtMs: number,
+): string {
+  return createHash("sha256")
+    .update(`${notingId}:${body}:${officerId}:${prevHash}:${signedAtMs}`)
+    .digest("hex");
 }
