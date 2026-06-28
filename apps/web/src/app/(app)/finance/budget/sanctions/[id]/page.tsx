@@ -4,6 +4,7 @@ import { getFinanceSanctionById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { SanctionApproveAction } from "../../../_components/FinanceActions";
 import { SanctionLineItemsTable } from "./SanctionLineItemsTable";
+import { RaiseEOfficeNote } from "../../../../../_components/RaiseEOfficeNote";
 
 export default async function SanctionDetailPage({ params }: { params: { id: string } }) {
   const { data: sanction, source } = await getFinanceSanctionById(params.id);
@@ -66,6 +67,15 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
           )}
         </div>
       </Card>
+
+      <RaiseEOfficeNote
+        refType="finance_sanction"
+        refId={params.id}
+        subject={sanction.subject}
+        dept={sanction.majorHead ?? "Finance"}
+        amountMinor={sanction.amount}
+        defaultApprovalChain="finance.sanction.standard"
+      />
 
       {sanction.lineItems.length > 0 && (
         <Card title="Line items">
