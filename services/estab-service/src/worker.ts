@@ -8,6 +8,7 @@ import { registerAssetsConsumers }    from "./modules/assets/consumer.js";
 import { registerFacilitiesConsumers } from "./modules/facilities/consumer.js";
 import { registerLegalConsumers }     from "./modules/legal/consumer.js";
 import { registerRtiIntakeConsumers } from "./modules/legal/intake-consumer.js";
+import { registerLinkageConsumers }   from "./modules/linkage/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -17,6 +18,7 @@ registerAssetsConsumers(queue);
 registerFacilitiesConsumers(queue);
 registerLegalConsumers(queue);
 registerRtiIntakeConsumers(queue);
+registerLinkageConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

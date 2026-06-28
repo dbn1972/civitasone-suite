@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { computeFileDueBy } from "./domain.js";
 import * as repo from "./repo.js";
+import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -182,6 +183,15 @@ export function registerFilesConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: p.approvedBy, correlationId: msg.correlationId,
         payload: { fileId: p.fileId, action: "noting_approved", approvedBy: p.approvedBy },
       });
+      // Cross-module: if this file was raised by a source module, send the
+      // approved decision back so the module can execute (release budget, etc.)
+      const approvedNoting = await repo.findLatestSubmittedNoting(tx, p.fileId, p.tenantId);
+      await emitModuleDecisionCallback(tx, {
+        tenantId: p.tenantId, fileId: p.fileId, correlationId: msg.correlationId,
+        decision: "approved", decidedBy: p.approvedBy,
+        notingId: approvedNoting?.id ?? null,
+        dscHash: approvedNoting?.dscHash ?? null,
+      });
       await audit(tx, msg, "approve", "file", p.fileId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
@@ -203,6 +213,11 @@ export function registerFilesConsumers(queue: Queue): void {
         topic: EVENTS.fileMoved, eventType: EVENTS.fileMoved,
         tenantId: msg.tenantId, actorId: p.rejectedBy, correlationId: msg.correlationId,
         payload: { fileId: p.fileId, action: "noting_rejected", rejectedBy: p.rejectedBy },
+      });
+      // Cross-module: send the rejected decision back to the source module
+      await emitModuleDecisionCallback(tx, {
+        tenantId: p.tenantId, fileId: p.fileId, correlationId: msg.correlationId,
+        decision: "rejected", decidedBy: p.rejectedBy,
       });
       await audit(tx, msg, "reject", "file", p.fileId);
     });

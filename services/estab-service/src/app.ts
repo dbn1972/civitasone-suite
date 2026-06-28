@@ -13,6 +13,7 @@ import { assetsRoutes }    from "./modules/assets/routes.js";
 import { facilitiesRoutes } from "./modules/facilities/routes.js";
 import { legalRoutes }     from "./modules/legal/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
+import { linkageRoutes }   from "./modules/linkage/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,6 +34,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(facilitiesRoutes);
   await app.register(legalRoutes);
   await app.register(dashboardRoutes);
+  await app.register(linkageRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
