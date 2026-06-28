@@ -1,3 +1,5 @@
+import { MODULE_CALLBACK_TOPICS as SDK_CALLBACK_TOPICS } from "@civitasone/eoffice-sdk";
+
 export const COMMANDS = {
   fileCreate:           "estab.file.create",
   fileMove:             "estab.file.move",
@@ -32,24 +34,11 @@ export const COMMANDS = {
 /**
  * Decision callback topics — emitted back to source modules when an eFile
  * raised by them is approved/rejected. Keyed by source_ref_type.
+ *
+ * Sourced from @civitasone/eoffice-sdk (single source of truth) and widened to
+ * Record<string, string> for runtime string-keyed lookup in the consumer.
  */
-export const MODULE_CALLBACK_TOPICS: Record<string, string> = {
-  finance_sanction:        "finance.sanction.file_decided",
-  finance_payment:         "finance.payment.file_decided",
-  finance_reappropriation: "finance.reappropriation.file_decided",
-  procurement_award:       "procurement.award.file_decided",
-  procurement_po:          "procurement.po.file_decided",
-  hr_promotion:            "hrms.promotion.file_decided",
-  hr_transfer:             "hrms.transfer.file_decided",
-  hr_disciplinary:         "hrms.disciplinary.file_decided",
-  hr_leave_special:        "hrms.leave_special.file_decided",
-  hr_recruitment:          "hrms.recruitment.file_decided",
-  grant_scheme:            "grant.scheme.file_decided",
-  grant_disbursement:      "grant.disbursement.file_decided",
-  asset_disposal:          "asset.disposal.file_decided",
-  legal_opinion:           "legal.opinion.file_decided",
-  contract_award:          "contract.award.file_decided",
-};
+export const MODULE_CALLBACK_TOPICS: Record<string, string> = SDK_CALLBACK_TOPICS;
 
 export const EVENTS = {
   fileCreated:          "estab.file.created",

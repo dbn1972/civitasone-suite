@@ -1,13 +1,8 @@
 import { z } from "zod";
+import { SOURCE_REF_TYPES } from "@civitasone/eoffice-sdk";
 
 /** Source ref types that any module can use to raise an eFile for approval. */
-export const SOURCE_REF_TYPES = [
-  "finance_sanction", "finance_payment", "finance_reappropriation",
-  "procurement_award", "procurement_po",
-  "hr_promotion", "hr_transfer", "hr_disciplinary", "hr_leave_special", "hr_recruitment",
-  "grant_scheme", "grant_disbursement",
-  "asset_disposal", "legal_opinion", "contract_award",
-] as const;
+export { SOURCE_REF_TYPES };
 
 export const fileFromModuleBody = z.object({
   refType:        z.enum(SOURCE_REF_TYPES),
