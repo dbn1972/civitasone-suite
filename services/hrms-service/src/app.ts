@@ -46,6 +46,7 @@ import { socialRoutes } from "./modules/social/routes.js";
 import { pulseGoalsRoutes } from "./modules/social/pulse-routes.js";
 import { idCardRoutes } from "./modules/id-cards/routes.js";
 import { visitingCardRoutes } from "./modules/visiting-cards/routes.js";
+import { deviceTrustRoutes } from "./modules/device-trust/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -100,6 +101,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(pulseGoalsRoutes);
   await app.register(idCardRoutes);
   await app.register(visitingCardRoutes);
+  await app.register(deviceTrustRoutes);
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
   await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);
