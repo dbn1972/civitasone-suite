@@ -103,22 +103,22 @@ This contract is **uniform across modules** — adding a new decision type is: p
 |----------|-----------------|:-----:|:-----------------:|
 | Finance sanction | `finance_sanction` | ✅ | ✅ |
 | Finance payment | `finance_payment` | ✅ (API) | ✅ |
-| Re-appropriation | `finance_reappropriation` | ☐ | ☐ |
+| Re-appropriation | `finance_reappropriation` | ✅ (API) | ✅ |
 | Procurement award/PO | `procurement_po` | ✅ | ✅ |
-| HR promotion | `hr_promotion` | ☐ | ☐ |
+| HR promotion | `hr_promotion` | ✅ (API) | ✅ |
 | HR transfer | `hr_transfer` | ✅ | ✅ |
-| HR disciplinary | `hr_disciplinary` | ☐ | ☐ |
+| HR disciplinary | `hr_disciplinary` | ✅ (API) | ✅ |
 | Grant scheme/disbursement | `grant_disbursement` | ✅ (API) | ✅ |
-| Asset disposal | `asset_disposal` | ☐ | ☐ |
-| Legal opinion | `legal_opinion` | ☐ | ☐ |
-| Contract award | `contract_award` | ☐ | ☐ |
+| Asset disposal | `asset_disposal` | ✅ (API) | ✅ |
+| Legal opinion | `legal_opinion` | ✅ (API) | ✅ |
+| Contract award | `contract_award` | ✅ (API) | ✅ |
 
-**Wired end-to-end (2026-06-28):** finance sanction (web+API), procurement PO
-(web+API), HR transfer (web+API), finance payment (API), grant disbursement
-(API). Each follows the identical raise → `*.file_decided` → execute pattern via
-`@civitasone/eoffice-sdk` (`onDecision`/`parseDecisionCallback`). Remaining
-types (re-appropriation, HR promotion/disciplinary, asset disposal, legal
-opinion, contract award) are the same ~½-day pattern each.
+**ALL 11 decision types are now wired end-to-end (2026-06-28).** Each follows
+the identical raise → `*.file_decided` → execute pattern via
+`@civitasone/eoffice-sdk` (`onDecision`/`parseDecisionCallback`). Web "Raise
+eOffice note" buttons are live for finance sanction, procurement PO and HR
+transfer; the rest expose the submit-approval API (web detail pages / raise
+buttons are the remaining UX polish, point (b)).
 
 ---
 
