@@ -113,6 +113,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(workforcePlanningRoutes);
   const { aiPredictionsRoutes } = await import("./modules/ai-predictions/routes.js");
   await app.register(aiPredictionsRoutes);
+  const { faceVerificationMlRoutes } = await import("./modules/ai-ml/face-verification.js");
+  await app.register(faceVerificationMlRoutes);
+  const { documentOcrRoutes } = await import("./modules/ai-ml/document-ocr.js");
+  await app.register(documentOcrRoutes);
+  const { nluChatbotRoutes } = await import("./modules/ai-ml/nlu-chatbot.js");
+  await app.register(nluChatbotRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
