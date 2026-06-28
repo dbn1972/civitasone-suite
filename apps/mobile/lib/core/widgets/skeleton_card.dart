@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Animated skeleton placeholder for loading states.
+/// Uses theme-aware colors for proper dark mode support.
 class SkeletonCard extends StatefulWidget {
   const SkeletonCard({super.key});
 
@@ -33,10 +34,13 @@ class _SkeletonCardState extends State<SkeletonCard>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Opacity(
-        opacity: _anim.value,
+    final theme = Theme.of(context);
+    final shimmerColor = theme.colorScheme.surfaceContainerHighest;
+
+    return FadeTransition(
+      opacity: _anim,
+      child: Semantics(
+        label: 'Loading content',
         child: Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Padding(
@@ -44,11 +48,11 @@ class _SkeletonCardState extends State<SkeletonCard>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _box(double.infinity, 14),
+                _box(double.infinity, 14, shimmerColor),
                 const SizedBox(height: 10),
-                _box(200, 12),
+                _box(200, 12, shimmerColor),
                 const SizedBox(height: 8),
-                _box(120, 10),
+                _box(120, 10, shimmerColor),
               ],
             ),
           ),
@@ -57,11 +61,11 @@ class _SkeletonCardState extends State<SkeletonCard>
     );
   }
 
-  Widget _box(double w, double h) => Container(
+  Widget _box(double w, double h, Color color) => Container(
         width: w,
         height: h,
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: color,
           borderRadius: BorderRadius.circular(4),
         ),
       );
@@ -74,10 +78,13 @@ class SkeletonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: count,
-      itemBuilder: (_, __) => const SkeletonCard(),
+    return Semantics(
+      label: 'Loading list',
+      child: ListView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: count,
+        itemBuilder: (_, __) => const SkeletonCard(),
+      ),
     );
   }
 }

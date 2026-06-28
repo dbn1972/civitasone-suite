@@ -106,12 +106,12 @@ class _FeedCard extends StatelessWidget {
       case 'birthday':
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
-          color: const Color(0xFFFFF0F5),
+          color: theme.colorScheme.tertiaryContainer.withOpacity(0.3),
           child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [
             const Text('🎂', style: TextStyle(fontSize: 28)),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Happy Birthday, ${item['name']}!', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFDB2777))),
+              Text('Happy Birthday, ${item['name']}!', style: TextStyle(fontWeight: FontWeight.w600, color: theme.colorScheme.tertiary)),
               Text('${item['designation']} • ${item['department']}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
             ])),
           ])),
@@ -120,12 +120,12 @@ class _FeedCard extends StatelessWidget {
       case 'new_joinee':
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
-          color: const Color(0xFFF0FFF4),
+          color: theme.colorScheme.primaryContainer.withOpacity(0.3),
           child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [
             const Text('👋', style: TextStyle(fontSize: 28)),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Welcome ${item['name']}!', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF15803D))),
+              Text('Welcome ${item['name']}!', style: TextStyle(fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
               Text('Joined as ${item['designation']} in ${item['department']}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
             ])),
           ])),

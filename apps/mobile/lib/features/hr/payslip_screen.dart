@@ -404,7 +404,7 @@ class _PayslipDetailScreenState extends ConsumerState<_PayslipDetailScreen> {
                     SizedBox(height: 12),
                     Text(
                       'Loading breakdown…',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                      style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -509,10 +509,11 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final color = isHighlight
-        ? const Color(0xFF6366F1)
+        ? theme.colorScheme.primary
         : isDeduction
-            ? Colors.red.shade700
+            ? theme.colorScheme.error
             : null;
 
     return Padding(
@@ -525,7 +526,7 @@ class _DetailRow extends StatelessWidget {
             style: TextStyle(
               fontSize: isBold ? 14 : 13,
               fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
-              color: color ?? (isBold ? Colors.black87 : const Color(0xFF64748B)),
+              color: color ?? (isBold ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant),
             ),
           ),
           Text(
@@ -533,7 +534,7 @@ class _DetailRow extends StatelessWidget {
             style: TextStyle(
               fontSize: isBold ? 14 : 13,
               fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-              color: color ?? Colors.black87,
+              color: color ?? theme.colorScheme.onSurface,
             ),
           ),
         ],

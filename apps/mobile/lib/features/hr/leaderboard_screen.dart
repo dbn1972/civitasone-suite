@@ -90,7 +90,6 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                           label: Text(p[0].toUpperCase() + p.substring(1)),
                           selected: _period == p,
                           onSelected: (_) { setState(() => _period = p); _fetchLeaderboard(); },
-                          selectedColor: const Color(0xFF6366F1).withOpacity(0.15),
                         )),
                     ]),
                     const SizedBox(height: 16),
@@ -159,8 +158,8 @@ class _LeaderRow extends StatelessWidget {
           ])),
           // Points
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('$points', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isTop3 ? rankColor : const Color(0xFF6366F1))),
-            const Text('pts', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+            Text('$points', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isTop3 ? rankColor : theme.colorScheme.primary)),
+            Text('pts', style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
           ]),
         ])),
       ),

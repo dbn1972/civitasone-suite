@@ -182,20 +182,23 @@ class _LeaveApplyScreenState extends ConsumerState<LeaveApplyScreen> {
 
             if (_fromDate != null && _toDate != null) ...[
               const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0E7FF),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$_days day${_days == 1 ? '' : 's'} of leave',
-                  style: const TextStyle(
-                    color: Color(0xFF4338CA),
-                    fontWeight: FontWeight.w600,
+              Builder(builder: (context) {
+                final theme = Theme.of(context);
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ),
-              ),
+                  child: Text(
+                    '$_days day${_days == 1 ? '' : 's'} of leave',
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              }),
             ],
             const SizedBox(height: 16),
 
@@ -244,34 +247,40 @@ class _DateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final display = value == null
         ? 'Select date'
         : '${value!.day.toString().padLeft(2, '0')}/'
             '${value!.month.toString().padLeft(2, '0')}/'
             '${value!.year}';
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade400),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-          const SizedBox(height: 2),
-          Row(children: [
-            const Icon(Icons.calendar_today, size: 14, color: Color(0xFF6366F1)),
-            const SizedBox(width: 6),
-            Text(display,
-                style: TextStyle(
-                    fontSize: 14,
-                    color: value == null
-                        ? Colors.grey.shade500
-                        : Colors.grey.shade900)),
+    return Semantics(
+      label: '$label: ${value == null ? "not selected" : display}',
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.colorScheme.outline),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 2),
+            Row(children: [
+              Icon(Icons.calendar_today, size: 14, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text(display,
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: value == null
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.onSurface)),
+            ]),
           ]),
-        ]),
+        ),
       ),
     );
   }
