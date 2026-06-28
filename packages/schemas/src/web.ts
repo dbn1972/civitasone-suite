@@ -40,8 +40,11 @@ export const paymentSummarySchema = z.object({
 
 export const employeeSummarySchema = z.object({
   id: z.string(),
+  employeeNo: z.string().optional(),
   name: z.string(),
   department: z.string(),
+  employeeType: z.string().optional(),
+  basicMinor: z.number().optional(),
   status: z.string(),
 });
 
