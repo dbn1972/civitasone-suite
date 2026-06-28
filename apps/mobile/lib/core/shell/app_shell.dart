@@ -58,8 +58,12 @@ class AppShell extends StatelessWidget {
         (label: 'CRM Deals', icon: Icons.handshake, route: '/crm/deals'),
         (label: 'Helpdesk', icon: Icons.support_agent, route: '/helpdesk/tickets'),
         (label: 'Projects', icon: Icons.folder, route: '/projects'),
+        (label: 'Assets', icon: Icons.inventory_2, route: '/assets/scan'),
+        (label: 'Contracts', icon: Icons.assignment, route: '/contracts/milestones'),
+        (label: 'Knowledge Base', icon: Icons.menu_book, route: '/knowledge'),
+        (label: 'Reports', icon: Icons.bar_chart, route: '/reports'),
         (label: 'Estab Files', icon: Icons.description, route: '/estab/files'),
-        (label: 'MIS', icon: Icons.bar_chart, route: '/mis'),
+        (label: 'MIS', icon: Icons.analytics, route: '/mis'),
       ],
     ),
   ];
@@ -146,6 +150,15 @@ class AppShell extends StatelessWidget {
                 },
               ),
           ],
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Settings'),
+            onTap: () {
+              Navigator.of(context).pop();
+              context.go('/settings');
+            },
+          ),
         ],
       ),
       // App bar with hamburger + notification bell

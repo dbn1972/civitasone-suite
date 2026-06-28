@@ -23,6 +23,11 @@ import 'features/helpdesk/ticket_create_screen.dart';
 import 'features/projects/projects_screen.dart';
 import 'features/estab/files_screen.dart';
 import 'features/mis/mis_screen.dart';
+import 'features/assets/asset_scan_screen.dart';
+import 'features/contracts/contract_milestones_screen.dart';
+import 'features/knowledge/knowledge_base_screen.dart';
+import 'features/reports/quick_reports_screen.dart';
+import 'features/settings/settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,6 +114,11 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/projects', builder: (_, __) => const ProjectsScreen()),
             GoRoute(path: '/estab/files', builder: (_, __) => const EstabFilesScreen()),
             GoRoute(path: '/mis', builder: (_, __) => const MisScreen()),
+            GoRoute(path: '/assets/scan', builder: (_, __) => const AssetScanScreen()),
+            GoRoute(path: '/contracts/milestones', builder: (_, __) => const ContractMilestonesScreen()),
+            GoRoute(path: '/knowledge', builder: (_, __) => const KnowledgeBaseScreen()),
+            GoRoute(path: '/reports', builder: (_, __) => const QuickReportsScreen()),
+            GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
           ],
         ),
         // Write-path screens rendered outside the shell (no bottom nav).
