@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
 import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 
-const PUBLIC = ["/auth", "/api/auth", "/_next", "/favicon.ico", "/sw.js"];
+const PUBLIC = ["/auth", "/api/auth", "/careers", "/_next", "/favicon.ico", "/sw.js"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
