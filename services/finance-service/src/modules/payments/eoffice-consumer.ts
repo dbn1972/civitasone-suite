@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
+import { minorString } from "@civitasone/schemas/money";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -43,7 +44,7 @@ export function registerPaymentEOfficeDecisionConsumers(queue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.paymentMade, eventType: EVENTS.paymentMade,
           tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
-          payload: { paymentId: cb.refId, billId: payment.billId, amountMinor: Number(payment.amountMinor), mode: payment.mode },
+          payload: { paymentId: cb.refId, billId: payment.billId, amountMinor: minorString(payment.amountMinor), mode: payment.mode },
         });
         await audit(tx, msg, "eoffice_approved", cb.refId, { fileNo: cb.fileNo, dscHash: cb.dscHash ?? null });
       } else if (cb.decision === "rejected") {

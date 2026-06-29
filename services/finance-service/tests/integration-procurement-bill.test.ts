@@ -213,8 +213,8 @@ describe("procurement.grn.accepted → draft vendor bill for 3-way match", () =>
 
     expect(payload.poRef).toContain("po-001");
     expect(payload.grnRef).toContain("grn-001");
-    expect(payload.grossMinor).toBe(5000000);
-    expect(payload.netMinor).toBe(5000000); // no deductions
+    expect(payload.grossMinor).toBe("5000000");
+    expect(payload.netMinor).toBe("5000000"); // no deductions
     expect(payload.billNo).toMatch(/^BILL\/GRN\//);
     expect(payload.vendorId).toBe("vendor-001");
     expect(payload.currency).toBe("INR");
@@ -294,8 +294,8 @@ describe("procurement.grn.accepted → draft vendor bill for 3-way match", () =>
       ([_tx, msg]: [unknown, { topic: string }]) => msg.topic === COMMANDS.billCreate,
     );
     expect(billCall).toBeDefined();
-    expect(billCall![1].payload.grossMinor).toBe(0);
-    expect(billCall![1].payload.netMinor).toBe(0);
+    expect(billCall![1].payload.grossMinor).toBe("0");
+    expect(billCall![1].payload.netMinor).toBe("0");
 
     await q.stop();
   });

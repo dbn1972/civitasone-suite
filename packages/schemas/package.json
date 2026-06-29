@@ -8,6 +8,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./common": "./dist/common.js",
+    "./money": "./dist/money.js",
     "./web": "./dist/web.js",
     "./identity": "./dist/identity.js",
     "./http": "./dist/http.js",

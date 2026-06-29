@@ -4,6 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { minorString } from "@civitasone/schemas/money";
 import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -83,7 +84,7 @@ export function registerBudgetConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.sanctionApproved, eventType: EVENTS.sanctionApproved,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { sanctionId: p.id, headId: sanction.headId, amountMinor: Number(sanction.amountMinor) },
+        payload: { sanctionId: p.id, headId: sanction.headId, amountMinor: minorString(sanction.amountMinor) },
       });
       await audit(tx, msg, "approve", "sanction", p.id);
     });

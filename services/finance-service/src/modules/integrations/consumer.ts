@@ -6,6 +6,7 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as auditRepo from "../audit/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
 import * as paymentsRepo from "../payments/repo.js";
+import { minorString } from "@civitasone/schemas/money";
 import { writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -116,7 +117,9 @@ export function registerIntegrationConsumers(queue: Queue): void {
     // producer did not send the explicit legs.
     const poAmountMinor = p.poAmountMinor != null ? BigInt(p.poAmountMinor) : null;
     const grnAmountMinor = p.grnAmountMinor != null ? BigInt(p.grnAmountMinor) : null;
-    const gross = grnAmountMinor != null ? Number(grnAmountMinor) : (p.grossMinor ?? 0);
+    // R7: keep money as bigint and transport as a string — never downcast paise
+    // to a JS number at the queue boundary.
+    const grossBig = grnAmountMinor ?? BigInt(p.grossMinor ?? 0);
     const headId = process.env.FINANCE_DEFAULT_HEAD_ID ?? "dddddddd-0001-0000-0000-000000000001";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -137,10 +140,10 @@ export function registerIntegrationConsumers(queue: Queue): void {
           billNo: `BILL/GRN/${p.grnId.slice(0, 8).toUpperCase()}`,
           vendorId: p.vendorId,
           headId,
-          grossMinor: gross,
+          grossMinor: minorString(grossBig),
           currency: "INR",
           deductions: [],
-          netMinor: gross,
+          netMinor: minorString(grossBig),
           poRef,
           grnRef,
           ...(poAmountMinor != null ? { poAmountMinor: poAmountMinor.toString() } : {}),

@@ -6,6 +6,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, nextStage } from "./domain.js";
+import { minorString } from "@civitasone/schemas/money";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists } from "../masters/repo.js";
@@ -263,7 +264,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.paymentMade, eventType: EVENTS.paymentMade,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { paymentId: p.id, billId: p.billId, amountMinor: p.amountMinor, mode: p.mode },
+        payload: { paymentId: p.id, billId: p.billId, amountMinor: minorString(p.amountMinor), mode: p.mode },
       });
       // GL spine: payment released -> Dr Accounts-Payable / Cr Bank.
       const payApHeadId = await headIdByCode(tx, p.tenantId, AP_CONTROL_CODE, "accounts_payable");
@@ -298,7 +299,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: "finance.gem.invoice.matched", eventType: "finance.gem.invoice.matched",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { poRef: p.poRef, invoiceRef: p.invoiceRef, amountMinor: p.amountMinor },
+        payload: { poRef: p.poRef, invoiceRef: p.invoiceRef, amountMinor: minorString(p.amountMinor) },
       });
       await audit(tx, msg, "gem_match", "gem_invoice", p.id);
     });
