@@ -32,7 +32,7 @@ export type PaymentSummary = {
 export async function getPayment(id: string, tenantId: string): Promise<PaymentRow | null> {
   const row = await cache.getOrLoad<PaymentRow>(
     cache.makeKey(tenantId, "payment", id),
-    () => repo.findPaymentById(id)
+    () => repo.findPaymentByIdAndTenant(id, tenantId)
   );
   // Tenant isolation: reject if DB row belongs to a different tenant (defence after cache miss).
   if (!row || row.tenantId !== tenantId) return null;
@@ -46,7 +46,7 @@ export async function listPayments(tenantId: string, limit: number, offset: numb
     const uniqueBillIds = [...new Set(rows.map((r) => r.billId))];
     const billVendorMap = new Map<string, string>();
     for (const billId of uniqueBillIds) {
-      const bill = await repo.findBillById(billId);
+      const bill = await repo.findBillByIdAndTenant(billId, tenantId);
       if (bill) {
         const vendorName = VENDOR_NAMES[bill.vendorId];
         if (vendorName) billVendorMap.set(billId, vendorName);
@@ -154,7 +154,7 @@ export async function listUCs(tenantId: string, limit: number) {
 export async function getBillDetail(id: string, tenantId: string) {
   const row = await cache.getOrLoad(
     cache.makeKey(tenantId, "bill", id),
-    () => repo.findBillById(id),
+    () => repo.findBillByIdAndTenant(id, tenantId),
   );
   if (!row || row.tenantId !== tenantId) return null;
   const threeWayMatch: "matched" | "pending" | "na" = (row.poRef && row.grnRef) ? "matched" : (row.poRef || row.grnRef) ? "pending" : "na";

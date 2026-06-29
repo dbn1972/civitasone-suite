@@ -39,6 +39,13 @@ export async function findBillById(id: string): Promise<BillRow | null> {
   return rows[0] ?? null;
 }
 
+/** R15: tenant-scoped bill read — no row from another tenant can be returned. */
+export async function findBillByIdAndTenant(id: string, tenantId: string): Promise<BillRow | null> {
+  const rows = await db.select().from(financeBills)
+    .where(and(eq(financeBills.id, id), eq(financeBills.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findBillByIdTx(tx: Writer, id: string): Promise<BillRow | null> {
   const rows = await (tx as typeof db).select().from(financeBills).where(eq(financeBills.id, id)).limit(1);
   return rows[0] ?? null;
@@ -46,6 +53,13 @@ export async function findBillByIdTx(tx: Writer, id: string): Promise<BillRow | 
 
 export async function findPaymentById(id: string): Promise<PaymentRow | null> {
   const rows = await db.select().from(financePayments).where(eq(financePayments.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+/** R15: tenant-scoped payment read — no row from another tenant can be returned. */
+export async function findPaymentByIdAndTenant(id: string, tenantId: string): Promise<PaymentRow | null> {
+  const rows = await db.select().from(financePayments)
+    .where(and(eq(financePayments.id, id), eq(financePayments.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 

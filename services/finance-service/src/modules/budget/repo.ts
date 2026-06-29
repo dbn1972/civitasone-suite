@@ -26,6 +26,13 @@ export async function findSanctionById(id: string): Promise<SanctionRow | null> 
   return rows[0] ?? null;
 }
 
+/** R15: tenant-scoped sanction read — no row from another tenant can be returned. */
+export async function findSanctionByIdAndTenant(id: string, tenantId: string): Promise<SanctionRow | null> {
+  const rows = await db.select().from(financeSanctions)
+    .where(and(eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 /** Sum of net_minor from bills against a sanction (cross-module via raw SQL aggregate). */
 export async function sanctionUtilised(tx: Writer, sanctionId: string): Promise<bigint> {
   // Bills live in the payments schema — we access them via the shared db connection

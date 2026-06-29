@@ -96,7 +96,7 @@ export async function listBudgetSummaries(tenantId: string, limit: number) {
 export async function getSanctionAvailable(id: string, tenantId: string): Promise<{ id: string; available: bigint; currency: string } | null> {
   const sanction = await cache.getOrLoad<SanctionRow>(
     cache.makeKey(tenantId, "sanction", id),
-    () => repo.findSanctionById(id)
+    () => repo.findSanctionByIdAndTenant(id, tenantId)
   );
   // Tenant isolation: reject if DB row belongs to a different tenant (defence after cache miss).
   if (!sanction || sanction.tenantId !== tenantId) return null;
@@ -133,7 +133,7 @@ export async function listSanctionSummaries(tenantId: string, limit: number) {
 export async function getSanctionDetail(id: string, tenantId: string) {
   const row = await cache.getOrLoad<SanctionRow>(
     cache.makeKey(tenantId, "sanction", id),
-    () => repo.findSanctionById(id),
+    () => repo.findSanctionByIdAndTenant(id, tenantId),
   );
   if (!row || row.tenantId !== tenantId) return null;
   const head = await repo.findHeadById(row.headId);
