@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeThreeWayMatch, assertQtyValid } from "./domain.js";
+import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
 import type { GrnItemInsert } from "./schema.js";
 
@@ -64,7 +65,8 @@ export function registerGrnConsumers(queue: Queue): void {
         const po = await import("../po/repo.js").then((m) => m.findPoById(poId, p.tenantId));
         const poItems = await import("../po/repo.js").then((m) => m.findPoItemsByPoId(poId, p.tenantId));
         const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
-        const grossMinor = po ? Number(po.totalMinor) : 0;
+        // R7: transport money as exact strings, never Number(bigint paise).
+        const grossMinorStr = po ? minorString(po.totalMinor) : "0";
 
         // Derive the authoritative PO and GRN(accepted) values server-side from
         // real PO line prices × GRN accepted qty — never from a caller. These
@@ -97,7 +99,7 @@ export function registerGrnConsumers(queue: Queue): void {
             itemCode: gi.itemCode,
             itemName: poItem?.description ?? gi.itemCode,
             acceptedQty: gi.acceptedQty,
-            rateMinor: poItem ? Number(poItem.unitPriceMinor) : 0,
+            rateMinor: poItem ? minorString(poItem.unitPriceMinor) : "0",
             currency: poItem?.currency ?? "INR",
             itemType,
             itemId: poItem?.id,
@@ -107,7 +109,7 @@ export function registerGrnConsumers(queue: Queue): void {
           topic: EVENTS.grnAccepted, eventType: EVENTS.grnAccepted,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: {
-            grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, grossMinor,
+            grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, grossMinor: grossMinorStr,
             // R5: paise as strings so > 2^53 stays exact across the queue boundary.
             poAmountMinor: poAmountMinor.toString(),
             grnAmountMinor: grnAmountMinor.toString(),

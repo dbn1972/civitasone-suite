@@ -105,7 +105,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
   /** procurement.grn.accepted → draft vendor bill with PO/GRN refs for 3-way match */
   queue.subscribe(CONSUMED_EVENTS.grnAccepted, async (msg) => {
     const p = msg.payload as {
-      grnId: string; poRef: string; vendorId: string; grossMinor?: number;
+      grnId: string; poRef: string; vendorId: string; grossMinor?: string | number;
       poAmountMinor?: string; grnAmountMinor?: string;
     };
     const billId = randomUUID();

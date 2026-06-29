@@ -6,6 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { allocateDocNo } from "../../shared/numbering.js";
+import { minorString } from "@civitasone/schemas/money";
 import * as repo from "./repo.js";
 import {
   assertTenderTransition, assertCanOpenFinancial, determineL1,
@@ -289,7 +290,7 @@ export function registerTenderConsumers(queue: Queue): void {
           ...(sanctionRef ? { sanctionRef } : {}),
           items: [{
             itemCode: t.tenderNo, description: `Award for tender ${t.tenderNo}`,
-            quantity: 1, unit: "lot", unitPriceMinor: Number(winner.amountMinor),
+            quantity: 1, unit: "lot", unitPriceMinor: minorString(winner.amountMinor),
             itemType: "service",
           }],
         },

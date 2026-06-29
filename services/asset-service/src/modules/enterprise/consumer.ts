@@ -41,7 +41,7 @@ export function registerEnterpriseConsumers(queue: Queue): void {
           assetId: pending.assetId,
           acquisitionCost: asset.acquisitionCost.toString(),
           accumulatedDep: asset.accumulatedDep.toString(),
-          proceeds: Number(pending.proceedsMinor),
+          proceeds: pending.proceedsMinor.toString(),
           gainLoss: gainLoss.toString(),
           currency: pending.currency,
           type: "asset_disposal",

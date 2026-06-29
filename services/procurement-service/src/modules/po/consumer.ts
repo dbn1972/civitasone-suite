@@ -57,7 +57,7 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; rateContractRef?: string; deliveryDate?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: number; itemType?: string }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
 
@@ -229,7 +229,7 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; gemOrderNo: string; deliveryDate?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: number; itemType?: string }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
     await db.transaction(async (tx) => {

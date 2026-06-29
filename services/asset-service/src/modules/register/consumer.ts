@@ -134,7 +134,7 @@ export function registerRegisterConsumers(queue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.assetCreated, eventType: EVENTS.assetCreated,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { assetId, code: item.itemCode, acquisitionCost: Number(totalCost), grnId: p.grnId },
+          payload: { assetId, code: item.itemCode, acquisitionCost: totalCost.toString(), grnId: p.grnId },
         });
         // P0-1/P0-2: acquisition GL on capitalization. Finance's GL consumer
         // treats anything that is NOT type:"depreciation"/"asset_disposal" as a

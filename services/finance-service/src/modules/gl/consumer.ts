@@ -165,7 +165,7 @@ export function registerGlConsumers(queue: Queue): void {
     if (raw.type === "asset_disposal") {
       const d = raw as {
         assetId: string; acquisitionCost: string; accumulatedDep: string;
-        proceeds: number; gainLoss: string; currency?: string;
+        proceeds: string | number; gainLoss: string; currency?: string;
       };
       // M1: carry paise as decimal strings -> BigInt (no Number() on paise).
       const acq = BigInt(d.acquisitionCost);
