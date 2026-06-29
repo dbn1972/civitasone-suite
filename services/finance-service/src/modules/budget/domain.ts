@@ -94,4 +94,19 @@ export function assertReappropriationValid(source: ReappropriationSource, amount
   }
 }
 
+/**
+ * R11 — maker-checker separation of duties. A sanction must be approved by an
+ * officer other than the one who raised it. Self-approval (single-officer
+ * sanction) is rejected so a financial commitment always has two distinct
+ * accountable parties (GFR maker-checker; DFPR delegation).
+ */
+export function assertSanctionApproverDistinct(createdBy: string, approverId: string): void {
+  if (createdBy === approverId) {
+    throw new DomainError(
+      "MAKER_CHECKER_VIOLATION",
+      "sanction approver must differ from the officer who created it (maker-checker)"
+    );
+  }
+}
+
 export { assertValidPfmsHoA, assertValidDdoCode } from "../../shared/pfms.js";

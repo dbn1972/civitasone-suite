@@ -7,6 +7,7 @@ export const COMMANDS = {
   reappropriationSubmitApproval: "finance.reappropriation.submit_approval",
   sanctionCreate:       "finance.sanction.create",
   sanctionReject:       "finance.sanction.reject",
+  sanctionApprove:      "finance.sanction.approve",
   sanctionSubmitApproval: "finance.sanction.submit_approval",
   // gl
   journalPost:          "finance.gl.post",

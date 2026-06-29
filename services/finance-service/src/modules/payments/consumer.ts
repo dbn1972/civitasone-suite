@@ -83,6 +83,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
         if (!sanction || sanction.tenantId !== p.tenantId) {
           throw new Error(`UNKNOWN_SANCTION: ${p.sanctionRef} not found for tenant`);
         }
+        // R11: a bill may only draw on an APPROVED sanction. A pending/draft
+        // sanction (maker-checker not yet completed) cannot fund expenditure.
+        if (sanction.status !== "approved") {
+          throw new Error(`SANCTION_NOT_APPROVED: ${p.sanctionRef} is '${sanction.status}', must be approved before billing`);
+        }
       }
       // Period hard-close: block bill posting into a hard-closed period (bill's own date).
       if ((await getPeriodStatus(p.tenantId, billPeriod)) === "hard_close") {

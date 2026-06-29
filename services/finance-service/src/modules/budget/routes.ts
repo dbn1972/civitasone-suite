@@ -101,6 +101,16 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectSanction(ctx, id, body));
   });
 
+  // R11 (maker-checker) — a checker approves a pending sanction. Restricted to
+  // finance_admin/super_admin; the SoD guard (approver ≠ creator) is enforced
+  // in the consumer transaction. Makes single-officer self-sanction impossible.
+  app.patch("/v1/finance/sanctions/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["finance_admin", "super_admin"]);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveSanction(ctx, id));
+  });
+
   // H1 — submit a sanction to eOffice for administrative approval. The eFile is
   // raised via the eOffice integration; the decision returns on
   // finance.sanction.file_decided and moves the sanction to approved/cancelled.

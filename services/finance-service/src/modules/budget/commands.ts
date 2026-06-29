@@ -75,6 +75,22 @@ export async function submitSanctionForApproval(ctx: RequestContext, id: string)
 }
 
 /**
+ * R11 — maker-checker approval of a sanction by a checker (an officer other than
+ * the creator). The SoD check (approver ≠ maker) is enforced in the consumer
+ * inside the write transaction. On approval the sanction becomes `approved` and
+ * emits finance.sanction.approved.
+ */
+export async function approveSanction(ctx: RequestContext, id: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.sanctionApprove, {
+    type: COMMANDS.sanctionApprove,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
  * Submit a budget re-appropriation to eOffice for administrative approval.
  * Creates the re-appropriation request in status `pending_approval` (the route
  * `:id` is the request id / eFile refId). The eFile is raised via the eOffice

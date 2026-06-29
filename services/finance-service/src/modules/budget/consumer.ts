@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertValidFY, assertReappropriationValid, DomainError } from "./domain.js";
+import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -52,18 +52,40 @@ export function registerBudgetConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; sanctionNo: string; purpose: string; headId: string; amountMinor: number; currency?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // R11 (maker-checker): a sanction is created as `pending_approval`. It does
+      // NOT self-approve and does NOT emit sanction.approved here — a separate
+      // checker (finance.sanction.approve, SoD-guarded) or the eOffice decision
+      // loop moves it to `approved` and emits the event. A single officer can no
+      // longer raise an already-sanctioned amount.
       await repo.insertSanction(tx, {
         id: p.id, tenantId: p.tenantId, sanctionNo: p.sanctionNo, purpose: p.purpose,
         headId: p.headId, amountMinor: BigInt(p.amountMinor),
-        currency: p.currency ?? "INR", status: "approved",
+        currency: p.currency ?? "INR", status: "pending_approval",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      await audit(tx, msg, "create", "sanction", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
+  });
+
+  queue.subscribe(COMMANDS.sanctionApprove, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const sanction = await repo.findSanctionByIdTx(tx, p.id);
+      if (!sanction || sanction.tenantId !== p.tenantId) return;
+      // Only a pending sanction can be approved (idempotent on redelivery).
+      if (sanction.status !== "pending_approval" && sanction.status !== "draft") return;
+      // R11 SoD: the approving officer (checker) must differ from the creator
+      // (maker). Same-officer approval is the maker-checker bypass we are closing.
+      assertSanctionApproverDistinct(sanction.createdBy, msg.actorId);
+      await repo.updateSanction(tx, p.id, { status: "approved", updatedBy: msg.actorId });
       await enqueue(tx, {
         topic: EVENTS.sanctionApproved, eventType: EVENTS.sanctionApproved,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { sanctionId: p.id, headId: p.headId, amountMinor: p.amountMinor },
+        payload: { sanctionId: p.id, headId: sanction.headId, amountMinor: Number(sanction.amountMinor) },
       });
-      await audit(tx, msg, "create", "sanction", p.id);
+      await audit(tx, msg, "approve", "sanction", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
