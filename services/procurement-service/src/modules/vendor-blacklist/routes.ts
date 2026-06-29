@@ -7,8 +7,19 @@ import type { VendorBlacklistRow } from "./schema.js";
 import * as vendorRepo from "../vendor/repo.js";
 
 const PROC_ROLES = ["procurement_officer", "procurement_admin", "super_admin"];
+const CENTRAL_DEBARMENT_ROLES = ["super_admin"]; // CVC / central debarring authority
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 const createBody = z.object({
+  reason: z.string().min(1).max(1000),
+  blacklistedFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  blacklistedUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  orderRef: z.string().max(128).optional(),
+});
+
+const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const centralDebarmentBody = z.object({
+  pan: z.string().regex(PAN_RE, "PAN must be 10 chars (AAAAA9999A)"),
   reason: z.string().min(1).max(1000),
   blacklistedFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   blacklistedUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -69,6 +80,46 @@ export async function vendorBlacklistRoutes(app: FastifyInstance): Promise<void>
     });
 
     return reply.code(201).send({ data: toApi(record) });
+  });
+
+  // R17 — record a CVC / government-wide debarment by PAN. Restricted to the
+  // central debarring authority (super_admin). Such an entry blocks the firm's
+  // PAN in EVERY tenant at the award/PO gate (isCentrallyDebarredTx), not just
+  // the recording tenant. Idempotent on an already-active PAN.
+  app.post("/v1/procurement/central-debarment", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CENTRAL_DEBARMENT_ROLES);
+    const body = centralDebarmentBody.parse(req.body);
+    const existing = await repo.findActiveCentralByPan(body.pan);
+    if (existing) {
+      throw new HttpError(409, "ALREADY_DEBARRED", "PAN already has an active central debarment");
+    }
+    const record = await repo.insertBlacklist({
+      tenantId: ctx.tenantId,        // recording authority's tenant
+      vendorId: NIL_UUID,            // central debarment matches by PAN, not a per-tenant vendor id
+      scope: "central",
+      pan: body.pan.toUpperCase(),
+      reason: body.reason,
+      blacklistedBy: ctx.actorId,
+      createdBy: ctx.actorId,
+      blacklistedFrom: body.blacklistedFrom,
+      blacklistedUntil: body.blacklistedUntil ?? null,
+      orderRef: body.orderRef ?? null,
+      status: "active",
+    });
+    return reply.code(201).send({ data: { ...toApi(record), scope: record.scope, pan: record.pan } });
+  });
+
+  // List active CVC / government-wide debarments (visible to every tenant).
+  app.get("/v1/procurement/central-debarment", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROC_ROLES);
+    const q = z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+    const rows = await repo.listActiveCentral(q.limit, q.offset);
+    return reply.send({ data: rows.map((r) => ({ ...toApi(r), scope: r.scope, pan: r.pan })), total: rows.length });
   });
 
   app.get("/v1/procurement/vendor-blacklist", async (req, reply) => {

@@ -108,6 +108,9 @@ export function registerPoConsumers(queue: Queue): void {
       const vendorTx = await vendorRepo.findVendorByIdTx(tx, p.vendorId, p.tenantId);
       const blacklisted =
         (await blacklistRepo.isBlacklistedTx(tx, p.tenantId, p.vendorId)) ||
+        // R17: a CVC/government-wide debarment of this firm's PAN blocks it in
+        // every tenant, not only the one that recorded it.
+        (await blacklistRepo.isCentrallyDebarredTx(tx, vendorTx?.pan)) ||
         (vendorTx?.vendorType === "blacklisted");
       if (blacklisted) {
         await enqueue(tx, {
@@ -239,6 +242,8 @@ export function registerPoConsumers(queue: Queue): void {
       const vendorTx = await vendorRepo.findVendorByIdTx(tx, p.vendorId, p.tenantId);
       const blacklisted =
         (await blacklistRepo.isBlacklistedTx(tx, p.tenantId, p.vendorId)) ||
+        // R17: federated CVC debarment by PAN blocks across all tenants.
+        (await blacklistRepo.isCentrallyDebarredTx(tx, vendorTx?.pan)) ||
         (vendorTx?.vendorType === "blacklisted");
       if (blacklisted) {
         await enqueue(tx, {

@@ -31,6 +31,39 @@ export async function isBlacklistedTx(tx: Writer, tenantId: string, vendorId: st
   return rows.length > 0;
 }
 
+/**
+ * R17 — federated (CVC/government-wide) debarment check. A vendor whose PAN
+ * appears in an ACTIVE central debarment is blocked in EVERY tenant, regardless
+ * of which authority recorded it. Case-insensitive PAN match. Usable inside a tx.
+ */
+export async function isCentrallyDebarredTx(tx: Writer, pan: string | null | undefined): Promise<boolean> {
+  if (!pan) return false;
+  const rows = await (tx as typeof db).select({ id: vendorBlacklist.id }).from(vendorBlacklist)
+    .where(and(
+      eq(vendorBlacklist.scope, "central"),
+      eq(vendorBlacklist.status, "active"),
+      sql`upper(${vendorBlacklist.pan}) = upper(${pan})`,
+    )).limit(1);
+  return rows.length > 0;
+}
+
+/** List active central (government-wide) debarments — visible to every tenant. */
+export async function listActiveCentral(limit = 50, offset = 0): Promise<VendorBlacklistRow[]> {
+  return db.select().from(vendorBlacklist)
+    .where(and(eq(vendorBlacklist.scope, "central"), eq(vendorBlacklist.status, "active")))
+    .limit(limit).offset(offset);
+}
+
+export async function findActiveCentralByPan(pan: string): Promise<VendorBlacklistRow | null> {
+  const rows = await db.select().from(vendorBlacklist)
+    .where(and(
+      eq(vendorBlacklist.scope, "central"),
+      eq(vendorBlacklist.status, "active"),
+      sql`upper(${vendorBlacklist.pan}) = upper(${pan})`,
+    )).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertBlacklist(row: VendorBlacklistInsert): Promise<VendorBlacklistRow> {
   const rows = await db.insert(vendorBlacklist).values(row).returning();
   return rows[0]!;
