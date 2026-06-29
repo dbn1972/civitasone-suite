@@ -123,7 +123,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3001"
-      DATABASE_URL: ${DATABASE_URL_IDENTITY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_identity}
+      DATABASE_URL: ${DATABASE_URL_IDENTITY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_identity; do NOT use the cluster superuser)}
       MFA_ENC_KEY: ${MFA_ENC_KEY:?}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
@@ -144,7 +144,7 @@ services:
         PORT: "3001"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_IDENTITY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_identity}
+      DATABASE_URL: ${DATABASE_URL_IDENTITY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_identity; do NOT use the cluster superuser)}
       MFA_ENC_KEY: ${MFA_ENC_KEY:?}
 
   tenant-service:
@@ -160,7 +160,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3002"
-      DATABASE_URL: ${DATABASE_URL_TENANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_tenant}
+      DATABASE_URL: ${DATABASE_URL_TENANT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_tenant; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -180,7 +180,7 @@ services:
         PORT: "3002"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_TENANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_tenant}
+      DATABASE_URL: ${DATABASE_URL_TENANT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_tenant; do NOT use the cluster superuser)}
 
   policy-service:
     <<: *svc-defaults
@@ -195,7 +195,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3003"
-      DATABASE_URL: ${DATABASE_URL_POLICY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_policy}
+      DATABASE_URL: ${DATABASE_URL_POLICY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_policy; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -215,7 +215,7 @@ services:
         PORT: "3003"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_POLICY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_policy}
+      DATABASE_URL: ${DATABASE_URL_POLICY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_policy; do NOT use the cluster superuser)}
 
   audit-service:
     <<: *svc-defaults
@@ -230,7 +230,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3004"
-      DATABASE_URL: ${DATABASE_URL_AUDIT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_audit}
+      DATABASE_URL: ${DATABASE_URL_AUDIT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_audit; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3004/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -250,7 +250,7 @@ services:
         PORT: "3004"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_AUDIT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_audit}
+      DATABASE_URL: ${DATABASE_URL_AUDIT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_audit; do NOT use the cluster superuser)}
 
   install-service:
     <<: *svc-defaults
@@ -265,7 +265,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3005"
-      DATABASE_URL: ${DATABASE_URL_INSTALL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_install}
+      DATABASE_URL: ${DATABASE_URL_INSTALL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_install; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3005/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -285,7 +285,7 @@ services:
         PORT: "3005"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_INSTALL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_install}
+      DATABASE_URL: ${DATABASE_URL_INSTALL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_install; do NOT use the cluster superuser)}
 
   notification-service:
     <<: *svc-defaults
@@ -300,7 +300,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3006"
-      DATABASE_URL: ${DATABASE_URL_NOTIFICATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_notification}
+      DATABASE_URL: ${DATABASE_URL_NOTIFICATION:?per-service least-privilege DSN required (set DATABASE_URL for civitas_notification; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3006/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -320,7 +320,7 @@ services:
         PORT: "3006"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_NOTIFICATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_notification}
+      DATABASE_URL: ${DATABASE_URL_NOTIFICATION:?per-service least-privilege DSN required (set DATABASE_URL for civitas_notification; do NOT use the cluster superuser)}
 
   finance-service:
     <<: *svc-defaults
@@ -335,7 +335,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3007"
-      DATABASE_URL: ${DATABASE_URL_FINANCE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_finance}
+      DATABASE_URL: ${DATABASE_URL_FINANCE:?per-service least-privilege DSN required (set DATABASE_URL for civitas_finance; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3007/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -355,7 +355,7 @@ services:
         PORT: "3007"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_FINANCE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_finance}
+      DATABASE_URL: ${DATABASE_URL_FINANCE:?per-service least-privilege DSN required (set DATABASE_URL for civitas_finance; do NOT use the cluster superuser)}
 
   procurement-service:
     <<: *svc-defaults
@@ -370,7 +370,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3008"
-      DATABASE_URL: ${DATABASE_URL_PROCUREMENT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_procurement}
+      DATABASE_URL: ${DATABASE_URL_PROCUREMENT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_procurement; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3008/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -390,7 +390,7 @@ services:
         PORT: "3008"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_PROCUREMENT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_procurement}
+      DATABASE_URL: ${DATABASE_URL_PROCUREMENT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_procurement; do NOT use the cluster superuser)}
 
   contract-service:
     <<: *svc-defaults
@@ -405,7 +405,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3009"
-      DATABASE_URL: ${DATABASE_URL_CONTRACT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_contract}
+      DATABASE_URL: ${DATABASE_URL_CONTRACT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_contract; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3009/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -425,7 +425,7 @@ services:
         PORT: "3009"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_CONTRACT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_contract}
+      DATABASE_URL: ${DATABASE_URL_CONTRACT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_contract; do NOT use the cluster superuser)}
 
   estab-service:
     <<: *svc-defaults
@@ -440,7 +440,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3010"
-      DATABASE_URL: ${DATABASE_URL_ESTAB:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_estab}
+      DATABASE_URL: ${DATABASE_URL_ESTAB:?per-service least-privilege DSN required (set DATABASE_URL for civitas_estab; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3010/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -460,7 +460,7 @@ services:
         PORT: "3010"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_ESTAB:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_estab}
+      DATABASE_URL: ${DATABASE_URL_ESTAB:?per-service least-privilege DSN required (set DATABASE_URL for civitas_estab; do NOT use the cluster superuser)}
 
   stock-service:
     <<: *svc-defaults
@@ -475,7 +475,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3011"
-      DATABASE_URL: ${DATABASE_URL_STOCK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_stock}
+      DATABASE_URL: ${DATABASE_URL_STOCK:?per-service least-privilege DSN required (set DATABASE_URL for civitas_stock; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3011/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -495,7 +495,7 @@ services:
         PORT: "3011"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_STOCK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_stock}
+      DATABASE_URL: ${DATABASE_URL_STOCK:?per-service least-privilege DSN required (set DATABASE_URL for civitas_stock; do NOT use the cluster superuser)}
 
   hrms-service:
     <<: *svc-defaults
@@ -510,7 +510,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3012"
-      DATABASE_URL: ${DATABASE_URL_HRMS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_hrms}
+      DATABASE_URL: ${DATABASE_URL_HRMS:?per-service least-privilege DSN required (set DATABASE_URL for civitas_hrms; do NOT use the cluster superuser)}
       PII_ENC_KEY: ${PII_ENC_KEY:?}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3012/health >/dev/null 2>&1 || exit 1"]
@@ -531,7 +531,7 @@ services:
         PORT: "3012"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_HRMS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_hrms}
+      DATABASE_URL: ${DATABASE_URL_HRMS:?per-service least-privilege DSN required (set DATABASE_URL for civitas_hrms; do NOT use the cluster superuser)}
       PII_ENC_KEY: ${PII_ENC_KEY:?}
 
   payroll-service:
@@ -547,7 +547,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3013"
-      DATABASE_URL: ${DATABASE_URL_PAYROLL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_payroll}
+      DATABASE_URL: ${DATABASE_URL_PAYROLL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_payroll; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3013/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -567,7 +567,7 @@ services:
         PORT: "3013"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_PAYROLL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_payroll}
+      DATABASE_URL: ${DATABASE_URL_PAYROLL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_payroll; do NOT use the cluster superuser)}
 
   project-service:
     <<: *svc-defaults
@@ -582,7 +582,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3014"
-      DATABASE_URL: ${DATABASE_URL_PROJECT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_project}
+      DATABASE_URL: ${DATABASE_URL_PROJECT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_project; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3014/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -602,7 +602,7 @@ services:
         PORT: "3014"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_PROJECT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_project}
+      DATABASE_URL: ${DATABASE_URL_PROJECT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_project; do NOT use the cluster superuser)}
 
   asset-service:
     <<: *svc-defaults
@@ -617,7 +617,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3015"
-      DATABASE_URL: ${DATABASE_URL_ASSET:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_asset}
+      DATABASE_URL: ${DATABASE_URL_ASSET:?per-service least-privilege DSN required (set DATABASE_URL for civitas_asset; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3015/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -637,7 +637,7 @@ services:
         PORT: "3015"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_ASSET:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_asset}
+      DATABASE_URL: ${DATABASE_URL_ASSET:?per-service least-privilege DSN required (set DATABASE_URL for civitas_asset; do NOT use the cluster superuser)}
 
   report-service:
     <<: *svc-defaults
@@ -652,7 +652,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3016"
-      DATABASE_URL: ${DATABASE_URL_REPORT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_report}
+      DATABASE_URL: ${DATABASE_URL_REPORT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_report; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3016/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -672,7 +672,7 @@ services:
         PORT: "3016"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_REPORT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_report}
+      DATABASE_URL: ${DATABASE_URL_REPORT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_report; do NOT use the cluster superuser)}
 
   plugin-service:
     <<: *svc-defaults
@@ -687,7 +687,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3017"
-      DATABASE_URL: ${DATABASE_URL_PLUGIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_plugin}
+      DATABASE_URL: ${DATABASE_URL_PLUGIN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_plugin; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3017/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -707,7 +707,7 @@ services:
         PORT: "3017"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_PLUGIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_plugin}
+      DATABASE_URL: ${DATABASE_URL_PLUGIN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_plugin; do NOT use the cluster superuser)}
 
   theme-service:
     <<: *svc-defaults
@@ -722,7 +722,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3018"
-      DATABASE_URL: ${DATABASE_URL_THEME:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_theme}
+      DATABASE_URL: ${DATABASE_URL_THEME:?per-service least-privilege DSN required (set DATABASE_URL for civitas_theme; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3018/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -742,7 +742,7 @@ services:
         PORT: "3018"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_THEME:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_theme}
+      DATABASE_URL: ${DATABASE_URL_THEME:?per-service least-privilege DSN required (set DATABASE_URL for civitas_theme; do NOT use the cluster superuser)}
 
   grant-service:
     <<: *svc-defaults
@@ -757,7 +757,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3019"
-      DATABASE_URL: ${DATABASE_URL_GRANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_grant}
+      DATABASE_URL: ${DATABASE_URL_GRANT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_grant; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3019/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -777,7 +777,7 @@ services:
         PORT: "3019"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_GRANT:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_grant}
+      DATABASE_URL: ${DATABASE_URL_GRANT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_grant; do NOT use the cluster superuser)}
 
   citizen-service:
     <<: *svc-defaults
@@ -792,7 +792,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3020"
-      DATABASE_URL: ${DATABASE_URL_CITIZEN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_citizen}
+      DATABASE_URL: ${DATABASE_URL_CITIZEN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_citizen; do NOT use the cluster superuser)}
       CITIZEN_PII_KEY: ${CITIZEN_PII_KEY:?}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3020/health >/dev/null 2>&1 || exit 1"]
@@ -813,7 +813,7 @@ services:
         PORT: "3020"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_CITIZEN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_citizen}
+      DATABASE_URL: ${DATABASE_URL_CITIZEN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_citizen; do NOT use the cluster superuser)}
       CITIZEN_PII_KEY: ${CITIZEN_PII_KEY:?}
 
   legal-service:
@@ -829,7 +829,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3021"
-      DATABASE_URL: ${DATABASE_URL_LEGAL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_legal}
+      DATABASE_URL: ${DATABASE_URL_LEGAL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_legal; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3021/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -849,7 +849,7 @@ services:
         PORT: "3021"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_LEGAL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_legal}
+      DATABASE_URL: ${DATABASE_URL_LEGAL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_legal; do NOT use the cluster superuser)}
 
   admin-service:
     <<: *svc-defaults
@@ -864,7 +864,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3022"
-      DATABASE_URL: ${DATABASE_URL_ADMIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_admin}
+      DATABASE_URL: ${DATABASE_URL_ADMIN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_admin; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3022/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -884,7 +884,7 @@ services:
         PORT: "3022"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_ADMIN:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_admin}
+      DATABASE_URL: ${DATABASE_URL_ADMIN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_admin; do NOT use the cluster superuser)}
 
   billing-service:
     <<: *svc-defaults
@@ -899,7 +899,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3023"
-      DATABASE_URL: ${DATABASE_URL_BILLING:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_billing}
+      DATABASE_URL: ${DATABASE_URL_BILLING:?per-service least-privilege DSN required (set DATABASE_URL for civitas_billing; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3023/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -919,7 +919,7 @@ services:
         PORT: "3023"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_BILLING:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_billing}
+      DATABASE_URL: ${DATABASE_URL_BILLING:?per-service least-privilege DSN required (set DATABASE_URL for civitas_billing; do NOT use the cluster superuser)}
 
   crm-service:
     <<: *svc-defaults
@@ -934,7 +934,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3024"
-      DATABASE_URL: ${DATABASE_URL_CRM:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_crm}
+      DATABASE_URL: ${DATABASE_URL_CRM:?per-service least-privilege DSN required (set DATABASE_URL for civitas_crm; do NOT use the cluster superuser)}
       CRM_PII_KEY: ${CRM_PII_KEY:?}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3024/health >/dev/null 2>&1 || exit 1"]
@@ -955,7 +955,7 @@ services:
         PORT: "3024"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_CRM:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_crm}
+      DATABASE_URL: ${DATABASE_URL_CRM:?per-service least-privilege DSN required (set DATABASE_URL for civitas_crm; do NOT use the cluster superuser)}
       CRM_PII_KEY: ${CRM_PII_KEY:?}
 
   inventory-service:
@@ -971,7 +971,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3025"
-      DATABASE_URL: ${DATABASE_URL_INVENTORY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_inventory}
+      DATABASE_URL: ${DATABASE_URL_INVENTORY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_inventory; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3025/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -991,7 +991,7 @@ services:
         PORT: "3025"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_INVENTORY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_inventory}
+      DATABASE_URL: ${DATABASE_URL_INVENTORY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_inventory; do NOT use the cluster superuser)}
 
   telephony-service:
     <<: *svc-defaults
@@ -1006,7 +1006,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3026"
-      DATABASE_URL: ${DATABASE_URL_TELEPHONY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_telephony}
+      DATABASE_URL: ${DATABASE_URL_TELEPHONY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_telephony; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3026/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -1026,7 +1026,7 @@ services:
         PORT: "3026"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_TELEPHONY:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_telephony}
+      DATABASE_URL: ${DATABASE_URL_TELEPHONY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_telephony; do NOT use the cluster superuser)}
 
   helpdesk-service:
     <<: *svc-defaults
@@ -1041,7 +1041,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3027"
-      DATABASE_URL: ${DATABASE_URL_HELPDESK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_helpdesk}
+      DATABASE_URL: ${DATABASE_URL_HELPDESK:?per-service least-privilege DSN required (set DATABASE_URL for civitas_helpdesk; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3027/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -1061,7 +1061,7 @@ services:
         PORT: "3027"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_HELPDESK:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_helpdesk}
+      DATABASE_URL: ${DATABASE_URL_HELPDESK:?per-service least-privilege DSN required (set DATABASE_URL for civitas_helpdesk; do NOT use the cluster superuser)}
 
   knowledge-service:
     <<: *svc-defaults
@@ -1076,7 +1076,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3028"
-      DATABASE_URL: ${DATABASE_URL_KNOWLEDGE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_knowledge}
+      DATABASE_URL: ${DATABASE_URL_KNOWLEDGE:?per-service least-privilege DSN required (set DATABASE_URL for civitas_knowledge; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3028/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -1096,7 +1096,7 @@ services:
         PORT: "3028"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_KNOWLEDGE:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_knowledge}
+      DATABASE_URL: ${DATABASE_URL_KNOWLEDGE:?per-service least-privilege DSN required (set DATABASE_URL for civitas_knowledge; do NOT use the cluster superuser)}
 
   workflow-service:
     <<: *svc-defaults
@@ -1111,7 +1111,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3029"
-      DATABASE_URL: ${DATABASE_URL_WORKFLOW:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_workflow}
+      DATABASE_URL: ${DATABASE_URL_WORKFLOW:?per-service least-privilege DSN required (set DATABASE_URL for civitas_workflow; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3029/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -1131,7 +1131,7 @@ services:
         PORT: "3029"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_WORKFLOW:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_workflow}
+      DATABASE_URL: ${DATABASE_URL_WORKFLOW:?per-service least-privilege DSN required (set DATABASE_URL for civitas_workflow; do NOT use the cluster superuser)}
 
   analytics-service:
     <<: *svc-defaults
@@ -1146,7 +1146,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "3031"
-      DATABASE_URL: ${DATABASE_URL_ANALYTICS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_analytics}
+      DATABASE_URL: ${DATABASE_URL_ANALYTICS:?per-service least-privilege DSN required (set DATABASE_URL for civitas_analytics; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3031/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -1166,7 +1166,7 @@ services:
         PORT: "3031"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_ANALYTICS:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_analytics}
+      DATABASE_URL: ${DATABASE_URL_ANALYTICS:?per-service least-privilege DSN required (set DATABASE_URL for civitas_analytics; do NOT use the cluster superuser)}
 
   location-service:
     <<: *svc-defaults
@@ -1181,7 +1181,7 @@ services:
     environment:
       <<: *svc-env
       PORT: "4012"
-      DATABASE_URL: ${DATABASE_URL_LOCATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_location}
+      DATABASE_URL: ${DATABASE_URL_LOCATION:?per-service least-privilege DSN required (set DATABASE_URL for civitas_location; do NOT use the cluster superuser)}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4012/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -1201,7 +1201,7 @@ services:
         PORT: "4012"
     environment:
       <<: *svc-env
-      DATABASE_URL: ${DATABASE_URL_LOCATION:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/civitas_location}
+      DATABASE_URL: ${DATABASE_URL_LOCATION:?per-service least-privilege DSN required (set DATABASE_URL for civitas_location; do NOT use the cluster superuser)}
 
   queue-service:
     <<: *svc-defaults

@@ -24,8 +24,8 @@ Plus two domain-critical correctness bugs: **re-appropriation isn't zero-sum** (
 | # | Risk | Lenses | Sev | Evidence |
 |---|------|--------|:---:|----------|
 | R1 | **RLS dormant** — `app.tenant_id` GUC never set in any service `src/`; `withTenantScope`/`setTenantGuc` have zero call sites; isolation = app-layer predicate only | S1, S4, Q7, D14 | 🔴 Critical | no GUC call sites; `current_tenant_id()` defs inconsistent (`,true` vs `,false`); estab RLS 0006 not even applied in test DB (`rls_enabled=false`) |
-| R2 | **Prod compose defaults service DSNs to the Postgres superuser** → bypasses RLS, breaks least-privilege/DB-per-service | S2 | 🔴 Critical | `infra/docker-compose.prod.yml` `DATABASE_URL_*` fall back to `POSTGRES_USER` (admin) |
-| R3 | **Audit log + eOffice notings wipeable via TRUNCATE** — `GRANT ALL` includes TRUNCATE; row triggers don't fire on TRUNCATE | S3 | 🔴 Critical | `scripts/dev/grant-all.mjs`; `audit 0006`, `estab 0007` are `BEFORE UPDATE OR DELETE` only |
+| R2 | **Prod compose defaults service DSNs to the Postgres superuser** → bypasses RLS, breaks least-privilege/DB-per-service | S2 | ✅ FIXED | `infra/docker-compose.prod.yml` — 62 superuser fallbacks now fail-closed (`:?`) requiring per-service least-priv DSN |
+| R3 | **Audit log + eOffice notings wipeable via TRUNCATE** — `GRANT ALL` includes TRUNCATE; row triggers don't fire on TRUNCATE | S3 | ✅ FIXED | audit 0011 + estab 0011: `BEFORE TRUNCATE … FOR EACH STATEMENT` guards + `REVOKE TRUNCATE,TRIGGER`; verified TRUNCATE rejected even for owner |
 | R4 | **Re-appropriation not zero-sum + mis-bounded** — no source head debited; `RE ≤ BE` cap forbids the very increase re-appropriation exists for | D1 | 🔴 Critical | `budget/consumer.ts`, `budget/reappropriation-eoffice-consumer.ts`, `financeReappropriations` has only `budgetId` |
 | R5 | **"3-way match" never matches the invoice amount** — passes on two non-validated ref strings | D2 | 🔴 Critical | `payments/domain.ts assertThreeWayMatchPresent`, `payments/validators.ts` |
 | R6 | **Silo tier not production-wired** — `dbFor` only in estab notifications read; all writes/outbox/other 32 services use singleton `db`; outbox relay binds one pool conn; no pool→silo data cutover | A1, A2, A3 | 🔴 Critical (if silo enabled) | `services/*/src/shared/db.ts`, `packages/outbox startRelay` |
@@ -63,8 +63,9 @@ Plus two domain-critical correctness bugs: **re-appropriation isn't zero-sum** (
 ## 4. Remediation roadmap
 
 ### Wave A — release blockers (must fix before GA)
-- **R1+R2+R4 (RLS):** run every service under its non-superuser `*_svc` role; remove the superuser DSN fallback (fail closed); standardize `current_tenant_id()`; wire `withTenantScope`/`SET LOCAL app.tenant_id` at the request+consumer tx boundary; add the cross-tenant FORCE-RLS integration test to CI; apply RLS migrations in all envs + add migration-drift detection.
-- **R3:** `REVOKE TRUNCATE` (+ `TRIGGER`) from service roles on `events.events` and `files.estab_notings`; add `BEFORE TRUNCATE … FOR EACH STATEMENT` guards; replace `GRANT ALL` with least-priv grants.
+- **R3 ✅ DONE** — TRUNCATE guards + REVOKE on `events.events` and `files.estab_notings` (+ `module_decision_log`); verified.
+- **R2 ✅ DONE** — prod compose fails closed; no superuser DSN fallback.
+- **R1 (RLS) — runbook ready** (`RLS-ENGAGEMENT-RUNBOOK.md`): standardize `current_tenant_id()` to `,true` → wire `withTenantScope` GUC at read/write boundaries per service → switch to non-bypass `*_svc` roles → blocking cross-tenant rejection test per service → decommission bypass. Sequenced so isolation engages only after the GUC is wired (never a big-bang).
 - **R4 (re-appropriation):** model as a zero-sum transfer (from-head/to-head, assert source savings ≥ amount, allow receiving RE > BE within sanctioned grant).
 - **R5 (3-way match):** enforce real tri-leg PO↔GRN↔invoice reconciliation within tolerance; validate poRef/grnRef resolve to tenant-scoped rows for the same vendor.
 - **R8 (CI red):** decide PO create status (draft vs pending) and fix consumer/test; fix the tenant dedupe test to use valid-UUID messageIds.
