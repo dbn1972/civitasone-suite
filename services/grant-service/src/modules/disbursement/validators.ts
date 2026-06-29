@@ -14,6 +14,10 @@ export type CreateInstallmentsBody = z.infer<typeof createInstallmentsBody>;
 export const disburseBody = z.object({
   mode:               z.enum(["PFMS", "DBT", "cheque", "RTGS"]).default("PFMS"),
   beneficiaryBankRef: z.string().optional(),
+  // R14: when true, the disbursement is created and held in `pending_approval`
+  // WITHOUT paying; the eOffice approval emits the single EFT (approval before
+  // payment). Default false preserves the legacy immediate-pay behaviour.
+  requireApproval:    z.boolean().optional().default(false),
 });
 export type DisburseBody = z.infer<typeof disburseBody>;
 

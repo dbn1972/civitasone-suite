@@ -32,6 +32,7 @@ export const grantDisbursements = disbursementSchema.table("grant_disbursements"
   pfmsTxnId:          text("pfms_txn_id"),             // PFMS transaction reference
   beneficiaryBankRef: text("beneficiary_bank_ref"),    // opaque "grant_bank_accounts:UUID"
   status:             varchar("status", { length: 24 }).notNull().default("initiated"),
+  eftEmitted:         boolean("eft_emitted").notNull().default(false),
   disbursedAt:        timestamp("disbursed_at", { withTimezone: true }),
   failureReason:      text("failure_reason"),
   retryCount:         integer("retry_count").notNull().default(0),

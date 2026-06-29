@@ -60,7 +60,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.disbursementInitiate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; installmentId: string;
-      mode: string; beneficiaryBankRef?: string;
+      mode: string; beneficiaryBankRef?: string; requireApproval?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -144,13 +144,19 @@ export function registerDisbursementConsumers(queue: Queue): void {
       }
 
       const pfmsTxnId = `PFMS-${p.id}`;
+      // R14: when approval-gated, hold the disbursement in pending_approval and
+      // do NOT pay yet — the eOffice approval emits the single EFT. The scheme
+      // budget is already reserved above (released on rejection). eft_emitted is
+      // the idempotent guard that the disbursement is paid at most once.
+      const gated = p.requireApproval === true;
       await repo.insertDisbursement(tx, {
         id: p.id, tenantId: p.tenantId, installmentId: p.installmentId,
         amountMinor: installment.amountMinor,
         currency: installment.currency,
         mode: p.mode, pfmsTxnId,
         beneficiaryBankRef: p.beneficiaryBankRef ?? null,
-        status: "initiated",
+        status: gated ? "pending_approval" : "initiated",
+        eftEmitted: !gated,
         retryCount: 0,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -159,19 +165,24 @@ export function registerDisbursementConsumers(queue: Queue): void {
         pfmsTxnId, reconciled: false, rawResponse: null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      // Emit to finance-service for EFT payment — cannot call inside transaction (deadlock risk per CLAUDE.md §4)
-      await enqueue(tx, {
-        topic: "finance.payment.eft.initiate", eventType: "finance.payment.eft.initiate",
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          disbursementId: p.id, installmentId: p.installmentId,
-          amountMinor: installment.amountMinor.toString(), currency: installment.currency,
-          pfmsTxnId, mode: p.mode,
-          beneficiaryBankRef: p.beneficiaryBankRef,
-        },
-      });
-      await repo.updateInstallment(tx, p.installmentId, { status: "disbursed", updatedBy: msg.actorId });
-      await audit(tx, msg, "initiate_disbursement", "grant_disbursement", p.id);
+      if (gated) {
+        // Held for administrative approval — no payment, installment not yet disbursed.
+        await audit(tx, msg, "disbursement_pending_approval", "grant_disbursement", p.id);
+      } else {
+        // Emit to finance-service for EFT payment — cannot call inside transaction (deadlock risk per CLAUDE.md §4)
+        await enqueue(tx, {
+          topic: "finance.payment.eft.initiate", eventType: "finance.payment.eft.initiate",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            disbursementId: p.id, installmentId: p.installmentId,
+            amountMinor: installment.amountMinor.toString(), currency: installment.currency,
+            pfmsTxnId, mode: p.mode,
+            beneficiaryBankRef: p.beneficiaryBankRef,
+          },
+        });
+        await repo.updateInstallment(tx, p.installmentId, { status: "disbursed", updatedBy: msg.actorId });
+        await audit(tx, msg, "initiate_disbursement", "grant_disbursement", p.id);
+      }
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "installments", p.installmentId));
   });

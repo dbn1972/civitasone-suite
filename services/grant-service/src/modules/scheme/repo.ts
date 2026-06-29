@@ -54,3 +54,24 @@ export async function reserveSchemeBudget(
     .returning({ id: grantSchemes.id });
   return rows.length > 0;
 }
+
+/**
+ * Release a previously-reserved scheme budget (R14): when an approval-gated
+ * disbursement is rejected before it was ever paid, the amount reserved at
+ * initiation must be returned to the scheme envelope. Floored at zero so a
+ * double-release can never drive disbursed_minor negative.
+ */
+export async function releaseSchemeBudget(
+  tx: Writer,
+  schemeId: string,
+  tenantId: string,
+  amountMinor: bigint,
+): Promise<void> {
+  await (tx as typeof db)
+    .update(grantSchemes)
+    .set({
+      disbursedMinor: sql`GREATEST(${grantSchemes.disbursedMinor} - ${amountMinor}, 0)`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(grantSchemes.id, schemeId), eq(grantSchemes.tenantId, tenantId)));
+}
