@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, varchar, integer, boolean, timestamp,
+  pgSchema, uuid, text, varchar, integer, boolean, timestamp, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const filesSchema = pgSchema("files");
@@ -54,6 +54,7 @@ export const estabDispatch = filesSchema.table("estab_dispatch", {
   toAddress:   text("to_address").notNull(),
   mode:        varchar("mode", { length: 32 }).notNull().default("email"),
   subject:     text("subject").notNull(),
+  enclosures:  jsonb("enclosures").notNull().default([]),
   dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
   status:      varchar("status", { length: 24 }).notNull().default("pending"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

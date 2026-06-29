@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, DataTable, EmptyState } from "@/app/_components/ds";
+import { ReappropriateWithApproval } from "./ReappropriateWithApproval";
 
 export default function AllocationPage() {
   type Row = { department: string; allocated: string; released: string; utilized: string; utilPercent: string; status: string; [k: string]: unknown };
@@ -13,7 +14,7 @@ export default function AllocationPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Budget Allocation" subtitle="Department-wise budget allocation, release, and utilization tracking." back="/finance" />
+      <PageHeader title="Budget Allocation" subtitle="Department-wise budget allocation, release, and utilization tracking." back="/finance" actions={<ReappropriateWithApproval />} />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e7edfd" label="Total Allocated" value="₹10,730 Cr" />
         <StatCard icon="📤" iconBg="#ecfdf3" label="Released" value="₹8,150 Cr" />

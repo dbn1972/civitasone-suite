@@ -12,6 +12,43 @@ import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const FILE_NOTING_WORKFLOW = "file_noting";
+const WORKFLOW_TASK_COMPLETED = "workflow.task.completed";
+
+/**
+ * Green-sign a noting with the tamper-evident hash chain (shared by the manual
+ * sign endpoint and the workflow auto-sign on each level's approval).
+ * No-op if the noting is already signed/approved (idempotent; the DB trigger
+ * also enforces immutability).
+ */
+async function signNotingChain(
+  tx: Parameters<typeof enqueue>[0],
+  opts: { tenantId: string; fileId: string; notingId: string; body: string; officerId: string },
+): Promise<void> {
+  const prevRows = await tx.execute(sql`
+    SELECT dsc_hash, chain_seq
+    FROM files.estab_notings
+    WHERE tenant_id = ${opts.tenantId} AND file_id = ${opts.fileId}
+      AND note_type = 'green' AND chain_seq IS NOT NULL
+    ORDER BY chain_seq DESC
+    LIMIT 1
+  `);
+  const prev = (prevRows as unknown as Array<{ dsc_hash: string | null; chain_seq: number | null }>)[0];
+  const prevHash = prev?.dsc_hash ?? "";
+  const chainSeq = (prev?.chain_seq ?? 0) + 1;
+
+  const signedAt = new Date();
+  const signatureRef = `DSC-${opts.officerId.slice(0, 8)}-${signedAt.getTime()}`;
+  const dscHash = computeNotingHash(opts.notingId, opts.body, opts.officerId, prevHash, signedAt.getTime());
+
+  await tx.execute(sql`
+    UPDATE files.estab_notings
+    SET note_type = 'green', note_status = 'approved', e_signed = true,
+        signed_at = ${signedAt}, signature_ref = ${signatureRef}, dsc_hash = ${dscHash},
+        prev_hash = ${prevHash === "" ? null : prevHash}, chain_seq = ${chainSeq},
+        updated_by = ${opts.officerId}, updated_at = ${signedAt}
+    WHERE id = ${opts.notingId} AND tenant_id = ${opts.tenantId}
+  `);
+}
 
 export function registerFilesConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.fileCreate, async (msg) => {
@@ -233,38 +270,32 @@ export function registerFilesConsumers(queue: Queue): void {
       if (!noting || noting.fileId !== p.fileId) return;
       // Already-signed notes are immutable (DB trigger also enforces this).
       if (noting.noteStatus === "approved" || noting.eSigned) return;
-
-      // Hash-chain: link this green note to the previous green note on the file.
-      const prevRows = await tx.execute(sql`
-        SELECT dsc_hash, chain_seq
-        FROM files.estab_notings
-        WHERE tenant_id = ${p.tenantId} AND file_id = ${p.fileId}
-          AND note_type = 'green' AND chain_seq IS NOT NULL
-        ORDER BY chain_seq DESC
-        LIMIT 1
-      `);
-      const prev = (prevRows as unknown as Array<{ dsc_hash: string | null; chain_seq: number | null }>)[0];
-      const prevHash = prev?.dsc_hash ?? "";
-      const chainSeq = (prev?.chain_seq ?? 0) + 1;
-
-      const signedAt = new Date();
-      const signatureRef = `DSC-${msg.actorId.slice(0, 8)}-${signedAt.getTime()}`;
-      const dscHash = computeNotingHash(noting.id, noting.body, msg.actorId, prevHash, signedAt.getTime());
-
-      // Green + sign + chain. prev_hash/chain_seq are migration-0007 columns
-      // outside the Drizzle model, so written via raw SQL (like linkage source refs).
-      await tx.execute(sql`
-        UPDATE files.estab_notings
-        SET note_type = 'green', note_status = 'approved', e_signed = true,
-            signed_at = ${signedAt}, signature_ref = ${signatureRef}, dsc_hash = ${dscHash},
-            prev_hash = ${prevHash === "" ? null : prevHash}, chain_seq = ${chainSeq},
-            updated_by = ${msg.actorId}, updated_at = ${signedAt}
-        WHERE id = ${p.notingId} AND tenant_id = ${p.tenantId}
-      `);
-
+      await signNotingChain(tx, {
+        tenantId: p.tenantId, fileId: p.fileId, notingId: noting.id,
+        body: noting.body, officerId: msg.actorId,
+      });
       await audit(tx, msg, "sign_noting", "noting", p.notingId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+  });
+
+  // G2 unification — when an officer APPROVES a file-noting workflow task at
+  // their level, auto-sign (green) their level's latest unsigned note, so the
+  // file accrues the SO→US→DS green chain without a separate manual sign step.
+  queue.subscribe(WORKFLOW_TASK_COMPLETED, async (msg) => {
+    const p = msg.payload as { refType?: string; refId?: string; decision?: string };
+    if (p.refType !== "estab_file" || !p.refId || p.decision !== "approve") return;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const noting = await repo.findLatestUnsignedNoting(tx, p.refId!, msg.tenantId);
+      if (!noting) return;
+      await signNotingChain(tx, {
+        tenantId: msg.tenantId, fileId: p.refId!, notingId: noting.id,
+        body: noting.body, officerId: msg.actorId,
+      });
+      await audit(tx, msg, "level_sign_noting", "noting", noting.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.refId));
   });
 
   queue.subscribe(COMMANDS.fileMove, async (msg) => {

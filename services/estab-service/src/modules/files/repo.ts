@@ -94,6 +94,16 @@ export async function findLatestSubmittedNoting(tx: Writer, fileId: string, tena
   return rows[0] ?? null;
 }
 
+/** Latest noting on a file that has not yet been green-signed (for per-level auto-sign). */
+export async function findLatestUnsignedNoting(tx: Writer, fileId: string, tenantId: string): Promise<NotingRow | null> {
+  const rows = await (tx as typeof db).select().from(estabNotings).where(and(
+    eq(estabNotings.fileId, fileId),
+    eq(estabNotings.tenantId, tenantId),
+    eq(estabNotings.eSigned, false),
+  )).orderBy(desc(estabNotings.seq)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertDispatch(tx: Writer, row: DispatchInsert): Promise<void> {
   await tx.insert(estabDispatch).values(row);
 }

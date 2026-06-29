@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
+import { PromoteWithApproval } from "./PromoteWithApproval";
 
 type Row = {
   id: string;
@@ -42,7 +43,7 @@ export default async function PromotionPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Promotions" subtitle="Promotion orders with grade progression details." back="/hr" />
+      <PageHeader title="Promotions" subtitle="Promotion orders with grade progression details." back="/hr" actions={<PromoteWithApproval />} />
       <StatGrid>
         <StatCard icon="⬆️" iconBg="#e6f7f0" label="Total Promotions" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f0ff" label="Approved" value={approved} />

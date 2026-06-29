@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -97,19 +98,39 @@ export function registerDfaConsumers(queue: Queue): void {
       if (!cur || !canTransition(cur.status, "dispatched")) return;
 
       const dispatchId = randomUUID();
+
+      // Wave 3 A4 — assemble formal enclosures from the parent file: the
+      // approved green note-sheet, the originating DAK, and file attachments.
+      const enclosures: Array<{ type: string; ref: string; label: string }> = [];
+      if (cur.fileId) {
+        enclosures.push({ type: "note_sheet", ref: `/v1/estab/files/${cur.fileId}/note-sheet/pdf`, label: "Approved note-sheet" });
+        const fileRows = await tx.execute(sql`
+          SELECT file_no, dak_no FROM files.estab_files WHERE id = ${cur.fileId} AND tenant_id = ${p.tenantId}
+        `);
+        const fileRow = (fileRows as unknown as Array<{ file_no: string | null; dak_no: string | null }>)[0];
+        if (fileRow?.dak_no) enclosures.push({ type: "dak", ref: fileRow.dak_no, label: `DAK ${fileRow.dak_no}` });
+        const atts = await tx.execute(sql`
+          SELECT id, file_name FROM files.estab_file_attachments WHERE file_id = ${cur.fileId} AND tenant_id = ${p.tenantId}
+        `);
+        for (const a of atts as unknown as Array<{ id: string; file_name: string }>) {
+          enclosures.push({ type: "attachment", ref: a.id, label: a.file_name });
+        }
+      }
+
       await insertDispatch(tx, {
         id: dispatchId, tenantId: p.tenantId,
         dispatchNo: `DSP/${new Date().getFullYear()}/${cur.dfaNo.split("/").pop() ?? "0001"}`,
         fileId: cur.fileId ?? null,
         toAddress: p.toAddress ?? cur.recipientAddress ?? cur.recipientName ?? "—",
         mode: p.mode, subject: cur.subject,
+        enclosures,
         dispatchedAt: new Date(), status: "dispatched",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateDfa(tx, p.id, {
         status: "dispatched", dispatchId, updatedBy: msg.actorId, version: cur.version + 1,
       });
-      await enqueue(tx, audit(msg, "dfa.dispatched", p.id, { dispatchId, mode: p.mode }));
+      await enqueue(tx, audit(msg, "dfa.dispatched", p.id, { dispatchId, mode: p.mode, enclosures: enclosures.length }));
     });
     await cache.invalidate(cache.makeKey(p.tenantId, "dfa", p.id));
   });

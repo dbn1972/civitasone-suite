@@ -646,6 +646,14 @@ export async function getPayments(): Promise<LoaderResult<PaymentSummary[]>> {
   });
 }
 
+export async function getFinancePaymentById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
+  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/finance/payments/${id}`, null, {
+    revalidateSeconds: 20,
+    telemetryKey: "finance.payment.detail",
+    mapResponse: (payload) => (isRecord(payload) ? (payload as Record<string, unknown>) : null),
+  });
+}
+
 export async function getTenantUsers(): Promise<LoaderResult<TenantUserSummary[]>> {
   return fetchJson("/api/identity/users", [] as TenantUserSummary[], {
     revalidateSeconds: 30,
@@ -1979,6 +1987,26 @@ export async function getGrantReleases(): Promise<LoaderResult<GrantRelease[]>> 
   });
 }
 
+/**
+ * Grant disbursement detail. The grant-service exposes no GET-by-id read for a
+ * disbursement; the only read surface is the tenant releases list (each row's
+ * `id` is the disbursement id). We defensively resolve the disbursement from
+ * that list so the detail page can show amount/status and raise the eFile.
+ */
+export async function getGrantDisbursementById(id: string): Promise<LoaderResult<GrantRelease | null>> {
+  const { data, source } = await getGrantReleases();
+  const match = data.find((row) => row.id === id) ?? null;
+  return { data: match, source };
+}
+
+export async function getDisciplinaryCaseById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
+  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/hrms/disciplinary-cases/${id}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "hrms.disciplinary.detail",
+    mapResponse: (payload) => (isRecord(payload) ? (payload as Record<string, unknown>) : null),
+  });
+}
+
 export async function getGrantInstallments(): Promise<LoaderResult<GrantInstallmentSummary[]>> {
   return fetchJson<unknown, GrantInstallmentSummary[]>("/api/v1/grants/installments", [], {
     revalidateSeconds: 120,
@@ -2387,6 +2415,14 @@ export async function getLegalOpinions(): Promise<LoaderResult<LegalOpinionSumma
     telemetryKey: "legal.opinions",
     responseSchema: LegalOpinionSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as LegalOpinionSummary[] | null,
+  });
+}
+
+export async function getLegalOpinionById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
+  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/legal/opinions/${id}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "legal.opinion.detail",
+    mapResponse: (payload) => (isRecord(payload) ? (payload as Record<string, unknown>) : null),
   });
 }
 

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../../shared/context.js";
+import { sqlClient } from "../../../shared/db.js";
 import * as queries from "../queries.js";
 
 const READER_ROLES = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin", "audit_officer"];
@@ -21,6 +22,18 @@ export async function noteSheetPrintRoutes(app: FastifyInstance): Promise<void> 
     const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
 
+    // Tenant organisation name for the header — NOT a hardcoded sovereign/owner
+    // string (editions include Govt, PSU, NGO, private). Resolved defensively
+    // from the shared tenant registry if present in this service DB.
+    let orgName = "";
+    try {
+      const rows = await sqlClient`SELECT name FROM public.tenants WHERE id = ${ctx.tenantId} LIMIT 1`;
+      orgName = (rows as unknown as Array<{ name?: string }>)[0]?.name ?? "";
+    } catch {
+      /* tenant registry not replicated in this DB — fall back below */
+    }
+    const headerOrg = orgName || file.dept || "Office Note Sheet";
+
     const rows = file.noteSheets.map((n, i) => {
       const ext = n as { noteType?: string; noteStatus?: string; eSigned?: boolean; signatureRef?: string };
       const bg = ext.noteType === "green" || ext.eSigned ? "#f0fdf4" : "#fefce8";
@@ -38,7 +51,7 @@ th,td{border:1px solid #ccc;padding:8px;text-align:left}
 th{background:#f5f5f5}
 .footer{margin-top:24px;font-size:11px;color:#666;text-align:center}
 </style></head><body>
-<h1>Government of India — Note Sheet</h1>
+<h1>${esc(headerOrg)} — Note Sheet</h1>
 <div class="meta">
   <div><b>File No:</b> ${esc(file.fileNo)}</div>
   <div><b>Subject:</b> ${esc(file.subject)}</div>
