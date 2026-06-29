@@ -1,5 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { DomainError } from "./domain.js";
 import { financeBudgets, financeSanctions, financeHeads, financeReappropriations, type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow, type ReappropriationRow, type ReappropriationInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -137,4 +138,43 @@ export async function incrementSanctionUtilisedGuarded(tx: Exec, id: string, net
     RETURNING id
   `);
   return (rows as unknown as unknown[]).length > 0;
+}
+
+/**
+ * R4 — zero-sum re-appropriation (GFR Rule 10). Atomically debits the source
+ * budget's re_minor and credits the target budget's re_minor by the same
+ * amount, conserving total appropriation. The source debit is guarded: it only
+ * applies if the source still has enough savings (re_minor - utilised_minor >=
+ * amount), so concurrent transfers cannot overdraw. Returns false (no change)
+ * when the source has insufficient savings; throws when the target head does
+ * not exist (rolls back the debit since both run in the caller's transaction).
+ * Must be called inside a db.transaction so the two legs commit together.
+ */
+export async function transferBudgetReMinorGuarded(
+  tx: Exec,
+  fromId: string,
+  toId: string,
+  amountMinor: bigint,
+  tenantId: string,
+  updatedBy: string,
+): Promise<boolean> {
+  const debited = await tx.execute(sql`
+    UPDATE budget.finance_budgets
+       SET re_minor = re_minor - ${amountMinor}, updated_by = ${updatedBy}, updated_at = now()
+     WHERE id = ${fromId} AND tenant_id = ${tenantId}
+       AND re_minor - utilised_minor >= ${amountMinor}
+    RETURNING id
+  `);
+  if ((debited as unknown as unknown[]).length === 0) return false; // insufficient savings / unknown source
+
+  const credited = await tx.execute(sql`
+    UPDATE budget.finance_budgets
+       SET re_minor = re_minor + ${amountMinor}, updated_by = ${updatedBy}, updated_at = now()
+     WHERE id = ${toId} AND tenant_id = ${tenantId}
+    RETURNING id
+  `);
+  if ((credited as unknown as unknown[]).length === 0) {
+    throw new DomainError("TARGET_NOT_FOUND", `re-appropriation target budget ${toId} not found for tenant`);
+  }
+  return true;
 }

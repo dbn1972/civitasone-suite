@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertValidFY, assertReleaseWithinSanction } from "./domain.js";
+import { assertValidFY, assertReappropriationValid, DomainError } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -26,17 +26,26 @@ export function registerBudgetConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.budgetReappropriate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; reMinor: number; reason: string };
+    // Zero-sum re-appropriation (GFR Rule 10): move `amountMinor` paise from the
+    // source budget's savings (p.fromBudgetId) to the target budget (p.id).
+    const p = msg.payload as { id: string; tenantId: string; fromBudgetId: string; amountMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findBudgetById(p.id);
-      if (existing) {
-        assertReleaseWithinSanction(existing.beMinor, BigInt(p.reMinor));
+      const source = await repo.findBudgetById(p.fromBudgetId);
+      if (!source || source.tenantId !== p.tenantId) {
+        throw new DomainError("SOURCE_NOT_FOUND", `re-appropriation source budget ${p.fromBudgetId} not found`);
       }
-      await repo.updateBudget(tx, p.id, { reMinor: BigInt(p.reMinor), updatedBy: msg.actorId });
+      const amount = BigInt(p.amountMinor);
+      // Validate against the source head's savings before touching any row.
+      assertReappropriationValid({ reMinor: source.reMinor, utilisedMinor: source.utilisedMinor }, amount);
+      const moved = await repo.transferBudgetReMinorGuarded(tx, p.fromBudgetId, p.id, amount, p.tenantId, msg.actorId);
+      if (!moved) {
+        throw new DomainError("INSUFFICIENT_SAVINGS", `source budget ${p.fromBudgetId} lacks savings for ${amount} paise`);
+      }
       await audit(tx, msg, "re_appropriate", "budget", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", p.id));
+    await cache.invalidate(cache.makeKey(msg.tenantId, "budget", p.fromBudgetId));
   });
 
   queue.subscribe(COMMANDS.sanctionCreate, async (msg) => {
@@ -82,11 +91,12 @@ export function registerBudgetConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.reappropriationSubmitApproval, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; budgetId: string; headId?: string; amountMinor: number; reason: string };
+    const p = msg.payload as { id: string; tenantId: string; fromBudgetId: string; toBudgetId: string; headId?: string; amountMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertReappropriation(tx, {
-        id: p.id, tenantId: p.tenantId, budgetId: p.budgetId, headId: p.headId ?? null,
+        id: p.id, tenantId: p.tenantId, budgetId: p.toBudgetId, fromBudgetId: p.fromBudgetId,
+        headId: p.headId ?? null,
         amountMinor: BigInt(p.amountMinor), reason: p.reason, status: "pending_approval",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

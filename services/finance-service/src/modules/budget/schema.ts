@@ -92,14 +92,18 @@ export const financeSanctions = budgetSchema.table("finance_sanctions", {
  * before it touches the target budget. `reappropriateBudget` applies a change
  * directly; this request defers that effect until the eOffice file is decided.
  *
- * `amount_minor` carries the new revised-estimate target (paise) to set on the
- * target budget's `re_minor` when the request is approved — same semantics as
- * the `reMinor` field on the direct re-appropriation path.
+ * GFR Rule 10 — re-appropriation is a ZERO-SUM transfer. `amount_minor` carries
+ * the TRANSFER amount (paise) moved FROM `from_budget_id`'s savings TO
+ * `budget_id` (the target). On approval the consumer debits the source head's
+ * re_minor and credits the target head's re_minor in one transaction, so total
+ * appropriation is conserved (the target's RE may exceed its own BE — that is
+ * the purpose of re-appropriation).
  */
 export const financeReappropriations = budgetSchema.table("finance_reappropriations", {
   id:           uuid("id").primaryKey().defaultRandom(),
   tenantId:     uuid("tenant_id").notNull(),
-  budgetId:     uuid("budget_id").notNull(),       // target budget whose re_minor is updated on approval
+  budgetId:     uuid("budget_id").notNull(),       // target budget credited on approval
+  fromBudgetId: uuid("from_budget_id"),            // source budget debited on approval (savings head)
   headId:       uuid("head_id"),                   // reference head (nullable — for audit/reporting)
   amountMinor:  bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   reason:       text("reason").notNull(),

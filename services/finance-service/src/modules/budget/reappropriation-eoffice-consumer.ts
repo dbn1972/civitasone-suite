@@ -4,7 +4,6 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
-import { assertReleaseWithinSanction } from "./domain.js";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -16,10 +15,9 @@ const AUDIT_TOPIC = "audit.event.record";
  * When a re-appropriation request was raised into eOffice for administrative
  * approval, eOffice emits `finance.reappropriation.file_decided` once the
  * SO→US→DS chain concludes. This consumer applies that decision:
- *   approved → status "approved" AND apply the re-appropriation (set the target
- *              budget's re_minor to the requested amount — same effect the
- *              direct `reappropriateBudget` path produces, so approval actually
- *              executes the change)
+ *   approved → execute the zero-sum transfer (debit source head savings, credit
+ *              target head) via transferBudgetReMinorGuarded; if the source no
+ *              longer has enough savings the request is rejected instead
  *   rejected → status "rejected"
  *   returned → no state change
  *
@@ -36,6 +34,7 @@ export function registerReappropriationEOfficeDecisionConsumers(queue: Queue): v
     const cb = parsed.value;
 
     let affectedBudgetId: string | null = null;
+    let affectedFromId: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
@@ -45,17 +44,34 @@ export function registerReappropriationEOfficeDecisionConsumers(queue: Queue): v
       if (req.status !== "pending_approval") return;
 
       if (cb.decision === "approved") {
-        // Apply the re-appropriation: set the target budget's revised estimate
-        // to the requested amount, enforcing GFR Rule 11 (RE <= BE) just like
-        // the direct re_appropriate consumer path.
-        const budget = await repo.findBudgetById(req.budgetId);
-        if (budget) {
-          assertReleaseWithinSanction(budget.beMinor, req.amountMinor);
-          await repo.updateBudget(tx, req.budgetId, { reMinor: req.amountMinor, updatedBy: cb.decidedBy });
-          affectedBudgetId = req.budgetId;
+        // Apply the zero-sum transfer (GFR Rule 10): debit the source head's
+        // savings and credit the target head, conserving total appropriation.
+        // Re-validated at execution time — savings may have changed since the
+        // file was raised, so an over-committed source is rejected here.
+        if (!req.fromBudgetId) {
+          await repo.updateReappropriation(tx, cb.refId, { status: "rejected", updatedBy: cb.decidedBy });
+          await audit(tx, msg, "eoffice_rejected_no_source", cb.refId, { fileNo: cb.fileNo });
+          return;
         }
-        await repo.updateReappropriation(tx, cb.refId, { status: "approved", updatedBy: cb.decidedBy });
-        await audit(tx, msg, "eoffice_approved", cb.refId, { fileNo: cb.fileNo, budgetId: req.budgetId, amountMinor: req.amountMinor.toString(), dscHash: cb.dscHash ?? null });
+        const moved = await repo.transferBudgetReMinorGuarded(
+          tx, req.fromBudgetId, req.budgetId, req.amountMinor, req.tenantId, cb.decidedBy,
+        );
+        if (moved) {
+          await repo.updateReappropriation(tx, cb.refId, { status: "approved", updatedBy: cb.decidedBy });
+          affectedBudgetId = req.budgetId;
+          affectedFromId = req.fromBudgetId;
+          await audit(tx, msg, "eoffice_approved", cb.refId, {
+            fileNo: cb.fileNo, fromBudgetId: req.fromBudgetId, toBudgetId: req.budgetId,
+            amountMinor: req.amountMinor.toString(), dscHash: cb.dscHash ?? null,
+          });
+        } else {
+          // Source no longer has enough savings — the approval cannot create
+          // funds, so the request is rejected rather than silently applied.
+          await repo.updateReappropriation(tx, cb.refId, { status: "rejected", updatedBy: cb.decidedBy });
+          await audit(tx, msg, "eoffice_rejected_insufficient_savings", cb.refId, {
+            fileNo: cb.fileNo, fromBudgetId: req.fromBudgetId, amountMinor: req.amountMinor.toString(),
+          });
+        }
       } else if (cb.decision === "rejected") {
         await repo.updateReappropriation(tx, cb.refId, { status: "rejected", updatedBy: cb.decidedBy });
         await audit(tx, msg, "eoffice_rejected", cb.refId, { fileNo: cb.fileNo });
@@ -67,6 +83,9 @@ export function registerReappropriationEOfficeDecisionConsumers(queue: Queue): v
     await cache.invalidate(cache.makeKey(msg.tenantId, "reappropriation", cb.refId));
     if (affectedBudgetId) {
       await cache.invalidate(cache.makeKey(msg.tenantId, "budget", affectedBudgetId));
+    }
+    if (affectedFromId) {
+      await cache.invalidate(cache.makeKey(msg.tenantId, "budget", affectedFromId));
     }
   });
 }

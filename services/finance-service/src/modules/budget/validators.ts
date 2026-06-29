@@ -14,8 +14,9 @@ export const createBudgetBody = z.object({
 export type CreateBudgetBody = z.infer<typeof createBudgetBody>;
 
 export const reappropriateBody = z.object({
-  reMinor: z.number().int().nonnegative(),
-  reason:  z.string().min(3).max(500),
+  fromBudgetId: z.string().uuid(),
+  amountMinor:  z.number().int().positive(),
+  reason:       z.string().min(3).max(500),
 });
 export type ReappropriateBody = z.infer<typeof reappropriateBody>;
 
@@ -42,15 +43,16 @@ export type RejectSanctionBody = z.infer<typeof rejectSanctionBody>;
 /**
  * Submit a budget re-appropriation to eOffice for administrative approval.
  * Creates the re-appropriation request (status pending_approval); the route
- * `:id` becomes the request id / eFile refId. `amountMinor` is the new
- * revised-estimate target (paise) applied to the target budget on approval —
- * same semantics as the direct re_appropriate path's `reMinor`.
+ * `:id` becomes the request id / eFile refId. The transfer moves `amountMinor`
+ * (paise) FROM `fromBudgetId`'s savings TO `toBudgetId` on approval — a
+ * zero-sum transfer (GFR Rule 10), applied by the eOffice decision callback.
  */
 export const submitReappropriationBody = z.object({
-  budgetId:    z.string().uuid(),
-  headId:      z.string().uuid().optional(),
-  amountMinor: z.number().int().nonnegative(),
-  reason:      z.string().min(3).max(500),
+  fromBudgetId: z.string().uuid(),
+  toBudgetId:   z.string().uuid(),
+  headId:       z.string().uuid().optional(),
+  amountMinor:  z.number().int().positive(),
+  reason:       z.string().min(3).max(500),
 });
 export type SubmitReappropriationBody = z.infer<typeof submitReappropriationBody>;
 
