@@ -128,9 +128,26 @@ describe("GRN domain — three-way match (pure)", () => {
     expect(result).toBe(true);
   });
 
-  it("qty mismatch → three_way_match=false", () => {
+  it("partial/part-supply receipt (received < ordered) still matches (R18)", () => {
+    // 8 of 10 received & accepted: a valid partial GRN; PO stays open for the balance.
     const result = computeThreeWayMatch(
       [{ orderedQty: 10, receivedQty: 8, acceptedQty: 8 }],
+      "pass"
+    );
+    expect(result).toBe(true);
+  });
+
+  it("nothing accepted → three_way_match=false (empty receipt is not a match)", () => {
+    const result = computeThreeWayMatch(
+      [{ orderedQty: 10, receivedQty: 0, acceptedQty: 0 }],
+      "pass"
+    );
+    expect(result).toBe(false);
+  });
+
+  it("accepted exceeds received → three_way_match=false (out of bounds)", () => {
+    const result = computeThreeWayMatch(
+      [{ orderedQty: 10, receivedQty: 5, acceptedQty: 8 }],
       "pass"
     );
     expect(result).toBe(false);
@@ -171,7 +188,9 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
           poItemRef: "procurement_po_item:eeeeeeee-0000-4000-8000-000000000001",
           itemCode: "LAP-001", orderedQty: 10, receivedQty: 8, acceptedQty: 8, unit: "nos",
         }],
-        inspection: { inspectorId: "ffffffff-0000-4000-8000-000000000001", result: "pass" },
+        // R18: a partial qty (8 of 10) is now a VALID receipt, so the rejection
+        // here is driven by a FAILED inspection — that still emits grnRejected.
+        inspection: { inspectorId: "ffffffff-0000-4000-8000-000000000001", result: "fail" },
       },
     });
 

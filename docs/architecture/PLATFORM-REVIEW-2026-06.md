@@ -40,11 +40,11 @@ Plus two domain-critical correctness bugs: **re-appropriation isn't zero-sum** (
 | R15 | **Finance by-id repo reads omit tenant predicate** (IDOR if RLS stays dormant) | S6 | ✅ FIXED | added tenant-scoped reads (`findSanctionByIdAndTenant`, `findBillByIdAndTenant`, `findPaymentByIdAndTenant`); all user-facing query loaders (sanction available/detail, payment, bill detail, payment→bill vendor lookup) now scope by tenant at the DB read, not just post-fetch; suite 126 green |
 | R16 | **Integration tests share one live Postgres, incomplete cleanup** — rerun flakiness (asset GRN inbox row; estab `estab_inward` unique key) | Q2, Q3, Q4 | ✅ FIXED | asset test clears derived uuidV5 processed ids (17/17 ×2); estab `wipe()` clears `estab_inward` (11/11 ×2); both proven rerun-stable |
 | R17 | **Vendor blacklist tenant-scoped only** — CVC debarment not government-wide | D8 | 🟡 Med | `vendor-blacklist/repo.ts` |
-| R18 | **GRN requires full receipt** — partial/part-supply deliveries blocked | D10 | 🟡 Med | `grn/domain.ts computeThreeWayMatch` |
+| R18 | **GRN requires full receipt** — partial/part-supply deliveries blocked | D10 | ✅ FIXED | `computeThreeWayMatch` no longer demands `received >= ordered`; partial receipts match when within PO bounds (accepted ≤ received ≤ ordered) and total accepted > 0; over-acceptance/empty receipt/failed inspection still rejected; bill drafts at the accepted value (ties to R5); tests updated + procurement 70 green |
 | R19 | **Major CCS(CCA) penalty imposed on single approval** — skips Rule 14 inquiry | D11 | 🟡 Med | `disciplinary/eoffice-consumer.ts` |
 | R20 | **qa-readiness score measures test-file presence, not pass/coverage** | Q6 | 🟡 Med | `scripts/qa-readiness-score.mjs scoreTesting` |
 | R21 | Orphaned callbacks (procurement_award/grant_scheme/asset_disposal/hr_leave_special/hr_recruitment emitted-capable, no consumer); `x-internal` aside | A12 | 🟢 Low | topic grep |
-| R22 | CI workflow expression bugs (unquoted `push`/`refs/heads/main`/`./package.json`) → docker-build on main never fires | Q11 | 🟢 Low | `.github/workflows/ci.yml`, `release.yml` |
+| R22 | CI workflow expression bugs (unquoted `push`/`refs/heads/main`/`./package.json`) → docker-build on main never fires | Q11 | ✅ FIXED | `ci.yml` docker-build `if:` now quotes `'push'`/`'refs/heads/main'`; version step uses `node -p 'require("./package.json").version'` with correct quoting |
 
 ---
 

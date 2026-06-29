@@ -550,7 +550,7 @@ jobs:
   docker-build:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    if: github.event_name == push && github.ref == refs/heads/main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [e2e]
     permissions:
       contents: read
@@ -604,7 +604,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract version
         id: version
-        run: echo "version=$(node -p "require(./package.json).version")" >> $GITHUB_OUTPUT
+        run: echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v5
         with:

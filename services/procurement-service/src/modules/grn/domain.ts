@@ -13,7 +13,20 @@ export interface GrnItem {
 
 export function computeThreeWayMatch(items: GrnItem[], inspectionResult: string): boolean {
   if (inspectionResult !== "pass") return false;
-  return items.every((i) => i.receivedQty >= i.orderedQty && i.acceptedQty >= i.orderedQty);
+  if (items.length === 0) return false;
+  // R18 — partial / part-supply deliveries are valid. A GRN records what was
+  // received THIS time; the PO stays open for the balance. So the match no
+  // longer demands receivedQty >= orderedQty. Each line must stay within PO
+  // bounds (accepted <= received, and <= ordered when the line is priced), and
+  // over-acceptance is rejected. The GRN must accept a positive total — an empty
+  // receipt is not a match.
+  const withinBounds = items.every((i) =>
+    i.acceptedQty >= 0 &&
+    i.acceptedQty <= i.receivedQty &&
+    (i.orderedQty <= 0 || i.acceptedQty <= i.orderedQty)
+  );
+  const totalAccepted = items.reduce((sum, i) => sum + i.acceptedQty, 0);
+  return withinBounds && totalAccepted > 0;
 }
 
 export function assertQtyValid(items: GrnItem[]): void {
