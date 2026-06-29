@@ -42,6 +42,7 @@ export default async function EstabFilesListPage() {
         subtitle="Create, route and track files with note sheets & movement trail."
         actions={
           <>
+            <a className="btn ghost" href="/estab/inbox">My Desk</a>
             <a className="btn ghost" href="/estab/dak">Dak / Receipts</a>
             <a className="btn ghost" href="/estab/dispatch">Dispatch</a>
             <a className="btn ghost" href="/estab/dfa">DFA</a>

@@ -23,6 +23,7 @@ export const DISPATCH = {
   poApprove: "procurement.po.approve",
   fileApprove: "estab.file.approve",
   fileReject: "estab.file.reject",
+  fileLevelApproved: "estab.file.level_approved",
   assetDisposeApprove: "asset.dispose.approve",
 } as const;
 

@@ -12,7 +12,7 @@ import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const FILE_NOTING_WORKFLOW = "file_noting";
-const WORKFLOW_TASK_COMPLETED = "workflow.task.completed";
+const WORKFLOW_TASK_COMPLETED = "estab.file.level_approved";
 
 /**
  * Green-sign a noting with the tamper-evident hash chain (shared by the manual
@@ -279,23 +279,23 @@ export function registerFilesConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
   });
 
-  // G2 unification — when an officer APPROVES a file-noting workflow task at
-  // their level, auto-sign (green) their level's latest unsigned note, so the
-  // file accrues the SO→US→DS green chain without a separate manual sign step.
+  // G2 unification — workflow emits estab.file.level_approved on each APPROVE at
+  // a file_noting level; auto-sign (green) that level's latest unsigned note so
+  // the file accrues the SO→US→DS hash chain without a separate manual step.
   queue.subscribe(WORKFLOW_TASK_COMPLETED, async (msg) => {
-    const p = msg.payload as { refType?: string; refId?: string; decision?: string };
-    if (p.refType !== "estab_file" || !p.refId || p.decision !== "approve") return;
+    const p = msg.payload as { fileId?: string };
+    if (!p.fileId) return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const noting = await repo.findLatestUnsignedNoting(tx, p.refId!, msg.tenantId);
+      const noting = await repo.findLatestUnsignedNoting(tx, p.fileId!, msg.tenantId);
       if (!noting) return;
       await signNotingChain(tx, {
-        tenantId: msg.tenantId, fileId: p.refId!, notingId: noting.id,
+        tenantId: msg.tenantId, fileId: p.fileId!, notingId: noting.id,
         body: noting.body, officerId: msg.actorId,
       });
       await audit(tx, msg, "level_sign_noting", "noting", noting.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.refId));
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
   });
 
   queue.subscribe(COMMANDS.fileMove, async (msg) => {

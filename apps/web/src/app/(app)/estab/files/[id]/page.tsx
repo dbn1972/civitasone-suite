@@ -4,6 +4,7 @@ import { PageHeader, StatusPill, EmptyState, DataTable } from "../../../../_comp
 import { formatIndianDate } from "@/lib/formatters";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
+import { OfficerName } from "./OfficerName";
 import type { EstabFileDetail } from "@civitasone/types";
 
 type NoteRow = {
@@ -88,7 +89,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
               <div className="fld"><div className="l">Subject</div><div className="v">{file.subject}</div></div>
               <div className="fld"><div className="l">Department</div><div className="v">{file.department ?? "—"}</div></div>
               <div className="fld"><div className="l">Classification</div><div className="v">{file.classification.replace(/_/g, " ")}</div></div>
-              <div className="fld"><div className="l">Currently with</div><div className="v">{file.currentHolder ?? "—"}</div></div>
+              <div className="fld"><div className="l">Currently with</div><div className="v">{file.currentHolder ? <OfficerName id={file.currentHolder} /> : "—"}</div></div>
               {ext.dueBy ? (
                 <div className="fld"><div className="l">SLA due by</div><div className="v">{formatIndianDate(ext.dueBy)}</div></div>
               ) : null}
@@ -130,7 +131,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
                 <ul className="tl">
                   {ext.movementHistory.map((m, i, arr) => (
                     <li key={m.id} className={i < arr.length - 1 ? "done" : "cur"}>
-                      <div className="t">→ Officer {m.toOfficerId.slice(0, 8)}</div>
+                      <div className="t"><OfficerName id={m.toOfficerId} prefix="→ " /></div>
                       <div className="d">{formatIndianDate(m.movedAt)}{m.remarks ? ` · ${m.remarks}` : ""}</div>
                     </li>
                   ))}

@@ -18,7 +18,11 @@ export const createApprovalRuleBody = z
     label:                  z.string().min(3).max(200),
     minAmountMinor:         z.number().int().nonnegative().default(0),
     maxAmountMinor:         z.number().int().positive().nullable().default(null),
-    workflowDefinitionCode: z.string().min(1),
+    // I8 — a workflow definition code is a dot/underscore-segmented identifier
+    // (e.g. "file_noting", "finance.sanction.director_cto"). This rejects empty/
+    // whitespace/garbage codes that would create an unroutable file; the
+    // workflow engine validates actual existence at instantiation.
+    workflowDefinitionCode: z.string().regex(/^[a-z][a-z0-9_.]{1,63}$/, "must be a lowercase dot/underscore code, e.g. file_noting"),
     startNodeKey:           z.string().min(1).default("review"),
     steps:                  z.array(approvalStep).min(1),
     priority:               z.number().int().min(0).max(10_000).default(100),
@@ -34,7 +38,7 @@ export const updateApprovalRuleBody = z
     label:                  z.string().min(3).max(200).optional(),
     minAmountMinor:         z.number().int().nonnegative().optional(),
     maxAmountMinor:         z.number().int().positive().nullable().optional(),
-    workflowDefinitionCode: z.string().min(1).optional(),
+    workflowDefinitionCode: z.string().regex(/^[a-z][a-z0-9_.]{1,63}$/, "must be a lowercase dot/underscore code, e.g. file_noting").optional(),
     startNodeKey:           z.string().min(1).optional(),
     steps:                  z.array(approvalStep).min(1).optional(),
     priority:               z.number().int().min(0).max(10_000).optional(),

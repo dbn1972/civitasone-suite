@@ -1,10 +1,29 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 
 const DEFAULT_OFFICER = "00000000-0000-0000-0000-000000000099";
+
+const ROLE_LABEL: Record<string, string> = {
+  dealing_hand: "Dealing Hand",
+  section_officer: "Section Officer",
+  under_secretary: "Under Secretary",
+  deputy_secretary: "Deputy Secretary",
+  director: "Director",
+  hod: "Head of Department",
+};
+
+type Operator = {
+  id: string;
+  employeeId: string;
+  division: string;
+  section: string | null;
+  deskRole: string;
+  canInitiate: boolean;
+  active: boolean;
+};
 
 type Props = {
   fileId: string;
@@ -18,6 +37,33 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   const [referRemarks, setReferRemarks] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Operator picker — the valid "mark/forward to" candidates (X10).
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [toOfficer, setToOfficer] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
+        if (!res.ok) return;
+        const body = (await res.json()) as { data?: Operator[] } | Operator[];
+        const list = (Array.isArray(body) ? body : (body.data ?? [])).filter((o) => o.active);
+        if (!active) return;
+        setOperators(list);
+        if (list.length > 0 && list[0]) setToOfficer(list[0].employeeId);
+      } catch {
+        /* picker is optional; manual UUID entry still works */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const operatorLabel = (o: Operator) =>
+    `${o.employeeId.slice(0, 8)} ·· ${o.division} ·· ${ROLE_LABEL[o.deskRole] ?? o.deskRole}`;
 
   async function addYellowNote() {
     if (!noteBody.trim()) {
@@ -92,6 +138,11 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   }
 
   async function referBack() {
+    const target = toOfficer.trim() || DEFAULT_OFFICER;
+    if (!/^[0-9a-f-]{36}$/i.test(target)) {
+      setMessage("Pick an officer or enter a valid officer ID before referring back.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -99,7 +150,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          toOfficer: DEFAULT_OFFICER,
+          toOfficer: target,
           remarks: referRemarks.trim() || "Referred back",
         }),
       });
@@ -146,6 +197,27 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           </button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <label htmlFor="estab-refer-officer" className="l" style={{ fontSize: 12 }}>Refer / forward to</label>
+          {operators.length > 0 ? (
+            <select
+              id="estab-refer-officer"
+              value={toOfficer}
+              onChange={(e) => setToOfficer(e.target.value)}
+              style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
+            >
+              {operators.map((o) => (
+                <option key={o.id} value={o.employeeId}>{operatorLabel(o)}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="estab-refer-officer"
+              value={toOfficer}
+              onChange={(e) => setToOfficer(e.target.value)}
+              placeholder="Officer UUID (no operators enrolled yet)"
+              style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
+            />
+          )}
           <label htmlFor="estab-refer-remarks" className="l" style={{ fontSize: 12 }}>Refer-back remarks</label>
           <input
             id="estab-refer-remarks"

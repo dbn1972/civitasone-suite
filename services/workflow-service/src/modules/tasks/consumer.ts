@@ -150,6 +150,26 @@ export function registerTasksConsumers(queue: Queue): void {
           link: `/workflow/tasks/${p.id}`,
         },
       });
+
+      // G2 — per-level green note. On each APPROVE of an estab_file task, signal
+      // estab to auto-create a signed (green), hash-chained note for this level,
+      // so the file accumulates the SO→US→DS noting chain as the workflow
+      // progresses (not just one note greened at the terminal step).
+      if (decision === "approve" && instance?.refType === "estab_file" && instance.refId) {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: DISPATCH.fileLevelApproved,
+          eventType: DISPATCH.fileLevelApproved,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            fileId: instance.refId,
+            nodeKey: p.nodeKey ?? null,
+            roleRef: p.roleRef ?? null,
+            levelName: p.name ?? null,
+          },
+        });
+      }
     });
     await cache.put(cache.makeKey(msg.tenantId, TASK_RESOURCE, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, TASK_RESOURCE);
