@@ -86,12 +86,12 @@ Verdict: **functionally a strong standalone eOffice; integration is ~60% closed.
 | O6 | Operator eligibility not enforced on move | 🟠 High | Policy/security | ✅ done |
 | G2 | Single-noting green vs per-level chain | 🟠 High | Records fidelity | ✅ done |
 | A4 | No enclosure model on outgoing DFA | 🟠 High | Dispatch | ✅ done |
-| A5 | Note-sheet hardcodes "Government of India" | 🟠 High | Compliance/branding | ✅ done (org name; PDF=HTML) |
-| I8 | Approval-matrix `workflowDefinitionCode` not validated | 🟡 Medium | Integration | ☐ open |
-| X9 | File inner page shows officer UUIDs, not names | 🟡 Medium | UX | ☐ open |
-| X10 | No operator picker; forwarding not operator-aware in UI | 🟡 Medium | UX | ☐ open |
-| X11 | DAK→file→note→approve→dispatch is disjoint screens | 🟡 Medium | UX | ☐ open |
-| X12 | No SLA/pendency cues, no "my pending files" desk inbox | 🟡 Medium | UX | ☐ open |
+| A5 | Note-sheet hardcodes "Government of India" | 🟠 High | Compliance/branding | ✅ done (tenant org name + real PDF via pdf-lib) |
+| I8 | Approval-matrix `workflowDefinitionCode` not validated | 🟡 Medium | Integration | ✅ done (format-validated) |
+| X9 | File inner page shows officer UUIDs, not names | 🟡 Medium | UX | ✅ done (OfficerName resolver) |
+| X10 | No operator picker; forwarding not operator-aware in UI | 🟡 Medium | UX | ✅ done (operator picker) |
+| X11 | DAK→file→note→approve→dispatch is disjoint screens | 🟡 Medium | UX | ☐ open (guided wizard) |
+| X12 | No SLA/pendency cues, no "my pending files" desk inbox | 🟡 Medium | UX | ✅ done (/estab/inbox + SLA cues) |
 
 ---
 
