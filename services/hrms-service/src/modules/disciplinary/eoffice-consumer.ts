@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
+import { assertMajorPenaltyInquiry } from "./state-machine.js";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -37,6 +38,32 @@ export function registerDisciplinaryEOfficeConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       if (cb.decision === "approved") {
+        // R19 — CCS (CCA) Rule 14: a MAJOR penalty cannot be imposed on a single
+        // eOffice approval. The formal inquiry must be complete (charge memo
+        // served, inquiry officer appointed, finding recorded). Verify at the
+        // imposition gate regardless of how the case reached pending_approval.
+        const existing = await repo.findCaseTx(tx, msg.tenantId, cb.refId);
+        if (!existing || existing.status !== "pending_approval") return; // not ours / already decided
+        const rule14 = assertMajorPenaltyInquiry({
+          proceedingType: existing.proceedingType,
+          penaltyType: existing.penaltyType,
+          chargeMemoRef: existing.chargeMemoRef,
+          inquiryOfficerId: existing.inquiryOfficerId,
+          finding: existing.finding,
+          findingDate: existing.findingDate,
+        });
+        if (!rule14.ok) {
+          // Block imposition: the case stays pending_approval; record the reason.
+          await repo.appendEvent(tx, {
+            tenantId: msg.tenantId, caseId: cb.refId, fromStatus: "pending_approval",
+            toStatus: "pending_approval", action: "major_penalty_blocked_rule14",
+            notes: rule14.reason ?? "Rule 14 inquiry incomplete", actorId: cb.decidedBy,
+          });
+          await audit(tx, msg, "eoffice_blocked_rule14", cb.refId, {
+            fileNo: cb.fileNo, reason: rule14.reason ?? null, penaltyType: existing.penaltyType,
+          });
+          return;
+        }
         const row = await repo.transitionCase(tx, msg.tenantId, cb.refId, cb.decidedBy, {
           from: ["pending_approval"], to: "penalty_imposed",
         });

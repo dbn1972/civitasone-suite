@@ -117,3 +117,31 @@ export function penaltyClassOf(penaltyType: string): "minor" | "major" | null {
   if (MAJOR_PENALTIES.has(penaltyType)) return "major";
   return null;
 }
+
+export interface Rule14Inputs {
+  proceedingType: string;            // "major" | "minor"
+  penaltyType?: string | null;       // proposed penalty
+  chargeMemoRef?: string | null;
+  inquiryOfficerId?: string | null;
+  finding?: string | null;
+  findingDate?: string | null;
+}
+
+/**
+ * CCS (CCA) Rule 14 — a MAJOR penalty may NOT be imposed without a completed
+ * formal inquiry: articles of charge served (charge memo), an inquiry officer
+ * appointed, and a finding recorded. Minor-penalty proceedings (Rule 16) need
+ * no oral inquiry, so they pass unconditionally. A case is treated as major if
+ * its proceeding type is major OR the proposed penalty is a major penalty.
+ * Returns ok=false with a reason when a major penalty lacks the inquiry record.
+ */
+export function assertMajorPenaltyInquiry(i: Rule14Inputs): TransitionCheck {
+  const isMajor =
+    i.proceedingType === "major" ||
+    (i.penaltyType ? penaltyClassOf(i.penaltyType) === "major" : false);
+  if (!isMajor) return { ok: true };
+  if (!i.chargeMemoRef) return { ok: false, reason: "CCS Rule 14: charge memo (articles of charge) not served" };
+  if (!i.inquiryOfficerId) return { ok: false, reason: "CCS Rule 14: inquiry officer not appointed" };
+  if (!i.finding || !i.findingDate) return { ok: false, reason: "CCS Rule 14: inquiry finding not recorded" };
+  return { ok: true };
+}

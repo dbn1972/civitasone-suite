@@ -19,6 +19,13 @@ export async function findCase(tenantId: string, id: string): Promise<Disciplina
   return rows[0] ?? null;
 }
 
+/** Transactional case read (for in-tx gates like the eOffice decision consumer). */
+export async function findCaseTx(tx: Writer, tenantId: string, id: string): Promise<DisciplinaryCaseRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsDisciplinaryCases)
+    .where(and(eq(hrmsDisciplinaryCases.tenantId, tenantId), eq(hrmsDisciplinaryCases.id, id))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listCasesByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<DisciplinaryCaseRow[]> {
   return db.select().from(hrmsDisciplinaryCases)
     .where(and(eq(hrmsDisciplinaryCases.tenantId, tenantId), eq(hrmsDisciplinaryCases.employeeId, employeeId)))
