@@ -10,7 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
-import { estabNotings } from "../src/modules/files/schema.js";
+import { estabNotings, estabInward } from "../src/modules/files/schema.js";
 import { estabRtiRequests } from "../src/modules/legal/schema.js";
 import { estabRoomBookings } from "../src/modules/facilities/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -36,6 +36,9 @@ const MSG_RTI_1 = "bbbbbbbb-eeee-4000-8000-000000000001";
 async function wipe() {
   await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
   await db.delete(estabNotings).where(eq(estabNotings.tenantId, TENANT));
+  // RTI create auto-registers a DAK into estab_inward (unique dak_no per tenant);
+  // clear it too or reruns hit the unique-key collision and roll back.
+  await db.delete(estabInward).where(eq(estabInward.tenantId, TENANT));
   await db.delete(estabRoomBookings).where(eq(estabRoomBookings.tenantId, TENANT));
   await db.delete(estabRtiRequests).where(eq(estabRtiRequests.tenantId, TENANT));
   await db.delete(processed).where(eq(processed.messageId, MSG_NOTE_1));

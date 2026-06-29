@@ -328,16 +328,26 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
       indentRef: "tender:finance-test", sanctionRef: "finance_sanction:abc-123",
       items: [{ itemCode: "X", description: "Item", quantity: 1, unit: "nos", unitPriceMinor: 35_000_000, itemType: "service" }],
     }));
-    await drain(q);
-    global.fetch = originalFetch;
+    await new Promise<void>((r) => setTimeout(r, 400)); // settle create (queue stays running)
 
     const pos = await db.select().from(procurementPos).where(eq(procurementPos.id, SANCTIONED_PO));
     expect(pos).toHaveLength(1);
-    expect(pos[0]?.status).toBe("pending");
+    // PO is created in `draft` (finance availability checked at create). It only
+    // moves to `pending` when submitted to eOffice for administrative approval.
+    expect(pos[0]?.status).toBe("draft");
     // Verify the finance call carried the internal + tenant headers (commitment scoping).
     expect(calledUrl).toContain("/v1/finance/sanctions/abc-123/available");
     expect(calledHeaders["x-internal"]).toBe("1");
     expect(calledHeaders["x-tenant-id"]).toBe(TENANT);
+
+    // draft → pending via submit-for-approval (eOffice administrative approval).
+    await q.publish(COMMANDS.poSubmitApproval, msg(COMMANDS.poSubmitApproval, { id: SANCTIONED_PO, tenantId: TENANT }));
+    await new Promise<void>((r) => setTimeout(r, 400)); // settle submit
+    await q.stop();
+    global.fetch = originalFetch;
+
+    const afterSubmit = await db.select().from(procurementPos).where(eq(procurementPos.id, SANCTIONED_PO));
+    expect(afterSubmit[0]?.status).toBe("pending");
   });
 
   it("finance returns available < total → BUDGET_EXCEEDED emitted, PO NOT written", async () => {

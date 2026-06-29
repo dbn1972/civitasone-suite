@@ -67,7 +67,7 @@ describe("write-via-queue + read-via-cache", () => {
   it("consumer dedupes repeated messageId (idempotent delivery)", async () => {
     let count = 0;
     queue.subscribe<{ id: string }>("tenant.tenant.touch", async () => { count++; });
-    const opts = { messageId: "same", type: "tenant.tenant.touch", tenantId: "t", actorId: "u", correlationId: "c", schemaVersion: "1.0", payload: { id: "t" } };
+    const opts = { messageId: "00000000-0000-4000-8000-0000000000de", type: "tenant.tenant.touch", tenantId: "t", actorId: "u", correlationId: "c", schemaVersion: "1.0", payload: { id: "t" } };
     await queue.publish("tenant.tenant.touch", opts);
     await queue.publish("tenant.tenant.touch", opts);
     await new Promise((r) => setTimeout(r, 20));

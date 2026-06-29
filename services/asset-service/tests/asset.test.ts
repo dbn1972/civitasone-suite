@@ -10,11 +10,12 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { assetAssets } from "../src/modules/register/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRegisterConsumers } from "../src/modules/register/consumer.js";
+import { uuidV5 } from "../src/shared/ids.js";
 import { slmMonthlyAmount, wdvMonthlyAmount, generatePeriods } from "../src/modules/depreciation/domain.js";
 import { assertAssetDisposable, computeDisposalGainLoss } from "../src/modules/lifecycle/domain.js";
 import { COMMANDS, CONSUMED } from "../src/topics.js";
@@ -190,10 +191,16 @@ describe("asset-service route auth (inject)", () => {
 describe("Register consumer — GRN fixed_asset capitalization", () => {
   const GRN_MSG = "66666666-ffff-4000-8000-000000000001";
   const GRN_ID = "grn-test-001";
+  // The consumer dedups on these DERIVED ids (uuidV5), not the envelope id —
+  // they must be cleared too or reruns short-circuit at markProcessed.
+  const ITEM_MSG = uuidV5(`msg:grn-asset:${GRN_ID}:FA-001`);
 
-  afterAll(async () => {
+  async function cleanup() {
     await db.delete(assetAssets).where(eq(assetAssets.code, "FA-001"));
-  });
+    await db.delete(processed).where(inArray(processed.messageId, [GRN_MSG, ITEM_MSG]));
+  }
+  beforeAll(cleanup);
+  afterAll(cleanup);
 
   it("creates asset from grnAccepted with fixed_asset items", async () => {
     const q = new MemoryQueue();
