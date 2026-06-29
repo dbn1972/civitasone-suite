@@ -101,6 +101,28 @@ export function registerTenantConsumers(queue: Queue): void {
     });
     await cache.invalidate(keyFor(msg.payload.tenantId));
   });
+
+  queue.subscribe<{ id: string; tier: "pool" | "silo"; dbDsnRef: string | null; kmsKeyRef: string | null }>(
+    COMMANDS.setIsolation,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const cur = await repo.findByIdTx(tx, msg.payload.id);
+        if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
+        await repo.update(tx, msg.payload.id, {
+          isolationTier: msg.payload.tier,
+          dbDsnRef: msg.payload.dbDsnRef,
+          kmsKeyRef: msg.payload.kmsKeyRef,
+          updatedBy: msg.actorId,
+          version: cur.version + 1,
+        });
+        // install-service consumes this to provision/migrate (silo) the tenant DB.
+        await emit(tx, msg, EVENTS.tenantIsolationChanged,
+          { tenantId: msg.payload.id, tier: msg.payload.tier }, "set_isolation", msg.payload.id);
+      });
+      await cache.invalidate(keyFor(msg.payload.id));
+    },
+  );
 }
 
 /** Enqueue the domain event + the mandatory audit event (CLAUDE.md §3: every mutation audits). */

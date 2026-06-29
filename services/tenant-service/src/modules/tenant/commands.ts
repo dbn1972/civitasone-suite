@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
-import type { CreateTenantBody, UpdateTenantBody, SuspendTenantBody } from "./validators.js";
+import type { CreateTenantBody, UpdateTenantBody, SuspendTenantBody, SetIsolationBody } from "./validators.js";
 import type { TenantView } from "./domain.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -23,6 +23,7 @@ export async function createTenant(ctx: RequestContext, body: CreateTenantBody):
     status: "draft",
     region: body.region,
     residency: body.residency,
+    isolationTier: "pool",
     settings: {},
     version: 1,
   };
@@ -63,6 +64,24 @@ export async function suspendTenant(ctx: RequestContext, id: string, body: Suspe
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
     payload: { id, reason: body.reason },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * Set a tenant's isolation tier (pool ↔ silo). For silo, dbDsnRef points to the
+ * dedicated DB's DSN in the secrets manager. Provisioning the actual DB +
+ * migrating all service schemas is orchestrated by install-service on the
+ * emitted tenant.tenant.isolation_changed event.
+ */
+export async function setIsolation(ctx: RequestContext, id: string, body: SetIsolationBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.setIsolation, {
+    type: COMMANDS.setIsolation,
+    tenantId: id,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tier: body.tier, dbDsnRef: body.dbDsnRef ?? null, kmsKeyRef: body.kmsKeyRef ?? null },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

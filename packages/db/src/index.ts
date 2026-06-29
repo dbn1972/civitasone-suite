@@ -22,6 +22,7 @@ export { createSqlClient } from "./pool.js";
 export {
   TenantRouter,
   envTenantResolver,
+  cachedResolver,
   type TenantTier,
   type TenantConnInfo,
   type TenantResolver,

@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, TenantRouter, envTenantResolver, cachedResolver } from "@civitasone/db";
 import { schema as filesModule }      from "../modules/files/schema.js";
 import { schema as committeeModule }  from "../modules/committee/schema.js";
 import { schema as assetsModule }     from "../modules/assets/schema.js";
@@ -17,8 +17,45 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://estab_svc:***@ho
 
 export const sqlClient = createSqlClient(url);
 
-export const db = drizzle(sqlClient, {
-  schema: { ...filesModule, ...committeeModule, ...assetsModule, ...facilitiesModule, ...legalModule, ...approvalRulesModule, ...dfaModule, ...handoverModule, ...migrationModule, ...operatorsModule, ...outboxSchema },
-});
+const ESTAB_SCHEMA = {
+  ...filesModule, ...committeeModule, ...assetsModule, ...facilitiesModule, ...legalModule,
+  ...approvalRulesModule, ...dfaModule, ...handoverModule, ...migrationModule, ...operatorsModule,
+  ...outboxSchema,
+};
+
+export const db = drizzle(sqlClient, { schema: ESTAB_SCHEMA });
 
 export type Db = typeof db;
+
+// ── Tiered multi-tenancy (Option B) ──────────────────────────────────────────
+// Pool tenants reuse the shared `sqlClient` above (no second connection); silo
+// tenants get a client to their dedicated DB. With no TENANT_SILO_IDS configured
+// every tenant resolves to pool, so this is fully backward compatible.
+const router = new TenantRouter({
+  poolDsn: url,
+  resolver: cachedResolver(envTenantResolver()),
+  clientFactory: (dsn, opts) => (dsn === url ? sqlClient : createSqlClient(dsn, opts)),
+});
+
+const drizzleByClient = new WeakMap<ReturnType<typeof createSqlClient>, Db>();
+
+/** The raw postgres-js client for a tenant (pool shared client or silo client). */
+export async function sqlClientFor(tenantId: string): Promise<ReturnType<typeof createSqlClient>> {
+  return router.sqlFor(tenantId);
+}
+
+/** A Drizzle db bound to the tenant's tier (cached per underlying client). */
+export async function dbFor(tenantId: string): Promise<Db> {
+  const client = await router.sqlFor(tenantId);
+  let d = drizzleByClient.get(client);
+  if (!d) {
+    d = drizzle(client, { schema: ESTAB_SCHEMA });
+    drizzleByClient.set(client, d);
+  }
+  return d;
+}
+
+/** Tenant isolation tier (for observability / routing decisions). */
+export async function tierOf(tenantId: string): Promise<"pool" | "silo"> {
+  return router.tierOf(tenantId);
+}

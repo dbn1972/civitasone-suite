@@ -4,6 +4,7 @@ export const COMMANDS = {
   updateTenant: "tenant.tenant.update",
   suspendTenant: "tenant.tenant.suspend",
   onboardTenant: "tenant.tenant.onboard",
+  setIsolation: "tenant.tenant.set_isolation",
 } as const;
 
 export const EVENTS = {
@@ -11,6 +12,7 @@ export const EVENTS = {
   tenantUpdated: "tenant.tenant.updated",
   tenantSuspended: "tenant.tenant.suspended",
   tenantOnboarded: "tenant.tenant.onboarded",
+  tenantIsolationChanged: "tenant.tenant.isolation_changed",
 } as const;
 
 export const SERVICE = "tenant";

@@ -69,6 +69,23 @@ export function envTenantResolver(): TenantResolver {
   };
 }
 
+/**
+ * Wrap any resolver with a small in-process TTL cache so the hot path doesn't
+ * hit the registry/HTTP on every request. Compose around an HTTP/registry-backed
+ * resolver: `cachedResolver(tenantServiceResolver, 30_000)`.
+ */
+export function cachedResolver(inner: TenantResolver, ttlMs = 30_000): TenantResolver {
+  const cache = new Map<string, { info: TenantConnInfo; exp: number }>();
+  return async (tenantId: string): Promise<TenantConnInfo> => {
+    const now = Date.now();
+    const hit = cache.get(tenantId);
+    if (hit && hit.exp > now) return hit.info;
+    const info = await inner(tenantId);
+    cache.set(tenantId, { info, exp: now + ttlMs });
+    return info;
+  };
+}
+
 export class TenantRouter {
   private readonly poolDsn: string;
   private readonly resolver: TenantResolver;

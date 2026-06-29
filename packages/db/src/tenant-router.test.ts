@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { TenantRouter, envTenantResolver, type TenantResolver } from "./tenant-router.js";
+import { TenantRouter, envTenantResolver, cachedResolver, type TenantResolver } from "./tenant-router.js";
 
 const T1 = "11111111-1111-1111-1111-111111111111";
 const T2 = "22222222-2222-2222-2222-222222222222";
@@ -78,5 +78,15 @@ describe("TenantRouter", () => {
     delete process.env.TENANT_SILO_IDS;
     expect(envTenantResolver()(T1)).toEqual({ tier: "pool" });
     process.env.TENANT_SILO_IDS = prev;
+  });
+
+  it("cachedResolver memoizes per tenant within the TTL", async () => {
+    let calls = 0;
+    const inner: TenantResolver = () => { calls++; return { tier: "pool" }; };
+    const resolve = cachedResolver(inner, 10_000);
+    await resolve(T1); await resolve(T1); await resolve(T1);
+    expect(calls).toBe(1);
+    await resolve(T2);
+    expect(calls).toBe(2);
   });
 });

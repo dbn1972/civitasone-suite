@@ -16,6 +16,10 @@ export const tenants = tenantSchema.table("tenants", {
   status: varchar("status", { length: 24 }).notNull().default("draft"),
   region: varchar("region", { length: 64 }).notNull(),
   residency: varchar("residency", { length: 64 }).notNull(),
+  // Tiered multi-tenancy: 'pool' (shared DB + RLS) | 'silo' (dedicated DB).
+  isolationTier: varchar("isolation_tier", { length: 8 }).notNull().default("pool"),
+  dbDsnRef: text("db_dsn_ref"),   // secret-manager reference (silo), never plaintext
+  kmsKeyRef: text("kms_key_ref"), // per-tenant encryption key reference (silo BYOK)
   settings: jsonb("settings").$type<Record<string, unknown>>().default({}).notNull(),
   // audit columns (CLAUDE.md §3.6)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

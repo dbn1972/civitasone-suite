@@ -1,4 +1,4 @@
-import { sqlClient } from "../../shared/db.js";
+import { sqlClientFor } from "../../shared/db.js";
 
 export type EOfficeNotification = {
   id: string;
@@ -17,6 +17,8 @@ export type EOfficeNotification = {
  */
 export async function getNotifications(tenantId: string, limit: number): Promise<EOfficeNotification[]> {
   const items: EOfficeNotification[] = [];
+  // Tier-routed client: pool tenants → shared DB, silo tenants → their own DB.
+  const sqlClient = await sqlClientFor(tenantId);
 
   // Overdue active files (pendency SLA breached).
   const overdue = await sqlClient`

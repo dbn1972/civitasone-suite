@@ -25,6 +25,16 @@ export type SuspendTenantBody = z.infer<typeof suspendTenantBody>;
 
 export const tenantIdParam = z.object({ tenantId: z.string().uuid() });
 
+export const setIsolationBody = z.object({
+  tier:      z.enum(["pool", "silo"]),
+  dbDsnRef:  z.string().min(1).max(512).nullable().optional(),  // secrets-manager reference
+  kmsKeyRef: z.string().min(1).max(512).nullable().optional(),
+}).refine((b) => b.tier === "pool" || !!b.dbDsnRef, {
+  message: "silo tier requires dbDsnRef (the dedicated DB secret reference)",
+  path: ["dbDsnRef"],
+});
+export type SetIsolationBody = z.infer<typeof setIsolationBody>;
+
 export const onboardTenantBody = z.object({
   name: z.string().min(2).max(200),
   domain: z.string().min(3).max(253).regex(/^[a-z0-9.-]+$/i, "invalid domain"),

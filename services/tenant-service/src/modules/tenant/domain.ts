@@ -10,6 +10,7 @@ export type TenantView = {
   status: TenantStatus;
   region: string;
   residency: string;
+  isolationTier: "pool" | "silo";
   settings: Record<string, unknown>;
   version: number;
 };

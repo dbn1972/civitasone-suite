@@ -18,6 +18,7 @@ function toView(r: TenantRow): TenantView {
     status: r.status as TenantView["status"],
     region: r.region,
     residency: r.residency,
+    isolationTier: (r.isolationTier as TenantView["isolationTier"]) ?? "pool",
     settings: r.settings,
     version: r.version,
   };

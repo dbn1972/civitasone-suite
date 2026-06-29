@@ -60,6 +60,7 @@ export async function createTenantPipeline(
     status: "draft",
     region: body.region,
     residency: body.residency,
+    isolationTier: "pool",
     settings: {},
     version: 1,
   };

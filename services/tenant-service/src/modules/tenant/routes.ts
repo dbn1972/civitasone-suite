@@ -8,7 +8,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createTenantBody, updateTenantBody, suspendTenantBody, tenantIdParam, onboardTenantBody } from "./validators.js";
+import { createTenantBody, updateTenantBody, suspendTenantBody, tenantIdParam, onboardTenantBody, setIsolationBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { createTenantPipeline } from "./onboard.js";
@@ -56,6 +56,15 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [...PLATFORM_ADMIN, "tenant_admin"]);
     const body = updateTenantBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateTenant(ctx, tenantId, body));
+  });
+
+  // SET ISOLATION TIER — provider/superadmin only (pool ↔ silo)
+  app.patch("/v1/tenants/:tenantId/isolation", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PLATFORM_ADMIN);
+    const { tenantId } = tenantIdParam.parse(req.params);
+    const body = setIsolationBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.setIsolation(ctx, tenantId, body));
   });
 
   // SUSPEND — provider/superadmin only
