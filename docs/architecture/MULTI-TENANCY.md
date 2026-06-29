@@ -146,8 +146,8 @@ behaviour is identical to today.
 - ✅ **Tenant registry:** `tenant.isolation_tier` / `db_dsn_ref` / `kms_key_ref` columns (migration 0004), `isolationTier` in the tenant read view, `PATCH /v1/tenants/:id/isolation` (platform-admin) → `setIsolation` command/consumer → emits `tenant.tenant.isolation_changed` for install-service to provision/migrate.
 - ✅ **Reference rollout (estab-service):** `shared/db.ts` exposes `dbFor(tenantId)` / `sqlClientFor(tenantId)` / `tierOf(tenantId)` via `TenantRouter` (pool reuses the existing shared client — no second connection; silo → dedicated DB). The notifications read path is converted as the reference. `db`/`sqlClient` retained so unconverted call sites keep working.
 - ☐ Redis-backed resolver: swap estab's `envTenantResolver` loader for one that reads `isolationTier` from tenant-service (cache via `@civitasone/cache`); DSN still derived from the per-env `TENANT_SILO_DSN_TEMPLATE`.
-- ☐ Provisioning orchestration in `install-service` (consume `tenant.tenant.isolation_changed` → create DB + migrate all schemas on silo).
-- ☐ Migration orchestrator (fan-out to pool + silo DBs).
+- ✅ **Provisioning orchestrator:** `scripts/dev/provision-silo-tenant.mjs` creates the tenant DB + applies **all** services' migrations into it (Option B). Proven end-to-end: 245 migrations → one DB with every service schema, 0 errors.
+- ✅ **Provisioning state machine (install-service):** migration 0005 `install.silo_provisions`; consumes `tenant.tenant.isolation_changed` (tier=silo → records a `requested` provision); `GET/PATCH /v1/install/silo-provisions` for ops/runner to report `provisioning → ready | failed`. The service never holds CREATE DATABASE creds — the privileged runner does, and reports status back.
 - ☐ Convert estab's remaining call sites + outbox/consumer tenant-DB routing; then roll service-by-service.
 - ☐ KMS/BYOK + residency wiring for silo tier.
 

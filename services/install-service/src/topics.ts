@@ -4,6 +4,7 @@ export const COMMANDS = {
   stepStart: "install.step.start",
   stepComplete: "install.step.complete",
   stepSkip: "install.step.skip",
+  siloProvisionUpdate: "install.silo_provision.update",
 } as const;
 
 export const EVENTS = {
@@ -16,3 +17,8 @@ export const EVENTS = {
 
 export const SERVICE = "install";
 export const RESOURCE = "stage";
+
+/** Events consumed from other services. */
+export const CONSUMED_EVENTS = {
+  tenantIsolationChanged: "tenant.tenant.isolation_changed",
+} as const;
