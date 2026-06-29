@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -23,7 +23,7 @@ const WORKFLOW_TASK_COMPLETED = "estab.file.level_approved";
 async function signNotingChain(
   tx: Parameters<typeof enqueue>[0],
   opts: { tenantId: string; fileId: string; notingId: string; body: string; officerId: string },
-): Promise<void> {
+): Promise<{ notingId: string; dscHash: string; signatureRef: string; chainSeq: number }> {
   const prevRows = await tx.execute(sql`
     SELECT dsc_hash, chain_seq
     FROM files.estab_notings
@@ -36,18 +36,21 @@ async function signNotingChain(
   const prevHash = prev?.dsc_hash ?? "";
   const chainSeq = (prev?.chain_seq ?? 0) + 1;
 
-  const signedAt = new Date();
-  const signatureRef = `DSC-${opts.officerId.slice(0, 8)}-${signedAt.getTime()}`;
-  const dscHash = computeNotingHash(opts.notingId, opts.body, opts.officerId, prevHash, signedAt.getTime());
+  const signedAtMs = Date.now();
+  const signatureRef = `DSC-${opts.officerId.slice(0, 8)}-${signedAtMs}`;
+  const dscHash = computeNotingHash(opts.notingId, opts.body, opts.officerId, prevHash, signedAtMs);
 
   await tx.execute(sql`
     UPDATE files.estab_notings
     SET note_type = 'green', note_status = 'approved', e_signed = true,
-        signed_at = ${signedAt}, signature_ref = ${signatureRef}, dsc_hash = ${dscHash},
+        signed_at = to_timestamp(${signedAtMs}::double precision / 1000.0),
+        signature_ref = ${signatureRef}, dsc_hash = ${dscHash},
         prev_hash = ${prevHash === "" ? null : prevHash}, chain_seq = ${chainSeq},
-        updated_by = ${opts.officerId}, updated_at = ${signedAt}
+        updated_by = ${opts.officerId},
+        updated_at = to_timestamp(${signedAtMs}::double precision / 1000.0)
     WHERE id = ${opts.notingId} AND tenant_id = ${opts.tenantId}
   `);
+  return { notingId: opts.notingId, dscHash, signatureRef, chainSeq };
 }
 
 export function registerFilesConsumers(queue: Queue): void {
@@ -199,21 +202,22 @@ export function registerFilesConsumers(queue: Queue): void {
     const p = msg.payload as { fileId: string; tenantId: string; approvedBy: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // R9/R10: capture the noting BEFORE the status flip and green-sign it
+      // through the SAME hash chain as the manual/level-approval paths, so the
+      // backbone approval accrues prev_hash/chain_seq. We retain the signed
+      // notingId + dscHash to bind the decision callback to the e-signed green
+      // note (re-querying findLatestSubmittedNoting here would return null since
+      // the note is no longer 'submitted').
       const noting = await repo.findLatestSubmittedNoting(tx, p.fileId, p.tenantId);
+      let signedNotingId: string | null = null;
+      let signedDscHash: string | null = null;
       if (noting) {
-        const signatureRef = `DSC-${p.approvedBy.slice(0, 8)}-${Date.now()}`;
-        const dscHash = createHash("sha256")
-          .update(`${noting.id}:${noting.body}:${p.approvedBy}:${Date.now()}`)
-          .digest("hex");
-        await repo.updateNoting(tx, noting.id, {
-          noteType: "green",
-          noteStatus: "approved",
-          eSigned: true,
-          signedAt: new Date(),
-          signatureRef,
-          dscHash,
-          updatedBy: p.approvedBy,
+        const signed = await signNotingChain(tx, {
+          tenantId: p.tenantId, fileId: p.fileId, notingId: noting.id,
+          body: noting.body, officerId: p.approvedBy,
         });
+        signedNotingId = signed.notingId;
+        signedDscHash = signed.dscHash;
       }
       await repo.updateFile(tx, p.fileId, { status: "active", updatedBy: p.approvedBy });
       await enqueue(tx, {
@@ -223,12 +227,12 @@ export function registerFilesConsumers(queue: Queue): void {
       });
       // Cross-module: if this file was raised by a source module, send the
       // approved decision back so the module can execute (release budget, etc.)
-      const approvedNoting = await repo.findLatestSubmittedNoting(tx, p.fileId, p.tenantId);
+      // — now carrying the signed green note's id + DSC hash.
       await emitModuleDecisionCallback(tx, {
         tenantId: p.tenantId, fileId: p.fileId, correlationId: msg.correlationId,
         decision: "approved", decidedBy: p.approvedBy,
-        notingId: approvedNoting?.id ?? null,
-        dscHash: approvedNoting?.dscHash ?? null,
+        notingId: signedNotingId,
+        dscHash: signedDscHash,
       });
       await audit(tx, msg, "approve", "file", p.fileId);
     });
