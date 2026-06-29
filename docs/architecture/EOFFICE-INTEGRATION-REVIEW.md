@@ -72,11 +72,10 @@ Verdict: **functionally a strong standalone eOffice; integration is ~60% closed.
 
 ## 3. Gap register (prioritised)
 
-> **Status (2026-06-28):** All critical + high integration gaps are CLOSED.
-> H1 ✅ (all 11 decision types) · D7 ✅ · R3 ✅ · O6 ✅ · G2 ✅ (manual sign +
-> workflow auto-sign, hash-chained) · A4 ✅ (dispatch enclosures) · A5 ✅
-> (tenant-org note-sheet header; real server-side PDF still pending a PDF lib).
-> Remaining: I8 (matrix code validation) and UX items X9–X12.
+> **Status (2026-06-28):** ALL gaps CLOSED. H1 ✅ (all 11 decision types) ·
+> D7 ✅ · R3 ✅ · O6 ✅ (adoption-aware) · G2 ✅ (dedicated level-approved
+> event + hash chain) · A4 ✅ (dispatch enclosures) · A5 ✅ (tenant-org header +
+> real pdf-lib PDF) · I8 ✅ · X9 ✅ · X10 ✅ · X11 ✅ · X12 ✅.
 
 | # | Gap | Severity | Area | Status |
 |---|-----|:--------:|------|:------:|
@@ -90,7 +89,7 @@ Verdict: **functionally a strong standalone eOffice; integration is ~60% closed.
 | I8 | Approval-matrix `workflowDefinitionCode` not validated | 🟡 Medium | Integration | ✅ done (format-validated) |
 | X9 | File inner page shows officer UUIDs, not names | 🟡 Medium | UX | ✅ done (OfficerName resolver) |
 | X10 | No operator picker; forwarding not operator-aware in UI | 🟡 Medium | UX | ✅ done (operator picker) |
-| X11 | DAK→file→note→approve→dispatch is disjoint screens | 🟡 Medium | UX | ☐ open (guided wizard) |
+| X11 | DAK→file→note→approve→dispatch is disjoint screens | 🟡 Medium | UX | ✅ done (/estab/workspace guided wizard) |
 | X12 | No SLA/pendency cues, no "my pending files" desk inbox | 🟡 Medium | UX | ✅ done (/estab/inbox + SLA cues) |
 
 ---
