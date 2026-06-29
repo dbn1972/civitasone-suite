@@ -72,20 +72,26 @@ Verdict: **functionally a strong standalone eOffice; integration is ~60% closed.
 
 ## 3. Gap register (prioritised)
 
-| # | Gap | Severity | Area | Effort |
+> **Status (2026-06-28):** All critical + high integration gaps are CLOSED.
+> H1 ✅ (all 11 decision types) · D7 ✅ · R3 ✅ · O6 ✅ · G2 ✅ (manual sign +
+> workflow auto-sign, hash-chained) · A4 ✅ (dispatch enclosures) · A5 ✅
+> (tenant-org note-sheet header; real server-side PDF still pending a PDF lib).
+> Remaining: I8 (matrix code validation) and UX items X9–X12.
+
+| # | Gap | Severity | Area | Status |
 |---|-----|:--------:|------|:------:|
-| H1 | No source module raises eFiles (HR/finance/procurement/grant) — integration is manual-only | 🔴 Critical | Integration | 3–4 d |
-| D7 | No consumer of `*.file_decided` — decision loop open, modules don't act on approval | 🔴 Critical | Integration | 3 d |
-| R3 | Workflow definitions seeded only for demo tenant; real tenants can't route | 🔴 Critical | Provisioning | 2 d |
-| O6 | Operator eligibility not enforced on `fileMove`/`notingAdd` (bypass on forward) | 🟠 High | Policy/security | 1 d |
-| G2 | Single-noting green promotion vs per-level note chain (eFile fidelity) | 🟠 High | Records fidelity | 3 d |
-| A4 | No enclosure model — can't attach green note-sheet/DAK to outgoing DFA | 🟠 High | Dispatch | 3 d |
-| A5 | Note-sheet is HTML not PDF; hardcodes "Government of India" not tenant org | 🟠 High | Compliance/branding | 1.5 d |
-| I8 | Approval-matrix `workflowDefinitionCode` not validated to exist | 🟡 Medium | Integration | 1 d |
-| X9 | File inner page shows officer UUIDs, not names/desk roles (no HRMS resolve) | 🟡 Medium | UX | 1.5 d |
-| X10 | No "mark/forward to operator" picker; forwarding is not operator-aware in UI | 🟡 Medium | UX | 2 d |
-| X11 | DAK→file→note→approve→dispatch is 6 disjoint screens, no guided flow | 🟡 Medium | UX | 3 d |
-| X12 | No SLA/pendency visual cues, no "my pending files" desk inbox view | 🟡 Medium | UX | 2 d |
+| H1 | No source module raises eFiles | 🔴 Critical | Integration | ✅ done (11 types) |
+| D7 | No consumer of `*.file_decided` | 🔴 Critical | Integration | ✅ done |
+| R3 | Workflow definitions seeded only for demo tenant | 🔴 Critical | Provisioning | ✅ done |
+| O6 | Operator eligibility not enforced on move | 🟠 High | Policy/security | ✅ done |
+| G2 | Single-noting green vs per-level chain | 🟠 High | Records fidelity | ✅ done |
+| A4 | No enclosure model on outgoing DFA | 🟠 High | Dispatch | ✅ done |
+| A5 | Note-sheet hardcodes "Government of India" | 🟠 High | Compliance/branding | ✅ done (org name; PDF=HTML) |
+| I8 | Approval-matrix `workflowDefinitionCode` not validated | 🟡 Medium | Integration | ☐ open |
+| X9 | File inner page shows officer UUIDs, not names | 🟡 Medium | UX | ☐ open |
+| X10 | No operator picker; forwarding not operator-aware in UI | 🟡 Medium | UX | ☐ open |
+| X11 | DAK→file→note→approve→dispatch is disjoint screens | 🟡 Medium | UX | ☐ open |
+| X12 | No SLA/pendency cues, no "my pending files" desk inbox | 🟡 Medium | UX | ☐ open |
 
 ---
 
