@@ -52,6 +52,7 @@ export default async function EstabFilesListPage() {
             <a className="btn ghost" href="/estab/handover">Handover</a>
             <a className="btn ghost" href="/estab/migration">Migration</a>
             <a className="btn ghost" href="/estab/notifications">Notifications</a>
+            <a className="btn primary" href="/estab/workspace">Guided File</a>
             <a className="btn primary" href="/estab/files/new">+ Create File</a>
           </>
         }
