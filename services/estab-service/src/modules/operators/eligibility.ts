@@ -50,6 +50,34 @@ export async function isActiveOperator(
   return e.eligible;
 }
 
+/** Has the tenant adopted the operator model (enrolled ≥1 active operator)? Cached. */
+export async function tenantHasOperators(tenantId: string): Promise<boolean> {
+  return (
+    (await cache.getOrLoad<boolean>(
+      cache.makeKey(tenantId, "operator", "_any"),
+      () => repo.hasActiveOperators(tenantId),
+      60,
+    )) ?? false
+  );
+}
+
+/**
+ * Adoption-aware gate. Returns true (allowed) when the target is an active
+ * operator, OR when the tenant has not yet enrolled ANY operators (so existing
+ * / greenfield file movement is not broken before the operator model is set
+ * up). Returns false only when operators exist but the target isn't one.
+ */
+export async function isMoveAllowed(
+  tenantId: string,
+  employeeId: string,
+  division?: string,
+): Promise<boolean> {
+  if (await isActiveOperator(tenantId, employeeId, division)) return true;
+  return !(await tenantHasOperators(tenantId)); // allow until the tenant adopts operators
+}
+
 export async function invalidateOperatorCache(tenantId: string, employeeId: string): Promise<void> {
   await cache.invalidate(cache.makeKey(tenantId, "operator", employeeId));
+  // Also bust the adoption flag so the first enrolment flips gating on.
+  await cache.invalidate(cache.makeKey(tenantId, "operator", "_any"));
 }

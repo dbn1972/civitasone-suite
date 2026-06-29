@@ -27,6 +27,14 @@ export async function findActiveOperatorsForEmployee(tenantId: string, employeeI
   ));
 }
 
+/** Has this tenant enrolled ANY active operator? Drives adoption-aware gating. */
+export async function hasActiveOperators(tenantId: string): Promise<boolean> {
+  const rows = await db.select({ id: estabFileOperator.id }).from(estabFileOperator)
+    .where(and(eq(estabFileOperator.tenantId, tenantId), eq(estabFileOperator.active, true)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function insertOperator(tx: Writer, row: OperatorInsert): Promise<void> {
   await tx.insert(estabFileOperator).values(row);
 }

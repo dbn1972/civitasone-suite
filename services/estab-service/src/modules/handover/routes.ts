@@ -6,7 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createHandoverBody, listHandoverQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import { isActiveOperator } from "../operators/eligibility.js";
+import { isActiveOperator, tenantHasOperators } from "../operators/eligibility.js";
 
 const ADMIN_ROLES = ["estab_division_admin", "estab_admin", "super_admin"];
 const READER_ROLES = [...ADMIN_ROLES, "estab_officer", "audit_officer"];
@@ -30,7 +30,7 @@ export async function handoverRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createHandoverBody.parse(req.body);
 
-    if (!(await isActiveOperator(ctx.tenantId, body.toOfficerId))) {
+    if (await tenantHasOperators(ctx.tenantId) && !(await isActiveOperator(ctx.tenantId, body.toOfficerId))) {
       throw new HttpError(422, "NOT_AN_OPERATOR", "receiving officer is not an active eOffice operator; enrol them first");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createHandover(ctx, body));

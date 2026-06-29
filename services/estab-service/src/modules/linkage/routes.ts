@@ -6,7 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { sqlClient } from "../../shared/db.js";
 import { fileFromModuleBody, refQuery } from "./validators.js";
 import * as commands from "./commands.js";
-import { checkEligibility } from "../operators/eligibility.js";
+import { checkEligibility, tenantHasOperators } from "../operators/eligibility.js";
 
 // Any authenticated service-account or officer from a source module can raise a file.
 const INITIATOR_ROLES = [
@@ -31,16 +31,18 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, INITIATOR_ROLES);
     const body = fileFromModuleBody.parse(req.body);
 
-    // Files may only be held/operated by enrolled eOffice operators. The first
-    // holder (currentWith) must be an active operator; the initiator must be an
-    // operator allowed to initiate files.
-    const holder = await checkEligibility(ctx.tenantId, body.currentWith, {});
-    if (!holder.eligible) {
-      throw new HttpError(422, "NOT_AN_OPERATOR", "the receiving officer (currentWith) is not an active eOffice operator");
-    }
-    const initiator = await checkEligibility(ctx.tenantId, body.initiatedBy, { requireInitiate: true });
-    if (!initiator.eligible) {
-      throw new HttpError(422, "CANNOT_INITIATE", "the initiating officer is not enrolled as an eOffice operator with initiate rights");
+    // Files may only be held/operated by enrolled eOffice operators — enforced
+    // once the tenant has adopted the operator model (greenfield raises aren't
+    // blocked before operators exist).
+    if (await tenantHasOperators(ctx.tenantId)) {
+      const holder = await checkEligibility(ctx.tenantId, body.currentWith, {});
+      if (!holder.eligible) {
+        throw new HttpError(422, "NOT_AN_OPERATOR", "the receiving officer (currentWith) is not an active eOffice operator");
+      }
+      const initiator = await checkEligibility(ctx.tenantId, body.initiatedBy, { requireInitiate: true });
+      if (!initiator.eligible) {
+        throw new HttpError(422, "CANNOT_INITIATE", "the initiating officer is not enrolled as an eOffice operator with initiate rights");
+      }
     }
 
     const result = await commands.raiseFileFromModule(ctx, body);

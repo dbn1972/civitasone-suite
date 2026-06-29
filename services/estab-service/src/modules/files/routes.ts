@@ -14,7 +14,7 @@ import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
 import { isTopSecret } from "./domain.js";
 import { enqueue } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
-import { isActiveOperator } from "../operators/eligibility.js";
+import { isMoveAllowed } from "../operators/eligibility.js";
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
@@ -58,8 +58,10 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = moveFileBody.parse(req.body);
-    // O6 — a file may only be marked to an ACTIVE enrolled eOffice operator.
-    if (!(await isActiveOperator(ctx.tenantId, body.toOfficer))) {
+    // O6 — a file may only be marked to an ACTIVE enrolled eOffice operator,
+    // enforced once the tenant has adopted the operator model (so existing /
+    // greenfield flows aren't broken before operators are set up).
+    if (!(await isMoveAllowed(ctx.tenantId, body.toOfficer))) {
       throw new HttpError(422, "NOT_AN_OPERATOR", "the receiving officer is not an active eOffice operator; enrol them in the division first");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.moveFile(ctx, id, body));
