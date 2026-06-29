@@ -1,0 +1,87 @@
+# CivitasOne Suite — Multi-Lens Platform Review
+
+**Date:** 2026-06-28
+**Panel (parallel, read-only):** Government-ERP Domain Expert · Principal Distributed-Systems Architect · Security Architect (AppSec + DPDP/CERT-In) · QA Lead / SDET.
+**Method:** each lens independently grep'd + read the actual source (and the QA lens ran typecheck + the test suites against the live dev Postgres). Findings below are code-grounded with file references; IDs map to the lens appendices (D=domain, A=architecture, S=security, Q=QA).
+
+---
+
+## 1. Verdict
+
+The platform is **architecturally sound and domain-literate** — clean CQRS + transactional outbox, a complete 11/11 eOffice decision backbone, strong procurement SoD, race-safe money controls, 7th-CPC payroll depth, and genuinely good security primitives (JWT hardening, PII AES-GCM, audit triggers, double-entry bigint). Typecheck is green across all 47 packages.
+
+**But it is not yet release-ready.** Three issues are corroborated by multiple lenses and must be fixed first:
+1. **Tenant isolation (RLS) is not actually engaged at runtime** (S1/S4/Q7/D14) — isolation rests solely on app-layer `WHERE tenant_id`.
+2. **The new silo multi-tenancy path is only partially wired** (A1/A2/A3) — enabling it today would split data and silo outbox would never publish.
+3. **The CI `test` gate is red** from two deterministic, pre-existing test/code divergences (Q1/Q5).
+
+Plus two domain-critical correctness bugs: **re-appropriation isn't zero-sum** (D1) and the **3-way match never reconciles the invoice amount** (D2).
+
+---
+
+## 2. Consolidated top risks (cross-lens)
+
+| # | Risk | Lenses | Sev | Evidence |
+|---|------|--------|:---:|----------|
+| R1 | **RLS dormant** — `app.tenant_id` GUC never set in any service `src/`; `withTenantScope`/`setTenantGuc` have zero call sites; isolation = app-layer predicate only | S1, S4, Q7, D14 | 🔴 Critical | no GUC call sites; `current_tenant_id()` defs inconsistent (`,true` vs `,false`); estab RLS 0006 not even applied in test DB (`rls_enabled=false`) |
+| R2 | **Prod compose defaults service DSNs to the Postgres superuser** → bypasses RLS, breaks least-privilege/DB-per-service | S2 | 🔴 Critical | `infra/docker-compose.prod.yml` `DATABASE_URL_*` fall back to `POSTGRES_USER` (admin) |
+| R3 | **Audit log + eOffice notings wipeable via TRUNCATE** — `GRANT ALL` includes TRUNCATE; row triggers don't fire on TRUNCATE | S3 | 🔴 Critical | `scripts/dev/grant-all.mjs`; `audit 0006`, `estab 0007` are `BEFORE UPDATE OR DELETE` only |
+| R4 | **Re-appropriation not zero-sum + mis-bounded** — no source head debited; `RE ≤ BE` cap forbids the very increase re-appropriation exists for | D1 | 🔴 Critical | `budget/consumer.ts`, `budget/reappropriation-eoffice-consumer.ts`, `financeReappropriations` has only `budgetId` |
+| R5 | **"3-way match" never matches the invoice amount** — passes on two non-validated ref strings | D2 | 🔴 Critical | `payments/domain.ts assertThreeWayMatchPresent`, `payments/validators.ts` |
+| R6 | **Silo tier not production-wired** — `dbFor` only in estab notifications read; all writes/outbox/other 32 services use singleton `db`; outbox relay binds one pool conn; no pool→silo data cutover | A1, A2, A3 | 🔴 Critical (if silo enabled) | `services/*/src/shared/db.ts`, `packages/outbox startRelay` |
+| R7 | **Money downcast to JS `number` at queue/event boundaries** — precision loss > ~₹9,007 cr | D3 | 🟠 High | `*/validators.ts` `z.number().int()`, `Number(...)` in finance/grn/asset/tender consumers |
+| R8 | **CI `test` job red** — 2 deterministic failures block the release gate | Q1, Q5 | 🟠 High | procurement PO `draft`≠`pending` (tender-lifecycle.test.ts:336); tenant dedupe test uses non-UUID messageId → DLQ'd by envelope validation |
+| R9 | **DSC hash/noting lost on decision callback** — approval can't be tied to the e-signed green note | D5, A5 | 🟠 High | `estab files/consumer.ts fileApprove` re-queries `findLatestSubmittedNoting` after status flip → null |
+| R10 | **Two signing paths; backbone path skips the hash chain** — notes approved via the cross-module path sit outside `prev_hash`/`chain_seq` | D6, A6 | 🟠 High | `signNotingChain` vs ad-hoc sign in `fileApprove` |
+| R11 | **Direct sanction creation self-approves** — single officer raises an already-approved sanction (maker-checker bypass) | D4 | 🟠 High | `budget/consumer.ts sanctionCreate` inserts `status:"approved"` |
+| R12 | **`x-internal` shared secret grants super_admin on any tenant** (non-constant-time compare) | S5 | 🟠 High | `packages/auth/src/plugin.ts` |
+| R13 | **Missing workflow definition → unguarded rubber-stamp approval** — eOffice chains bypass SO→US→DS when `approvalChain` code isn't a seeded definition | A4 | 🟠 High | `workflow instances/consumer.ts` `definitionId=null`; provisioning catalog lacks eOffice chain codes |
+| R14 | **Grant disbursement: eOffice approval doesn't trigger the payout** (direct path already pays; approval path only sets state) | D7 | 🟡 Med | `grant disbursement/consumer.ts` vs `eoffice-consumer.ts` |
+| R15 | **Finance by-id repo reads omit tenant predicate** (IDOR if RLS stays dormant) | S6 | 🟡 Med | `finance budget/repo.ts findSanctionById` etc. (grant-service does it right) |
+| R16 | **Integration tests share one live Postgres, incomplete cleanup** — rerun flakiness (asset GRN inbox row; estab `estab_inward` unique key) | Q2, Q3, Q4 | 🟡 Med | proven via DB introspection |
+| R17 | **Vendor blacklist tenant-scoped only** — CVC debarment not government-wide | D8 | 🟡 Med | `vendor-blacklist/repo.ts` |
+| R18 | **GRN requires full receipt** — partial/part-supply deliveries blocked | D10 | 🟡 Med | `grn/domain.ts computeThreeWayMatch` |
+| R19 | **Major CCS(CCA) penalty imposed on single approval** — skips Rule 14 inquiry | D11 | 🟡 Med | `disciplinary/eoffice-consumer.ts` |
+| R20 | **qa-readiness score measures test-file presence, not pass/coverage** | Q6 | 🟡 Med | `scripts/qa-readiness-score.mjs scoreTesting` |
+| R21 | Orphaned callbacks (procurement_award/grant_scheme/asset_disposal/hr_leave_special/hr_recruitment emitted-capable, no consumer); `x-internal` aside | A12 | 🟢 Low | topic grep |
+| R22 | CI workflow expression bugs (unquoted `push`/`refs/heads/main`/`./package.json`) → docker-build on main never fires | Q11 | 🟢 Low | `.github/workflows/ci.yml`, `release.yml` |
+
+---
+
+## 3. What is genuinely strong (keep)
+
+- **eOffice decision backbone:** all 11 source types execute the correct domain effect on approval (sanction→approved+event, payment→released, PO→approved, transfer→posting applied, promotion→designation/pay, grant→initiated, asset→disposed+GL, legal→issued, contract→awarded), each tenant/status-guarded and idempotent.
+- **CQRS + outbox:** stable-messageId republish, `ON CONFLICT` `markProcessed`, events only inside the outbox tx; no route writes Postgres directly (arch-guard enforced).
+- **Procurement controls:** maker/checker/tech-evaluator SoD, sealed two-envelope L1 in pure BigInt, blacklist+sanction gates re-checked inside award/PO transactions, gapless numbering after gates.
+- **Money/GL:** balanced debit/credit in bigint paise, deterministic journal ids, period close, race-safe guarded UPDATEs.
+- **Security primitives:** RS256/JWKS + HS256 fail-closed + audience validation; AES-256-GCM PII with keyring/rotation + blind index; audit append-only trigger + REVOKE (modulo TRUNCATE); DPDP anonymise-not-delete; secret refs (`db_dsn_ref`/`kms_key_ref`) excluded from the tenant API projection.
+- **Workflow engine:** row-locked SoD, version pinning, fail-closed condition parser, cycle/fork-bomb guards.
+- **Multi-tenancy keystone unit tests** (7/7) and **eoffice-sdk** (13/13) are clean.
+
+---
+
+## 4. Remediation roadmap
+
+### Wave A — release blockers (must fix before GA)
+- **R1+R2+R4 (RLS):** run every service under its non-superuser `*_svc` role; remove the superuser DSN fallback (fail closed); standardize `current_tenant_id()`; wire `withTenantScope`/`SET LOCAL app.tenant_id` at the request+consumer tx boundary; add the cross-tenant FORCE-RLS integration test to CI; apply RLS migrations in all envs + add migration-drift detection.
+- **R3:** `REVOKE TRUNCATE` (+ `TRIGGER`) from service roles on `events.events` and `files.estab_notings`; add `BEFORE TRUNCATE … FOR EACH STATEMENT` guards; replace `GRANT ALL` with least-priv grants.
+- **R4 (re-appropriation):** model as a zero-sum transfer (from-head/to-head, assert source savings ≥ amount, allow receiving RE > BE within sanctioned grant).
+- **R5 (3-way match):** enforce real tri-leg PO↔GRN↔invoice reconciliation within tolerance; validate poRef/grnRef resolve to tenant-scoped rows for the same vendor.
+- **R8 (CI red):** decide PO create status (draft vs pending) and fix consumer/test; fix the tenant dedupe test to use valid-UUID messageIds.
+
+### Wave B — high (fast-follow)
+- **R7:** carry money as decimal strings end-to-end; rebuild with BigInt at boundaries.
+- **R9+R10:** capture noting id/hash before the status flip and pass it to the callback; route ALL green-signing through `signNotingChain`.
+- **R11:** create sanctions as `pending_approval`; require the maker-checker/eOffice path.
+- **R12:** replace `x-internal` shared secret with per-service signed identities (mTLS/short-lived JWT `aud`), scoped roles, constant-time compare, audit every elevation.
+- **R13:** seed eOffice approval-chain workflow definitions per tenant; reject `from-module` raises whose `approvalChain` doesn't resolve (don't silently rubber-stamp).
+- **R6 (silo):** do NOT enable silo for any tenant until `dbFor` + per-tenant outbox routing are rolled across services and a pool→silo cutover exists. (Keystone + provisioning are in place; the per-service rollout is not.)
+
+### Wave C — medium / hardening
+- R14 grant payout sequencing · R15 tenant predicate in finance repos · R16 self-isolating integration tests (truncate `_inbox`/`_outbox`/side-effects, unique tenant per run) · R17 federated CVC debarment · R18 partial GRN · R19 major-penalty inquiry gate · R20 qa-score on real coverage · R21 orphaned callbacks · R22 CI expression fixes.
+
+---
+
+## 5. Bottom line
+
+The architecture and domain modelling are strong and largely production-shaped; the eOffice integration is genuinely differentiated. The release-blocking work is concentrated and well-defined: **make RLS real (R1–R3), fix the two domain-correctness bugs (R4, R5), and green the CI test gate (R8).** Silo multi-tenancy should stay behind its flag until Wave B/R6 completes. None of this is a redesign — it is hardening and finishing the wiring already started.
