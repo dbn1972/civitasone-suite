@@ -29,6 +29,33 @@ export function registerInstancesConsumers(queue: Queue): void {
         ? await defRepo.findByCodeTx(tx, p.tenantId, p.definitionCode)
         : null;
 
+      // R13: a definition code was requested but no seeded definition resolves
+      // for this tenant. Proceeding would create a single ad-hoc task whose lone
+      // approval rubber-stamps the entire decision (SO→US→DS chain bypassed).
+      // Fail closed: persist a `rejected` instance, record it, emit a rejection,
+      // and create NO actionable approval task. The source module's file simply
+      // never gets an approval rather than a one-click rubber-stamp.
+      if (p.definitionCode && !def) {
+        await repo.insert(tx, {
+          id: p.id, tenantId: p.tenantId, name: p.name, status: "rejected",
+          definitionId: null, definitionVersion: null,
+          refType: p.refType ?? null, refId: p.refId ?? null,
+          currentNode: null, context,
+          createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+        });
+        await historyRepo.record(tx, {
+          tenantId: p.tenantId, instanceId: p.id, taskId: null,
+          fromNode: null, toNode: null, action: "rejected", decision: null,
+          actorId: msg.actorId,
+          detail: { reason: "unknown_definition", definitionCode: p.definitionCode },
+        });
+        await emit(tx, msg, EVENTS.instanceRejected, {
+          instanceId: p.id, reason: "unknown_definition",
+          definitionCode: p.definitionCode, refType: p.refType, refId: p.refId,
+        }, "reject_unknown_definition", p.id);
+        return; // no task created → no rubber-stamp path
+      }
+
       let startNode = def ? await defRepo.findFirstNodeTx(tx, def.id) : null;
       if (def && p.startNodeKey) {
         startNode = await defRepo.findNodeByKeyTx(tx, def.id, p.startNodeKey) ?? startNode;

@@ -11,6 +11,7 @@ export const EVENTS = {
   taskCompleted: "workflow.task.completed",
   taskAssigned: "workflow.task.assigned",
   instanceCancelled: "workflow.instance.cancelled",
+  instanceRejected: "workflow.instance.rejected",
   instanceSuspended: "workflow.instance.suspended",
   instanceResumed: "workflow.instance.resumed",
 } as const;
