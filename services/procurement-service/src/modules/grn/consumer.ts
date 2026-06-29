@@ -66,16 +66,20 @@ export function registerGrnConsumers(queue: Queue): void {
         const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
         const grossMinor = po ? Number(po.totalMinor) : 0;
 
-        // Persist a server-DERIVED three-way match (PO vs GRN). Amounts come from
-        // the real PO line prices × GRN accepted qty — never from a caller. The
-        // payment gate reads this table.
+        // Derive the authoritative PO and GRN(accepted) values server-side from
+        // real PO line prices × GRN accepted qty — never from a caller. These
+        // are persisted to the three-way-match table AND carried on the
+        // grn.accepted event so finance can reconcile invoice↔GRN↔PO (R5).
+        const poAmountMinor = po ? BigInt(po.totalMinor) : 0n;
+        let grnAmountMinor = 0n;
+        for (const gi of p.items) {
+          const poItem = poItemMap.get(gi.poItemRef);
+          if (poItem) grnAmountMinor += BigInt(poItem.unitPriceMinor) * BigInt(gi.acceptedQty);
+        }
+
+        // Persist a server-DERIVED three-way match (PO vs GRN). The payment gate
+        // reads this table.
         if (po) {
-          const poAmountMinor = BigInt(po.totalMinor);
-          let grnAmountMinor = 0n;
-          for (const gi of p.items) {
-            const poItem = poItemMap.get(gi.poItemRef);
-            if (poItem) grnAmountMinor += BigInt(poItem.unitPriceMinor) * BigInt(gi.acceptedQty);
-          }
           const variancePct = poAmountMinor > 0n
             ? Number((poAmountMinor > grnAmountMinor ? poAmountMinor - grnAmountMinor : grnAmountMinor - poAmountMinor) * 10000n / poAmountMinor) / 100
             : 0;
@@ -102,7 +106,13 @@ export function registerGrnConsumers(queue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.grnAccepted, eventType: EVENTS.grnAccepted,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, grossMinor, items: enrichedItems },
+          payload: {
+            grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, grossMinor,
+            // R5: paise as strings so > 2^53 stays exact across the queue boundary.
+            poAmountMinor: poAmountMinor.toString(),
+            grnAmountMinor: grnAmountMinor.toString(),
+            items: enrichedItems,
+          },
         });
       } else {
         await enqueue(tx, {

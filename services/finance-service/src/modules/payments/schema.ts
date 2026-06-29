@@ -19,6 +19,8 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   netMinor:    bigint("net_minor", { mode: "bigint" }).notNull().default(0n),
   poRef:       text("po_ref"),
   grnRef:      text("grn_ref"),
+  poAmountMinor:  bigint("po_amount_minor", { mode: "bigint" }),   // R5: authoritative PO value snapshot (paise)
+  grnAmountMinor: bigint("grn_amount_minor", { mode: "bigint" }),  // R5: authoritative GRN accepted value snapshot (paise)
   billDate:    date("bill_date"),
   ddoCode:     varchar("ddo_code", { length: 12 }),
   paoCode:     varchar("pao_code", { length: 12 }),
@@ -32,6 +34,17 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   createdBy:   uuid("created_by").notNull(),
   updatedBy:   uuid("updated_by").notNull(),
   version:     integer("version").notNull().default(1),
+});
+
+export const financeGrnMatch = paymentsSchema.table("finance_grn_match", {
+  tenantId:       uuid("tenant_id").notNull(),
+  grnRef:         text("grn_ref").notNull(),
+  poRef:          text("po_ref").notNull(),
+  vendorId:       uuid("vendor_id").notNull(),
+  poAmountMinor:  bigint("po_amount_minor", { mode: "bigint" }).notNull().default(0n),
+  grnAmountMinor: bigint("grn_amount_minor", { mode: "bigint" }).notNull().default(0n),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const financePayments = paymentsSchema.table("finance_payments", {
@@ -124,6 +137,8 @@ export const financeUC = paymentsSchema.table("finance_uc", {
 
 export type BillRow    = typeof financeBills.$inferSelect;
 export type BillInsert = typeof financeBills.$inferInsert;
+export type GrnMatchRow    = typeof financeGrnMatch.$inferSelect;
+export type GrnMatchInsert = typeof financeGrnMatch.$inferInsert;
 export type PaymentRow    = typeof financePayments.$inferSelect;
 export type PaymentInsert = typeof financePayments.$inferInsert;
 export type AdvanceRow    = typeof financeAdvances.$inferSelect;
@@ -131,4 +146,4 @@ export type AdvanceInsert = typeof financeAdvances.$inferInsert;
 export type UCRow    = typeof financeUC.$inferSelect;
 export type UCInsert = typeof financeUC.$inferInsert;
 
-export const schema = { financeBills, financePayments, financePfms, financeAdvances, financeUC };
+export const schema = { financeBills, financeGrnMatch, financePayments, financePfms, financeAdvances, financeUC };

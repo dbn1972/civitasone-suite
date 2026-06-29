@@ -1,9 +1,38 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
-import { financeBills, financePayments, financeAdvances, financeUC, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert } from "./schema.js";
+import { financeBills, financePayments, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
+
+// ── R5: AP three-way-match read-model (populated from procurement.grn.accepted) ─
+
+/** Upsert the authoritative PO + GRN(accepted) values for a GRN (keyed by tenant+grnRef). */
+export async function upsertGrnMatch(
+  tx: Exec,
+  m: { tenantId: string; grnRef: string; poRef: string; vendorId: string; poAmountMinor: bigint; grnAmountMinor: bigint },
+): Promise<void> {
+  await tx.execute(sql`
+    INSERT INTO payments.finance_grn_match
+      (tenant_id, grn_ref, po_ref, vendor_id, po_amount_minor, grn_amount_minor)
+    VALUES (${m.tenantId}::uuid, ${m.grnRef}, ${m.poRef}, ${m.vendorId}::uuid,
+            ${m.poAmountMinor.toString()}::bigint, ${m.grnAmountMinor.toString()}::bigint)
+    ON CONFLICT (tenant_id, grn_ref) DO UPDATE SET
+      po_ref           = EXCLUDED.po_ref,
+      vendor_id        = EXCLUDED.vendor_id,
+      po_amount_minor  = EXCLUDED.po_amount_minor,
+      grn_amount_minor = EXCLUDED.grn_amount_minor,
+      updated_at       = now()
+  `);
+}
+
+export async function findGrnMatch(tx: Writer, tenantId: string, grnRef: string): Promise<GrnMatchRow | null> {
+  const rows = await (tx as typeof db).select().from(financeGrnMatch)
+    .where(and(eq(financeGrnMatch.tenantId, tenantId), eq(financeGrnMatch.grnRef, grnRef)))
+    .limit(1);
+  return rows[0] ?? null;
+}
 
 export async function findBillById(id: string): Promise<BillRow | null> {
   const rows = await db.select().from(financeBills).where(eq(financeBills.id, id)).limit(1);

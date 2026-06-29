@@ -5,7 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertBillPassed, assertValidPaymentMode, nextStage } from "./domain.js";
+import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, nextStage } from "./domain.js";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists } from "../masters/repo.js";
@@ -37,6 +37,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       ddoCode?: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
       netMinor: number; poRef?: string; grnRef?: string; billDate?: string;
+      poAmountMinor?: string; grnAmountMinor?: string;
     };
     // B1: when the producer (e.g. grn.accepted integration handler) omits ddoCode,
     // fall back to FINANCE_DEFAULT_DDO_CODE env var, then the tenant PFMS config
@@ -96,6 +97,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
       const { docNo: billNo } = await nextDocNo(
         tx as unknown as Parameters<typeof nextDocNo>[0], p.tenantId, billFy, "BILL",
       );
+      // R5: resolve authoritative PO + GRN(accepted) amounts for the 3-way match
+      // snapshot — prefer the values carried on the command, else fall back to
+      // the AP read-model populated from procurement.grn.accepted (keyed by grnRef).
+      let poAmountMinor: bigint | null = p.poAmountMinor != null ? BigInt(p.poAmountMinor) : null;
+      let grnAmountMinor: bigint | null = p.grnAmountMinor != null ? BigInt(p.grnAmountMinor) : null;
+      if ((poAmountMinor == null || grnAmountMinor == null) && p.grnRef) {
+        const match = await repo.findGrnMatch(tx, p.tenantId, p.grnRef);
+        if (match) {
+          poAmountMinor = poAmountMinor ?? match.poAmountMinor;
+          grnAmountMinor = grnAmountMinor ?? match.grnAmountMinor;
+        }
+      }
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo, vendorId: p.vendorId,
         headId: p.headId, ddoCode: resolvedDdoCode.toUpperCase(),
@@ -104,6 +117,8 @@ export function registerPaymentsConsumers(queue: Queue): void {
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
         deductions: p.deductions, netMinor,
         poRef: p.poRef ?? null, grnRef: p.grnRef ?? null,
+        ...(poAmountMinor != null ? { poAmountMinor } : {}),
+        ...(grnAmountMinor != null ? { grnAmountMinor } : {}),
         billDate,
         stage: "section", status: hasMismatch ? "on_hold" : "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -143,8 +158,29 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const bill = await repo.findBillByIdTx(tx, p.id);
       if (!bill) throw new Error(`bill ${p.id} not found`);
-      // 3-way match must be valid before passing
-      assertThreeWayMatchPresent(bill.poRef, bill.grnRef);
+      // 3-way match must be valid before passing. When the bill carries the
+      // authoritative PO + GRN(accepted) amounts (snapshotted at create or
+      // resolved from the AP read-model), enforce the real tri-leg
+      // reconciliation: the invoice may not exceed GRN/PO beyond tolerance.
+      // Otherwise fall back to the presence check (manual bills with no
+      // resolvable procurement amounts).
+      let poAmt = bill.poAmountMinor;
+      let grnAmt = bill.grnAmountMinor;
+      if ((poAmt == null || grnAmt == null) && bill.grnRef) {
+        const match = await repo.findGrnMatch(tx, p.tenantId, bill.grnRef);
+        if (match) {
+          poAmt = poAmt ?? match.poAmountMinor;
+          grnAmt = grnAmt ?? match.grnAmountMinor;
+        }
+      }
+      if (poAmt != null && grnAmt != null) {
+        const tol = Number(process.env.FINANCE_THREE_WAY_TOLERANCE_PCT ?? "") || undefined;
+        assertThreeWayMatch(bill.poRef, bill.grnRef, {
+          poAmountMinor: poAmt, grnAmountMinor: grnAmt, invoiceMinor: bill.grossMinor,
+        }, tol);
+      } else {
+        assertThreeWayMatchPresent(bill.poRef, bill.grnRef);
+      }
       const currentStage = bill.stage ?? "section";
       const newStage = nextStage(currentStage);
       const isPassed = newStage === "pay";

@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as auditRepo from "../audit/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
+import * as paymentsRepo from "../payments/repo.js";
 import { writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -104,14 +105,29 @@ export function registerIntegrationConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.grnAccepted, async (msg) => {
     const p = msg.payload as {
       grnId: string; poRef: string; vendorId: string; grossMinor?: number;
+      poAmountMinor?: string; grnAmountMinor?: string;
     };
     const billId = randomUUID();
-    const gross = p.grossMinor ?? 0;
     const poRef = p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`;
     const grnRef = `procurement_grn:${p.grnId}`;
+    // R5: authoritative ordered (PO) and accepted (GRN) values derived in
+    // procurement. The vendor bill is drafted for the GRN-accepted value (pay
+    // for what was received), falling back to legacy grossMinor when the
+    // producer did not send the explicit legs.
+    const poAmountMinor = p.poAmountMinor != null ? BigInt(p.poAmountMinor) : null;
+    const grnAmountMinor = p.grnAmountMinor != null ? BigInt(p.grnAmountMinor) : null;
+    const gross = grnAmountMinor != null ? Number(grnAmountMinor) : (p.grossMinor ?? 0);
     const headId = process.env.FINANCE_DEFAULT_HEAD_ID ?? "dddddddd-0001-0000-0000-000000000001";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Persist the AP three-way-match read-model so a later invoice citing this
+      // GRN can be reconciled even if entered manually.
+      if (poAmountMinor != null && grnAmountMinor != null) {
+        await paymentsRepo.upsertGrnMatch(tx as unknown as Parameters<typeof paymentsRepo.upsertGrnMatch>[0], {
+          tenantId: msg.tenantId, grnRef, poRef, vendorId: p.vendorId,
+          poAmountMinor, grnAmountMinor,
+        });
+      }
       await enqueue(tx, {
         topic: COMMANDS.billCreate, eventType: COMMANDS.billCreate,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -127,6 +143,8 @@ export function registerIntegrationConsumers(queue: Queue): void {
           netMinor: gross,
           poRef,
           grnRef,
+          ...(poAmountMinor != null ? { poAmountMinor: poAmountMinor.toString() } : {}),
+          ...(grnAmountMinor != null ? { grnAmountMinor: grnAmountMinor.toString() } : {}),
         },
       });
       await audit(tx, msg, "grn_bill_draft", "bill", billId);
