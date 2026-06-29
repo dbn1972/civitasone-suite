@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, MODULE_CALLBACK_TOPICS } from "../../topics.js";
+import { isDecisionConsumed } from "@civitasone/eoffice-sdk";
 import { computeFileDueBy } from "../files/domain.js";
 import * as repo from "../files/repo.js";
 import { resolveApproval } from "../approval-rules/resolver.js";
@@ -44,6 +45,24 @@ export function registerLinkageConsumers(queue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // R21 — fail closed on a source type whose decision callback is not
+      // consumed by any module. Raising such an eFile would emit an approval the
+      // source never acts on (silently lost). Reject the raise and audit it
+      // instead of creating an orphaned file.
+      if (!isDecisionConsumed(p.sourceRefType)) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "estab", action: "raise_rejected_no_decision_consumer",
+            resourceType: "file", resourceId: p.id, outcome: "rejected",
+            metadata: { sourceRefType: p.sourceRefType, sourceRefId: p.sourceRefId },
+          },
+        });
+        return;
+      }
+
       const dueBy = computeFileDueBy();
 
       // 1. Create the file with module linkage

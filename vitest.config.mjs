@@ -12,6 +12,10 @@ export default {
     },
     coverage: {
       provider: "v8",
+      // R20: emit a machine-readable summary so qa-readiness-score can measure
+      // REAL coverage (not just test-file presence) when coverage has been run.
+      reporter: ["text", "json-summary"],
+      reportsDirectory: "coverage",
       thresholds: {
         lines: 70,
         functions: 70,

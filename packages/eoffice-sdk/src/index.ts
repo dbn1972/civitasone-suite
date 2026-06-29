@@ -58,6 +58,8 @@ export {
   PRIORITIES,
   DECISIONS,
   MODULE_CALLBACK_TOPICS,
+  DECISION_CONSUMED_REF_TYPES,
+  isDecisionConsumed,
   ESTAB_FILE_FROM_MODULE_TOPIC,
   raiseFileInput,
   acceptedResult,

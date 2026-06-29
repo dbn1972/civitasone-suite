@@ -54,6 +54,27 @@ export const MODULE_CALLBACK_TOPICS: Record<SourceRefType, string> = {
   contract_award:          "contract.award.file_decided",
 };
 
+/**
+ * Source ref types whose decision callback is ACTUALLY consumed by a source
+ * module today (a registered `*.file_decided` consumer applies the decision).
+ * Raising an eFile for a type NOT in this set would emit an approval the source
+ * never acts on — the decision would be silently lost — so the estab linkage
+ * raise path rejects unsupported types (fail-closed). Add a type here only once
+ * its decision consumer exists. (R21)
+ */
+export const DECISION_CONSUMED_REF_TYPES: ReadonlySet<SourceRefType> = new Set<SourceRefType>([
+  "finance_sanction", "finance_payment", "finance_reappropriation",
+  "procurement_po",
+  "hr_promotion", "hr_transfer", "hr_disciplinary",
+  "grant_disbursement",
+  "asset_disposal", "legal_opinion", "contract_award",
+]);
+
+/** True when a raised eFile of this type will have its decision consumed. */
+export function isDecisionConsumed(refType: string): boolean {
+  return DECISION_CONSUMED_REF_TYPES.has(refType as SourceRefType);
+}
+
 /** The SQS command topic estab-service consumes to create a file from a module. */
 export const ESTAB_FILE_FROM_MODULE_TOPIC = "estab.file.from_module";
 

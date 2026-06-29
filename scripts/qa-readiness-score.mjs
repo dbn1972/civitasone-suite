@@ -89,11 +89,39 @@ function parseCiJobs() {
   return jobs.filter((j) => j !== "env" && j !== "on");
 }
 
+// ── Coverage (R20) ──────────────────────────────────────────────────────────
+
+/**
+ * Read REAL coverage from vitest's json-summary output when present. Looks at
+ * the root `coverage/coverage-summary.json` (the suite runs from the root with
+ * `tests/**`) and any per-service `services/<s>/coverage/coverage-summary.json`.
+ * Returns null when no summary exists (e.g. the qa-readiness CI job runs without
+ * `--coverage`), in which case the caller falls back to test-file presence.
+ */
+function readCoverage(services) {
+  const summaries = [];
+  const candidates = ["coverage/coverage-summary.json", ...services.map((s) => `services/${s}/coverage/coverage-summary.json`)];
+  for (const rel of candidates) {
+    const abs = join(ROOT, rel);
+    if (!existsSync(abs)) continue;
+    try {
+      const total = JSON.parse(readFileSync(abs, "utf8")).total;
+      if (total?.lines?.pct != null && total?.statements?.pct != null) {
+        summaries.push({ lines: total.lines.pct, statements: total.statements.pct });
+      }
+    } catch {
+      // ignore unreadable/partial summary
+    }
+  }
+  if (summaries.length === 0) return null;
+  const avg = (k) => summaries.reduce((s, c) => s + c[k], 0) / summaries.length;
+  return { measured: true, files: summaries.length, lines: avg("lines"), statements: avg("statements") };
+}
+
 // ── Testing ───────────────────────────────────────────────────────────────────
 
 function scoreTesting(services) {
   const checks = {};
-  const withTests = services.filter((s) => exists(`services/${s}/tests`) || exists(`services/${s}/src`));
   const testFiles = services.filter((s) => {
     const t = join(ROOT, "services", s, "tests");
     if (!existsSync(t)) return false;
@@ -113,28 +141,37 @@ function scoreTesting(services) {
   checks.ciContractJob = ciJobs.includes("contract-tests");
   checks.ciE2eJob = ciJobs.includes("e2e");
 
-  const weights = {
-    contractTest: 15,
-    vitestAtRoot: 10,
-    e2eSpecs: 15,
-    serviceTestRatio: 25,
-    packagesWithTests: 10,
-    ciTestJob: 10,
-    ciContractJob: 10,
-    ciE2eJob: 5,
-  };
+  // R20: when real coverage is available, the 25-pt "service coverage" band is
+  // driven by MEASURED line/statement coverage instead of mere test-file
+  // presence. When coverage hasn't been run (e.g. the standalone qa-readiness
+  // job), fall back to the presence ratio so the release gate is unchanged.
+  const cov = readCoverage(services);
+  checks.coverageMeasured = cov !== null;
+  let coverageBand;
+  if (cov) {
+    const pct = (cov.lines + cov.statements) / 2;
+    checks.coveragePct = Math.round(pct * 10) / 10;
+    coverageBand = Math.round((pct / 100) * 25);
+  } else {
+    checks.coveragePct = null;
+    coverageBand = Math.round(checks.serviceTestRatio * 25);
+  }
 
   let score = 0;
-  score += checks.contractTest ? weights.contractTest : 0;
-  score += checks.vitestAtRoot ? weights.vitestAtRoot : 0;
-  score += checks.e2eSpecs ? weights.e2eSpecs : 0;
-  score += Math.round(checks.serviceTestRatio * weights.serviceTestRatio);
-  score += checks.packagesWithTests ? weights.packagesWithTests : 0;
-  score += checks.ciTestJob ? weights.ciTestJob : 0;
-  score += checks.ciContractJob ? weights.ciContractJob : 0;
-  score += checks.ciE2eJob ? weights.ciE2eJob : 0;
+  score += checks.contractTest ? 15 : 0;
+  score += checks.vitestAtRoot ? 10 : 0;
+  score += checks.e2eSpecs ? 15 : 0;
+  score += coverageBand;
+  score += checks.packagesWithTests ? 10 : 0;
+  score += checks.ciTestJob ? 10 : 0;
+  score += checks.ciContractJob ? 10 : 0;
+  score += checks.ciE2eJob ? 5 : 0;
 
-  return { score: Math.min(100, score), checks, detail: `${testFiles.length}/${services.length} services have tests` };
+  const detail = cov
+    ? `measured coverage ${checks.coveragePct}% (lines+statements avg) across ${cov.files} report(s); ${testFiles.length}/${services.length} services have tests`
+    : `${testFiles.length}/${services.length} services have tests (coverage not measured — run with --coverage)`;
+
+  return { score: Math.min(100, score), checks, detail };
 }
 
 // ── Security ──────────────────────────────────────────────────────────────────
