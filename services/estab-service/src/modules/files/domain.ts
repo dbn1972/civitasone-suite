@@ -7,6 +7,38 @@ export class DomainError extends Error {
 export const FILE_CLASSIFICATIONS = ["top_secret", "secret", "confidential", "public"] as const;
 export const FILE_STATUSES = ["draft", "active", "closed", "archived"] as const;
 
+/** CSMOP file-type taxonomy (R2). */
+export const FILE_TYPES = ["main", "part", "volume", "linked", "standing_guard", "ephemeral"] as const;
+export type FileType = (typeof FILE_TYPES)[number];
+
+export function assertValidFileType(v: string): asserts v is FileType {
+  if (!(FILE_TYPES as readonly string[]).includes(v)) {
+    throw new DomainError("INVALID_FILE_TYPE", `file_type must be one of: ${FILE_TYPES.join(", ")}`);
+  }
+}
+
+const ROMAN: ReadonlyArray<[number, string]> = [
+  [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+  [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+];
+export function toRoman(n: number): string {
+  let rem = Math.max(1, Math.floor(n));
+  let out = "";
+  for (const [v, sym] of ROMAN) { while (rem >= v) { out += sym; rem -= v; } }
+  return out;
+}
+
+/**
+ * Derive a child file number from a base file number (CSMOP). A volume appends
+ * `/Vol-<roman>`; a part appends `(Part-<n>)`. The base (main file) number stays
+ * the immutable parent reference.
+ */
+export function deriveChildFileNo(baseFileNo: string, type: FileType, n: number): string {
+  if (type === "volume") return `${baseFileNo}/Vol-${toRoman(n)}`;
+  if (type === "part") return `${baseFileNo}(Part-${n})`;
+  return baseFileNo;
+}
+
 export type FileClassification = (typeof FILE_CLASSIFICATIONS)[number];
 
 export function assertValidClassification(v: string): asserts v is FileClassification {

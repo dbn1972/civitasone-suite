@@ -8,6 +8,7 @@ import {
   createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
   addAttachmentBody, recallFileBody, reopenFileBody, attachInwardBody, detachInwardBody,
   deliveryUpdateBody, fileSearchQuery,
+  openVolumeBody, openPartFileBody, linkFileBody, setFileTypeBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -34,6 +35,39 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = addNotingBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addNoting(ctx, id, body));
+  });
+
+  // ── R2 file-type taxonomy ─────────────────────────────────────────────────
+  app.post("/v1/estab/files/:id/volumes", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = openVolumeBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.openVolume(ctx, id, body));
+  });
+
+  app.post("/v1/estab/files/:id/parts", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = openPartFileBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.openPartFile(ctx, id, body));
+  });
+
+  app.post("/v1/estab/files/:id/links", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = linkFileBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.linkFile(ctx, id, body));
+  });
+
+  app.patch("/v1/estab/files/:id/type", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = setFileTypeBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.setFileType(ctx, id, body));
   });
 
   app.post("/v1/estab/files/:id/submit-for-approval", async (req, reply) => {

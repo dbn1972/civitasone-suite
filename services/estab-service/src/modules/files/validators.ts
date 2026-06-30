@@ -120,3 +120,28 @@ export const openFileFromInwardBody = z.object({
   initialNote:    z.string().optional(),
 });
 export type OpenFileFromInwardBody = z.infer<typeof openFileFromInwardBody>;
+
+/** Open the next volume (Vol II, III…) of a file that has grown too large (R2). */
+export const openVolumeBody = z.object({
+  currentWith: z.string().uuid().optional(),
+});
+export type OpenVolumeBody = z.infer<typeof openVolumeBody>;
+
+/** Open a part file while the main file is away in movement (R2). */
+export const openPartFileBody = z.object({
+  subject:     z.string().min(1).optional(),
+  currentWith: z.string().uuid().optional(),
+});
+export type OpenPartFileBody = z.infer<typeof openPartFileBody>;
+
+/** Link two files for joint reference; the link is symmetric (R2). */
+export const linkFileBody = z.object({
+  targetFileId: z.string().uuid(),
+});
+export type LinkFileBody = z.infer<typeof linkFileBody>;
+
+/** Reclassify a file's type (e.g. mark as a standing guard / ephemeral file) (R2). */
+export const setFileTypeBody = z.object({
+  fileType: z.enum(["main", "part", "volume", "linked", "standing_guard", "ephemeral"]),
+});
+export type SetFileTypeBody = z.infer<typeof setFileTypeBody>;

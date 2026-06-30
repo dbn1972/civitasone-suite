@@ -1,6 +1,7 @@
 import {
   pgSchema, uuid, text, varchar, integer, boolean, timestamp, jsonb, date,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const filesSchema = pgSchema("files");
 
@@ -18,6 +19,11 @@ export const estabFiles = filesSchema.table("estab_files", {
   dakNo:          text("dak_no"),
   dueBy:          timestamp("due_by", { withTimezone: true }),
   parentFileId:   uuid("parent_file_id"),
+  // CSMOP file-type taxonomy (R2): main file vs part/volume/linked/standing-guard.
+  fileType:       varchar("file_type", { length: 20 }).notNull().default("main"),
+  volumeNo:       integer("volume_no").notNull().default(1),
+  partNo:         integer("part_no"),
+  linkedFileIds:  uuid("linked_file_ids").array().notNull().default(sql`'{}'::uuid[]`),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

@@ -5,7 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
-import { computeFileDueBy, computeNotingHash } from "./domain.js";
+import { computeFileDueBy, computeNotingHash, deriveChildFileNo, assertValidFileType } from "./domain.js";
 import * as repo from "./repo.js";
 import * as recordsRepo from "../records/repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
@@ -396,6 +396,101 @@ export function registerFilesConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
   });
 
+  // ── R2 file-type taxonomy: open the next VOLUME of a main file ─────────────
+  queue.subscribe(COMMANDS.fileOpenVolume, async (msg) => {
+    const p = msg.payload as { id: string; baseFileId: string; tenantId: string; currentWith: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const base = await repo.findFileById(p.baseFileId, p.tenantId);
+      if (!base) return;
+      // The "root" of a volume set is the main file (or the parent of a volume).
+      const rootId = base.parentFileId ?? base.id;
+      const maxRows = await tx.execute(sql`
+        SELECT MAX(volume_no) AS max_vol FROM files.estab_files
+        WHERE tenant_id = ${p.tenantId} AND (id = ${rootId} OR parent_file_id = ${rootId})
+      `);
+      const maxVol = Number((maxRows as unknown as Array<{ max_vol: number | null }>)[0]?.max_vol ?? 1);
+      const nextVol = maxVol + 1;
+      const root = rootId === base.id ? base : await repo.findFileById(rootId, p.tenantId);
+      const baseNo = root?.fileNo ?? base.fileNo;
+      await repo.insertFile(tx, {
+        id: p.id, tenantId: p.tenantId,
+        fileNo: deriveChildFileNo(baseNo, "volume", nextVol),
+        subject: base.subject, dept: base.dept, priority: base.priority,
+        classification: base.classification,
+        currentWith: p.currentWith ?? base.currentWith, status: "active",
+        dueBy: computeFileDueBy(), parentFileId: rootId,
+        fileType: "volume", volumeNo: nextVol,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "open_volume", "file", p.id, { rootId, volumeNo: nextVol });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
+  });
+
+  // ── R2 file-type taxonomy: open a PART file of a main file ─────────────────
+  queue.subscribe(COMMANDS.fileOpenPart, async (msg) => {
+    const p = msg.payload as { id: string; baseFileId: string; tenantId: string; subject: string | null; currentWith: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const base = await repo.findFileById(p.baseFileId, p.tenantId);
+      if (!base) return;
+      const rootId = base.parentFileId ?? base.id;
+      const maxRows = await tx.execute(sql`
+        SELECT MAX(part_no) AS max_part FROM files.estab_files
+        WHERE tenant_id = ${p.tenantId} AND parent_file_id = ${rootId} AND file_type = 'part'
+      `);
+      const nextPart = Number((maxRows as unknown as Array<{ max_part: number | null }>)[0]?.max_part ?? 0) + 1;
+      const root = rootId === base.id ? base : await repo.findFileById(rootId, p.tenantId);
+      const baseNo = root?.fileNo ?? base.fileNo;
+      await repo.insertFile(tx, {
+        id: p.id, tenantId: p.tenantId,
+        fileNo: deriveChildFileNo(baseNo, "part", nextPart),
+        subject: p.subject ?? base.subject, dept: base.dept, priority: base.priority,
+        classification: base.classification,
+        currentWith: p.currentWith ?? base.currentWith, status: "active",
+        dueBy: computeFileDueBy(), parentFileId: rootId,
+        fileType: "part", partNo: nextPart,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "open_part", "file", p.id, { rootId, partNo: nextPart });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
+  });
+
+  // ── R2 file-type taxonomy: symmetrically LINK two files ────────────────────
+  queue.subscribe(COMMANDS.fileLink, async (msg) => {
+    const p = msg.payload as { fileId: string; targetFileId: string; tenantId: string };
+    if (p.fileId === p.targetFileId) return;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const a = await repo.findFileById(p.fileId, p.tenantId);
+      const b = await repo.findFileById(p.targetFileId, p.tenantId);
+      if (!a || !b) return;
+      const aLinks = Array.from(new Set([...(a.linkedFileIds ?? []), b.id]));
+      const bLinks = Array.from(new Set([...(b.linkedFileIds ?? []), a.id]));
+      await repo.updateFile(tx, a.id, { linkedFileIds: aLinks, updatedBy: msg.actorId });
+      await repo.updateFile(tx, b.id, { linkedFileIds: bLinks, updatedBy: msg.actorId });
+      await audit(tx, msg, "link", "file", a.id, { targetFileId: b.id });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.targetFileId));
+  });
+
+  // ── R2 file-type taxonomy: reclassify a file's type ────────────────────────
+  queue.subscribe(COMMANDS.fileSetType, async (msg) => {
+    const p = msg.payload as { fileId: string; fileType: string; tenantId: string };
+    assertValidFileType(p.fileType);
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const f = await repo.findFileById(p.fileId, p.tenantId);
+      if (!f) return;
+      await repo.updateFile(tx, p.fileId, { fileType: p.fileType, updatedBy: msg.actorId });
+      await audit(tx, msg, "set_type", "file", p.fileId, { fileType: p.fileType });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+  });
+
   queue.subscribe(COMMANDS.dispatchCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; dispatchNo?: string; fileId?: string; toAddress: string; mode: string; subject: string };
     await db.transaction(async (tx) => {
@@ -512,10 +607,10 @@ export function registerFilesConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, metadata: Record<string, unknown> = {}): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "estab", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "estab", action, resourceType, resourceId, outcome: "success", metadata },
   });
 }

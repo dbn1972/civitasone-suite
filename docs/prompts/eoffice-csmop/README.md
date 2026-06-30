@@ -21,9 +21,9 @@ drive the remediation wave for `estab-service`.
 Source gap analysis: [`../../EOFFICE-GOI-PROCEDURE-GAP-ANALYSIS-2026-06-30.md`](../../EOFFICE-GOI-PROCEDURE-GAP-ANALYSIS-2026-06-30.md)
 
 ## Remediation order (by severity, then dependency)
-1. **R3** DFA gapless numbering + versioning (High, self-contained) ✅ first
-2. **R1** Org-hierarchy module (High)
-3. **R2** File-type taxonomy (High)
+1. **R3** DFA gapless numbering + versioning (High, self-contained) ✅ done
+2. **R1** Org-hierarchy module (High) ✅ done
+3. **R2** File-type taxonomy (High) ✅ done
 4. **R9** System diary numbering + duplicate-subject warning (Low, cheap)
 5. **R10** Conditional/partial approval (Low, cheap)
 6. **R4** Record room (Medium)

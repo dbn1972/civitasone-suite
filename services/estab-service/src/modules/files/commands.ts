@@ -6,7 +6,7 @@ import type {
   CreateFileBody, AddNotingBody, MoveFileBody, CloseFileBody,
   CreateDispatchBody, RegisterInwardBody, SubmitNotingBody, OpenFileFromInwardBody,
   AddAttachmentBody, RecallFileBody, ReopenFileBody, AttachInwardBody, DetachInwardBody,
-  DeliveryUpdateBody,
+  DeliveryUpdateBody, OpenVolumeBody, OpenPartFileBody, LinkFileBody, SetFileTypeBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -112,6 +112,51 @@ export async function reopenFile(ctx: RequestContext, fileId: string, body: Reop
     type: COMMANDS.fileReopen,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
+  return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** R2 — open the next volume of a (main) file. The new volume id is returned. */
+export async function openVolume(ctx: RequestContext, fileId: string, body: OpenVolumeBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.fileOpenVolume, {
+    messageId: id, type: COMMANDS.fileOpenVolume,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, baseFileId: fileId, tenantId: ctx.tenantId, currentWith: body.currentWith ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** R2 — open a part file linked to a (main) file. */
+export async function openPartFile(ctx: RequestContext, fileId: string, body: OpenPartFileBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.fileOpenPart, {
+    messageId: id, type: COMMANDS.fileOpenPart,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, baseFileId: fileId, tenantId: ctx.tenantId, subject: body.subject ?? null, currentWith: body.currentWith ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** R2 — symmetrically link two files for joint reference. */
+export async function linkFile(ctx: RequestContext, fileId: string, body: LinkFileBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.fileLink, {
+    messageId: randomUUID(), type: COMMANDS.fileLink,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { fileId, targetFileId: body.targetFileId, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "file", body.targetFileId));
+  return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** R2 — reclassify a file's type (e.g. standing guard / ephemeral). */
+export async function setFileType(ctx: RequestContext, fileId: string, body: SetFileTypeBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.fileSetType, {
+    messageId: randomUUID(), type: COMMANDS.fileSetType,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { fileId, fileType: body.fileType, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
   return { id: fileId, status: "accepted", correlationId: ctx.correlationId };

@@ -13,6 +13,11 @@ export type FileDetailDto = {
   currentWith: string;
   currentHolder: string;
   status: string;
+  fileType: string;
+  volumeNo: number;
+  partNo?: number | null;
+  parentFileId?: string | null;
+  linkedFileIds: string[];
   dakNo?: string | null;
   inwardId?: string | null;
   dueBy?: string | null;
@@ -79,6 +84,11 @@ function mapFileBase(file: FileRow) {
     currentWith: file.currentWith,
     currentHolder: officerLabel(file.currentWith),
     status: file.status,
+    fileType: file.fileType,
+    volumeNo: file.volumeNo,
+    partNo: file.partNo,
+    parentFileId: file.parentFileId,
+    linkedFileIds: file.linkedFileIds ?? [],
     dakNo: file.dakNo,
     inwardId: file.inwardId,
     dueBy: file.dueBy?.toISOString() ?? null,

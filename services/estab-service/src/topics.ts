@@ -6,6 +6,11 @@ export const COMMANDS = {
   fileClose:            "estab.file.close",
   fileRecall:           "estab.file.recall",
   fileReopen:           "estab.file.reopen",
+  // file-type taxonomy (R2)
+  fileOpenVolume:       "estab.file.open_volume",
+  fileOpenPart:         "estab.file.open_part",
+  fileLink:             "estab.file.link",
+  fileSetType:          "estab.file.set_type",
   notingAdd:            "estab.noting.add",
   notingSubmit:         "estab.noting.submit",
   notingSign:           "estab.noting.sign",
