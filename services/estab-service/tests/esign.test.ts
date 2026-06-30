@@ -15,7 +15,10 @@ import { registerEsignConsumers } from "../src/modules/esign/consumer.js";
 import { registerDfaConsumers } from "../src/modules/dfa/consumer.js";
 import { COMMANDS as ESIGN } from "../src/modules/esign/commands.js";
 import { assertSigningAllowed, computeDocHash, DomainError } from "../src/modules/esign/domain.js";
-import { mockAadhaarProvider, mockDscProvider } from "../src/modules/esign/providers.js";
+import {
+  mockAadhaarProvider, mockDscProvider,
+  buildEsignRequestXml, resolveAadhaarProvider, cdacAadhaarProvider, emudhraAadhaarProvider,
+} from "../src/modules/esign/providers.js";
 
 const TENANT = "11111111-aaaa-4000-8000-0000000000e7";
 const ACTOR  = "00000000-aaaa-4000-8000-0000000000e7";
@@ -63,6 +66,63 @@ describe("eSign domain (pure)", () => {
     expect(a.pkcs7).toMatch(/^MOCK-CMS\./);
     expect((await mockAadhaarProvider.verify({ docHash: h, pkcs7: a.pkcs7 })).valid).toBe(true);
     expect((await mockDscProvider.verify({ docHash: h, pkcs7: "not-a-cms" })).valid).toBe(false);
+  });
+});
+
+describe("Aadhaar eSign ESP providers (C-DAC / eMudhra)", () => {
+  const SAVED = process.env.ESIGN_AADHAAR_PROVIDER;
+  afterAll(() => {
+    if (SAVED === undefined) delete process.env.ESIGN_AADHAAR_PROVIDER;
+    else process.env.ESIGN_AADHAAR_PROVIDER = SAVED;
+    delete process.env.CDAC_ESIGN_GATEWAY;
+    delete process.env.CDAC_ASP_ID;
+    delete process.env.CDAC_ASP_PRIVATE_KEY;
+  });
+
+  it("buildEsignRequestXml emits CCA eSign 3.x request carrying the SHA-256 doc hash", () => {
+    const docHash = computeDocHash("dfa", "11111111-aaaa-4000-8000-000000000aaa", "Order body");
+    const xml = buildEsignRequestXml({ aspId: "ASP-CIV", docHash, responseUrl: "https://civ/esign/resp", signerId: ACTOR, txn: "ESIGN-deadbeef" });
+    expect(xml).toContain(`<Esign ver="3.0"`);
+    expect(xml).toContain(`aspId="ASP-CIV"`);
+    expect(xml).toContain(`responseUrl="https://civ/esign/resp"`);
+    expect(xml).toContain(`hashAlgorithm="SHA256"`);
+    expect(xml).toContain(docHash);
+    expect(xml).toContain(`txn="ESIGN-deadbeef"`);
+  });
+
+  it("resolveAadhaarProvider selects cdac/emudhra/mock by env (default mock)", () => {
+    delete process.env.ESIGN_AADHAAR_PROVIDER;
+    expect(resolveAadhaarProvider().name).toBe("mock-aadhaar-esp");
+    process.env.ESIGN_AADHAAR_PROVIDER = "cdac";
+    expect(resolveAadhaarProvider().name).toBe("cdac-esign");
+    process.env.ESIGN_AADHAAR_PROVIDER = "emudhra";
+    expect(resolveAadhaarProvider().name).toBe("emudhra-esign");
+    process.env.ESIGN_AADHAAR_PROVIDER = "something-unknown";
+    expect(resolveAadhaarProvider().name).toBe("mock-aadhaar-esp");
+  });
+
+  it("ESP providers carry correct method/name and mock-sign without live credentials", async () => {
+    delete process.env.CDAC_ESIGN_GATEWAY;
+    delete process.env.CDAC_ASP_ID;
+    delete process.env.CDAC_ASP_PRIVATE_KEY;
+    expect(cdacAadhaarProvider.method).toBe("aadhaar_esign");
+    expect(emudhraAadhaarProvider.method).toBe("aadhaar_esign");
+    const h = computeDocHash("noting", randomUUID(), "body");
+    const r = await cdacAadhaarProvider.sign({ docHash: h, signer: { signerId: ACTOR } });
+    expect(r.pkcs7).toMatch(/^MOCK-CMS\./);
+    expect(r.certIssuer).toMatch(/cdac-esign eSign CA/);
+  });
+
+  it("live ESP credentials force a citizen redirect (ESIGN_REDIRECT_REQUIRED)", async () => {
+    process.env.CDAC_ESIGN_GATEWAY = "https://esign.cdac.in/v3/esign";
+    process.env.CDAC_ASP_ID = "ASP-CIV";
+    // a throwaway RSA key generated at runtime so signAspRequest succeeds
+    const { generateKeyPairSync } = await import("node:crypto");
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    process.env.CDAC_ASP_PRIVATE_KEY = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+    const h = computeDocHash("dfa", randomUUID(), "body");
+    await expect(cdacAadhaarProvider.sign({ docHash: h, signer: { signerId: ACTOR } }))
+      .rejects.toThrowError(/ESIGN_REDIRECT_REQUIRED/);
   });
 });
 

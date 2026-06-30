@@ -7,7 +7,7 @@ import {
   idParam, createFileBody, addNotingBody, moveFileBody, closeFileBody,
   createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
   addAttachmentBody, recallFileBody, reopenFileBody, attachInwardBody, detachInwardBody,
-  deliveryUpdateBody,
+  deliveryUpdateBody, fileSearchQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -160,6 +160,15 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const q = listQuerySchema.parse(req.query);
     const files = await queries.listFiles(ctx.tenantId, q.limit);
     return reply.send({ data: files, pagination: { hasMore: files.length === q.limit, pageSize: q.limit } });
+  });
+
+  // CSMOP full-text search — by subject / file number / department / note-sheet content.
+  app.get("/v1/estab/files/search", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { q, limit } = fileSearchQuery.parse(req.query);
+    const hits = await queries.searchFiles(ctx.tenantId, q, limit);
+    return reply.send({ data: hits, query: q });
   });
 
   app.get("/v1/estab/inward", async (req, reply) => {

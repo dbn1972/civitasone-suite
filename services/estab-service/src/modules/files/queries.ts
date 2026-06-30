@@ -153,6 +153,10 @@ export async function listInwardMovements(tenantId: string, inwardId: string) {
   return repo.listInwardMovements(inwardId, tenantId);
 }
 
+export async function searchFiles(tenantId: string, q: string, limit: number) {
+  return repo.searchFiles(tenantId, q, limit);
+}
+
 /** @deprecated use getFileDetail */
 export async function getFile(tenantId: string, id: string) {
   return getFileDetail(tenantId, id);

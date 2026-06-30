@@ -81,6 +81,40 @@ export async function listFilesByTenant(tenantId: string, limit: number): Promis
   return db.select().from(estabFiles).where(eq(estabFiles.tenantId, tenantId)).limit(limit);
 }
 
+export type FileSearchHit = {
+  id: string; fileNo: string; subject: string; dept: string;
+  classification: string; status: string; rank: number; matchedIn: string;
+};
+
+/**
+ * Full-text search over files (CSMOP). Matches the file's subject / file number
+ * / department OR the content of any of its note-sheets, tenant-scoped, ranked
+ * by relevance. Uses `websearch_to_tsquery` so users can type natural queries
+ * ("pay revision" -draft "2025").
+ */
+export async function searchFiles(tenantId: string, q: string, limit: number): Promise<FileSearchHit[]> {
+  const rows = await db.execute(sql`
+    WITH query AS (SELECT websearch_to_tsquery('english', ${q}) AS tsq)
+    SELECT f.id, f.file_no, f.subject, f.dept, f.classification, f.status,
+           ts_rank(f.search_tsv, query.tsq) AS rank,
+           CASE WHEN f.search_tsv @@ query.tsq THEN 'file' ELSE 'note_sheet' END AS matched_in
+      FROM files.estab_files f, query
+     WHERE f.tenant_id = ${tenantId}::uuid
+       AND ( f.search_tsv @@ query.tsq
+          OR EXISTS (
+               SELECT 1 FROM files.estab_notings n
+                WHERE n.file_id = f.id AND n.tenant_id = f.tenant_id
+                  AND to_tsvector('english', coalesce(n.body, '')) @@ query.tsq) )
+     ORDER BY rank DESC NULLS LAST, f.created_at DESC
+     LIMIT ${limit}
+  `);
+  return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+    id: String(r.id), fileNo: String(r.file_no), subject: String(r.subject),
+    dept: String(r.dept), classification: String(r.classification), status: String(r.status),
+    rank: Number(r.rank ?? 0), matchedIn: String(r.matched_in),
+  }));
+}
+
 export async function listInwardByTenant(tenantId: string, limit: number) {
   return db.select().from(estabInward).where(eq(estabInward.tenantId, tenantId))
     .orderBy(desc(estabInward.receivedAt)).limit(limit);

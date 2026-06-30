@@ -2,6 +2,12 @@ import { z } from "zod";
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+export const fileSearchQuery = z.object({
+  q:     z.string().min(2).max(200),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type FileSearchQuery = z.infer<typeof fileSearchQuery>;
+
 export const createFileBody = z.object({
   fileNo:         z.string().min(1).optional(),
   section:        z.string().min(1).optional(),
