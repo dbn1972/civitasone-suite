@@ -8,6 +8,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { canTransition, isEditable, type DfaStatus } from "./domain.js";
 import { insertDispatch } from "../files/repo.js";
+import * as esignRepo from "../esign/repo.js";
 import type { CreateDfaBody, UpdateDfaBody } from "./validators.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -116,6 +117,14 @@ export function registerDfaConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findDfaById(p.id, p.tenantId);
       if (!cur || !canTransition(cur.status, "dispatched")) return;
+
+      // H1 — when the tenant mandates e-signature, an unsigned DFA cannot be
+      // issued. (optional/disabled tenants are unaffected.)
+      const signCfg = await esignRepo.getSignConfigTx(tx, p.tenantId);
+      if (signCfg.mode === "mandatory" && !(await esignRepo.hasValidSignatureTx(tx, p.tenantId, "dfa", p.id))) {
+        await enqueue(tx, audit(msg, "dfa.dispatch_blocked_unsigned", p.id, { reason: "mandatory_esign" }));
+        return;
+      }
 
       const dispatchId = randomUUID();
 

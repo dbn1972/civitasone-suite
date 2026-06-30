@@ -16,6 +16,7 @@ import { registerMigrationConsumers } from "./modules/migration/consumer.js";
 import { registerOperatorConsumers }  from "./modules/operators/consumer.js";
 import { registerCorrespondenceConsumers } from "./modules/correspondence/consumer.js";
 import { registerRecordsConsumers } from "./modules/records/consumer.js";
+import { registerEsignConsumers } from "./modules/esign/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -33,6 +34,7 @@ registerMigrationConsumers(queue);
 registerOperatorConsumers(queue);
 registerCorrespondenceConsumers(queue);
 registerRecordsConsumers(queue);
+registerEsignConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
