@@ -1,5 +1,22 @@
 import { ZodError } from "zod";
 
+/**
+ * Structural ZodError check. `instanceof ZodError` is unreliable across a
+ * pnpm/monorepo when a service's compiled code and this package resolve the
+ * zod class through different module realms — the validation error then leaks
+ * as a raw 500. Detecting by shape (name + issues[]) is realm-independent and a
+ * strict superset of the instanceof check, so it can only ever catch MORE
+ * genuine ZodErrors, never fewer.
+ */
+function isZodError(err: unknown): err is { issues: Array<{ path: (string | number)[]; message: string }> } {
+  if (err instanceof ZodError) return true;
+  return (
+    typeof err === "object" && err !== null &&
+    (err as { name?: string }).name === "ZodError" &&
+    Array.isArray((err as { issues?: unknown }).issues)
+  );
+}
+
 export type HttpErrorLike = {
   status: number;
   code: string;
@@ -24,7 +41,7 @@ type FastifyLikeReply = { code: (n: number) => { send: (body: unknown) => void }
 export function createFastifyErrorHandler(getHttpError?: (err: unknown) => HttpErrorLike | null) {
   return function errorHandler(err: unknown, req: FastifyLikeRequest, reply: FastifyLikeReply): void {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       void reply.code(400).send({
         code: "VALIDATION_FAILED",
         message: "invalid request",

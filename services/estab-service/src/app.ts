@@ -35,6 +35,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerOpsRoutes(app, { service: "estab-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
+  // Uniform Zod + HTTP error envelope MUST be registered BEFORE the route
+  // modules so each encapsulated child inherits it at load time (Fastify binds
+  // the error handler at registration, not per-request). Registering it after
+  // the routes — as before — left every child context on Fastify's default
+  // handler, so ZodError validation failures leaked as raw 500s.
+  registerSchemaErrorHandler(app, HttpError);
 
   await app.register(filesRoutes);
   await app.register(committeeRoutes);
@@ -51,8 +57,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(notificationRoutes);
   await app.register(correspondenceRoutes);
   await app.register(recordsRoutes);
-
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }
