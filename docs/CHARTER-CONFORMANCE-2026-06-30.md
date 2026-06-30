@@ -50,9 +50,9 @@ Verdict legend:
 | 24 | Developer portal as first-class surface | 🟨 Partial | Web `developer-portal` page exists; **no developer-portal service**, no API-reference/SDK/error-code catalog depth. | Developer Experience |
 | 25 | Public legal completeness | 🟨 Partial | `legal` page exists but inside authenticated `(app)` group; not a public trust/legal site with footer discoverability. | Legal/Web |
 | 26 | Trust page discoverability | 🟨 Partial | `docs/SECURITY.md` etc. exist; no public trust center. | Legal/Web |
-| 27 | Threat model & abuse-case maintenance | 🟥 Gap | SAST docs + security review exist; no maintained §35 threat-model / abuse-case catalog. | Security |
+| 27 | Threat model & abuse-case maintenance | 🟨 Partial | Baseline `docs/security/THREAT-MODEL.md` (18 threats + 10 abuse cases, STRIDE × §35.2); open actions tracked. Was 🟥. | Security |
 | 28 | Tenant-isolation verification | ✅ Meets | Isolation tests across API/persistence/cache layers (crm/estab/etc.). | QA |
-| 29 | SLOs, SLIs, alerts, runbooks for critical services | 🟥 Gap | Some runbooks (`OPERATIONS_DASHBOARD_RUNBOOK.md`, `RLS-ENGAGEMENT-RUNBOOK.md`); **no per-service SLO/SLI/error-budget** definitions. | SRE |
+| 29 | SLOs, SLIs, alerts, runbooks for critical services | 🟨 Partial | Baseline `docs/operations/SLO-SLI-RUNBOOKS.md` (platform + per-service SLOs, SLIs from existing observability metrics, runbook template, instrumentation backlog). Was 🟥. | SRE |
 | 30 | Break-glass & support-access governance | ✅ Meets | identity `breakglass` module + policy break-glass flow, audited. | Security |
 | 31 | Compliance control mapping | 🟨 Partial | DPDP/CERT-In awareness in code; no §42 control-to-evidence matrix doc. | Compliance |
 | 32 | Upgrade & migration policy | 🟨 Partial | 259 ordered SQL migrations; no published upgrade/compatibility-window policy. | Platform Arch |
@@ -60,7 +60,7 @@ Verdict legend:
 | 34 | Documented ownership | 🟨 Partial | `CODEOWNERS` + steering; no per-domain owner table per §29.1. | Eng Mgmt |
 | 35 | Safe defaults | ✅ Meets | Fail-closed workflow/auth, prod queue guard, dev-login gate, PII fails closed. | Security |
 
-**Tally:** ✅ 14 · 🟦 1 · 🟨 13 · 🟥 6 · ⬜ 0 (of 35).
+**Tally:** ✅ 14 · 🟦 1 · 🟨 15 · 🟥 4 · ⬜ 0 (of 35). *(G5 threat model and G6 SLO/runbooks moved 🟥→🟨 on 2026-06-30 with baseline docs.)*
 
 ---
 
@@ -76,10 +76,10 @@ Infra is provisioned by ops tooling, not a guided wizard. **Decision:** if self-
 No sandbox/manifest/signature/lifecycle. **Decision:** deprioritize until a third-party extension model is actually required; until then, mark plugin/theme services as "internal-config scaffolds, not an open extension platform."
 
 ### G5. Threat model & abuse-case catalog (§35)
-**Action (recommended now):** stand up `docs/security/THREAT-MODEL.md` + abuse-case catalog (cross-tenant leakage, privilege escalation, replayed destructive message, classification bypass, etc.). CERT-In posture expects this.
+**Status: baseline drafted** → `docs/security/THREAT-MODEL.md` (18 threats, 10 abuse cases, trust boundaries, open actions). Remaining: object-level/IDOR test expansion (T3), dep-pinning gate (T13), export-volume alerts (T10), and the recurring review cadence.
 
 ### G6. Per-service SLO/SLI + runbooks (§38)
-**Action (recommended now):** define SLIs (availability, p95 latency, error rate, queue lag) + SLOs + error-budget owner + runbook per critical service (finance, identity, gateway, queue, workflow, estab).
+**Status: baseline drafted** → `docs/operations/SLO-SLI-RUNBOOKS.md` (platform NFR targets, per-service SLO table, SLIs from existing observability metrics, runbook template, impact thresholds). Remaining instrumentation backlog: p95 latency histograms, per-tenant rate counters, alert wiring, backup/restore drill, per-service runbook split.
 
 ---
 
