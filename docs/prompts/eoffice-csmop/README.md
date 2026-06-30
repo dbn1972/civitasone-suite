@@ -25,7 +25,7 @@ Source gap analysis: [`../../EOFFICE-GOI-PROCEDURE-GAP-ANALYSIS-2026-06-30.md`](
 2. **R1** Org-hierarchy module (High) ✅ done
 3. **R2** File-type taxonomy (High) ✅ done
 4. **R9** System diary numbering + duplicate-subject warning (Low, cheap) ✅ done
-5. **R10** Conditional/partial approval (Low, cheap)
+5. **R10** Conditional/partial approval (Low, cheap) ✅ done
 6. **R4** Record room (Medium)
 7. **R5** Archival & NAI (Medium)
 8. **R6** Records Officer & annual review (Medium, depends on R1)
