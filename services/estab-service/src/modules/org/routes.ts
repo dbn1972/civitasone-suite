@@ -8,18 +8,14 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const WRITE_ROLES = ["estab_admin", "super_admin"];
-const READ_ROLES  = [...WRITE_ROLES, "estab_officer", "audit_officer"];
+const READ_ROLES = [...WRITE_ROLES, "estab_division_admin", "estab_officer", "audit_officer"];
 
 export async function orgRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/org-units", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const q = listOrgUnitsQuery.parse(req.query);
-    const data = await queries.listOrgUnits(
-      ctx.tenantId,
-      { type: q.type, parentId: q.parentId, activeOnly: q.activeOnly },
-      q.limit,
-    );
+    const data = await queries.listOrgUnits(ctx.tenantId, { type: q.type, parentId: q.parentId, activeOnly: q.activeOnly }, q.limit);
     return reply.send({ data });
   });
 
@@ -32,7 +28,6 @@ export async function orgRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: unit });
   });
 
-  // Channel of submission — the ancestor chain from this unit up to the root.
   app.get("/v1/estab/org-units/:id/ancestors", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
