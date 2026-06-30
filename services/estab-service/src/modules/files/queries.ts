@@ -149,6 +149,10 @@ export async function listFileMovements(tenantId: string, fileId: string) {
   return repo.listFileMovements(fileId, tenantId);
 }
 
+export async function listInwardMovements(tenantId: string, inwardId: string) {
+  return repo.listInwardMovements(inwardId, tenantId);
+}
+
 /** @deprecated use getFileDetail */
 export async function getFile(tenantId: string, id: string) {
   return getFileDetail(tenantId, id);

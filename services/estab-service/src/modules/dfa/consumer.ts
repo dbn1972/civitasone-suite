@@ -85,9 +85,29 @@ export function registerDfaConsumers(queue: Queue): void {
   };
 
   transition(COMMANDS.dfaSubmit, "pending_approval");
-  transition(COMMANDS.dfaApprove, "approved", (p) => ({ approvedBy: String(p.approvedBy ?? ""), approvedAt: new Date() }));
   transition(COMMANDS.dfaReturn, "returned", (p) => ({ returnedReason: String(p.reason ?? "") }));
   transition(COMMANDS.dfaSign, "signed", (p) => ({ signedBy: String(p.signedBy ?? ""), signedAt: new Date() }));
+
+  // K3 maker-checker — a DFA may only be approved by an officer OTHER than the
+  // one who drafted it. Self-approval is rejected (throws → message dead-letters,
+  // DFA stays pending_approval).
+  queue.subscribe(COMMANDS.dfaApprove, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const cur = await repo.findDfaById(p.id, p.tenantId);
+      if (!cur || !canTransition(cur.status, "approved")) return;
+      if (cur.createdBy === msg.actorId) {
+        throw new Error("MAKER_CHECKER_VIOLATION: a DFA cannot be approved by its drafter");
+      }
+      await repo.updateDfa(tx, p.id, {
+        status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
+        updatedBy: msg.actorId, version: cur.version + 1,
+      });
+      await enqueue(tx, audit(msg, "dfa.approved", p.id));
+    });
+    await cache.invalidate(cache.makeKey(p.tenantId, "dfa", p.id));
+  });
 
   // Dispatch: move to dispatched AND create a dispatch record.
   queue.subscribe(COMMANDS.dfaDispatch, async (msg) => {

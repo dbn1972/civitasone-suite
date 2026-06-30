@@ -5,24 +5,21 @@ import { COMMANDS } from "../../topics.js";
 import type {
   CreateFileBody, AddNotingBody, MoveFileBody, CloseFileBody,
   CreateDispatchBody, RegisterInwardBody, SubmitNotingBody, OpenFileFromInwardBody,
-  AddAttachmentBody,
+  AddAttachmentBody, RecallFileBody, ReopenFileBody, AttachInwardBody, DetachInwardBody,
+  DeliveryUpdateBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-function nextFileNo(): string {
-  const year = new Date().getFullYear();
-  const seq = String(Math.floor(Math.random() * 9000) + 1000);
-  return `F/${year}/${seq}`;
-}
-
 export async function createFile(ctx: RequestContext, body: CreateFileBody): Promise<Accepted> {
   const id = randomUUID();
-  const fileNo = body.fileNo ?? nextFileNo();
+  // CSMOP gapless file number is allocated server-side in the consumer (per
+  // section+year). A caller-supplied fileNo is honoured only for legacy mapping.
+  const section = body.section ?? body.dept;
   await queue.publish(COMMANDS.fileCreate, {
     messageId: id, type: COMMANDS.fileCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body, fileNo },
+    payload: { id, tenantId: ctx.tenantId, ...body, section },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -72,11 +69,10 @@ export async function openFileFromInward(
   body: OpenFileFromInwardBody,
 ): Promise<Accepted> {
   const id = randomUUID();
-  const fileNo = nextFileNo();
   await queue.publish(COMMANDS.inwardOpenFile, {
     messageId: id, type: COMMANDS.inwardOpenFile,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, inwardId, tenantId: ctx.tenantId, fileNo, ...body },
+    payload: { id, inwardId, tenantId: ctx.tenantId, section: body.dept, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -99,6 +95,56 @@ export async function closeFile(ctx: RequestContext, fileId: string, body: Close
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
   return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function recallFile(ctx: RequestContext, fileId: string, body: RecallFileBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.fileRecall, {
+    type: COMMANDS.fileRecall,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { fileId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
+  return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function reopenFile(ctx: RequestContext, fileId: string, body: ReopenFileBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.fileReopen, {
+    type: COMMANDS.fileReopen,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { fileId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
+  return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function attachInward(ctx: RequestContext, body: AttachInwardBody, fileId: string): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.inwardAttach, {
+    messageId: id, type: COMMANDS.inwardAttach,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, inwardId: body.inwardId, fileId },
+  });
+  return { id: body.inwardId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function detachInward(ctx: RequestContext, body: DetachInwardBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.inwardDetach, {
+    messageId: id, type: COMMANDS.inwardDetach,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, inwardId: body.inwardId, reason: body.reason },
+  });
+  return { id: body.inwardId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function updateDelivery(ctx: RequestContext, body: DeliveryUpdateBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.dispatchDelivery, {
+    messageId: id, type: COMMANDS.dispatchDelivery,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, ...body },
+  });
+  return { id: body.dispatchId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function createDispatch(ctx: RequestContext, body: CreateDispatchBody): Promise<Accepted> {

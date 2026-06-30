@@ -81,3 +81,30 @@ export async function invalidateOperatorCache(tenantId: string, employeeId: stri
   // Also bust the adoption flag so the first enrolment flips gating on.
   await cache.invalidate(cache.makeKey(tenantId, "operator", "_any"));
 }
+
+/** Classification → clearance rank (CSMOP). */
+export const CLASSIFICATION_RANK: Record<string, number> = {
+  public: 1, confidential: 2, secret: 3, top_secret: 4,
+};
+
+/** Highest clearance rank held by an employee across their active desks (0 if none). */
+export async function clearanceRankFor(tenantId: string, employeeId: string): Promise<number> {
+  const desks = await loadActiveDesks(tenantId, employeeId);
+  return desks.reduce((max, d) => Math.max(max, d.clearanceLevel ?? 1), 0);
+}
+
+/**
+ * CSMOP classification-based access control. Allows access when the file is
+ * `public`, OR the tenant hasn't adopted operators yet (greenfield), OR the
+ * actor's clearance rank >= the file's classification rank. Denies otherwise.
+ */
+export async function isAccessAllowed(
+  tenantId: string,
+  employeeId: string,
+  classification: string,
+): Promise<boolean> {
+  const need = CLASSIFICATION_RANK[classification] ?? 1;
+  if (need <= 1) return true; // public
+  if (!(await tenantHasOperators(tenantId))) return true; // not yet adopted
+  return (await clearanceRankFor(tenantId, employeeId)) >= need;
+}

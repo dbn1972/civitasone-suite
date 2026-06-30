@@ -4,12 +4,17 @@ export const COMMANDS = {
   fileCreate:           "estab.file.create",
   fileMove:             "estab.file.move",
   fileClose:            "estab.file.close",
+  fileRecall:           "estab.file.recall",
+  fileReopen:           "estab.file.reopen",
   notingAdd:            "estab.noting.add",
   notingSubmit:         "estab.noting.submit",
   notingSign:           "estab.noting.sign",
   inwardOpenFile:       "estab.inward.open_file",
   dispatchCreate:       "estab.dispatch.create",
   inwardRegister:       "estab.inward.register",
+  inwardAttach:         "estab.inward.attach",
+  inwardDetach:         "estab.inward.detach",
+  dispatchDelivery:     "estab.dispatch.delivery",
   fileAttachmentAdd:    "estab.file.attachment.add",
   committeeCreate:      "estab.committee.create",
   meetingCreate:        "estab.meeting.create",
@@ -45,6 +50,17 @@ export const COMMANDS = {
   migrationLink:        "estab.migration.link",
   operatorEnrol:        "estab.operator.enrol",
   operatorUpdate:       "estab.operator.update",
+  // correspondence (yellow side) + PUC
+  correspondenceAdd:    "estab.correspondence.add",
+  pucMark:              "estab.file.puc.mark",
+  pucUnmark:            "estab.file.puc.unmark",
+  // records management / retention / weed-out
+  assignCategory:       "estab.record.assign_category",
+  recordDisposal:       "estab.record.record_disposal",
+  weedoutPropose:       "estab.weedout.propose",
+  weedoutApprove:       "estab.weedout.approve",
+  weedoutReject:        "estab.weedout.reject",
+  weedoutDestroy:       "estab.weedout.destroy",
 } as const;
 
 /**

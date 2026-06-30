@@ -14,6 +14,8 @@ import { registerDfaConsumers }       from "./modules/dfa/consumer.js";
 import { registerHandoverConsumers }  from "./modules/handover/consumer.js";
 import { registerMigrationConsumers } from "./modules/migration/consumer.js";
 import { registerOperatorConsumers }  from "./modules/operators/consumer.js";
+import { registerCorrespondenceConsumers } from "./modules/correspondence/consumer.js";
+import { registerRecordsConsumers } from "./modules/records/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -29,6 +31,8 @@ registerDfaConsumers(queue);
 registerHandoverConsumers(queue);
 registerMigrationConsumers(queue);
 registerOperatorConsumers(queue);
+registerCorrespondenceConsumers(queue);
+registerRecordsConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

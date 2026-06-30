@@ -20,6 +20,7 @@ export function registerOperatorConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
         division: p.division, section: p.section ?? null,
         deskRole: p.deskRole, canInitiate: p.canInitiate,
+        clearanceLevel: p.clearanceLevel ?? 1,
         active: true, assignedBy: msg.actorId,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -45,6 +46,7 @@ export function registerOperatorConsumers(queue: Queue): void {
       if (p.patch.section !== undefined) patch.section = p.patch.section;
       if (p.patch.deskRole !== undefined) patch.deskRole = p.patch.deskRole;
       if (p.patch.canInitiate !== undefined) patch.canInitiate = p.patch.canInitiate;
+      if (p.patch.clearanceLevel !== undefined) patch.clearanceLevel = p.patch.clearanceLevel;
       if (p.patch.active !== undefined) patch.active = p.patch.active;
       await repo.updateOperator(tx, p.id, patch);
       await enqueue(tx, {

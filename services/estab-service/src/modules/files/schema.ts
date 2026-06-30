@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, varchar, integer, boolean, timestamp, jsonb,
+  pgSchema, uuid, text, varchar, integer, boolean, timestamp, jsonb, date,
 } from "drizzle-orm/pg-core";
 
 export const filesSchema = pgSchema("files");
@@ -35,6 +35,9 @@ export const estabNotings = filesSchema.table("estab_notings", {
   action:     varchar("action", { length: 64 }),
   noteType:   varchar("note_type", { length: 16 }).notNull().default("yellow"),
   noteStatus: varchar("note_status", { length: 16 }).notNull().default("draft"),
+  officerName:        text("officer_name"),
+  officerDesignation: text("officer_designation"),
+  officerSection:     text("officer_section"),
   signatureRef: text("signature_ref"),
   dscHash:      text("dsc_hash"),
   eSigned:    boolean("e_signed").notNull().default(false),
@@ -57,6 +60,9 @@ export const estabDispatch = filesSchema.table("estab_dispatch", {
   enclosures:  jsonb("enclosures").notNull().default([]),
   dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
   status:      varchar("status", { length: 24 }).notNull().default("pending"),
+  deliveryStatus: varchar("delivery_status", { length: 24 }).notNull().default("pending"),
+  deliveredAt:    timestamp("delivered_at", { withTimezone: true }),
+  deliveryProof:  text("delivery_proof"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
@@ -76,6 +82,14 @@ export const estabInward = filesSchema.table("estab_inward", {
   fileId:     uuid("file_id"),
   barcode:    text("barcode"),
   sourceSection: varchar("source_section", { length: 32 }),
+  mode:        varchar("mode", { length: 24 }),
+  language:    varchar("language", { length: 24 }),
+  urgency:     varchar("urgency", { length: 16 }),
+  category:    varchar("category", { length: 32 }),
+  receivedDate: date("received_date"),
+  dueDate:     date("due_date"),
+  detachedReason: text("detached_reason"),
+  detachedAt:  timestamp("detached_at", { withTimezone: true }),
   status:     varchar("status", { length: 24 }).notNull().default("received"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -93,6 +107,24 @@ export const estabFileMovements = filesSchema.table("estab_file_movements", {
   action:        varchar("action", { length: 30 }).default("forward"),
   remarks:       text("remarks"),
   movedAt:       timestamp("moved_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const estabDocSeq = filesSchema.table("estab_doc_seq", {
+  tenantId: uuid("tenant_id").notNull(),
+  series:   text("series").notNull(),
+  year:     integer("year").notNull(),
+  lastSeq:  integer("last_seq").notNull().default(0),
+});
+
+export const estabInwardMovements = filesSchema.table("estab_inward_movements", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  inwardId:    uuid("inward_id").notNull(),
+  fromOfficer: uuid("from_officer"),
+  toOfficer:   uuid("to_officer"),
+  action:      varchar("action", { length: 24 }).notNull(),
+  remarks:     text("remarks"),
+  movedAt:     timestamp("moved_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const estabFileAttachments = filesSchema.table("estab_file_attachments", {
@@ -120,4 +152,4 @@ export type InwardRow  = typeof estabInward.$inferSelect;
 export type InwardInsert = typeof estabInward.$inferInsert;
 export type AttachmentRow = typeof estabFileAttachments.$inferSelect;
 
-export const schema = { estabFiles, estabNotings, estabDispatch, estabInward, estabFileMovements, estabFileAttachments };
+export const schema = { estabFiles, estabNotings, estabDispatch, estabInward, estabFileMovements, estabFileAttachments, estabDocSeq, estabInwardMovements };

@@ -6,7 +6,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import {
   idParam, createFileBody, addNotingBody, moveFileBody, closeFileBody,
   createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
-  addAttachmentBody,
+  addAttachmentBody, recallFileBody, reopenFileBody, attachInwardBody, detachInwardBody,
+  deliveryUpdateBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -14,7 +15,7 @@ import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
 import { isTopSecret } from "./domain.js";
 import { enqueue } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
-import { isMoveAllowed } from "../operators/eligibility.js";
+import { isMoveAllowed, isAccessAllowed } from "../operators/eligibility.js";
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
@@ -64,6 +65,11 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     if (!(await isMoveAllowed(ctx.tenantId, body.toOfficer))) {
       throw new HttpError(422, "NOT_AN_OPERATOR", "the receiving officer is not an active eOffice operator; enrol them in the division first");
     }
+    // Classification gate: the receiving officer must be cleared for this file.
+    const target = await queries.getFileDetail(ctx.tenantId, id);
+    if (target && !(await isAccessAllowed(ctx.tenantId, body.toOfficer, target.classification))) {
+      throw new HttpError(422, "INSUFFICIENT_CLEARANCE", "the receiving officer's clearance is below this file's classification");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.moveFile(ctx, id, body));
   });
 
@@ -73,6 +79,57 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = closeFileBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeFile(ctx, id, body));
+  });
+
+  // CSMOP movement verb — recall a wrongly-marked file back to the sender.
+  app.patch("/v1/estab/files/:id/recall", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = recallFileBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recallFile(ctx, id, body));
+  });
+
+  // CSMOP — reopen a closed file with a recorded reason.
+  app.patch("/v1/estab/files/:id/reopen", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = reopenFileBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reopenFile(ctx, id, body));
+  });
+
+  // Attach an already-diarised receipt to an existing file.
+  app.post("/v1/estab/files/:id/attach-receipt", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = attachInwardBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.attachInward(ctx, body, id));
+  });
+
+  // Detach a wrongly-attached receipt (reason mandatory, audited).
+  app.post("/v1/estab/inward/detach", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const body = detachInwardBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.detachInward(ctx, body));
+  });
+
+  // Record dispatch delivery proof/status.
+  app.post("/v1/estab/dispatch/delivery", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const body = deliveryUpdateBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateDelivery(ctx, body));
+  });
+
+  app.get("/v1/estab/inward/:id/movements", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const movements = await queries.listInwardMovements(ctx.tenantId, id);
+    return reply.send({ data: movements });
   });
 
   app.post("/v1/estab/dispatch", async (req, reply) => {
@@ -143,6 +200,19 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    // CSMOP classification-based access control: deny if the officer's clearance
+    // is below the file's classification (once the tenant adopts the operator
+    // model). The denial itself is audited.
+    if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, file.classification))) {
+      await db.transaction(async (tx) => {
+        await enqueue(tx, {
+          topic: "audit.event.record", eventType: "audit.event.record",
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+          payload: { service: "estab", action: "access_denied_clearance", resourceType: "file", resourceId: id, outcome: "denied", classification: file.classification },
+        });
+      });
+      throw new HttpError(403, "FORBIDDEN", "insufficient security clearance for this file's classification");
+    }
     if (isTopSecret(file.classification)) {
       await db.transaction(async (tx) => {
         await enqueue(tx, {

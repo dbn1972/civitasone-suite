@@ -1,7 +1,8 @@
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   estabFiles, estabNotings, estabDispatch, estabInward, estabFileMovements, estabFileAttachments,
+  estabInwardMovements,
 } from "./schema.js";
 import type {
   FileRow, FileInsert, NotingRow, NotingInsert, DispatchInsert, InwardInsert,
@@ -9,6 +10,50 @@ import type {
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
+
+/**
+ * Allocate a GAPLESS CSMOP file number per (tenant, section, year). The
+ * sequence is bumped atomically (INSERT … ON CONFLICT DO UPDATE … RETURNING),
+ * so concurrent creations never collide or skip — unlike a random number.
+ * Format: `<SECTION>/<5-digit serial>/<year>` e.g. `ESTAB-A/00007/2025`.
+ */
+export async function allocateFileNo(tx: Exec, tenantId: string, section: string, year: number): Promise<string> {
+  const series = `file:${section}`;
+  const rows = await tx.execute(sql`
+    INSERT INTO files.estab_doc_seq (tenant_id, series, year, last_seq)
+    VALUES (${tenantId}::uuid, ${series}, ${year}, 1)
+    ON CONFLICT (tenant_id, series, year)
+    DO UPDATE SET last_seq = files.estab_doc_seq.last_seq + 1
+    RETURNING last_seq
+  `);
+  const seq = Number((rows as unknown as Array<{ last_seq: number }>)[0]?.last_seq ?? 1);
+  return `${section.toUpperCase()}/${String(seq).padStart(5, "0")}/${year}`;
+}
+
+/** Allocate a gapless dispatch number per (tenant, year): `DSP/<year>/<6-digit>`. */
+export async function allocateDispatchNo(tx: Exec, tenantId: string, year: number): Promise<string> {
+  const rows = await tx.execute(sql`
+    INSERT INTO files.estab_doc_seq (tenant_id, series, year, last_seq)
+    VALUES (${tenantId}::uuid, 'dispatch', ${year}, 1)
+    ON CONFLICT (tenant_id, series, year)
+    DO UPDATE SET last_seq = files.estab_doc_seq.last_seq + 1
+    RETURNING last_seq
+  `);
+  const seq = Number((rows as unknown as Array<{ last_seq: number }>)[0]?.last_seq ?? 1);
+  return `DSP/${year}/${String(seq).padStart(6, "0")}`;
+}
+
+/** Record a receipt (DAK) movement for the inward register. */
+export async function insertInwardMovement(tx: Writer, row: { tenantId: string; inwardId: string; fromOfficer?: string | null; toOfficer?: string | null; action: string; remarks?: string | null }): Promise<void> {
+  await tx.insert(estabInwardMovements).values(row);
+}
+
+export async function listInwardMovements(inwardId: string, tenantId: string) {
+  return db.select().from(estabInwardMovements)
+    .where(and(eq(estabInwardMovements.tenantId, tenantId), eq(estabInwardMovements.inwardId, inwardId)))
+    .orderBy(asc(estabInwardMovements.movedAt));
+}
 
 export async function findFileById(id: string, tenantId: string): Promise<FileRow | null> {
   const rows = await db.select().from(estabFiles)
@@ -106,6 +151,11 @@ export async function findLatestUnsignedNoting(tx: Writer, fileId: string, tenan
 
 export async function insertDispatch(tx: Writer, row: DispatchInsert): Promise<void> {
   await tx.insert(estabDispatch).values(row);
+}
+
+export async function updateDispatch(tx: Writer, id: string, tenantId: string, patch: Partial<DispatchInsert>): Promise<void> {
+  await tx.update(estabDispatch).set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(estabDispatch.id, id), eq(estabDispatch.tenantId, tenantId)));
 }
 
 export async function insertInward(tx: Writer, row: InwardInsert): Promise<void> {

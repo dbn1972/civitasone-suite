@@ -7,6 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { computeFileDueBy, computeNotingHash } from "./domain.js";
 import * as repo from "./repo.js";
+import * as recordsRepo from "../records/repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -57,14 +58,16 @@ export function registerFilesConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.fileCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; fileNo: string; subject: string; dept: string;
-      priority: string; classification: string; currentWith: string;
+      priority: string; classification: string; currentWith: string; section?: string;
       initialNote?: string; inwardId?: string; dakNo?: string; parentFileId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const dueBy = computeFileDueBy();
+      // CSMOP gapless file number per section+year (legacy fileNo honoured if given).
+      const fileNo = p.fileNo ?? await repo.allocateFileNo(tx, p.tenantId, p.section ?? p.dept, new Date().getFullYear());
       await repo.insertFile(tx, {
-        id: p.id, tenantId: p.tenantId, fileNo: p.fileNo, subject: p.subject,
+        id: p.id, tenantId: p.tenantId, fileNo, subject: p.subject,
         dept: p.dept, priority: p.priority, classification: p.classification,
         currentWith: p.currentWith, status: "draft",
         inwardId: p.inwardId ?? null, dakNo: p.dakNo ?? null, dueBy,
@@ -73,7 +76,7 @@ export function registerFilesConsumers(queue: Queue): void {
       });
       if (p.inwardId) {
         await repo.updateInward(tx, p.inwardId, {
-          fileId: p.id, fileRef: p.fileNo, status: "file_opened", updatedBy: msg.actorId,
+          fileId: p.id, fileRef: fileNo, status: "file_opened", updatedBy: msg.actorId,
         });
       }
       if (p.initialNote?.trim()) {
@@ -89,7 +92,7 @@ export function registerFilesConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.fileCreated, eventType: EVENTS.fileCreated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { fileId: p.id, fileNo: p.fileNo, subject: p.subject, dakNo: p.dakNo },
+        payload: { fileId: p.id, fileNo, subject: p.subject, dakNo: p.dakNo },
       });
       await audit(tx, msg, "create", "file", p.id);
     });
@@ -98,7 +101,7 @@ export function registerFilesConsumers(queue: Queue): void {
 
   queue.subscribe(COMMANDS.inwardOpenFile, async (msg) => {
     const p = msg.payload as {
-      id: string; inwardId: string; tenantId: string; fileNo: string;
+      id: string; inwardId: string; tenantId: string; fileNo?: string; section?: string;
       dept: string; currentWith: string; classification: string; initialNote?: string;
     };
     const inward = await repo.findInwardById(p.inwardId, p.tenantId);
@@ -107,15 +110,16 @@ export function registerFilesConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const dueBy = computeFileDueBy();
+      const fileNo = p.fileNo ?? await repo.allocateFileNo(tx, p.tenantId, p.section ?? p.dept, new Date().getFullYear());
       await repo.insertFile(tx, {
-        id: p.id, tenantId: p.tenantId, fileNo: p.fileNo,
+        id: p.id, tenantId: p.tenantId, fileNo,
         subject: inward.subject, dept: p.dept, priority: "normal",
         classification: p.classification, currentWith: p.currentWith,
         status: "draft", inwardId: p.inwardId, dakNo: inward.dakNo, dueBy,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateInward(tx, p.inwardId, {
-        fileId: p.id, fileRef: p.fileNo, status: "file_opened", updatedBy: msg.actorId,
+        fileId: p.id, fileRef: fileNo, status: "file_opened", updatedBy: msg.actorId,
       });
       const noteBody = p.initialNote?.trim() ?? `DAK ${inward.dakNo} registered and file opened.`;
       await repo.insertNoting(tx, {
@@ -139,6 +143,7 @@ export function registerFilesConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; fileId: string; tenantId: string; body: string;
       action?: string; officerId: string; noteType?: string;
+      officerName?: string; officerDesignation?: string; officerSection?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -156,6 +161,9 @@ export function registerFilesConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, fileId: p.fileId, seq,
         officerId: p.officerId, body: p.body, action: p.action ?? null,
         noteType: p.noteType ?? "yellow", noteStatus: "draft",
+        officerName: p.officerName ?? null,
+        officerDesignation: p.officerDesignation ?? null,
+        officerSection: p.officerSection ?? null,
         eSigned: false, signedAt: null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -335,20 +343,69 @@ export function registerFilesConsumers(queue: Queue): void {
     const p = msg.payload as { fileId: string; tenantId: string; remarks?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // CSMOP/RRS: a file may be closed only after a record category has been
+      // assigned (disposal classification). Without it, closure is rejected so
+      // no file escapes the retention regime.
+      if (!(await recordsRepo.hasRecordCategoryTx(tx, p.tenantId, p.fileId))) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "estab", action: "close_rejected_no_record_category", resourceType: "file", resourceId: p.fileId, outcome: "rejected" },
+        });
+        return;
+      }
       await repo.updateFile(tx, p.fileId, { status: "closed", updatedBy: msg.actorId });
       await audit(tx, msg, "close", "file", p.fileId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
   });
 
-  queue.subscribe(COMMANDS.dispatchCreate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; dispatchNo: string; fileId?: string; toAddress: string; mode: string; subject: string };
+  // CSMOP movement verb — RECALL: the sender pulls a wrongly-marked file back.
+  queue.subscribe(COMMANDS.fileRecall, async (msg) => {
+    const p = msg.payload as { fileId: string; tenantId: string; remarks?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const existing = await repo.findFileById(p.fileId, p.tenantId);
+      if (!existing || existing.status === "closed") return;
+      await repo.insertFileMovement(tx, {
+        id: randomUUID(), tenantId: p.tenantId, fileId: p.fileId,
+        fromOfficerId: existing.currentWith, toOfficerId: msg.actorId,
+        action: "recall", remarks: p.remarks ?? null,
+      });
+      await repo.updateFile(tx, p.fileId, { currentWith: msg.actorId, status: "active", updatedBy: msg.actorId });
+      await audit(tx, msg, "recall", "file", p.fileId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+  });
+
+  // CSMOP — REOPEN a closed file (with reason); restores it to active.
+  queue.subscribe(COMMANDS.fileReopen, async (msg) => {
+    const p = msg.payload as { fileId: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const existing = await repo.findFileById(p.fileId, p.tenantId);
+      if (!existing || existing.status !== "closed") return;
+      await repo.updateFile(tx, p.fileId, { status: "active", updatedBy: msg.actorId });
+      await repo.insertFileMovement(tx, {
+        id: randomUUID(), tenantId: p.tenantId, fileId: p.fileId,
+        fromOfficerId: existing.currentWith, toOfficerId: msg.actorId,
+        action: "reopen", remarks: p.reason,
+      });
+      await audit(tx, msg, "reopen", "file", p.fileId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+  });
+
+  queue.subscribe(COMMANDS.dispatchCreate, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; dispatchNo?: string; fileId?: string; toAddress: string; mode: string; subject: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      // CSMOP gapless dispatch number when the caller did not supply one.
+      const dispatchNo = p.dispatchNo ?? await repo.allocateDispatchNo(tx, p.tenantId, new Date().getFullYear());
       await repo.insertDispatch(tx, {
-        id: p.id, tenantId: p.tenantId, dispatchNo: p.dispatchNo,
+        id: p.id, tenantId: p.tenantId, dispatchNo,
         fileId: p.fileId ?? null, toAddress: p.toAddress, mode: p.mode, subject: p.subject,
-        dispatchedAt: new Date(), status: "sent",
+        dispatchedAt: new Date(), status: "sent", deliveryStatus: "sent",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "dispatch", p.id);
@@ -359,6 +416,8 @@ export function registerFilesConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; dakNo: string; fromAddress: string; subject: string;
       assignedTo?: string; sourceSection?: string;
+      mode?: string; language?: string; urgency?: string; category?: string;
+      receivedDate?: string; dueDate?: string;
     };
     const barcode = `DAK-${p.dakNo.replace(/\//g, "-")}`;
     await db.transaction(async (tx) => {
@@ -368,10 +427,69 @@ export function registerFilesConsumers(queue: Queue): void {
         fromAddress: p.fromAddress, subject: p.subject,
         assignedTo: p.assignedTo ?? null, fileRef: null, fileId: null,
         barcode, sourceSection: p.sourceSection ?? null,
+        mode: p.mode ?? null, language: p.language ?? null,
+        urgency: p.urgency ?? null, category: p.category ?? null,
+        receivedDate: p.receivedDate ?? new Date().toISOString().slice(0, 10),
+        dueDate: p.dueDate ?? null,
         status: "received",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      await repo.insertInwardMovement(tx, {
+        tenantId: p.tenantId, inwardId: p.id, fromOfficer: null,
+        toOfficer: p.assignedTo ?? null, action: "received", remarks: null,
+      });
       await audit(tx, msg, "register", "inward", p.id);
+    });
+  });
+
+  // CSMOP B2 — attach an already-diarised receipt to an EXISTING file.
+  queue.subscribe(COMMANDS.inwardAttach, async (msg) => {
+    const p = msg.payload as { tenantId: string; inwardId: string; fileId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const inward = await repo.findInwardById(p.inwardId, p.tenantId);
+      const file = await repo.findFileById(p.fileId, p.tenantId);
+      if (!inward || !file) return;
+      await repo.updateInward(tx, p.inwardId, { fileId: p.fileId, fileRef: file.fileNo, status: "attached", updatedBy: msg.actorId });
+      await repo.insertInwardMovement(tx, {
+        tenantId: p.tenantId, inwardId: p.inwardId, fromOfficer: inward.assignedTo ?? null,
+        toOfficer: file.currentWith, action: "attached_to_file", remarks: file.fileNo,
+      });
+      await audit(tx, msg, "attach_to_file", "inward", p.inwardId);
+    });
+  });
+
+  // CSMOP B3 — detach a wrongly-attached receipt; reason is mandatory + audited.
+  queue.subscribe(COMMANDS.inwardDetach, async (msg) => {
+    const p = msg.payload as { tenantId: string; inwardId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const inward = await repo.findInwardById(p.inwardId, p.tenantId);
+      if (!inward) return;
+      await repo.updateInward(tx, p.inwardId, {
+        fileId: null, fileRef: null, status: "detached",
+        detachedReason: p.reason, detachedAt: new Date(), updatedBy: msg.actorId,
+      });
+      await repo.insertInwardMovement(tx, {
+        tenantId: p.tenantId, inwardId: p.inwardId, fromOfficer: null,
+        toOfficer: inward.assignedTo ?? null, action: "detached", remarks: p.reason,
+      });
+      await audit(tx, msg, "detach_from_file", "inward", p.inwardId);
+    });
+  });
+
+  // Dispatch delivery proof/status update.
+  queue.subscribe(COMMANDS.dispatchDelivery, async (msg) => {
+    const p = msg.payload as { tenantId: string; dispatchId: string; deliveryStatus: string; deliveryProof?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.updateDispatch(tx, p.dispatchId, p.tenantId, {
+        deliveryStatus: p.deliveryStatus,
+        deliveredAt: p.deliveryStatus === "delivered" ? new Date() : null,
+        deliveryProof: p.deliveryProof ?? null,
+        updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "delivery_update", "dispatch", p.dispatchId);
     });
   });
 
