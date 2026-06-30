@@ -69,3 +69,20 @@ export async function listDfa(
   const rows = await repo.listDfa(tenantId, filter, limit);
   return rows.map(toDto);
 }
+
+export type DfaVersionDto = {
+  revNo: number;
+  subject: string;
+  body: string;
+  comment: string | null;
+  createdAt: string;
+  createdBy: string;
+};
+
+export async function listDfaVersions(tenantId: string, dfaId: string): Promise<DfaVersionDto[]> {
+  const rows = await repo.listDfaVersions(dfaId, tenantId);
+  return rows.map((r) => ({
+    revNo: r.revNo, subject: r.subject, body: r.body, comment: r.comment,
+    createdAt: r.createdAt.toISOString(), createdBy: r.createdBy,
+  }));
+}

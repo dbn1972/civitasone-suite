@@ -24,6 +24,7 @@ export const updateDfaBody = z.object({
   recipientEmployeeId: z.string().uuid().nullable().optional(),
   recipientName:      z.string().min(1).optional(),
   recipientAddress:   z.string().min(1).optional(),
+  revisionComment:    z.string().min(1).max(1000).optional(),
 });
 export type UpdateDfaBody = z.infer<typeof updateDfaBody>;
 

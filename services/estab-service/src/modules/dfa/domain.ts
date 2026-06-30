@@ -24,9 +24,13 @@ export function isEditable(status: string): boolean {
   return status === "draft" || status === "returned";
 }
 
-export function nextDfaNo(communicationType: string): string {
-  const year = new Date().getFullYear();
+/**
+ * Format a GAPLESS DFA number. The serial is allocated atomically from
+ * `files.estab_doc_seq` in the consumer transaction (see `repo.allocateDfaNo`),
+ * never from `Math.random()`, so the DFA register has no gaps or collisions.
+ * Format: `DFA/<TYPE>/<year>/<5-digit serial>` e.g. `DFA/LET/2026/00001`.
+ */
+export function formatDfaNo(communicationType: string, year: number, seq: number): string {
   const prefix = communicationType.slice(0, 3).toUpperCase();
-  const seq = String(Math.floor(Math.random() * 9000) + 1000);
-  return `DFA/${prefix}/${year}/${seq}`;
+  return `DFA/${prefix}/${year}/${String(seq).padStart(5, "0")}`;
 }

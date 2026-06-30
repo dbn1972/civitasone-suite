@@ -31,7 +31,22 @@ export const estabDfa = filesSchema.table("estab_dfa", {
   version:            integer("version").notNull().default(1),
 });
 
+/** Draft revision history (R3) — one row per revision of a DFA draft. */
+export const estabDfaVersion = filesSchema.table("estab_dfa_version", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull(),
+  dfaId:     uuid("dfa_id").notNull(),
+  revNo:     integer("rev_no").notNull(),
+  subject:   text("subject").notNull(),
+  body:      text("body").notNull(),
+  comment:   text("comment"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+});
+
 export type DfaRow = typeof estabDfa.$inferSelect;
 export type DfaInsert = typeof estabDfa.$inferInsert;
+export type DfaVersionRow = typeof estabDfaVersion.$inferSelect;
+export type DfaVersionInsert = typeof estabDfaVersion.$inferInsert;
 
-export const schema = { estabDfa };
+export const schema = { estabDfa, estabDfaVersion };

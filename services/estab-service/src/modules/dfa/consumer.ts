@@ -6,14 +6,16 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { canTransition, isEditable, type DfaStatus } from "./domain.js";
+import { canTransition, isEditable, formatDfaNo, type DfaStatus } from "./domain.js";
 import { insertDispatch } from "../files/repo.js";
 import * as esignRepo from "../esign/repo.js";
 import type { CreateDfaBody, UpdateDfaBody } from "./validators.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-type CreatePayload = CreateDfaBody & { id: string; tenantId: string; dfaNo: string };
+// `dfaNo` is normally allocated server-side (gapless); a caller-supplied value
+// is honoured only for legacy import / migration, matching the file-number rule.
+type CreatePayload = CreateDfaBody & { id: string; tenantId: string; dfaNo?: string };
 
 function audit(msg: { tenantId: string; actorId: string; correlationId: string }, action: string, id: string, metadata: Record<string, unknown> = {}) {
   return {
@@ -26,10 +28,15 @@ function audit(msg: { tenantId: string; actorId: string; correlationId: string }
 export function registerDfaConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.dfaCreate, async (msg) => {
     const p = msg.payload as CreatePayload;
+    let dfaNo = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // R3 — gapless DFA number allocated atomically here (not Math.random()).
+      // A caller-supplied dfaNo is honoured only for legacy paper-file migration.
+      const year = new Date().getFullYear();
+      dfaNo = p.dfaNo ?? formatDfaNo(p.communicationType, year, await repo.allocateDfaSeq(tx, p.tenantId, p.communicationType, year));
       await repo.insertDfa(tx, {
-        id: p.id, tenantId: p.tenantId, dfaNo: p.dfaNo,
+        id: p.id, tenantId: p.tenantId, dfaNo,
         fileId: p.fileId ?? null, communicationType: p.communicationType,
         templateCode: p.templateCode ?? null,
         subject: p.subject, body: p.body,
@@ -37,7 +44,12 @@ export function registerDfaConsumers(queue: Queue): void {
         recipientName: p.recipientName ?? null, recipientAddress: p.recipientAddress ?? null,
         status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await enqueue(tx, audit(msg, "dfa.create", p.id, { dfaNo: p.dfaNo, type: p.communicationType }));
+      // R3 — snapshot the initial draft as revision 1.
+      await repo.insertDfaVersion(tx, {
+        tenantId: p.tenantId, dfaId: p.id, revNo: 1,
+        subject: p.subject, body: p.body, comment: "initial draft", createdBy: msg.actorId,
+      });
+      await enqueue(tx, audit(msg, "dfa.create", p.id, { dfaNo, type: p.communicationType }));
     });
     await cache.invalidate(cache.makeKey(p.tenantId, "dfa", p.id));
   });
@@ -57,7 +69,16 @@ export function registerDfaConsumers(queue: Queue): void {
       if (p.patch.recipientName !== undefined) patch.recipientName = p.patch.recipientName;
       if (p.patch.recipientAddress !== undefined) patch.recipientAddress = p.patch.recipientAddress;
       await repo.updateDfa(tx, p.id, patch);
-      await enqueue(tx, audit(msg, "dfa.update", p.id));
+      // R3 — retain the revised draft as a new version.
+      const revNo = await repo.nextDfaRevNo(tx, p.id);
+      await repo.insertDfaVersion(tx, {
+        tenantId: p.tenantId, dfaId: p.id, revNo,
+        subject: p.patch.subject ?? cur.subject,
+        body: p.patch.body ?? cur.body,
+        comment: p.patch.revisionComment ?? "revision",
+        createdBy: msg.actorId,
+      });
+      await enqueue(tx, audit(msg, "dfa.update", p.id, { revNo }));
     });
     await cache.invalidate(cache.makeKey(p.tenantId, "dfa", p.id));
   });
@@ -86,8 +107,30 @@ export function registerDfaConsumers(queue: Queue): void {
   };
 
   transition(COMMANDS.dfaSubmit, "pending_approval");
-  transition(COMMANDS.dfaReturn, "returned", (p) => ({ returnedReason: String(p.reason ?? "") }));
   transition(COMMANDS.dfaSign, "signed", (p) => ({ signedBy: String(p.signedBy ?? ""), signedAt: new Date() }));
+
+  // Return for revision — records the reviewer's reason AND snapshots it as a
+  // revision comment in the version history (R3).
+  queue.subscribe(COMMANDS.dfaReturn, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const cur = await repo.findDfaById(p.id, p.tenantId);
+      if (!cur || !canTransition(cur.status, "returned")) return;
+      const reason = String(p.reason ?? "");
+      await repo.updateDfa(tx, p.id, {
+        status: "returned", returnedReason: reason, updatedBy: msg.actorId, version: cur.version + 1,
+      });
+      const revNo = await repo.nextDfaRevNo(tx, p.id);
+      await repo.insertDfaVersion(tx, {
+        tenantId: p.tenantId, dfaId: p.id, revNo,
+        subject: cur.subject, body: cur.body,
+        comment: `returned: ${reason}`, createdBy: msg.actorId,
+      });
+      await enqueue(tx, audit(msg, "dfa.returned", p.id, { revNo }));
+    });
+    await cache.invalidate(cache.makeKey(p.tenantId, "dfa", p.id));
+  });
 
   // K3 maker-checker — a DFA may only be approved by an officer OTHER than the
   // one who drafted it. Self-approval is rejected (throws → message dead-letters,

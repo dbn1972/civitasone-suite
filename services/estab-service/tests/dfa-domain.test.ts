@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canTransition, isEditable, nextDfaNo } from "../src/modules/dfa/domain.js";
+import { canTransition, isEditable, formatDfaNo } from "../src/modules/dfa/domain.js";
 
 describe("DFA state machine", () => {
   it("allows the happy path draft → … → dispatched", () => {
@@ -29,8 +29,9 @@ describe("DFA state machine", () => {
     expect(isEditable("dispatched")).toBe(false);
   });
 
-  it("generates a typed DFA number", () => {
-    expect(nextDfaNo("letter")).toMatch(/^DFA\/LET\/\d{4}\/\d{4}$/);
-    expect(nextDfaNo("order")).toMatch(/^DFA\/ORD\/\d{4}\/\d{4}$/);
+  it("formats a gapless, typed DFA number", () => {
+    expect(formatDfaNo("letter", 2026, 1)).toBe("DFA/LET/2026/00001");
+    expect(formatDfaNo("order", 2026, 42)).toBe("DFA/ORD/2026/00042");
+    expect(formatDfaNo("notification", 2026, 12345)).toBe("DFA/NOT/2026/12345");
   });
 });

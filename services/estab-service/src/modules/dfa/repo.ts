@@ -1,9 +1,27 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { estabDfa } from "./schema.js";
-import type { DfaRow, DfaInsert } from "./schema.js";
+import { estabDfa, estabDfaVersion } from "./schema.js";
+import type { DfaRow, DfaInsert, DfaVersionRow, DfaVersionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
+
+/**
+ * Allocate a GAPLESS DFA serial per (tenant, communication-type, year) from
+ * files.estab_doc_seq — atomic INSERT … ON CONFLICT DO UPDATE … RETURNING, so
+ * concurrent drafts never collide or skip (replaces the old Math.random()).
+ */
+export async function allocateDfaSeq(tx: Exec, tenantId: string, communicationType: string, year: number): Promise<number> {
+  const series = `dfa:${communicationType}`;
+  const rows = await tx.execute(sql`
+    INSERT INTO files.estab_doc_seq (tenant_id, series, year, last_seq)
+    VALUES (${tenantId}::uuid, ${series}, ${year}, 1)
+    ON CONFLICT (tenant_id, series, year)
+    DO UPDATE SET last_seq = files.estab_doc_seq.last_seq + 1
+    RETURNING last_seq
+  `);
+  return Number((rows as unknown as Array<{ last_seq: number }>)[0]?.last_seq ?? 1);
+}
 
 export async function findDfaById(id: string, tenantId: string): Promise<DfaRow | null> {
   const rows = await db.select().from(estabDfa)
@@ -31,4 +49,22 @@ export async function insertDfa(tx: Writer, row: DfaInsert): Promise<void> {
 
 export async function updateDfa(tx: Writer, id: string, patch: Partial<DfaInsert>): Promise<void> {
   await tx.update(estabDfa).set({ ...patch, updatedAt: new Date() }).where(eq(estabDfa.id, id));
+}
+
+/** Snapshot a DFA revision into the version history (R3 draft versioning). */
+export async function insertDfaVersion(tx: Writer, row: DfaVersionInsert): Promise<void> {
+  await tx.insert(estabDfaVersion).values(row);
+}
+
+/** Next revision number for a DFA (gapless per dfa). */
+export async function nextDfaRevNo(tx: Writer, dfaId: string): Promise<number> {
+  const rows = await (tx as typeof db).select().from(estabDfaVersion).where(eq(estabDfaVersion.dfaId, dfaId));
+  return rows.length + 1;
+}
+
+/** List all revisions of a DFA, oldest first. */
+export async function listDfaVersions(dfaId: string, tenantId: string): Promise<DfaVersionRow[]> {
+  return db.select().from(estabDfaVersion)
+    .where(and(eq(estabDfaVersion.dfaId, dfaId), eq(estabDfaVersion.tenantId, tenantId)))
+    .orderBy(asc(estabDfaVersion.revNo));
 }

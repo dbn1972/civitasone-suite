@@ -31,6 +31,14 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: dfa });
   });
 
+  app.get("/v1/estab/dfa/:id/versions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = req.params as { id: string };
+    const data = await queries.listDfaVersions(ctx.tenantId, id);
+    return reply.send({ data });
+  });
+
   app.post("/v1/estab/dfa", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, DRAFTER_ROLES);

@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { nextDfaNo } from "./domain.js";
 import type { CreateDfaBody, UpdateDfaBody } from "./validators.js";
 
 export type Accepted = { id: string; dfaNo?: string; status: string; correlationId: string };
@@ -21,9 +20,10 @@ function envelope(ctx: RequestContext, type: string, payload: Record<string, unk
 
 export async function createDfa(ctx: RequestContext, body: CreateDfaBody): Promise<Accepted> {
   const id = randomUUID();
-  const dfaNo = nextDfaNo(body.communicationType);
-  await queue.publish(COMMANDS.dfaCreate, envelope(ctx, COMMANDS.dfaCreate, { id, tenantId: ctx.tenantId, dfaNo, ...body }));
-  return { id, dfaNo, status: "accepted", correlationId: ctx.correlationId };
+  // The gapless DFA number is allocated in the consumer transaction (CQRS,
+  // same as file/dispatch numbers); the caller discovers it via GET after 202.
+  await queue.publish(COMMANDS.dfaCreate, envelope(ctx, COMMANDS.dfaCreate, { id, tenantId: ctx.tenantId, ...body }));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function updateDfa(ctx: RequestContext, id: string, body: UpdateDfaBody): Promise<Accepted> {
