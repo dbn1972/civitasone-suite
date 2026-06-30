@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
-  createDfaBody, updateDfaBody, returnDfaBody, dispatchDfaBody, listDfaQuery,
+  createDfaBody, updateDfaBody, returnDfaBody, approveDfaBody, dispatchDfaBody, listDfaQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -65,7 +65,8 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
     const { id } = req.params as { id: string };
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveDfa(ctx, id));
+    const body = approveDfaBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveDfa(ctx, id, { modality: body.modality, conditions: body.conditions }));
   });
 
   app.post("/v1/estab/dfa/:id/return", async (req, reply) => {

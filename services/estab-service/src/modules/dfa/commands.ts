@@ -36,8 +36,12 @@ export async function submitDfa(ctx: RequestContext, id: string): Promise<Accept
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function approveDfa(ctx: RequestContext, id: string): Promise<Accepted> {
-  await queue.publish(COMMANDS.dfaApprove, envelope(ctx, COMMANDS.dfaApprove, { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId }));
+export async function approveDfa(ctx: RequestContext, id: string, opts?: { modality?: string; conditions?: string | undefined }): Promise<Accepted> {
+  await queue.publish(COMMANDS.dfaApprove, envelope(ctx, COMMANDS.dfaApprove, {
+    id, tenantId: ctx.tenantId, approvedBy: ctx.actorId,
+    modality: opts?.modality ?? "approved",
+    ...(opts?.conditions ? { conditions: opts.conditions } : {}),
+  }));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

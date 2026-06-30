@@ -19,6 +19,8 @@ export const estabDfa = filesSchema.table("estab_dfa", {
   status:             text("status").notNull().default("draft"),
   approvedBy:         uuid("approved_by"),
   approvedAt:         timestamp("approved_at", { withTimezone: true }),
+  decisionModality:   text("decision_modality").notNull().default("approved"),
+  decisionConditions: text("decision_conditions"),
   returnedReason:     text("returned_reason"),
   signedBy:           uuid("signed_by"),
   signedAt:           timestamp("signed_at", { withTimezone: true }),

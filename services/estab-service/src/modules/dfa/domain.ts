@@ -25,6 +25,20 @@ export function isEditable(status: string): boolean {
 }
 
 /**
+ * CSMOP "levels of disposal" — the modality of an approval. A conditional or
+ * partial approval still advances the DFA to `approved`, but records the
+ * modality and the condition text as part of the disposal record (R10).
+ */
+export const APPROVAL_MODALITIES = [
+  "approved", "approved_with_conditions", "partially_approved",
+] as const;
+export type ApprovalModality = (typeof APPROVAL_MODALITIES)[number];
+
+export function isApprovalModality(v: string): v is ApprovalModality {
+  return (APPROVAL_MODALITIES as readonly string[]).includes(v);
+}
+
+/**
  * Format a GAPLESS DFA number. The serial is allocated atomically from
  * `files.estab_doc_seq` in the consumer transaction (see `repo.allocateDfaNo`),
  * never from `Math.random()`, so the DFA register has no gaps or collisions.

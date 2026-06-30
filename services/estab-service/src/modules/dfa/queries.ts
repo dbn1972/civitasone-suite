@@ -18,6 +18,8 @@ export type DfaDto = {
   editable: boolean;
   approvedBy: string | null;
   approvedAt: string | null;
+  decisionModality: string;
+  decisionConditions: string | null;
   returnedReason: string | null;
   signedBy: string | null;
   signedAt: string | null;
@@ -43,6 +45,8 @@ function toDto(r: DfaRow): DfaDto {
     editable: isEditable(r.status),
     approvedBy: r.approvedBy,
     approvedAt: r.approvedAt?.toISOString() ?? null,
+    decisionModality: r.decisionModality,
+    decisionConditions: r.decisionConditions,
     returnedReason: r.returnedReason,
     signedBy: r.signedBy,
     signedAt: r.signedAt?.toISOString() ?? null,

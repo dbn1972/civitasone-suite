@@ -6,7 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { canTransition, isEditable, formatDfaNo, type DfaStatus } from "./domain.js";
+import { canTransition, isEditable, formatDfaNo, isApprovalModality, type DfaStatus } from "./domain.js";
 import { insertDispatch } from "../files/repo.js";
 import * as esignRepo from "../esign/repo.js";
 import type { CreateDfaBody, UpdateDfaBody } from "./validators.js";
@@ -136,7 +136,7 @@ export function registerDfaConsumers(queue: Queue): void {
   // one who drafted it. Self-approval is rejected (throws → message dead-letters,
   // DFA stays pending_approval).
   queue.subscribe(COMMANDS.dfaApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; modality?: string; conditions?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findDfaById(p.id, p.tenantId);
@@ -144,11 +144,17 @@ export function registerDfaConsumers(queue: Queue): void {
       if (cur.createdBy === msg.actorId) {
         throw new Error("MAKER_CHECKER_VIOLATION: a DFA cannot be approved by its drafter");
       }
+      // R10 — record the disposal modality (plain / conditional / partial)
+      // and any conditions; a conditional/partial approval still advances to
+      // 'approved' but the modality is preserved as part of the record.
+      const modality = isApprovalModality(p.modality ?? "") ? p.modality! : "approved";
       await repo.updateDfa(tx, p.id, {
         status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
+        decisionModality: modality,
+        ...(p.conditions ? { decisionConditions: p.conditions } : {}),
         updatedBy: msg.actorId, version: cur.version + 1,
       });
-      await enqueue(tx, audit(msg, "dfa.approved", p.id));
+      await enqueue(tx, audit(msg, "dfa.approved", p.id, { modality, hasConditions: Boolean(p.conditions) }));
     });
     await cache.invalidate(cache.makeKey(p.tenantId, "dfa", p.id));
   });
