@@ -424,6 +424,63 @@ function routeTemplate(request: unknown): string {
   return r.routeOptions?.url ?? r.routerPath ?? "unmatched";
 }
 
+// ── PERF-2: per-tenant request counter (Charter §28.6 noisy-neighbor / T6) ───
+// Counts requests per (service, tenant) so a single tenant's request storm is
+// visible and alertable (noisy-neighbor). Cardinality is hard-capped: once a
+// service has seen MAX_TENANT_LABELS distinct tenants, further tenants fold into
+// the "_overflow" label so an attacker can't explode label cardinality.
+const MAX_TENANT_LABELS = 1000;
+const tenantRequestsTotal = new Map<string, number>(); // "service|tenant" -> count
+const tenantLabelCount = new Map<string, number>();     // service -> distinct tenant labels
+
+/** Increment http_requests_by_tenant_total{service,tenant} (cardinality-capped). */
+export function recordTenantRequest(service: string, tenantId: string): void {
+  if (!tenantId) return;
+  let label = tenantId;
+  const direct = `${service}|${label}`;
+  if (!tenantRequestsTotal.has(direct)) {
+    const seen = tenantLabelCount.get(service) ?? 0;
+    if (seen >= MAX_TENANT_LABELS) {
+      label = "_overflow";
+    } else {
+      tenantLabelCount.set(service, seen + 1);
+    }
+  }
+  const key = `${service}|${label}`;
+  tenantRequestsTotal.set(key, (tenantRequestsTotal.get(key) ?? 0) + 1);
+}
+
+/** Request count for a (service, tenant) — test helper. */
+export function getTenantRequestCount(service: string, tenantId: string): number {
+  return tenantRequestsTotal.get(`${service}|${tenantId}`) ?? 0;
+}
+
+/** Reset per-tenant counters — test helper. */
+export function resetTenantRequestMetrics(): void {
+  tenantRequestsTotal.clear();
+  tenantLabelCount.clear();
+}
+
+function formatTenantRequestMetrics(): string[] {
+  const lines = [
+    "# HELP http_requests_by_tenant_total HTTP requests by service and tenant (noisy-neighbor)",
+    "# TYPE http_requests_by_tenant_total counter",
+  ];
+  for (const [key, count] of tenantRequestsTotal) {
+    const sep = key.indexOf("|");
+    const service = key.slice(0, sep);
+    const tenant = key.slice(sep + 1);
+    lines.push(`http_requests_by_tenant_total{service="${service}",tenant="${tenant}"} ${count}`);
+  }
+  return lines;
+}
+
+/** Read the resolved tenant id from a request if the auth plugin set req.ctx. */
+function requestTenant(request: unknown): string {
+  const r = request as { ctx?: { tenantId?: string } };
+  return r.ctx?.tenantId ?? "";
+}
+
 /** Standard /health /ready /metrics /openapi.json for every service. */
 export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
   const version = opts.version ?? process.env.npm_package_version ?? "0.1.0";
@@ -448,6 +505,7 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
       : start !== undefined ? performance.now() - start : null;
     if (elapsed === null) return;
     recordHttpLatency(opts.service, (request.method ?? "GET").toUpperCase(), routeTemplate(request), elapsed);
+    recordTenantRequest(opts.service, requestTenant(request));
   });
 
   app.get("/health", async () => ({
@@ -522,6 +580,7 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
       ...formatConsumerHeartbeatMetrics(),
       ...formatFailureMetrics(),
       ...formatHttpLatencyMetrics(),
+      ...formatTenantRequestMetrics(),
     ];
     return reply.type("text/plain; version=0.0.4").send(lines.join("\n") + "\n");
   });

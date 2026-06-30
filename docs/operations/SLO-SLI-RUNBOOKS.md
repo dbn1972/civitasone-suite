@@ -39,7 +39,7 @@
 | **Request latency p50/p95/p99** | `http_request_duration_ms` histogram (per service/method/route) + `getHttpLatencyQuantile()` |
 | Gateway upstream readiness | gateway `/ready` (identity, finance, queue) |
 
-**Status:** request-latency histograms are now emitted by `registerOpsRoutes` on every service (PERF-1) — the latency SLOs below are measurable on `/metrics` (`http_request_duration_ms_bucket`). Remaining instrumentation gap: per-tenant rate counters — see §6.
+**Status:** request-latency histograms are now emitted by `registerOpsRoutes` on every service (PERF-1), and a per-tenant request counter `http_requests_by_tenant_total` (PERF-2, cardinality-capped) supports the noisy-neighbor SLO. Latency and noisy-neighbor alerts are wired in `infra/observability/alert.rules.yml`.
 
 ---
 
@@ -97,8 +97,8 @@ Every service MUST maintain a runbook with these sections. Below is the **filled
 ## 6. Operational-maturity backlog (to reach full §38 compliance)
 
 1. ~~**Emit p95 latency histograms** per route (OTel)~~ **DONE (PERF-1)** — `http_request_duration_ms` histogram per service/method/route on `/metrics`, with in-process `getHttpLatencyQuantile()` for SLO checks/tests.
-2. **Per-tenant rate/quota counters** for noisy-neighbor SLO (ties to threat T6).
-3. **Wire alerts** from the existing ops metrics into the alerting stack (page/warn thresholds in §3), including p95 burn against the §1 targets.
+2. ~~**Per-tenant rate/quota counters** for noisy-neighbor SLO (ties to threat T6).~~ **DONE (PERF-2)** — `http_requests_by_tenant_total{service,tenant}` (cardinality-capped, `_overflow` label).
+3. ~~**Wire alerts** from the existing ops metrics into the alerting stack~~ **DONE** — `infra/observability/alert.rules.yml` adds p95 read SLO, auth-path p95 (150ms), per-tenant noisy-neighbor (warn/crit), and app-failure (captured errors / consumer errors / outbox relay) alerts.
 4. **Backup/restore drill** to prove RPO ≤15 min / RTO ≤4 h (Charter §28.3, §38.6 "failure-testing evidence").
 5. **Per-service runbook files** — split §5 into `docs/operations/runbooks/<service>.md` as ownership is assigned.
 6. **Error budget reporting cadence** — monthly review per §38.3.

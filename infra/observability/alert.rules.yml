@@ -55,3 +55,93 @@ groups:
         annotations:
           summary: "SQS queue consumer critically stalled — {{ $value | humanizeDuration }} lag"
           description: "Queue {{ $labels.queue_name }} message age exceeds 1 hour. Immediate investigation required."
+
+  - name: civitasone.http.latency
+    rules:
+      # PERF-1: p95 read latency SLO (Charter §28.2: p95 < 300–500ms for common reads).
+      # Uses the http_request_duration_ms histogram emitted by registerOpsRoutes.
+      - alert: HttpP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (rate(http_request_duration_ms_bucket{method="GET"}[5m]))
+          ) > 500
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "p95 GET latency high on {{ $labels.service }} ({{ $value | humanize }}ms)"
+          description: "{{ $labels.service }} p95 read latency has exceeded the 500ms SLO for 10+ minutes."
+
+      # Tier-0 auth path is stricter (Charter §28.2: p95 auth/session < 150ms).
+      - alert: AuthP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_ms_bucket{service="identity-service"}[5m]))
+          ) > 150
+        for: 5m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "identity-service p95 latency above 150ms auth SLO ({{ $value | humanize }}ms)"
+          description: "Auth/session validation p95 has breached the 150ms SLO for 5+ minutes — login experience degraded."
+
+  - name: civitasone.tenant.noisy-neighbor
+    rules:
+      # PERF-2 / §28.6: a single tenant generating a disproportionate request
+      # rate against a service — possible abuse or runaway integration (threat T6).
+      - alert: TenantRequestRateHigh
+        expr: sum by (service, tenant) (rate(http_requests_by_tenant_total[5m])) > 50
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High request rate from tenant {{ $labels.tenant }} on {{ $labels.service }}"
+          description: "Tenant {{ $labels.tenant }} is driving {{ $value | humanize }} req/s on {{ $labels.service }} for 10+ minutes — check for abuse or a runaway client (noisy-neighbor)."
+
+      - alert: TenantRequestRateCritical
+        expr: sum by (service, tenant) (rate(http_requests_by_tenant_total[5m])) > 200
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Critical request rate from tenant {{ $labels.tenant }} on {{ $labels.service }}"
+          description: "Tenant {{ $labels.tenant }} is driving {{ $value | humanize }} req/s on {{ $labels.service }} — apply rate limiting / investigate immediately."
+
+  - name: civitasone.app.failures
+    rules:
+      # OPS-1: app-level failure signals exposed by @civitasone/observability.
+      - alert: CapturedErrorsAppearing
+        expr: increase(captured_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Captured errors on {{ $labels.service }}"
+          description: "{{ $labels.service }} recorded {{ $value | humanize }} captured error(s) in 5m — check structured error logs."
+
+      - alert: ConsumerErrorsHigh
+        expr: increase(consumer_errors_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Queue consumer errors on {{ $labels.service }}/{{ $labels.topic }}"
+          description: "{{ $value | humanize }} consumer handler exceptions in 5m on {{ $labels.topic }}."
+
+      - alert: OutboxRelayFailing
+        expr: increase(outbox_relay_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Transactional outbox relay failing on {{ $labels.service }}"
+          description: "{{ $labels.service }} outbox relay has failed {{ $value | humanize }} time(s) in 5m — events may be delayed."

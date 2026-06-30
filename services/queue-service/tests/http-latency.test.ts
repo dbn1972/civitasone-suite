@@ -9,11 +9,14 @@ import {
   getHttpLatencyQuantile,
   getHttpLatencyCount,
   resetHttpLatencyMetrics,
+  recordTenantRequest,
+  getTenantRequestCount,
+  resetTenantRequestMetrics,
 } from "@civitasone/observability";
 
 const SVC = "finance-service";
 
-beforeEach(() => resetHttpLatencyMetrics());
+beforeEach(() => { resetHttpLatencyMetrics(); resetTenantRequestMetrics(); });
 
 describe("http latency histogram", () => {
   it("returns null when no samples recorded", () => {
@@ -49,5 +52,25 @@ describe("http latency histogram", () => {
     recordHttpLatency("a-service", "GET", "/x", 10);
     expect(getHttpLatencyCount("b-service")).toBe(0);
     expect(getHttpLatencyQuantile("b-service", 0.95)).toBeNull();
+  });
+});
+
+describe("per-tenant request counter (noisy-neighbor)", () => {
+  it("counts requests per (service, tenant) and ignores empty tenant", () => {
+    for (let i = 0; i < 7; i++) recordTenantRequest(SVC, "tenant-a");
+    for (let i = 0; i < 3; i++) recordTenantRequest(SVC, "tenant-b");
+    recordTenantRequest(SVC, ""); // unauthenticated / no ctx — not counted
+    expect(getTenantRequestCount(SVC, "tenant-a")).toBe(7);
+    expect(getTenantRequestCount(SVC, "tenant-b")).toBe(3);
+    expect(getTenantRequestCount(SVC, "")).toBe(0);
+  });
+
+  it("caps cardinality: tenants beyond the limit fold into _overflow", () => {
+    // 1000-label cap; the 1001st distinct tenant should land in _overflow.
+    for (let i = 0; i < 1000; i++) recordTenantRequest(SVC, `t-${i}`);
+    recordTenantRequest(SVC, "t-overflow-1");
+    recordTenantRequest(SVC, "t-overflow-2");
+    expect(getTenantRequestCount(SVC, "t-overflow-1")).toBe(0); // not tracked directly
+    expect(getTenantRequestCount(SVC, "_overflow")).toBe(2);
   });
 });
