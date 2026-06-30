@@ -37,6 +37,12 @@ import { getDashboard, invalidateDashboard, dashboardKey } from "../src/modules/
 import { cache } from "../src/shared/infra.js";
 import { isEncrypted } from "../src/shared/pii-crypto.js";
 
+// PII at-rest encryption (DPDP/P1-2) fails closed without CRM_PII_KEY. Seed a
+// deterministic test key before any consumer encrypts email/phone — otherwise
+// the create consumer throws, the message is retried to the DLQ, and the row is
+// never written (the create then times out). Mirrors tests/pii-crypto.test.ts.
+process.env.CRM_PII_KEY ??= "test_pii_key_for_crm_domain_tests_aaaa";
+
 // Stable, disposable test tenants (kept away from real data).
 const TENANT_A = "ddddddd1-0000-4000-8000-000000000001";
 const TENANT_B = "ddddddd2-0000-4000-8000-000000000002";

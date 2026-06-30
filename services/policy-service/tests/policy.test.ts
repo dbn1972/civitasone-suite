@@ -41,7 +41,9 @@ describe("write-via-queue + read-via-cache (policy)", () => {
   it("consumer dedupes by messageId", async () => {
     let count = 0;
     q.subscribe("policy.test.touch", async () => { count++; });
-    const opts = { messageId: "same-msg", type: "policy.test.touch", tenantId: "t", actorId: "u", correlationId: "c", schemaVersion: "1.0", payload: {} };
+    // messageId must be a valid UUID — the bus validates the envelope (04-T3)
+    // and routes malformed messages straight to the DLQ before any handler runs.
+    const opts = { messageId: "cccccccc-3333-4000-8000-000000000003", type: "policy.test.touch", tenantId: "t1", actorId: "u1", correlationId: "c1", schemaVersion: "1.0", payload: {} };
     await q.publish("policy.test.touch", opts);
     await q.publish("policy.test.touch", opts);
     await new Promise((r) => setTimeout(r, 20));

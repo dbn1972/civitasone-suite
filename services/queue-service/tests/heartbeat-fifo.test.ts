@@ -66,6 +66,13 @@ vi.mock("@aws-sdk/client-sqs", async (importOriginal) => {
           return { QueueUrl: `https://sqs.test/${String(cmd.input.QueueName)}` };
         case "GetQueueAttributesCommand":
           return { Attributes: { QueueArn: "arn:aws:sqs:ap-south-1:000:dlq" } };
+        case "ListQueuesCommand": {
+          // QUE-FANOUT: publish() discovers each subscriber's per-topic queue via
+          // ListQueues(prefix) and fans a copy out to every one. Return one
+          // subscriber queue matching the requested prefix so a send is emitted.
+          const prefix = String(cmd.input.QueueNamePrefix ?? "");
+          return { QueueUrls: [`https://sqs.test/${prefix}testsvc`] };
+        }
         default:
           return {};
       }
@@ -101,10 +108,10 @@ describe("FIFO publish wiring (05-T4)", () => {
     expect(send?.input.MessageGroupId).toBe("tenant-1");
     expect(send?.input.MessageDeduplicationId).toBe(messageId);
 
-    // FIFO queue is created with the FifoQueue attribute and a `.fifo` name.
-    const create = sent.find((c) => c.name === "CreateQueueCommand");
-    expect(String(create?.input.QueueName)).toMatch(/\.fifo$/);
-    expect((create?.input.Attributes as Record<string, string>)?.FifoQueue).toBe("true");
+    // Fan-out targets the subscriber's own per-topic FIFO queue (discovered via
+    // ListQueues), so the resolved queue prefix carries the topic base name.
+    const list = sent.find((c) => c.name === "ListQueuesCommand");
+    expect(String(list?.input.QueueNamePrefix)).toMatch(/^finance-gl-post__/);
   });
 
   it("publishing to a standard topic does NOT set FIFO attributes (default unchanged)", async () => {
@@ -115,10 +122,6 @@ describe("FIFO publish wiring (05-T4)", () => {
     expect(send).toBeDefined();
     expect(send?.input.MessageGroupId).toBeUndefined();
     expect(send?.input.MessageDeduplicationId).toBeUndefined();
-
-    const create = sent.find((c) => c.name === "CreateQueueCommand");
-    expect(String(create?.input.QueueName)).not.toMatch(/\.fifo$/);
-    expect((create?.input.Attributes as Record<string, string> | undefined)?.FifoQueue).toBeUndefined();
   });
 
   it("callers may override the message group (finer ordering scope)", async () => {
