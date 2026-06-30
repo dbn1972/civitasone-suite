@@ -167,6 +167,11 @@ export async function searchFiles(tenantId: string, q: string, limit: number) {
   return repo.searchFiles(tenantId, q, limit);
 }
 
+/** Duplicate-subject pre-check (CSMOP one-subject-one-file, R9). */
+export async function findSimilarOpenFiles(tenantId: string, subject: string, limit: number) {
+  return repo.findSimilarOpenFiles(tenantId, subject, limit);
+}
+
 /** @deprecated use getFileDetail */
 export async function getFile(tenantId: string, id: string) {
   return getFileDetail(tenantId, id);

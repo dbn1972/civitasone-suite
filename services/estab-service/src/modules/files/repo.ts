@@ -44,6 +44,43 @@ export async function allocateDispatchNo(tx: Exec, tenantId: string, year: numbe
   return `DSP/${year}/${String(seq).padStart(6, "0")}`;
 }
 
+/**
+ * Allocate a GAPLESS diary/DAK number per (tenant, year): `DAK/<year>/<6-digit>`
+ * (CSMOP central-diary register, R9). System-generated and gapless like the
+ * file and dispatch numbers — never operator-typed — so the diary has no gaps
+ * or duplicates.
+ */
+export async function allocateDakNo(tx: Exec, tenantId: string, year: number): Promise<string> {
+  const rows = await tx.execute(sql`
+    INSERT INTO files.estab_doc_seq (tenant_id, series, year, last_seq)
+    VALUES (${tenantId}::uuid, 'dak', ${year}, 1)
+    ON CONFLICT (tenant_id, series, year)
+    DO UPDATE SET last_seq = files.estab_doc_seq.last_seq + 1
+    RETURNING last_seq
+  `);
+  const seq = Number((rows as unknown as Array<{ last_seq: number }>)[0]?.last_seq ?? 1);
+  return `DAK/${year}/${String(seq).padStart(6, "0")}`;
+}
+
+/**
+ * Find active/draft files whose subject closely matches a candidate subject
+ * (CSMOP one-subject-one-file). Used to warn before opening a duplicate file.
+ */
+export async function findSimilarOpenFiles(tenantId: string, subject: string, limit: number): Promise<Array<{ id: string; fileNo: string; subject: string; status: string }>> {
+  const rows = await db.execute(sql`
+    SELECT id, file_no, subject, status
+      FROM files.estab_files
+     WHERE tenant_id = ${tenantId}::uuid
+       AND status IN ('draft','active')
+       AND lower(btrim(subject)) = lower(btrim(${subject}))
+     ORDER BY created_at DESC
+     LIMIT ${limit}
+  `);
+  return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+    id: String(r.id), fileNo: String(r.file_no), subject: String(r.subject), status: String(r.status),
+  }));
+}
+
 /** Record a receipt (DAK) movement for the inward register. */
 export async function insertInwardMovement(tx: Writer, row: { tenantId: string; inwardId: string; fromOfficer?: string | null; toOfficer?: string | null; action: string; remarks?: string | null }): Promise<void> {
   await tx.insert(estabInwardMovements).values(row);

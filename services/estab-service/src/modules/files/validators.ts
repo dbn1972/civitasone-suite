@@ -8,6 +8,13 @@ export const fileSearchQuery = z.object({
 });
 export type FileSearchQuery = z.infer<typeof fileSearchQuery>;
 
+/** Duplicate-subject pre-check before opening a file (CSMOP one-subject-one-file, R9). */
+export const duplicateCheckQuery = z.object({
+  subject: z.string().min(2).max(500),
+  limit:   z.coerce.number().int().min(1).max(50).default(10),
+});
+export type DuplicateCheckQuery = z.infer<typeof duplicateCheckQuery>;
+
 export const createFileBody = z.object({
   fileNo:         z.string().min(1).optional(),
   section:        z.string().min(1).optional(),
@@ -60,7 +67,7 @@ export const createDispatchBody = z.object({
 export type CreateDispatchBody = z.infer<typeof createDispatchBody>;
 
 export const registerInwardBody = z.object({
-  dakNo:         z.string().min(1),
+  dakNo:         z.string().min(1).optional(), // system gapless DAK/<year>/<6-digit> when omitted (R9)
   fromAddress:   z.string().min(1),
   subject:       z.string().min(1),
   assignedTo:    z.string().uuid().optional(),

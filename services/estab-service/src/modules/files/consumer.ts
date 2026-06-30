@@ -509,16 +509,18 @@ export function registerFilesConsumers(queue: Queue): void {
 
   queue.subscribe(COMMANDS.inwardRegister, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; dakNo: string; fromAddress: string; subject: string;
+      id: string; tenantId: string; dakNo?: string; fromAddress: string; subject: string;
       assignedTo?: string; sourceSection?: string;
       mode?: string; language?: string; urgency?: string; category?: string;
       receivedDate?: string; dueDate?: string;
     };
-    const barcode = `DAK-${p.dakNo.replace(/\//g, "-")}`;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // CSMOP gapless diary number when the caller did not supply one (R9).
+      const dakNo = p.dakNo ?? await repo.allocateDakNo(tx, p.tenantId, new Date().getFullYear());
+      const barcode = `DAK-${dakNo.replace(/\//g, "-")}`;
       await repo.insertInward(tx, {
-        id: p.id, tenantId: p.tenantId, dakNo: p.dakNo,
+        id: p.id, tenantId: p.tenantId, dakNo,
         fromAddress: p.fromAddress, subject: p.subject,
         assignedTo: p.assignedTo ?? null, fileRef: null, fileId: null,
         barcode, sourceSection: p.sourceSection ?? null,
@@ -533,7 +535,7 @@ export function registerFilesConsumers(queue: Queue): void {
         tenantId: p.tenantId, inwardId: p.id, fromOfficer: null,
         toOfficer: p.assignedTo ?? null, action: "received", remarks: null,
       });
-      await audit(tx, msg, "register", "inward", p.id);
+      await audit(tx, msg, "register", "inward", p.id, { dakNo });
     });
   });
 

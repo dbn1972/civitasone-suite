@@ -7,7 +7,7 @@ import {
   idParam, createFileBody, addNotingBody, moveFileBody, closeFileBody,
   createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
   addAttachmentBody, recallFileBody, reopenFileBody, attachInwardBody, detachInwardBody,
-  deliveryUpdateBody, fileSearchQuery,
+  deliveryUpdateBody, fileSearchQuery, duplicateCheckQuery,
   openVolumeBody, openPartFileBody, linkFileBody, setFileTypeBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
@@ -203,6 +203,15 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { q, limit } = fileSearchQuery.parse(req.query);
     const hits = await queries.searchFiles(ctx.tenantId, q, limit);
     return reply.send({ data: hits, query: q });
+  });
+
+  // CSMOP one-subject-one-file — warn if an open file already has this subject (R9).
+  app.get("/v1/estab/files/duplicate-check", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { subject, limit } = duplicateCheckQuery.parse(req.query);
+    const matches = await queries.findSimilarOpenFiles(ctx.tenantId, subject, limit);
+    return reply.send({ data: matches, duplicate: matches.length > 0 });
   });
 
   app.get("/v1/estab/inward", async (req, reply) => {
