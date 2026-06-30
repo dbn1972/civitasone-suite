@@ -50,6 +50,9 @@ export const COMMANDS = {
   migrationLink:        "estab.migration.link",
   operatorEnrol:        "estab.operator.enrol",
   operatorUpdate:       "estab.operator.update",
+  // org hierarchy (R1)
+  orgUnitCreate:        "estab.org_unit.create",
+  orgUnitUpdate:        "estab.org_unit.update",
   // correspondence (yellow side) + PUC
   correspondenceAdd:    "estab.correspondence.add",
   pucMark:              "estab.file.puc.mark",
