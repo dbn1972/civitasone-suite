@@ -311,14 +311,143 @@ export async function initErrorReporting(service: string): Promise<"sentry" | "l
   }
 }
 
+// ── PERF-1: HTTP request latency histogram (Charter §28.2 / §38 p95 SLOs) ────
+// Per (service, method, route-template) histogram so latency SLOs become
+// measurable, not aspirational. Route TEMPLATES (e.g. /v1/estab/files/{id}) are
+// used — never the raw URL — so cardinality stays bounded. Exposed as a
+// Prometheus histogram on /metrics AND queryable in-process for tests/SLO checks.
+
+// Upper bucket bounds in milliseconds (last bucket is +Inf, tracked separately).
+const LATENCY_BUCKETS_MS = [5, 10, 25, 50, 75, 100, 150, 200, 300, 400, 500, 750, 1000, 2000, 5000];
+
+type LatencyHist = { buckets: number[]; sum: number; count: number };
+const httpLatency = new Map<string, LatencyHist>(); // "service|method|route" -> hist
+// Per-request start stamps, keyed by the request object (no mutation of typed objects).
+const reqStart = new WeakMap<object, number>();
+
+function latencyKey(service: string, method: string, route: string): string {
+  return `${service}|${method}|${route}`;
+}
+
+/**
+ * Record one observed request latency (ms) for a service/method/route template.
+ * Exported so workers or custom transports can record latencies directly.
+ */
+export function recordHttpLatency(service: string, method: string, route: string, ms: number): void {
+  const key = latencyKey(service, method, route);
+  let h = httpLatency.get(key);
+  if (!h) {
+    h = { buckets: new Array(LATENCY_BUCKETS_MS.length + 1).fill(0), sum: 0, count: 0 };
+    httpLatency.set(key, h);
+  }
+  h.sum += ms;
+  h.count += 1;
+  let placed = false;
+  for (let i = 0; i < LATENCY_BUCKETS_MS.length; i++) {
+    if (ms <= LATENCY_BUCKETS_MS[i]!) { h.buckets[i]! += 1; placed = true; break; }
+  }
+  if (!placed) h.buckets[LATENCY_BUCKETS_MS.length]! += 1; // +Inf bucket
+}
+
+/**
+ * Estimate a latency quantile (0<q<1) in ms from the histogram, with linear
+ * interpolation inside the matched bucket. Returns null when no samples exist.
+ * Aggregates across all routes of a service when `method`/`route` are omitted.
+ */
+export function getHttpLatencyQuantile(service: string, q: number, method?: string, route?: string): number | null {
+  const agg = new Array(LATENCY_BUCKETS_MS.length + 1).fill(0);
+  let total = 0;
+  for (const [key, h] of httpLatency) {
+    const [svc, m, r] = key.split("|");
+    if (svc !== service) continue;
+    if (method !== undefined && m !== method) continue;
+    if (route !== undefined && r !== route) continue;
+    for (let i = 0; i < agg.length; i++) agg[i] += h.buckets[i]!;
+    total += h.count;
+  }
+  if (total === 0) return null;
+  const rank = q * total;
+  let cumulative = 0;
+  for (let i = 0; i < agg.length; i++) {
+    const prev = cumulative;
+    cumulative += agg[i]!;
+    if (cumulative >= rank) {
+      const lower = i === 0 ? 0 : LATENCY_BUCKETS_MS[i - 1]!;
+      const upper = i < LATENCY_BUCKETS_MS.length ? LATENCY_BUCKETS_MS[i]! : LATENCY_BUCKETS_MS[LATENCY_BUCKETS_MS.length - 1]!;
+      const inBucket = agg[i]!;
+      if (inBucket === 0) return upper;
+      const frac = (rank - prev) / inBucket;
+      return Math.round(lower + (upper - lower) * frac);
+    }
+  }
+  return LATENCY_BUCKETS_MS[LATENCY_BUCKETS_MS.length - 1]!;
+}
+
+/** Total observed request count for a service (test helper). */
+export function getHttpLatencyCount(service: string): number {
+  let total = 0;
+  for (const [key, h] of httpLatency) {
+    if (key.split("|")[0] === service) total += h.count;
+  }
+  return total;
+}
+
+/** Reset latency histograms — test helper. */
+export function resetHttpLatencyMetrics(): void {
+  httpLatency.clear();
+}
+
+function formatHttpLatencyMetrics(): string[] {
+  const lines = [
+    "# HELP http_request_duration_ms Request latency by service, method and route template",
+    "# TYPE http_request_duration_ms histogram",
+  ];
+  for (const [key, h] of httpLatency) {
+    const [service, method, route] = key.split("|");
+    const labels = `service="${service}",method="${method}",route="${route}"`;
+    let cumulative = 0;
+    for (let i = 0; i < LATENCY_BUCKETS_MS.length; i++) {
+      cumulative += h.buckets[i]!;
+      lines.push(`http_request_duration_ms_bucket{${labels},le="${LATENCY_BUCKETS_MS[i]}"} ${cumulative}`);
+    }
+    cumulative += h.buckets[LATENCY_BUCKETS_MS.length]!;
+    lines.push(`http_request_duration_ms_bucket{${labels},le="+Inf"} ${cumulative}`);
+    lines.push(`http_request_duration_ms_sum{${labels}} ${h.sum}`);
+    lines.push(`http_request_duration_ms_count{${labels}} ${h.count}`);
+  }
+  return lines;
+}
+
+/** Best-effort route template for a Fastify request (bounded cardinality). */
+function routeTemplate(request: unknown): string {
+  const r = request as { routeOptions?: { url?: string }; routerPath?: string; method?: string };
+  return r.routeOptions?.url ?? r.routerPath ?? "unmatched";
+}
+
 /** Standard /health /ready /metrics /openapi.json for every service. */
 export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
   const version = opts.version ?? process.env.npm_package_version ?? "0.1.0";
 
   app.addHook("preSerialization", async (_request, _reply, payload) => jsonSafe(payload));
 
-  app.addHook("onResponse", async () => {
+  // PERF-1: stamp request start, then record latency per route template on
+  // response. WeakMap-keyed so we never mutate the framework's typed objects.
+  app.addHook("onRequest", async (...args: unknown[]) => {
+    const request = args[0] as object;
+    if (request) reqStart.set(request, performance.now());
+  });
+
+  app.addHook("onResponse", async (...args: unknown[]) => {
     requestCount++;
+    const request = args[0] as (object & { method?: string }) | undefined;
+    const reply = args[1] as { elapsedTime?: number } | undefined;
+    if (!request) return;
+    const start = reqStart.get(request);
+    const elapsed = typeof reply?.elapsedTime === "number"
+      ? reply.elapsedTime
+      : start !== undefined ? performance.now() - start : null;
+    if (elapsed === null) return;
+    recordHttpLatency(opts.service, (request.method ?? "GET").toUpperCase(), routeTemplate(request), elapsed);
   });
 
   app.get("/health", async () => ({
@@ -392,6 +521,7 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
       ...formatConsumerErrorMetrics(),
       ...formatConsumerHeartbeatMetrics(),
       ...formatFailureMetrics(),
+      ...formatHttpLatencyMetrics(),
     ];
     return reply.type("text/plain; version=0.0.4").send(lines.join("\n") + "\n");
   });
