@@ -43,6 +43,17 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createDeptBody.parse(req.body);
+    // Hierarchy enforcement: if parent is specified + both have levels, child must be deeper.
+    if (body.parentId && body.level !== undefined) {
+      const parent = await db.select().from(hrmsDepartments)
+        .where(eq(hrmsDepartments.id, body.parentId)).limit(1);
+      if (parent[0]?.level != null && body.level <= parent[0].level) {
+        return reply.code(400).send({
+          code: "HIERARCHY_VIOLATION",
+          message: `Child level (${body.level}) must be greater than parent level (${parent[0].level})`,
+        });
+      }
+    }
     const id = randomUUID();
     await db.insert(hrmsDepartments).values({
       id, tenantId: ctx.tenantId, code: body.code, name: body.name,

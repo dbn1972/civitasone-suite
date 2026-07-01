@@ -18,6 +18,10 @@ export const createEmployeeBody = z.object({
   basicMinor:    z.number().int().nonnegative().default(0),
   currency:      z.string().length(3).default("INR"),
   payStructureId: z.string().uuid().optional(),
+  // ERP org-structure refs (cross-service)
+  legalEntityId:  z.string().uuid().optional(),
+  costCenterId:   z.string().uuid().optional(),
+  locationId:     z.string().uuid().optional(),
 });
 export type CreateEmployeeBody = z.infer<typeof createEmployeeBody>;
 

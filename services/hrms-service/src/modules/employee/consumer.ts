@@ -27,6 +27,7 @@ export function registerEmployeeConsumers(queue: Queue): void {
       dateOfBirth?: string; gender?: string; pan?: string; aadhaarRef?: string;
       mobile?: string; email?: string; bankAccountNo?: string; bankIfsc?: string;
       payStructureId?: string;
+      legalEntityId?: string; costCenterId?: string; locationId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -39,6 +40,9 @@ export function registerEmployeeConsumers(queue: Queue): void {
         aadhaarRef: p.aadhaarRef ?? null, mobile: p.mobile ?? null, email: p.email ?? null,
         bankAccountNo: p.bankAccountNo ?? null, bankIfsc: p.bankIfsc ?? null,
         payStructureId: p.payStructureId ?? null,
+        ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
+        ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
+        ...(p.locationId ? { locationId: p.locationId } : {}),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {

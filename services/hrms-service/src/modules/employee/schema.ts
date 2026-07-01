@@ -67,6 +67,10 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   pensionScheme:    varchar("pension_scheme", { length: 8 }).notNull().default("NPS"),
   managerId:        uuid("manager_id"),
   userRef:          text("user_ref"),
+  // ERP org-structure refs (cross-service)
+  legalEntityId:    uuid("legal_entity_id"),     // finance org.legal_entities
+  costCenterId:     uuid("cost_center_id"),      // finance org.cost_centers
+  locationId:       uuid("location_id"),         // location-service
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),
