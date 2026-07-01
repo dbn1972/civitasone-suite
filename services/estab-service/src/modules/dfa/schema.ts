@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, timestamp,
+  pgSchema, uuid, text, boolean, integer, timestamp,
 } from "drizzle-orm/pg-core";
 
 export const filesSchema = pgSchema("files");
@@ -51,4 +51,23 @@ export type DfaInsert = typeof estabDfa.$inferInsert;
 export type DfaVersionRow = typeof estabDfaVersion.$inferSelect;
 export type DfaVersionInsert = typeof estabDfaVersion.$inferInsert;
 
-export const schema = { estabDfa, estabDfaVersion };
+/** DFA template library (R8 eOffice parity). */
+export const estabDfaTemplate = filesSchema.table("estab_dfa_template", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull(),
+  code:              text("code").notNull(),
+  name:              text("name").notNull(),
+  communicationType: text("communication_type").notNull().default("letter"),
+  body:              text("body").notNull(),
+  isActive:          boolean("is_active").notNull().default(true),
+  createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:         uuid("created_by").notNull(),
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:         uuid("updated_by").notNull(),
+  version:           integer("version").notNull().default(1),
+});
+
+export type DfaTemplateRow = typeof estabDfaTemplate.$inferSelect;
+export type DfaTemplateInsert = typeof estabDfaTemplate.$inferInsert;
+
+export const schema = { estabDfa, estabDfaVersion, estabDfaTemplate };

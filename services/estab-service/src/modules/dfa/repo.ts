@@ -68,3 +68,26 @@ export async function listDfaVersions(dfaId: string, tenantId: string): Promise<
     .where(and(eq(estabDfaVersion.dfaId, dfaId), eq(estabDfaVersion.tenantId, tenantId)))
     .orderBy(asc(estabDfaVersion.revNo));
 }
+
+
+// ── R8 DFA template library ──────────────────────────────────────────────
+
+import { estabDfaTemplate } from "./schema.js";
+import type { DfaTemplateRow, DfaTemplateInsert } from "./schema.js";
+
+export async function insertDfaTemplate(tx: Writer, row: DfaTemplateInsert): Promise<void> {
+  await tx.insert(estabDfaTemplate).values(row);
+}
+
+export async function listDfaTemplates(tenantId: string): Promise<DfaTemplateRow[]> {
+  return db.select().from(estabDfaTemplate)
+    .where(and(eq(estabDfaTemplate.tenantId, tenantId), eq(estabDfaTemplate.isActive, true)))
+    .orderBy(asc(estabDfaTemplate.code));
+}
+
+export async function findDfaTemplateByCode(tenantId: string, code: string): Promise<DfaTemplateRow | null> {
+  const rows = await db.select().from(estabDfaTemplate)
+    .where(and(eq(estabDfaTemplate.tenantId, tenantId), eq(estabDfaTemplate.code, code), eq(estabDfaTemplate.isActive, true)))
+    .limit(1);
+  return rows[0] ?? null;
+}
