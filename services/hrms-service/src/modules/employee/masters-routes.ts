@@ -18,7 +18,7 @@ const createDeptBody = z.object({
   parentId: z.string().uuid().optional(),
   type: z.string().min(1).max(40).optional(),
   level: z.number().int().min(0).optional(),
-  govtTier: z.enum(["central", "state"]).optional(),
+  govtTier: z.enum(["central", "state", "local_body", "statutory_body", "autonomous_body"]).optional(),
   locationId: z.string().uuid().optional(),
   headEmployeeId: z.string().uuid().optional(),
 });

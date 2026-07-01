@@ -6,7 +6,7 @@ export type TenantView = {
   tenantId: string;
   name: string;
   domain: string;
-  edition: "small_office" | "psu" | "govt";
+  edition: "small_office" | "psu" | "govt" | "private" | "ngo" | "section8" | "cooperative";
   status: TenantStatus;
   region: string;
   residency: string;

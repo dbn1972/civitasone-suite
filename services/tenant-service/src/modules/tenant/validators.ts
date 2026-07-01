@@ -4,7 +4,7 @@ import { z } from "zod";
 export const createTenantBody = z.object({
   name: z.string().min(2).max(200),
   domain: z.string().min(3).max(253).regex(/^[a-z0-9.-]+$/i, "invalid domain"),
-  edition: z.enum(["small_office", "psu", "govt"]),
+  edition: z.enum(["govt", "psu", "private", "ngo", "section8", "cooperative", "small_office"]),
   region: z.string().min(2).max(64),
   residency: z.string().min(2).max(64),
 });
@@ -38,7 +38,7 @@ export type SetIsolationBody = z.infer<typeof setIsolationBody>;
 export const onboardTenantBody = z.object({
   name: z.string().min(2).max(200),
   domain: z.string().min(3).max(253).regex(/^[a-z0-9.-]+$/i, "invalid domain"),
-  edition: z.enum(["small_office", "psu", "govt"]),
+  edition: z.enum(["govt", "psu", "private", "ngo", "section8", "cooperative", "small_office"]),
   region: z.string().min(2).max(64),
   residency: z.string().min(2).max(64),
   adminEmail: z.string().email().max(254),

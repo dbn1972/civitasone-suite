@@ -12,7 +12,7 @@ export const tenants = tenantSchema.table("tenants", {
   tenantId: uuid("tenant_id").notNull(),
   name: varchar("name", { length: 200 }).notNull(),
   domain: varchar("domain", { length: 253 }).notNull().unique(),
-  edition: varchar("edition", { length: 32 }).notNull(), // small_office | psu | govt
+  edition: varchar("edition", { length: 32 }).notNull(), // govt | psu | private | ngo | section8 | cooperative | small_office
   status: varchar("status", { length: 24 }).notNull().default("draft"),
   region: varchar("region", { length: 64 }).notNull(),
   residency: varchar("residency", { length: 64 }).notNull(),
@@ -20,6 +20,7 @@ export const tenants = tenantSchema.table("tenants", {
   isolationTier: varchar("isolation_tier", { length: 8 }).notNull().default("pool"),
   dbDsnRef: text("db_dsn_ref"),   // secret-manager reference (silo), never plaintext
   kmsKeyRef: text("kms_key_ref"), // per-tenant encryption key reference (silo BYOK)
+  orgCategory: text("org_category"), // richer classification (central_govt, state_psu, society, etc.)
   settings: jsonb("settings").$type<Record<string, unknown>>().default({}).notNull(),
   // audit columns (CLAUDE.md §3.6)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
