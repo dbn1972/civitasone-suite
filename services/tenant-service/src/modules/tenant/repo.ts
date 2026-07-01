@@ -5,7 +5,7 @@
  */
 import { eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { tenants, type TenantRow, type TenantInsert } from "./schema.js";
+import { tenants, tenantQuotas, type TenantRow, type TenantInsert, type TenantQuotaRow } from "./schema.js";
 import type { TenantView } from "./domain.js";
 
 function toView(r: TenantRow): TenantView {
@@ -53,3 +53,76 @@ export async function findByIdTx(tx: Writer, id: string): Promise<TenantView | n
 }
 
 export { toView };
+
+// ── quota reads/writes ───────────────────────────────────────────────
+
+export interface TenantQuotaView {
+  tenantId: string;
+  maxEmployees: number;
+  maxFiles: number;
+  maxApiCallsPerMin: number;
+  maxStorageGb: number;
+  maxUsers: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function quotaToView(r: TenantQuotaRow): TenantQuotaView {
+  return {
+    tenantId: r.tenantId,
+    maxEmployees: r.maxEmployees,
+    maxFiles: r.maxFiles,
+    maxApiCallsPerMin: r.maxApiCallsPerMin,
+    maxStorageGb: r.maxStorageGb,
+    maxUsers: r.maxUsers,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+/** Default quotas returned when no row exists for a tenant. */
+const DEFAULT_QUOTAS: Omit<TenantQuotaView, "tenantId" | "createdAt" | "updatedAt"> = {
+  maxEmployees: 500,
+  maxFiles: 10000,
+  maxApiCallsPerMin: 200,
+  maxStorageGb: 10,
+  maxUsers: 100,
+};
+
+export async function findQuotas(tenantId: string): Promise<TenantQuotaView> {
+  const rows = await db.select().from(tenantQuotas).where(eq(tenantQuotas.tenantId, tenantId)).limit(1);
+  if (rows[0]) return quotaToView(rows[0]);
+  // Return defaults when no explicit quotas exist
+  const now = new Date();
+  return { tenantId, ...DEFAULT_QUOTAS, createdAt: now, updatedAt: now };
+}
+
+export async function upsertQuotas(tenantId: string, patch: Partial<{ maxEmployees: number | undefined; maxFiles: number | undefined; maxApiCallsPerMin: number | undefined; maxStorageGb: number | undefined; maxUsers: number | undefined }>): Promise<TenantQuotaView> {
+  const now = new Date();
+  // Strip undefined values to satisfy exactOptionalPropertyTypes
+  const cleanPatch: Record<string, number> = {};
+  if (patch.maxEmployees !== undefined) cleanPatch.maxEmployees = patch.maxEmployees;
+  if (patch.maxFiles !== undefined) cleanPatch.maxFiles = patch.maxFiles;
+  if (patch.maxApiCallsPerMin !== undefined) cleanPatch.maxApiCallsPerMin = patch.maxApiCallsPerMin;
+  if (patch.maxStorageGb !== undefined) cleanPatch.maxStorageGb = patch.maxStorageGb;
+  if (patch.maxUsers !== undefined) cleanPatch.maxUsers = patch.maxUsers;
+
+  const existing = await db.select().from(tenantQuotas).where(eq(tenantQuotas.tenantId, tenantId)).limit(1);
+  if (existing[0]) {
+    await db.update(tenantQuotas)
+      .set({ ...cleanPatch, updatedAt: now })
+      .where(eq(tenantQuotas.tenantId, tenantId));
+  } else {
+    await db.insert(tenantQuotas).values({
+      tenantId,
+      maxEmployees: cleanPatch.maxEmployees ?? DEFAULT_QUOTAS.maxEmployees,
+      maxFiles: cleanPatch.maxFiles ?? DEFAULT_QUOTAS.maxFiles,
+      maxApiCallsPerMin: cleanPatch.maxApiCallsPerMin ?? DEFAULT_QUOTAS.maxApiCallsPerMin,
+      maxStorageGb: cleanPatch.maxStorageGb ?? DEFAULT_QUOTAS.maxStorageGb,
+      maxUsers: cleanPatch.maxUsers ?? DEFAULT_QUOTAS.maxUsers,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  return findQuotas(tenantId);
+}

@@ -33,4 +33,18 @@ export const tenants = tenantSchema.table("tenants", {
 export type TenantRow = typeof tenants.$inferSelect;
 export type TenantInsert = typeof tenants.$inferInsert;
 
-export const schema = { tenants };
+export const tenantQuotas = tenantSchema.table("tenant_quotas", {
+  tenantId: uuid("tenant_id").primaryKey(),
+  maxEmployees: integer("max_employees").notNull().default(500),
+  maxFiles: integer("max_files").notNull().default(10000),
+  maxApiCallsPerMin: integer("max_api_calls_per_min").notNull().default(200),
+  maxStorageGb: integer("max_storage_gb").notNull().default(10),
+  maxUsers: integer("max_users").notNull().default(100),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type TenantQuotaRow = typeof tenantQuotas.$inferSelect;
+export type TenantQuotaInsert = typeof tenantQuotas.$inferInsert;
+
+export const schema = { tenants, tenantQuotas };

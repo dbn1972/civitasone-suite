@@ -20,12 +20,14 @@
  */
 import { createSqlClient, type SqlClientOptions } from "./pool.js";
 
-export type TenantTier = "pool" | "silo";
+export type TenantTier = "pool" | "silo" | "shard";
 
 export interface TenantConnInfo {
   tier: TenantTier;
-  /** Required for silo: the dedicated DB DSN for this tenant. */
+  /** Required for silo/shard: the dedicated DB DSN for this tenant. */
   connectionString?: string;
+  /** Shard identifier (shard tier only) — e.g. "shard-3". */
+  shardId?: string;
 }
 
 export type TenantResolver = (tenantId: string) => Promise<TenantConnInfo> | TenantConnInfo;
@@ -64,6 +66,39 @@ export function envTenantResolver(): TenantResolver {
   return (tenantId: string): TenantConnInfo => {
     if (ids.has(tenantId.toLowerCase()) && template) {
       return { tier: "silo", connectionString: template.replaceAll("{tenant}", tenantId) };
+    }
+    return { tier: "pool" };
+  };
+}
+
+/**
+ * Env-driven SHARD resolver — reads TENANT_SHARD_MAP as JSON.
+ *   TENANT_SHARD_MAP  JSON map of tenantId → shard DSN, e.g.
+ *     {"<uuid>": "postgres://svc:pw@pg-shard-3:5432/civitas_pool_3", …}
+ *
+ * Any tenant not in the map → pool tier. Returns shardId derived from the DSN
+ * (the DB name slug after the last slash).
+ */
+export function envShardResolver(): TenantResolver {
+  const raw = process.env.TENANT_SHARD_MAP ?? "{}";
+  let map: Record<string, string>;
+  try {
+    map = JSON.parse(raw) as Record<string, string>;
+  } catch {
+    map = {};
+  }
+  // Normalize keys to lowercase for case-insensitive matching
+  const normalized = new Map<string, string>();
+  for (const [k, v] of Object.entries(map)) {
+    normalized.set(k.toLowerCase(), v);
+  }
+  return (tenantId: string): TenantConnInfo => {
+    const dsn = normalized.get(tenantId.toLowerCase());
+    if (dsn) {
+      // Derive shardId from the DSN database name (last path segment)
+      const dbName = dsn.split("/").pop() ?? "";
+      const shardId = dbName.replace(/^civitas_pool_/, "shard-") || "shard-unknown";
+      return { tier: "shard", connectionString: dsn, shardId };
     }
     return { tier: "pool" };
   };
@@ -141,9 +176,9 @@ export class TenantRouter {
       throw new Error(`TenantRouter.sqlFor: invalid tenantId (must be a UUID): ${tenantId}`);
     }
     const info = await this.resolver(tenantId);
-    if (info.tier === "silo") {
+    if (info.tier === "silo" || info.tier === "shard") {
       if (!info.connectionString) {
-        throw new Error(`TenantRouter: silo tenant ${tenantId} has no connectionString`);
+        throw new Error(`TenantRouter: ${info.tier} tenant ${tenantId} has no connectionString`);
       }
       return this.getSiloClient(info.connectionString);
     }

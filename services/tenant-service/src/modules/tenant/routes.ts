@@ -8,7 +8,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createTenantBody, updateTenantBody, suspendTenantBody, tenantIdParam, onboardTenantBody, setIsolationBody } from "./validators.js";
+import { createTenantBody, updateTenantBody, suspendTenantBody, tenantIdParam, onboardTenantBody, setIsolationBody, updateQuotasBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { createTenantPipeline } from "./onboard.js";
@@ -96,6 +96,30 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     const body = onboardTenantBody.parse(req.body);
     const result = await createTenantPipeline(ctx, body);
     return reply.code(202).send(result);
+  });
+
+  // ── Tenant Quotas ──────────────────────────────────────────────────
+
+  /** GET /v1/tenant/:tenantId/quotas — returns current quotas (any authenticated user in tenant). */
+  app.get("/v1/tenant/:tenantId/quotas", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const { tenantId } = tenantIdParam.parse(req.params);
+    // Cross-tenant guard
+    if (ctx.tenantId !== tenantId && !ctx.roles.some((r) => PLATFORM_ADMIN.includes(r))) {
+      throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
+    }
+    const quotas = await queries.getQuotas(tenantId);
+    return reply.send(quotas);
+  });
+
+  /** PATCH /v1/tenant/:tenantId/quotas — updates quotas (super_admin only). */
+  app.patch("/v1/tenant/:tenantId/quotas", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["super_admin"]);
+    const { tenantId } = tenantIdParam.parse(req.params);
+    const body = updateQuotasBody.parse(req.body);
+    const updated = await queries.updateQuotas(tenantId, body);
+    return reply.send(updated);
   });
 
   // uniform error envelope (CLAUDE.md / ARCHITECTURE §6)

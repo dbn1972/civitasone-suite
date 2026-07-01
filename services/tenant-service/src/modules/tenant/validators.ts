@@ -45,3 +45,14 @@ export const onboardTenantBody = z.object({
   adminName: z.string().min(2).max(200),
 });
 export type OnboardTenantBody = z.infer<typeof onboardTenantBody>;
+
+export const updateQuotasBody = z.object({
+  maxEmployees: z.number().int().min(1).max(1_000_000).optional(),
+  maxFiles: z.number().int().min(1).max(100_000_000).optional(),
+  maxApiCallsPerMin: z.number().int().min(1).max(100_000).optional(),
+  maxStorageGb: z.number().int().min(1).max(100_000).optional(),
+  maxUsers: z.number().int().min(1).max(1_000_000).optional(),
+}).refine((b) => Object.values(b).some((v) => v !== undefined), {
+  message: "at least one quota field must be provided",
+});
+export type UpdateQuotasBody = z.infer<typeof updateQuotasBody>;
