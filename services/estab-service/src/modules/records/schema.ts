@@ -80,6 +80,31 @@ export const estabWeedout = filesSchema.table("estab_weedout", {
   byStatus: index("idx_estab_weedout_status").on(t.tenantId, t.status),
 }));
 
+/**
+ * Archival workflow (R5, Public Records Act 1993). A distinct lifecycle
+ * stage from closure — Cat-A permanent records become NAI-eligible 25y after
+ * closure and are explicitly transferred to the National Archives.
+ */
+export const estabArchival = filesSchema.table("estab_archival", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  fileId:          uuid("file_id").notNull(),
+  archivedAt:      timestamp("archived_at", { withTimezone: true }).notNull().defaultNow(),
+  archivedBy:      uuid("archived_by").notNull(),
+  naiEligibleAt:   timestamp("nai_eligible_at", { withTimezone: true }),
+  naiTransferredAt: timestamp("nai_transferred_at", { withTimezone: true }),
+  naiReference:    text("nai_reference"),
+  registerNo:      text("register_no"),
+  status:          varchar("status", { length: 20 }).notNull().default("archived"),
+  remarks:         text("remarks"),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+  version:         integer("version").notNull().default(1),
+});
+
+export type ArchivalRow    = typeof estabArchival.$inferSelect;
+export type ArchivalInsert = typeof estabArchival.$inferInsert;
+
 export type FileRecordRow    = typeof estabFileRecord.$inferSelect;
 export type FileRecordInsert = typeof estabFileRecord.$inferInsert;
 export type RequisitionRow   = typeof estabRecordRequisition.$inferSelect;
@@ -87,4 +112,4 @@ export type RequisitionInsert = typeof estabRecordRequisition.$inferInsert;
 export type WeedoutRow       = typeof estabWeedout.$inferSelect;
 export type WeedoutInsert    = typeof estabWeedout.$inferInsert;
 
-export const schema = { estabFileRecord, estabRecordRequisition, estabWeedout };
+export const schema = { estabFileRecord, estabRecordRequisition, estabArchival, estabWeedout };

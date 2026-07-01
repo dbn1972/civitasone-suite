@@ -178,6 +178,48 @@ export function registerRecordsConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file_record", p.requisitionId));
   });
+
+  // ── R5 archival & NAI transfer ──────────────────────────────────────────
+
+  queue.subscribe(COMMANDS.archiveFile, async (msg) => {
+    const p = msg.payload as { id: string; fileId: string; tenantId: string; remarks: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rec = await repo.findRecordTx(tx, p.tenantId, p.fileId);
+      if (!rec) return; // must be categorised before archival
+      // Cat-A → NAI-eligible at closed + 25 years.
+      const naiEligibleAt = rec.recordCategory === "A"
+        ? (() => { const d = new Date(); d.setFullYear(d.getFullYear() + 25); return d; })()
+        : null;
+      const status = naiEligibleAt ? "nai_due" : "archived";
+      await repo.insertArchival(tx, {
+        id: p.id, tenantId: p.tenantId, fileId: p.fileId,
+        archivedBy: msg.actorId, status,
+        ...(naiEligibleAt ? { naiEligibleAt } : {}),
+        ...(p.remarks ? { remarks: p.remarks } : {}),
+        createdBy: msg.actorId,
+      });
+      await audit(tx, msg, "archive", "archival", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "archival", p.fileId));
+  });
+
+  queue.subscribe(COMMANDS.recordNaiTransfer, async (msg) => {
+    const p = msg.payload as { fileId: string; tenantId: string; naiReference: string; registerNo: string | null; remarks: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const arch = await repo.findArchivalByFile(p.tenantId, p.fileId);
+      if (!arch || arch.status === "nai_transferred") return;
+      await repo.updateArchival(tx, arch.id, {
+        status: "nai_transferred", naiTransferredAt: new Date(),
+        naiReference: p.naiReference,
+        ...(p.registerNo ? { registerNo: p.registerNo } : {}),
+        ...(p.remarks ? { remarks: p.remarks } : {}),
+      });
+      await audit(tx, msg, "nai_transfer", "archival", arch.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "archival", p.fileId));
+  });
 }
 
 async function audit(

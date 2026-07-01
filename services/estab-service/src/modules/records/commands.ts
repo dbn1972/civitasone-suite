@@ -5,6 +5,7 @@ import type {
   AssignCategoryBody, RecordDisposalBody, ProposeWeedoutBody,
   RejectWeedoutBody, DestroyWeedoutBody,
   TransferToRecordRoomBody, RequisitionRecordBody, ReturnRecordBody,
+  ArchiveFileBody, RecordNaiTransferBody,
 } from "./validators.js";
 
 /**
@@ -23,6 +24,9 @@ export const COMMANDS = {
   transferToRecordRoom: "estab.record.transfer_to_record_room",
   requisitionRecord:    "estab.record.requisition",
   returnRecord:         "estab.record.return",
+  // R5 archival & NAI
+  archiveFile:          "estab.record.archive",
+  recordNaiTransfer:    "estab.record.nai_transfer",
 } as const;
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -117,4 +121,26 @@ export async function returnRecord(ctx: RequestContext, body: ReturnRecordBody):
     payload: { requisitionId: body.requisitionId, tenantId: ctx.tenantId },
   });
   return { id: body.requisitionId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+
+// ── R5 archival & NAI transfer ────────────────────────────────────────────
+
+export async function archiveFile(ctx: RequestContext, fileId: string, body: ArchiveFileBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.archiveFile, {
+    messageId: id, type: COMMANDS.archiveFile,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, fileId, tenantId: ctx.tenantId, remarks: body.remarks ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function recordNaiTransfer(ctx: RequestContext, fileId: string, body: RecordNaiTransferBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.recordNaiTransfer, {
+    type: COMMANDS.recordNaiTransfer,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { fileId, tenantId: ctx.tenantId, naiReference: body.naiReference, registerNo: body.registerNo ?? null, remarks: body.remarks ?? null },
+  });
+  return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
 }

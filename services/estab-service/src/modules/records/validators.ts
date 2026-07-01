@@ -63,3 +63,18 @@ export const listRequisitionsQuery = z.object({
   limit:  z.coerce.number().int().min(1).max(200).default(50),
 });
 export type ListRequisitionsQuery = z.infer<typeof listRequisitionsQuery>;
+
+
+// ── R5 archival & NAI ────────────────────────────────────────────────────
+
+export const archiveFileBody = z.object({
+  remarks: z.string().min(1).optional(),
+});
+export type ArchiveFileBody = z.infer<typeof archiveFileBody>;
+
+export const recordNaiTransferBody = z.object({
+  naiReference: z.string().min(1),
+  registerNo:   z.string().min(1).optional(),
+  remarks:      z.string().min(1).optional(),
+});
+export type RecordNaiTransferBody = z.infer<typeof recordNaiTransferBody>;

@@ -7,6 +7,7 @@ import {
   idParam, assignCategoryBody, recordDisposalBody, proposeWeedoutBody,
   rejectWeedoutBody, destroyWeedoutBody, listWeedoutQuery,
   transferToRecordRoomBody, requisitionRecordBody, returnRecordBody, listRequisitionsQuery,
+  archiveFileBody, recordNaiTransferBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -112,6 +113,31 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     const q = listRequisitionsQuery.parse(req.query);
     const rows = await repo.listRequisitions(ctx.tenantId, q.status, q.limit);
     return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+  });
+
+  // ── R5 archival & NAI ───────────────────────────────────────────────────
+
+  app.post("/v1/estab/files/:id/archive", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = archiveFileBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.archiveFile(ctx, id, body));
+  });
+
+  app.post("/v1/estab/files/:id/nai-transfer", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = recordNaiTransferBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordNaiTransfer(ctx, id, body));
+  });
+
+  app.get("/v1/estab/archival/nai-due", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const rows = await repo.listNaiDue(ctx.tenantId, 100);
+    return reply.send({ data: rows });
   });
 
   app.setErrorHandler((err, req, reply) => {

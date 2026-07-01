@@ -151,3 +151,31 @@ export async function listRequisitions(tenantId: string, status: string | undefi
     : eq(estabRecordRequisition.tenantId, tenantId);
   return db.select().from(estabRecordRequisition).where(where).orderBy(desc(estabRecordRequisition.issuedAt)).limit(limit);
 }
+
+
+// ── R5 archival & NAI transfer ───────────────────────────────────────────
+
+import { estabArchival } from "./schema.js";
+import type { ArchivalRow, ArchivalInsert } from "./schema.js";
+
+export async function insertArchival(tx: Writer, row: ArchivalInsert): Promise<void> {
+  await tx.insert(estabArchival).values(row);
+}
+
+export async function findArchivalByFile(tenantId: string, fileId: string): Promise<ArchivalRow | null> {
+  const rows = await db.select().from(estabArchival)
+    .where(and(eq(estabArchival.tenantId, tenantId), eq(estabArchival.fileId, fileId))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateArchival(tx: Writer, id: string, patch: Partial<ArchivalInsert>): Promise<void> {
+  await tx.update(estabArchival).set(patch).where(eq(estabArchival.id, id));
+}
+
+/** Files whose nai_eligible_at has passed but not yet transferred. */
+export async function listNaiDue(tenantId: string, limit: number): Promise<ArchivalRow[]> {
+  return db.select().from(estabArchival)
+    .where(and(eq(estabArchival.tenantId, tenantId), eq(estabArchival.status, "nai_due")))
+    .orderBy(desc(estabArchival.naiEligibleAt))
+    .limit(limit);
+}
