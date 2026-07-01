@@ -11,6 +11,7 @@ import { getPeriodStatus } from "../period-close/routes.js";
 import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
 import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
+import { validateOrgAssignment } from "../org-structure/domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -44,6 +45,7 @@ const CASH = process.env.FINANCE_CASH_CODE ?? "1100";
 type StandardJournal = {
   id: string; tenantId: string; voucherNo: string; type: string;
   postingDate: string; lines: JournalLine[]; reversesId?: string;
+  legalEntityId?: string; costCenterId?: string; profitCenterId?: string; operatingUnitId?: string;
 };
 
 async function postJournal(
@@ -52,6 +54,13 @@ async function postJournal(
   journal: StandardJournal,
 ): Promise<void> {
   assertJournalBalances(journal.lines);
+  // ERP org-structure validation: if a legal entity is assigned, verify all org refs belong to it.
+  await validateOrgAssignment(journal.tenantId, {
+    legalEntityId: journal.legalEntityId ?? null,
+    costCenterId: journal.costCenterId ?? null,
+    profitCenterId: journal.profitCenterId ?? null,
+    operatingUnitId: journal.operatingUnitId ?? null,
+  });
   // M2: lines must be non-negative and the journal must move money. A balanced
   // 0==0 journal (or negative legs) posts an empty / nonsensical voucher — reject.
   let totalDebit = 0n;
@@ -103,6 +112,10 @@ async function postJournal(
     type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
     status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
     ...(journal.reversesId ? { reversesId: journal.reversesId } : {}),
+      ...(journal.legalEntityId ? { legalEntityId: journal.legalEntityId } : {}),
+      ...(journal.costCenterId ? { costCenterId: journal.costCenterId } : {}),
+      ...(journal.profitCenterId ? { profitCenterId: journal.profitCenterId } : {}),
+      ...(journal.operatingUnitId ? { operatingUnitId: journal.operatingUnitId } : {}),
   });
   for (const line of journal.lines) {
     // P5: resolve raw account codes -> head UUIDs so the depreciation / disposal

@@ -109,6 +109,25 @@ export const profitCenters = orgSchema.table("profit_centers", {
   version:        integer("version").notNull().default(1),
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PURCHASING ORGANISATION (SAP Purchasing Org)
+// The unit responsible for procurement under a legal entity.
+// ═══════════════════════════════════════════════════════════════════════════
+export const purchasingOrgs = orgSchema.table("purchasing_orgs", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  legalEntityId:  uuid("legal_entity_id").notNull(),
+  code:           text("code").notNull(),
+  name:           text("name").notNull(),
+  scope:          text("scope").notNull().default("entity"), // entity|cross_entity|plant
+  isActive:       boolean("is_active").notNull().default(true),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:      uuid("created_by").notNull(),
+  updatedBy:      uuid("updated_by").notNull(),
+  version:        integer("version").notNull().default(1),
+});
+
 export type LegalEntityRow    = typeof legalEntities.$inferSelect;
 export type LegalEntityInsert = typeof legalEntities.$inferInsert;
 export type OperatingUnitRow    = typeof operatingUnits.$inferSelect;
@@ -117,5 +136,7 @@ export type CostCenterRow    = typeof costCenters.$inferSelect;
 export type CostCenterInsert = typeof costCenters.$inferInsert;
 export type ProfitCenterRow    = typeof profitCenters.$inferSelect;
 export type ProfitCenterInsert = typeof profitCenters.$inferInsert;
+export type PurchasingOrgRow    = typeof purchasingOrgs.$inferSelect;
+export type PurchasingOrgInsert = typeof purchasingOrgs.$inferInsert;
 
-export const schema = { legalEntities, operatingUnits, costCenters, profitCenters };
+export const schema = { legalEntities, operatingUnits, costCenters, profitCenters, purchasingOrgs };
