@@ -20,12 +20,41 @@ export const estabFileRecord = filesSchema.table("estab_file_record", {
   disposalAction: text("disposal_action"),
   disposedAt:     timestamp("disposed_at", { withTimezone: true }),
   disposedBy:     uuid("disposed_by"),
+  // Record-room physical location (R4).
+  roomStatus:     varchar("room_status", { length: 24 }).notNull().default("in_section"), // in_section|in_record_room|issued
+  recordRoomId:   text("record_room_id"),
+  rack:           text("rack"),
+  shelf:          text("shelf"),
+  bundleNo:       text("bundle_no"),
+  transferredAt:  timestamp("transferred_at", { withTimezone: true }),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }),
   updatedBy:      uuid("updated_by"),
 }, (t) => ({
   pk: primaryKey({ columns: [t.tenantId, t.fileId] }),
+}));
+
+/**
+ * Record-room issue/receipt register (R4) — tracks requisition of a recorded
+ * file out of the record room and its return.
+ */
+export const estabRecordRequisition = filesSchema.table("estab_record_requisition", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  fileId:      uuid("file_id").notNull(),
+  requestedBy: uuid("requested_by").notNull(),
+  purpose:     text("purpose"),
+  status:      varchar("status", { length: 16 }).notNull().default("issued"), // issued|returned
+  issuedAt:    timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
+  dueBack:     date("due_back"),
+  returnedAt:  timestamp("returned_at", { withTimezone: true }),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
+  version:     integer("version").notNull().default(1),
+}, (t) => ({
+  byFile:   index("idx_estab_requisition_file").on(t.tenantId, t.fileId),
+  byStatus: index("idx_estab_requisition_status").on(t.tenantId, t.status),
 }));
 
 /**
@@ -53,7 +82,9 @@ export const estabWeedout = filesSchema.table("estab_weedout", {
 
 export type FileRecordRow    = typeof estabFileRecord.$inferSelect;
 export type FileRecordInsert = typeof estabFileRecord.$inferInsert;
+export type RequisitionRow   = typeof estabRecordRequisition.$inferSelect;
+export type RequisitionInsert = typeof estabRecordRequisition.$inferInsert;
 export type WeedoutRow       = typeof estabWeedout.$inferSelect;
 export type WeedoutInsert    = typeof estabWeedout.$inferInsert;
 
-export const schema = { estabFileRecord, estabWeedout };
+export const schema = { estabFileRecord, estabRecordRequisition, estabWeedout };

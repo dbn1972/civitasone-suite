@@ -34,3 +34,32 @@ export const listWeedoutQuery = z.object({
   limit:  z.coerce.number().int().min(1).max(200).default(50),
 });
 export type ListWeedoutQuery = z.infer<typeof listWeedoutQuery>;
+
+
+// ── R4 record-room management ────────────────────────────────────────────
+
+export const transferToRecordRoomBody = z.object({
+  recordRoomId: z.string().min(1).optional(),
+  rack:         z.string().min(1).optional(),
+  shelf:        z.string().min(1).optional(),
+  bundleNo:     z.string().min(1).optional(),
+});
+export type TransferToRecordRoomBody = z.infer<typeof transferToRecordRoomBody>;
+
+export const requisitionRecordBody = z.object({
+  fileId:  z.string().uuid(),
+  purpose: z.string().min(1).optional(),
+  dueBack: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+export type RequisitionRecordBody = z.infer<typeof requisitionRecordBody>;
+
+export const returnRecordBody = z.object({
+  requisitionId: z.string().uuid(),
+});
+export type ReturnRecordBody = z.infer<typeof returnRecordBody>;
+
+export const listRequisitionsQuery = z.object({
+  status: z.enum(["issued", "returned"]).optional(),
+  limit:  z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ListRequisitionsQuery = z.infer<typeof listRequisitionsQuery>;

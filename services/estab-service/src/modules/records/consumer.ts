@@ -127,6 +127,57 @@ export function registerRecordsConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "weedout", p.id));
   });
+
+  // ── R4 record-room management ───────────────────────────────────────────
+
+  queue.subscribe(COMMANDS.transferToRecordRoom, async (msg) => {
+    const p = msg.payload as { fileId: string; tenantId: string; recordRoomId?: string; rack?: string; shelf?: string; bundleNo?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rec = await repo.findRecordTx(tx, p.tenantId, p.fileId);
+      if (!rec) return; // no record row → file not yet categorised
+      await repo.transferToRecordRoom(tx, p.tenantId, p.fileId, {
+        ...(p.recordRoomId ? { recordRoomId: p.recordRoomId } : {}),
+        ...(p.rack ? { rack: p.rack } : {}),
+        ...(p.shelf ? { shelf: p.shelf } : {}),
+        ...(p.bundleNo ? { bundleNo: p.bundleNo } : {}),
+      }, msg.actorId);
+      await audit(tx, msg, "transfer_to_record_room", "file_record", p.fileId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file_record", p.fileId));
+  });
+
+  queue.subscribe(COMMANDS.requisitionRecord, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; fileId: string; purpose: string | null; dueBack: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rec = await repo.findRecordTx(tx, p.tenantId, p.fileId);
+      if (!rec || rec.roomStatus !== "in_record_room") return; // can only issue from record room
+      await repo.insertRequisition(tx, {
+        id: p.id, tenantId: p.tenantId, fileId: p.fileId,
+        requestedBy: msg.actorId,
+        ...(p.purpose ? { purpose: p.purpose } : {}),
+        ...(p.dueBack ? { dueBack: p.dueBack } : {}),
+        status: "issued", createdBy: msg.actorId,
+      });
+      await repo.markRecordIssued(tx, p.tenantId, p.fileId, msg.actorId);
+      await audit(tx, msg, "requisition", "record_requisition", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file_record", p.fileId));
+  });
+
+  queue.subscribe(COMMANDS.returnRecord, async (msg) => {
+    const p = msg.payload as { requisitionId: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const req = await repo.findRequisitionByIdTx(tx, p.requisitionId, p.tenantId);
+      if (!req || req.status !== "issued") return;
+      await repo.updateRequisition(tx, p.requisitionId, { status: "returned", returnedAt: new Date() });
+      await repo.markRecordReturned(tx, p.tenantId, req.fileId, msg.actorId);
+      await audit(tx, msg, "return", "record_requisition", p.requisitionId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "file_record", p.requisitionId));
+  });
 }
 
 async function audit(

@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import {
   idParam, assignCategoryBody, recordDisposalBody, proposeWeedoutBody,
   rejectWeedoutBody, destroyWeedoutBody, listWeedoutQuery,
+  transferToRecordRoomBody, requisitionRecordBody, returnRecordBody, listRequisitionsQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -78,6 +79,38 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const q = listWeedoutQuery.parse(req.query);
     const rows = await repo.listWeedoutByTenant(ctx.tenantId, q.status, q.limit);
+    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+  });
+
+  // ── R4 record-room management ───────────────────────────────────────────
+
+  app.post("/v1/estab/files/:id/transfer-to-record-room", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = transferToRecordRoomBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.transferToRecordRoom(ctx, id, body));
+  });
+
+  app.post("/v1/estab/record-requisitions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = requisitionRecordBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.requisitionRecord(ctx, body));
+  });
+
+  app.post("/v1/estab/record-requisitions/return", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = returnRecordBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.returnRecord(ctx, body));
+  });
+
+  app.get("/v1/estab/record-requisitions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const q = listRequisitionsQuery.parse(req.query);
+    const rows = await repo.listRequisitions(ctx.tenantId, q.status, q.limit);
     return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
   });
 

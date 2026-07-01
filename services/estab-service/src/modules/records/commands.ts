@@ -4,6 +4,7 @@ import { queue, cache } from "../../shared/infra.js";
 import type {
   AssignCategoryBody, RecordDisposalBody, ProposeWeedoutBody,
   RejectWeedoutBody, DestroyWeedoutBody,
+  TransferToRecordRoomBody, RequisitionRecordBody, ReturnRecordBody,
 } from "./validators.js";
 
 /**
@@ -18,6 +19,10 @@ export const COMMANDS = {
   weedoutApprove:  "estab.weedout.approve",
   weedoutReject:   "estab.weedout.reject",
   weedoutDestroy:  "estab.weedout.destroy",
+  // R4 record-room
+  transferToRecordRoom: "estab.record.transfer_to_record_room",
+  requisitionRecord:    "estab.record.requisition",
+  returnRecord:         "estab.record.return",
 } as const;
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -80,4 +85,36 @@ export async function destroyWeedout(ctx: RequestContext, weedoutId: string, bod
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "weedout", weedoutId));
   return { id: weedoutId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+
+// ── R4 record-room ────────────────────────────────────────────────────────
+
+export async function transferToRecordRoom(ctx: RequestContext, fileId: string, body: TransferToRecordRoomBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.transferToRecordRoom, {
+    type: COMMANDS.transferToRecordRoom,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { fileId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "file_record", fileId));
+  return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function requisitionRecord(ctx: RequestContext, body: RequisitionRecordBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.requisitionRecord, {
+    messageId: id, type: COMMANDS.requisitionRecord,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, fileId: body.fileId, purpose: body.purpose ?? null, dueBack: body.dueBack ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function returnRecord(ctx: RequestContext, body: ReturnRecordBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.returnRecord, {
+    type: COMMANDS.returnRecord,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { requisitionId: body.requisitionId, tenantId: ctx.tenantId },
+  });
+  return { id: body.requisitionId, status: "accepted", correlationId: ctx.correlationId };
 }
