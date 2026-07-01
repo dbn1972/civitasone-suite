@@ -1,0 +1,4584 @@
+{
+  "admin-service": [
+    {
+      "method": "GET",
+      "path": "/v1/admin/api-keys"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/api-keys"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/api-keys/:id/revoke"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/api-keys/:id/rotate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/breakglass"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/config"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/feature-flags"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/feature-flags"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/feature-flags/:key/override"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/health"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/health/:service"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/health/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/operations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/platform-config"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/platform-config"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/platform-config/debug-mode"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/queue-metrics"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/support/break-glass"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/support/break-glass/:id/close"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/tenant/modules"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/tenant/modules/:key/toggle"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/tenants"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/tenants"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/tenants/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/tenants/:id/backup/run"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/tenants/:id/backup/runs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/tenants/:id/backup/schedule"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/tenants/:id/config"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/tenants/:id/edition"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/tenants/:id/modules-list"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/tenants/:id/modules/:module/toggle"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/tenants/:id/reactivate"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/tenants/:id/suspend"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/uploads/:key"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/uploads/presign"
+    }
+  ],
+  "analytics-service": [
+    {
+      "method": "POST",
+      "path": "/v1/analytics/activation/events"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/activation/funnel"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/activation/funnel/platform"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/dashboards"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/dashboards"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/dashboards/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/analytics/dashboards/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/dashboards/:id/shares"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/dashboards/:id/widgets"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/exports"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/exports"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/queries"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/queries/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/queries/run"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/saved-metrics"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/saved-metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/scheduled"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/analytics/scheduled"
+    }
+  ],
+  "asset-service": [
+    {
+      "method": "GET",
+      "path": "/v1/assets/assets"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/assets/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/assets/assets/:id/barcode"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/assets/:id/depreciation"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets/:id/depreciation/schedule"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/assets/assets/:id/dispose"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets/:id/impairment"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets/:id/inter-org-transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/assets/:id/maintenance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets/:id/maintenance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets/:id/request-disposal"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets/:id/revaluation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/assets/assets/:id/transfer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/assets/:id/writeoff-request"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/bulk/import"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/dashboard"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/depreciation/run"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/disposals/:id/submit-approval"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/insurance/claims"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/insurance/policies"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/leases"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/leases"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/locations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/locations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/maintenance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/projects/auc"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/projects/auc"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/projects/auc/:id/capitalize"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/scan/:barcode"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assets/verifications"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/verifications"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/verifications/:id/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/verifications/:id/items"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/verifications/:id/submit"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/work-orders"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/assets/work-orders/:id/complete"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/work-orders/:id/spare-parts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assets/writeoff-requests/:id/approve"
+    }
+  ],
+  "audit-service": [
+    {
+      "method": "GET",
+      "path": "/audit/events"
+    },
+    {
+      "method": "GET",
+      "path": "/audit/events/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/audit/exports"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/breakglass"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/compliance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/compliance/checklists"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/compliance/checklists"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/audit/compliance/checklists/:id/complete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/compliance/pending"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/events"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/exports"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/exports/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/exports/:id/download"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/exports/:id/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/observations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/observations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/observations/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/observations/:id/close"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/observations/:id/draft-para"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/observations/:id/reply"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/observations/:id/review"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/paras"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/audit/paras/:id/close"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/paras/:id/issue"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/audit/paras/:id/pending_recovery"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/paras/:id/response"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/audit/paras/:id/settle"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/plans"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/plans/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/plans/:id/items"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/plans/:id/risks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/plans/:id/risks"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/audit/plans/:id/start"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/risks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/audit/risks"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/audit/risks/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit/risks/universe"
+    }
+  ],
+  "billing-service": [
+    {
+      "method": "POST",
+      "path": "/v1/billing/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/invoices"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/invoices/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/billing/invoices/:id/approvals/:approvalId"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/billing/invoices/:id/cancel"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/billing/invoices/:id/issue"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/billing/invoices/:id/pay"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/invoices/:id/payments"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/invoices/generate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/payments"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/payments"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/payments/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/plans"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/plans/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/subscriptions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/subscriptions"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/billing/subscriptions/:id/activate"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/billing/subscriptions/:id/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/tenants/:id/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/tenants/:id/outstanding"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/tenants/:id/payments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/tenants/:id/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/tenants/:id/usage"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/usage"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/webhooks/razorpay"
+    }
+  ],
+  "citizen-service": [
+    {
+      "method": "GET",
+      "path": "/v1/citizen"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/analytics/grievances"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/analytics/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/analytics/sla"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/analytics/sla-rules"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/applications"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/applications"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/applications/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/applications/:id/documents"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/applications/:id/status"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/grievances"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/grievances"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/grievances/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/grievances/:id/actions"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/grievances/:id/assign"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/grievances/:id/escalate"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/grievances/:id/reopen"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/grievances/:id/resolve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/profiles"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/citizen/profiles/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/requests"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/rti"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/rti"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/rti/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/rti/:id/appeal"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/rti/:id/respond"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/rti/overdue"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/services"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/services/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/sla-rules"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/sla-rules"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/sla/breaches"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/tickets"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/tickets"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/tickets/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/tickets/:id/assign"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/tickets/:id/close"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/tickets/:id/escalate"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/tickets/:id/notes"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/citizen/tickets/:id/resolve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/citizen/tickets/analytics"
+    }
+  ],
+  "contract-service": [
+    {
+      "method": "GET",
+      "path": "/v1/contract/contracts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/contract/contracts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/contract/contracts/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/contract/contracts/:id/activate"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/contract/contracts/:id/amend"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/contract/contracts/:id/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/contract/contracts/:id/close"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/contract/contracts/:id/milestones"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/contract/contracts/:id/milestones/:milestoneId/complete"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/contract/contracts/:id/milestones/:milestoneId/late"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/contract/contracts/:id/submit-approval"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/contract/contracts/:id/terminate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/contract/contracts/active"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/contract/contracts/expiring"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/contract/rate-contracts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/contract/rate-contracts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/contract/rate-contracts/:id"
+    }
+  ],
+  "crm-service": [
+    {
+      "method": "GET",
+      "path": "/v1/crm/accounts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/accounts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/activities"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/activities"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/activities/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/contacts/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/contacts/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/:id/detail"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/bulk/import"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/export"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/merge"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/deals"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/deals/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/deals/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/deals/:id/stage"
+    }
+  ],
+  "estab-service": [
+    {
+      "method": "POST",
+      "path": "/v1/estab/annual-reviews"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/approval-rules"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/approval-rules"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/approval-rules/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/approval-rules/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/approval-rules/resolve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/archival/nai-due"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/committees"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/committees/:id/meetings"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/committees/:id/meetings"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/compliance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/court-cases"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/court-cases/:id/date"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/dfa"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dfa"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/dfa-templates"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/dfa/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/dfa/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dfa/:id/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dfa/:id/dispatch"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dfa/:id/return"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dfa/:id/sign"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dfa/:id/submit"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/dfa/:id/versions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/dispatch"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dispatch"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/dispatch/delivery"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/esign/:subjectType/:subjectId"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/esign/config"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/estab/esign/config"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/esign/sign"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:fileId/references"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id/annual-reviews"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/archive"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/attach-receipt"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/attachments"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/files/:id/close"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id/correspondence"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/correspondence"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id/decision-log"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/disposal"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/links"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/files/:id/move"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id/movements"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/nai-transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id/note-sheet/pdf"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/notings"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/notings/:notingId/sign"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/parts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id/puc"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/puc"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/estab/files/:id/puc/:correspondenceId"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/files/:id/recall"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/:id/record"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/record-category"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/files/:id/reopen"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/submit-for-approval"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/transfer-to-record-room"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/files/:id/type"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/:id/volumes"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/by-ref"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/duplicate-check"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/files/from-module"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/files/search"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/guesthouse-bookings"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/guesthouses"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/handovers"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/handovers"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/inward"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/inward"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/inward/:id/movements"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/inward/:id/open-file"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/inward/detach"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/library/books"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/library/issues"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/meetings"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/meetings/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/meetings/:id/attendance"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/meetings/:id/minutes"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/meetings/:id/resolutions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/migration"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/migration"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/migration/:id/link"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/notifications"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/notings/:noteId/references"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/operators"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/operators"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/operators/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/operators/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/operators/eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/record-requisitions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/record-requisitions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/record-requisitions/return"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/records-officer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/records-officer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/references"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/references/remove"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/room-bookings"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/room-bookings"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/room-bookings/:id/checkin"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/room-bookings/:id/checkout"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/rti"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/rti/:id/respond"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/vehicle-bookings"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/estab/vehicle-bookings/:id/return"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/vehicles"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/vehicles"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/vehicles/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/estab/weedout"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/weedout"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/weedout/:id/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/weedout/:id/destroy"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/estab/weedout/:id/reject"
+    }
+  ],
+  "finance-service": [
+    {
+      "method": "GET",
+      "path": "/v1/finance/accounts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/accounts/:id/hoa"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/advances"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/advances"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/advances/:id/adjust"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/ap/aging"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/ar/aging"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/bank-accounts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/bank-accounts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/bank-statements"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/bank-statements"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/bank-statements/:id/brs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/bank-statements/:id/reconcile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/banks/:id/balance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/bills"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/bills"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/bills/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/bills/:id/approve"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/finance/bills/sample-data"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/bills/sample-data"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/budget-allocations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/budget-allocations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/budget-allocations/re-appropriate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/budgets"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/budgets"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/budgets/:id/re"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/cash-book"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/cash-book/balance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/challans"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/commitments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/cost-centers"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/cost-centers"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/ddo"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/deposits"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/deposits/:id/adjust"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/deposits/:id/forfeit"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/deposits/:id/refund"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/fiscal-years"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/fiscal-years"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/fiscal-years/:code/activate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/fixed-assets/register"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/gem/einvoice/match"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/gst/itc-reconciliation"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/gst/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/gst/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/hoa/validate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/instruments"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/instruments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/instruments/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/instruments/:id/bounce"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/instruments/:id/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/instruments/:id/clear"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/instruments/:id/present"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/journals"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/journals"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/journals/:id/download"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/journals/:id/pdf"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/journals/:id/reverse"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/legal-entities"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/legal-entities"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/major-heads"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/opening-balances"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/opening-balances/:fyCode"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/operating-units"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/operating-units"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/pao"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/payments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/payments/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/payments/:id/submit-approval"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/payments/eft"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/periods"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/periods/:period/close"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/periods/:period/hard-close"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/periods/:period/reopen"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/pfms/:id/bank-file"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/pfms/:id/sign"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/pfms/batches"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/pfms/config"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/profit-centers"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/profit-centers"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/reappropriations/:id/submit-approval"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/recurring-entries"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/recurring-entries"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/recurring-entries/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/reports/budget-utilisation"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/reports/expenditure-statement"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/sanctions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/sanctions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/sanctions/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/sanctions/:id/approve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/sanctions/:id/available"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/finance/sanctions/:id/reject"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/sanctions/:id/submit-approval"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/balance-sheet"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/cash-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/income-expenditure"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/profit-and-loss"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/receipts-payments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/trial-balance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/trial-balance-check"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/statements/trial-balance/balanced"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/subledger-gl-reconciliation"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/utilization-certificates"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/utilization-certificates"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/vendor-tds"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/vendor-tds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/vendor-tds/form-26q"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/voucher-types"
+    }
+  ],
+  "grant-service": [
+    {
+      "method": "GET",
+      "path": "/v1/grants/applications/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/grants/applications/:id/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/applications/:id/compliance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/applications/:id/installments"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/grants/applications/:id/reject"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/grants/applications/:id/score"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/applications/:id/uc"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/applications/:id/uc"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/beneficiaries"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/beneficiaries/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/beneficiaries/:id/aadhaar"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/beneficiaries/:id/bank"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/dashboard"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/disbursements/:id/submit-approval"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/grantees"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/grants"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/grants/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/installments"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/installments/:id/disburse"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/pfms/reconcile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/releases"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/schemes"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/schemes"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/schemes/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/schemes/:id/applications"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/schemes/:id/criteria"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/utilization-certs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/grants/utilization-certs/:id/validate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/grants/utilization-certs/:id/validation-status"
+    }
+  ],
+  "helpdesk-service": [
+    {
+      "method": "GET",
+      "path": "/v1/helpdesk/sla/breaches"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/helpdesk/sla/config"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/helpdesk/sla/config"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/helpdesk/sla/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/helpdesk/sla/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/helpdesk/tickets"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/helpdesk/tickets"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/helpdesk/tickets/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/helpdesk/tickets/:id/assign"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/helpdesk/tickets/:id/escalate"
+    }
+  ],
+  "hrms-service": [
+    {
+      "method": "POST",
+      "path": "/v1/careers/apply"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/careers/vacancies"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/careers/vacancies/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/admin/face-config"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/admin/face-config"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/admin/leave-policies"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/admin/leave-policies"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/hrms/admin/leave-policies/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/admin/leave-policies/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/alerts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/ai/alerts/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/attrition-risk"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/attrition-risk/:employeeId"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/leave-prediction"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/recommendations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/risk-scores"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/ai/scan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/succession"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ai/workforce-insights"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/announcements"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/announcements"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/apar"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/apar/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/apar/:id/accept"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/apar/:id/finalise"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/apar/:id/reporting"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/apar/:id/representation"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/apar/:id/reviewing"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/apar/:id/self-appraisal"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/applications"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/applications/:id/hire"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/applications/:id/offer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/appraisals"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/appraisals"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/appraisals/:id/stage"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/assistant"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/attendance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/attendance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/attendance/face-log"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/attendance/geo-check-in"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/attendance/geo-check-out"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/attendance/geo-history"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/attendance/regularisations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/attendance/regularisations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/attendance/reportees"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/attendance/summary"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/attendance/verify-face"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/birthdays/:id/wish"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/birthdays/today"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/cea-claims/:claimId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/cea-claims/:claimId/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/cea-claims/:claimId/reject"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/comp-off"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/comp-off"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/comp-off/:id/redeem"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/departments"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/departments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/deputations/:depId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/deputations/:depId/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/deputations/:depId/repatriate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/designations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/designations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/devices/:deviceId/activity"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/devices/:id/block"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/devices/:id/unblock"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/devices/admin"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/devices/heartbeat"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/devices/me"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/devices/policy"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/devices/policy"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/devices/register"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/disciplinary-cases/:caseId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/appeal"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/appeal-decision"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/charge-memo"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/close"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/drop"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/events"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/finding"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/inquiry"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary-cases/:caseId/penalty"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/disciplinary/:id/submit-approval"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/dpc/eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employee-types"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employee-types"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/employee-types/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/employees/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/cea-claims"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/cea-claims"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/employees/:id/confirm"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/deputations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/deputations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/disciplinary-cases"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/disciplinary-cases"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/gpf"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/gpf"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/gpf/advance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/gpf/interest"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/gpf/refund"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/gpf/subscription"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/gpf/withdrawal"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/ltc-claims"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/ltc-claims"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/pension"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/pension/records"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/profile-photo"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/profile-photo"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/promotion/submit-approval"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/employees/:id/separate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/service-book"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/service-book"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/service-book/pdf"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/:id/suspensions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/suspensions"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/employees/:id/transfer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/transfer/submit-approval"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/employees/bulk"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/employees/bulk/status/:batchId"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/expenses"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/expenses"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/expenses/:id/approve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/goals"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/goals"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/goals/:id/checkin"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/goals/:id/checkins"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/holidays"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/holidays"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/hrms/holidays/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/id-cards"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/id-cards"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/id-cards/:id/reactivate"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/id-cards/:id/revoke"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/id-cards/:id/suspend"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/id-cards/me"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/id-cards/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/internal/payroll-input"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/interviews"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/interviews"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/interviews/:id/scorecard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/job-openings"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/job-openings"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/kudos"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/kudos/feed"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/leaderboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/leaderboard/my-points"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/leave-allocations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/leave-allocations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/leave-applications"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/leave-applications"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/leave-applications/:id/approve"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/leave-applications/:id/reject"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/leave-context"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/leave-requests"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/leave-requests"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/leave-requests/:id/approve"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/leave-requests/:id/reject"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/leave-types"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/lifecycle/promotions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lifecycle/promotions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/lifecycle/transfers"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lifecycle/transfers"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lifecycle/transfers/:id/issue-order"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lifecycle/transfers/:id/join"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lifecycle/transfers/:id/relieve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/loans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/loans"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/loans/:id/emi-paid"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/ltc-claims/:claimId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/ltc-claims/:claimId/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/ltc-claims/:claimId/reject"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/me/attendance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/me/leave-applications"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/me/leave-balance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/me/profile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/medical/claims"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/medical/claims"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/medical/claims/:id/approve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/medical/history"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/medical/hospitals"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/medical/insurance"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/nominations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/nominations/:id/complete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/office-locations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/office-locations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/org-chart"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/orgchart"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/pay-matrix"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/pay-matrix/annual-increment"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/pay-matrix/lookup"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/pulse-surveys"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/pulse-surveys"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/pulse-surveys/:id/respond"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/pulse-surveys/:id/results"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/recruitment/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/reports/absentees"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/reports/headcount"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/reports/leave-balance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/reports/seniority"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/reservation/rosters"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/reservation/rosters"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/reservation/rosters/:rid"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/reservation/rosters/:rid/points"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/reservation/rosters/:rid/points"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/reservation/rosters/:rid/vacancies"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/rti/requests"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/rti/requests"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/rti/requests/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/rti/requests/:id/appeal"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/rti/requests/:id/assign"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/rti/requests/:id/close"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/rti/requests/:id/respond"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/salary-advances"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/salary-advances"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/salary-advances/:id/approve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/sanctioned-posts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/sanctioned-posts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/sanctioned-posts/:pid"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/scheduler/due-list"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/scheduler/run"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/scheduler/runs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/seniority"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/service-book/entries/:entryId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/service-book/entries/:entryId/attest"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/social/feed"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/suspensions/:suspId/revoke"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/talent-pool"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/training-programs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/trainings"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/travel-requests"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/travel-requests"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/travel-requests/:id/approve"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/travel-requests/:id/reject"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/visiting-card/me"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/hrms/visiting-card/me"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/visiting-card/me/share"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/visiting-card/me/signature"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/visiting-card/public/:code"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/workforce/budget"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/workforce/diversity"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/workforce/headcount"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/workforce/retirement-forecast"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/workforce/vacancy-forecast"
+    }
+  ],
+  "identity-service": [
+    {
+      "method": "GET",
+      "path": "/identity/api-keys"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/api-keys"
+    },
+    {
+      "method": "DELETE",
+      "path": "/identity/api-keys/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/api-keys/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/api-keys/:id/rotate"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/api-keys/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/break-glass"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/break-glass"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/break-glass/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/break-glass/:id/close"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/mfa/setup"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/mfa/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/rbac/permissions"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/rbac/permissions"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/rbac/roles"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/rbac/roles"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/rbac/roles/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/rbac/roles/:id/assignments"
+    },
+    {
+      "method": "DELETE",
+      "path": "/identity/rbac/roles/:id/assignments/:userId"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/rbac/roles/:id/permissions"
+    },
+    {
+      "method": "DELETE",
+      "path": "/identity/rbac/roles/:id/permissions/:permissionId"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/rbac/users/:userId/effective"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/sessions"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/sessions"
+    },
+    {
+      "method": "DELETE",
+      "path": "/identity/sessions/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/sessions/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/users"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/users"
+    },
+    {
+      "method": "DELETE",
+      "path": "/identity/users/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/identity/users/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/identity/users/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/users/:id/keycloak-reconcile"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/users/:id/mfa"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/users/:id/reset-password"
+    },
+    {
+      "method": "POST",
+      "path": "/identity/users/:id/sessions/revoke-all"
+    },
+    {
+      "method": "PATCH",
+      "path": "/identity/users/:id/status"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/devices/register"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/devices/step-up"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sync/pull"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sync/push"
+    }
+  ],
+  "install-service": [
+    {
+      "method": "GET",
+      "path": "/v1/install/silo-provisions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/install/silo-provisions/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/install/silo-provisions/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/install/stages"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/install/stages"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/install/stages/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/install/steps"
+    }
+  ],
+  "inventory-service": [
+    {
+      "method": "POST",
+      "path": "/v1/inventory/adjustments"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/balances"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/categories"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/inventory/categories"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/inventory/issues"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/items"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/inventory/items"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/items/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/inventory/items/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/low-stock"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/inventory/receipts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/stores"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/inventory/stores"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/inventory/transfers"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/inventory/uoms"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/inventory/uoms"
+    }
+  ],
+  "knowledge-service": [
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/documents"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/documents"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/records"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/search"
+    }
+  ],
+  "legal-service": [
+    {
+      "method": "GET",
+      "path": "/v1/legal/cases"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/cases"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/cases/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/legal/cases/:id/dispose"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/cases/:id/hearings"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/legal/cases/:id/hearings/:hId/adjourn"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/cases/:id/orders"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/cases/:id/reminder"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/contract-reviews"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/legal/contract-reviews/:id/clear"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/counsel-briefs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/counsel-briefs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/counsel-briefs/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/court-orders"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/filings"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/filings"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/filings/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/hearings"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/hearings/upcoming"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/notices"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/notices/:id/respond"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/opinions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/opinions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/opinions/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/legal/opinions/:id/draft"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/legal/opinions/:id/issue"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/opinions/:id/submit-approval"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/legal/settlements"
+    }
+  ],
+  "location-service": [
+    {
+      "method": "GET",
+      "path": "/v1/locations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/locations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/locations/:id"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/locations/sample-data"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/locations/sample-data"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/locations/tree"
+    }
+  ],
+  "notification-service": [
+    {
+      "method": "GET",
+      "path": "/notifications/alert-rules"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/alert-rules"
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/alert-rules/:id/disable"
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/alert-rules/:id/enable"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/campaigns"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/campaigns/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/campaigns/:id/cancel"
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/campaigns/:id/send"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/channels"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/channels"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/deliveries"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/deliveries/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/notifications"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/preferences/:userId"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/preferences/:userId"
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/prefs/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/send"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/templates"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/templates"
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/templates/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/templates/:id/versions"
+    }
+  ],
+  "payroll-service": [
+    {
+      "method": "GET",
+      "path": "/v1/payroll/arrears"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/arrears"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/bonus"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/bonus/compute"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/comparison"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/ctc/calculate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/ctc/config"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/ddos"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/ddos"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/loans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/loans"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/payroll/loans/:id/disburse"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/pensioners"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/pensioners"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/register"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/reimbursements"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/reimbursements"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/runs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/runs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/runs/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/payroll/runs/:id/approve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/runs/:id/bank-file"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/payroll/runs/:id/disburse"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/payroll/runs/:id/revert"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/salary-revisions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/salary-slips"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/slips/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/slips/:id/pdf"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/challans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/statutory/challans"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/ecr"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/esi"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/form12ba"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/form24q"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/form26q"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/gpf"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/gratuity"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/lwf"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/nps"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/nps-scf"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/statutory/perquisite-components"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/pf"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/pt"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/reconcile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/statutory/tds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/structures"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/structures"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax-declarations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/tax-declarations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax/computation"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax/form16"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax/form16/:employeeId/pdf"
+    }
+  ],
+  "plugin-service": [
+    {
+      "method": "GET",
+      "path": "/v1/plugins/items"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/plugins/items"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/plugins/items/:id"
+    }
+  ],
+  "policy-service": [
+    {
+      "method": "POST",
+      "path": "/policy/bindings"
+    },
+    {
+      "method": "DELETE",
+      "path": "/policy/bindings/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/policy/breakglass"
+    },
+    {
+      "method": "GET",
+      "path": "/policy/roles"
+    },
+    {
+      "method": "POST",
+      "path": "/policy/roles"
+    },
+    {
+      "method": "GET",
+      "path": "/policy/roles/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/policy/roles/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/policy/roles/:id/permissions"
+    },
+    {
+      "method": "POST",
+      "path": "/policy/roles/:id/permissions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/policy/abac/evaluate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/policy/abac/rules"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/policy/abac/rules"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/policy/abac/rules/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/policy/abac/rules/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/policy/abac/rules/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/policy/evaluate"
+    }
+  ],
+  "procurement-service": [
+    {
+      "method": "POST",
+      "path": "/v1/procurement/advances"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/approvals"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/auctions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/auctions/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/auctions/:id/bids"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/procurement/auctions/:id/close"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/central-debarment"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/central-debarment"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/dashboard"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/debit-notes"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/emd"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/emd"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/emd/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/emd/:id/forfeit"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/emd/:id/refund"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/grns"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/grns"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/grns/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/indents"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/indents"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/indents/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/procurement/indents/:id/approve"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/procurement/indents/:id/reject"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/indents/tender-required"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/orders"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/pbg"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/pbg"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/pbg/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/pbg/:id/forfeit"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/pbg/:id/release"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/pos"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/pos"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/pos/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/procurement/pos/:id/dispatch"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/pos/:id/download"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/pos/:id/pdf"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/pos/:id/submit-approval"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/pos/gem"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/rfqs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/rfqs/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/tenders"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/tenders"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/tenders/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/tenders/:id/award"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/tenders/:id/bids"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/tenders/:id/evaluation"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/tenders/:id/open-financial"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/tenders/:id/publish"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/tenders/:id/technical-evaluation"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/three-way-match"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/three-way-match"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/vendor-blacklist"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/vendors"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/vendors"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/vendors/:id"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/procurement/vendors/:id/blacklist"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/procurement/vendors/:id/blacklist"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/procurement/vendors/:id/blacklist"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/procurement/vendors/:id/empanel"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/procurement/vendors/blacklisted"
+    }
+  ],
+  "project-service": [
+    {
+      "method": "GET",
+      "path": "/v1/projects"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/baselines"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/baselines"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/dpr"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/evm"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/evm/compute"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/financial-progress"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/geo-tags"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/geo-tags"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/milestones"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/:id/milestones/:mId/complete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/penalties"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/penalties"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/physical-progress"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/progress"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/ra-bills"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/ra-bills"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/ra-bills/:billId/approve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/resources"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/resources"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/risks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/risks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/site-photos"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/tasks"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/:id/tasks/:taskId/status"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/:id/time-extensions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/time-extensions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/:id/time-extensions/:extId/approve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/dashboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/fund-releases"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/milestones"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/milestones/:id/evidence"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/milestones/:id/evidence"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/projects"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/projects/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/schemes"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/schemes"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/schemes/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/schemes/:id/components"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/schemes/:id/fund-releases"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/schemes/:id/fund-releases/:rId/disburse"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/schemes/:id/uc-statements"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/schemes/:id/uc-statements"
+    }
+  ],
+  "report-service": [
+    {
+      "method": "GET",
+      "path": "/v1/reports/dashboards"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/reports/generate/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reports/jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/reports/jobs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reports/kpis"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reports/mis"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reports/report-jobs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reports/report-jobs/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/reports/schedule"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reports/scheduled"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reports/schedules"
+    }
+  ],
+  "stock-service": [
+    {
+      "method": "GET",
+      "path": "/v1/stock/dashboard"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/stock/entries"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/stock/items"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/stock/items"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/stock/items/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/stock/ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/stock/physical-verification"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/stock/valuation"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/stock/warehouses"
+    }
+  ],
+  "telephony-service": [
+    {
+      "method": "GET",
+      "path": "/v1/telephony/agents"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/agents"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/telephony/agents/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/agents/:id/status"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/telephony/calls"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/telephony/calls/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/abandon"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/answer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/assign"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/complete"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/ivr-hits"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/link"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/miss"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/recording"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/calls/:id/ring"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/telephony/calls/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/telephony/queues"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/queues"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/telephony/queues/:id"
+    }
+  ],
+  "tenant-service": [
+    {
+      "method": "POST",
+      "path": "/v1/tenant/onboard"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tenants"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tenants/:tenantId"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/tenants/:tenantId"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/tenants/:tenantId/isolation"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tenants/:tenantId/suspend"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tenants/current"
+    }
+  ],
+  "theme-service": [
+    {
+      "method": "GET",
+      "path": "/v1/themes/tokens"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/themes/tokens"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/themes/tokens/:id"
+    }
+  ],
+  "workflow-service": [
+    {
+      "method": "GET",
+      "path": "/v1/workflow/analytics/bottlenecks"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/analytics/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/audit/export"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/definitions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/definitions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/definitions/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/definitions/:id/deploy"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/delegations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/delegations"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workflow/delegations/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/dlq"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/dlq/:id/requeue"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/instances"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/instances"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/instances/:id/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/instances/:id/history"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/instances/:id/migrate"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/instances/:id/resume"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/instances/:id/suspend"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/role-members"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workflow/role-members"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/tasks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/tasks/:id/assign"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/tasks/:id/claim"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/tasks/:id/complete"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/tasks/bulk-complete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/templates"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/templates/:id/clone"
+    }
+  ]
+}
