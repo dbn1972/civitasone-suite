@@ -61,4 +61,24 @@ export type JournalInsert = typeof financeJournals.$inferInsert;
 export type LedgerRow   = typeof financeLedger.$inferSelect;
 export type LedgerInsert = typeof financeLedger.$inferInsert;
 
-export const schema = { financeJournals, financeLedger };
+/** Denormalized journal lines — eliminates CROSS JOIN LATERAL on JSONB lines. */
+export const financeJournalLines = glSchema.table("finance_journal_lines", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  journalId:      uuid("journal_id").notNull(),
+  headId:         uuid("head_id").notNull(),
+  debitMinor:     bigint("debit_minor", { mode: "bigint" }).notNull().default(0n),
+  creditMinor:    bigint("credit_minor", { mode: "bigint" }).notNull().default(0n),
+  narration:      text("narration"),
+  postingDate:    date("posting_date").notNull(),
+  journalType:    text("journal_type").notNull(),
+  headCode:       text("head_code"),
+  headName:       text("head_name"),
+  headClassification: text("head_classification"),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type JournalLineRow = typeof financeJournalLines.$inferSelect;
+export type JournalLineInsert = typeof financeJournalLines.$inferInsert;
+
+export const schema = { financeJournals, financeLedger, financeJournalLines };

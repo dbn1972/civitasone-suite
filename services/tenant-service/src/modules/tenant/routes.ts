@@ -8,7 +8,10 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createTenantBody, updateTenantBody, suspendTenantBody, tenantIdParam, onboardTenantBody, setIsolationBody, updateQuotasBody } from "./validators.js";
+import { createTenantBody, updateTenantBody, suspendTenantBody, tenantIdParam, onboardTenantBody, setIsolationBody, updateQuotasBody, msmeOnboardBody } from "./validators.js";
+import { randomUUID } from "node:crypto";
+import * as repo from "./repo.js";
+import { db } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { createTenantPipeline } from "./onboard.js";
@@ -120,6 +123,61 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     const body = updateQuotasBody.parse(req.body);
     const updated = await queries.updateQuotas(tenantId, body);
     return reply.send(updated);
+  });
+
+  /**
+   * POST /v1/tenant/msme-onboard — MSME self-signup (public, no auth required).
+   *
+   * Accepts Udyam number + basic info, creates a tenant with:
+   * - edition: "small_office"
+   * - settings.msme: { udyamNumber, category, sector, nicCode, gstin }
+   * - Default quotas applied
+   * - Sector-based modules auto-configured
+   *
+   * In production, this would validate the Udyam number against the MSME portal API.
+   * For now, it accepts the self-declared classification.
+   */
+  app.post("/v1/tenant/msme-onboard", async (req, reply) => {
+    const body = msmeOnboardBody.parse(req.body);
+
+    // In production: validate udyamNumber against https://udyamregistration.gov.in/
+    // For now: trust the self-declaration (Udyam format: UDYAM-XX-XX-XXXXXXX)
+
+    const tenantId = randomUUID();
+    const domain = body.businessName.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 30) + ".civitasone.in";
+
+    // Create tenant via the same pipeline as admin onboarding
+    const ctx = { tenantId, actorId: tenantId, correlationId: randomUUID(), roles: ["owner"] } as unknown as import("@civitasone/types").RequestContext;
+    const result = await createTenantPipeline(ctx, {
+      name: body.businessName,
+      domain,
+      edition: "small_office",
+      region: body.state ?? "IN",
+      residency: "IN",
+      adminEmail: body.email,
+      adminName: body.ownerName,
+    });
+
+    // Store MSME profile in tenant settings (via direct DB update for speed)
+    await repo.update(db as unknown as repo.Writer, result.tenantId, {
+      settings: {
+        msme: {
+          udyamNumber: body.udyamNumber,
+          category: body.category,
+          sector: body.sector,
+          nicCode: body.nicCode ?? null,
+          gstin: body.gstin ?? null,
+        },
+      },
+    });
+
+    return reply.code(201).send({
+      tenantId: result.tenantId,
+      domain,
+      edition: "small_office",
+      sector: body.sector,
+      message: "MSME tenant created. Login with the email provided.",
+    });
   });
 
   // uniform error envelope (CLAUDE.md / ARCHITECTURE §6)

@@ -1,6 +1,6 @@
 import { eq, and, gte, lte, sql, asc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { financeJournals, financeLedger, type JournalRow, type JournalInsert, type LedgerInsert } from "./schema.js";
+import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
 import { financeHeads } from "../budget/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -11,6 +11,10 @@ export async function insertJournal(tx: Writer, row: JournalInsert): Promise<voi
 
 export async function insertLedgerLine(tx: Writer, row: LedgerInsert): Promise<void> {
   await tx.insert(financeLedger).values(row);
+}
+
+export async function insertJournalLine(tx: Writer, row: JournalLineInsert): Promise<void> {
+  await tx.insert(financeJournalLines).values(row);
 }
 
 export async function findJournalById(id: string): Promise<JournalRow | null> {

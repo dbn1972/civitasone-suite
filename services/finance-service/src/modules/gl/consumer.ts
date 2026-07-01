@@ -129,6 +129,16 @@ async function postJournal(
       voucherNo, postingDate: journal.postingDate,
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });
+    // Denormalized journal line (eliminates CROSS JOIN LATERAL for asset/report queries).
+    const head = await budgetRepo.findHeadByIdTx(tx as Parameters<typeof budgetRepo.findHeadByIdTx>[0], headId);
+    await repo.insertJournalLine(tx, {
+      id: randomUUID(), tenantId: journal.tenantId, journalId: journal.id, headId,
+      debitMinor: BigInt(line.debitMinor), creditMinor: BigInt(line.creditMinor),
+      narration: line.narration ?? null, postingDate: journal.postingDate, journalType: journal.type,
+      ...(head?.code ? { headCode: head.code } : {}),
+      ...(head?.name ? { headName: head.name } : {}),
+      ...(head?.classification ? { headClassification: head.classification } : {}),
+    });
   }
   await enqueue(tx, {
     topic: EVENTS.glPosted, eventType: EVENTS.glPosted,

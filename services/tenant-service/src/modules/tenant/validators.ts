@@ -56,3 +56,18 @@ export const updateQuotasBody = z.object({
   message: "at least one quota field must be provided",
 });
 export type UpdateQuotasBody = z.infer<typeof updateQuotasBody>;
+
+
+export const msmeOnboardBody = z.object({
+  udyamNumber:  z.string().regex(/^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/, "Invalid Udyam number format (UDYAM-XX-XX-XXXXXXX)"),
+  businessName: z.string().min(2).max(200),
+  ownerName:    z.string().min(2).max(200),
+  email:        z.string().email().max(254),
+  mobile:       z.string().min(10).max(15).optional(),
+  category:     z.enum(["micro", "small", "medium"]),
+  sector:       z.enum(["manufacturing", "trading", "services"]),
+  nicCode:      z.string().min(2).max(5).optional(),
+  gstin:        z.string().length(15).optional(),
+  state:        z.string().min(2).max(64).optional(),
+});
+export type MsmeOnboardBody = z.infer<typeof msmeOnboardBody>;

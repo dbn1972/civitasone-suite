@@ -3,6 +3,7 @@ import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import { quotaCheckPlugin } from "@civitasone/db";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID } from "node:crypto";
 import { resolveRoute } from "./registry.js";
@@ -143,6 +144,20 @@ export async function buildApp(): Promise<FastifyInstance> {
     keyGenerator: (req) => (req.headers["x-tenant-id"] as string) || (req.ip ?? "unknown"),
     max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
     timeWindow: "1 minute",
+  });
+
+  // Phase 1 hyperscale: per-tenant configurable quota enforcement.
+  const quotaStore = {
+    _d: new Map<string, { v: string; e: number }>(),
+    _c: new Map<string, { n: number; e: number }>(),
+    async get(k: string) { const e = this._d.get(k); return (e && e.e > Date.now()) ? e.v : null; },
+    async set(k: string, v: string, t: number) { this._d.set(k, { v, e: Date.now() + t * 1000 }); },
+    async incr(k: string, t: number) { const now = Date.now(); const e = this._c.get(k); if (e && e.e > now) { e.n++; return e.n; } this._c.set(k, { n: 1, e: now + t * 1000 }); return 1; },
+  };
+  await app.register(quotaCheckPlugin, {
+    store: quotaStore,
+    tenantServiceUrl: process.env.GATEWAY_TENANT_URL ?? "http://127.0.0.1:3002",
+    shadowMode: process.env.QUOTA_SHADOW_MODE === "true",
   });
 
   registerResponseMetrics(app);

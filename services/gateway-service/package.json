@@ -22,7 +22,8 @@
     "fastify": "^4.27.0",
     "pino": "^8.21.0",
     "@civitasone/schemas": "workspace:*",
-    "@civitasone/observability": "workspace:*"
+    "@civitasone/observability": "workspace:*",
+    "@civitasone/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
