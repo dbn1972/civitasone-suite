@@ -224,12 +224,12 @@ export function registerRecordsConsumers(queue: Queue): void {
   // ── R6 Records Officer & annual review ──────────────────────────────────
 
   queue.subscribe(COMMANDS.appointRecordsOfficer, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; operatorId: string; orgUnitId: string | null };
+    const p = msg.payload as { id: string; tenantId: string; operatorId: string; departmentId: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.upsertRecordsOfficer(tx, {
         id: p.id, tenantId: p.tenantId, operatorId: p.operatorId,
-        ...(p.orgUnitId ? { orgUnitId: p.orgUnitId } : {}),
+        ...(p.departmentId ? { departmentId: p.departmentId } : {}),
         active: true, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "appoint_records_officer", "records_officer", p.id);

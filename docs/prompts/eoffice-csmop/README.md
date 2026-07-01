@@ -7,7 +7,7 @@ drive the remediation wave for `estab-service`.
 | Prompt | Procedural area | Gap | Remediation | Severity |
 |--------|-----------------|-----|-------------|:--------:|
 | [00](./00-master-office-procedure-audit.md) | Master receipt→archival audit | — | — | — |
-| [01](./01-org-hierarchy.md) | Organisation hierarchy | #1 | R1 | High |
+| [01](./01-org-hierarchy.md) | Organisation hierarchy | #1 | R1 | High — **resolved by referencing HRMS departments (cross-service)** |
 | [02](./02-file-type-taxonomy.md) | File-type taxonomy | #2 | R2 | High |
 | [03](./03-dfa-hardening.md) | Drafting / DFA | #3 | R3 | High |
 | [04](./04-record-room.md) | Record room | #4 | R4 | Medium |
@@ -22,7 +22,7 @@ Source gap analysis: [`../../EOFFICE-GOI-PROCEDURE-GAP-ANALYSIS-2026-06-30.md`](
 
 ## Remediation order (by severity, then dependency)
 1. **R3** DFA gapless numbering + versioning (High, self-contained) ✅ done
-2. **R1** Org-hierarchy module (High) ✅ done
+2. **R1** Org-hierarchy module (High) ✅ done — **refactored: removed duplicate `estab_org_unit`; estab-service now references HRMS departments cross-service (same pattern as employee refs)**
 3. **R2** File-type taxonomy (High) ✅ done
 4. **R9** System diary numbering + duplicate-subject warning (Low, cheap) ✅ done
 5. **R10** Conditional/partial approval (Low, cheap) ✅ done

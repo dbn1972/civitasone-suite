@@ -157,7 +157,7 @@ export async function appointRecordsOfficer(ctx: RequestContext, body: AppointRe
   await queue.publish(COMMANDS.appointRecordsOfficer, {
     messageId: id, type: COMMANDS.appointRecordsOfficer,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, operatorId: body.operatorId, orgUnitId: body.orgUnitId ?? null },
+    payload: { id, tenantId: ctx.tenantId, operatorId: body.operatorId, departmentId: body.departmentId ?? null },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

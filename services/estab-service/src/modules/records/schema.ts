@@ -113,7 +113,7 @@ export const estabRecordsOfficer = filesSchema.table("estab_records_officer", {
   id:          uuid("id").primaryKey().defaultRandom(),
   tenantId:    uuid("tenant_id").notNull(),
   operatorId:  uuid("operator_id").notNull(),
-  orgUnitId:   uuid("org_unit_id"),
+  departmentId: uuid("department_id"),    // cross-service ref to hrms_departments
   appointedAt: timestamp("appointed_at", { withTimezone: true }).notNull().defaultNow(),
   active:      boolean("active").notNull().default(true),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

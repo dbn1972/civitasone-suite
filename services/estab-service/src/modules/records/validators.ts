@@ -83,8 +83,8 @@ export type RecordNaiTransferBody = z.infer<typeof recordNaiTransferBody>;
 // ── R6 Records Officer + annual review ───────────────────────────────────
 
 export const appointRecordsOfficerBody = z.object({
-  operatorId: z.string().uuid(),
-  orgUnitId:  z.string().uuid().optional(),
+  operatorId:   z.string().uuid(),
+  departmentId: z.string().uuid().optional(),  // cross-service ref to hrms_departments
 });
 export type AppointRecordsOfficerBody = z.infer<typeof appointRecordsOfficerBody>;
 

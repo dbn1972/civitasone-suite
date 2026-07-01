@@ -55,9 +55,6 @@ export const COMMANDS = {
   migrationLink:        "estab.migration.link",
   operatorEnrol:        "estab.operator.enrol",
   operatorUpdate:       "estab.operator.update",
-  // org hierarchy (R1)
-  orgUnitCreate:        "estab.org_unit.create",
-  orgUnitUpdate:        "estab.org_unit.update",
   // structured referencing (R7)
   referenceAdd:         "estab.reference.add",
   referenceRemove:      "estab.reference.remove",
