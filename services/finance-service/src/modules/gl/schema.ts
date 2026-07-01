@@ -26,6 +26,11 @@ export const financeJournals = glSchema.table("finance_journals", {
   postingDate: date("posting_date").notNull(),
   lines:       jsonb("lines").$type<JournalLine[]>().notNull().default([]),
   status:      varchar("status", { length: 24 }).notNull().default("draft"),
+  // ERP org structure references (0028)
+  legalEntityId:  uuid("legal_entity_id"),
+  costCenterId:   uuid("cost_center_id"),
+  profitCenterId: uuid("profit_center_id"),
+  operatingUnitId: uuid("operating_unit_id"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
