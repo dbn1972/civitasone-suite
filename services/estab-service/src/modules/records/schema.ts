@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, varchar, integer, date, timestamp, index, primaryKey,
+  pgSchema, uuid, text, varchar, integer, boolean, date, timestamp, index, primaryKey,
 } from "drizzle-orm/pg-core";
 
 // Records management lives in the existing `files` PG schema (module isolation:
@@ -105,6 +105,43 @@ export const estabArchival = filesSchema.table("estab_archival", {
 export type ArchivalRow    = typeof estabArchival.$inferSelect;
 export type ArchivalInsert = typeof estabArchival.$inferInsert;
 
+/**
+ * Records Officer designation (R6, Public Records Rules 1997).
+ * One active Records Officer per tenant.
+ */
+export const estabRecordsOfficer = filesSchema.table("estab_records_officer", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  operatorId:  uuid("operator_id").notNull(),
+  orgUnitId:   uuid("org_unit_id"),
+  appointedAt: timestamp("appointed_at", { withTimezone: true }).notNull().defaultNow(),
+  active:      boolean("active").notNull().default(true),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:   uuid("updated_by").notNull(),
+  version:     integer("version").notNull().default(1),
+});
+
+/** Annual review register (R6). */
+export const estabAnnualReview = filesSchema.table("estab_annual_review", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  fileId:        uuid("file_id").notNull(),
+  reviewedAt:    timestamp("reviewed_at", { withTimezone: true }).notNull().defaultNow(),
+  reviewedBy:    uuid("reviewed_by").notNull(),
+  decision:      varchar("decision", { length: 16 }).notNull(),
+  remarks:       text("remarks"),
+  nextReviewDue: date("next_review_due"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+});
+
+export type RecordsOfficerRow    = typeof estabRecordsOfficer.$inferSelect;
+export type RecordsOfficerInsert = typeof estabRecordsOfficer.$inferInsert;
+export type AnnualReviewRow      = typeof estabAnnualReview.$inferSelect;
+export type AnnualReviewInsert   = typeof estabAnnualReview.$inferInsert;
+
 export type FileRecordRow    = typeof estabFileRecord.$inferSelect;
 export type FileRecordInsert = typeof estabFileRecord.$inferInsert;
 export type RequisitionRow   = typeof estabRecordRequisition.$inferSelect;
@@ -112,4 +149,4 @@ export type RequisitionInsert = typeof estabRecordRequisition.$inferInsert;
 export type WeedoutRow       = typeof estabWeedout.$inferSelect;
 export type WeedoutInsert    = typeof estabWeedout.$inferInsert;
 
-export const schema = { estabFileRecord, estabRecordRequisition, estabArchival, estabWeedout };
+export const schema = { estabFileRecord, estabRecordRequisition, estabArchival, estabRecordsOfficer, estabAnnualReview, estabWeedout };

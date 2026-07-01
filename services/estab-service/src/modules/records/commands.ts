@@ -6,6 +6,7 @@ import type {
   RejectWeedoutBody, DestroyWeedoutBody,
   TransferToRecordRoomBody, RequisitionRecordBody, ReturnRecordBody,
   ArchiveFileBody, RecordNaiTransferBody,
+  AppointRecordsOfficerBody, RecordAnnualReviewBody,
 } from "./validators.js";
 
 /**
@@ -27,6 +28,9 @@ export const COMMANDS = {
   // R5 archival & NAI
   archiveFile:          "estab.record.archive",
   recordNaiTransfer:    "estab.record.nai_transfer",
+  // R6 Records Officer + annual review
+  appointRecordsOfficer: "estab.record.appoint_officer",
+  recordAnnualReview:    "estab.record.annual_review",
 } as const;
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -143,4 +147,27 @@ export async function recordNaiTransfer(ctx: RequestContext, fileId: string, bod
     payload: { fileId, tenantId: ctx.tenantId, naiReference: body.naiReference, registerNo: body.registerNo ?? null, remarks: body.remarks ?? null },
   });
   return { id: fileId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+
+// ── R6 Records Officer + annual review ────────────────────────────────────
+
+export async function appointRecordsOfficer(ctx: RequestContext, body: AppointRecordsOfficerBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.appointRecordsOfficer, {
+    messageId: id, type: COMMANDS.appointRecordsOfficer,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, operatorId: body.operatorId, orgUnitId: body.orgUnitId ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function recordAnnualReview(ctx: RequestContext, body: RecordAnnualReviewBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.recordAnnualReview, {
+    messageId: id, type: COMMANDS.recordAnnualReview,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, fileId: body.fileId, decision: body.decision, remarks: body.remarks ?? null, nextReviewDue: body.nextReviewDue ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -78,3 +78,20 @@ export const recordNaiTransferBody = z.object({
   remarks:      z.string().min(1).optional(),
 });
 export type RecordNaiTransferBody = z.infer<typeof recordNaiTransferBody>;
+
+
+// ── R6 Records Officer + annual review ───────────────────────────────────
+
+export const appointRecordsOfficerBody = z.object({
+  operatorId: z.string().uuid(),
+  orgUnitId:  z.string().uuid().optional(),
+});
+export type AppointRecordsOfficerBody = z.infer<typeof appointRecordsOfficerBody>;
+
+export const recordAnnualReviewBody = z.object({
+  fileId:   z.string().uuid(),
+  decision: z.enum(["retain", "weed", "archive"]),
+  remarks:  z.string().min(1).optional(),
+  nextReviewDue: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+export type RecordAnnualReviewBody = z.infer<typeof recordAnnualReviewBody>;

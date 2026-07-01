@@ -8,6 +8,7 @@ import {
   rejectWeedoutBody, destroyWeedoutBody, listWeedoutQuery,
   transferToRecordRoomBody, requisitionRecordBody, returnRecordBody, listRequisitionsQuery,
   archiveFileBody, recordNaiTransferBody,
+  appointRecordsOfficerBody, recordAnnualReviewBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -138,6 +139,37 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const rows = await repo.listNaiDue(ctx.tenantId, 100);
     return reply.send({ data: rows });
+  });
+
+  // ── R6 Records Officer & annual review ──────────────────────────────────
+
+  app.post("/v1/estab/records-officer", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = appointRecordsOfficerBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.appointRecordsOfficer(ctx, body));
+  });
+
+  app.get("/v1/estab/records-officer", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const officer = await repo.findActiveRecordsOfficer(ctx.tenantId);
+    return reply.send({ data: officer ?? null });
+  });
+
+  app.post("/v1/estab/annual-reviews", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = recordAnnualReviewBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordAnnualReview(ctx, body));
+  });
+
+  app.get("/v1/estab/files/:id/annual-reviews", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { id } = idParam.parse(req.params);
+    const data = await repo.listAnnualReviews(ctx.tenantId, id);
+    return reply.send({ data });
   });
 
   app.setErrorHandler((err, req, reply) => {

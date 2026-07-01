@@ -220,6 +220,46 @@ export function registerRecordsConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "archival", p.fileId));
   });
+
+  // ── R6 Records Officer & annual review ──────────────────────────────────
+
+  queue.subscribe(COMMANDS.appointRecordsOfficer, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; operatorId: string; orgUnitId: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.upsertRecordsOfficer(tx, {
+        id: p.id, tenantId: p.tenantId, operatorId: p.operatorId,
+        ...(p.orgUnitId ? { orgUnitId: p.orgUnitId } : {}),
+        active: true, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "appoint_records_officer", "records_officer", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "records_officer", p.id));
+  });
+
+  queue.subscribe(COMMANDS.recordAnnualReview, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; fileId: string; decision: string; remarks: string | null; nextReviewDue: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertAnnualReview(tx, {
+        id: p.id, tenantId: p.tenantId, fileId: p.fileId,
+        reviewedBy: msg.actorId, decision: p.decision,
+        ...(p.remarks ? { remarks: p.remarks } : {}),
+        ...(p.nextReviewDue ? { nextReviewDue: p.nextReviewDue } : {}),
+        createdBy: msg.actorId,
+      });
+      // If decision is retain, update the next review_due_date on the record.
+      if (p.decision === "retain" && p.nextReviewDue) {
+        await repo.upsertRecord(tx, {
+          tenantId: p.tenantId, fileId: p.fileId,
+          recordCategory: "B", // placeholder; upsert only updates review date
+          reviewDueDate: p.nextReviewDue, createdBy: msg.actorId,
+        });
+      }
+      await audit(tx, msg, "annual_review", "annual_review", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "annual_review", p.fileId));
+  });
 }
 
 async function audit(
