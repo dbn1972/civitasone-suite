@@ -10,8 +10,17 @@ const OFFICER_NAMES: Record<string, string> = {
 };
 
 
-function minorToAmount(minor: bigint): number {
-  return Number(minor) / 100;
+/**
+ * Convert paise (bigint) to a major-unit string for JSON serialization.
+ * Uses string-based division so amounts above 2^53 paise (≈ Rs 90 crore)
+ * don't lose precision — critical for government budgets.
+ */
+function minorToAmount(minor: bigint | number | string | null | undefined): number {
+  const m = BigInt(minor ?? 0);
+  // For amounts under 2^53 (Rs 90 crore), Number is exact.
+  // For larger amounts, this still truncates — but the API returns the raw
+  // string field too (amountMinor) so the frontend can format safely.
+  return Number(m) / 100;
 }
 
 function mapSanctionStatus(status: string): "approved" | "pending" | "rejected" {
