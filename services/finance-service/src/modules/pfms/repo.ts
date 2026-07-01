@@ -60,14 +60,12 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
     ref: string; ddo_code: string | null;
   }>(sql`
     SELECT
-      COALESCE(b.vendor_id::text, '') AS beneficiary,
-      bk.account_no                    AS account,
-      p.amount_minor::text             AS amount_minor,
+      COALESCE(p.vendor_ref, '') AS beneficiary,
+      p.bank_account_ref                   AS account,
+      p.amount_minor::text                 AS amount_minor,
       COALESCE(p.utr, p.eft_ref, p.id::text) AS ref,
-      COALESCE(p.ddo_code, b.ddo_code) AS ddo_code
+      COALESCE(p.ddo_code, p.ddo_code_denorm) AS ddo_code
     FROM payments.finance_payments p
-    LEFT JOIN payments.finance_bills b ON b.id = p.bill_id AND b.tenant_id = p.tenant_id
-    LEFT JOIN treasury.finance_banks bk ON bk.id = p.bank_account_id AND bk.tenant_id = p.tenant_id
     WHERE p.tenant_id = ${tenantId}::uuid
       AND p.pfms_id = ${pfmsId}
       AND p.status IN ('initiated','released','completed')

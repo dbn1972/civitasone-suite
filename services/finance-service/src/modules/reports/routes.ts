@@ -30,14 +30,12 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = await db.execute(sql`
       SELECT fh.code, fh.name,
-        COALESCE(SUM(p.amount_minor), 0)::bigint AS expenditure_minor
+        COALESCE(hu.expended_minor, 0)::bigint AS expenditure_minor
       FROM budget.finance_heads fh
-      JOIN budget.finance_budgets fb ON fb.head_id = fh.id AND fb.tenant_id = fh.tenant_id AND fb.fy = ${fy}
-      LEFT JOIN payments.finance_bills b ON b.head_id = fh.id AND b.tenant_id = fh.tenant_id
-      LEFT JOIN payments.finance_payments p ON p.bill_id = b.id
-        AND p.tenant_id = ${ctx.tenantId}::uuid AND p.status = 'paid'
+      LEFT JOIN budget.head_utilisation hu
+        ON hu.tenant_id = fh.tenant_id AND hu.head_id = fh.id AND hu.fy = ${fy}::bpchar
       WHERE fh.tenant_id = ${ctx.tenantId}::uuid
-      GROUP BY fh.id, fh.code, fh.name ORDER BY fh.code
+      ORDER BY fh.code
     `);
 
     const result = rows as unknown as Array<{ code: string; name: string; expenditure_minor: string }>;
@@ -60,18 +58,15 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = await db.execute(sql`
       SELECT fh.code, fh.name,
-        fb.allocated_minor AS sanctioned_amount_minor,
-        fb.utilised_minor AS released_amount_minor,
-        COALESCE(SUM(p.amount_minor), 0)::bigint AS expended_minor,
-        ROUND(COALESCE(SUM(p.amount_minor), 0)::numeric /
-          NULLIF(fb.allocated_minor, 0) * 100, 2) AS utilisation_pct
+        COALESCE(hu.allocated_minor, 0) AS sanctioned_amount_minor,
+        COALESCE(hu.committed_minor, 0) AS released_amount_minor,
+        COALESCE(hu.expended_minor, 0)::bigint AS expended_minor,
+        ROUND(COALESCE(hu.expended_minor, 0)::numeric /
+          NULLIF(hu.allocated_minor, 0) * 100, 2) AS utilisation_pct
       FROM budget.finance_heads fh
-      JOIN budget.finance_budgets fb ON fb.head_id = fh.id AND fb.tenant_id = fh.tenant_id AND fb.fy = ${fy}
-      LEFT JOIN payments.finance_bills b ON b.head_id = fh.id AND b.tenant_id = fh.tenant_id
-      LEFT JOIN payments.finance_payments p ON p.bill_id = b.id
-        AND p.tenant_id = ${ctx.tenantId}::uuid AND p.status = 'paid'
+      LEFT JOIN budget.head_utilisation hu
+        ON hu.tenant_id = fh.tenant_id AND hu.head_id = fh.id AND hu.fy = ${fy}::bpchar
       WHERE fh.tenant_id = ${ctx.tenantId}::uuid
-      GROUP BY fh.id, fh.code, fh.name, fb.allocated_minor, fb.utilised_minor
       ORDER BY fh.code
     `);
 
