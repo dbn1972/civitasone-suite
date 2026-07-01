@@ -58,6 +58,9 @@ export const COMMANDS = {
   // org hierarchy (R1)
   orgUnitCreate:        "estab.org_unit.create",
   orgUnitUpdate:        "estab.org_unit.update",
+  // structured referencing (R7)
+  referenceAdd:         "estab.reference.add",
+  referenceRemove:      "estab.reference.remove",
   // correspondence (yellow side) + PUC
   correspondenceAdd:    "estab.correspondence.add",
   pucMark:              "estab.file.puc.mark",

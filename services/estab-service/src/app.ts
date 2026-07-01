@@ -20,6 +20,7 @@ import { handoverRoutes }   from "./modules/handover/routes.js";
 import { migrationRoutes }  from "./modules/migration/routes.js";
 import { operatorRoutes }   from "./modules/operators/routes.js";
 import { orgRoutes }        from "./modules/org/routes.js";
+import { referencingRoutes } from "./modules/referencing/routes.js";
 import { notificationRoutes } from "./modules/notifications/routes.js";
 import { correspondenceRoutes } from "./modules/correspondence/routes.js";
 import { recordsRoutes } from "./modules/records/routes.js";
@@ -57,6 +58,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(migrationRoutes);
   await app.register(operatorRoutes);
   await app.register(orgRoutes);
+  await app.register(referencingRoutes);
   await app.register(notificationRoutes);
   await app.register(correspondenceRoutes);
   await app.register(recordsRoutes);
