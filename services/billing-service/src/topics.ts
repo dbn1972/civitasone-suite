@@ -17,6 +17,8 @@ export const COMMANDS = {
   checkoutVerify:       "billing.checkout.verify",
   webhookRazorpay:      "billing.webhook.razorpay",
   dunningRetry:         "billing.dunning.retry",
+  einvoiceGenerate:     "billing.einvoice.generate",
+  einvoiceCancel:       "billing.einvoice.cancel",
 } as const;
 
 export const EVENTS = {

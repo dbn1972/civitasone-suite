@@ -3,6 +3,9 @@ export const COMMANDS = {
   warehouseCreate:      "stock.warehouse.create",
   entryCreate:          "stock.entry.create",
   physicalCreate:       "stock.physical.create",
+  ewbGenerate:          "stock.ewb.generate",
+  ewbCancel:            "stock.ewb.cancel",
+  ewbUpdateVehicle:     "stock.ewb.update_vehicle",
 } as const;
 
 export const EVENTS = {

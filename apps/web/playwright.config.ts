@@ -10,8 +10,9 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
+  timeout: 30_000,
   reporter: [['html', { outputFolder: 'e2e-report' }], ['list']],
   use: {
     baseURL: process.env.BASE_URL ?? `http://localhost:${E2E_PORT}`,
@@ -35,7 +36,7 @@ export default defineConfig({
   webServer: {
     command: `CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web dev --port ${E2E_PORT}`,
     url: `http://localhost:${E2E_PORT}`,
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
 });

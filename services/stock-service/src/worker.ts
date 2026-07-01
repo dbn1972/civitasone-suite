@@ -5,12 +5,14 @@ import { startRelay } from "./shared/outbox.js";
 import { registerItemConsumers }      from "./modules/item/consumer.js";
 import { registerWarehouseConsumers } from "./modules/warehouse/consumer.js";
 import { registerEntryConsumers }     from "./modules/entry/consumer.js";
+import { registerEwayBillConsumers }  from "./modules/eway-bill/consumer.js";
 
 const log = pino({ name: "stock-worker" });
 
 registerItemConsumers(queue);
 registerWarehouseConsumers(queue);
 registerEntryConsumers(queue);
+registerEwayBillConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

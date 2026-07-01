@@ -7,6 +7,7 @@ import { registerSubscriptionsConsumers } from "./modules/subscriptions/consumer
 import { registerUsageConsumers } from "./modules/usage/consumer.js";
 import { registerInvoicesConsumers } from "./modules/invoices/consumer.js";
 import { registerPaymentsConsumers } from "./modules/payments/consumer.js";
+import { registerEInvoiceConsumers } from "./modules/einvoice/consumer.js";
 
 const log = pino({ name: "billing-worker" });
 
@@ -15,6 +16,7 @@ registerSubscriptionsConsumers(queue);
 registerUsageConsumers(queue);
 registerInvoicesConsumers(queue);
 registerPaymentsConsumers(queue);
+registerEInvoiceConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

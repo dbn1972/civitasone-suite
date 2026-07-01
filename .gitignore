@@ -12,6 +12,7 @@ infra/.env
 *.tsbuildinfo
 apps/web/test-results/
 apps/web/e2e-report/
+apps/web/playwright-report/
 .claude/
 
 # Build artifacts / IDE

@@ -71,6 +71,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fixedAssetRoutes);
   const { pfmsTreasuryStubRoutes } = await import("./modules/pfms/treasury-stubs.js");
   await app.register(pfmsTreasuryStubRoutes);
+  const { simplifiedRoutes } = await import("./modules/simplified/routes.js");
+  await app.register(simplifiedRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
