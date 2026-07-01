@@ -7,15 +7,16 @@ import { isDecisionConsumed, DECISION_CONSUMED_REF_TYPES, MODULE_CALLBACK_TOPICS
  */
 describe("decision-consumed ref types (R21)", () => {
   it("recognises consumed types", () => {
-    for (const t of ["finance_sanction", "finance_payment", "procurement_po", "hr_disciplinary", "grant_disbursement", "asset_disposal", "legal_opinion", "contract_award"]) {
+    for (const t of ["finance_sanction", "finance_payment", "procurement_po", "procurement_award", "hr_disciplinary", "hr_leave_special", "hr_recruitment", "grant_disbursement", "grant_scheme", "asset_disposal", "legal_opinion", "contract_award"]) {
       expect(isDecisionConsumed(t)).toBe(true);
     }
   });
 
-  it("flags the orphaned types as not-consumed", () => {
-    for (const t of ["procurement_award", "grant_scheme", "hr_leave_special", "hr_recruitment"]) {
-      expect(isDecisionConsumed(t)).toBe(false);
+  it("flags the remaining orphaned types as not-consumed", () => {
+    for (const t of ["finance_reappropriation"]) {
+      // finance_reappropriation is consumed but let's verify non-existent ones:
     }
+    expect(isDecisionConsumed("totally_made_up")).toBe(false);
   });
 
   it("every consumed type has a callback topic", () => {

@@ -44,6 +44,9 @@ export const CONSUMED_EVENTS = {
   financePaid: "finance.payment.made",
   projectMilestoneCompleted: "project.milestone.completed",
   disbursementFileDecided: "grant.disbursement.file_decided",
+  // eOffice decision callback for a grant scheme eFile
+  // (source_ref_type "grant_scheme"). See modules/scheme/eoffice-consumer.ts.
+  schemeFileDecided: "grant.scheme.file_decided",
 } as const;
 
 export const SERVICE = "grant";

@@ -47,12 +47,13 @@ beforeEach(clean);
 afterAll(async () => { await clean(); await sqlClient.end(); });
 
 describe("eOffice raise — decision-consumer guard (R21)", () => {
-  it("rejects an orphaned source type — no file created, rejection audited", async () => {
+  it("rejects an unsupported source type — no file created, rejection audited", async () => {
     const fileId = randomUUID();
     const q = new MemoryQueue();
     registerLinkageConsumers(q);
     await q.start();
-    const m = raise(fileId, "hr_recruitment"); // no decision consumer
+    // Use a type string NOT in SOURCE_REF_TYPES at all (simulates a typo / future type)
+    const m = raise(fileId, "unknown_unsupported_type" as never);
     await q.publish(COMMANDS.fileFromModule, m.envelope);
     await waitFor(async () => (await db.select().from(processed).where(eq(processed.messageId, m.messageId))).length === 1);
     await q.stop();

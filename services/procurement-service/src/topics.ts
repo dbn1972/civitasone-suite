@@ -65,6 +65,9 @@ export const FINANCE_GL_POST = "finance.gl.post";
 export const CONSUMED_EVENTS = {
   legalContractCleared: "legal.contract_review.cleared",
   poFileDecided:        "procurement.po.file_decided",
+  // eOffice decision callback for a procurement award eFile
+  // (source_ref_type "procurement_award"). See modules/tender/eoffice-consumer.ts.
+  awardFileDecided:     "procurement.award.file_decided",
 } as const;
 
 export const SERVICE = "procurement";

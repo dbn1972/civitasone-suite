@@ -10,6 +10,17 @@ export async function findSchemeById(id: string, tenantId: string): Promise<Sche
   return rows[0] ?? null;
 }
 
+export async function findSchemeByIdTx(tx: Writer, id: string, tenantId: string): Promise<SchemeRow | null> {
+  const rows = await (tx as typeof db).select().from(grantSchemes)
+    .where(and(eq(grantSchemes.id, id), eq(grantSchemes.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateScheme(tx: Writer, id: string, patch: Partial<SchemeInsert>): Promise<void> {
+  await (tx as typeof db).update(grantSchemes).set({ ...patch, updatedAt: new Date() })
+    .where(eq(grantSchemes.id, id));
+}
+
 export async function findCriteriaByScheme(schemeId: string, limit = 200): Promise<CriterionRow[]> {
   return db.select().from(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.schemeId, schemeId)).limit(limit);
 }

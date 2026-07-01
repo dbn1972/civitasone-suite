@@ -44,6 +44,12 @@ export const CONSUMED_EVENTS = {
   // eOffice decision callback for an HR disciplinary eFile
   // (source_ref_type "hr_disciplinary"). See modules/disciplinary/eoffice-consumer.ts.
   disciplinaryFileDecided: "hrms.disciplinary.file_decided",
+  // eOffice decision callback for a special leave eFile
+  // (source_ref_type "hr_leave_special"). See modules/leave/eoffice-consumer.ts.
+  leaveSpecialFileDecided: "hrms.leave_special.file_decided",
+  // eOffice decision callback for an HR recruitment eFile
+  // (source_ref_type "hr_recruitment"). See modules/recruitment/eoffice-consumer.ts.
+  recruitmentFileDecided: "hrms.recruitment.file_decided",
 } as const;
 
 export const SERVICE = "hrms";

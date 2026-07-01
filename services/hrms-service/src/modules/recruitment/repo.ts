@@ -119,6 +119,17 @@ export async function findJobOpeningById(id: string): Promise<JobOpeningRow | nu
   return rows[0] ?? null;
 }
 
+export async function findJobOpeningByIdTx(tx: Writer, id: string, tenantId: string): Promise<JobOpeningRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsJobOpenings)
+    .where(and(eq(hrmsJobOpenings.id, id), eq(hrmsJobOpenings.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateJobOpening(tx: Writer, id: string, patch: Partial<typeof hrmsJobOpenings.$inferInsert>): Promise<void> {
+  await tx.update(hrmsJobOpenings).set({ ...patch, updatedAt: new Date() }).where(eq(hrmsJobOpenings.id, id));
+}
+
 // --- Talent Pool (resume bank / candidate search) ---
 
 export async function searchApplications(

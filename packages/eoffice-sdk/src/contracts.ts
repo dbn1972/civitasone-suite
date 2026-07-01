@@ -64,9 +64,9 @@ export const MODULE_CALLBACK_TOPICS: Record<SourceRefType, string> = {
  */
 export const DECISION_CONSUMED_REF_TYPES: ReadonlySet<SourceRefType> = new Set<SourceRefType>([
   "finance_sanction", "finance_payment", "finance_reappropriation",
-  "procurement_po",
-  "hr_promotion", "hr_transfer", "hr_disciplinary",
-  "grant_disbursement",
+  "procurement_po", "procurement_award",
+  "hr_promotion", "hr_transfer", "hr_disciplinary", "hr_leave_special", "hr_recruitment",
+  "grant_disbursement", "grant_scheme",
   "asset_disposal", "legal_opinion", "contract_award",
 ]);
 
