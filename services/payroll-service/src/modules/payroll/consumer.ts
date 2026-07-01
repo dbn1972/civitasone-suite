@@ -377,6 +377,7 @@ export function registerPayrollConsumers(queue: Queue): void {
             totalGrossMinor: totalGross.toString(),
             totalNetMinor: totalNet.toString(),
             totalEmployerContribMinor: totalEmployerContrib.toString(),
+            ...(run.legalEntityId ? { legalEntityId: run.legalEntityId } : {}),
           },
         });
       }

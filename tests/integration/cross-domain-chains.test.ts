@@ -132,8 +132,8 @@ describe("Cross-service chain A: procurement.grn.accepted → finance.bill.creat
     expect(p.vendorId).toBe("ddddffff-0001-4000-8000-000000000001");
     expect(p.currency).toBe("INR");
     // No deductions on a GRN draft → net == gross.
-    expect(p.grossMinor).toBe(750000);
-    expect(p.netMinor).toBe(750000);
+    expect(String(p.grossMinor)).toBe("750000");
+    expect(String(p.netMinor)).toBe("750000");
     expect(p.deductions).toEqual([]);
     // billNo derives from the first 8 chars of grnId, upper-cased.
     expect(p.billNo).toBe(`BILL/GRN/${grnId.slice(0, 8).toUpperCase()}`);

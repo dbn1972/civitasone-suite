@@ -192,3 +192,49 @@ describe("Idempotency across the hop", () => {
     expect(seen).toHaveLength(1);
   });
 });
+
+
+describe("V1 — org-structure propagation: payroll.run.approved with legalEntityId → GL journal carries it", () => {
+  it("legalEntityId on payroll run flows through to the finance GL journal payload", async () => {
+    const LEGAL_ENTITY_ID = "eeeeeeee-0001-4000-8000-000000000001";
+    const glPosted = harness.nextEvent("finance.gl.post");
+
+    await harness.queue.publish(
+      "payroll.run.approved",
+      envelope("aaaaaaaa-0001-4000-8000-000000000001", "payroll.run.approved", {
+        runId: "99999999-0002-4000-8000-000000000002",
+        month: "2026-06",
+        totalGrossMinor: "500000",
+        totalNetMinor: "400000",
+        totalEmployerContribMinor: "50000",
+        legalEntityId: LEGAL_ENTITY_ID,
+      }),
+    );
+
+    const msg = await glPosted;
+    const p = msg.payload as { type: string; legalEntityId?: string; lines: unknown[] };
+    expect(p.type).toBe("payroll_accrual");
+    // The critical assertion: legalEntityId propagates from payroll → finance GL
+    expect(p.legalEntityId).toBe(LEGAL_ENTITY_ID);
+  });
+
+  it("payroll run WITHOUT legalEntityId still posts (backward compat, no LE field)", async () => {
+    const glPosted = harness.nextEvent("finance.gl.post");
+
+    await harness.queue.publish(
+      "payroll.run.approved",
+      envelope("aaaaaaaa-0001-4000-8000-000000000001", "payroll.run.approved", {
+        runId: "99999999-0003-4000-8000-000000000003",
+        month: "2026-07",
+        totalGrossMinor: "300000",
+        totalNetMinor: "250000",
+      }),
+    );
+
+    const msg = await glPosted;
+    const p = msg.payload as { type: string; legalEntityId?: string };
+    expect(p.type).toBe("payroll_accrual");
+    // No legalEntityId in payload → field should be absent (backward compat)
+    expect(p.legalEntityId).toBeUndefined();
+  });
+});

@@ -159,6 +159,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const p = msg.payload as {
       runId: string; month: string; totalGrossMinor: string; totalNetMinor: string;
       totalEmployerContribMinor?: string;
+      legalEntityId?: string;
     };
     const gross = BigInt(p.totalGrossMinor);
     const net = BigInt(p.totalNetMinor);
@@ -204,6 +205,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
           voucherNo: `PAY/${p.month}/${p.runId.slice(0, 8)}`,
           type: "payroll_accrual",
           postingDate: new Date().toISOString().slice(0, 10),
+          ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
           // H3: paise passed as bigint strings so > 2^53 paise stays exact.
           lines: lines.map((l) => ({
             accountCode: l.accountCode,
