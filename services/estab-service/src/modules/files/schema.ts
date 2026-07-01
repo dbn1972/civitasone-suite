@@ -11,6 +11,7 @@ export const estabFiles = filesSchema.table("estab_files", {
   fileNo:         text("file_no").notNull(),
   subject:        text("subject").notNull(),
   dept:           text("dept").notNull(),
+  departmentId:   uuid("department_id"),
   priority:       varchar("priority", { length: 16 }).notNull().default("normal"),
   classification: varchar("classification", { length: 16 }).notNull().default("public"),
   currentWith:    uuid("current_with").notNull(),

@@ -24,6 +24,7 @@ export const auditPlanItems = planSchema.table("audit_plan_items", {
   tenantId:      uuid("tenant_id").notNull(),
   planId:        uuid("plan_id").notNull(),
   deptRef:       text("dept_ref").notNull(),
+  departmentId:  uuid("department_id"),
   unitRef:       text("unit_ref"),
   scheduledFrom: date("scheduled_from").notNull(),
   scheduledTo:   date("scheduled_to").notNull(),

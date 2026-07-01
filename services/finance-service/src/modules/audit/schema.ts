@@ -10,6 +10,7 @@ export const financeAuditParas = auditModuleSchema.table("finance_audit_paras", 
   paraNo:          text("para_no").notNull(),
   source:          varchar("source", { length: 32 }).notNull(),  // CAG|AG|internal
   dept:            text("dept").notNull(),
+  departmentId:    uuid("department_id"),
   moneyValueMinor: bigint("money_value_minor", { mode: "bigint" }).notNull().default(0n),
   currency:        char("currency", { length: 3 }).notNull().default("INR"),
   status:          varchar("status", { length: 24 }).notNull().default("open"),

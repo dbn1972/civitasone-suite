@@ -9,6 +9,7 @@ export const estabFileOperator = filesSchema.table("estab_file_operator", {
   tenantId:    uuid("tenant_id").notNull(),
   employeeId:  uuid("employee_id").notNull(),
   division:    text("division").notNull(),
+  departmentId: uuid("department_id"),
   section:     text("section"),
   deskRole:    text("desk_role").notNull().default("dealing_hand"),
   clearanceLevel: integer("clearance_level").notNull().default(1), // 1 public,2 confidential,3 secret,4 top_secret

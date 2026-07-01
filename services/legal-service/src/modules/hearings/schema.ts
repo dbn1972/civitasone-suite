@@ -13,6 +13,7 @@ export const legalHearings = hearingsSchema.table("legal_hearings", {
   nextDate:     date("next_date"),
   previousDate: date("previous_date"),
   reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+  departmentId: uuid("department_id"),
   assignedTo:   uuid("assigned_to"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

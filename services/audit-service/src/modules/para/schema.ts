@@ -8,6 +8,7 @@ export const auditParas = paraSchema.table("audit_paras", {
   paraNo:              text("para_no").notNull(),
   observationId:       uuid("observation_id"),
   deptRef:             text("dept_ref").notNull(),
+  departmentId:        uuid("department_id"),
   body:                text("body").notNull(),
   category:            varchar("category", { length: 24 }).notNull().default("compliance"),
   amountInvolvedMinor: bigint("amount_involved_minor", { mode: "bigint" }).notNull().default(0n),

@@ -6,6 +6,7 @@ export const auditComplianceReports = complianceSchema.table("audit_compliance_r
   id:         uuid("id").primaryKey().defaultRandom(),
   tenantId:   uuid("tenant_id").notNull(),
   reportNo:   text("report_no").notNull(),
+  departmentId: uuid("department_id"),
   periodFrom: date("period_from").notNull(),
   periodTo:   date("period_to").notNull(),
   summary:    text("summary").notNull(),
