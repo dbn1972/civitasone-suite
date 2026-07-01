@@ -16,6 +16,11 @@ const createDeptBody = z.object({
   code: z.string().min(1, "Department code is required").max(20),
   name: z.string().min(2, "Department name is required").max(200),
   parentId: z.string().uuid().optional(),
+  type: z.string().min(1).max(40).optional(),
+  level: z.number().int().min(0).optional(),
+  govtTier: z.enum(["central", "state"]).optional(),
+  locationId: z.string().uuid().optional(),
+  headEmployeeId: z.string().uuid().optional(),
 });
 
 const createDesignationBody = z.object({
@@ -42,6 +47,11 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     await db.insert(hrmsDepartments).values({
       id, tenantId: ctx.tenantId, code: body.code, name: body.name,
       parentId: body.parentId ?? null,
+      ...(body.type ? { type: body.type } : {}),
+      ...(body.level !== undefined ? { level: body.level } : {}),
+      ...(body.govtTier ? { govtTier: body.govtTier } : {}),
+      ...(body.locationId ? { locationId: body.locationId } : {}),
+      ...(body.headEmployeeId ? { headEmployeeId: body.headEmployeeId } : {}),
       createdBy: ctx.actorId, updatedBy: ctx.actorId,
     });
     return reply.code(201).send({ id, status: "created" });

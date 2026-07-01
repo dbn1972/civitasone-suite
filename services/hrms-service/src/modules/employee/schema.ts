@@ -11,6 +11,12 @@ export const hrmsDepartments = employeeSchema.table("hrms_departments", {
   code:       text("code").notNull(),
   name:       text("name").notNull(),
   parentId:   uuid("parent_id"),
+  type:       text("type"),               // admin level (edition-specific vocabulary)
+  level:      integer("level"),           // numeric depth (0=root)
+  govtTier:   text("govt_tier"),          // 'central' | 'state' | null
+  locationId: uuid("location_id"),        // cross-service ref to location-service
+  headEmployeeId: uuid("head_employee_id"), // head of this unit
+  isActive:   boolean("is_active").notNull().default(true),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),
