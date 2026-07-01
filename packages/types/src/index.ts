@@ -432,7 +432,7 @@ export type PayrollRunDetail = {
   grossAmount: number;
   netAmount: number;
   deductions: number;
-  status: "draft" | "processing" | "completed" | "paid";
+  status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
 };
 
 export type PayrollRunFullDetail = PayrollRunDetail & {
@@ -456,7 +456,7 @@ export type SalarySlipSummary = {
   gross: number;
   deductions: number;
   net: number;
-  status: "draft" | "finalized" | "paid";
+  status: "draft" | "finalized" | "paid" | "computed";
 };
 
 export type JobOpeningSummary = {
@@ -1337,7 +1337,7 @@ export type LegalCaseSummary = {
   respondent?: string;
   advocateName?: string;
   nextHearingDate?: string;
-  status: "active" | "disposed" | "stayed" | "transferred" | "dismissed" | "settled";
+  status: "active" | "disposed" | "stayed" | "transferred" | "dismissed" | "settled" | "pending" | "appealed";
 };
 
 export type LegalCaseDetail = LegalCaseSummary & {
@@ -1648,4 +1648,46 @@ export type NotificationDelivery = {
   deliveredAt?: string;
   failureReason?: string;
   status: "pending" | "delivered" | "failed" | "bounced";
+};
+
+
+// ── Payroll extended types ────────────────────────────────────────────────────
+
+export type PayrollStructure = {
+  id: string;
+  name: string;
+  description?: string;
+  components: Array<{
+    name: string;
+    type: "earning" | "deduction";
+    calculationMethod: "fixed" | "percentage" | "formula";
+    amount?: number;
+    percentage?: number;
+    formula?: string;
+  }>;
+  isDefault: boolean;
+  status: "active" | "inactive";
+};
+
+export type TaxDeclaration = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  financialYear: string;
+  regime: "old" | "new";
+  totalDeclared: number;
+  totalVerified: number;
+  status: "draft" | "submitted" | "verified" | "locked";
+  submittedAt?: string;
+};
+
+export type PensionerSummary = {
+  id: string;
+  ppoNo: string;
+  fullName: string;
+  basicPensionMinor: number;
+  status: "active" | "suspended" | "ceased" | "commuted";
+  ddoCode: string;
+  bankAccount?: string;
+  retirementDate?: string;
 };

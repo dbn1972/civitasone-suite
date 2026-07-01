@@ -14,10 +14,10 @@ export default async function PayrollPage() {
 
   const totalRuns = runs.length;
   const totalEmployeesPaid = runs
-    .filter((r) => r.status === "disbursed")
+    .filter((r) => r.status === "paid")
     .reduce((sum, r) => sum + r.employeeCount, 0);
   const totalGross = runs
-    .filter((r) => r.status === "disbursed")
+    .filter((r) => r.status === "paid")
     .reduce((sum, r) => sum + r.grossAmount, 0);
   const pending = runs.filter((r) => r.status === "draft" || r.status === "processing").length;
   const existingPeriods = runs.map((r) => r.payPeriod);

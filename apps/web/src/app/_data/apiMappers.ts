@@ -338,21 +338,21 @@ export function mapProcurementGRNDetail(payload: unknown): GRNDetail | null {
   };
 }
 
-const DEAL_STAGES = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
+const DEAL_STAGES = new Set(["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]);
 
 function normalizeDealStage(raw: string | null): DealSummary["stage"] | null {
   if (!raw) return null;
   const key = raw.trim();
-  // Handle exact matches (PascalCase from backend)
-  if (DEAL_STAGES.has(key)) return key as DealSummary["stage"];
-  // Handle lowercase/snake_case variants
   const lower = key.toLowerCase().replace(/\s+/g, "_");
-  if (lower === "lead" || lower === "prospecting") return "Lead";
-  if (lower === "proposal" || lower === "qualification") return "Proposal";
-  if (lower === "negotiation") return "Negotiation";
-  if (lower === "won" || lower === "closed_won") return "Won";
-  if (lower === "lost" || lower === "closed_lost") return "Lost";
-  return "Lead";
+  // Handle exact matches
+  if (DEAL_STAGES.has(lower)) return lower as DealSummary["stage"];
+  // Handle PascalCase/legacy variants
+  if (lower === "lead" || lower === "prospecting") return "prospecting";
+  if (lower === "proposal" || lower === "qualification") return "proposal";
+  if (lower === "negotiation") return "negotiation";
+  if (lower === "won" || lower === "closed_won") return "closed_won";
+  if (lower === "lost" || lower === "closed_lost") return "closed_lost";
+  return "prospecting";
 }
 
 export function mapDealSummaries(payload: unknown): DealSummary[] | null {
@@ -365,11 +365,11 @@ export function mapDealSummaries(payload: unknown): DealSummary[] | null {
     const dealName = toText(row.dealName) ?? toText(row.name);
     const stage = normalizeDealStage(toText(row.stage));
     if (!id || !dealName || !stage) continue;
-    const rawStatus = (toText(row.status) ?? "active").toLowerCase();
+    const rawStatus = (toText(row.status) ?? "open").toLowerCase();
     const status: DealSummary["status"] =
       rawStatus === "won" || rawStatus === "closed_won" ? "won"
         : rawStatus === "lost" || rawStatus === "closed_lost" ? "lost"
-          : "active";
+          : "open";
     mapped.push({
       id,
       dealName,

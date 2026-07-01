@@ -91,8 +91,8 @@ describe("gateway contract", () => {
       ["policy", "policy-v1"],
       // estab-service: short + long spelling
       ["estab", "establishment"],
-      // hrms-service: canonical /hrms + /hr convenience alias
-      ["hrms", "hr"],
+      // hrms-service: canonical /hrms + /hr convenience alias + /careers (recruitment)
+      ["hrms", "hr", "careers"],
       // project-service: singular gateway prefix + plural upstream
       ["project", "projects"],
       // asset-service: singular gateway prefix + plural upstream
