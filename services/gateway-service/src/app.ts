@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { resolveRoute } from "./registry.js";
 import { checkModuleEnabled } from "./module-guard.js";
 import { registerResponseMetrics } from "./response-metrics.js";
+import { registerScreenManifestRoute } from "./screen-manifest.js";
 
 // x-internal is intentionally absent: external clients must never inject it.
 // The gateway sets it itself only when it originates an internal service call.
@@ -145,6 +146,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   registerResponseMetrics(app);
+  registerScreenManifestRoute(app);
 
   registerOpsRoutes(app, {
     service: "gateway-service",
