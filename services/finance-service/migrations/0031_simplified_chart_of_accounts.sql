@@ -55,11 +55,5 @@ CREATE INDEX idx_simplified_txn_tenant_type ON simplified.transactions (tenant_i
 CREATE INDEX idx_simplified_txn_journal     ON simplified.transactions (journal_id) WHERE journal_id IS NOT NULL;
 
 -- RLS policies (tenant isolation)
-ALTER TABLE simplified.accounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE simplified.transactions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY simplified_accounts_tenant_isolation ON simplified.accounts
-  USING (tenant_id = current_setting('app.tenant_id')::uuid);
 
-CREATE POLICY simplified_transactions_tenant_isolation ON simplified.transactions
-  USING (tenant_id = current_setting('app.tenant_id')::uuid);
