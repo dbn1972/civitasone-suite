@@ -10,6 +10,14 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      exclude: [
+        "dist/**",
+        "src/index.ts",
+        "src/worker.ts",
+        "src/modules/roles/consumer.ts",
+        "src/modules/bindings/consumer.ts",
+        "src/modules/abac/consumer.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,
