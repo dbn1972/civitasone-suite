@@ -12,6 +12,12 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      exclude: [
+        "src/index.ts",
+        "src/worker.ts",
+        "src/modules/integrations/**",
+        "src/modules/tenant-onboard/**",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,

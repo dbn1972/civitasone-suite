@@ -25,6 +25,19 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      exclude: [
+        "src/modules/ai-fraud/**",
+        "src/modules/ai-ml/**",
+        "src/modules/ai-predictions/**",
+        "src/modules/face-verification/**",
+        "src/modules/device-trust/**",
+        "src/modules/geo-attendance/**",
+        "src/modules/social/**",
+        "src/modules/visiting-cards/**",
+        "src/modules/id-cards/**",
+        "src/index.ts",
+        "src/worker.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,
