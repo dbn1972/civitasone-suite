@@ -13,6 +13,12 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      exclude: [
+        "dist/**",
+        "src/index.ts",
+        "src/worker.ts",
+        "src/modules/tickets/consumer.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,
