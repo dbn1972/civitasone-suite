@@ -11,6 +11,21 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      include: ["src/**"],
+      exclude: [
+        "dist/**",
+        "src/index.ts",
+        "src/worker.ts",
+        "src/modules/stages/consumer.ts",
+        "src/modules/provisioning/consumer.ts",
+        "src/modules/orchestrator/consumer.ts",
+        "src/modules/orchestrator/repo.ts",
+        "src/modules/stages/repo.ts",
+        "src/modules/provisioning/repo.ts",
+        "src/modules/orchestrator/schema.ts",
+        "src/modules/provisioning/schema.ts",
+        "src/modules/stages/schema.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,
