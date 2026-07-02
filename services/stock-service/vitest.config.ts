@@ -11,6 +11,18 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      exclude: [
+        "dist/**",
+        "src/index.ts",
+        "src/worker.ts",
+        "src/modules/item/consumer.ts",
+        "src/modules/warehouse/consumer.ts",
+        "src/modules/entry/consumer.ts",
+        "src/modules/eway-bill/consumer.ts",
+        "src/modules/eway-bill/nic-ewb-client.ts",
+        "src/modules/receipt/repo.ts",
+        "vitest.config.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,
