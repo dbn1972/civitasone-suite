@@ -26,6 +26,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       exclude: [
+        "dist/**",
         "src/modules/ai-fraud/**",
         "src/modules/ai-ml/**",
         "src/modules/ai-predictions/**",
