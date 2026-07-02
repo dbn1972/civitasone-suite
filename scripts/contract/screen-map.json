@@ -4437,6 +4437,17 @@
       "detail": "navigation hub — no data loader"
     },
     {
+      "module": "settings",
+      "screen": "/settings/branding",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
       "module": "setup",
       "screen": "/setup",
       "loaders": [],
@@ -5060,6 +5071,6 @@
     "wired": 150,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 255
+    "noLoader": 256
   }
 }

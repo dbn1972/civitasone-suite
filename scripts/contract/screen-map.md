@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-07-01T10:18:21.207Z
+Generated: 2026-07-01T18:30:10.906Z
 
-**Summary:** 150 WIRED | 0 MISSING | 0 MISMATCH | 255 NO_LOADER
+**Summary:** 150 WIRED | 0 MISSING | 0 MISMATCH | 256 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -362,6 +362,7 @@ Generated: 2026-07-01T10:18:21.207Z
 | reports | /reports/list | getReportJobs | /api/v1/reports/report-jobs | reports → /v1/reports/report-jobs | ✓ `/v1/reports/report-jobs` | ✓ | ✅ WIRED |
 | reports | /reports/mis | getMISSummary | /api/v1/reports/mis | reports → /v1/reports/mis | ✓ `/v1/reports/mis` | ✓ | ✅ WIRED |
 | reports | /reports | — | — | — | — | — | — NO_LOADER |
+| settings | /settings/branding | — | — | — | — | — | — NO_LOADER |
 | setup | /setup | — | — | — | — | — | — NO_LOADER |
 | stock | /stock/[id] | getStockItemById | /api/v1/stock/items/:param | stock → /v1/stock/items/:param | ✓ `/v1/stock/items/:id` | ✓ | ✅ WIRED |
 | stock | /stock/dashboard | getStockDashboard | /api/v1/stock/dashboard | stock → /v1/stock/dashboard | ✓ `/v1/stock/dashboard` | ✓ | ✅ WIRED |
