@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, varchar, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const paymentsSchema = pgSchema("payments");
 
@@ -9,6 +9,9 @@ export const financePao = paymentsSchema.table("finance_pao", {
   name:      text("name").notNull(),
   ministry:  text("ministry"),
   isActive:  boolean("is_active").notNull().default(true),
+  version:   integer("version").notNull().default(1),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -20,6 +23,9 @@ export const financeDdo = paymentsSchema.table("finance_ddo", {
   name:      text("name").notNull(),
   paoCode:   varchar("pao_code", { length: 12 }),
   isActive:  boolean("is_active").notNull().default(true),
+  version:   integer("version").notNull().default(1),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

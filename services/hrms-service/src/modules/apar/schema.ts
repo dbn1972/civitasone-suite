@@ -12,6 +12,8 @@ export const hrmsAparScores = appraisalSchema.table("hrms_apar_scores", {
   score:       integer("score").notNull(),
   remarks:     text("remarks"),
   scoredBy:    uuid("scored_by").notNull(),
+  createdBy:   uuid("created_by").notNull(),
+  updatedBy:   uuid("updated_by").notNull(),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

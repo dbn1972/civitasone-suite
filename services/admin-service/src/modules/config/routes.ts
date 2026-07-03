@@ -74,7 +74,11 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/feature-flags", async (req, reply) => {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
-    return reply.send(await queries.listFeatureFlags());
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
+    const offset = Math.max(0, Number(q.offset) || 0);
+    const all = await queries.listFeatureFlags();
+    return reply.send(all.slice(offset, offset + limit));
   });
 
   // Internal endpoint for gateway module enforcement (service-to-service).

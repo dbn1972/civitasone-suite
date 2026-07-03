@@ -17,6 +17,8 @@ export const hrmsFraudAlerts = empSchema.table("hrms_fraud_alerts", {
   resolvedBy:      uuid("resolved_by"),
   resolvedAt:      timestamp("resolved_at", { withTimezone: true }),
   resolutionNotes: text("resolution_notes"),
+  createdBy:       uuid("created_by").notNull(),
+  updatedBy:       uuid("updated_by").notNull(),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

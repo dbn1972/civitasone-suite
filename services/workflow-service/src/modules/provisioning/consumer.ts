@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import { definitions } from "../definitions/schema.js";
 import * as defRepo from "../definitions/repo.js";
 import { STANDARD_DEFINITIONS, linearEdges } from "./catalog.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 /**
  * Seed the standard workflow definitions (nodes + linear edges) into a tenant
@@ -52,6 +54,12 @@ export function registerProvisioningConsumers(queue: Queue): void {
           linearEdges(def).map((e, i) => ({ fromNode: e.fromNode, toNode: e.toNode, sortOrder: i + 1 })),
         );
       }
+
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "workflow", action: "provision_definitions", resourceType: "workflow_definition", resourceId: tenantId, outcome: "success" },
+      });
     });
   });
 }

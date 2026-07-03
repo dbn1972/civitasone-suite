@@ -31,14 +31,22 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const { id } = tenantParam.parse(req.params);
-    return reply.send(await queries.listReceiptsForTenant(id));
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
+    const offset = Math.max(0, Number(q.offset) || 0);
+    const all = await queries.listReceiptsForTenant(id);
+    return reply.send(all.slice(offset, offset + limit));
   });
 
   // Caller-scoped list: returns payments for the authenticated user's tenant.
   app.get("/v1/billing/payments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, BILLING_ROLES);
-    return reply.send(await queries.listReceiptsForTenant(ctx.tenantId));
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
+    const offset = Math.max(0, Number(q.offset) || 0);
+    const all = await queries.listReceiptsForTenant(ctx.tenantId);
+    return reply.send(all.slice(offset, offset + limit));
   });
 
   app.setErrorHandler((err, req, reply) => {

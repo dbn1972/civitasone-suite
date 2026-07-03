@@ -7,6 +7,8 @@ import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import { notificationCampaigns } from "./schema.js";
 import * as repo from "./repo.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export function registerBulkConsumers(q: Queue): void {
   q.subscribe<{
     id: string; tenantId: string; templateId: string; name: string;
@@ -25,6 +27,11 @@ export function registerBulkConsumers(q: Queue): void {
         topic: EVENTS.campaignCreated, eventType: EVENTS.campaignCreated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { campaignId: p.id, recipientCount: p.recipients.length },
+      });
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "notification", action: "create_campaign", resourceType: "campaign", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.campaign, msg.payload.id));
@@ -51,6 +58,11 @@ export function registerBulkConsumers(q: Queue): void {
           },
         });
       }
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "notification", action: "send_campaign", resourceType: "campaign", resourceId: p.id, outcome: "success" },
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.campaign, msg.payload.id));
   });
@@ -59,6 +71,11 @@ export function registerBulkConsumers(q: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateCampaignStatus(tx, msg.payload.id, "cancelled", msg.actorId);
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "notification", action: "cancel_campaign", resourceType: "campaign", resourceId: msg.payload.id, outcome: "success" },
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.campaign, msg.payload.id));
   });

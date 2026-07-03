@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, varchar, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, boolean, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
 
 export const filesSchema = pgSchema("files");
 
@@ -28,6 +28,9 @@ export const estabSignature = filesSchema.table("estab_signature", {
   revocationCheckedAt: timestamp("revocation_checked_at", { withTimezone: true }),
   valid:               boolean("valid").notNull().default(true),
   txnRef:              text("txn_ref"),
+  version:             integer("version").notNull().default(1),
+  createdBy:           uuid("created_by").notNull(),
+  updatedBy:           uuid("updated_by").notNull(),
   createdAt:           timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

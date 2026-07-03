@@ -15,6 +15,7 @@ export const bankStatement = bankReconSchema.table("finance_bank_statement", {
   closingMinor:  bigint("closing_minor", { mode: "bigint" }).notNull().default(0n),
   lineCount:     integer("line_count").notNull().default(0),
   status:        varchar("status", { length: 16 }).notNull().default("imported"),
+  version:       integer("version").notNull().default(1),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),
 });

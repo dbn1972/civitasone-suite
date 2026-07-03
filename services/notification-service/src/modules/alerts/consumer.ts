@@ -5,6 +5,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export function registerAlertConsumers(q: Queue): void {
   q.subscribe<{
     id: string; tenantId: string; name: string; triggerEvent: string;
@@ -23,6 +25,11 @@ export function registerAlertConsumers(q: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { ruleId: p.id },
       });
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "notification", action: "create_alert_rule", resourceType: "alert_rule", resourceId: p.id, outcome: "success" },
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.alertRule, "list"));
   });
@@ -40,6 +47,11 @@ async function handleEnableToggle(msg: { messageId: string; tenantId: string; ac
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
     await repo.setRuleEnabled(tx, msg.payload.id, enabled, msg.actorId);
+    await enqueue(tx as Parameters<typeof enqueue>[0], {
+      topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+      tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { service: "notification", action: enabled ? "enable_alert_rule" : "disable_alert_rule", resourceType: "alert_rule", resourceId: msg.payload.id, outcome: "success" },
+    });
   });
   await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.alertRule, msg.payload.id));
   await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.alertRule, "list"));

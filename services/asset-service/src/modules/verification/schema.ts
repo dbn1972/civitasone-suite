@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, varchar, boolean, timestamp, date, jsonb } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, boolean, integer, jsonb, timestamp, date } from "drizzle-orm/pg-core";
 
 export const verificationSchema = pgSchema("lifecycle");
 
@@ -12,6 +12,9 @@ export const physicalVerifications = verificationSchema.table("physical_verifica
   approvedBy:       uuid("approved_by"),
   approvedAt:       timestamp("approved_at", { withTimezone: true }),
   notes:            text("notes"),
+  version:          integer("version").notNull().default(1),
+  createdBy:        uuid("created_by").notNull(),
+  updatedBy:        uuid("updated_by").notNull(),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -6,9 +6,30 @@
  * Read-only: DB, Redis, SQS, PgBouncer, Keycloak, encryption status.
  */
 import type { FastifyInstance } from "fastify";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
+
+const patchConfigSchema = z.object({
+  cacheTtl: z.record(z.string(), z.number().int().min(5).max(3600)).optional(),
+  rateLimits: z.object({
+    perMinute: z.number().int().min(10).optional(),
+    burstMax: z.number().int().min(5).optional(),
+  }).optional(),
+  logLevel: z.enum(["debug", "info", "warn", "error"]).optional(),
+  debugModeUntil: z.string().nullable().optional(),
+  notifications: z.object({
+    emailProvider: z.string().optional(),
+    smsProvider: z.string().optional(),
+    emailFrom: z.string().email().optional(),
+    smsFrom: z.string().optional(),
+  }).optional(),
+}).strict();
+
+const debugModeSchema = z.object({
+  durationMinutes: z.number().int().min(5).max(60).optional(),
+}).strict();
 
 type PlatformConfig = {
   /** Editable settings */
@@ -126,18 +147,18 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
   app.patch("/v1/admin/platform-config", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PLATFORM_ADMIN);
-    const body = req.body as Partial<PlatformConfig["controllable"]>;
+    const body = patchConfigSchema.parse(req.body);
 
     if (body.cacheTtl) {
       for (const [k, v] of Object.entries(body.cacheTtl)) {
-        if (typeof v === "number" && v >= 5 && v <= 3600) controllable.cacheTtl[k] = v;
+        controllable.cacheTtl[k] = v;
       }
     }
     if (body.rateLimits) {
-      if (typeof body.rateLimits.perMinute === "number") controllable.rateLimits.perMinute = Math.max(10, body.rateLimits.perMinute);
-      if (typeof body.rateLimits.burstMax === "number") controllable.rateLimits.burstMax = Math.max(5, body.rateLimits.burstMax);
+      if (body.rateLimits.perMinute !== undefined) controllable.rateLimits.perMinute = body.rateLimits.perMinute;
+      if (body.rateLimits.burstMax !== undefined) controllable.rateLimits.burstMax = body.rateLimits.burstMax;
     }
-    if (body.logLevel && ["debug", "info", "warn", "error"].includes(body.logLevel)) {
+    if (body.logLevel) {
       controllable.logLevel = body.logLevel;
     }
     if (body.debugModeUntil !== undefined) {
@@ -156,11 +177,26 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
   app.post("/v1/admin/platform-config/debug-mode", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PLATFORM_ADMIN);
-    const body = req.body as { durationMinutes?: number };
-    const mins = Math.min(60, Math.max(5, body.durationMinutes ?? 15));
+    const body = debugModeSchema.parse(req.body);
+    const mins = body.durationMinutes ?? 15;
     const until = new Date(Date.now() + mins * 60000).toISOString();
     controllable.debugModeUntil = until;
     controllable.logLevel = "debug";
     return reply.send({ status: "debug_enabled", until, durationMinutes: mins });
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({
+        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
+        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
 }

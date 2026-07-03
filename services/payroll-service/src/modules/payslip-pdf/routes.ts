@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
@@ -6,7 +7,9 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 
-const idParamSchema = { type: "object", properties: { id: { type: "string" } }, required: ["id"] } as const;
+const pathParamSchema = z.object({
+  id: z.string().uuid(),
+});
 
 /** Default HTML template for salary slip — used when no custom template found */
 const DEFAULT_TEMPLATE = `<!DOCTYPE html>
@@ -76,7 +79,7 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/slips/:id/pdf", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = pathParamSchema.parse(req.params);
 
     // Fetch the salary slip
     const slipRows = await db.select().from(payrollSlips)

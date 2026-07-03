@@ -30,6 +30,7 @@ const SOURCE_BY_EVENT: Record<string, string> = {
 export function normalizeFact(eventType: string, msg: Envelope): FactEventInsert {
   const p = msg.payload ?? {};
   const source = SOURCE_BY_EVENT[eventType] ?? "unknown";
+  const systemActor = "00000000-0000-0000-0000-000000000000";
   return {
     tenantId: msg.tenantId,
     source,
@@ -39,5 +40,7 @@ export function normalizeFact(eventType: string, msg: Envelope): FactEventInsert
     amount: num(p.amount ?? p.totalAmount ?? p.value),
     occurredAt: typeof p.occurredAt === "string" ? new Date(p.occurredAt) : new Date(),
     dedupeKey: msg.messageId,
+    createdBy: str(p.actorId, systemActor),
+    updatedBy: str(p.actorId, systemActor),
   };
 }

@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, text, jsonb, timestamp, inet } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, integer, jsonb, timestamp, inet } from "drizzle-orm/pg-core";
 
 export const eventsSchema = pgSchema("events");
 
@@ -19,6 +19,7 @@ export const auditEvents = eventsSchema.table("events", {
   eventHash:     varchar("event_hash", { length: 64 }),
   correlationId: varchar("correlation_id", { length: 64 }),
   occurredAt:    timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  version:       integer("version").notNull().default(1),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),
   ipAddress:     varchar("ip_address", { length: 45 }),

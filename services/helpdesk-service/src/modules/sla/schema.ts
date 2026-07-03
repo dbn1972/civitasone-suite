@@ -10,6 +10,8 @@ export const ticketEscalations = helpdeskSchema.table("ticket_escalations", {
   escalatedAt: timestamp("escalated_at", { withTimezone: true }).notNull().defaultNow(),
   reason:      text("reason").notNull(),
   level:       integer("level").notNull().default(1),
+  createdBy:   uuid("created_by").notNull(),
+  updatedBy:   uuid("updated_by").notNull(),
 });
 
 export const schema = { ticketEscalations };

@@ -14,6 +14,7 @@ export const estabReference = filesSchema.table("estab_reference", {
   targetFileId: uuid("target_file_id"),
   pageFrom:     integer("page_from"),
   pageTo:       integer("page_to"),
+  version:      integer("version").notNull().default(1),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
 });

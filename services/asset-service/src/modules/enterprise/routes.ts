@@ -36,7 +36,11 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/assets/projects/auc", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    return reply.send({ data: await repo.listAuc(ctx.tenantId) });
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
+    const offset = Math.max(0, Number(q.offset) || 0);
+    const all = await repo.listAuc(ctx.tenantId);
+    return reply.send({ data: all.slice(offset, offset + limit) });
   });
 
   app.post("/v1/assets/projects/auc", async (req, reply) => {
@@ -93,7 +97,11 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/assets/leases", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    return reply.send({ data: await repo.listLeases(ctx.tenantId) });
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
+    const offset = Math.max(0, Number(q.offset) || 0);
+    const all = await repo.listLeases(ctx.tenantId);
+    return reply.send({ data: all.slice(offset, offset + limit) });
   });
 
   app.post("/v1/assets/leases", async (req, reply) => {
@@ -230,7 +238,11 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/assets/locations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    return reply.send({ data: await repo.listLocations(ctx.tenantId) });
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
+    const offset = Math.max(0, Number(q.offset) || 0);
+    const all = await repo.listLocations(ctx.tenantId);
+    return reply.send({ data: all.slice(offset, offset + limit) });
   });
 
   app.post("/v1/assets/locations", async (req, reply) => {

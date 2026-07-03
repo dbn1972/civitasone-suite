@@ -2,6 +2,8 @@ import { pgSchema, uuid, varchar, integer, timestamp, doublePrecision } from "dr
 
 export const pincodeSchema = pgSchema("pincode");
 
+// Global reference data — no tenantId (shared across all tenants).
+// Pincodes are sourced from India Post and serve as a read-only lookup for all tenants.
 export const pincodes = pincodeSchema.table("pincodes", {
   id: uuid("id").primaryKey().defaultRandom(),
   pincode: varchar("pincode", { length: 6 }).notNull(),

@@ -1,3 +1,4 @@
+import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -5,34 +6,47 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 
+const log = pino({ name: "admin-config-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerConfigConsumers(queue: Queue): void {
   queue.subscribe<{ tenantId: string; moduleKey: string; enabled: boolean }>(COMMANDS.moduleToggle, async (msg) => {
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.upsertModule(tx, msg.payload.tenantId, msg.payload.moduleKey, msg.payload.enabled, msg.actorId);
-      await audit(tx, msg, "module_toggle", msg.payload.tenantId);
-    });
-    await cache.invalidate(cache.makeKey(msg.payload.tenantId, "config", msg.payload.tenantId));
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.upsertModule(tx, msg.payload.tenantId, msg.payload.moduleKey, msg.payload.enabled, msg.actorId);
+        await audit(tx, msg, "module_toggle", msg.payload.tenantId);
+      });
+      await cache.invalidate(cache.makeKey(msg.payload.tenantId, "config", msg.payload.tenantId));
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.moduleToggle }, "Consumer processing failed");
+    }
   });
 
   queue.subscribe<{ flagKey: string; enabled: boolean }>(COMMANDS.featureFlagCreate, async (msg) => {
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insertFlag(tx, msg.payload.flagKey, msg.payload.enabled, msg.actorId);
-      await audit(tx, msg, "feature_flag_create", msg.payload.flagKey);
-    });
-    await cache.invalidate("admin:platform:feature_flags");
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.insertFlag(tx, msg.payload.flagKey, msg.payload.enabled, msg.actorId);
+        await audit(tx, msg, "feature_flag_create", msg.payload.flagKey);
+      });
+      await cache.invalidate("admin:platform:feature_flags");
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.featureFlagCreate }, "Consumer processing failed");
+    }
   });
 
   queue.subscribe<{ flagKey: string; tenantId: string; enabled: boolean }>(COMMANDS.featureFlagOverride, async (msg) => {
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.setFlagOverride(tx, msg.payload.flagKey, msg.payload.tenantId, msg.payload.enabled, msg.actorId);
-      await audit(tx, msg, "feature_flag_override", msg.payload.flagKey);
-    });
-    await cache.invalidate(cache.makeKey(msg.payload.tenantId, "config", msg.payload.tenantId));
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.setFlagOverride(tx, msg.payload.flagKey, msg.payload.tenantId, msg.payload.enabled, msg.actorId);
+        await audit(tx, msg, "feature_flag_override", msg.payload.flagKey);
+      });
+      await cache.invalidate(cache.makeKey(msg.payload.tenantId, "config", msg.payload.tenantId));
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.featureFlagOverride }, "Consumer processing failed");
+    }
   });
 }
 

@@ -1,8 +1,10 @@
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 export type LegalClearance = {
   reviewId: string;
@@ -30,6 +32,11 @@ export function registerClearanceConsumers(queue: Queue): void {
         record,
         86400,
       );
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "procurement", action: "legal_clearance_received", resourceType: "legal_clearance", resourceId: p.reviewId, outcome: "success" },
+      });
     });
   });
 }

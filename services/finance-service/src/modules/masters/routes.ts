@@ -1,14 +1,20 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+}).partial();
+
 export async function mastersRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/pao", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
+    listQuerySchema.parse(req.query);
     const rows = await repo.listPao(ctx.tenantId);
     return reply.send({
       data: rows.map((r) => ({ id: r.id, paoCode: r.paoCode, name: r.name, ministry: r.ministry, isActive: r.isActive })),
@@ -18,6 +24,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/ddo", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
+    listQuerySchema.parse(req.query);
     const rows = await repo.listDdo(ctx.tenantId);
     return reply.send({
       data: rows.map((r) => ({ id: r.id, ddoCode: r.ddoCode, name: r.name, paoCode: r.paoCode, isActive: r.isActive })),

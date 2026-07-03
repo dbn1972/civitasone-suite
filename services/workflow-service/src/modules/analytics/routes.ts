@@ -1,9 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
+
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+}).partial();
 
 /**
  * P0-3 — read-only workflow analytics / SLA reporting endpoints. Tenant-scoped
@@ -13,12 +18,14 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/workflow/analytics/summary", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
+    listQuerySchema.parse(req.query);
     return reply.send({ data: await queries.summary(ctx.tenantId) });
   });
 
   app.get("/v1/workflow/analytics/bottlenecks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
+    listQuerySchema.parse(req.query);
     return reply.send({ data: await queries.bottlenecks(ctx.tenantId) });
   });
 

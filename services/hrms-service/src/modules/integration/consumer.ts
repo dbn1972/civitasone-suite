@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import { hrmsLeaveTypes } from "../leave/schema.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 /** Seed default leave types when a tenant is provisioned. */
 export function registerIntegrationConsumers(queue: Queue): void {
@@ -31,6 +33,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
           updatedBy: actor,
         });
       }
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "hrms", action: "seed_leave_types", resourceType: "leave_type", resourceId: p.tenantId, outcome: "success" },
+      });
     });
   });
 }

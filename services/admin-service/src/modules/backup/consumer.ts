@@ -1,3 +1,4 @@
+import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -5,28 +6,37 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 
+const log = pino({ name: "admin-backup-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerBackupConsumers(queue: Queue): void {
   queue.subscribe<{ tenantId: string; cronExpr: string }>(COMMANDS.backupSchedule, async (msg) => {
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.upsertSchedule(tx, msg.payload.tenantId, msg.payload.cronExpr, msg.actorId);
-      await audit(tx, msg, "backup_schedule", msg.payload.tenantId);
-    });
-    await cache.invalidate(cache.makeKey(msg.payload.tenantId, "backup_runs", msg.payload.tenantId));
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.upsertSchedule(tx, msg.payload.tenantId, msg.payload.cronExpr, msg.actorId);
+        await audit(tx, msg, "backup_schedule", msg.payload.tenantId);
+      });
+      await cache.invalidate(cache.makeKey(msg.payload.tenantId, "backup_runs", msg.payload.tenantId));
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.backupSchedule }, "Consumer processing failed");
+    }
   });
 
   queue.subscribe<{ tenantId: string; runId: string }>(COMMANDS.backupTrigger, async (msg) => {
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insertRun(tx, {
-        id: msg.payload.runId, tenantId: msg.payload.tenantId, status: "running",
-        createdBy: msg.actorId, updatedBy: msg.actorId,
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.insertRun(tx, {
+          id: msg.payload.runId, tenantId: msg.payload.tenantId, status: "running",
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await audit(tx, msg, "backup_trigger", msg.payload.runId);
       });
-      await audit(tx, msg, "backup_trigger", msg.payload.runId);
-    });
-    await cache.invalidate(cache.makeKey(msg.payload.tenantId, "backup_runs", msg.payload.tenantId));
+      await cache.invalidate(cache.makeKey(msg.payload.tenantId, "backup_runs", msg.payload.tenantId));
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.backupTrigger }, "Consumer processing failed");
+    }
   });
 }
 

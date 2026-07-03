@@ -1,10 +1,16 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsLeaveAllocs, hrmsLeaveApps } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
+
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(31),
+  offset: z.coerce.number().int().min(0).default(0),
+}).partial();
 
 export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
   // My profile — employee sees their own data linked by actorId → userRef
@@ -31,12 +37,13 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
   // My attendance this month
   app.get("/v1/hrms/me/attendance", async (req, reply) => {
     const ctx = resolveContext(req);
+    const query = listQuerySchema.parse(req.query);
     const emps = await db.select().from(hrmsEmployees)
       .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.userRef, ctx.actorId)));
     if (!emps[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record" });
     const records = await db.select().from(hrmsAttendance)
       .where(and(eq(hrmsAttendance.tenantId, ctx.tenantId), eq(hrmsAttendance.employeeId, emps[0].id)));
-    return reply.send({ data: records.slice(0, 31).map(r => ({ date: r.attendanceDate, status: r.status, inTime: r.inTime, outTime: r.outTime })) });
+    return reply.send({ data: records.slice(0, query.limit ?? 31).map(r => ({ date: r.attendanceDate, status: r.status, inTime: r.inTime, outTime: r.outTime })) });
   });
 
   // My leave applications

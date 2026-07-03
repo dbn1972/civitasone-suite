@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
@@ -6,6 +7,10 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+
+const pathParamSchema = z.object({
+  id: z.string().uuid(),
+});
 
 /**
  * NEFT/RTGS bank-transfer file for salary disbursement. Beneficiary account,
@@ -18,7 +23,7 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
 
-    const { id } = req.params as { id: string };
+    const { id } = pathParamSchema.parse(req.params);
 
     // Verify the run exists and belongs to this tenant
     const runRows = await db.select().from(payrollRuns)

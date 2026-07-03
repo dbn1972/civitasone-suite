@@ -10,7 +10,11 @@ export const slaRules = citizenSchema.table("sla_rules", {
   escalationHours: integer("escalation_hours").notNull(),
   escalateTo:      varchar("escalate_to", { length: 64 }).notNull(),
   isActive:        boolean("is_active").notNull().default(true),
+  version:         integer("version").notNull().default(1),
+  createdBy:       uuid("created_by").notNull(),
+  updatedBy:       uuid("updated_by").notNull(),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type SlaRuleRow    = typeof slaRules.$inferSelect;

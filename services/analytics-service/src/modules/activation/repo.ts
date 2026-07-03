@@ -12,6 +12,7 @@ import { db } from "../../shared/db.js";
 import { factEvents } from "../facts/schema.js";
 
 export async function recordActivation(tenantId: string, step: string): Promise<void> {
+  const systemActor = "00000000-0000-0000-0000-000000000000";
   await db
     .insert(factEvents)
     .values({
@@ -21,6 +22,8 @@ export async function recordActivation(tenantId: string, step: string): Promise<
       category: "activation",
       status: "ok",
       dedupeKey: `activation:${step}`,
+      createdBy: systemActor,
+      updatedBy: systemActor,
     })
     .onConflictDoNothing({ target: [factEvents.tenantId, factEvents.dedupeKey] });
 }

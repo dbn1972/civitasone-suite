@@ -10,13 +10,14 @@
  * isolation is enforced by the session-derived tenantId (and DB RLS).
  */
 import type { FastifyInstance } from "fastify";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { registerErrorHandler } from "../../shared/errors.js";
 import * as repo from "./repo.js";
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
 
-const FUNNEL_STEPS = new Set([
+const FUNNEL_STEPS = [
   "signin",
   "wizard_opened",
   "org-profile",
@@ -25,16 +26,17 @@ const FUNNEL_STEPS = new Set([
   "people",
   "modules",
   "first_transaction",
-]);
+] as const;
+
+const activationEventSchema = z.object({
+  step: z.enum(FUNNEL_STEPS),
+}).strict();
 
 export async function activationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/analytics/activation/events", async (req, reply) => {
     const ctx = resolveContext(req);
     if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
-    const step = (req.body as { step?: unknown } | null)?.step;
-    if (typeof step !== "string" || !FUNNEL_STEPS.has(step)) {
-      throw new HttpError(400, "VALIDATION_FAILED", "invalid funnel step");
-    }
+    const { step } = activationEventSchema.parse(req.body);
     await repo.recordActivation(ctx.tenantId, step);
     return reply.code(202).send({ status: "accepted" });
   });
