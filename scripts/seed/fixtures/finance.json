@@ -1,0 +1,21 @@
+{
+  "budget": [
+    {"id":"bgt-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","financial_year":"2025-26","head_of_account":"2049-00-001","description":"District Administration - Salary","sanctioned_amount_paise":1500000000,"revised_amount_paise":1500000000,"expenditure_paise":875000000,"status":"active"}
+  ],
+  "bills": [
+    {"id":"bill-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","bill_number":"DC/BHU/2025/001","bill_type":"salary","amount_paise":4500000,"head_of_account":"2049-00-001","vendor_name":null,"description":"Salary bill - April 2025","status":"approved","submitted_by":"emp-007","approved_by":"emp-004","submitted_at":"2025-04-05T10:00:00Z","approved_at":"2025-04-06T14:30:00Z"},
+    {"id":"bill-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","bill_number":"DC/BHU/2025/002","bill_type":"contingency","amount_paise":125000,"head_of_account":"2049-00-051","vendor_name":"Odisha Stationery Depot","description":"Stationery supplies Q1","status":"pending","submitted_by":"emp-008","approved_by":null,"submitted_at":"2025-04-10T09:00:00Z","approved_at":null},
+    {"id":"bill-003","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","bill_number":"DC/BHU/2025/003","bill_type":"travel","amount_paise":35000,"head_of_account":"2049-00-011","vendor_name":null,"description":"TA/DA for field visit - Collector","status":"approved","submitted_by":"emp-008","approved_by":"emp-004","submitted_at":"2025-04-12T11:00:00Z","approved_at":"2025-04-13T10:00:00Z"},
+    {"id":"bill-004","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","bill_number":"DC/BHU/2025/004","bill_type":"works","amount_paise":2500000,"head_of_account":"4059-60-051","vendor_name":"XYZ Construction Ltd","description":"Road repair near collectorate","status":"submitted","submitted_by":"emp-007","approved_by":null,"submitted_at":"2025-04-15T09:30:00Z","approved_at":null},
+    {"id":"bill-005","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","bill_number":"DC/BHU/2025/005","bill_type":"utility","amount_paise":89000,"head_of_account":"2049-00-051","vendor_name":"TPCODL","description":"Electricity bill - March 2025","status":"paid","submitted_by":"emp-007","approved_by":"emp-004","submitted_at":"2025-04-02T08:00:00Z","approved_at":"2025-04-02T16:00:00Z"}
+  ],
+  "sanctions": [
+    {"id":"sanc-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","sanction_number":"SANC/2025/001","amount_paise":5000000000,"head_of_account":"2049-00-001","purpose":"Annual salary budget - DC office","sanctioned_by":"emp-001","sanctioned_at":"2025-04-01T00:00:00Z","financial_year":"2025-26","status":"active"},
+    {"id":"sanc-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","sanction_number":"SANC/2025/002","amount_paise":50000000,"head_of_account":"4059-60-051","purpose":"Road and building maintenance","sanctioned_by":"emp-001","sanctioned_at":"2025-04-01T00:00:00Z","financial_year":"2025-26","status":"active"}
+  ],
+  "bank_accounts": [
+    {"id":"ba-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","account_name":"DC Bhubaneswar - Main Treasury","bank_name":"State Bank of India","branch":"Treasury Branch, Bhubaneswar","account_number":"30712345678","ifsc":"SBIN0001234","account_type":"treasury","balance_paise":250000000,"is_active":true},
+    {"id":"ba-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","account_name":"DC Bhubaneswar - Contingency","bank_name":"State Bank of India","branch":"Treasury Branch, Bhubaneswar","account_number":"30712345679","ifsc":"SBIN0001234","account_type":"contingency","balance_paise":5000000,"is_active":true},
+    {"id":"ba-003","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","account_name":"DC Bhubaneswar - PD Account","bank_name":"Union Bank of India","branch":"Bhubaneswar Main","account_number":"520101012345678","ifsc":"UBIN0534021","account_type":"pd_account","balance_paise":12000000,"is_active":true}
+  ]
+}

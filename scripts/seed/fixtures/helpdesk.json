@@ -1,0 +1,9 @@
+{
+  "tickets": [
+    {"id":"tkt-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","ticket_number":"HD/2025/001","subject":"Printer not working in Room 204","category":"it_support","priority":"medium","status":"open","raised_by":"emp-008","assigned_to":"emp-009","created_at":"2025-05-01T09:00:00Z","resolved_at":null},
+    {"id":"tkt-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","ticket_number":"HD/2025/002","subject":"AC repair needed in DC chamber","category":"maintenance","priority":"high","status":"in_progress","raised_by":"emp-008","assigned_to":null,"created_at":"2025-04-28T14:30:00Z","resolved_at":null},
+    {"id":"tkt-003","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","ticket_number":"HD/2025/003","subject":"Network connectivity issue - Finance wing","category":"it_support","priority":"critical","status":"resolved","raised_by":"emp-007","assigned_to":"emp-009","created_at":"2025-04-25T11:00:00Z","resolved_at":"2025-04-25T15:30:00Z"},
+    {"id":"tkt-004","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","ticket_number":"HD/2025/004","subject":"Water leakage in record room","category":"maintenance","priority":"high","status":"open","raised_by":"emp-003","assigned_to":null,"created_at":"2025-05-02T08:00:00Z","resolved_at":null},
+    {"id":"tkt-005","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","ticket_number":"HD/2025/005","subject":"Request for additional parking space","category":"general","priority":"low","status":"closed","raised_by":"emp-005","assigned_to":"emp-008","created_at":"2025-04-15T10:00:00Z","resolved_at":"2025-04-20T12:00:00Z"}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "vendors": [
+    {"id":"ven-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","name":"Odisha Stationery Depot","gstin":"21AABCO1234R1ZM","pan":"AABCO1234R","address":"Janpath, Bhubaneswar","contact_person":"Ravi Kumar","phone":"+919876540001","email":"info@odishastationery.in","category":"stationery","status":"approved"},
+    {"id":"ven-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","name":"XYZ Construction Ltd","gstin":"21AABCX5678R1ZM","pan":"AABCX5678R","address":"Saheed Nagar, Bhubaneswar","contact_person":"Sanjay Dash","phone":"+919876540002","email":"tender@xyzconstruction.in","category":"civil_works","status":"approved"},
+    {"id":"ven-003","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","name":"InfoTech Solutions Pvt Ltd","gstin":"21AABCI9012R1ZM","pan":"AABCI9012R","address":"Patia, Bhubaneswar","contact_person":"Amit Sahu","phone":"+919876540003","email":"govt@infotechsolutions.in","category":"it_hardware","status":"approved"},
+    {"id":"ven-004","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","name":"Kalinga Furniture Works","gstin":"21AABCK3456R1ZM","pan":"AABCK3456R","address":"Mancheswar Industrial Estate","contact_person":"Prasad Mohanty","phone":"+919876540004","email":"sales@kalingafurniture.in","category":"furniture","status":"approved"},
+    {"id":"ven-005","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","name":"TPCODL","gstin":"21AABCT7890R1ZM","pan":"AABCT7890R","address":"Janpath, Bhubaneswar","contact_person":"Helpdesk","phone":"1912","email":"billing@tpcodl.in","category":"utility","status":"approved"}
+  ],
+  "indents": [
+    {"id":"ind-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","indent_number":"IND/2025/001","description":"Office stationery for Q2 2025","department":"Administration","requested_by":"emp-008","amount_paise":75000,"status":"approved","created_at":"2025-04-20T10:00:00Z"},
+    {"id":"ind-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","indent_number":"IND/2025/002","description":"Laptop procurement - IT dept","department":"IT","requested_by":"emp-009","amount_paise":350000,"status":"po_raised","created_at":"2025-04-22T11:00:00Z"},
+    {"id":"ind-003","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","indent_number":"IND/2025/003","description":"Conference room chairs (20 nos)","department":"Administration","requested_by":"emp-008","amount_paise":180000,"status":"pending","created_at":"2025-05-01T09:30:00Z"}
+  ],
+  "purchase_orders": [
+    {"id":"po-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","po_number":"PO/2025/001","vendor_id":"ven-001","indent_id":"ind-001","description":"Stationery supply Q2","amount_paise":72000,"gst_paise":12960,"total_paise":84960,"status":"delivered","issued_at":"2025-04-25T14:00:00Z"},
+    {"id":"po-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","po_number":"PO/2025/002","vendor_id":"ven-003","indent_id":"ind-002","description":"Dell Latitude laptops x5","amount_paise":325000,"gst_paise":58500,"total_paise":383500,"status":"in_transit","issued_at":"2025-04-28T16:00:00Z"}
+  ]
+}

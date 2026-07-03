@@ -1,0 +1,18 @@
+{
+  "rti_requests": [
+    {"id":"rti-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"RTI/2025/001","applicant_name":"Sanjay Kumar","subject":"Details of road construction expenditure 2024-25","department":"Finance","status":"replied","filed_at":"2025-03-15T10:00:00Z","due_date":"2025-04-14","replied_at":"2025-04-10T16:00:00Z"},
+    {"id":"rti-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"RTI/2025/002","applicant_name":"Meera Panda","subject":"Staff strength and vacancies in collectorate","department":"HR","status":"pending","filed_at":"2025-04-25T09:00:00Z","due_date":"2025-05-25","replied_at":null},
+    {"id":"rti-003","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"RTI/2025/003","applicant_name":"Biswajit Rout","subject":"Land acquisition details - NH expansion","department":"Revenue","status":"transferred","filed_at":"2025-04-28T14:00:00Z","due_date":"2025-05-28","replied_at":null},
+    {"id":"rti-004","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"RTI/2025/004","applicant_name":"Pooja Mishra","subject":"Status of pending building permissions","department":"Planning","status":"pending","filed_at":"2025-05-01T11:00:00Z","due_date":"2025-05-31","replied_at":null},
+    {"id":"rti-005","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"RTI/2025/005","applicant_name":"Ajay Nayak","subject":"List of contractors blacklisted since 2020","department":"Procurement","status":"replied","filed_at":"2025-02-10T10:00:00Z","due_date":"2025-03-12","replied_at":"2025-03-05T14:00:00Z"}
+  ],
+  "grievances": [
+    {"id":"grv-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"GRV/2025/001","complainant_name":"Ramchandra Swain","subject":"Delay in pension disbursement","category":"service_delivery","status":"under_investigation","filed_at":"2025-04-10T09:00:00Z","expected_resolution":"2025-05-10"},
+    {"id":"grv-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"GRV/2025/002","complainant_name":"Sarita Rath","subject":"Unauthorized construction near residential area","category":"planning","status":"open","filed_at":"2025-04-28T11:30:00Z","expected_resolution":"2025-05-28"},
+    {"id":"grv-003","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"GRV/2025/003","complainant_name":"Tapan Mohapatra","subject":"Corruption allegation in ration card distribution","category":"vigilance","status":"resolved","filed_at":"2025-03-01T10:00:00Z","expected_resolution":"2025-04-01"}
+  ],
+  "service_requests": [
+    {"id":"sr-001","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"SR/2025/001","applicant_name":"Deepa Mohanty","service_type":"income_certificate","status":"issued","applied_at":"2025-04-20T10:00:00Z","completed_at":"2025-04-22T14:00:00Z"},
+    {"id":"sr-002","tenant_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","reference_number":"SR/2025/002","applicant_name":"Krishna Das","service_type":"caste_certificate","status":"processing","applied_at":"2025-05-01T09:00:00Z","completed_at":null}
+  ]
+}

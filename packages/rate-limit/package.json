@@ -1,0 +1,29 @@
+{
+  "name": "@civitasone/rate-limit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/rate-limit": "^9.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "fastify": "^4.28.0",
+    "typescript": "*",
+    "vitest": "^2.1.9"
+  },
+  "peerDependencies": {
+    "fastify": "^4.0.0"
+  }
+}

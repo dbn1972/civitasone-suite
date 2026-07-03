@@ -1,0 +1,21 @@
+[
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "District Collectorate, Bhubaneswar",
+    "slug": "dc-bhubaneswar",
+    "edition": "govt_department",
+    "state": "Odisha",
+    "district": "Khordha",
+    "pin_code": "751001",
+    "gstin": "21AABCU9603R1ZM",
+    "pan": "AABCU9603R",
+    "email": "collector-khordha@nic.in",
+    "phone": "+916742391234",
+    "address": "Collectorate Road, Bhubaneswar, Odisha 751001",
+    "logo_url": null,
+    "settings": "{\"locale\":\"en-IN\",\"timezone\":\"Asia/Kolkata\",\"currency\":\"INR\",\"financial_year_start\":\"04-01\"}",
+    "is_active": true,
+    "created_at": "2024-04-01T00:00:00Z",
+    "updated_at": "2024-04-01T00:00:00Z"
+  }
+]

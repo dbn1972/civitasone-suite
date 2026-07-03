@@ -296,6 +296,25 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/rate-limit:
+    dependencies:
+      '@fastify/rate-limit':
+        specifier: ^9.1.0
+        version: 9.1.0
+    devDependencies:
+      '@types/node':
+        specifier: '*'
+        version: 20.19.43
+      fastify:
+        specifier: ^4.28.0
+        version: 4.29.1
+      typescript:
+        specifier: '*'
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   packages/schemas:
     dependencies:
       zod:
@@ -310,6 +329,21 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  packages/security-headers:
+    devDependencies:
+      '@types/node':
+        specifier: '*'
+        version: 20.19.43
+      fastify:
+        specifier: ^4.28.0
+        version: 4.29.1
+      typescript:
+        specifier: '*'
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
   packages/types:
