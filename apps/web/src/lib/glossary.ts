@@ -6,6 +6,9 @@
  */
 export const GLOSSARY: Record<string, string> = {
   // Finance
+  HoA: "Head of Account — the classification code under which government money is budgeted and spent.",
+  "Head of Account": "The classification code under which government money is budgeted and spent.",
+  GST: "Goods and Services Tax — the indirect tax on supply of goods and services in India.",
   Sanction: "An official approval to spend a fixed amount of money for a stated purpose.",
   GL: "General Ledger — the master record of every money transaction, kept in balance.",
   "General Ledger": "The master record of every money transaction, kept in balance.",
@@ -19,7 +22,7 @@ export const GLOSSARY: Record<string, string> = {
   Depreciation: "The yearly reduction in an asset's value as it ages.",
   PFMS: "Public Financial Management System — the government's central payment platform.",
   TDS: "Tax Deducted at Source — tax held back from a payment and sent to the tax department.",
-  DBT: "Direct Benefit Transfer — paying scheme money straight into a beneficiary's bank account.",
+  DBT: "Direct Benefit Transfer — scheme money sent straight to the beneficiary's bank account.",
   IRN: "Invoice Reference Number — the unique ID a tax invoice gets when registered with the government portal.",
   UTR: "Unique Transaction Reference — the number that identifies a bank transfer so you can trace it.",
   NEFT: "National Electronic Funds Transfer — a common way to move money between banks.",
@@ -38,18 +41,18 @@ export const GLOSSARY: Record<string, string> = {
   Tender: "A formal, competitive process to choose a supplier for larger purchases.",
   PO: "Purchase Order — the official order sent to a supplier to buy something.",
   Empanelment: "Adding a vendor to your approved list so they can be used for purchases.",
-  EMD: "Earnest Money Deposit — a refundable amount a bidder pays to take part in a tender.",
+  EMD: "Earnest Money Deposit — a security deposit paid with a bid to show the bidder is serious.",
   "Bank guarantee": "A bank's promise to pay if a supplier fails to meet their commitment.",
   "Reverse auction": "A live bidding event where suppliers compete by lowering their price.",
 
   // HR / Payroll
-  APAR: "Annual Performance Appraisal Report — the yearly review of an employee.",
+  APAR: "Annual Performance Appraisal Report — the yearly assessment of a government officer's work.",
   GPF: "General Provident Fund — a savings fund for government employees.",
-  NPS: "National Pension System — a retirement savings scheme.",
+  NPS: "National Pension System — a retirement savings scheme for government employees.",
   LOP: "Loss of Pay — a day with no salary, usually for unapproved absence.",
   Gratuity: "A one-time payment to an employee on retirement or leaving service.",
   "Pay matrix": "The 7th Pay Commission table that sets salary by grade and level.",
-  CPC: "Central Pay Commission — the body whose recommendations set government pay scales.",
+  CPC: "Central Pay Commission — the body that recommends government pay scales (currently 7th CPC).",
   Deputation: "Temporarily sending an employee to work in another office or organisation.",
   Regularisation: "Correcting a missing or wrong attendance entry, with approval.",
   PPO: "Pension Payment Order — the document that authorises a retired employee's pension.",
