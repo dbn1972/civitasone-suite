@@ -36,7 +36,7 @@ export function LocaleProvider({ children, initialLocale }: LocaleProviderProps)
     if (initialLocale) return;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "hi" || stored === "en") {
+      if (stored === "en" || stored === "hi" || stored === "ta" || stored === "te" || stored === "kn") {
         setLocaleState(stored);
       } else {
         setLocaleState(detectBrowserLocale());

@@ -6,17 +6,23 @@
 
 import { en } from "./en";
 import { hi } from "./hi";
+import { ta } from "./ta";
+import { te } from "./te";
+import { kn } from "./kn";
 
-export type Locale = "en" | "hi";
+export type Locale = "en" | "hi" | "ta" | "te" | "kn";
 export const DEFAULT_LOCALE: Locale = "en";
-export const SUPPORTED_LOCALES: Locale[] = ["en", "hi"];
+export const SUPPORTED_LOCALES: Locale[] = ["en", "hi", "ta", "te", "kn"];
 
 export const LOCALE_LABELS: Record<Locale, string> = {
   en: "🇬🇧 English",
   hi: "🇮🇳 हिन्दी",
+  ta: "🇮🇳 தமிழ்",
+  te: "🇮🇳 తెలుగు",
+  kn: "🇮🇳 ಕನ್ನಡ",
 };
 
-const dictionaries: Record<Locale, Record<string, string>> = { en, hi };
+const dictionaries: Record<Locale, Record<string, string>> = { en, hi, ta, te, kn };
 
 /**
  * Look up a translation key for the given locale.
@@ -34,5 +40,8 @@ export function detectBrowserLocale(): Locale {
   if (typeof navigator === "undefined") return DEFAULT_LOCALE;
   const lang = navigator.language.toLowerCase();
   if (lang.startsWith("hi")) return "hi";
+  if (lang.startsWith("ta")) return "ta";
+  if (lang.startsWith("te")) return "te";
+  if (lang.startsWith("kn")) return "kn";
   return "en";
 }

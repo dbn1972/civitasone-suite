@@ -1,4 +1,5 @@
 @import "@civitasone/ui-kit/components.css";
+@import "./globals-animations.css";
 
 @tailwind base;
 @tailwind components;
