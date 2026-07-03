@@ -15,6 +15,10 @@ export const COMMANDS = {
   subscriptionCancel: "tenant.subscription.cancel",
   subscriptionRenew: "tenant.subscription.renew",
   subscriptionSuspend: "tenant.subscription.suspend",
+  // ── self-service subscription ──────────────────────────────────────────
+  subscriptionUpgradeInitiate: "tenant.subscription.upgrade_initiate",
+  subscriptionDowngrade: "tenant.subscription.downgrade",
+  subscriptionCancelSelf: "tenant.subscription.cancel_self",
   // ── quotas ─────────────────────────────────────────────────────────
   quotaSet: "tenant.quota.set",
   quotaIncrement: "tenant.quota.increment",
@@ -39,6 +43,10 @@ export const EVENTS = {
   subscriptionCancelled: "tenant.subscription.cancelled",
   subscriptionRenewed: "tenant.subscription.renewed",
   subscriptionSuspended: "tenant.subscription.suspended",
+  // ── self-service subscription ──────────────────────────────────────────
+  subscriptionUpgradeInitiated: "tenant.subscription.upgrade_initiated",
+  subscriptionDowngraded: "tenant.subscription.downgraded",
+  subscriptionCancelledSelf: "tenant.subscription.cancelled_self",
   // ── quotas ─────────────────────────────────────────────────────────
   quotaSet: "tenant.quota.set_done",
   quotaIncremented: "tenant.quota.incremented",

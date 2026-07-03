@@ -18,6 +18,8 @@ import { uploadRoutes } from "./modules/uploads/routes.js";
 import { featureFlagRoutes } from "./modules/feature-flags/routes.js";
 import { dataExportRoutes } from "./modules/data-export/routes.js";
 import { webhookRoutes } from "./modules/webhooks/routes.js";
+import { scheduledJobRoutes } from "./modules/scheduled-jobs/routes.js";
+import { customDomainRoutes } from "./modules/custom-domains/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -43,6 +45,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(featureFlagRoutes);
   await app.register(dataExportRoutes);
   await app.register(webhookRoutes);
+  await app.register(scheduledJobRoutes);
+  await app.register(customDomainRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

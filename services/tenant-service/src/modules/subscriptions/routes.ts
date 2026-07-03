@@ -14,6 +14,9 @@ import {
   suspendSubscriptionBody,
   subscriptionIdParam,
   tenantIdParam,
+  upgradeInitiateBody,
+  downgradeBody,
+  cancelSubscriptionSelfBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import { cache } from "../../shared/infra.js";
@@ -88,5 +91,80 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
     const { subscriptionId } = subscriptionIdParam.parse(req.params);
     const body = suspendSubscriptionBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.subscriptionSuspend(ctx, subscriptionId, body));
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Self-Service Plan Upgrade Routes
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // GET available plans with pricing & feature comparison
+  app.get("/v1/tenant/plans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    // Available to all authenticated users (to show plan comparison)
+    const plans = [
+      {
+        id: "plan-small-office", name: "Small Office", pricePerMonth: 999900,
+        currency: "INR", maxUsers: 100, storageGb: 50, maxApiCalls: 10000,
+        modules: ["finance", "hrms", "payroll", "helpdesk", "knowledge"],
+      },
+      {
+        id: "plan-psu", name: "PSU", pricePerMonth: 4999900,
+        currency: "INR", maxUsers: 2000, storageGb: 500, maxApiCalls: 100000,
+        modules: ["finance", "hrms", "payroll", "procurement", "contract", "asset", "helpdesk", "knowledge", "projects", "inventory"],
+      },
+      {
+        id: "plan-govt", name: "Govt Department", pricePerMonth: 9999900,
+        currency: "INR", maxUsers: 10000, storageGb: 2000, maxApiCalls: 500000,
+        modules: ["finance", "hrms", "payroll", "procurement", "contract", "asset", "helpdesk", "knowledge", "projects", "inventory", "grant", "citizen", "legal", "crm", "estab"],
+      },
+    ];
+    return reply.send({ data: plans });
+  });
+
+  // GET current subscription details
+  app.get("/v1/tenant/subscription/current", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const view = await repo.findByTenantId(ctx.tenantId);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "no active subscription");
+    return reply.send({ data: view });
+  });
+
+  // POST initiate upgrade (creates Razorpay order)
+  app.post("/v1/tenant/subscription/upgrade", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const parsed = upgradeInitiateBody.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    const result = await commands.subscriptionUpgradeInitiate(ctx, parsed.data);
+    return reply.code(202).send(result);
+  });
+
+  // POST initiate downgrade
+  app.post("/v1/tenant/subscription/downgrade", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const parsed = downgradeBody.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    const result = await commands.subscriptionDowngrade(ctx, { targetPlanId: parsed.data.targetPlanId });
+    return reply.code(202).send(result);
+  });
+
+  // POST cancel subscription (self-service)
+  app.post("/v1/tenant/subscription/cancel", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const parsed = cancelSubscriptionSelfBody.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    const result = await commands.subscriptionCancelSelf(ctx, parsed.data);
+    return reply.code(202).send(result);
+  });
+
+  // GET invoice history
+  app.get("/v1/tenant/subscription/invoice-history", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    // Placeholder: in production, query invoice table
+    return reply.send({ data: [] });
   });
 }

@@ -97,3 +97,48 @@ export async function subscriptionSuspend(ctx: RequestContext, subscriptionId: s
   });
   return { id: subscriptionId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+// ── Self-service plan upgrade commands ─────────────────────────────────
+
+export async function subscriptionUpgradeInitiate(ctx: RequestContext, body: { targetPlanId: string; paymentMethod: string }): Promise<Accepted & { razorpayOrderId?: string }> {
+  const id = randomUUID();
+  const razorpayOrderId = `order_${randomUUID().replace(/-/g, "").slice(0, 14)}`;
+  await queue.publish(COMMANDS.subscriptionUpgradeInitiate, {
+    messageId: id,
+    type: COMMANDS.subscriptionUpgradeInitiate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, targetPlanId: body.targetPlanId, paymentMethod: body.paymentMethod, razorpayOrderId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId, razorpayOrderId };
+}
+
+export async function subscriptionDowngrade(ctx: RequestContext, body: { targetPlanId: string }): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.subscriptionDowngrade, {
+    messageId: id,
+    type: COMMANDS.subscriptionDowngrade,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, targetPlanId: body.targetPlanId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function subscriptionCancelSelf(ctx: RequestContext, body: { reason: string; feedback?: string }): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.subscriptionCancelSelf, {
+    messageId: id,
+    type: COMMANDS.subscriptionCancelSelf,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason, feedback: body.feedback ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

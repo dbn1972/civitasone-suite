@@ -38,3 +38,22 @@ export type SuspendSubscriptionBody = z.infer<typeof suspendSubscriptionBody>;
 
 export const subscriptionIdParam = z.object({ subscriptionId: z.string().uuid() });
 export const tenantIdParam = z.object({ tenantId: z.string().uuid() });
+
+// ── Self-service plan upgrade validators ─────────────────────────────────
+export const upgradeInitiateBody = z.object({
+  targetPlanId: z.string().uuid(),
+  paymentMethod: z.enum(["razorpay", "bank_transfer"]).default("razorpay"),
+});
+export type UpgradeInitiateBody = z.infer<typeof upgradeInitiateBody>;
+
+export const downgradeBody = z.object({
+  targetPlanId: z.string().uuid(),
+  acknowledgement: z.boolean().refine((v) => v === true, { message: "Must acknowledge data preservation notice" }),
+});
+export type DowngradeBody = z.infer<typeof downgradeBody>;
+
+export const cancelSubscriptionSelfBody = z.object({
+  reason: z.string().min(3).max(500),
+  feedback: z.string().max(2000).optional(),
+});
+export type CancelSubscriptionSelfBody = z.infer<typeof cancelSubscriptionSelfBody>;

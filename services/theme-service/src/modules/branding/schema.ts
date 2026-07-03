@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const brandingSchema = pgSchema("branding");
 
@@ -11,6 +11,9 @@ export const tenantBranding = brandingSchema.table("tenant_branding", {
   primaryColor: text("primary_color").notNull().default("#1e40af"),
   accentColor: text("accent_color").notNull().default("#f59e0b"),
   footerText: text("footer_text"),
+  customEmailFrom: text("custom_email_from"),
+  poweredByHidden: boolean("powered_by_hidden").notNull().default(false),
+  customLoginHtml: text("custom_login_html"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

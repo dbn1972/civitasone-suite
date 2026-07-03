@@ -8,6 +8,9 @@ export const COMMANDS = {
   createAbacRule:   "policy.abac.rule.create",
   updateAbacRule:   "policy.abac.rule.update",
   deleteAbacRule:   "policy.abac.rule.delete",
+  // ── role features ──────────────────────────────────────────────────────
+  roleFeatureGrant:  "policy.role_feature.grant",
+  roleFeatureRevoke: "policy.role_feature.revoke",
 } as const;
 
 export const EVENTS = {
@@ -20,6 +23,9 @@ export const EVENTS = {
   abacRuleCreated:    "policy.abac.rule.created",
   abacRuleUpdated:    "policy.abac.rule.updated",
   abacRuleDeleted:    "policy.abac.rule.deleted",
+  // ── role features ──────────────────────────────────────────────────────
+  roleFeatureGranted: "policy.role_feature.granted",
+  roleFeatureRevoked: "policy.role_feature.revoked",
 } as const;
 
 export const SERVICE = "policy";
