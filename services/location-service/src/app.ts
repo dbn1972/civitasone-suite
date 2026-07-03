@@ -8,6 +8,10 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { locationRoutes } from "./modules/locations/routes.js";
+import { hierarchyRoutes } from "./modules/hierarchy/routes.js";
+import { jurisdictionRoutes } from "./modules/jurisdiction/routes.js";
+import { geofenceRoutes } from "./modules/geofence/routes.js";
+import { pincodeRoutes } from "./modules/pincode/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -22,6 +26,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "location-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(locationRoutes);
+  await app.register(hierarchyRoutes);
+  await app.register(jurisdictionRoutes);
+  await app.register(geofenceRoutes);
+  await app.register(pincodeRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
