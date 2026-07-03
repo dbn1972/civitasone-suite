@@ -6,10 +6,21 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerDocumentsConsumers } from "./modules/documents/consumer.js";
+import { registerCategoriesConsumers } from "./modules/categories/consumer.js";
+import { registerRetentionConsumers } from "./modules/retention/consumer.js";
+import { registerSearchConsumers } from "./modules/search/consumer.js";
+import { registerVersionsConsumers } from "./modules/versions/consumer.js";
+import { registerSharingConsumers } from "./modules/sharing/consumer.js";
 
 const log = pino({ name: "knowledge-worker" });
 
 registerDocumentsConsumers(queue);
+registerCategoriesConsumers(queue);
+registerRetentionConsumers(queue);
+registerSearchConsumers(queue);
+registerVersionsConsumers(queue);
+registerSharingConsumers(queue);
+
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("knowledge-service worker: consumers + outbox relay running");
