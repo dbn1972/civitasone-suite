@@ -25,6 +25,20 @@ export const EVENTS = {
   campaignCreated:       "notification.campaign.created",
 } as const;
 
+/** Events consumed from other services — triggers user notifications. */
+export const CONSUMED_EVENTS = {
+  hrmsLeaveApproved:        "hrms.leave.approved",
+  hrmsLeaveApplied:         "hrms.leave.applied",
+  financeSanctionApproved:  "finance.sanction.approved",
+  financePaymentMade:       "finance.payment.made",
+  financeBillPassed:        "finance.bill.passed",
+  procurementGrnAccepted:   "procurement.grn.accepted",
+  helpdeskTicketCreated:    "helpdesk.ticket.created",
+  helpdeskTicketEscalated:  "helpdesk.ticket.escalated",
+  citizenRequestCreated:    "citizen.request.created",
+  auditParaIssued:          "audit.para.issued",
+} as const;
+
 export const SERVICE = "notification";
 export const RESOURCE = {
   template:  "template",
