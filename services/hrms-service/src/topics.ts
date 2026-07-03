@@ -22,6 +22,74 @@ export const COMMANDS = {
   applicationHire:      "hrms.application.hire",
   trainingCreate:       "hrms.training.create",
   nominationCreate:     "hrms.nomination.create",
+
+  // lifecycle
+  lifecycleConfirm:     "hrms.lifecycle.confirm",
+  lifecycleSeparate:    "hrms.lifecycle.separate",
+  lifecycleReinstate:   "hrms.lifecycle.reinstate",
+
+  // deputation
+  deputationCreate:     "hrms.deputation.create",
+  deputationExtend:     "hrms.deputation.extend",
+  deputationRevert:     "hrms.deputation.revert",
+
+  // medical
+  medicalClaimCreate:   "hrms.medical_claim.create",
+  medicalClaimApprove:  "hrms.medical_claim.approve",
+
+  // claims (LTC / CEA)
+  claimCreate:          "hrms.claim.create",
+  claimApprove:         "hrms.claim.approve",
+  claimReject:          "hrms.claim.reject",
+
+  // pension
+  pensionInitiate:      "hrms.pension.initiate",
+  pensionApprove:       "hrms.pension.approve",
+  pensionCalculate:     "hrms.pension.calculate",
+
+  // gpf
+  gpfAdvance:           "hrms.gpf.advance",
+  gpfWithdrawal:        "hrms.gpf.withdrawal",
+  gpfFinalSettlement:   "hrms.gpf.final_settlement",
+
+  // seniority
+  seniorityGenerate:    "hrms.seniority.generate",
+  seniorityApprove:     "hrms.seniority.approve",
+
+  // service-book
+  serviceBookAddEntry:  "hrms.service_book.add_entry",
+  serviceBookVerify:    "hrms.service_book.verify",
+
+  // apar
+  aparCreate:           "hrms.apar.create",
+  aparSubmit:           "hrms.apar.submit",
+  aparReview:           "hrms.apar.review",
+  aparAccept:           "hrms.apar.accept",
+
+  // geo-attendance
+  geoCheckIn:           "hrms.geo_attendance.check_in",
+  geoCheckOut:          "hrms.geo_attendance.check_out",
+
+  // holidays
+  holidayCreate:        "hrms.holiday.create",
+  holidayDelete:        "hrms.holiday.delete",
+
+  // id-cards
+  idCardIssue:          "hrms.id_card.issue",
+  idCardSuspend:        "hrms.id_card.suspend",
+  idCardRevoke:         "hrms.id_card.revoke",
+  idCardReactivate:     "hrms.id_card.reactivate",
+
+  // pay-matrix
+  payMatrixIncrement:   "hrms.pay_matrix.annual_increment",
+
+  // reservation
+  rosterCreate:         "hrms.roster.create",
+  rosterGeneratePoints: "hrms.roster.generate_points",
+  sanctionedPostCreate: "hrms.sanctioned_post.create",
+
+  // workforce-planning
+  workforcePlanRefresh: "hrms.workforce_plan.refresh",
 } as const;
 
 export const EVENTS = {
