@@ -15,6 +15,36 @@ import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js"
 import { registerTrainingConsumers }   from "./modules/training/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 import { registerAppraisalConsumers }  from "./modules/appraisals/consumer.js";
+// Previous batch consumers
+import { registerAparConsumers }       from "./modules/apar/consumer.js";
+import { registerClaimsConsumers }     from "./modules/claims/consumer.js";
+import { registerDeputationConsumers } from "./modules/deputation/consumer.js";
+import { registerGeoAttendanceConsumers } from "./modules/geo-attendance/consumer.js";
+import { registerGpfConsumers }        from "./modules/gpf/consumer.js";
+import { registerHolidayConsumers }    from "./modules/holidays/consumer.js";
+import { registerIdCardConsumers }     from "./modules/id-cards/consumer.js";
+import { registerMedicalConsumers }    from "./modules/medical/consumer.js";
+import { registerPayMatrixConsumers }  from "./modules/pay-matrix/consumer.js";
+import { registerPensionConsumers }    from "./modules/pension/consumer.js";
+import { registerReservationConsumers } from "./modules/reservation/consumer.js";
+import { registerSeniorityConsumers }  from "./modules/seniority/consumer.js";
+import { registerServiceBookConsumers } from "./modules/service-book/consumer.js";
+import { registerWorkforcePlanningConsumers } from "./modules/workforce-planning/consumer.js";
+// Current batch consumers
+import { registerAiFraudConsumers }    from "./modules/ai-fraud/consumer.js";
+import { registerAiPredictionsConsumers } from "./modules/ai-predictions/consumer.js";
+import { registerBulkImportConsumers } from "./modules/bulk-import/consumer.js";
+import { registerDashboardConsumers }  from "./modules/dashboard/consumer.js";
+import { registerDeviceTrustConsumers } from "./modules/device-trust/consumer.js";
+import { registerFaceVerificationConsumers } from "./modules/face-verification/consumer.js";
+import { registerInternalConsumers }   from "./modules/internal/consumer.js";
+import { registerOrgchartConsumers }   from "./modules/orgchart/consumer.js";
+import { registerReportsConsumers }    from "./modules/reports/consumer.js";
+import { registerRtiConsumers }        from "./modules/rti/consumer.js";
+import { registerSchedulerConsumers }  from "./modules/scheduler/consumer.js";
+import { registerSelfServiceConsumers } from "./modules/self-service/consumer.js";
+import { registerSocialConsumers }     from "./modules/social/consumer.js";
+import { registerVisitingCardConsumers } from "./modules/visiting-cards/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 
 const log = pino({ name: "hrms-worker" });
@@ -32,6 +62,36 @@ registerRecruitmentEOfficeConsumers(queue);
 registerTrainingConsumers(queue);
 registerIntegrationConsumers(queue);
 registerAppraisalConsumers(queue);
+// Previous batch
+registerAparConsumers(queue);
+registerClaimsConsumers(queue);
+registerDeputationConsumers(queue);
+registerGeoAttendanceConsumers(queue);
+registerGpfConsumers(queue);
+registerHolidayConsumers(queue);
+registerIdCardConsumers(queue);
+registerMedicalConsumers(queue);
+registerPayMatrixConsumers(queue);
+registerPensionConsumers(queue);
+registerReservationConsumers(queue);
+registerSeniorityConsumers(queue);
+registerServiceBookConsumers(queue);
+registerWorkforcePlanningConsumers(queue);
+// Current batch
+registerAiFraudConsumers(queue);
+registerAiPredictionsConsumers(queue);
+registerBulkImportConsumers(queue);
+registerDashboardConsumers(queue);
+registerDeviceTrustConsumers(queue);
+registerFaceVerificationConsumers(queue);
+registerInternalConsumers(queue);
+registerOrgchartConsumers(queue);
+registerReportsConsumers(queue);
+registerRtiConsumers(queue);
+registerSchedulerConsumers(queue);
+registerSelfServiceConsumers(queue);
+registerSocialConsumers(queue);
+registerVisitingCardConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
