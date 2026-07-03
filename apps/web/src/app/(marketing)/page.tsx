@@ -171,6 +171,33 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Documentation CTA ────────────────────────────────────────────── */}
+      <section className="bg-white py-20 sm:py-28">
+        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+          <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+            Full Documentation Available
+          </h2>
+          <p className="mt-4 text-lg text-gray-500">
+            Step-by-step guides for every module. Written for office staff with no IT background.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            <Link
+              href="/docs"
+              className="inline-flex items-center rounded-lg bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 transition-colors"
+            >
+              Read Online →
+            </Link>
+            <a
+              href="/docs/CivitasOne-User-Manual.pdf"
+              className="inline-flex items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              download
+            >
+              Download PDF →
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* ── Comparison Table ──────────────────────────────────────────────── */}
       <section className="bg-white py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
