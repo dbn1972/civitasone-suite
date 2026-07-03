@@ -167,7 +167,7 @@ describe("Module Gap Analysis: Skeletal Service Detection", () => {
   }
 
   // Flag services known to be skeletal (for tracking remediation progress)
-  const KNOWN_SKELETAL = ["plugin", "knowledge", "location", "theme", "tenant"];
+  const KNOWN_SKELETAL = ["theme"];
   for (const svc of KNOWN_SKELETAL) {
     it(`${svc}-service is flagged as skeletal (≤2 modules)`, () => {
       const modulesDir = join(SERVICES_DIR, `${svc}-service`, "src", "modules");
@@ -197,8 +197,8 @@ describe("Module Gap Analysis: Plugin System Readiness", () => {
     const modulesDir = join(PLUGIN_DIR, "modules");
     const modules = listDirs(modulesDir);
     // Current state: only "items" module exists
-    expect(modules).not.toContain("registry");
-    expect(modules).not.toContain("marketplace");
+    expect(modules).toContain("registry");
+    // marketplace not yet built;
   });
 
   it("[GAP] plugin-service lacks lifecycle management (install/enable/disable)", () => {
@@ -210,6 +210,6 @@ describe("Module Gap Analysis: Plugin System Readiness", () => {
   it("[GAP] no plugin-sdk package exists in packages/", () => {
     const packagesDir = join(ROOT, "packages");
     const packages = listDirs(packagesDir);
-    expect(packages).not.toContain("plugin-sdk");
+    expect(packages).toContain("plugin-sdk");
   });
 });

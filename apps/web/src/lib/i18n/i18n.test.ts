@@ -42,7 +42,7 @@ describe("i18n", () => {
     it("SUPPORTED_LOCALES contains en and hi", () => {
       expect(SUPPORTED_LOCALES).toContain("en");
       expect(SUPPORTED_LOCALES).toContain("hi");
-      expect(SUPPORTED_LOCALES).toHaveLength(2);
+      expect(SUPPORTED_LOCALES).toHaveLength(5);
     });
   });
 

@@ -145,7 +145,7 @@ describe("UX Audit: Terminology Consistency (R12)", () => {
       }
     }
     // Known gap: HoA and GST need glossary entries (tracked for remediation)
-    expect(missing).toEqual(["HoA", "GST"]);
+    expect(missing).toEqual([]);
   });
 
   it("every help module has at least one task", () => {

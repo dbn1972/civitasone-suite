@@ -123,7 +123,29 @@
     },
     {
       "module": "admin",
+      "screen": "/admin/role-features",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "admin",
       "screen": "/admin/sa-dashboard",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/scheduled-jobs",
       "loaders": [],
       "apiPaths": [],
       "upstream": null,
@@ -4701,6 +4723,28 @@
     },
     {
       "module": "tenant-admin",
+      "screen": "/tenant-admin/data-export",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/domain",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "tenant-admin",
       "screen": "/tenant-admin/idp",
       "loaders": [],
       "apiPaths": [],
@@ -4809,6 +4853,17 @@
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/plans",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "tenant-admin",
@@ -4957,6 +5012,17 @@
     },
     {
       "module": "tenant-admin",
+      "screen": "/tenant-admin/usage",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "tenant-admin",
       "screen": "/tenant-admin/users/[id]",
       "loaders": [
         "getAdminUserById"
@@ -4984,6 +5050,17 @@
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/webhooks",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "themes",
@@ -5071,6 +5148,6 @@
     "wired": 150,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 256
+    "noLoader": 263
   }
 }

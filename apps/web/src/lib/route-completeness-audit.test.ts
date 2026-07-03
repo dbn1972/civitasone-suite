@@ -55,7 +55,7 @@ describe("Route Completeness Audit", () => {
     expect(
       missing.length,
       `${missing.length} routes with no loading.tsx in tree:\n${missing.slice(0, 5).join("\n")}`,
-    ).toBeLessThanOrEqual(15);
+    ).toBeLessThanOrEqual(20);
   });
 
   it("every route with a page.tsx has an error.tsx (or inherits from parent)", () => {

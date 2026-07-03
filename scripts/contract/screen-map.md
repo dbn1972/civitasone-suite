@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-07-01T18:30:10.906Z
+Generated: 2026-07-03T11:18:10.517Z
 
-**Summary:** 150 WIRED | 0 MISSING | 0 MISMATCH | 256 NO_LOADER
+**Summary:** 150 WIRED | 0 MISSING | 0 MISMATCH | 263 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -17,7 +17,9 @@ Generated: 2026-07-01T18:30:10.906Z
 | admin | /admin/onboarding | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/operators | — | — | — | — | — | — NO_LOADER |
 | admin | /admin | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/role-features | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/sa-dashboard | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/scheduled-jobs | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tech-admin | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tenant-provision | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tenants/[id] | — | — | — | — | — | — NO_LOADER |
@@ -383,6 +385,8 @@ Generated: 2026-07-01T18:30:10.906Z
 | tenant-admin | /tenant-admin/breakglass/[id] | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/breakglass | getBreakglassLog | /api/v1/admin/breakglass | admin → /v1/admin/breakglass | ✓ `/v1/admin/breakglass` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/compliance | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/data-export | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/domain | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/idp | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/install | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/mfa | — | — | — | — | — | — NO_LOADER |
@@ -392,6 +396,7 @@ Generated: 2026-07-01T18:30:10.906Z
 | tenant-admin | /tenant-admin/org-hierarchy | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/org-type | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin | getTenantAdminDashboard | /api/v1/admin/health | admin → /v1/admin/health | ✓ `/v1/admin/health` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/plans | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/platform-config | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/readiness | getTenantAdminDashboard | /api/v1/admin/health | admin → /v1/admin/health | ✓ `/v1/admin/health` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/roles/[id] | getAdminRoleById | /api/policy/roles/:param | policy → /policy/roles/:param | ✓ `/policy/roles/:id` | ✓ | ✅ WIRED |
@@ -403,8 +408,10 @@ Generated: 2026-07-01T18:30:10.906Z
 | tenant-admin | /tenant-admin/siem | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/sso | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/subscription | getSubscription | /api/v1/billing/subscriptions | billing → /v1/billing/subscriptions | ✓ `/v1/billing/subscriptions` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/usage | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/users/[id] | getAdminUserById | /api/identity/users/:param | identity → /identity/users/:param | ✓ `/identity/users/:id` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/users | getAdminUsers | /api/identity/users | identity → /identity/users | ✓ `/identity/users` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/webhooks | — | — | — | — | — | — NO_LOADER |
 | themes | /themes | getThemeTokens | /api/v1/themes/tokens | theme → /v1/themes/tokens | ✓ `/v1/themes/tokens` | ✓ | ✅ WIRED |
 | workflow | /workflow/definitions/[id] | — | — | — | — | — | — NO_LOADER |
 | workflow | /workflow/definitions | — | — | — | — | — | — NO_LOADER |
