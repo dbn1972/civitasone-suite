@@ -9,6 +9,10 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { tenantRoutes } from "./modules/tenant/routes.js";
+import { planRoutes } from "./modules/plans/routes.js";
+import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
+import { quotaRoutes } from "./modules/quotas/routes.js";
+import { settingRoutes } from "./modules/settings/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -21,8 +25,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authPlugin);
   registerOpsRoutes(app, { service: "tenant-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
-
   await app.register(tenantRoutes);
+  await app.register(planRoutes);
+  await app.register(subscriptionRoutes);
+  await app.register(quotaRoutes);
+  await app.register(settingRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

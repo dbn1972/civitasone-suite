@@ -8,10 +8,18 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerTenantConsumers } from "./modules/tenant/consumer.js";
+import { registerPlanConsumers } from "./modules/plans/consumer.js";
+import { registerSubscriptionConsumers } from "./modules/subscriptions/consumer.js";
+import { registerQuotaConsumers } from "./modules/quotas/consumer.js";
+import { registerSettingConsumers } from "./modules/settings/consumer.js";
 
 const log = pino({ name: "tenant-worker" });
 
 registerTenantConsumers(queue);
+registerPlanConsumers(queue);
+registerSubscriptionConsumers(queue);
+registerQuotaConsumers(queue);
+registerSettingConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("tenant-service worker: consumers + outbox relay running");
