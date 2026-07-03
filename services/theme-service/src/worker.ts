@@ -3,10 +3,14 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerTokenConsumers } from "./modules/tokens/consumer.js";
+import { registerBrandingConsumers } from "./modules/branding/consumer.js";
+import { registerTemplateConsumers } from "./modules/templates/consumer.js";
 
 const log = pino({ name: "themes-worker" });
 
 registerTokenConsumers(queue);
+registerBrandingConsumers(queue);
+registerTemplateConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("theme-service worker: consumers + outbox relay running");

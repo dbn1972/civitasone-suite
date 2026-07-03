@@ -9,6 +9,8 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { tokensRoutes } from "./modules/tokens/routes.js";
 import { brandRoutes } from "./modules/tokens/brand-routes.js";
+import { brandingRoutes } from "./modules/branding/routes.js";
+import { templatesRoutes } from "./modules/templates/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
@@ -17,6 +19,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "theme-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
   await app.register(tokensRoutes);
   await app.register(brandRoutes);
+  await app.register(brandingRoutes);
+  await app.register(templatesRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

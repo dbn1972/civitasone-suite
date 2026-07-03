@@ -3,10 +3,14 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerItemConsumers } from "./modules/items/consumer.js";
+import { registerRegistryConsumers } from "./modules/registry/consumer.js";
+import { registerHookConsumers } from "./modules/hooks/consumer.js";
 
 const log = pino({ name: "plugins-worker" });
 
 registerItemConsumers(queue);
+registerRegistryConsumers(queue);
+registerHookConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("plugin-service worker: consumers + outbox relay running");
