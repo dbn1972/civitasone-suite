@@ -79,6 +79,68 @@ export type AuditEventPayload = {
   metadata?: Record<string, unknown>;
 };
 
+// ─── Asset events ────────────────────────────────────────────────────────────
+export type AssetRegisteredPayload = { assetId: string; assetCode: string; category: string; value: number };
+export type AssetDepreciatedPayload = { assetId: string; period: string; amount: number };
+export type AssetDisposedPayload = { assetId: string; disposalMethod: string; saleValue: number };
+
+// ─── Stock events ────────────────────────────────────────────────────────────
+export type StockReceivedPayload = { receiptId: string; skuId: string; qty: number; warehouseId: string };
+export type StockIssuedPayload = { issueId: string; skuId: string; qty: number; issuedTo: string };
+export type StockAdjustedPayload = { adjustmentId: string; skuId: string; qtyDelta: number; reason: string };
+
+// ─── Grant events ────────────────────────────────────────────────────────────
+export type GrantDisbursedPayload = { disbursementId: string; grantId: string; amount: number; installment: number };
+export type GrantUcSubmittedPayload = { ucId: string; grantId: string; amount: number; period: string };
+export type GrantClosedPayload = { grantId: string; reason: string };
+
+// ─── Contract events ─────────────────────────────────────────────────────────
+export type ContractSignedPayload = { contractId: string; vendorId: string; value: number; startDate: string };
+export type ContractAmendedPayload = { contractId: string; amendmentNo: number; revisedValue: number };
+export type ContractClosedPayload = { contractId: string; closeReason: string };
+
+// ─── Project events ──────────────────────────────────────────────────────────
+export type ProjectCreatedPayload = { projectId: string; name: string; budget: number; startDate: string };
+export type MilestoneCompletedPayload = { milestoneId: string; projectId: string; name: string };
+export type ProjectClosedPayload = { projectId: string; status: string };
+
+// ─── Legal events ────────────────────────────────────────────────────────────
+export type CaseFiledPayload = { caseId: string; caseNo: string; court: string; filedDate: string };
+export type HearingScheduledPayload = { hearingId: string; caseId: string; date: string; court: string };
+export type CaseClosedPayload = { caseId: string; outcome: string };
+
+// ─── Citizen events ──────────────────────────────────────────────────────────
+export type CitizenRequestCreatedPayload = { requestId: string; type: string; citizenId: string };
+export type CitizenRequestResolvedPayload = { requestId: string; resolution: string };
+export type RtiRequestFiledPayload = { rtiId: string; subject: string; citizenId: string };
+
+// ─── CRM events ──────────────────────────────────────────────────────────────
+export type ContactCreatedPayload = { contactId: string; name: string; type: string };
+export type DealWonPayload = { dealId: string; contactId: string; value: number };
+export type DealLostPayload = { dealId: string; contactId: string; reason: string };
+
+// ─── Workflow events ─────────────────────────────────────────────────────────
+export type TaskAssignedPayload = { taskId: string; assigneeId: string; workflowId: string };
+export type TaskCompletedPayload = { taskId: string; completedBy: string; outcome: string };
+export type WorkflowCompletedPayload = { workflowId: string; status: string; completedAt: string };
+
+// ─── Billing events ──────────────────────────────────────────────────────────
+export type InvoiceGeneratedPayload = { invoiceId: string; tenantId: string; amount: number; period: string };
+export type PaymentReceivedPayload = { paymentId: string; invoiceId: string; amount: number; method: string };
+
+// ─── Notification events ─────────────────────────────────────────────────────
+export type NotificationDeliveredPayload = { notificationId: string; channel: string; recipientId: string };
+export type NotificationFailedPayload = { notificationId: string; channel: string; reason: string };
+
+// ─── Payroll events ──────────────────────────────────────────────────────────
+export type PayrollRunApprovedPayload = { runId: string; period: string; totalNet: number; employeeCount: number };
+export type PayrollRunCompletedDetailPayload = { runId: string; period: string; bankFileGenerated: boolean };
+
+// ─── Establishment events ────────────────────────────────────────────────────
+export type FileCreatedPayload = { fileId: string; fileNo: string; department: string; subject: string };
+export type FileDecidedPayload = { fileId: string; decision: string; decidedBy: string; decidedAt: string };
+export type MeetingScheduledPayload = { meetingId: string; date: string; department: string; subject: string };
+
 export {
   eventEnvelopeSchema,
   parseEnvelope,
