@@ -5,6 +5,7 @@ import { NotificationBell } from "../NotificationBell";
 import { DarkModeToggle } from "../DarkModeToggle";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { AccountMenu } from "../AccountMenu";
+import { LanguageSwitcher } from "../LanguageSwitcher";
 
 interface TopBarProps {
   crumb?: ReactNode;
@@ -22,6 +23,7 @@ export function TopBar({ crumb }: TopBarProps) {
       </div>
       <div className="tb-actions">
         <ConnectionStatus />
+        <LanguageSwitcher />
         <DarkModeToggle />
         <button className="iconbtn" title="Analytics" type="button">📊</button>
         <NotificationBell />

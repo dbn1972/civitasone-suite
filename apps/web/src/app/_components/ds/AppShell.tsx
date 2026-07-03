@@ -4,6 +4,7 @@ import { TopBar } from "./TopBar";
 import { KeyboardShortcuts } from "../KeyboardShortcuts";
 import { WhatsNewBanner } from "../WhatsNewBanner";
 import { FeedbackWidget } from "../FeedbackWidget";
+import { AskCivitasOne } from "../AskCivitasOne";
 
 interface AppShellProps {
   children: ReactNode;
@@ -24,6 +25,7 @@ export function AppShell({ children, crumb, enabledModules }: AppShellProps) {
         </main>
       </div>
       <KeyboardShortcuts />
+      <AskCivitasOne />
       <FeedbackWidget />
     </div>
   );
