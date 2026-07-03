@@ -1,0 +1,2479 @@
+openapi: "3.1.0"
+info:
+  title: CivitasOne Suite API
+  version: "0.2.0"
+  description: |
+    Unified API for CivitasOne government ERP suite.
+    All endpoints require Bearer token authentication (Keycloak OIDC).
+    Write operations return 202 Accepted (CQRS async processing).
+  contact:
+    name: CivitasOne Platform Team
+    url: https://civitasone.app/docs/api
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+servers:
+  - url: https://api.civitasone.app
+    description: Production
+  - url: http://localhost:8080
+    description: Local Development
+security:
+  - bearerAuth: []
+tags:
+  - name: Finance
+    description: Budget, bills, payments, GL, sanctions
+  - name: HRMS
+    description: Employees, leave, attendance, payroll
+  - name: Procurement
+    description: Indents, vendors, purchase orders, GRN
+  - name: Tenant
+    description: Settings, plans, subscriptions, quotas
+  - name: Admin
+    description: Feature flags, webhooks, scheduled jobs, data export
+  - name: Identity
+    description: Authentication, sessions, devices
+  - name: Citizen
+    description: Requests, RTI, grievances
+  - name: Stock
+    description: Items, barcode lookup, goods receipt
+  - name: Helpdesk
+    description: Tickets, SLA, escalation
+  - name: Audit
+    description: Events, compliance, observations
+
+paths:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Finance Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/finance/bills:
+    post:
+      operationId: createBill
+      tags: [Finance]
+      summary: Create a new bill
+      description: |
+        Creates a bill (expenditure voucher) for a vendor or contractor payment.
+        The bill enters the approval workflow and, once sanctioned, becomes eligible
+        for payment processing. Amount is in paise (minor units).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBillRequest"
+      responses:
+        "202":
+          description: Bill creation accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires finance_officer or finance_admin
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listBills
+      tags: [Finance]
+      summary: List bills
+      description: |
+        Returns a paginated list of bills for the current tenant.
+        Supports filtering by status, vendor, and date range.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, pending, sanctioned, paid, cancelled]
+        - name: vendorId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Paginated list of bills
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Bill"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/finance/sanctions:
+    post:
+      operationId: createSanction
+      tags: [Finance]
+      summary: Create a budget sanction
+      description: |
+        Creates an expenditure sanction against a budget head. The sanction
+        reserves funds and must be approved by a checker (maker-checker pattern)
+        before bills can be drawn against it. Amount in paise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSanctionRequest"
+      responses:
+        "202":
+          description: Sanction creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires finance_officer or finance_admin
+      security:
+        - bearerAuth: []
+
+  /v1/finance/payments:
+    post:
+      operationId: initiatePayment
+      tags: [Finance]
+      summary: Initiate a payment
+      description: |
+        Initiates payment processing for a sanctioned bill. Supports PFMS
+        integration for government treasury payments and NEFT/RTGS for direct
+        bank transfers. Amount in paise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+      responses:
+        "202":
+          description: Payment initiation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires finance_admin
+      security:
+        - bearerAuth: []
+
+  /v1/finance/gl/entries:
+    get:
+      operationId: listGlEntries
+      tags: [Finance]
+      summary: List General Ledger entries
+      description: |
+        Returns double-entry GL journal entries for the current tenant.
+        Each transaction produces balanced debit/credit entries. Supports
+        filtering by account, date range, and voucher reference.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: accountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: voucherRef
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated GL entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GlEntry"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/finance/budgets:
+    post:
+      operationId: createBudget
+      tags: [Finance]
+      summary: Create a budget allocation
+      description: |
+        Creates a budget allocation for a financial year against a Head of Account.
+        Allocations define the spending ceiling for a budget head. Amount in paise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBudgetRequest"
+      responses:
+        "202":
+          description: Budget creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires finance_officer or finance_admin
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # HRMS Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/hrms/leave/apply:
+    post:
+      operationId: applyLeave
+      tags: [HRMS]
+      summary: Apply for leave
+      description: |
+        Submits a leave application for the authenticated employee. Validates
+        against CCS(Leave) Rules including balance checks, minimum service
+        requirements, and leave-type-specific policies (CL/EL/HPL/ML etc).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyLeaveRequest"
+      responses:
+        "202":
+          description: Leave application accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "422":
+          description: Leave rule violation (CCS Rules)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/attendance/geo-check-in:
+    post:
+      operationId: geoCheckIn
+      tags: [HRMS]
+      summary: GPS-based attendance check-in
+      description: |
+        Records employee attendance using GPS coordinates. Validates that the
+        check-in location is within the configured geofence radius for the
+        employee's assigned office. Includes device fingerprint for fraud detection.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoCheckInRequest"
+      responses:
+        "202":
+          description: Check-in accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "422":
+          description: Outside geofence radius
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/employees:
+    get:
+      operationId: listEmployees
+      tags: [HRMS]
+      summary: List employees
+      description: |
+        Returns a paginated list of employees for the current tenant.
+        Supports filtering by department, designation, and status.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: departmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, probation, suspended, retired, terminated]
+        - name: search
+          in: query
+          description: Full-text search on name or employee code
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated employee list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Employee"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/id-cards/me:
+    get:
+      operationId: getMyIdCard
+      tags: [HRMS]
+      summary: Get my digital ID card
+      description: |
+        Returns the authenticated employee's digital identity card including
+        photo URL, QR code data, designation, and office details. Used by
+        the mobile app to display the virtual ID card.
+      responses:
+        "200":
+          description: Employee ID card data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdCard"
+        "401":
+          description: Missing or invalid bearer token
+        "404":
+          description: ID card not yet generated
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/id-cards/verify:
+    post:
+      operationId: verifyIdCardQr
+      tags: [HRMS]
+      summary: Verify an ID card QR code
+      description: |
+        Verifies a scanned QR code from a digital employee ID card.
+        Returns employee identity and current employment status.
+        Used by security checkpoints and reception desks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qrPayload]
+              properties:
+                qrPayload:
+                  type: string
+                  description: Base64-encoded QR payload from the ID card
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  employee:
+                    $ref: "#/components/schemas/Employee"
+                  status:
+                    type: string
+                    enum: [active, expired, revoked]
+        "400":
+          description: Invalid QR payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Procurement Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/procurement/indents:
+    post:
+      operationId: createIndent
+      tags: [Procurement]
+      summary: Create a purchase indent
+      description: |
+        Creates a purchase indent (material requisition) from a department.
+        The indent enters the approval workflow and, once approved, can be
+        converted to a purchase order. Links to budget head for fund availability.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIndentRequest"
+      responses:
+        "202":
+          description: Indent creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires procurement_officer
+      security:
+        - bearerAuth: []
+
+  /v1/procurement/purchase-orders:
+    post:
+      operationId: createPurchaseOrder
+      tags: [Procurement]
+      summary: Create a purchase order
+      description: |
+        Creates a purchase order against an approved indent and selected vendor.
+        Includes line items with quantities, rates, and delivery schedule.
+        Links to the sanction for fund commitment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePurchaseOrderRequest"
+      responses:
+        "202":
+          description: PO creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires procurement_officer or procurement_admin
+      security:
+        - bearerAuth: []
+
+  /v1/procurement/grn:
+    post:
+      operationId: createGrn
+      tags: [Procurement]
+      summary: Record goods received
+      description: |
+        Records a Goods Received Note (GRN) against a purchase order.
+        Triggers stock entry creation and enables bill processing for the
+        received quantity. Supports partial receipts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGrnRequest"
+      responses:
+        "202":
+          description: GRN accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires store_keeper or procurement_officer
+      security:
+        - bearerAuth: []
+
+  /v1/procurement/vendors:
+    get:
+      operationId: listVendors
+      tags: [Procurement]
+      summary: List registered vendors
+      description: |
+        Returns a paginated list of registered vendors/suppliers for the tenant.
+        Includes vendor rating, categories, and compliance status (GST, PAN).
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Search by vendor name or GSTIN
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated vendor list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Vendor"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Tenant Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/settings:
+    get:
+      operationId: getTenantSettings
+      tags: [Tenant]
+      summary: Get tenant settings
+      description: |
+        Returns all configuration settings for the current tenant including
+        locale, timezone, fiscal year start, enabled modules, and branding.
+      responses:
+        "200":
+          description: Tenant settings object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+                    description: Key-value settings map
+        "401":
+          description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+    put:
+      operationId: upsertTenantSetting
+      tags: [Tenant]
+      summary: Create or update a setting
+      description: |
+        Creates or updates a single tenant configuration setting.
+        Only tenant_admin and super_admin roles can modify settings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                  description: Setting key (dot-notation, e.g. "locale.timezone")
+                  examples: ["locale.timezone", "finance.fiscal_year_start", "branding.logo_url"]
+                value:
+                  description: Setting value (string, number, boolean, or object)
+      responses:
+        "202":
+          description: Setting update accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires tenant_admin or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/tenant/plans:
+    get:
+      operationId: listTenantPlans
+      tags: [Tenant]
+      summary: List available plans
+      description: |
+        Returns the list of subscription plans available for upgrade/downgrade.
+        Includes feature entitlements, user limits, and pricing for each plan.
+      responses:
+        "200":
+          description: Available plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                          examples: ["Small Office", "PSU", "Govt Department"]
+                        maxUsers:
+                          type: integer
+                        modules:
+                          type: array
+                          items:
+                            type: string
+                        priceMonthlyPaise:
+                          type: integer
+                          description: Monthly price in paise
+        "401":
+          description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+
+  /v1/tenant/usage:
+    get:
+      operationId: getTenantUsage
+      tags: [Tenant]
+      summary: Get usage dashboard
+      description: |
+        Returns current resource usage for the tenant including active users,
+        storage consumption, API call counts, and queue message volume.
+        Used by the admin dashboard to show quota utilization.
+      responses:
+        "200":
+          description: Usage metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activeUsers:
+                    type: integer
+                  maxUsers:
+                    type: integer
+                  storageUsedBytes:
+                    type: integer
+                    format: int64
+                  storageMaxBytes:
+                    type: integer
+                    format: int64
+                  apiCallsThisMonth:
+                    type: integer
+                  plan:
+                    type: string
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/tenant/subscription/upgrade:
+    post:
+      operationId: upgradePlan
+      tags: [Tenant]
+      summary: Upgrade subscription plan
+      description: |
+        Initiates a plan upgrade for the tenant. Prorates charges for the
+        remaining billing period. Takes effect immediately for feature access;
+        billing adjustment appears on the next invoice.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId]
+              properties:
+                planId:
+                  type: string
+                  format: uuid
+                  description: Target plan ID to upgrade to
+      responses:
+        "202":
+          description: Upgrade request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error (e.g. downgrade not allowed via this endpoint)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires tenant_admin or super_admin
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Admin Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/admin/feature-flags/manage:
+    get:
+      operationId: listFeatureFlags
+      tags: [Admin]
+      summary: List feature flags
+      description: |
+        Returns all feature flags for the tenant including their current state,
+        rollout percentage, and targeting rules.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Feature flags list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FeatureFlag"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires super_admin
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createFeatureFlag
+      tags: [Admin]
+      summary: Create a feature flag
+      description: |
+        Creates a new feature flag. Flags start disabled by default.
+        Supports percentage rollouts and user/role targeting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFeatureFlagRequest"
+      responses:
+        "202":
+          description: Flag creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/admin/feature-flags/manage/{id}/kill:
+    post:
+      operationId: killFeatureFlag
+      tags: [Admin]
+      summary: Kill switch — disable flag immediately
+      description: |
+        Emergency kill switch that immediately disables a feature flag for all
+        users. Use during incidents to disable problematic features without
+        a full deployment.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Kill switch activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires super_admin
+        "404":
+          description: Feature flag not found
+      security:
+        - bearerAuth: []
+
+  /v1/admin/webhooks:
+    get:
+      operationId: listWebhooks
+      tags: [Admin]
+      summary: List webhooks
+      description: |
+        Returns configured webhook endpoints for the tenant. Webhooks deliver
+        real-time event notifications for configured event types.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Webhook list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Webhook"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires tenant_admin
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createWebhook
+      tags: [Admin]
+      summary: Create a webhook
+      description: |
+        Registers a new webhook endpoint. The URL will receive POST requests
+        with event payloads. Supports HMAC signature verification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "202":
+          description: Webhook creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/admin/data-export:
+    post:
+      operationId: requestDataExport
+      tags: [Admin]
+      summary: Request a data export
+      description: |
+        Initiates an asynchronous full or partial data export for the tenant.
+        Generates a downloadable archive (ZIP) containing CSV/JSON files.
+        Notifies via webhook and email when ready.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format]
+              properties:
+                format:
+                  type: string
+                  enum: [csv, json]
+                modules:
+                  type: array
+                  items:
+                    type: string
+                  description: Modules to export (empty = all)
+                fromDate:
+                  type: string
+                  format: date
+                toDate:
+                  type: string
+                  format: date
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires tenant_admin or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/admin/scheduled-jobs:
+    get:
+      operationId: listScheduledJobs
+      tags: [Admin]
+      summary: List scheduled jobs
+      description: |
+        Returns all configured scheduled/cron jobs for the tenant.
+        Includes last run time, next scheduled run, and status.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Scheduled jobs list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ScheduledJob"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires super_admin
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Citizen Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/citizen/requests:
+    post:
+      operationId: fileCitizenRequest
+      tags: [Citizen]
+      summary: File a citizen request
+      description: |
+        Submits a new citizen service request (grievance, RTI, general request).
+        The request enters the department workflow for assignment and resolution.
+        Citizens receive an acknowledgement number for tracking.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCitizenRequestBody"
+      responses:
+        "202":
+          description: Request filed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listMyCitizenRequests
+      tags: [Citizen]
+      summary: List my requests
+      description: |
+        Returns the authenticated citizen's filed requests with current status.
+        Includes request type, department, assigned officer, and last update.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, resolved, rejected, escalated]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [grievance, rti, general, suggestion]
+      responses:
+        "200":
+          description: Paginated citizen requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CitizenRequest"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+
+  /v1/citizen/requests/{id}/timeline:
+    get:
+      operationId: getCitizenRequestTimeline
+      tags: [Citizen]
+      summary: Get request status timeline
+      description: |
+        Returns the full timeline of status changes and actions for a citizen
+        request. Shows when the request was filed, assigned, responded to,
+        escalated, or resolved — with timestamps and actor names.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Request timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId:
+                    type: string
+                    format: uuid
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        action:
+                          type: string
+                          enum: [filed, assigned, responded, escalated, resolved, rejected, reopened]
+                        actor:
+                          type: string
+                        note:
+                          type: string
+        "401":
+          description: Missing or invalid bearer token
+        "404":
+          description: Request not found or does not belong to current user
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Stock Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/stock/items/barcode/{code}:
+    get:
+      operationId: lookupItemByBarcode
+      tags: [Stock]
+      summary: Lookup item by barcode
+      description: |
+        Retrieves stock item details by scanning a barcode (EAN-13, Code-128, QR).
+        Used by mobile app barcode scanner for quick item identification
+        in stores and warehouses.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Barcode value (EAN-13, Code-128, or QR content)
+      responses:
+        "200":
+          description: Stock item details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockItem"
+        "401":
+          description: Missing or invalid bearer token
+        "404":
+          description: No item found for this barcode
+      security:
+        - bearerAuth: []
+
+  /v1/stock/entries:
+    post:
+      operationId: createStockEntry
+      tags: [Stock]
+      summary: Record a goods receipt
+      description: |
+        Records stock entry (goods receipt into store/warehouse). Links to
+        GRN or purchase order. Updates item quantity and valuation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, warehouseId, type]
+              properties:
+                type:
+                  type: string
+                  enum: [receipt, return, transfer_in]
+                warehouseId:
+                  type: string
+                  format: uuid
+                grnId:
+                  type: string
+                  format: uuid
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [itemId, quantity]
+                    properties:
+                      itemId:
+                        type: string
+                        format: uuid
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      batchNo:
+                        type: string
+                      expiryDate:
+                        type: string
+                        format: date
+      responses:
+        "202":
+          description: Stock entry accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires store_keeper
+      security:
+        - bearerAuth: []
+
+  /v1/stock/physical:
+    post:
+      operationId: createStockAdjustment
+      tags: [Stock]
+      summary: Physical stock adjustment
+      description: |
+        Records a physical stock count adjustment (increase or decrease).
+        Used during periodic physical verification to reconcile system
+        quantities with actual counts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [warehouseId, items, reason]
+              properties:
+                warehouseId:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+                  enum: [physical_count, damage, expired, theft, correction]
+                notes:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [itemId, systemQty, physicalQty]
+                    properties:
+                      itemId:
+                        type: string
+                        format: uuid
+                      systemQty:
+                        type: integer
+                      physicalQty:
+                        type: integer
+      responses:
+        "202":
+          description: Adjustment accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires store_keeper or inventory_admin
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Helpdesk Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/helpdesk/tickets:
+    post:
+      operationId: createTicket
+      tags: [Helpdesk]
+      summary: Create a support ticket
+      description: |
+        Creates a new internal helpdesk ticket for IT support, facilities,
+        or administrative requests. Tickets are auto-assigned based on category
+        and SLA timers start immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, category, description]
+              properties:
+                subject:
+                  type: string
+                  maxLength: 200
+                category:
+                  type: string
+                  enum: [it_hardware, it_software, network, facilities, admin, other]
+                priority:
+                  type: string
+                  enum: [low, medium, high, critical]
+                  default: medium
+                description:
+                  type: string
+                  maxLength: 5000
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  maxItems: 5
+      responses:
+        "202":
+          description: Ticket creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listTickets
+      tags: [Helpdesk]
+      summary: List helpdesk tickets
+      description: |
+        Returns helpdesk tickets visible to the authenticated user.
+        Regular users see their own tickets; helpdesk agents see assigned tickets;
+        admins see all tickets.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, waiting_on_user, resolved, closed]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated ticket list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        subject:
+                          type: string
+                        status:
+                          type: string
+                        priority:
+                          type: string
+                        category:
+                          type: string
+                        assignedTo:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        slaBreached:
+                          type: boolean
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Components
+# ═══════════════════════════════════════════════════════════════════════════════
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Keycloak OIDC access token (RS256). Obtain via
+        POST /realms/civitasone/protocol/openid-connect/token
+        with client_credentials or authorization_code grant.
+
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      description: Maximum number of items to return (default 20, max 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    OffsetParam:
+      name: offset
+      in: query
+      description: Number of items to skip for pagination
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+  schemas:
+    # ─── Common ────────────────────────────────────────────────────────────────
+
+    AcceptedResponse:
+      type: object
+      required: [id, status, correlationId]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the created/queued resource
+        status:
+          type: string
+          enum: [accepted, queued]
+        correlationId:
+          type: string
+          description: Request correlation ID for tracing
+
+    Pagination:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    ValidationError:
+      type: object
+      required: [code, message, correlationId, retryable]
+      properties:
+        code:
+          type: string
+          examples: ["VALIDATION_FAILED"]
+        message:
+          type: string
+        correlationId:
+          type: string
+        retryable:
+          type: boolean
+          const: false
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    ErrorResponse:
+      type: object
+      required: [code, message, correlationId, retryable]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        correlationId:
+          type: string
+        retryable:
+          type: boolean
+
+    # ─── Finance ───────────────────────────────────────────────────────────────
+
+    Bill:
+      type: object
+      required: [id, tenantId, vendorId, amountPaise, currency, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        billNumber:
+          type: string
+          description: Human-readable bill reference number
+        vendorId:
+          type: string
+          format: uuid
+        vendorName:
+          type: string
+        sanctionId:
+          type: string
+          format: uuid
+        amountPaise:
+          type: integer
+          format: int64
+          description: Bill amount in paise (minor units)
+        currency:
+          type: string
+          default: INR
+          description: ISO 4217 currency code
+        status:
+          type: string
+          enum: [draft, pending, sanctioned, paid, cancelled]
+        description:
+          type: string
+        budgetHeadId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+        version:
+          type: integer
+
+    CreateBillRequest:
+      type: object
+      required: [vendorId, amountPaise, budgetHeadId, description]
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+        sanctionId:
+          type: string
+          format: uuid
+        amountPaise:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Amount in paise
+        currency:
+          type: string
+          default: INR
+        budgetHeadId:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 500
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    Sanction:
+      type: object
+      required: [id, tenantId, budgetHeadId, amountPaise, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        sanctionNumber:
+          type: string
+        budgetHeadId:
+          type: string
+          format: uuid
+        amountPaise:
+          type: integer
+          format: int64
+          description: Sanctioned amount in paise
+        availablePaise:
+          type: integer
+          format: int64
+          description: Remaining available balance in paise
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, exhausted, cancelled]
+        purpose:
+          type: string
+        financialYear:
+          type: string
+          examples: ["2025-26"]
+        createdAt:
+          type: string
+          format: date-time
+        approvedBy:
+          type: string
+          format: uuid
+        version:
+          type: integer
+
+    CreateSanctionRequest:
+      type: object
+      required: [budgetHeadId, amountPaise, purpose, financialYear]
+      properties:
+        budgetHeadId:
+          type: string
+          format: uuid
+        amountPaise:
+          type: integer
+          format: int64
+          minimum: 1
+        purpose:
+          type: string
+          maxLength: 1000
+        financialYear:
+          type: string
+          pattern: "^\\d{4}-\\d{2}$"
+          examples: ["2025-26"]
+
+    Payment:
+      type: object
+      required: [id, tenantId, billId, amountPaise, status, mode]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        billId:
+          type: string
+          format: uuid
+        amountPaise:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [initiated, processing, completed, failed, reversed]
+        mode:
+          type: string
+          enum: [pfms, neft, rtgs, cheque, cash]
+        utrNumber:
+          type: string
+          description: Unique Transaction Reference (bank reference)
+        paidAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    CreatePaymentRequest:
+      type: object
+      required: [billId, amountPaise, mode]
+      properties:
+        billId:
+          type: string
+          format: uuid
+        amountPaise:
+          type: integer
+          format: int64
+          minimum: 1
+        mode:
+          type: string
+          enum: [pfms, neft, rtgs, cheque, cash]
+        bankAccountId:
+          type: string
+          format: uuid
+
+    GlEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        accountName:
+          type: string
+        debitPaise:
+          type: integer
+          format: int64
+        creditPaise:
+          type: integer
+          format: int64
+        voucherRef:
+          type: string
+        narration:
+          type: string
+        postingDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateBudgetRequest:
+      type: object
+      required: [headId, financialYear, allocationPaise]
+      properties:
+        headId:
+          type: string
+          format: uuid
+          description: Budget Head / Head of Account ID
+        financialYear:
+          type: string
+          pattern: "^\\d{4}-\\d{2}$"
+          examples: ["2025-26"]
+        allocationPaise:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Budget allocation in paise
+        description:
+          type: string
+
+    # ─── HRMS ──────────────────────────────────────────────────────────────────
+
+    Employee:
+      type: object
+      required: [id, tenantId, name, employeeCode, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        employeeCode:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        designation:
+          type: string
+        departmentId:
+          type: string
+          format: uuid
+        departmentName:
+          type: string
+        employeeType:
+          type: string
+          enum: [permanent, temporary, contract, deputation]
+        status:
+          type: string
+          enum: [active, probation, suspended, retired, terminated]
+        dateOfJoining:
+          type: string
+          format: date
+        photoUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+
+    LeaveRequest:
+      type: object
+      required: [id, employeeId, leaveTypeId, fromDate, toDate, daysApplied, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        leaveTypeId:
+          type: string
+          format: uuid
+        leaveTypeName:
+          type: string
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        daysApplied:
+          type: number
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled]
+        appliedAt:
+          type: string
+          format: date-time
+        approvedBy:
+          type: string
+          format: uuid
+
+    ApplyLeaveRequest:
+      type: object
+      required: [leaveTypeId, employeeId, allocId, fromDate, toDate, daysApplied]
+      properties:
+        leaveTypeId:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        allocId:
+          type: string
+          format: uuid
+          description: Leave allocation ID to debit from
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        daysApplied:
+          type: number
+          minimum: 0.5
+          description: Supports half-day (0.5) leave
+        reason:
+          type: string
+          maxLength: 500
+
+    CheckInRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        accuracy:
+          type: number
+          description: GPS accuracy in meters
+        withinGeofence:
+          type: boolean
+        deviceFingerprint:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    GeoCheckInRequest:
+      type: object
+      required: [latitude, longitude, accuracy, deviceFingerprint]
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        accuracy:
+          type: number
+          description: GPS accuracy in meters
+        deviceFingerprint:
+          type: string
+        photoUrl:
+          type: string
+          format: uri
+          description: Optional selfie for verification
+
+    IdCard:
+      type: object
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+        employeeCode:
+          type: string
+        name:
+          type: string
+        designation:
+          type: string
+        department:
+          type: string
+        office:
+          type: string
+        photoUrl:
+          type: string
+          format: uri
+        qrData:
+          type: string
+          description: QR code payload for verification
+        validUntil:
+          type: string
+          format: date
+        bloodGroup:
+          type: string
+
+    # ─── Procurement ───────────────────────────────────────────────────────────
+
+    PurchaseOrder:
+      type: object
+      required: [id, tenantId, vendorId, status, totalPaise]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        poNumber:
+          type: string
+        vendorId:
+          type: string
+          format: uuid
+        vendorName:
+          type: string
+        indentId:
+          type: string
+          format: uuid
+        sanctionId:
+          type: string
+          format: uuid
+        totalPaise:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [draft, approved, issued, partially_received, completed, cancelled]
+        lineItems:
+          type: array
+          items:
+            type: object
+            properties:
+              itemId:
+                type: string
+                format: uuid
+              description:
+                type: string
+              quantity:
+                type: integer
+              unitPricePaise:
+                type: integer
+                format: int64
+              receivedQty:
+                type: integer
+        deliveryDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+
+    CreatePurchaseOrderRequest:
+      type: object
+      required: [vendorId, indentId, lineItems]
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+        indentId:
+          type: string
+          format: uuid
+        sanctionId:
+          type: string
+          format: uuid
+        deliveryDate:
+          type: string
+          format: date
+        lineItems:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [itemId, quantity, unitPricePaise]
+            properties:
+              itemId:
+                type: string
+                format: uuid
+              description:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+              unitPricePaise:
+                type: integer
+                format: int64
+                minimum: 1
+
+    Vendor:
+      type: object
+      required: [id, tenantId, name, gstin]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        gstin:
+          type: string
+          pattern: "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
+        pan:
+          type: string
+        category:
+          type: string
+        rating:
+          type: number
+          minimum: 0
+          maximum: 5
+        address:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        bankAccount:
+          type: object
+          properties:
+            accountNumber:
+              type: string
+            ifsc:
+              type: string
+            bankName:
+              type: string
+        status:
+          type: string
+          enum: [active, blacklisted, suspended]
+        createdAt:
+          type: string
+          format: date-time
+
+    GRN:
+      type: object
+      required: [id, purchaseOrderId, items]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        purchaseOrderId:
+          type: string
+          format: uuid
+        grnNumber:
+          type: string
+        receivedDate:
+          type: string
+          format: date
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              itemId:
+                type: string
+                format: uuid
+              orderedQty:
+                type: integer
+              receivedQty:
+                type: integer
+              acceptedQty:
+                type: integer
+              rejectedQty:
+                type: integer
+              rejectionReason:
+                type: string
+        status:
+          type: string
+          enum: [pending_inspection, accepted, partially_accepted, rejected]
+        inspectedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateGrnRequest:
+      type: object
+      required: [purchaseOrderId, items]
+      properties:
+        purchaseOrderId:
+          type: string
+          format: uuid
+        challanNumber:
+          type: string
+        receivedDate:
+          type: string
+          format: date
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [itemId, receivedQty]
+            properties:
+              itemId:
+                type: string
+                format: uuid
+              receivedQty:
+                type: integer
+                minimum: 1
+              acceptedQty:
+                type: integer
+              rejectedQty:
+                type: integer
+              rejectionReason:
+                type: string
+
+    CreateIndentRequest:
+      type: object
+      required: [departmentId, items, purpose]
+      properties:
+        departmentId:
+          type: string
+          format: uuid
+        budgetHeadId:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          maxLength: 1000
+        priority:
+          type: string
+          enum: [normal, urgent]
+          default: normal
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [description, quantity, unit]
+            properties:
+              description:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+              unit:
+                type: string
+                examples: ["nos", "kg", "litre", "metre", "ream"]
+              estimatedUnitPricePaise:
+                type: integer
+                format: int64
+
+    # ─── Admin ─────────────────────────────────────────────────────────────────
+
+    FeatureFlag:
+      type: object
+      required: [id, key, enabled]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          description: Unique flag key (dot-notation)
+          examples: ["finance.gst_auto_calc", "hrms.geo_checkin"]
+        enabled:
+          type: boolean
+        rolloutPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        targetRoles:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateFeatureFlagRequest:
+      type: object
+      required: [key, description]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9_.]+$"
+        description:
+          type: string
+          maxLength: 500
+        enabled:
+          type: boolean
+          default: false
+        rolloutPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 0
+        targetRoles:
+          type: array
+          items:
+            type: string
+
+    Webhook:
+      type: object
+      required: [id, url, events, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+          description: Event types to deliver
+          examples: [["bill.created", "payment.completed", "leave.approved"]]
+        active:
+          type: boolean
+        secret:
+          type: string
+          description: HMAC secret (write-only, masked on read)
+        lastDeliveredAt:
+          type: string
+          format: date-time
+        failureCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateWebhookRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        secret:
+          type: string
+          description: HMAC signing secret for payload verification
+
+    ScheduledJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        cronExpression:
+          type: string
+          examples: ["0 2 * * *"]
+        enabled:
+          type: boolean
+        lastRunAt:
+          type: string
+          format: date-time
+        nextRunAt:
+          type: string
+          format: date-time
+        lastStatus:
+          type: string
+          enum: [success, failed, running, skipped]
+        lastDurationMs:
+          type: integer
+
+    # ─── Citizen ───────────────────────────────────────────────────────────────
+
+    CitizenRequest:
+      type: object
+      required: [id, type, subject, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [grievance, rti, general, suggestion]
+        subject:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, resolved, rejected, escalated]
+        departmentId:
+          type: string
+          format: uuid
+        assignedTo:
+          type: string
+          format: uuid
+        acknowledgementNumber:
+          type: string
+          description: Public tracking number given to citizen
+        filedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+        slaDeadline:
+          type: string
+          format: date-time
+
+    CreateCitizenRequestBody:
+      type: object
+      required: [type, subject, description, departmentId]
+      properties:
+        type:
+          type: string
+          enum: [grievance, rti, general, suggestion]
+        subject:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        departmentId:
+          type: string
+          format: uuid
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 10
+
+    # ─── Stock ─────────────────────────────────────────────────────────────────
+
+    StockItem:
+      type: object
+      required: [id, name, barcode]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        barcode:
+          type: string
+        sku:
+          type: string
+        category:
+          type: string
+        unit:
+          type: string
+          examples: ["nos", "kg", "litre"]
+        currentStock:
+          type: integer
+        reorderLevel:
+          type: integer
+        warehouseId:
+          type: string
+          format: uuid
+        warehouseName:
+          type: string
+        valuationPaise:
+          type: integer
+          format: int64
+          description: Current stock valuation in paise
+        lastReceivedAt:
+          type: string
+          format: date-time
