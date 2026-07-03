@@ -71,4 +71,29 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
       overLimit: repo.isOverLimit(quota),
     });
   });
+
+  // GET full usage dashboard for current tenant (all resources)
+  app.get("/v1/tenant/usage", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const quotas = await repo.findAllByTenant(ctx.tenantId);
+    const resources = quotas.map((q) => ({
+      resource: q.resource,
+      limit: q.limit,
+      used: q.used,
+      usagePercent: repo.usagePercent(q),
+      overLimit: repo.isOverLimit(q),
+      projectedOverageDate: repo.projectedOverageDate(q, Math.max(1, Math.round(q.used / 30)))?.toISOString() ?? null,
+    }));
+    const anyOverLimit = resources.some((r) => r.overLimit);
+    const anyWarning = resources.some((r) => r.usagePercent >= 90);
+    return reply.send({ tenantId: ctx.tenantId, resources, anyOverLimit, anyWarning });
+  });
+
+  // POST increment usage — internal service calls
+  app.post("/v1/tenant/usage/increment", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const body = quotaIncrementBody.parse(req.body);
+    const res = await commands.quotaIncrement(ctx, body);
+    return sendAccepted(reply, acceptedResponseSchema, res);
+  });
 }
