@@ -31,6 +31,7 @@ const List<String> kKnownMailboxes = [
   'loans',
   'advances',
   'announcements',
+  'tenant_settings',
 ];
 
 const String _apiBase =

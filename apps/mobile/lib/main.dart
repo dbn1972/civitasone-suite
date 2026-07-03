@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/auth/pkce_auth.dart';
 import 'core/background_sync.dart';
+import 'core/module_gating.dart';
 import 'core/providers.dart';
 import 'core/shell/app_shell.dart';
 import 'core/shell/biz_shell.dart';
+import 'core/widgets/module_disabled_screen.dart';
 import 'core/theme/app_colors.dart';
 import 'core/splash_screen.dart';
 import 'core/auth/biometric_lock.dart';
@@ -120,12 +122,27 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
         final token = await ref.read(authProvider).accessToken();
         if (token == null && path != '/login') return '/login';
         if (token != null && path == '/login') return '/dashboard';
+
+        // Module gating: check if the route's module is enabled
+        if (path != '/module-disabled' && path != '/dashboard' && path != '/settings') {
+          final enabledModules = ref.read(enabledModulesProvider).valueOrNull;
+          if (!isRouteAllowed(enabledModules, path)) {
+            return '/module-disabled';
+          }
+        }
+
         return null;
       },
       routes: [
         GoRoute(
           path: '/splash',
           builder: (_, __) => _SplashRouter(auth: ref.read(authProvider)),
+        ),
+        GoRoute(
+          path: '/module-disabled',
+          builder: (_, state) => ModuleDisabledScreen(
+            moduleName: state.extra as String? ?? 'This',
+          ),
         ),
         GoRoute(
           path: '/onboarding',
@@ -362,12 +379,21 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 /// Dashboard — employee's home screen with quick actions + today's summary.
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final enabledModules = ref.watch(enabledModulesProvider).valueOrNull;
+
+    // Filter quick actions and modules based on enabled modules
+    final visibleActions = _quickActions
+        .where((a) => isRouteAllowed(enabledModules, a.route))
+        .toList();
+    final visibleModules = _modules
+        .where((m) => isRouteAllowed(enabledModules, m.route))
+        .toList();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -394,7 +420,7 @@ class DashboardScreen extends StatelessWidget {
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           childAspectRatio: 0.95,
-          children: _quickActions.map((a) {
+          children: visibleActions.map((a) {
             return InkWell(
               onTap: () => context.go(a.route),
               borderRadius: BorderRadius.circular(12),
@@ -428,7 +454,7 @@ class DashboardScreen extends StatelessWidget {
             style: theme.textTheme.titleSmall
                 ?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        ..._modules.map((m) => Card(
+        ...visibleModules.map((m) => Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 onTap: () => context.go(m.route),

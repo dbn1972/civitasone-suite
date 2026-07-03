@@ -75,4 +75,37 @@ describe("Sidebar", () => {
     expect(screen.getByText("D. Nayak")).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
   });
+
+  describe("module gating integration", () => {
+    it("when enabledModules is ['finance'], sidebar only shows finance + always-visible items", () => {
+      render(<Sidebar enabledModules={["finance"]} />);
+      // Finance module items visible
+      expect(screen.getByRole("link", { name: /Finance/ })).toBeInTheDocument();
+      // Platform/overview items always visible
+      expect(screen.getByRole("link", { name: /Dashboard/ })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /Tenant Admin/ })).toBeInTheDocument();
+      // Other modules hidden
+      expect(screen.queryByRole("link", { name: /HR & Payroll/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /Procurement/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /CRM/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /Helpdesk/ })).not.toBeInTheDocument();
+    });
+
+    it("when enabledModules is null, sidebar shows all (backward compatible)", () => {
+      render(<Sidebar enabledModules={null} />);
+      expect(screen.getByRole("link", { name: /Finance/ })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /HR & Payroll/ })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /Procurement/ })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /CRM/ })).toBeInTheDocument();
+    });
+
+    it("multiple enabled modules show their respective items", () => {
+      render(<Sidebar enabledModules={["finance", "hrms", "projects"]} />);
+      expect(screen.getByRole("link", { name: /Finance/ })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /HR & Payroll/ })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /Projects/ })).toBeInTheDocument();
+      // Procurement not enabled
+      expect(screen.queryByRole("link", { name: /Procurement/ })).not.toBeInTheDocument();
+    });
+  });
 });

@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { AppShell } from "./AppShell";
 
 // Mock Sidebar and TopBar since they have their own tests
-vi.mock("./Sidebar", () => ({ Sidebar: () => <nav data-testid="sidebar">Sidebar</nav> }));
+vi.mock("./Sidebar", () => ({ Sidebar: ({ enabledModules }: { enabledModules?: string[] | null }) => <nav data-testid="sidebar" data-modules={JSON.stringify(enabledModules)}>Sidebar</nav> }));
 vi.mock("./TopBar", () => ({ TopBar: ({ crumb }: { crumb?: React.ReactNode }) => <header data-testid="topbar">{crumb}</header> }));
 
 describe("AppShell", () => {

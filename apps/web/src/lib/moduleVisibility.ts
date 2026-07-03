@@ -27,9 +27,17 @@ export async function getEnabledModules(): Promise<string[] | null> {
  * (platform/overview). A null enabled-list means "unknown" → show all.
  * Matching is lenient: a module is enabled if any enabled name contains, or is
  * contained by, the key (handles "hrms" vs "hr", "establishment" vs "estab").
+ *
+ * Super admins and platform admins bypass module gating entirely.
  */
-export function isModuleEnabled(enabled: string[] | null, moduleKey: string | null): boolean {
+export function isModuleEnabled(
+  enabled: string[] | null,
+  moduleKey: string | null,
+  roles?: string[],
+): boolean {
   if (moduleKey === null) return true;
+  // Super admins and platform admins bypass module gating
+  if (roles?.includes("super_admin") || roles?.includes("platform_admin")) return true;
   if (!enabled) return true; // unknown → show all
   const key = moduleKey.toLowerCase();
   return enabled.some((name) => name === key || name.includes(key) || key.includes(name));

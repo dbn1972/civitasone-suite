@@ -51,6 +51,22 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
         });
         if (!res.ok) throw new Error(await res.text());
       }
+      // Emit audit event for module changes
+      try {
+        await fetch("/api/proxy/v1/audit/events", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            service: "admin",
+            action: dirtyKeys.map((k) => `module_${pending[k] ? "enable" : "disable"}_${k}`).join(","),
+            resourceType: "module_config",
+            resourceId: dirtyKeys.join(","),
+            outcome: "success",
+          }),
+        });
+      } catch {
+        // Audit failure should not block the save
+      }
       setStatus(`Saved ${dirtyKeys.length} module${dirtyKeys.length === 1 ? "" : "s"}.`);
       router.refresh();
     } catch (err) {
