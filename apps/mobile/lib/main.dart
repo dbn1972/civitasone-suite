@@ -6,6 +6,7 @@ import 'core/auth/pkce_auth.dart';
 import 'core/background_sync.dart';
 import 'core/providers.dart';
 import 'core/shell/app_shell.dart';
+import 'core/shell/biz_shell.dart';
 import 'core/theme/app_colors.dart';
 import 'core/splash_screen.dart';
 import 'core/auth/biometric_lock.dart';
@@ -31,6 +32,16 @@ import 'features/contracts/contract_milestones_screen.dart';
 import 'features/knowledge/knowledge_base_screen.dart';
 import 'features/reports/quick_reports_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/invoicing/invoice_list_screen.dart';
+import 'features/invoicing/invoice_create_screen.dart';
+import 'features/payments/payment_list_screen.dart';
+import 'features/payments/payment_record_screen.dart';
+import 'features/expenses/expense_list_screen.dart';
+import 'features/expenses/expense_capture_screen.dart';
+import 'features/dashboard/business_dashboard_screen.dart';
+import 'features/customers/customer_list_screen.dart';
+import 'features/customers/customer_create_screen.dart';
+import 'features/customers/customer_detail_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -134,6 +145,40 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/reports', builder: (_, __) => const QuickReportsScreen()),
             GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
           ],
+        ),
+        // Small Business shell — separate bottom nav for biz mode
+        ShellRoute(
+          builder: (ctx, state, child) => BizShell(child: child),
+          routes: [
+            GoRoute(path: '/biz/dashboard', builder: (_, __) => const BusinessDashboardScreen()),
+            GoRoute(path: '/biz/invoices', builder: (_, __) => const InvoiceListScreen()),
+            GoRoute(path: '/biz/payments', builder: (_, __) => const PaymentListScreen()),
+            GoRoute(path: '/biz/expenses', builder: (_, __) => const ExpenseListScreen()),
+            GoRoute(path: '/biz/customers', builder: (_, __) => const CustomerListScreen()),
+          ],
+        ),
+        // Write-path screens rendered outside any shell (full-screen).
+        GoRoute(
+          path: '/biz/invoices/new',
+          builder: (_, __) => const InvoiceCreateScreen(),
+        ),
+        GoRoute(
+          path: '/biz/payments/new',
+          builder: (_, __) => const PaymentRecordScreen(),
+        ),
+        GoRoute(
+          path: '/biz/expenses/new',
+          builder: (_, __) => const ExpenseCaptureScreen(),
+        ),
+        GoRoute(
+          path: '/biz/customers/new',
+          builder: (_, __) => const CustomerCreateScreen(),
+        ),
+        GoRoute(
+          path: '/biz/customers/:id',
+          builder: (_, state) => CustomerDetailScreen(
+            customerId: state.pathParameters['id']!,
+          ),
         ),
         // Write-path screens rendered outside the shell (no bottom nav).
         ...hrFullScreenRoutes(),
