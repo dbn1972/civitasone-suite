@@ -42,6 +42,18 @@ import 'features/dashboard/business_dashboard_screen.dart';
 import 'features/customers/customer_list_screen.dart';
 import 'features/customers/customer_create_screen.dart';
 import 'features/customers/customer_detail_screen.dart';
+import 'features/attendance/gps_checkin_screen.dart';
+import 'features/attendance/attendance_history_screen.dart';
+import 'features/directory/employee_directory_screen.dart';
+import 'features/directory/employee_detail_screen.dart';
+import 'features/directory/id_card_screen.dart' as dir;
+import 'features/directory/id_card_verify_screen.dart' as dir;
+import 'features/bills/bill_tracker_screen.dart';
+import 'features/bills/bill_detail_screen.dart';
+import 'features/stock_scanner/stock_scanner_screen.dart';
+import 'features/citizen_requests/citizen_requests_screen.dart';
+import 'features/citizen_requests/request_filing_screen.dart';
+import 'features/citizen_requests/request_detail_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -144,6 +156,16 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/knowledge', builder: (_, __) => const KnowledgeBaseScreen()),
             GoRoute(path: '/reports', builder: (_, __) => const QuickReportsScreen()),
             GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+            GoRoute(path: '/attendance/history', builder: (_, __) => const AttendanceHistoryScreen()),
+            GoRoute(path: '/directory', builder: (_, __) => const EmployeeDirectoryScreen()),
+            GoRoute(path: '/directory/:id', builder: (_, state) => EmployeeDetailScreen(employeeId: state.pathParameters['id']!)),
+            GoRoute(path: '/directory/id-card', builder: (_, __) => const dir.IdCardScreen()),
+            GoRoute(path: '/directory/id-card/verify', builder: (_, __) => const dir.IdCardVerifyScreen()),
+            GoRoute(path: '/bills', builder: (_, __) => const BillTrackerScreen()),
+            GoRoute(path: '/bills/:id', builder: (_, state) => BillDetailScreen(billId: state.pathParameters['id']!)),
+            GoRoute(path: '/stock/scanner', builder: (_, __) => const StockScannerScreen()),
+            GoRoute(path: '/citizen/requests', builder: (_, __) => const CitizenRequestsScreen()),
+            GoRoute(path: '/citizen/requests/:id', builder: (_, state) => RequestDetailScreen(requestId: state.pathParameters['id']!)),
           ],
         ),
         // Small Business shell — separate bottom nav for biz mode
@@ -185,6 +207,15 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
         GoRoute(
           path: '/helpdesk/tickets/new',
           builder: (_, __) => const TicketCreateScreen(),
+        ),
+        // Field module full-screen routes
+        GoRoute(
+          path: '/attendance/check-in',
+          builder: (_, __) => const GpsCheckInScreen(),
+        ),
+        GoRoute(
+          path: '/citizen/requests/new',
+          builder: (_, __) => const RequestFilingScreen(),
         ),
       ],
     );
@@ -430,24 +461,29 @@ class DashboardScreen extends StatelessWidget {
   }
 
   static const _quickActions = [
-    (label: 'Check In', icon: Icons.location_on, route: '/hr/geo-checkin', color: Color(0xFF22C55E)),
+    (label: 'Check In', icon: Icons.location_on, route: '/attendance/check-in', color: Color(0xFF22C55E)),
     (label: 'Leave', icon: Icons.event_note, route: '/hr/leave/apply', color: Color(0xFF6366F1)),
     (label: 'Payslip', icon: Icons.receipt_long, route: '/hr/payslips', color: Color(0xFFF59E0B)),
     (label: 'Approvals', icon: Icons.task_alt, route: '/hr/approvals', color: Color(0xFFEF4444)),
-    (label: 'Holidays', icon: Icons.event, route: '/hr/holidays', color: Color(0xFF8B5CF6)),
-    (label: 'Vacancies', icon: Icons.work, route: '/hr/vacancies', color: Color(0xFF06B6D4)),
-    (label: 'Loans', icon: Icons.account_balance_wallet, route: '/hr/loans', color: Color(0xFFEC4899)),
-    (label: 'Team', icon: Icons.people, route: '/hr/team', color: Color(0xFF10B981)),
+    (label: 'Directory', icon: Icons.badge, route: '/directory', color: Color(0xFF8B5CF6)),
+    (label: 'Bills', icon: Icons.description, route: '/bills', color: Color(0xFF06B6D4)),
+    (label: 'Scanner', icon: Icons.qr_code_scanner, route: '/stock/scanner', color: Color(0xFFEC4899)),
+    (label: 'Requests', icon: Icons.assignment, route: '/citizen/requests', color: Color(0xFF10B981)),
   ];
 
   static const _modules = [
     (label: 'HR & Self-Service', icon: Icons.people, route: '/hr/dashboard', color: Color(0xFFF59E0B), description: 'Leave, attendance, payslip, profile'),
-    (label: 'Finance', icon: Icons.account_balance, route: '/finance/payments', color: Color(0xFF22C55E), description: 'Payments, journals, vouchers'),
+    (label: 'GPS Attendance', icon: Icons.gps_fixed, route: '/attendance/history', color: Color(0xFF22C55E), description: 'GPS check-in/out, history, geofencing'),
+    (label: 'Employee Directory', icon: Icons.badge, route: '/directory', color: Color(0xFF8B5CF6), description: 'Search, profiles, digital ID card'),
+    (label: 'Bill Tracker', icon: Icons.description, route: '/bills', color: Color(0xFF06B6D4), description: 'Track bills, timeline, approvals'),
+    (label: 'Stock Scanner', icon: Icons.qr_code_scanner, route: '/stock/scanner', color: Color(0xFFEC4899), description: 'Scan, receive goods, adjust stock'),
+    (label: 'Citizen Requests', icon: Icons.assignment, route: '/citizen/requests', color: Color(0xFF10B981), description: 'File requests, track SLA'),
+    (label: 'Finance', icon: Icons.account_balance, route: '/finance/payments', color: Color(0xFF3B82F6), description: 'Payments, journals, vouchers'),
     (label: 'Procurement', icon: Icons.shopping_cart, route: '/procurement/indents', color: Color(0xFFEF4444), description: 'Indents, POs, approvals'),
-    (label: 'CRM', icon: Icons.contacts, route: '/crm/contacts', color: Color(0xFF8B5CF6), description: 'Contacts, deals, pipeline'),
-    (label: 'Helpdesk', icon: Icons.support_agent, route: '/helpdesk/tickets', color: Color(0xFF06B6D4), description: 'Tickets, SLA, support'),
-    (label: 'Projects', icon: Icons.folder, route: '/projects', color: Color(0xFFEC4899), description: 'Tasks, milestones, resources'),
-    (label: 'MIS Reports', icon: Icons.bar_chart, route: '/mis', color: Color(0xFF10B981), description: 'Analytics, dashboards'),
+    (label: 'CRM', icon: Icons.contacts, route: '/crm/contacts', color: Color(0xFFF97316), description: 'Contacts, deals, pipeline'),
+    (label: 'Helpdesk', icon: Icons.support_agent, route: '/helpdesk/tickets', color: Color(0xFF0EA5E9), description: 'Tickets, SLA, support'),
+    (label: 'Projects', icon: Icons.folder, route: '/projects', color: Color(0xFFD946EF), description: 'Tasks, milestones, resources'),
+    (label: 'MIS Reports', icon: Icons.bar_chart, route: '/mis', color: Color(0xFF14B8A6), description: 'Analytics, dashboards'),
   ];
 }
 
