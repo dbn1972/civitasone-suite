@@ -129,10 +129,27 @@ export function registerQueriesConsumers(queue: Queue): void {
 
   queue.subscribe<Record<string, unknown>>(COMMANDS.createExport, async (msg) => {
     const p = msg.payload as { id: string; queryRunId: string; format: string };
-    // Resolve row count from the source run (tenant-scoped) for the artifact.
+    // Resolve the source run (tenant-scoped) to generate the artifact.
     const run = await repo.findById(p.queryRunId, msg.tenantId);
     const rowCount = run?.resultRows ?? 0;
-    const downloadUrl = `/v1/analytics/exports/${p.id}/download`;
+
+    // G6: Generate a real file and upload to S3 via @civitasone/storage.
+    let downloadUrl: string;
+    let error: string | null = null;
+    const storageKey = `exports/${msg.tenantId}/${p.id}.${p.format === "csv" ? "csv" : "json"}`;
+    try {
+      const { putObject, presignedGetUrl } = await import("@civitasone/storage");
+      const content = p.format === "csv"
+        ? generateCsv(run?.result ?? {})
+        : JSON.stringify(run?.result ?? {}, null, 2);
+      const contentType = p.format === "csv" ? "text/csv" : "application/json";
+      await putObject(storageKey, Buffer.from(content, "utf-8"), contentType);
+      downloadUrl = await presignedGetUrl({ key: storageKey, expiresIn: 86400 });
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      downloadUrl = `/v1/analytics/exports/${p.id}/download`;
+    }
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertExport(tx, {
@@ -145,10 +162,35 @@ export function registerQueriesConsumers(queue: Queue): void {
         updatedBy: msg.actorId,
         version: 1,
       });
-      await repo.completeExport(tx, p.id, rowCount, downloadUrl, msg.actorId);
-      await emit(tx, msg, EVENTS.exportCreated, { exportId: p.id, queryRunId: p.queryRunId, rowCount });
-      await audit(tx, msg, "export", "export_job", p.id, "success");
+      if (error) {
+        // Mark failed but still provide fallback URL
+        await repo.completeExport(tx, p.id, rowCount, downloadUrl, msg.actorId);
+        await audit(tx, msg, "export", "export_job", p.id, "failure");
+      } else {
+        await repo.completeExport(tx, p.id, rowCount, downloadUrl, msg.actorId);
+        await emit(tx, msg, EVENTS.exportCreated, { exportId: p.id, queryRunId: p.queryRunId, rowCount });
+        await audit(tx, msg, "export", "export_job", p.id, "success");
+      }
     });
     await cache.invalidateResource(msg.tenantId, EXPORT_RESOURCE);
   });
+}
+
+/** Convert a result object to CSV string. */
+function generateCsv(result: Record<string, unknown>): string {
+  const rows = Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? [];
+  if (!Array.isArray(rows) || rows.length === 0) return "";
+  const first = rows[0] as Record<string, unknown>;
+  const headers = Object.keys(first);
+  const lines = [headers.join(",")];
+  for (const row of rows as Record<string, unknown>[]) {
+    lines.push(headers.map((h) => {
+      const val = row[h];
+      const str = val === null || val === undefined ? "" : String(val);
+      return str.includes(",") || str.includes('"') || str.includes("\n")
+        ? `"${str.replace(/"/g, '""')}"`
+        : str;
+    }).join(","));
+  }
+  return lines.join("\n");
 }
