@@ -77,6 +77,19 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  /** Download redirect — returns the presigned download URL for a completed job */
+  app.get("/v1/reports/jobs/:id/download", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = idParam.parse(req.params);
+    const job = await queries.getJob(ctx.tenantId, id);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    if (job.status !== "completed" || !job.downloadUrl) {
+      throw new HttpError(409, "NOT_READY", "report is not yet completed or has no download URL");
+    }
+    return reply.redirect(302, job.downloadUrl);
+  });
+
   app.get("/v1/reports/kpis", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);

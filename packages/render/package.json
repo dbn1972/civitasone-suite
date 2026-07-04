@@ -1,0 +1,28 @@
+{
+  "name": "@civitasone/render",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./pdf": "./src/pdf.js",
+    "./xlsx": "./src/xlsx.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "playwright-core": "^1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright-core": { "optional": true }
+  }
+}
