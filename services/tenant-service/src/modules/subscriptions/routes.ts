@@ -160,11 +160,28 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send(result);
   });
 
-  // GET invoice history
+  // GET invoice history — fetches from billing-service
   app.get("/v1/tenant/subscription/invoice-history", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    // Placeholder: in production, query invoice table
-    return reply.send({ data: [] });
+
+    const billingUrl = process.env.BILLING_SERVICE_URL ?? "http://127.0.0.1:3028";
+    try {
+      const res = await fetch(`${billingUrl}/v1/billing/invoices?limit=50`, {
+        headers: {
+          "x-internal": "1",
+          "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+          "x-tenant-id": ctx.tenantId,
+          "x-correlation-id": ctx.correlationId,
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return reply.send({ data: [] });
+      const body = await res.json() as { data?: unknown[] };
+      return reply.send({ data: body.data ?? [] });
+    } catch {
+      // billing-service unreachable — return empty (degraded, not broken)
+      return reply.send({ data: [] });
+    }
   });
 }

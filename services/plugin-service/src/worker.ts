@@ -5,12 +5,14 @@ import { startRelay } from "./shared/outbox.js";
 import { registerItemConsumers } from "./modules/items/consumer.js";
 import { registerRegistryConsumers } from "./modules/registry/consumer.js";
 import { registerHookConsumers } from "./modules/hooks/consumer.js";
+import { registerRuntimeConsumers } from "./modules/runtime/consumer.js";
 
 const log = pino({ name: "plugins-worker" });
 
 registerItemConsumers(queue);
 registerRegistryConsumers(queue);
 registerHookConsumers(queue);
+registerRuntimeConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("plugin-service worker: consumers + outbox relay running");

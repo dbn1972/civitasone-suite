@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { resolveRoute } from "./registry.js";
 import { checkModuleEnabled } from "./module-guard.js";
 import { checkPolicy } from "./policy-check.js";
+import { createRedisQuotaStore, createInMemoryQuotaStore } from "./quota-store.js";
 import { registerResponseMetrics } from "./response-metrics.js";
 import { registerScreenManifestRoute } from "./screen-manifest.js";
 
@@ -152,13 +153,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // Phase 1 hyperscale: per-tenant configurable quota enforcement.
-  const quotaStore = {
-    _d: new Map<string, { v: string; e: number }>(),
-    _c: new Map<string, { n: number; e: number }>(),
-    async get(k: string) { const e = this._d.get(k); return (e && e.e > Date.now()) ? e.v : null; },
-    async set(k: string, v: string, t: number) { this._d.set(k, { v, e: Date.now() + t * 1000 }); },
-    async incr(k: string, t: number) { const now = Date.now(); const e = this._c.get(k); if (e && e.e > now) { e.n++; return e.n; } this._c.set(k, { n: 1, e: now + t * 1000 }); return 1; },
-  };
+  // Uses Redis for distributed counters (survives restart, fleet-wide enforcement).
+  const REDIS_URL = process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
+  const quotaStore = REDIS_URL
+    ? await createRedisQuotaStore(REDIS_URL)
+    : createInMemoryQuotaStore();
   await app.register(quotaCheckPlugin, {
     store: quotaStore,
     tenantServiceUrl: process.env.GATEWAY_TENANT_URL ?? "http://127.0.0.1:3002",
