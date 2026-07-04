@@ -103,3 +103,81 @@ function safeEqualHex(a: string, b: string): boolean {
     return false;
   }
 }
+
+// ── PKI / DSC (Digital Signature Certificate) path ────────────────
+//
+// When EXPORT_SIGNING_MODE=pki, uses RSA/ECDSA private key signing instead of HMAC.
+// This enables regulator-verifiable signatures using the organization's DSC
+// (Class 3 / CCA-issued certificate as per IT Act 2000, Section 3).
+//
+// Env vars:
+//   EXPORT_SIGNING_MODE      — "hmac" (default) | "pki"
+//   EXPORT_PKI_KEY_PATH      — path to PEM-encoded private key (RSA/ECDSA)
+//   EXPORT_PKI_CERT_PATH     — path to PEM-encoded certificate (for verification)
+//   EXPORT_PKI_ALG           — "RS256" | "ES256" (default: RS256)
+
+import { createSign, createVerify, type KeyObject } from "node:crypto";
+import { readFileSync } from "node:fs";
+
+const SIGNING_MODE = (process.env.EXPORT_SIGNING_MODE ?? "hmac") as "hmac" | "pki";
+
+let _pkiKey: string | null = null;
+let _pkiCert: string | null = null;
+
+function loadPkiKey(): string {
+  if (_pkiKey) return _pkiKey;
+  const keyPath = process.env.EXPORT_PKI_KEY_PATH;
+  if (!keyPath) throw new Error("EXPORT_PKI_KEY_PATH is required when EXPORT_SIGNING_MODE=pki");
+  _pkiKey = readFileSync(keyPath, "utf8");
+  return _pkiKey;
+}
+
+function loadPkiCert(): string {
+  if (_pkiCert) return _pkiCert;
+  const certPath = process.env.EXPORT_PKI_CERT_PATH;
+  if (!certPath) throw new Error("EXPORT_PKI_CERT_PATH is required for PKI verification");
+  _pkiCert = readFileSync(certPath, "utf8");
+  return _pkiCert;
+}
+
+const PKI_ALG = (process.env.EXPORT_PKI_ALG ?? "RS256") as "RS256" | "ES256";
+const HASH_ALG = PKI_ALG === "ES256" ? "sha256" : "sha256";
+
+/**
+ * Sign a manifest using PKI (RSA/ECDSA).
+ * Returns a base64url-encoded detached signature.
+ */
+export function signManifestPki(m: Omit<ExportManifest, "signingKeyId" | "alg">): string {
+  const key = loadPkiKey();
+  const canonical = canonicalManifest(m);
+  const sign = createSign(HASH_ALG);
+  sign.update(canonical);
+  return sign.sign(key, "base64url");
+}
+
+/**
+ * Verify a PKI signature over a manifest.
+ */
+export function verifyManifestPki(
+  m: Omit<ExportManifest, "signingKeyId" | "alg">,
+  signature: string,
+): boolean {
+  const cert = loadPkiCert();
+  const canonical = canonicalManifest(m);
+  const verify = createVerify(HASH_ALG);
+  verify.update(canonical);
+  return verify.verify(cert, signature, "base64url");
+}
+
+/**
+ * Unified signing function that uses HMAC or PKI based on EXPORT_SIGNING_MODE.
+ */
+export function signManifestUnified(m: Omit<ExportManifest, "signingKeyId" | "alg">): { signature: string; alg: string } {
+  if (SIGNING_MODE === "pki") {
+    return { signature: signManifestPki(m), alg: PKI_ALG };
+  }
+  return { signature: signManifest(m), alg: SIGNATURE_ALG };
+}
+
+/** Returns the active signing mode. */
+export function getSigningMode(): "hmac" | "pki" { return SIGNING_MODE; }

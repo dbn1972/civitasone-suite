@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { callRoutes } from "./modules/calls/routes.js";
 import { queueRoutes } from "./modules/queues/routes.js";
 import { agentRoutes } from "./modules/agents/routes.js";
+import { webhookRoutes } from "./modules/webhooks/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -25,6 +26,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(callRoutes);
   await app.register(queueRoutes);
   await app.register(agentRoutes);
+  await app.register(webhookRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
