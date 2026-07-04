@@ -39,6 +39,8 @@ export type PublishInput<T> = Omit<CommandEnvelope<T>, "messageId" | "timestamp"
 
 export type Handler<T = unknown> = (msg: CommandEnvelope<T>) => Promise<void>;
 
+import { RabbitMqQueue } from "./adapters/rabbitmq.js";
+
 export type QueueDriver = "memory" | "sqs" | "rabbitmq";
 /**
  * Throw this (or a subclass) from a consumer handler to bypass retry logic
@@ -572,11 +574,7 @@ export function createQueue(): Queue {
   switch (driver) {
     case "memory": return new MemoryQueue();
     case "sqs":    return new SqsQueue();
-    case "rabbitmq": {
-      // Dynamic import to avoid loading amqplib when using SQS
-      const { RabbitMqQueue } = require("./adapters/rabbitmq.js") as { RabbitMqQueue: new () => Queue };
-      return new RabbitMqQueue();
-    }
+    case "rabbitmq": return new RabbitMqQueue();
     default:       throw new Error(`Unknown QUEUE_DRIVER: "${driver}"`);
   }
 }

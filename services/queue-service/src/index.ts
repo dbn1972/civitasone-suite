@@ -21,6 +21,8 @@ export {
   SqsQueue,
 } from "./bus.js";
 
+export { RabbitMqQueue } from "./adapters/rabbitmq.js";
+
 export type {
   CommandEnvelope,
   PublishInput,

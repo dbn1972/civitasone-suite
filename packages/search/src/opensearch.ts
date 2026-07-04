@@ -42,7 +42,7 @@ export class OpenSearchEngine implements SearchEngine {
     this.client = new Client({
       node,
       ...(username && password ? { auth: { username, password } } : {}),
-      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
+      ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
     });
 
     this.shards = opts?.shards ?? 2;

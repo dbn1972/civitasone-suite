@@ -14,7 +14,7 @@
  *   RABBITMQ_PREFETCH     — consumer prefetch count (default: 10)
  *   RABBITMQ_MAX_RETRIES  — max delivery attempts before DLQ (default: 5)
  */
-import { connect, type Connection, type Channel, type ConsumeMessage } from "amqplib";
+import { connect, type ChannelModel, type Channel, type ConsumeMessage } from "amqplib";
 import { parseEnvelope } from "@civitasone/events";
 import { incrementConsumerError, incrementDlqMessage, captureError, recordConsumerHeartbeat } from "@civitasone/observability";
 import type { Queue, QueueDriver, CommandEnvelope, PublishInput, Handler, PublishOptions } from "../bus.js";
@@ -22,7 +22,7 @@ import { NonRetryableError, isFifoTopic } from "../bus.js";
 import { randomUUID } from "node:crypto";
 
 export class RabbitMqQueue implements Queue {
-  private connection: Connection | null = null;
+  private connection: ChannelModel | null = null;
   private publishChannel: Channel | null = null;
   private consumeChannel: Channel | null = null;
   private handlers = new Map<string, Handler[]>();
@@ -201,7 +201,7 @@ export class RabbitMqQueue implements Queue {
 
   // ── Private helpers ──────────────────────────────────────────────────────
 
-  private async getConnection(): Promise<Connection> {
+  private async getConnection(): Promise<ChannelModel> {
     if (!this.connection) {
       this.connection = await connect(this.url);
       this.connection.on("close", () => { this.connection = null; this.publishChannel = null; this.consumeChannel = null; });
