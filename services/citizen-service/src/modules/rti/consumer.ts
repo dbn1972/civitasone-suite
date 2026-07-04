@@ -61,6 +61,36 @@ export function registerRtiConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
   });
 
+  // RTI Act 2005 §6(3): transfer to the concerned PIO within 5 days.
+  queue.subscribe(COMMANDS.rtiTransfer, async (msg) => {
+    const p = msg.payload as { id: string; rtiId: string; tenantId: string; toAuthority: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rti = await repo.findRtiByIdTx(tx, p.rtiId, msg.tenantId);
+      if (!rti) return;
+      await repo.updateRti(tx, p.rtiId, msg.tenantId, {
+        status: "transferred", cpioRef: p.toAuthority, updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.rtiTransferred, eventType: EVENTS.rtiTransferred,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { rtiId: p.rtiId, rtiNo: rti.rtiNo, toAuthority: p.toAuthority },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: EVENTS.rtiTransferred,
+          recipient: p.toAuthority,
+          recipientId: p.toAuthority,
+          variables: { rtiId: p.rtiId, rtiNo: rti.rtiNo },
+        }),
+      });
+      await audit(tx, msg, "transfer", "citizen_rti", p.rtiId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
+  });
+
   queue.subscribe(COMMANDS.rtiAppeal, async (msg) => {
     const p = msg.payload as { id: string; rtiId: string; tenantId: string; appealType: string; grounds: string; ownerCitizenId?: string | null };
     await db.transaction(async (tx) => {

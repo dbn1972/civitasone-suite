@@ -34,6 +34,7 @@ export const EVENTS = {
   grievanceResolved:      "citizen.grievance.resolved",
   grievanceReopened:      "citizen.grievance.reopened",
   rtiFiled:               "citizen.rti.filed",
+  rtiTransferred:         "citizen.rti.transferred",
   grievanceEscalated:     "citizen.grievance.escalated",
   profileDeleted:         "citizen.profile.deleted",
   ticketSlaBreached:      "citizen.ticket.sla_breached",

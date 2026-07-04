@@ -39,6 +39,23 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await audit(tx, msg, "create", "advance", p.id);
     });
   });
+
+  queue.subscribe(COMMANDS.debitNoteCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; grnRef: string; vendorId: string;
+      amountMinor: number; reason?: string; currency?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertDebitNote(tx, {
+        id: p.id, tenantId: p.tenantId, grnRef: p.grnRef, vendorId: p.vendorId,
+        amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        reason: p.reason ?? "", status: "issued",
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "create", "debit_note", p.id);
+    });
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

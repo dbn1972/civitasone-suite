@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool as sqlClient } from "../../shared/db.js";
 
 /**
@@ -208,6 +208,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/devices/:id/block — block a specific device */
   app.patch("/v1/hrms/devices/:id/block", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
@@ -235,6 +236,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/devices/:id/unblock — restore access */
   app.patch("/v1/hrms/devices/:id/unblock", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const { id } = req.params as { id: string };
 
     await sqlClient.query(
@@ -276,6 +278,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/devices/policy — update compliance policy */
   app.patch("/v1/hrms/devices/policy", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const body = policyUpdateSchema.parse(req.body);
 
     await sqlClient.query(

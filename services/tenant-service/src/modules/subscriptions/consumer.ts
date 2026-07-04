@@ -146,6 +146,73 @@ export function registerSubscriptionConsumers(queue: Queue): void {
       await cache.invalidate(keyFor(msg.tenantId, msg.payload.id));
     },
   );
+
+  // ── Self-service subscription management ───────────────────────────────
+
+  queue.subscribe<{ targetPlanId: string; paymentMethod: string; razorpayOrderId: string }>(
+    COMMANDS.subscriptionUpgradeInitiate,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        // Find the tenant's active subscription
+        const sub = await repo.findByTenantIdTx(tx as unknown as repo.Writer, msg.tenantId);
+        if (!sub) throw new Error(`no active subscription for tenant ${msg.tenantId}`);
+        // Record the upgrade intent (actual activation happens on payment confirmation)
+        await emit(tx, msg, EVENTS.subscriptionUpgradeInitiated, {
+          subscriptionId: sub.id, targetPlanId: msg.payload.targetPlanId,
+          razorpayOrderId: msg.payload.razorpayOrderId,
+        }, "upgrade_initiate", sub.id);
+      });
+    },
+  );
+
+  queue.subscribe<{ targetPlanId: string }>(
+    COMMANDS.subscriptionDowngrade,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const sub = await repo.findByTenantIdTx(tx as unknown as repo.Writer, msg.tenantId);
+        if (!sub) throw new Error(`no active subscription for tenant ${msg.tenantId}`);
+        // Downgrade takes effect at end of current period
+        await repo.update(tx as unknown as repo.Writer, sub.id, {
+          planId: msg.payload.targetPlanId,
+          updatedBy: msg.actorId,
+          version: sub.version + 1,
+        });
+        await emit(tx, msg, EVENTS.subscriptionDowngraded, {
+          subscriptionId: sub.id, oldPlanId: sub.planId, newPlanId: msg.payload.targetPlanId,
+        }, "downgrade", sub.id);
+      });
+      const sub = await repo.findByTenantId(msg.tenantId);
+      if (sub) await cache.invalidate(keyFor(msg.tenantId, sub.id));
+    },
+  );
+
+  queue.subscribe<{ reason: string; feedback?: string }>(
+    COMMANDS.subscriptionCancelSelf,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const sub = await repo.findByTenantIdTx(tx as unknown as repo.Writer, msg.tenantId);
+        if (!sub) throw new Error(`no active subscription for tenant ${msg.tenantId}`);
+        assertTransition(sub.status, "cancelled");
+        // Self-cancel always takes effect at end of billing period (not immediate)
+        await repo.update(tx as unknown as repo.Writer, sub.id, {
+          status: "cancelled",
+          cancelledAt: new Date(),
+          cancelReason: msg.payload.reason,
+          endDate: sub.currentPeriodEnd,
+          updatedBy: msg.actorId,
+          version: sub.version + 1,
+        });
+        await emit(tx, msg, EVENTS.subscriptionCancelledSelf, {
+          subscriptionId: sub.id, reason: msg.payload.reason, feedback: msg.payload.feedback,
+        }, "cancel_self", sub.id);
+      });
+      const sub = await repo.findByTenantId(msg.tenantId);
+      if (sub) await cache.invalidate(keyFor(msg.tenantId, sub.id));
+    },
+  );
 }
 
 /** Enqueue domain event + mandatory audit event. */

@@ -24,9 +24,10 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, res);
   });
 
-  // INCREMENT usage — internal service calls
+  // INCREMENT usage — internal service calls (require platform_admin or service_account)
   app.post("/v1/quotas/increment", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, [...PLATFORM_ADMIN, "service_account"]);
     const body = quotaIncrementBody.parse(req.body);
     const res = await commands.quotaIncrement(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, res);
@@ -89,9 +90,10 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ tenantId: ctx.tenantId, resources, anyOverLimit, anyWarning });
   });
 
-  // POST increment usage — internal service calls
+  // POST increment usage — internal service calls (require elevated role)
   app.post("/v1/tenant/usage/increment", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, [...PLATFORM_ADMIN, "service_account"]);
     const body = quotaIncrementBody.parse(req.body);
     const res = await commands.quotaIncrement(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, res);

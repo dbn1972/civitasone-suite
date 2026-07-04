@@ -1,4 +1,5 @@
 import { pgSchema, uuid, text, integer, boolean, varchar, timestamp } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const vendorSchema = pgSchema("vendor");
 
@@ -7,15 +8,15 @@ export const procurementVendors = vendorSchema.table("procurement_vendors", {
   tenantId:        uuid("tenant_id").notNull(),
   name:            text("name").notNull(),
   gstin:           text("gstin"),
-  pan:             text("pan"),
-  email:           text("email"),
-  phone:           text("phone"),
+  pan:             encryptedText("pan"),
+  email:           encryptedText("email"),
+  phone:           encryptedText("phone"),
   vendorType:      varchar("vendor_type", { length: 24 }).notNull().default("registered"),
   mse:             boolean("mse").notNull().default(false),
   msme:            boolean("msme").notNull().default(false),
   udyamNo:         text("udyam_no"),
-  bankAccount:     text("bank_account"),
-  ifsc:            text("ifsc"),
+  bankAccount:     encryptedText("bank_account"),
+  ifsc:            encryptedText("ifsc"),
   blacklistReason: text("blacklist_reason"),
   kycStatus:       varchar("kyc_status", { length: 20 }).notNull().default("pending"),
   kycVerifiedAt:   timestamp("kyc_verified_at", { withTimezone: true }),

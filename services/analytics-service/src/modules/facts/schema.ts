@@ -3,7 +3,7 @@
  * Drizzle schema in Postgres schema `analytics`. The whitelisted query builder
  * runs ONLY against this table (never user SQL, never another service's DB).
  */
-import { pgSchema, uuid, varchar, numeric, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, bigint, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("analytics");
 
@@ -14,8 +14,8 @@ export const factEvents = domainSchema.table("fact_events", {
   eventType: varchar("event_type", { length: 64 }).notNull(),
   category: varchar("category", { length: 64 }).notNull().default("general"),
   status: varchar("status", { length: 32 }).notNull().default("unknown"),
-  // numeric → string in drizzle/postgres-js; we coerce at the boundary.
-  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  // Money in PAISE (minor units) — never float/numeric. BigInt mode returns bigint.
+  amount: bigint("amount", { mode: "bigint" }).notNull().default(0n),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   dedupeKey: varchar("dedupe_key", { length: 128 }).notNull(),
   version: integer("version").notNull().default(1),

@@ -16,7 +16,7 @@ export interface PlanView {
   maxUsers: number;
   maxStorageGb: number;
   enabledModules: string[];
-  priceMinor: number;
+  priceMinor: bigint;
   billingCycle: "monthly" | "quarterly" | "annual";
   features: Record<string, unknown>;
   version: number;

@@ -12,9 +12,13 @@ type Envelope = {
   payload: Record<string, unknown>;
 };
 
-function num(v: unknown): string {
+function num(v: unknown): bigint {
   const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n.toFixed(2) : "0";
+  // Incoming amounts may be in rupees (decimal) or already paise (integer).
+  // Assume paise (integer) — coerce to bigint. If fractional, multiply by 100.
+  if (!Number.isFinite(n)) return 0n;
+  if (Number.isInteger(n)) return BigInt(n);
+  return BigInt(Math.round(n * 100)); // fractional → treat as rupees → convert to paise
 }
 
 function str(v: unknown, fallback: string): string {

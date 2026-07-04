@@ -25,7 +25,7 @@ export async function planCreate(ctx: RequestContext, body: CreatePlanBody): Pro
     maxUsers: body.maxUsers,
     maxStorageGb: body.maxStorageGb,
     enabledModules: body.enabledModules,
-    priceMinor: body.priceMinor,
+    priceMinor: BigInt(body.priceMinor),
     billingCycle: body.billingCycle,
     features: body.features,
     version: 1,

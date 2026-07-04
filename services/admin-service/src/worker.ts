@@ -8,6 +8,9 @@ import { registerBackupConsumers } from "./modules/backup/consumer.js";
 import { registerSupportConsumers, startBreakGlassSweeper, sweepExpiredBreakGlass } from "./modules/support/consumer.js";
 import { registerScheduledJobConsumers } from "./modules/scheduled-jobs/consumer.js";
 import { registerCustomDomainConsumers } from "./modules/custom-domains/consumer.js";
+import { registerWebhookConsumers } from "./modules/webhooks/consumer.js";
+import { registerDataExportConsumers } from "./modules/data-export/consumer.js";
+import { registerFeatureFlagConsumers } from "./modules/feature-flags/consumer.js";
 
 const log = pino({ name: "admin-worker" });
 
@@ -17,6 +20,9 @@ registerBackupConsumers(queue);
 registerSupportConsumers(queue);
 registerScheduledJobConsumers(queue);
 registerCustomDomainConsumers(queue);
+registerWebhookConsumers(queue);
+registerDataExportConsumers(queue);
+registerFeatureFlagConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

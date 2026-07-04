@@ -2,7 +2,7 @@
  * plans module — Drizzle schema. Lives in its OWN Postgres schema `plans`.
  * L2 rule: this module's repo queries ONLY `plans.*`. No other module may import this file.
  */
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, pgEnum } from "drizzle-orm/pg-core";
 
 export const plansSchema = pgSchema("plans");
 
@@ -18,7 +18,7 @@ export const plans = plansSchema.table("plans", {
   maxUsers: integer("max_users").notNull(),
   maxStorageGb: integer("max_storage_gb").notNull(),
   enabledModules: jsonb("enabled_modules").$type<string[]>().notNull().default([]),
-  priceMinor: integer("price_minor").notNull(), // amount in paise (INR minor units)
+  priceMinor: bigint("price_minor", { mode: "bigint" }).notNull(), // amount in paise (INR minor units)
   billingCycle: billingCycleEnum("billing_cycle").notNull().default("annual"),
   features: jsonb("features").$type<Record<string, unknown>>().notNull().default({}),
   // audit columns

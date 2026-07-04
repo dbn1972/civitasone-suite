@@ -55,7 +55,9 @@ class ApiClient {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = await _storage.read(key: 'access_token');
+    // Use PkceAuthService.accessToken() which transparently refreshes if expired
+    // and reads from the correct secure storage key ('civitasone_at').
+    final token = await auth.accessToken();
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }
@@ -70,8 +72,8 @@ class ApiClient {
     if (err.response?.statusCode == 401) {
       final refreshed = await _attemptTokenRefresh();
       if (refreshed) {
-        // Retry original request with new token
-        final token = await _storage.read(key: 'access_token');
+        // Retry original request with new token from PkceAuthService
+        final token = await auth.accessToken();
         err.requestOptions.headers['Authorization'] = 'Bearer $token';
         try {
           final response = await _dio.fetch(err.requestOptions);

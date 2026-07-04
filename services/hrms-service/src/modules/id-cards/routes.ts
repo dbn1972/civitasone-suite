@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createHmac } from "node:crypto";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool as sqlClient } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 
@@ -266,6 +266,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/id-cards/:id/suspend — temporarily suspend a card */
   app.patch("/v1/hrms/id-cards/:id/suspend", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
@@ -281,6 +282,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/id-cards/:id/revoke — permanently revoke a card */
   app.patch("/v1/hrms/id-cards/:id/revoke", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
@@ -296,6 +298,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/id-cards/:id/reactivate — reactivate a suspended card */
   app.patch("/v1/hrms/id-cards/:id/reactivate", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const { id } = req.params as { id: string };
 
     await sqlClient.query(

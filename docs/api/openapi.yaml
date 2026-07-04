@@ -2751,3 +2751,241 @@ components:
         lastReceivedAt:
           type: string
           format: date-time
+
+    # ─── Identity / SCIM 2.0 ──────────────────────────────────────────────────
+
+    ScimServiceProviderConfig:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          examples: [["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"]]
+        patch:
+          type: object
+          properties:
+            supported:
+              type: boolean
+        bulk:
+          type: object
+          properties:
+            supported:
+              type: boolean
+            maxOperations:
+              type: integer
+            maxPayloadSize:
+              type: integer
+        filter:
+          type: object
+          properties:
+            supported:
+              type: boolean
+            maxResults:
+              type: integer
+        changePassword:
+          type: object
+          properties:
+            supported:
+              type: boolean
+        sort:
+          type: object
+          properties:
+            supported:
+              type: boolean
+        etag:
+          type: object
+          properties:
+            supported:
+              type: boolean
+        authenticationSchemes:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+
+    ScimUser:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          examples: [["urn:ietf:params:scim:schemas:core:2.0:User"]]
+        id:
+          type: string
+          format: uuid
+        userName:
+          type: string
+          description: Email address (primary identifier)
+        name:
+          type: object
+          properties:
+            formatted:
+              type: string
+            givenName:
+              type: string
+            familyName:
+              type: string
+        emails:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                format: email
+              type:
+                type: string
+                examples: ["work"]
+              primary:
+                type: boolean
+        active:
+          type: boolean
+          description: Whether the user can authenticate
+        meta:
+          type: object
+          properties:
+            resourceType:
+              type: string
+              examples: ["User"]
+            created:
+              type: string
+              format: date-time
+            lastModified:
+              type: string
+              format: date-time
+            location:
+              type: string
+              description: Canonical URI of the resource
+
+    ScimListResponse:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          examples: [["urn:ietf:params:scim:api:messages:2.0:ListResponse"]]
+        totalResults:
+          type: integer
+        startIndex:
+          type: integer
+        itemsPerPage:
+          type: integer
+        Resources:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScimUser"
+
+    ScimCreateUserRequest:
+      type: object
+      required: [userName]
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+        userName:
+          type: string
+          description: Email address — primary login identifier
+        name:
+          type: object
+          properties:
+            formatted:
+              type: string
+            givenName:
+              type: string
+            familyName:
+              type: string
+        emails:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                format: email
+              type:
+                type: string
+              primary:
+                type: boolean
+
+    ScimReplaceUserRequest:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+        userName:
+          type: string
+          description: Email address
+        name:
+          type: object
+          properties:
+            formatted:
+              type: string
+            givenName:
+              type: string
+            familyName:
+              type: string
+        emails:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                format: email
+              type:
+                type: string
+              primary:
+                type: boolean
+        active:
+          type: boolean
+          description: Set false to disable/deprovision the user
+
+    ScimPatchRequest:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          examples: [["urn:ietf:params:scim:api:messages:2.0:PatchOp"]]
+        Operations:
+          type: array
+          items:
+            type: object
+            required: [op]
+            properties:
+              op:
+                type: string
+                enum: [add, remove, replace]
+              path:
+                type: string
+                description: "Target attribute (e.g. `active`, `userName`, `name.formatted`)"
+              value:
+                description: New value for the attribute
+
+    ScimError:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          examples: [["urn:ietf:params:scim:api:messages:2.0:Error"]]
+        detail:
+          type: string
+          description: Human-readable error description
+        status:
+          type: string
+          description: HTTP status code as string

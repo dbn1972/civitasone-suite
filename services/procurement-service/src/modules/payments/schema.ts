@@ -37,5 +37,7 @@ export const procurementDebitNotes = paymentsSchema.table("procurement_debit_not
 
 export type AdvanceRow    = typeof procurementAdvances.$inferSelect;
 export type AdvanceInsert = typeof procurementAdvances.$inferInsert;
+export type DebitNoteRow    = typeof procurementDebitNotes.$inferSelect;
+export type DebitNoteInsert = typeof procurementDebitNotes.$inferInsert;
 
 export const schema = { procurementAdvances, procurementDebitNotes };

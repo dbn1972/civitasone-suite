@@ -29,7 +29,7 @@ export function registerPlanConsumers(queue: Queue): void {
         maxUsers: p.maxUsers,
         maxStorageGb: p.maxStorageGb,
         enabledModules: p.enabledModules,
-        priceMinor: p.priceMinor,
+        priceMinor: BigInt(p.priceMinor),
         billingCycle: p.billingCycle,
         features: p.features,
         createdBy: msg.actorId,

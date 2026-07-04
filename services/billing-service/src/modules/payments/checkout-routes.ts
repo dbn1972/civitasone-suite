@@ -20,8 +20,7 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
 
     const body = checkoutBody.parse(req.body);
 
-    // In a real flow, we'd look up the plan price from the DB.
-    // For now, publish a checkoutCreate command for audit trail and
+    // Publish a checkoutCreate command for audit trail and
     // call Razorpay directly since this is an external order creation.
     const receipt = `checkout-${ctx.tenantId}-${Date.now()}`;
 
