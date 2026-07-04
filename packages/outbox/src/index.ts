@@ -114,4 +114,40 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
   return inserted.length > 0;
 }
 
+/**
+ * G7: Scheduled outbox purge — deletes published outbox rows older than
+ * `retentionDays` (default 7). Also purges old inbox/processed entries.
+ * Returns the number of deleted rows. Safe to call from any service worker.
+ */
+export async function purgeOutbox(db: DrizzleTx, retentionDays = 7): Promise<number> {
+  const { sql } = await import("drizzle-orm");
+  const cutoff = sql`now() - interval '${sql.raw(String(retentionDays))} days'`;
+
+  // Delete published outbox messages older than retention
+  const deletedOutbox = await db.execute(sql`
+    DELETE FROM _outbox.messages
+    WHERE published_at IS NOT NULL AND published_at < ${cutoff}
+  `);
+
+  // Delete processed inbox entries older than retention
+  await db.execute(sql`
+    DELETE FROM _inbox.processed
+    WHERE processed_at < ${cutoff}
+  `);
+
+  return (deletedOutbox as unknown as { rowCount?: number }).rowCount ?? 0;
+}
+
+/**
+ * Start a periodic outbox purge. Runs every `intervalMs` (default: 1 hour).
+ * Returns the interval handle for cleanup on shutdown.
+ */
+export function startOutboxPurge(db: DrizzleTx, intervalMs = 3_600_000, retentionDays = 7): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    purgeOutbox(db, retentionDays).catch(() => { /* swallow — non-critical maintenance */ });
+  }, intervalMs);
+  timer.unref();
+  return timer;
+}
+
 export { and, eq, isNull };
