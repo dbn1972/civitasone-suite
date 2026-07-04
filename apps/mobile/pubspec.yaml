@@ -26,6 +26,8 @@ dependencies:
   uuid: ^4.4.0
   # QR code generation for ID cards and visiting cards
   qr_flutter: ^4.1.0
+  # Barcode/QR scanning via camera (asset verification, stock scanner)
+  mobile_scanner: ^5.1.1
   # Real GPS for geo-fenced attendance
   geolocator: ^12.0.0
   # Camera for selfie/receipt capture

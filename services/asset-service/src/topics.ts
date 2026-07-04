@@ -8,6 +8,8 @@ export const COMMANDS = {
   maintenancePlan:      "asset.maintenance.plan",
   workOrderCreate:      "asset.work_order.create",
   workOrderComplete:    "asset.work_order.complete",
+  meterReadingRecord:   "asset.meter_reading.record",
+  impairmentTestRun:    "asset.impairment_test.run",
   insurancePolicyCreate:"asset.insurance.policy.create",
   insuranceClaimCreate: "asset.insurance.claim.create",
 } as const;
@@ -17,6 +19,9 @@ export const EVENTS = {
   assetTransferred:"asset.asset.transferred",
   assetDisposed:   "asset.disposed",
   depPosted:       "asset.dep.posted",
+  meterReadingRecorded:   "asset.meter_reading.recorded",
+  meterThresholdBreached: "asset.meter_reading.threshold_breached",
+  impairmentTestCompleted:"asset.impairment_test.completed",
 } as const;
 
 export const CONSUMED = {

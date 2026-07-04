@@ -9,6 +9,10 @@ export const assetMaintenancePlans = maintenanceSchema.table("asset_maintenance_
   tenantId:    uuid("tenant_id").notNull(),
   assetId:     uuid("asset_id").notNull(),
   frequency:   varchar("frequency", { length: 16 }).notNull().default("monthly"),
+  triggerType: varchar("trigger_type", { length: 16 }).notNull().default("calendar"),
+  meterType:   varchar("meter_type", { length: 32 }),
+  meterThreshold: text("meter_threshold"), // numeric stored as text for drizzle compat
+  lastMeterValue: text("last_meter_value"),
   nextDue:     date("next_due"),
   lastDone:    date("last_done"),
   description: text("description"),
@@ -43,4 +47,21 @@ export type MaintenancePlanInsert = typeof assetMaintenancePlans.$inferInsert;
 export type WorkOrderRow          = typeof assetWorkOrders.$inferSelect;
 export type WorkOrderInsert       = typeof assetWorkOrders.$inferInsert;
 
-export const schema = { assetMaintenancePlans, assetWorkOrders };
+export const assetMeterReadings = maintenanceSchema.table("asset_meter_readings", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  assetId:      uuid("asset_id").notNull(),
+  meterType:    varchar("meter_type", { length: 32 }).notNull(),
+  readingValue: text("reading_value").notNull(), // numeric(18,4) stored as text
+  unit:         varchar("unit", { length: 16 }).notNull().default("km"),
+  readingDate:  date("reading_date").notNull(),
+  source:       varchar("source", { length: 16 }).notNull().default("manual"),
+  notes:        text("notes"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:    uuid("created_by").notNull(),
+});
+
+export type MeterReadingRow    = typeof assetMeterReadings.$inferSelect;
+export type MeterReadingInsert = typeof assetMeterReadings.$inferInsert;
+
+export const schema = { assetMaintenancePlans, assetWorkOrders, assetMeterReadings };
