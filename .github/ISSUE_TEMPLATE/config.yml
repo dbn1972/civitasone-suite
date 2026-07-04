@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/civitasone/civitasone/discussions
+    about: >
+      Have a usage question, an idea to float, or need help with setup? Please
+      start a discussion instead of opening an issue.
+  - name: Report a security vulnerability
+    url: https://github.com/civitasone/civitasone/security/policy
+    about: >
+      Do NOT open a public issue for security problems. Follow our Security
+      Policy (SECURITY.md) to report vulnerabilities privately.

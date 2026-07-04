@@ -1,0 +1,17 @@
+# Funding channels for the CivitasOne Suite.
+# GitHub renders a "Sponsor" button on the repository from the entries below.
+# Uncomment and replace placeholders once the corresponding accounts exist.
+# See: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# GitHub Sponsors — one or more org/user handles.
+github: [civitasone]
+
+# Open Collective — the collective slug (https://opencollective.com/<slug>).
+open_collective: civitasone
+
+# Other platforms (uncomment as needed):
+# patreon: # Patreon username
+# ko_fi: # Ko-fi username
+# tidelift: # e.g. npm/civitasone
+# liberapay: # Liberapay username
+# custom: ["https://civitasone.app/support"]

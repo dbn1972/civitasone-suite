@@ -1,1 +1,0 @@
-../../erpnext-develop/PERFORMANCE_DESIGN.md

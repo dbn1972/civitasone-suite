@@ -1,0 +1,84 @@
+name: Feature request
+description: Propose a new capability or enhancement for the CivitasOne Suite.
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape CivitasOne. Please describe the problem before
+        the solution — well-scoped problems lead to better designs. Search
+        [existing issues and discussions](https://github.com/civitasone/civitasone/issues)
+        first to avoid duplicates.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: >
+        What user or operational problem are you trying to solve? Describe the
+        scenario, who is affected, and why the current behaviour is insufficient.
+      placeholder: >
+        Section-8 finance officers cannot reconcile FCRA-restricted funds
+        separately from general funds, so audit prep takes days…
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: Describe the capability you would like, ideally with the command/event flow or UI you imagine.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected module / vertical
+      description: Which part of the platform or which edition does this target?
+      options:
+        - govt
+        - psu
+        - ngo
+        - section8
+        - education
+        - health
+        - identity
+        - finance
+        - hrms
+        - payroll
+        - procurement
+        - workflow
+        - eoffice
+        - web
+        - mobile
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternative designs have you weighed, and why are they insufficient?
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: >
+        Links to regulations (e.g. GFR-2017, 7th CPC, FCRA), mockups, related
+        issues, or any other context. Do not include secrets or PII.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and discussions and this is not a duplicate.
+          required: true

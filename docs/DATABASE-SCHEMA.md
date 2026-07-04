@@ -1,0 +1,247 @@
+# CivitasOne Suite — Database Schema
+
+> **Version:** 0.1.0 · PostgreSQL 16 · Drizzle ORM 0.30
+> Database-per-service. 32 physical databases named `civitas_<service>`. `queue` (embedded library) and `gateway` (stateless proxy) own no database.
+
+---
+
+## 1. Database Inventory
+
+Each service owns exactly one database. Money columns are `BigInt` (paise); all timestamps are `timestamptz`.
+
+| # | Service | Port | Database | Owns DB |
+|---|---|---|---|---|
+| 1 | identity | 3001 | `civitas_identity` | yes |
+| 2 | tenant | 3002 | `civitas_tenant` | yes |
+| 3 | policy | 3003 | `civitas_policy` | yes |
+| 4 | audit | 3004 | `civitas_audit` | yes |
+| 5 | install | 3005 | `civitas_install` | yes |
+| 6 | notification | 3006 | `civitas_notification` | yes |
+| 7 | finance | 3007 | `civitas_finance` | yes |
+| 8 | procurement | 3008 | `civitas_procurement` | yes |
+| 9 | contract | 3009 | `civitas_contract` | yes |
+| 10 | estab | 3010 | `civitas_estab` | yes |
+| 11 | stock | 3011 | `civitas_stock` | yes |
+| 12 | hrms | 3012 | `civitas_hrms` | yes |
+| 13 | payroll | 3013 | `civitas_payroll` | yes |
+| 14 | project | 3014 | `civitas_project` | yes |
+| 15 | asset | 3015 | `civitas_asset` | yes |
+| 16 | report | 3016 | `civitas_report` | yes |
+| 17 | plugin | 3017 | `civitas_plugin` | yes |
+| 18 | theme | 3018 | `civitas_theme` | yes |
+| 19 | grant | 3019 | `civitas_grant` | yes |
+| 20 | citizen | 3020 | `civitas_citizen` | yes |
+| 21 | legal | 3021 | `civitas_legal` | yes |
+| 22 | admin | 3022 | `civitas_admin` | yes |
+| 23 | billing | 3023 | `civitas_billing` | yes |
+| 24 | crm | 3024 | `civitas_crm` | yes |
+| 25 | inventory | 3025 | `civitas_inventory` | yes |
+| 26 | telephony | 3026 | `civitas_telephony` | yes |
+| 27 | helpdesk | 3027 | `civitas_helpdesk` | yes |
+| 28 | knowledge | 3028 | `civitas_knowledge` | yes |
+| 29 | workflow | 3029 | `civitas_workflow` | yes |
+| 30 | analytics | 3031 | `civitas_analytics` | yes |
+| 31 | location | 4012 | `civitas_location` | yes |
+| 32 | queue | — (embedded lib) | — | no |
+| 33 | gateway | 8080 (proxy) | — | no |
+
+> 32 of the 33 services are backed by a `civitas_<service>` database. Every one of those databases carries the two infrastructure schemas `_outbox` and `_inbox` in addition to its domain schemas.
+
+---
+
+## 2. Schema Organization Within a Database
+
+A service groups its tables into **per-module PostgreSQL schemas**, plus the two mandatory infra schemas:
+
+- Domain schemas — one per functional module (e.g. `gl`, `budget`, `leave`).
+- `_outbox` — transactional outbox rows pending relay publication.
+- `_inbox` — dedup ledger for consumed events (exactly-once effect).
+
+### Common infra tables (present in every `civitas_<service>`)
+
+**`_outbox.messages`**
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | outbox row id |
+| tenant_id | uuid | tenant scope (RLS) |
+| topic | text | event topic `{service}.{aggregate}.{pastTense}` |
+| payload | jsonb | serialized event |
+| created_at | timestamptz | insertion time (ordering) |
+| delivered_at | timestamptz null | set when relay publishes |
+
+**`_inbox.processed`**
+
+| Column | Type | Notes |
+|---|---|---|
+| message_id | text PK | dedup key; `INSERT ... ON CONFLICT DO NOTHING` |
+| tenant_id | uuid | tenant scope |
+| topic | text | consumed event topic |
+| processed_at | timestamptz | first-seen timestamp |
+
+---
+
+## 3. Major Service Schemas
+
+The following covers the highest-traffic services. Relationships are described as text (FK direction shown with `→`).
+
+### identity — `civitas_identity`
+Schemas: `auth`, `rbac`, `session`.
+
+- `auth.user` — id, tenant_id, keycloak_sub, email, status.
+- `rbac.role` — id, tenant_id, name.
+- `rbac.user_role` — user_id → `auth.user`, role_id → `rbac.role` (many-to-many).
+- `rbac.permission` — id, code; `rbac.role_permission` maps role_id → permission_id.
+- `session.session` — id, user_id → `auth.user`, issued_at, expires_at.
+
+### tenant — `civitas_tenant`
+Schemas: `org`, `config`.
+
+- `org.tenant` — id, name, tier (`pool` | `silo`), status.
+- `org.unit` — id, tenant_id, parent_id → `org.unit` (self-referential org tree).
+- `config.setting` — tenant_id, key, value (jsonb).
+
+### finance — `civitas_finance`
+Schemas: `gl`, `budget`, `treasury`, `payments`, `org`.
+
+- `gl.account` — id, tenant_id, code, type (asset/liability/income/expense).
+- `gl.journal` — id, tenant_id, posted_at; `gl.journal_line` — journal_id → `gl.journal`, account_id → `gl.account`, debit BigInt, credit BigInt.
+- `budget.head` — id, tenant_id, code, fiscal_year.
+- `budget.allocation` — head_id → `budget.head`, amount BigInt.
+- `treasury.account` — bank account records; `payments.voucher` — voucher_id, amount BigInt, status; `payments.disbursement` — voucher_id → `payments.voucher`.
+- Emits `finance.budget.created`; consumes payroll disbursement events.
+
+### hrms — `civitas_hrms`
+Schemas: `employee`, `leave`, `gpf`, `pension`, `disciplinary`, `claims`, `recruitment`.
+
+- `employee.employee` — id, tenant_id, code, name, unit_id.
+- `leave.leave_type`, `leave.leave_balance` (employee_id → `employee.employee`), `leave.leave_request` (employee_id, type_id → `leave.leave_type`, status).
+- `gpf.account` — employee_id → `employee.employee`, opening_balance BigInt; `gpf.transaction`.
+- `pension.case` — employee_id, retirement_date, status.
+- `disciplinary.case`, `claims.claim`, `recruitment.vacancy` / `recruitment.application`.
+- Emits `hrms.leave.approved`; on leave approval, payroll and finance react.
+
+### payroll — `civitas_payroll`
+Schemas: `run`, `component`, `payslip`, `bank`.
+
+- `run.payroll_run` — id, tenant_id, period, status.
+- `component.earning` / `component.deduction` — code, amount BigInt.
+- `payslip.payslip` — run_id → `run.payroll_run`, employee_id, gross BigInt, net BigInt.
+- `bank.mandate` — employee_id, account, ifsc.
+- Consumes `hrms.leave.approved` (loss of pay), emits disbursement commands to finance.
+
+### procurement — `civitas_procurement`
+Schemas: `tender`, `bid`, `award`, `vendor`.
+
+- `vendor.vendor` — id, tenant_id, name, gstin.
+- `tender.tender` — id, tenant_id, ref_no, status.
+- `bid.bid` — tender_id → `tender.tender`, vendor_id → `vendor.vendor`, amount BigInt.
+- `award.award` — tender_id, bid_id → `bid.bid`.
+- Emits `procurement.tender.awarded`; contract service reacts to create the contract.
+
+### workflow — `civitas_workflow`
+Schemas: `definition`, `instance`, `task`.
+
+- `definition.workflow` — id, tenant_id, key, version, dag (jsonb of steps).
+- `instance.instance` — id, definition_id → `definition.workflow`, status, context (jsonb).
+- `task.task` — instance_id → `instance.instance`, assignee, state (pending/approved/rejected).
+- Consumes `workflow.instance.create`, emits `workflow.instance.created` and per-task events; drives approvals for leave, tenders, disposals.
+
+### audit — `civitas_audit`
+Schemas: `log`.
+
+- `log.event` — id, tenant_id, actor, action, resource, occurred_at, detail (jsonb).
+- Append-only. Subscribes broadly to `*.{pastTense}` events across services to build an immutable audit trail.
+
+### estab — `civitas_estab`
+Schemas: `post`, `posting`, `seniority`.
+
+- `post.post` — sanctioned posts (id, tenant_id, grade, cadre).
+- `posting.posting` — employee_id (from hrms), post_id → `post.post`, from_date, to_date.
+- `seniority.list` — cadre-wise seniority ordering.
+
+### grant — `civitas_grant`
+Schemas: `scheme`, `sanction`, `utilization`.
+
+- `scheme.scheme` — id, tenant_id, name, fiscal_year, ceiling BigInt.
+- `sanction.sanction` — scheme_id → `scheme.scheme`, beneficiary, amount BigInt, status.
+- `utilization.uc` — sanction_id → `sanction.sanction`, utilized BigInt (utilization certificate).
+
+### asset — `civitas_asset`
+Schemas: `register`, `depreciation`, `disposal`, `maintenance`.
+
+- `register.asset` — id, tenant_id, tag, category, acquired_at, cost BigInt.
+- `depreciation.entry` — asset_id → `register.asset`, period, amount BigInt.
+- `disposal.file` — asset_id, method, status; emits `asset.disposal.decided` after `asset.disposal.file_decided` command.
+- `maintenance.ticket` — asset_id, schedule.
+
+### citizen — `civitas_citizen`
+Schemas: `rti`, `grievance`, `service`.
+
+- `rti.request` — id, tenant_id, applicant, subject, status.
+- `rti.transfer` — request_id → `rti.request`, to_unit; emits `citizen.rti.transferred` after `citizen.rti.transfer`.
+- `grievance.grievance` — id, applicant, category, status.
+- `service.application` — citizen service delivery requests.
+
+### billing — `civitas_billing`
+Schemas: `checkout`, `invoice`, `subscription`.
+
+- `checkout.session` — id, tenant_id, amount BigInt, status; command `billing.checkout.verify` → event `billing.checkout.verified`.
+- `invoice.invoice` — session_id → `checkout.session`, number, total BigInt.
+- `subscription.subscription` — tenant_id, plan, period.
+
+---
+
+## 4. Migration Conventions
+
+- Migrations are authored with **Drizzle ORM 0.30** and materialized as **numbered SQL files** under each service's `migrations/` directory (e.g. `0001_init.sql`, `0002_add_leave_balance.sql`).
+- Migrations are **additive and idempotent**: prefer `CREATE ... IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and guarded policy creation so re-running is safe.
+- Numbering is strictly increasing; migrations apply in order and are never edited after release — a follow-up numbered migration corrects a prior one.
+- Each service migrates its **own** database only; there are no cross-database migrations.
+
+```mermaid
+flowchart LR
+  A[Drizzle schema.ts] -->|generate| B[migrations/NNNN_*.sql]
+  B -->|apply in order| C[(civitas_service DB)]
+  C --> D[domain schemas + _outbox + _inbox]
+```
+
+---
+
+## 5. RLS Policy Overview
+
+Every tenant-scoped table uses the same isolation pattern:
+
+```sql
+-- Helper (created once per database)
+CREATE OR REPLACE FUNCTION current_tenant_id() RETURNS uuid
+  LANGUAGE sql STABLE AS
+  $$ SELECT current_setting('app.tenant_id', true)::uuid $$;
+
+-- Per table
+ALTER TABLE leave.leave_request ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leave.leave_request FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON leave.leave_request
+  USING (tenant_id = current_tenant_id())
+  WITH CHECK (tenant_id = current_tenant_id());
+```
+
+- `current_tenant_id()` reads the **`app.tenant_id` GUC**, which the service sets per request via `SET LOCAL app.tenant_id = '<tenant>'` inside a tenant-scoped transaction.
+- `USING` filters reads; `WITH CHECK` prevents writing rows for another tenant.
+- `FORCE ROW LEVEL SECURITY` ensures the policy applies even to the table owner.
+- The `_outbox` and `_inbox` schemas are likewise `tenant_id`-scoped so relayed events and dedup records never cross tenants.
+- **Silo tier** tenants get a dedicated database; RLS still applies but the tenant set is a single tenant.
+
+---
+
+## 6. Cross-Service Referential Integrity
+
+Because each service owns its own database, **there are no cross-database foreign keys**. References to entities owned by another service (e.g. payroll referencing an hrms `employee_id`) are stored as **plain identifiers** and kept consistent through events:
+
+- hrms emits employee lifecycle events; payroll/estab project the minimal fields they need into their own tables.
+- Integrity across services is **eventual**, reconciled by the outbox→event→inbox pipeline, not enforced by the database engine.
+
+---
+
+*For messaging contracts and per-service routes see `SERVICES.md`; for the overall architecture see `ARCHITECTURE.md`.*

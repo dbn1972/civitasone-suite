@@ -1,0 +1,106 @@
+name: Bug report
+description: Report a defect in the CivitasOne Suite so we can reproduce and fix it.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report.
+
+        Before submitting, please search [existing issues](https://github.com/civitasone/civitasone/issues)
+        to avoid duplicates. **Do not include secrets, tokens, or citizen/PII data**
+        in logs or screenshots. For security vulnerabilities, follow our
+        [Security Policy](../../SECURITY.md) instead of opening a public issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug and its impact.
+      placeholder: When approving a sanction order, the GL posting is duplicated…
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, ordered steps that reliably reproduce the behaviour.
+      value: |
+        1. Go to '...'
+        2. Perform command '...'
+        3. Observe event '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: service
+    attributes:
+      label: Service affected
+      description: Which service exhibits the problem? Choose "other" if unsure or if it spans multiple.
+      options:
+        - identity
+        - finance
+        - hrms
+        - payroll
+        - procurement
+        - workflow
+        - web
+        - mobile
+        - other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Suite release or commit SHA (e.g. 0.1.0 or a short SHA).
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did you observe the bug?
+      options:
+        - Local (docker-compose / dev)
+        - Staging
+        - Production
+        - Self-hosted (Helm / Kubernetes)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs and output
+      description: >
+        Paste relevant pino log lines, stack traces, or SQS/DLQ output.
+        This is automatically formatted as code — no backticks needed.
+        Redact all secrets and personal data first.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: I have removed all secrets and PII from logs and screenshots.
+          required: true
