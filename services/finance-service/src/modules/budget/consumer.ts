@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -12,10 +13,10 @@ const AUDIT_TOPIC = "audit.event.record";
 export function registerBudgetConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.budgetCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; headId: string; fy: string; beMinor: number };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    await tenantTransaction(db, p.tenantId, async (tx) => {
+      if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
       assertValidFY(p.fy);
-      await repo.insertBudget(tx, {
+      await repo.insertBudget(tx as Parameters<typeof repo.insertBudget>[0], {
         id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
         beMinor: BigInt(p.beMinor), reMinor: BigInt(p.beMinor),
         allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR",

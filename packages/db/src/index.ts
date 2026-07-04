@@ -32,6 +32,8 @@ export {
 export { assertP95, measureP95, assertIndexUsed } from "./perf.js";
 // SAST-003: RLS defense-in-depth — tenant GUC helpers (staged rollout; see tenant-scope.ts).
 export { withTenantScope, setTenantGuc } from "./tenant-scope.js";
+// SAST-003b: simplified tenant-scoped transaction factory.
+export { tenantTransaction, createTenantTxHook } from "./tenant-tx.js";
 // Phase 1 hyperscale: per-tenant quota enforcement plugin.
 export { quotaCheckPlugin, type QuotaCheckStore, type QuotaCheckOptions, type TenantQuota } from "./quota-check.js";
 
