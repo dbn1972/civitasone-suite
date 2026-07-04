@@ -140,3 +140,12 @@ export async function listExports(tenantId: string, limit: number, offset: numbe
     .offset(offset);
   return rows.map(toExportView);
 }
+
+export async function findExportById(id: string, tenantId: string): Promise<ExportView | null> {
+  const rows = await db
+    .select()
+    .from(exportJobs)
+    .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ? toExportView(rows[0]) : null;
+}

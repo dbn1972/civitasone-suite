@@ -34,6 +34,23 @@ export function registerJobConsumers(queue: Queue): void {
     });
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+
+    // Trigger the render pipeline — the render consumer will produce the actual file
+    const p = msg.payload;
+    await queue.publish(COMMANDS.renderJob, {
+      messageId: `render-${p.id}`,
+      type: COMMANDS.renderJob,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        jobId: p.id,
+        tenantId: msg.tenantId,
+        templateHtml: `<html><body><h1>${p.name}</h1><p>Report type: ${p.reportType ?? "general"}</p><p>Generated at: ${new Date().toISOString()}</p></body></html>`,
+        format: (p.format ?? "pdf") as "pdf" | "xlsx" | "csv" | "html",
+      },
+    });
   });
 }
 

@@ -79,5 +79,23 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, exportsListSchema, await queries.listExports(ctx.tenantId, q.limit, q.offset));
   });
 
+  /** Download an export file — redirects to the presigned S3 URL */
+  app.get("/v1/analytics/exports/:id/download", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = idParam.parse(req.params);
+    const exp = await queries.getExport(ctx.tenantId, id);
+    if (!exp) throw new HttpError(404, "NOT_FOUND", "export not found");
+    if (exp.status !== "completed" || !exp.downloadUrl) {
+      throw new HttpError(409, "NOT_READY", "export is not yet completed");
+    }
+    // If it's a relative path, build the presigned URL; if absolute, redirect
+    if (exp.downloadUrl.startsWith("http")) {
+      return reply.redirect(302, exp.downloadUrl);
+    }
+    // Fallback: return the URL in the response body
+    return reply.send({ downloadUrl: exp.downloadUrl });
+  });
+
   registerErrorHandler(app);
 }

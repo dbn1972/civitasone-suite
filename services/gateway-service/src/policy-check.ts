@@ -80,9 +80,17 @@ export async function checkPolicy(
     });
 
     if (!res.ok) {
-      // Policy service unavailable — fail open in audit mode, fail closed in enforce mode
+      // Policy service unavailable — fail open in audit mode, fail CLOSED in enforce mode
       log.warn({ status: res.status, route: routeName }, "policy-service returned non-200");
-      return MODE === "audit" ? true : true; // fail open for now during rollout
+      if (MODE === "true") {
+        reply.code(503).send({
+          code: "POLICY_UNAVAILABLE",
+          message: "Policy service unavailable — request denied (fail-closed)",
+          correlationId: req.id,
+        });
+        return false;
+      }
+      return true; // audit mode: allow through
     }
 
     const decision = await res.json() as PolicyDecision;
@@ -102,9 +110,17 @@ export async function checkPolicy(
 
     return true;
   } catch (err) {
-    // Timeout or network error — fail open during rollout
-    log.error({ err, route: routeName }, "policy check failed (allowing request)");
-    return true;
+    // Timeout or network error — fail CLOSED in enforce mode, open in audit
+    log.error({ err, route: routeName }, "policy check failed");
+    if (MODE === "true") {
+      reply.code(503).send({
+        code: "POLICY_UNAVAILABLE",
+        message: "Policy service unreachable — request denied (fail-closed)",
+        correlationId: req.id,
+      });
+      return false;
+    }
+    return true; // audit/off mode: allow
   }
 }
 

@@ -7,6 +7,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import { INITIAL_STATUS } from "./transitions.js";
+import { dial, isConfigured as isCarrierConfigured } from "../../shared/carrier-adapter.js";
 import type {
   CreateCallBody,
   RingCallBody,
@@ -88,6 +89,28 @@ export async function createCall(ctx: RequestContext, body: CreateCallBody): Pro
     linkedRefType: body.linkedRefType ?? null,
     linkedRefId: body.linkedRefId ?? null,
   });
+
+  // For outbound calls, invoke the carrier adapter to actually place the call.
+  // Env-gated: when carrier is unconfigured (mock mode), the call is recorded
+  // but no actual dialing occurs.
+  if (body.direction === "outbound" && body.calleeNumber) {
+    if (isCarrierConfigured()) {
+      try {
+        const dialResult = await dial({
+          from: body.callerNumber ?? "",
+          to: body.calleeNumber,
+          recordCall: true,
+        });
+        // The carrier's callId is stored by the consumer via a subsequent event
+        await publish(ctx, COMMANDS.ringCall, randomUUID(), {
+          id, tenantId: ctx.tenantId, carrierCallId: dialResult.carrierCallId,
+        });
+      } catch {
+        // Carrier failure — call is recorded as queued but not connected
+        // Consumer will handle timeout/abandonment
+      }
+    }
+  }
 
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -2,11 +2,12 @@
  * Carrier webhook routes — receives inbound call notifications and status updates
  * from Twilio/Exotel and converts them into internal telephony commands.
  *
- * These endpoints are PUBLIC (no JWT) — authenticated via carrier-specific
- * signature validation (Twilio X-Twilio-Signature, Exotel webhook token).
+ * Authenticated via carrier-specific signature validation:
+ *   - Twilio: X-Twilio-Signature HMAC-SHA1 over URL + sorted POST params
+ *   - Exotel: X-Exotel-Token bearer token comparison
  */
-import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { randomUUID, createHmac, timingSafeEqual } from "node:crypto";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { pino } from "pino";
@@ -17,9 +18,56 @@ const log = pino({ name: "telephony-webhooks" });
 // to a tenant via a lookup table. For now, use a default.
 const DEFAULT_TENANT = process.env.DEFAULT_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
 
+// ── Webhook signature validation ──────────────────────────────────
+
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
+const EXOTEL_WEBHOOK_TOKEN = process.env.EXOTEL_WEBHOOK_TOKEN ?? "";
+
+/**
+ * Validate Twilio X-Twilio-Signature.
+ * HMAC-SHA1 of (webhook URL + sorted POST params) using auth token.
+ */
+function validateTwilioSignature(req: FastifyRequest): boolean {
+  if (!TWILIO_AUTH_TOKEN) return false; // not configured = reject
+  const sig = req.headers["x-twilio-signature"] as string | undefined;
+  if (!sig) return false;
+
+  const url = `${process.env.CARRIER_WEBHOOK_BASE ?? "https://api.civitasone.in"}${req.url.split("?")[0]}`;
+  const params = req.body as Record<string, string>;
+  const keys = Object.keys(params).sort();
+  const data = url + keys.map((k) => k + params[k]).join("");
+  const expected = createHmac("sha1", TWILIO_AUTH_TOKEN).update(data).digest("base64");
+
+  try {
+    return timingSafeEqual(Buffer.from(sig, "base64"), Buffer.from(expected, "base64"));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate Exotel webhook token (simple bearer comparison).
+ */
+function validateExotelSignature(req: FastifyRequest): boolean {
+  if (!EXOTEL_WEBHOOK_TOKEN) return false;
+  const token = (req.headers["x-exotel-token"] ?? req.headers["authorization"]?.replace("Bearer ", "")) as string | undefined;
+  if (!token) return false;
+  try {
+    return timingSafeEqual(Buffer.from(token), Buffer.from(EXOTEL_WEBHOOK_TOKEN));
+  } catch {
+    return false;
+  }
+}
+
+function rejectUnauthorized(reply: FastifyReply): void {
+  reply.code(401).send({ code: "WEBHOOK_UNAUTHORIZED", message: "Invalid or missing webhook signature" });
+}
+
 export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   /** Twilio inbound voice webhook — new incoming call */
+  /** Twilio inbound voice webhook — new incoming call */
   app.post("/v1/telephony/webhooks/twilio/inbound", async (req, reply) => {
+    if (!validateTwilioSignature(req)) { rejectUnauthorized(reply); return; }
     const body = req.body as Record<string, string>;
     const callSid = body["CallSid"] ?? randomUUID();
     const from = body["From"] ?? "";
@@ -57,6 +105,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
 
   /** Twilio status callback — call status changes */
   app.post("/v1/telephony/webhooks/twilio/status", async (req, reply) => {
+    if (!validateTwilioSignature(req)) { rejectUnauthorized(reply); return; }
     const body = req.body as Record<string, string>;
     const callSid = body["CallSid"] ?? "";
     const status = body["CallStatus"] ?? "";
@@ -85,6 +134,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
 
   /** Twilio recording callback — recording ready */
   app.post("/v1/telephony/webhooks/twilio/recording", async (req, reply) => {
+    if (!validateTwilioSignature(req)) { rejectUnauthorized(reply); return; }
     const body = req.body as Record<string, string>;
     const callSid = body["CallSid"] ?? "";
     const recordingSid = body["RecordingSid"] ?? "";
@@ -115,6 +165,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
 
   /** Exotel inbound webhook */
   app.post("/v1/telephony/webhooks/exotel/inbound", async (req, reply) => {
+    if (!validateExotelSignature(req)) { rejectUnauthorized(reply); return; }
     const body = req.body as Record<string, string>;
     const callSid = body["CallSid"] ?? body["Sid"] ?? randomUUID();
     const from = body["From"] ?? body["CallFrom"] ?? "";
@@ -146,6 +197,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
 
   /** Exotel status callback */
   app.post("/v1/telephony/webhooks/exotel/status", async (req, reply) => {
+    if (!validateExotelSignature(req)) { rejectUnauthorized(reply); return; }
     const body = req.body as Record<string, string>;
     const callSid = body["CallSid"] ?? body["Sid"] ?? "";
     const status = body["Status"] ?? body["CallStatus"] ?? "";

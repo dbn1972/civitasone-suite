@@ -36,3 +36,7 @@ export async function listExports(tenantId: string, limit: number, offset: numbe
     page(await repo.listExports(tenantId, limit, offset), limit, offset),
   );
 }
+
+export async function getExport(tenantId: string, id: string) {
+  return cache.getOrLoad(cache.makeKey(tenantId, EXPORT_RESOURCE, id), () => repo.findExportById(id, tenantId));
+}
