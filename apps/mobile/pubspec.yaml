@@ -32,6 +32,8 @@ dependencies:
   image_picker: ^1.1.0
   # Biometric app lock
   local_auth: ^2.2.0
+  # PBKDF2 PIN hashing
+  crypto: ^3.0.3
   # Device info for compliance heartbeat
   device_info_plus: ^10.1.0
   # Share files (vCard, images)
