@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1073.0",
+    "amqplib": "^0.10.4",
     "@civitasone/auth": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@civitasone/events": "workspace:*",
@@ -30,6 +31,7 @@
     "@civitasone/observability": "workspace:*"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.5",
     "@types/node": "^20.0.0",
     "tsx": "^4.16.0",
     "typescript": "^5.4.0",

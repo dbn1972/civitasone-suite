@@ -348,7 +348,7 @@ flowchart LR
 | ORM | Drizzle ORM 0.30 |
 | Database | PostgreSQL 16 (database-per-service, RLS) |
 | Cache | Redis 7 (read-through) |
-| Messaging | AWS SQS (commands + events) |
+| Messaging | AWS SQS or RabbitMQ (via `QUEUE_DRIVER` env — commands + events) |
 | Search | Meilisearch / OpenSearch (via `@civitasone/search` adapter) |
 | Identity | Keycloak 24 (OIDC, RS256, JWKS) |
 | Logging | pino 8.21 |

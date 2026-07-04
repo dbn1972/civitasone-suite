@@ -39,7 +39,7 @@ export type PublishInput<T> = Omit<CommandEnvelope<T>, "messageId" | "timestamp"
 
 export type Handler<T = unknown> = (msg: CommandEnvelope<T>) => Promise<void>;
 
-export type QueueDriver = "memory" | "sqs";
+export type QueueDriver = "memory" | "sqs" | "rabbitmq";
 /**
  * Throw this (or a subclass) from a consumer handler to bypass retry logic
  * and route the message directly to the DLQ. Use for permanent business
@@ -553,24 +553,30 @@ export function resolveQueueDriver(): QueueDriver {
     if (isTest) return "memory";
     throw new Error(
       "FATAL: QUEUE_DRIVER is required outside test environments. " +
-        "Set QUEUE_DRIVER=sqs (production) or QUEUE_DRIVER=memory (explicit local dev).",
+        "Set QUEUE_DRIVER=sqs (AWS) or QUEUE_DRIVER=rabbitmq (on-prem) or QUEUE_DRIVER=memory (explicit local dev).",
     );
   }
   if (raw === "sqs") return "sqs";
+  if (raw === "rabbitmq") return "rabbitmq";
   if (raw === "memory") return "memory";
-  throw new Error(`FATAL: unknown QUEUE_DRIVER "${raw}" — valid values: memory, sqs`);
+  throw new Error(`FATAL: unknown QUEUE_DRIVER "${raw}" — valid values: memory, sqs, rabbitmq`);
 }
 
 export function createQueue(): Queue {
   const driver = resolveQueueDriver();
   if (driver === "memory" && process.env.NODE_ENV === "production") {
     throw new Error(
-      "FATAL: QUEUE_DRIVER=memory is forbidden in production. Set QUEUE_DRIVER=sqs and configure AWS/SQS.",
+      "FATAL: QUEUE_DRIVER=memory is forbidden in production. Set QUEUE_DRIVER=sqs or QUEUE_DRIVER=rabbitmq.",
     );
   }
   switch (driver) {
     case "memory": return new MemoryQueue();
     case "sqs":    return new SqsQueue();
+    case "rabbitmq": {
+      // Dynamic import to avoid loading amqplib when using SQS
+      const { RabbitMqQueue } = require("./adapters/rabbitmq.js") as { RabbitMqQueue: new () => Queue };
+      return new RabbitMqQueue();
+    }
     default:       throw new Error(`Unknown QUEUE_DRIVER: "${driver}"`);
   }
 }

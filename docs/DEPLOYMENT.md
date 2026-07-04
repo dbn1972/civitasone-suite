@@ -233,8 +233,10 @@ Key practices to encode in the roles:
 | `PORT` | Service listen port (see §6.3 table). |
 | `DATABASE_URL` | Postgres DSN, **routed through pgbouncer** `:6432`, DB = `civitas_<service>`. |
 | `REDIS_URL` | Redis 7 connection string for the read-through cache. |
-| `AWS_REGION` | SQS region (e.g. `ap-south-1`). |
+| `QUEUE_DRIVER` | Queue broker: `sqs` (AWS/LocalStack), `rabbitmq` (on-prem), or `memory` (tests). |
+| `AWS_REGION` | SQS region (when QUEUE_DRIVER=sqs, e.g. `ap-south-1`). |
 | `AWS_ENDPOINT_URL` | **Dev only** — `http://localstack:4566`. Unset in AWS to use the real endpoint. |
+| `RABBITMQ_URL` | RabbitMQ connection (when QUEUE_DRIVER=rabbitmq, e.g. `amqp://user:pass@rabbit:5672`). |
 | `KEYCLOAK_URL` | Keycloak base URL for OIDC discovery. |
 | `KEYCLOAK_REALM` | Realm name (imported from `infra/keycloak`). |
 | `JWKS_URI` | JWKS endpoint used to verify RS256 access tokens. |

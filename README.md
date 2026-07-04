@@ -62,7 +62,7 @@ Unlike traditional ERPs that require constant internet connectivity, CivitasOne 
 | Backend | Node.js 20+, Fastify 4, Drizzle ORM, PostgreSQL 16 |
 | Frontend | Next.js 14, React 18, Tailwind CSS, shadcn/ui |
 | Mobile | Flutter 3.22+, Riverpod, go_router |
-| Queue | AWS SQS (LocalStack in dev) |
+| Queue | AWS SQS / RabbitMQ (driver-based) |
 | Cache | Redis 7 |
 | Auth | Keycloak 24 (OIDC/PKCE) |
 | Search | Meilisearch / OpenSearch (via adapter) |
