@@ -1,6 +1,7 @@
 import {
   pgSchema, uuid, integer, bigint, char, varchar, numeric, timestamp, date,
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const statutorySchema = pgSchema("statutory");
 
@@ -146,7 +147,7 @@ export const payrollTdsNonSalary = statutorySchema.table("payroll_tds_nonsalary"
   period:           char("period", { length: 7 }).notNull(),
   deducteeRef:      varchar("deductee_ref", { length: 64 }).notNull(),
   deducteeName:     varchar("deductee_name", { length: 255 }).notNull().default(""),
-  deducteePan:      varchar("deductee_pan", { length: 10 }).notNull().default(""),
+  deducteePan:      encryptedText("deductee_pan").notNull().default(""),
   section:          varchar("section", { length: 8 }).notNull(),
   paidAmountMinor:  bigint("paid_amount_minor", { mode: "bigint" }).notNull().default(0n),
   tdsRatePct:       numeric("tds_rate_pct", { precision: 5, scale: 2 }).notNull().default("0"),

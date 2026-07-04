@@ -28,6 +28,19 @@ export function toView(r: SearchIndexRow): SearchIndexView {
   };
 }
 
+/**
+ * Escape a value for use inside a Meilisearch filter string literal.
+ * Enforces strict alphanumeric + limited punctuation charset, and escapes
+ * double quotes to prevent filter injection (e.g. `x" OR tenantId="other`).
+ */
+function escapeMeiliFilter(value: string): string {
+  // Strip any characters that could be filter syntax
+  // Allow: alphanumeric, hyphen, underscore, dot, space, colon, slash
+  const sanitized = value.replace(/[^a-zA-Z0-9\-_.: /]/g, "");
+  // Escape remaining double quotes (should be none after above, but belt-and-suspenders)
+  return sanitized.replace(/"/g, '\\"');
+}
+
 export async function search(
   tenantId: string,
   query: string,
@@ -37,9 +50,9 @@ export async function search(
   offset: number,
 ): Promise<SearchResult[]> {
   try {
-    const filter: string[] = [`tenantId = "${tenantId}"`];
-    if (category) filter.push(`category = "${category}"`);
-    if (tags?.length) filter.push(tags.map((t) => `tags = "${t}"`).join(" AND "));
+    const filter: string[] = [`tenantId = "${escapeMeiliFilter(tenantId)}"`];
+    if (category) filter.push(`category = "${escapeMeiliFilter(category)}"`);
+    if (tags?.length) filter.push(tags.map((t) => `tags = "${escapeMeiliFilter(t)}"`).join(" AND "));
 
     const res = await fetch(`${MEILI_HOST}/indexes/knowledge_documents/search`, {
       method: "POST",

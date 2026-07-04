@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { FileRtiBody, RespondRtiBody, AppealRtiBody } from "./validators.js";
+import type { FileRtiBody, RespondRtiBody, AppealRtiBody, TransferRtiBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -38,4 +38,15 @@ export async function appealRti(ctx: RequestContext, id: string, body: AppealRti
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "rti", id));
   return { id: appealId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function transferRti(ctx: RequestContext, id: string, body: TransferRtiBody): Promise<Accepted> {
+  const transferId = randomUUID();
+  await queue.publish(COMMANDS.rtiTransfer, {
+    messageId: transferId, type: COMMANDS.rtiTransfer,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id: transferId, rtiId: id, tenantId: ctx.tenantId, toAuthority: body.toAuthority },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "rti", id));
+  return { id: transferId, status: "accepted", correlationId: ctx.correlationId };
 }

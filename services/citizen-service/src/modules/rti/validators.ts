@@ -22,3 +22,8 @@ export const appealRtiBody = z.object({
   grounds:    safeText({ max: 5000, multiline: true }),
 });
 export type AppealRtiBody = z.infer<typeof appealRtiBody>;
+
+export const transferRtiBody = z.object({
+  toAuthority: safeText({ max: 200 }),
+});
+export type TransferRtiBody = z.infer<typeof transferRtiBody>;

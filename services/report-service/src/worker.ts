@@ -6,10 +6,12 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerJobConsumers } from "./modules/jobs/consumer.js";
+import { registerRenderConsumers } from "./modules/render/consumer.js";
 
 const log = pino({ name: "reports-worker" });
 
 registerJobConsumers(queue);
+registerRenderConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("report-service worker: consumers + outbox relay running");

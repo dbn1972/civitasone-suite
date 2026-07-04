@@ -3,24 +3,16 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { legalHearings } from "../hearings/schema.js";
+import { legalReminders } from "./schema.js";
 import { and, eq, gte, lte } from "drizzle-orm";
 import * as caseRepo from "../cases/repo.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
+import { randomUUID } from "node:crypto";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 
 const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin"];
-
-interface Reminder {
-  id: string;
-  tenantId: string;
-  caseId: string;
-  remindAt: string;
-  message: string;
-  createdBy: string;
-  createdAt: string;
-  sent: boolean;
-}
-
-// In-process reminder store (persisted to notification service via events in production)
-const reminderStore: Reminder[] = [];
 
 const reminderBody = z.object({
   remindAt: z.string().datetime(),
@@ -28,7 +20,7 @@ const reminderBody = z.object({
 });
 
 export async function reminderRoutes(app: FastifyInstance): Promise<void> {
-  // Read upcoming hearings from DB (not an in-memory store that misses CQRS-persisted records)
+  // Read upcoming hearings from DB
   app.get("/v1/legal/hearings/upcoming", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
@@ -63,24 +55,45 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data, total: data.length });
   });
 
+  // List reminders for a case (read from DB)
+  app.get("/v1/legal/cases/:id/reminders", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LEGAL_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const rows = await db.select().from(legalReminders).where(
+      and(eq(legalReminders.tenantId, ctx.tenantId), eq(legalReminders.caseId, id))
+    ).limit(100);
+    return reply.send({ data: rows, total: rows.length });
+  });
+
+  // Create reminder via CQRS (validate → queue → 202)
   app.post("/v1/legal/cases/:id/reminder", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = reminderBody.parse(req.body);
 
-    const record: Reminder = {
-      id: crypto.randomUUID(),
+    const reminderId = randomUUID();
+    await queue.publish(COMMANDS.reminderCreate, {
+      messageId: reminderId,
+      type: COMMANDS.reminderCreate,
       tenantId: ctx.tenantId,
-      caseId: id,
-      remindAt: body.remindAt,
-      message: body.message,
-      createdBy: ctx.actorId,
-      createdAt: new Date().toISOString(),
-      sent: false,
-    };
-    reminderStore.push(record);
-    return reply.code(201).send({ data: record });
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        id: reminderId,
+        tenantId: ctx.tenantId,
+        caseId: id,
+        remindAt: body.remindAt,
+        message: body.message,
+      },
+    });
+    return sendAccepted(reply, acceptedResponseSchema, {
+      id: reminderId,
+      status: "accepted",
+      correlationId: ctx.correlationId,
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {

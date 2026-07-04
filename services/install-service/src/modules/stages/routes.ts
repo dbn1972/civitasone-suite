@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createStageBody, idParam, stagesListSchema } from "./validators.js";
 import { InstallStepSummaryListSchema } from "@civitasone/schemas/web";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -47,6 +49,32 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
     const row = await queries.getStage(id, ctx.tenantId);
     if (!row) throw new HttpError(404, "NOT_FOUND", "stage not found");
     return reply.send(row);
+  });
+
+  /** PATCH /v1/install/steps/:id/:verb — trigger step lifecycle (run, skip, retry) */
+  app.patch("/v1/install/steps/:id/:verb", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const params = idParam.extend({ verb: z.enum(["run", "skip", "retry"]) }).parse(req.params);
+    const { id, verb } = params;
+
+    const topicMap = {
+      run: COMMANDS.stepStart,
+      retry: COMMANDS.stepStart,
+      skip: COMMANDS.stepSkip,
+    } as const;
+    const topic = topicMap[verb];
+
+    await queue.publish(topic, {
+      messageId: id,
+      type: topic,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, verb },
+    });
+    sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   app.setErrorHandler((err, req, reply) => {

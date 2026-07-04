@@ -177,7 +177,7 @@ export function RunQueryForm() {
 
       setSubmitting(true);
       try {
-        const res = await fetch("/api/proxy/v1/analytics/queries", {
+        const res = await fetch("/api/proxy/v1/analytics/queries/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

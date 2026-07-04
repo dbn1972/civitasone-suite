@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { tenantModulesResponseSchema } from "@civitasone/schemas/web";
@@ -85,8 +86,12 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   // Authenticates via INTERNAL_SERVICE_SECRET header — no user JWT required.
   // Falls back to super-admin auth if internal secret not provided.
   app.get("/v1/admin/tenants/:id/modules-list", async (req, reply) => {
-    const secret = req.headers["x-internal-secret"];
-    if (secret !== process.env.INTERNAL_SERVICE_SECRET) {
+    const secret = req.headers["x-internal-secret"] as string | undefined;
+    const expected = process.env.INTERNAL_SERVICE_SECRET;
+    const isValidInternal = typeof expected === "string" && expected.length > 0 &&
+      typeof secret === "string" && secret.length === expected.length &&
+      timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
+    if (!isValidInternal) {
       // Fall back to normal auth if not internal
       const ctx = resolveContext(req);
       requireSuperAdmin(ctx);

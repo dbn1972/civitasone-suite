@@ -8,6 +8,7 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID } from "node:crypto";
 import { resolveRoute } from "./registry.js";
 import { checkModuleEnabled } from "./module-guard.js";
+import { checkPolicy } from "./policy-check.js";
 import { registerResponseMetrics } from "./response-metrics.js";
 import { registerScreenManifestRoute } from "./screen-manifest.js";
 
@@ -57,6 +58,10 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   // V-01: Module-guard enforcement — reject requests for disabled modules before proxying.
   const moduleAllowed = await checkModuleEnabled(req, reply, route.name);
   if (!moduleAllowed) return; // reply already sent with 403
+
+  // V-02: ABAC policy enforcement — evaluate mutations against policy-service rules.
+  const policyAllowed = await checkPolicy(req, reply, route.name);
+  if (!policyAllowed) return; // reply already sent with 403
 
   const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
   const remainder = rawRemainder === "/" ? "" : rawRemainder;

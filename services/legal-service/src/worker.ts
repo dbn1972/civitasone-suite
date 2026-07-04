@@ -11,6 +11,7 @@ import { registerOpinionConsumers } from "./modules/opinions/consumer.js";
 import { registerOpinionEOfficeDecisionConsumers } from "./modules/opinions/eoffice-consumer.js";
 import { registerCounselBriefConsumers } from "./modules/counsel/consumer.js";
 import { registerFilingConsumers } from "./modules/filings/consumer.js";
+import { registerReminderConsumers } from "./modules/reminders/consumer.js";
 
 const log = pino({ name: "legal-worker" });
 
@@ -23,6 +24,7 @@ registerOpinionConsumers(queue);
 registerOpinionEOfficeDecisionConsumers(queue);
 registerCounselBriefConsumers(queue);
 registerFilingConsumers(queue);
+registerReminderConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

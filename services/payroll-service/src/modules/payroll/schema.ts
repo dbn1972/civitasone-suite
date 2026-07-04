@@ -1,6 +1,7 @@
 import {
   pgSchema, uuid, text, integer, bigint, char, varchar, boolean, numeric, jsonb, timestamp, date,
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const payrollSchema = pgSchema("payroll");
 
@@ -117,9 +118,9 @@ export const payrollPensioners = payrollSchema.table("payroll_pensioners", {
   commutationDate:       date("commutation_date"),
   medicalAllowanceMinor: bigint("medical_allowance_minor", { mode: "bigint" }).notNull().default(0n),
   ddoCode:               varchar("ddo_code", { length: 32 }),
-  bankAccountNo:         text("bank_account_no"),
-  bankIfsc:              text("bank_ifsc"),
-  pan:                   text("pan"),
+  bankAccountNo:         encryptedText("bank_account_no"),
+  bankIfsc:              encryptedText("bank_ifsc"),
+  pan:                   encryptedText("pan"),
   taxRegime:             varchar("tax_regime", { length: 8 }).notNull().default("new"),
   status:                varchar("status", { length: 16 }).notNull().default("active"),
   createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

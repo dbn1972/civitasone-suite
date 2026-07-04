@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { verifyToken, toRequestContext } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 
@@ -36,7 +37,7 @@ function resolveServiceContextInner(req: FastifyRequest): RequestContext {
     if (
       typeof serviceSecret !== "string" ||
       serviceSecret.length === 0 ||
-      req.headers["x-service-secret"] !== serviceSecret
+      !constantTimeEqual(req.headers["x-service-secret"] as string | undefined, serviceSecret)
     ) {
       throw new AuthContextError(401, "UNAUTHENTICATED", "x-internal requires valid service secret");
     }
@@ -82,4 +83,17 @@ function resolveServiceContextInner(req: FastifyRequest): RequestContext {
   }
 
   throw new AuthContextError(401, "UNAUTHENTICATED", "invalid or expired token");
+}
+
+/** Constant-time string comparison to prevent timing attacks on secrets. */
+function constantTimeEqual(a: string | undefined | null, b: string): boolean {
+  if (!a) return false;
+  const aBuf = Buffer.from(a, "utf8");
+  const bBuf = Buffer.from(b, "utf8");
+  if (aBuf.length !== bBuf.length) {
+    // Compare against b to avoid short-circuiting, but always return false
+    timingSafeEqual(bBuf, bBuf);
+    return false;
+  }
+  return timingSafeEqual(aBuf, bBuf);
 }

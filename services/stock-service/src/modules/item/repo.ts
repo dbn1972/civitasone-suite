@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { stockItems, stockUoms, type ItemInsert, type ItemRow } from "./schema.js";
+import { stockItems, stockUoms, stockItemCategories, type ItemInsert, type ItemRow, type ItemCategoryRow, type UomRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export type ItemWithUom = ItemRow & { uom: string | null };
@@ -76,4 +76,16 @@ export async function findItemsWithUomByTenant(tenantId: string, opts?: { catego
     .where(eq(stockItems.tenantId, tenantId))
     .limit(opts?.limit ?? 50)
     .offset(opts?.offset ?? 0);
+}
+
+export async function findCategoriesByTenant(tenantId: string, limit = 200): Promise<ItemCategoryRow[]> {
+  return db.select().from(stockItemCategories)
+    .where(eq(stockItemCategories.tenantId, tenantId))
+    .limit(limit);
+}
+
+export async function findUomsByTenant(tenantId: string, limit = 200): Promise<UomRow[]> {
+  return db.select().from(stockUoms)
+    .where(eq(stockUoms.tenantId, tenantId))
+    .limit(limit);
 }

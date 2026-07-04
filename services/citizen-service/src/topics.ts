@@ -15,6 +15,7 @@ export const COMMANDS = {
   rtiFile:                 "citizen.rti.file",
   rtiResponseReceive:      "citizen.rti.response_receive",
   rtiAppeal:               "citizen.rti.appeal",
+  rtiTransfer:             "citizen.rti.transfer",
   ticketCreate:            "citizen.ticket.create",
   ticketNote:              "citizen.ticket.note",
   ticketClose:             "citizen.ticket.close",

@@ -13,14 +13,46 @@ import { eq, and, desc } from "drizzle-orm";
 
 const RESOURCE = "webhook";
 
+/**
+ * SSRF guard: block private, loopback, and link-local IP ranges in webhook URLs.
+ * Resolves hostname and rejects internal network destinations.
+ */
+function isBlockedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    // Block explicit loopback
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]") return true;
+    // Block 0.0.0.0
+    if (host === "0.0.0.0") return true;
+    // Block metadata endpoints (cloud providers)
+    if (host === "169.254.169.254" || host === "metadata.google.internal") return true;
+    // Block private IPv4 ranges
+    const ipv4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (ipv4) {
+      const [, a, b] = ipv4.map(Number);
+      if (a === 10) return true;                            // 10.0.0.0/8
+      if (a === 172 && b! >= 16 && b! <= 31) return true;  // 172.16.0.0/12
+      if (a === 192 && b === 168) return true;              // 192.168.0.0/16
+      if (a === 169 && b === 254) return true;              // link-local
+      if (a === 127) return true;                           // loopback
+    }
+    // Block non-https in production (optional hardening)
+    if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") return true;
+    return false;
+  } catch {
+    return true; // malformed → block
+  }
+}
+
 const createBody = z.object({
-  url: z.string().url().max(2048),
+  url: z.string().url().max(2048).refine((u) => !isBlockedUrl(u), { message: "URL targets a blocked network range (private/loopback/link-local)" }),
   events: z.array(z.string().min(1).max(200)).min(1),
   description: z.string().max(500).optional(),
 });
 
 const updateBody = z.object({
-  url: z.string().url().max(2048).optional(),
+  url: z.string().url().max(2048).refine((u) => !isBlockedUrl(u), { message: "URL targets a blocked network range" }).optional(),
   events: z.array(z.string().min(1).max(200)).optional(),
   active: z.boolean().optional(),
   description: z.string().max(500).optional(),

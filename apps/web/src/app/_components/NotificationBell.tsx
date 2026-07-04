@@ -16,18 +16,54 @@ interface NotificationBellProps {
   unreadCount?: number;
 }
 
-const SAMPLE_NOTIFICATIONS: Notification[] = [
-  { id: "1", title: "Budget sanction approved", description: "FY 2026-27 Q2 allocation", time: "2 min ago", read: false, icon: "✅" },
-  { id: "2", title: "New leave request", description: "Rajesh Kumar requested 3 days CL", time: "15 min ago", read: false, icon: "🏖️" },
-  { id: "3", title: "Payment processed", description: "₹2,45,000 credited to vendor", time: "1 hr ago", read: true, icon: "💳" },
-  { id: "4", title: "Milestone overdue", description: "Phase 2 - Road Construction", time: "3 hrs ago", read: true, icon: "⚠️" },
-  { id: "5", title: "Audit observation", description: "Pending response for Query #42", time: "Yesterday", read: true, icon: "📋" },
-];
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs > 1 ? "s" : ""} ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
 
-export function NotificationBell({ notifications, unreadCount }: NotificationBellProps) {
+export function NotificationBell({ notifications: propNotifications, unreadCount }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
+  const [fetched, setFetched] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const items = notifications ?? SAMPLE_NOTIFICATIONS;
+
+  // Fetch from notification-service inbox on mount
+  useEffect(() => {
+    if (propNotifications) return; // skip fetch if props provided
+    let active = true;
+    setLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/proxy/notifications/notifications?limit=10", { credentials: "same-origin" });
+        if (!res.ok) return;
+        const json = (await res.json()) as { data?: Array<{ id: string; title: string; message?: string; createdAt?: string; status?: string }> } | unknown;
+        const data = Array.isArray(json) ? json : (json as { data?: unknown[] })?.data ?? [];
+        if (active) {
+          setFetched((data as Array<{ id: string; title: string; message?: string; createdAt?: string; status?: string }>).map((n) => ({
+            id: n.id,
+            title: n.title ?? "Notification",
+            description: n.message ?? undefined,
+            time: n.createdAt ? formatRelativeTime(n.createdAt) : "",
+            read: n.status === "read",
+          })));
+        }
+      } catch {
+        // Silently degrade — bell shows empty
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [propNotifications]);
+
+  const items = propNotifications ?? fetched;
   const count = unreadCount ?? items.filter((n) => !n.read).length;
 
   useEffect(() => {

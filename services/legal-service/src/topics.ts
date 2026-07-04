@@ -15,6 +15,7 @@ export const COMMANDS = {
   opinionSubmitApproval: "legal.opinion.submit_approval",
   counselBriefAssign:   "legal.counsel_brief.assign",
   filingRecord:         "legal.filing.record",
+  reminderCreate:       "legal.reminder.create",
 } as const;
 
 export const EVENTS = {

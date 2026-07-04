@@ -4,7 +4,7 @@ import { RTISummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
-import { idParam, fileRtiBody, respondRtiBody, appealRtiBody } from "./validators.js";
+import { idParam, fileRtiBody, respondRtiBody, appealRtiBody, transferRtiBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -48,6 +48,15 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     // P0-1: a bare citizen only sees their own RTIs; officers see the tenant view.
     const ownCitizenId = isOfficer(ctx) ? undefined : ctx.actorId;
     sendValidated(reply, RTISummaryListSchema, await queries.listRtiSummaries(ctx.tenantId, q.limit, ownCitizenId));
+  });
+
+  /** RTI Act 2005 §6(3): transfer to the concerned PIO within 5 days. */
+  app.post("/v1/citizen/rti/:id/transfer", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = transferRtiBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.transferRti(ctx, id, body));
   });
 
   /** RTI Act 2005 §7: list RTIs that have breached the 30-day deadline without response (officer view).

@@ -14,11 +14,22 @@ export function PluginActions({ plugin }: { plugin: Plugin }) {
 
 	async function run(verb: "install" | "enable" | "disable", reason?: string) {
 		if (!plugin.id) throw new Error("This plugin is not installable in the current tenant.");
-		const method = verb === "install" ? "POST" : "PATCH";
-		const res = await fetch(`/api/proxy/v1/plugins/items/${plugin.id}/${verb}`, {
+		let url: string;
+		let method: string;
+		let body: string | undefined;
+		if (verb === "install") {
+			url = `/api/proxy/v1/plugins/install`;
+			method = "POST";
+			body = JSON.stringify({ pluginId: plugin.id, reason });
+		} else {
+			url = `/api/proxy/v1/plugins/${plugin.id}/${verb}`;
+			method = "POST";
+			body = reason ? JSON.stringify({ reason }) : undefined;
+		}
+		const res = await fetch(url, {
 			method,
-			headers: reason ? { "Content-Type": "application/json" } : undefined,
-			body: reason ? JSON.stringify({ reason }) : undefined,
+			headers: body ? { "Content-Type": "application/json" } : undefined,
+			body,
 		});
 		if (!res.ok) throw new Error((await res.text()) || `Failed to ${verb} plugin.`);
 		router.refresh();

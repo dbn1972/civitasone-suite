@@ -15,6 +15,9 @@ import { deviceRoutes } from "./modules/devices/routes.js";
 import { syncRoutes } from "./modules/sync/routes.js";
 import { apiKeyRoutes } from "./modules/apikeys/routes.js";
 import { breakGlassRoutes } from "./modules/breakglass/routes.js";
+import { samlRoutes } from "./modules/saml/routes.js";
+import { scimRoutes } from "./modules/scim/routes.js";
+import { webauthnRoutes } from "./modules/webauthn/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -36,6 +39,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(syncRoutes);
   await app.register(apiKeyRoutes);
   await app.register(breakGlassRoutes);
+  await app.register(samlRoutes);
+  await app.register(scimRoutes);
+  await app.register(webauthnRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

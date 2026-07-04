@@ -93,7 +93,7 @@ async function loadBrandConfig(tenantId: string): Promise<BrandConfigRow | null>
 }
 
 function buildCssVars(config: BrandConfigRow | typeof DEFAULTS & { tenantId?: string }): string {
-  return `:root {
+  let css = `:root {
   --color-primary: ${config.colorPrimary};
   --color-primary-fg: ${config.colorPrimaryFg};
   --color-secondary: ${config.colorSecondary};
@@ -112,6 +112,34 @@ function buildCssVars(config: BrandConfigRow | typeof DEFAULTS & { tenantId?: st
   --header-style: ${config.headerStyle};
   --border-radius: ${config.borderRadius};
 }`;
+  const custom = "customCss" in config ? (config as { customCss?: string | null }).customCss : null;
+  if (custom) {
+    css += "\n" + sanitizeCss(custom);
+  }
+  return css;
+}
+
+/**
+ * Sanitize user-supplied CSS to prevent injection attacks.
+ * Removes dangerous constructs: @import, url(), expression(), javascript:, behavior, -moz-binding.
+ */
+function sanitizeCss(raw: string): string {
+  let css = raw;
+  // Strip JS-based expressions (IE-era but defense-in-depth)
+  css = css.replace(/expression\s*\([^)]*\)/gi, "/* [sanitized] */");
+  // Strip @import to block external resource loading
+  css = css.replace(/@import\b[^;]*/gi, "/* [sanitized] */");
+  // Strip url() to prevent data exfiltration and external resource loading
+  css = css.replace(/url\s*\([^)]*\)/gi, "/* [sanitized] */");
+  // Strip javascript: protocol references
+  css = css.replace(/javascript\s*:/gi, "/* [sanitized] */");
+  // Strip IE behaviors
+  css = css.replace(/behavior\s*:/gi, "/* [sanitized] */");
+  // Strip -moz-binding
+  css = css.replace(/-moz-binding\s*:/gi, "/* [sanitized] */");
+  // Strip HTML comment delimiters (can confuse parsers)
+  css = css.replace(/<!--|-->/g, "");
+  return css;
 }
 
 /* ---------- routes ---------- */

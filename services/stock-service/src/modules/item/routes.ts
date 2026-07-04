@@ -11,6 +11,20 @@ const STOCK_ROLES  = ["stock_manager", "stock_admin", "super_admin", "procuremen
 const READER_ROLES = [...STOCK_ROLES, "audit_officer"];
 
 export async function itemRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/stock/categories", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const rows = await queries.listCategories(ctx.tenantId);
+    return reply.send({ data: rows });
+  });
+
+  app.get("/v1/stock/uoms", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const rows = await queries.listUoms(ctx.tenantId);
+    return reply.send({ data: rows });
+  });
+
   app.post("/v1/stock/items", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, STOCK_ROLES);
