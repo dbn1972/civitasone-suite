@@ -240,6 +240,12 @@ Key practices to encode in the roles:
 | `JWKS_URI` | JWKS endpoint used to verify RS256 access tokens. |
 | `METRICS_TOKEN` | Bearer token guarding `GET /metrics` (else internal-IP allowlist). |
 | `INTERNAL_SERVICE_SECRET` | Shared secret authenticating east–west service calls. |
+| `SEARCH_ENGINE` | Search provider: `meilisearch` (default) or `opensearch`. |
+| `MEILISEARCH_HOST` | Meilisearch URL (when `SEARCH_ENGINE=meilisearch`). Default: `http://localhost:7700`. |
+| `MEILISEARCH_API_KEY` | Meilisearch API key. |
+| `OPENSEARCH_NODE` | OpenSearch URL (when `SEARCH_ENGINE=opensearch`). Default: `http://localhost:9200`. |
+| `OPENSEARCH_USERNAME` | OpenSearch basic auth username. |
+| `OPENSEARCH_PASSWORD` | OpenSearch basic auth password. |
 | `PII_ENC_KEY` | AES-256-GCM key for PII field encryption (32 bytes, base64). |
 | `LOG_LEVEL` | pino level (`info` default). Logs are structured JSON. |
 

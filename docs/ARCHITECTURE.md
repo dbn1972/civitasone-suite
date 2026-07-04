@@ -349,6 +349,7 @@ flowchart LR
 | Database | PostgreSQL 16 (database-per-service, RLS) |
 | Cache | Redis 7 (read-through) |
 | Messaging | AWS SQS (commands + events) |
+| Search | Meilisearch / OpenSearch (via `@civitasone/search` adapter) |
 | Identity | Keycloak 24 (OIDC, RS256, JWKS) |
 | Logging | pino 8.21 |
 | Web | Next.js 14.2 (App Router) |
@@ -356,6 +357,31 @@ flowchart LR
 | Gateway | Fastify edge proxy (`:8080`) |
 | Money | `BigInt` paise |
 | Time | `timestamptz` |
+
+---
+
+## Full-Text Search
+
+CivitasOne uses a **provider-agnostic search adapter** (`@civitasone/search` package) that supports two engines:
+
+| Engine | Use Case | Deployment |
+|--------|----------|------------|
+| Meilisearch | On-prem, district offices, single-server | Self-hosted (Rust binary) |
+| OpenSearch | AWS cloud, enterprise scale, analytics | Amazon OpenSearch Service (managed) |
+
+The choice is driven by the `SEARCH_ENGINE` env var (`"meilisearch"` or `"opensearch"`). Both engines share the same interface:
+
+```mermaid
+graph LR
+    KS[knowledge-service] --> SA["@civitasone/search"]
+    SA -->|SEARCH_ENGINE=meilisearch| ME[Meilisearch]
+    SA -->|SEARCH_ENGINE=opensearch| OS[OpenSearch]
+    KS -->|fallback| PG[(PostgreSQL ILIKE)]
+```
+
+**Tenant isolation**: All documents carry a `tenantId` field. Every query is filtered by `tenantId` — cross-tenant search is architecturally impossible.
+
+**Fallback**: If the search engine is unreachable, the knowledge-service degrades gracefully to a PostgreSQL ILIKE query on the local `knowledge.search_index` table.
 
 ---
 

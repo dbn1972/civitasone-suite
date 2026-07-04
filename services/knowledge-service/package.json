@@ -17,6 +17,7 @@
   "dependencies": {
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
+    "@civitasone/search": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/events": "workspace:*",
     "@civitasone/observability": "workspace:*",

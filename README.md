@@ -65,7 +65,7 @@ Unlike traditional ERPs that require constant internet connectivity, CivitasOne 
 | Queue | AWS SQS (LocalStack in dev) |
 | Cache | Redis 7 |
 | Auth | Keycloak 24 (OIDC/PKCE) |
-| Search | Meilisearch |
+| Search | Meilisearch / OpenSearch (via adapter) |
 | Monorepo | pnpm 9 + Turborepo 2 |
 | Testing | Vitest, Playwright, k6 |
 | CI/CD | GitHub Actions |

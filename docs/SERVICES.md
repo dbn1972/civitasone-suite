@@ -83,7 +83,7 @@ Shared operational capabilities consumed across domains.
 | report | 3016 | `civitas_report` | Report definitions, scheduled runs | `/v1/report/definitions`, `/v1/report/runs` | C `report.run.request` · E `report.run.generated` | analytics, finance, hrms |
 | telephony | 3026 | `civitas_telephony` | Call logging, IVR, click-to-call | `/v1/telephony/calls`, `/v1/telephony/ivr` | C `telephony.call.dial` · E `telephony.call.completed` | crm, helpdesk |
 | helpdesk | 3027 | `civitas_helpdesk` | Support tickets, SLAs, queues | `/v1/helpdesk/tickets`, `/v1/helpdesk/queues` | C `helpdesk.ticket.open` · E `helpdesk.ticket.resolved` | notification, knowledge |
-| knowledge | 3028 | `civitas_knowledge` | Knowledge base, articles, search | `/v1/knowledge/articles`, `/v1/knowledge/search` | C `knowledge.article.publish` · E `knowledge.article.published` | — |
+| knowledge | 3028 | `civitas_knowledge` | Knowledge base, articles, full-text search (Meilisearch/OpenSearch via `@civitasone/search`) | `/v1/knowledge/articles`, `/v1/knowledge/search` | C `knowledge.search.index` · E `knowledge.search.indexed` | — |
 | workflow | 3029 | `civitas_workflow` | Approval orchestration engine | `/v1/workflow/instances`, `/v1/workflow/tasks` | C `workflow.instance.create` · E `workflow.instance.created`, `workflow.task.approved` | identity, notification |
 | analytics | 3031 | `civitas_analytics` | Metrics, aggregations, dashboards | `/v1/analytics/metrics`, `/v1/analytics/dashboards` | E `analytics.metric.rolled_up` (subscribes broadly) | all domain services |
 | location | 4012 | `civitas_location` | Geocoding, admin boundaries, GIS | `/v1/location/geocode`, `/v1/location/boundaries` | C `location.geocode.request` · E `location.geocode.resolved` | — |

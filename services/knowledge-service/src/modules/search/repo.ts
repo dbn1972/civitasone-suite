@@ -1,10 +1,30 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { createSearchEngine, type SearchEngine, type SearchResult as EngineResult } from "@civitasone/search";
 import { db } from "../../shared/db.js";
-import { searchIndex, type SearchIndexRow, type SearchIndexInsert, type SearchIndexView } from "./schema.js";
+import { searchIndex, type SearchIndexRow, type SearchIndexView } from "./schema.js";
 
-/** Meilisearch client wrapper — falls back to DB search when Meilisearch unavailable */
-const MEILI_HOST = process.env.MEILISEARCH_HOST ?? "http://localhost:7700";
-const MEILI_KEY = process.env.MEILISEARCH_API_KEY ?? "";
+/** Singleton search engine instance — provider chosen via SEARCH_ENGINE env var. */
+let engine: SearchEngine | null = null;
+
+function getEngine(): SearchEngine {
+  if (!engine) {
+    engine = createSearchEngine();
+  }
+  return engine;
+}
+
+/** Initialize the search engine (call once at startup). */
+export async function initializeSearch(): Promise<void> {
+  await getEngine().initialize({ indexName: "knowledge_documents" });
+}
+
+/** Gracefully close the search engine connection. */
+export async function closeSearch(): Promise<void> {
+  if (engine) {
+    await engine.close();
+    engine = null;
+  }
+}
 
 export type SearchResult = {
   id: string;
@@ -28,19 +48,6 @@ export function toView(r: SearchIndexRow): SearchIndexView {
   };
 }
 
-/**
- * Escape a value for use inside a Meilisearch filter string literal.
- * Enforces strict alphanumeric + limited punctuation charset, and escapes
- * double quotes to prevent filter injection (e.g. `x" OR tenantId="other`).
- */
-function escapeMeiliFilter(value: string): string {
-  // Strip any characters that could be filter syntax
-  // Allow: alphanumeric, hyphen, underscore, dot, space, colon, slash
-  const sanitized = value.replace(/[^a-zA-Z0-9\-_.: /]/g, "");
-  // Escape remaining double quotes (should be none after above, but belt-and-suspenders)
-  return sanitized.replace(/"/g, '\\"');
-}
-
 export async function search(
   tenantId: string,
   query: string,
@@ -50,31 +57,25 @@ export async function search(
   offset: number,
 ): Promise<SearchResult[]> {
   try {
-    const filter: string[] = [`tenantId = "${escapeMeiliFilter(tenantId)}"`];
-    if (category) filter.push(`category = "${escapeMeiliFilter(category)}"`);
-    if (tags?.length) filter.push(tags.map((t) => `tags = "${escapeMeiliFilter(t)}"`).join(" AND "));
-
-    const res = await fetch(`${MEILI_HOST}/indexes/knowledge_documents/search`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(MEILI_KEY ? { Authorization: `Bearer ${MEILI_KEY}` } : {}),
-      },
-      body: JSON.stringify({ q: query, filter, limit, offset }),
+    const response = await getEngine().search({
+      q: query,
+      tenantId,
+      category,
+      tags,
+      limit,
+      offset,
     });
 
-    if (!res.ok) throw new Error(`Meilisearch returned ${res.status}`);
-    const data = (await res.json()) as { hits: Array<{ id: string; documentId: string; title: string; content: string; tags: string[]; _rankingScore?: number }> };
-    return data.hits.map((h) => ({
+    return response.hits.map((h: EngineResult) => ({
       id: h.id,
       documentId: h.documentId,
       title: h.title,
       content: h.content,
       tags: h.tags ?? [],
-      score: h._rankingScore,
+      score: h.score,
     }));
   } catch {
-    // Fallback to DB full-text (basic ILIKE) when Meilisearch unavailable
+    // Fallback to DB full-text (basic ILIKE) when search engine is unavailable
     return fallbackDbSearch(tenantId, query, limit, offset);
   }
 }
@@ -97,7 +98,7 @@ async function fallbackDbSearch(tenantId: string, query: string, limit: number, 
 }
 
 export async function indexDocument(tenantId: string, doc: { id: string; documentId: string; title: string; content: string; tags: string[] }): Promise<void> {
-  // Upsert into local search_index table
+  // Upsert into local search_index table (source of truth)
   await db.insert(searchIndex).values({
     id: doc.id,
     tenantId,
@@ -111,18 +112,18 @@ export async function indexDocument(tenantId: string, doc: { id: string; documen
     set: { title: doc.title, content: doc.content, tags: doc.tags, indexedAt: new Date() },
   });
 
-  // Push to Meilisearch
+  // Push to search engine
   try {
-    await fetch(`${MEILI_HOST}/indexes/knowledge_documents/documents`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(MEILI_KEY ? { Authorization: `Bearer ${MEILI_KEY}` } : {}),
-      },
-      body: JSON.stringify([{ ...doc, tenantId }]),
+    await getEngine().index({
+      id: doc.id,
+      tenantId,
+      documentId: doc.documentId,
+      title: doc.title,
+      content: doc.content,
+      tags: doc.tags,
     });
   } catch {
-    // Meilisearch down — local index is source of truth; relay job will catch up
+    // Search engine down — local index is source of truth; relay job will catch up
   }
 }
 
@@ -138,13 +139,10 @@ export async function removeDocument(tenantId: string, documentId: string): Prom
   await db.delete(searchIndex)
     .where(and(eq(searchIndex.tenantId, tenantId), eq(searchIndex.documentId, documentId)));
 
-  // Remove from Meilisearch
+  // Remove from search engine
   try {
-    await fetch(`${MEILI_HOST}/indexes/knowledge_documents/documents/${documentId}`, {
-      method: "DELETE",
-      headers: MEILI_KEY ? { Authorization: `Bearer ${MEILI_KEY}` } : {},
-    });
+    await getEngine().remove(tenantId, documentId);
   } catch {
-    // Meilisearch down — relay job will handle cleanup
+    // Search engine down — relay job will handle cleanup
   }
 }
