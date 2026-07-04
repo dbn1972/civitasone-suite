@@ -34,7 +34,7 @@ function findRouteFiles(dir) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...findRouteFiles(fullPath));
-    } else if (entry.name === "routes.ts") {
+    } else if (entry.name === "routes.ts" || entry.name.endsWith("-routes.ts") || entry.name.endsWith(".routes.ts") || entry.name.endsWith("-route.ts")) {
       results.push(fullPath);
     }
   }
