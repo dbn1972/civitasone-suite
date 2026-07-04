@@ -1065,6 +1065,272 @@ paths:
         - bearerAuth: []
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Identity Service — SCIM 2.0 (RFC 7643/7644)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/identity/scim/ServiceProviderConfig:
+    get:
+      operationId: scimServiceProviderConfig
+      tags: [Identity]
+      summary: SCIM Service Provider Configuration
+      description: |
+        Returns the SCIM 2.0 service provider configuration describing
+        supported capabilities (patch, filter, bulk, etc.). Public endpoint
+        — no authentication required.
+      security: []
+      responses:
+        "200":
+          description: SCIM ServiceProviderConfig resource
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimServiceProviderConfig"
+
+  /v1/identity/scim/Users:
+    get:
+      operationId: scimListUsers
+      tags: [Identity]
+      summary: List SCIM users
+      description: |
+        Returns a paginated list of users in SCIM 2.0 format. Supports basic
+        SCIM filter syntax (e.g. `userName eq "user@example.com"`).
+        Used by external IdPs (Azure AD, Okta) for provisioning sync.
+      parameters:
+        - name: filter
+          in: query
+          description: "SCIM filter expression (e.g. `userName eq \"user@example.com\"`)"
+          schema:
+            type: string
+        - name: startIndex
+          in: query
+          description: 1-based index of the first result (default 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: count
+          in: query
+          description: Maximum number of results (default 50, max 200)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: SCIM ListResponse containing user resources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimListResponse"
+        "401":
+          description: Missing or invalid SCIM bearer token
+        "503":
+          description: SCIM is not configured (SCIM_BEARER_TOKEN not set)
+      security:
+        - scimBearerToken: []
+    post:
+      operationId: scimCreateUser
+      tags: [Identity]
+      summary: Create (provision) a SCIM user
+      description: |
+        Creates a new user from an external IdP provisioning request.
+        Maps SCIM User attributes to the internal user model. The user
+        is created with status "active" and can authenticate immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScimCreateUserRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "400":
+          description: Missing required field (userName/email)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "401":
+          description: Missing or invalid SCIM bearer token
+        "503":
+          description: SCIM is not configured
+      security:
+        - scimBearerToken: []
+
+  /v1/identity/scim/Users/{id}:
+    get:
+      operationId: scimGetUser
+      tags: [Identity]
+      summary: Get a SCIM user by ID
+      description: |
+        Returns a single user resource in SCIM 2.0 format.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: SCIM User resource
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "400":
+          description: Invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "401":
+          description: Missing or invalid SCIM bearer token
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "503":
+          description: SCIM is not configured
+      security:
+        - scimBearerToken: []
+    put:
+      operationId: scimReplaceUser
+      tags: [Identity]
+      summary: Replace (full update) a SCIM user
+      description: |
+        Replaces all mutable attributes of a user. Maps SCIM User fields to
+        internal attributes (email, name, active status).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScimReplaceUserRequest"
+      responses:
+        "200":
+          description: User replaced successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "400":
+          description: Invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "401":
+          description: Missing or invalid SCIM bearer token
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "503":
+          description: SCIM is not configured
+      security:
+        - scimBearerToken: []
+    patch:
+      operationId: scimPatchUser
+      tags: [Identity]
+      summary: Patch (partial update) a SCIM user
+      description: |
+        Applies partial updates using SCIM PatchOp semantics. Commonly used
+        by IdPs to deactivate users (`active: false`) during deprovisioning.
+        Supports `replace` operations on `active`, `userName`, and `name.formatted`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScimPatchRequest"
+      responses:
+        "200":
+          description: User patched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "400":
+          description: Invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "401":
+          description: Missing or invalid SCIM bearer token
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "503":
+          description: SCIM is not configured
+      security:
+        - scimBearerToken: []
+    delete:
+      operationId: scimDeleteUser
+      tags: [Identity]
+      summary: Delete (deprovision) a SCIM user
+      description: |
+        Soft-deletes a user by setting status to "disabled". The user can no
+        longer authenticate but the record is retained for audit purposes.
+        SCIM DELETE maps to deactivation, not hard-delete.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: User deactivated successfully (no content)
+        "400":
+          description: Invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "401":
+          description: Missing or invalid SCIM bearer token
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimError"
+        "503":
+          description: SCIM is not configured
+      security:
+        - scimBearerToken: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Citizen Service
   # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1476,6 +1742,14 @@ components:
         Keycloak OIDC access token (RS256). Obtain via
         POST /realms/civitasone/protocol/openid-connect/token
         with client_credentials or authorization_code grant.
+    scimBearerToken:
+      type: http
+      scheme: bearer
+      description: |
+        Static bearer token for SCIM 2.0 provisioning endpoints.
+        Set via SCIM_BEARER_TOKEN environment variable on the identity-service.
+        Separate from Keycloak user JWTs — used only by external IdPs
+        (Azure AD, Okta, Google Workspace, MeriPehchaan).
 
   parameters:
     LimitParam:

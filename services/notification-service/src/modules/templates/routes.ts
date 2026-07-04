@@ -39,6 +39,10 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/preferences/:userId", async (req, reply) => {
     const ctx = resolveContext(req);
     const { userId } = userIdParam.parse(req.params);
+    // IDOR guard: users can only set their own preferences; admins can set any
+    if (userId !== ctx.actorId && !ctx.roles.includes("notification_admin") && !ctx.roles.includes("super_admin")) {
+      throw new HttpError(403, "FORBIDDEN", "Cannot modify another user's notification preferences");
+    }
     const body = setPrefsBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.setPrefs(ctx, userId, body));
   });
@@ -46,6 +50,10 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
   app.get("/notifications/preferences/:userId", async (req, reply) => {
     const ctx = resolveContext(req);
     const { userId } = userIdParam.parse(req.params);
+    // IDOR guard: users can only read their own preferences; admins can read any
+    if (userId !== ctx.actorId && !ctx.roles.includes("notification_admin") && !ctx.roles.includes("super_admin")) {
+      throw new HttpError(403, "FORBIDDEN", "Cannot read another user's notification preferences");
+    }
     return reply.send(await queries.getUserPrefs(ctx.tenantId, userId));
   });
 

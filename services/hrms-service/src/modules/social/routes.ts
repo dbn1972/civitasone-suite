@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache, queue } from "../../shared/infra.js";
 import { sqlPool as sqlClient } from "../../shared/db.js";
 
@@ -398,8 +398,18 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/travel-requests/:id/approve — reporting manager approves */
   app.patch("/v1/hrms/travel-requests/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["manager", "hr_admin", "hr_officer", "super_admin"]);
     const { id } = req.params as { id: string };
     const now = new Date().toISOString();
+
+    // SoD: verify approver is not the submitter
+    const check = await sqlClient.query(
+      `SELECT employee_id FROM hrms.travel_requests WHERE id = $1 AND tenant_id = $2`,
+      [id, ctx.tenantId],
+    );
+    if (check.rows[0]?.employee_id === ctx.actorId) {
+      throw new HttpError(403, "SELF_APPROVAL", "Cannot approve your own travel request");
+    }
 
     const result = await sqlClient.query(
       `UPDATE hrms.travel_requests SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
@@ -432,6 +442,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/travel-requests/:id/reject — reporting manager rejects */
   app.patch("/v1/hrms/travel-requests/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["manager", "hr_admin", "hr_officer", "super_admin"]);
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
     const now = new Date().toISOString();
@@ -480,8 +491,18 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/expenses/:id/approve — approve expense claim */
   app.patch("/v1/hrms/expenses/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["manager", "hr_admin", "finance_officer", "super_admin"]);
     const { id } = req.params as { id: string };
     const now = new Date().toISOString();
+
+    // SoD: verify approver is not the submitter
+    const check = await sqlClient.query(
+      `SELECT employee_id FROM hrms.expense_claims WHERE id = $1 AND tenant_id = $2`,
+      [id, ctx.tenantId],
+    );
+    if (check.rows[0]?.employee_id === ctx.actorId) {
+      throw new HttpError(403, "SELF_APPROVAL", "Cannot approve your own expense claim");
+    }
 
     await sqlClient.query(
       `UPDATE hrms.expense_claims SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
