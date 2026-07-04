@@ -43,8 +43,14 @@ export type Predicate =
   | { op: "equals"; path: string; value: unknown }
   | { op: "in"; path: string; values: unknown[] }
   | { op: "exists"; path: string }
+  | { op: "not-equals"; path: string; value: unknown }
+  | { op: "not-in"; path: string; values: unknown[] }
+  | { op: "not-exists"; path: string }
   | { op: "owner-match"; subjectPath?: string; resourcePath?: string }
-  | { op: "tenant-match"; subjectPath?: string; resourcePath?: string };
+  | { op: "tenant-match"; subjectPath?: string; resourcePath?: string }
+  | { op: "time-window"; after?: string; before?: string; timezone?: string }
+  | { op: "or"; predicates: Predicate[] }
+  | { op: "not"; predicate: Predicate };
 
 export interface RuleExpression {
   effect: "allow" | "deny";
@@ -96,12 +102,20 @@ export function evalPredicate(req: AccessRequest, p: Predicate): boolean {
   switch (p.op) {
     case "equals":
       return resolvePath(req, p.path) === p.value;
+    case "not-equals":
+      return resolvePath(req, p.path) !== p.value;
     case "in": {
       const v = resolvePath(req, p.path);
       return p.values.some((cand) => cand === v);
     }
+    case "not-in": {
+      const v = resolvePath(req, p.path);
+      return !p.values.some((cand) => cand === v);
+    }
     case "exists":
       return present(resolvePath(req, p.path));
+    case "not-exists":
+      return !present(resolvePath(req, p.path));
     case "owner-match": {
       const subj = resolvePath(req, p.subjectPath ?? "subject.attrs.userId");
       const sid = present(subj) ? subj : req.subject.id;
@@ -113,9 +127,33 @@ export function evalPredicate(req: AccessRequest, p: Predicate): boolean {
       const resT = resolvePath(req, p.resourcePath ?? "resource.attrs.tenantId");
       return present(subjT) && present(resT) && subjT === resT;
     }
+    case "time-window": {
+      const now = new Date();
+      if (p.after) {
+        const afterTime = parseTimeOfDay(p.after);
+        if (now < afterTime) return false;
+      }
+      if (p.before) {
+        const beforeTime = parseTimeOfDay(p.before);
+        if (now > beforeTime) return false;
+      }
+      return true;
+    }
+    case "or":
+      return p.predicates.some((sub) => evalPredicate(req, sub));
+    case "not":
+      return !evalPredicate(req, p.predicate);
     default:
       return false;
   }
+}
+
+/** Parse a time string (HH:MM) into a Date for today. */
+function parseTimeOfDay(time: string): Date {
+  const [h, m] = time.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h ?? 0, m ?? 0, 0, 0);
+  return d;
 }
 
 function targets(rule: RuleExpression, req: AccessRequest): boolean {

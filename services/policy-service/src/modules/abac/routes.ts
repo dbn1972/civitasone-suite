@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
+import crypto from "node:crypto";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { queue } from "../../shared/infra.js";
 import { createRuleBody, updateRuleBody, ruleIdParam, evaluateBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -70,6 +72,26 @@ export async function abacRoutes(app: FastifyInstance): Promise<void> {
       context: { ...body.context, tenantId: ctx.tenantId },
     };
     const decision = await queries.evaluateAccess(ctx.tenantId, accessReq);
+
+    // Emit decision to audit stream for compliance (allow + deny both logged)
+    queue.publish("audit.event.record", {
+      messageId: crypto.randomUUID(),
+      type: "audit.event.record",
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        eventType: "policy.decision",
+        action: body.action,
+        resourceType: body.resource.type,
+        decision: decision.decision,
+        reason: decision.reason,
+        matchedRuleId: decision.matchedRuleId ?? null,
+        subjectId: body.subject.id ?? ctx.actorId,
+      },
+    }).catch(() => { /* fire-and-forget audit */ });
+
     return reply.send(decision);
   });
 
