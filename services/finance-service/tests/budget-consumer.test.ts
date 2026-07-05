@@ -28,6 +28,12 @@ const {
 });
 
 vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
+vi.mock("@civitasone/db", () => ({
+  tenantTransaction: async (_db: unknown, _tenantId: string, fn: (tx: unknown) => Promise<void>) => {
+    await dbTransactionFn(fn);
+  },
+  setTenantGuc: vi.fn(async () => undefined),
+}));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => { enqueuedMessages.push({ topic: msg.topic, payload: msg.payload }); }),
   markProcessed: vi.fn(async () => true),
