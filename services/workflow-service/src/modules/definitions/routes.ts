@@ -15,7 +15,7 @@ const nodeSchema = z.object({
   nodeKey: z.string().min(1).max(64),
   name: z.string().min(1).max(200),
   roleRef: z.string().max(128).optional(),
-  nodeType: z.enum(["task", "split", "parallel", "join", "start", "end", "timer", "xor", "exclusive", "call"]).default("task"),
+  nodeType: z.enum(["task", "split", "parallel", "join", "start", "end", "timer", "xor", "exclusive", "call", "message_catch", "message_throw", "signal_catch", "decision"]).default("task"),
   slaMinutes: z.number().int().positive().optional(),
   // SECURITY C-1b — deemed-approval dwell floor is enforced in validateGraph
   // (timer_minutes must be >= 1). We accept >= 1 here too for a clear 400.
@@ -29,11 +29,29 @@ const nodeSchema = z.object({
   assignStrategy: z.enum(["none", "round_robin", "least_loaded", "hierarchy"]).optional(),
   assignRef: z.string().max(128).optional(),
   sortOrder: z.number().int().optional(),
+  // Message/Signal events
+  messageName: z.string().max(128).optional(),
+  correlationKeyExpr: z.string().max(256).optional(),
+  signalName: z.string().max(128).optional(),
+  messageTopic: z.string().max(128).optional(),
+  messagePayloadExpr: z.string().max(512).optional(),
+  // Decision tables
+  decisionTableCode: z.string().max(64).optional(),
+  // Compensation
+  compensationHandlerKey: z.string().max(64).optional(),
+  // Multi-instance
+  multiInstanceCollection: z.string().max(128).optional(),
+  multiInstanceMode: z.enum(["parallel", "sequential"]).optional(),
+  multiInstanceCompletion: z.string().max(32).optional(),
+  // Visual designer position
+  positionX: z.number().int().optional(),
+  positionY: z.number().int().optional(),
 });
 const edgeSchema = z.object({
   fromNode: z.string().min(1).max(64),
   toNode: z.string().min(1).max(64),
   condition: z.string().max(512).optional(),
+  waypoints: z.array(z.object({ x: z.number(), y: z.number() })).optional(),
   sortOrder: z.number().int().optional(),
 });
 const createBody = z.object({
@@ -42,6 +60,7 @@ const createBody = z.object({
   description: z.string().max(1000).optional(),
   nodes: z.array(nodeSchema).default([]),
   edges: z.array(edgeSchema).default([]),
+  layout: z.object({ width: z.number().optional(), height: z.number().optional(), zoom: z.number().optional(), gridSize: z.number().optional() }).optional(),
 });
 
 export async function definitionRoutes(app: FastifyInstance): Promise<void> {
@@ -72,6 +91,7 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
         code: body.code,
         name: body.name,
         ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.layout !== undefined ? { layout: body.layout as { width?: number; height?: number; zoom?: number; gridSize?: number } } : {}),
         version,
         status: "draft",
         createdBy: ctx.actorId,
@@ -132,6 +152,12 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
           callDefinitionCode: n.callDefinitionCode,
           assignStrategy: n.assignStrategy,
           sortOrder: n.sortOrder,
+          messageName: n.messageName,
+          correlationKeyExpr: n.correlationKeyExpr,
+          signalName: n.signalName,
+          messageTopic: n.messageTopic,
+          decisionTableCode: n.decisionTableCode,
+          multiInstanceCollection: n.multiInstanceCollection,
         })),
         edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
       );

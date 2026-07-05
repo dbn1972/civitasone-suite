@@ -4,6 +4,9 @@ export const COMMANDS = {
   cancelInstance: "workflow.instance.cancel",
   suspendInstance: "workflow.instance.suspend",
   resumeInstance: "workflow.instance.resume",
+  deliverMessage: "workflow.message.deliver",
+  correlateMessage: "workflow.message.correlate",
+  broadcastSignal: "workflow.signal.broadcast",
 } as const;
 
 export const EVENTS = {
@@ -14,6 +17,11 @@ export const EVENTS = {
   instanceRejected: "workflow.instance.rejected",
   instanceSuspended: "workflow.instance.suspended",
   instanceResumed: "workflow.instance.resumed",
+  messageDelivered: "workflow.message.delivered",
+  messageReceived: "workflow.message.received",
+  signalDelivered: "workflow.signal.delivered",
+  signalReceived: "workflow.signal.received",
+  messageTimeout: "workflow.message.timeout",
 } as const;
 
 /** Cross-service commands dispatched when a workflow task completes. */

@@ -29,6 +29,44 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: await queries.bottlenecks(ctx.tenantId) });
   });
 
+  app.get("/v1/workflow/analytics/cycle-time", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = listQuerySchema.parse(req.query);
+    return reply.send({ data: await queries.cycleTimeByDefinition(ctx.tenantId, q.limit ?? 50) });
+  });
+
+  app.get("/v1/workflow/analytics/automation-rate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    return reply.send({ data: await queries.automationRate(ctx.tenantId) });
+  });
+
+  app.get("/v1/workflow/analytics/sla-compliance", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = listQuerySchema.parse(req.query);
+    return reply.send({ data: await queries.slaCompliance(ctx.tenantId, q.limit ?? 50) });
+  });
+
+  app.get("/v1/workflow/analytics/version-comparison", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = z.object({ code: z.string().min(1).max(64) }).parse(req.query);
+    return reply.send({ data: await queries.versionComparison(ctx.tenantId, q.code) });
+  });
+
+  /** GET /v1/workflow/analytics/assignment-recommendations — ML-ready smart routing */
+  app.get("/v1/workflow/analytics/assignment-recommendations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = z.object({
+      roleRef: z.string().max(128),
+      limit: z.coerce.number().int().min(1).max(20).default(5),
+    }).parse(req.query);
+    return reply.send({ data: await queries.assignmentRecommendations(ctx.tenantId, q.roleRef, q.limit) });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

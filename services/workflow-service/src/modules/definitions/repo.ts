@@ -143,12 +143,30 @@ export interface NodeSpec {
   // Gap 4 — auto-assignment strategy.
   assignStrategy?: string | null | undefined;
   assignRef?: string | null | undefined;
+  // Visual designer position
+  positionX?: number | null | undefined;
+  positionY?: number | null | undefined;
+  // Message/Signal events
+  messageName?: string | null | undefined;
+  correlationKeyExpr?: string | null | undefined;
+  signalName?: string | null | undefined;
+  messageTopic?: string | null | undefined;
+  messagePayloadExpr?: string | null | undefined;
+  // Decision tables
+  decisionTableCode?: string | null | undefined;
+  // Compensation
+  compensationHandlerKey?: string | null | undefined;
+  // Multi-instance
+  multiInstanceCollection?: string | null | undefined;
+  multiInstanceMode?: string | null | undefined;
+  multiInstanceCompletion?: string | null | undefined;
   sortOrder?: number | undefined;
 }
 export interface EdgeSpec {
   fromNode: string;
   toNode: string;
   condition?: string | null | undefined;
+  waypoints?: Array<{ x: number; y: number }> | null | undefined;
   sortOrder?: number | undefined;
 }
 
@@ -174,6 +192,18 @@ export async function insertGraphTx(
         ...(n.callContextMap !== undefined && n.callContextMap !== null ? { callContextMap: n.callContextMap } : {}),
         ...(n.assignStrategy !== undefined && n.assignStrategy !== null ? { assignStrategy: n.assignStrategy } : {}),
         ...(n.assignRef !== undefined && n.assignRef !== null ? { assignRef: n.assignRef } : {}),
+        ...(n.messageName ? { messageName: n.messageName } : {}),
+        ...(n.correlationKeyExpr ? { correlationKeyExpr: n.correlationKeyExpr } : {}),
+        ...(n.signalName ? { signalName: n.signalName } : {}),
+        ...(n.messageTopic ? { messageTopic: n.messageTopic } : {}),
+        ...(n.messagePayloadExpr ? { messagePayloadExpr: n.messagePayloadExpr } : {}),
+        ...(n.decisionTableCode ? { decisionTableCode: n.decisionTableCode } : {}),
+        ...(n.compensationHandlerKey ? { compensationHandlerKey: n.compensationHandlerKey } : {}),
+        ...(n.multiInstanceCollection ? { multiInstanceCollection: n.multiInstanceCollection } : {}),
+        ...(n.multiInstanceMode ? { multiInstanceMode: n.multiInstanceMode } : {}),
+        ...(n.multiInstanceCompletion ? { multiInstanceCompletion: n.multiInstanceCompletion } : {}),
+        ...(n.positionX !== undefined ? { positionX: n.positionX } : {}),
+        ...(n.positionY !== undefined ? { positionY: n.positionY } : {}),
         sortOrder: n.sortOrder ?? i + 1,
       })),
     );
@@ -185,6 +215,7 @@ export async function insertGraphTx(
         fromNode: e.fromNode,
         toNode: e.toNode,
         ...(e.condition !== undefined && e.condition !== null ? { condition: e.condition } : {}),
+        ...(e.waypoints !== undefined ? { waypoints: e.waypoints } : {}),
         sortOrder: e.sortOrder ?? i + 1,
       })),
     );

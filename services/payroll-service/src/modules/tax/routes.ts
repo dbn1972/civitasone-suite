@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
+import { exemptionCeilings } from "../fnf/schema.js";
 import { buildForm16 } from "./form16.js";
 import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
@@ -16,6 +18,16 @@ import * as commands from "./commands.js";
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer", "employee"];
 const WRITER_ROLES  = [...PAYROLL_ROLES, "employee", "hr_admin"];
+const CEILING_ROLES = ["payroll_admin", "super_admin"];
+
+const VALID_SECTIONS = ["10_10", "10_10AA", "10_10B", "10_10C"] as const;
+
+const upsertCeilingBody = z.object({
+  fyStartYear: z.number().int().min(2020).max(2099),
+  section: z.enum(VALID_SECTIONS),
+  ceilingMinor: z.string().transform((v) => BigInt(v)),
+  notes: z.string().max(512).optional(),
+});
 
 /**
  * Parse FY string like "2025-26" to start/end year.
@@ -239,6 +251,71 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       perquisitesMinor: Number(dec.perquisitesMinor),
       status: dec.status,
       createdAt: dec.createdAt,
+    });
+  });
+
+  /**
+   * GET /v1/payroll/tax/exemption-ceilings
+   * List all configured statutory exemption ceilings.
+   * Auth: payroll_admin, super_admin.
+   */
+  app.get("/v1/payroll/tax/exemption-ceilings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CEILING_ROLES);
+
+    const rows = await db.select().from(exemptionCeilings);
+
+    const data = rows.map((row) => ({
+      id: row.id,
+      fyStartYear: row.fyStartYear,
+      section: row.section,
+      ceilingMinor: row.ceilingMinor.toString(),
+      notes: row.notes,
+      createdAt: row.createdAt,
+    }));
+
+    return reply.send({ data, meta: { total: data.length } });
+  });
+
+  /**
+   * PUT /v1/payroll/tax/exemption-ceilings
+   * Upsert a statutory exemption ceiling for a given section + FY.
+   * Auth: payroll_admin, super_admin.
+   */
+  app.put("/v1/payroll/tax/exemption-ceilings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CEILING_ROLES);
+
+    const body = upsertCeilingBody.parse(req.body);
+
+    const rows = await db
+      .insert(exemptionCeilings)
+      .values({
+        fyStartYear: body.fyStartYear,
+        section: body.section,
+        ceilingMinor: body.ceilingMinor,
+        notes: body.notes ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [exemptionCeilings.fyStartYear, exemptionCeilings.section],
+        set: {
+          ceilingMinor: body.ceilingMinor,
+          notes: body.notes ?? null,
+        },
+      })
+      .returning();
+
+    const row = rows[0]!;
+
+    return reply.send({
+      data: {
+        id: row.id,
+        fyStartYear: row.fyStartYear,
+        section: row.section,
+        ceilingMinor: row.ceilingMinor.toString(),
+        notes: row.notes,
+        createdAt: row.createdAt,
+      },
     });
   });
 }

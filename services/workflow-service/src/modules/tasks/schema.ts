@@ -1,5 +1,6 @@
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
+
 export const domainSchema = pgSchema("workflow");
 
 export const tasks = domainSchema.table("tasks", {
@@ -21,6 +22,9 @@ export const tasks = domainSchema.table("tasks", {
   // reaches terminal. is_call marks it so humans never complete it.
   childInstanceId: uuid("child_instance_id"),
   isCall: boolean("is_call").notNull().default(false),
+  // Multi-instance support
+  multiInstanceIndex: integer("multi_instance_index"),
+  multiInstanceParentId: uuid("multi_instance_parent_id"),
   // Gap 5 — pre-breach reminders (distinct from escalation_count).
   reminderCount: integer("reminder_count").notNull().default(0),
   lastReminderAt: timestamp("last_reminder_at", { withTimezone: true }),

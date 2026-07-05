@@ -17,6 +17,7 @@
   "dependencies": {
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
+    "@civitasone/circuit-breaker": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/eoffice-sdk": "workspace:*",
     "@civitasone/events": "workspace:*",

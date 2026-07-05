@@ -67,6 +67,8 @@ export interface SlipInput {
    * remainder is reported as `recoveryCarryForwardMinor` to be recovered later.
    */
   protectedNetFloorMinor?: bigint;
+  /** Sec 10(5) LTC exemption total for this employee in the current FY (paise). */
+  ltcExemptTotalMinor?: bigint;
 }
 
 /** Deduction codes treated as "recovery" — subject to the protected-net floor. */
@@ -142,6 +144,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     tdsYtdMinor,
     monthsRemaining,
     protectedNetFloorMinor = 0n,
+    ltcExemptTotalMinor = 0n,
   } = input;
 
   const earnings: PayComponent[] = [];
@@ -222,9 +225,9 @@ export function computeSlip(input: SlipInput): SlipResult {
     const d80c = declaration.ded80cMinor ?? 0n; const c80c = d80c > 15_000_000n ? 15_000_000n : d80c;
     const d80d = declaration.ded80dMinor ?? 0n; const c80d = d80d > 7_500_000n ? 7_500_000n : d80d;
     const other = declaration.otherDedMinor ?? 0n;
-    annualTaxableMinor = annualGross + extraIncome - 5_000_000n - hraExempt - c80c - c80d - other - pt * 12n;
+    annualTaxableMinor = annualGross + extraIncome - 5_000_000n - hraExempt - c80c - c80d - other - pt * 12n - ltcExemptTotalMinor;
   } else {
-    annualTaxableMinor = annualGross + extraIncome - 7_500_000n; // new regime: standard deduction only
+    annualTaxableMinor = annualGross + extraIncome - 7_500_000n - ltcExemptTotalMinor; // new regime: standard deduction + LTC exempt
   }
   if (annualTaxableMinor < 0n) annualTaxableMinor = 0n;
   const annualTaxMinor = annualTaxFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear);

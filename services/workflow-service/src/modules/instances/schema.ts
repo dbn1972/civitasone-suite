@@ -21,6 +21,7 @@ export const instances = domainSchema.table("instances", {
   // parent.call_depth + 1. Used to reject fork-bombs past WORKFLOW_MAX_CALL_DEPTH.
   callDepth: integer("call_depth").notNull().default(0),
   context: jsonb("context").$type<Record<string, unknown>>().notNull().default({}),
+  completedNodes: jsonb("completed_nodes").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

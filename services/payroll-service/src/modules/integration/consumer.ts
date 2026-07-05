@@ -2,10 +2,12 @@ import type { Queue } from "@civitasone/queue";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
-import { CONSUMED_EVENTS } from "../../topics.js";
+import { CONSUMED_EVENTS, COMMANDS } from "../../topics.js";
 import * as lopRepo from "./lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { computeGratuity } from "../payroll/domain.js";
+import { computeLtcExemption } from "../tax/ltc-exemption.js";
+import { ltcExemptions } from "../fnf/schema.js";
 import { randomUUID } from "node:crypto";
 import { enqueue } from "../../shared/outbox.js";
 
@@ -69,6 +71,21 @@ export function registerIntegrationConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { service: "payroll", action: "gratuity_compute", resourceType: "gratuity", resourceId: p.employeeId, outcome: "success" },
       });
+
+      // Publish F&F compute command so the FNF consumer can run full settlement
+      await enqueue(tx, {
+        topic: COMMANDS.fnfCompute,
+        eventType: COMMANDS.fnfCompute,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          employeeId: p.employeeId,
+          tenantId: msg.tenantId,
+          separationDate: p.effectiveDate,
+          separationType: "retirement",
+        },
+      });
     });
   });
 
@@ -79,6 +96,55 @@ export function registerIntegrationConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await markSlipsPaidForRun(tx, p.payrollRunId!, msg.actorId);
+    });
+  });
+
+  queue.subscribe(CONSUMED_EVENTS.ltcClaimApproved, async (msg) => {
+    const p = msg.payload as {
+      claimId: string;
+      employeeId: string;
+      claimType: string;
+      approvedFareMinor: string;
+      entitlementMinor: string;
+      blockYear: string;
+      ltcType: "hometown" | "all_india";
+      usedInBlock: number;
+    };
+    // Only process LTC claims
+    if (p.claimType !== "ltc") return;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const result = computeLtcExemption({
+        approvedFareMinor: BigInt(p.approvedFareMinor),
+        entitlementMinor: BigInt(p.entitlementMinor),
+        ltcType: p.ltcType,
+        blockYear: p.blockYear,
+        usedInBlock: p.usedInBlock,
+      });
+
+      // Determine FY from current date
+      const now = new Date();
+      const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      const fy = `${fyStartYear}-${(fyStartYear + 1) % 100}`;
+
+      await tx.insert(ltcExemptions).values({
+        tenantId: msg.tenantId,
+        employeeId: p.employeeId,
+        fy,
+        claimId: p.claimId,
+        blockYear: p.blockYear,
+        ltcType: p.ltcType,
+        approvedFareMinor: BigInt(p.approvedFareMinor),
+        exemptAmountMinor: result.exemptMinor,
+      });
+
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "payroll", action: "ltc_exemption_compute", resourceType: "ltc_exemption", resourceId: p.claimId, outcome: "success" },
+      });
     });
   });
 }

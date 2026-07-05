@@ -11,6 +11,9 @@
  *   DSC_PASSPHRASE         — passphrase for the PKCS#12 keystore
  */
 
+import { readFile } from "node:fs/promises";
+import { signPdfWithDsc, type DscSignInput } from "./dsc-signer.js";
+
 
 
 
@@ -98,27 +101,39 @@ export async function renderPdf(opts: PdfRenderOptions): Promise<PdfRenderResult
 /**
  * DSC signing seam: applies PKCS7 detached signature when DSC_P12_PATH is set.
  * Otherwise returns the buffer unchanged with a log warning.
+ *
+ * Optionally accepts explicit DSC material (p12Buffer + passphrase) to bypass env vars.
  */
-async function maybeSignPdf(buffer: Buffer): Promise<{ buffer: Buffer; applied: boolean }> {
-  const p12Path = process.env.DSC_P12_PATH;
-  const passphrase = process.env.DSC_PASSPHRASE;
+export async function maybeSignPdf(
+  buffer: Buffer,
+  dscMaterial?: DscSignInput | undefined,
+): Promise<{ buffer: Buffer; applied: boolean }> {
+  // Use explicit material if provided, otherwise load from env vars
+  let dsc: DscSignInput | undefined = dscMaterial;
 
-  if (!p12Path || !passphrase) {
-    console.info("PDF unsigned (DSC_P12_PATH/DSC_PASSPHRASE not set) — set env vars to enable DSC signing");
-    return { buffer, applied: false };
+  if (!dsc) {
+    const p12Path = process.env.DSC_P12_PATH;
+    const passphrase = process.env.DSC_PASSPHRASE;
+
+    if (!p12Path || !passphrase) {
+      console.info("PDF unsigned (DSC_P12_PATH/DSC_PASSPHRASE not set) — set env vars to enable DSC signing");
+      return { buffer, applied: false };
+    }
+
+    try {
+      const p12Buffer = await readFile(p12Path);
+      dsc = { p12Buffer, passphrase };
+    } catch (err) {
+      console.error({ err: (err as Error).message, p12Path }, "Failed to read DSC P12 file — returning unsigned PDF");
+      return { buffer, applied: false };
+    }
   }
 
-  // In a full implementation, this would:
-  // 1. Parse the PKCS#12 keystore
-  // 2. Create a PKCS#7 detached signature over the PDF hash
-  // 3. Embed the signature in the PDF's signature annotation
-  // For now, log that signing would occur and return unsigned.
-  // A production implementation would use node-forge or a native OpenSSL binding.
-  console.info({ p12Path }, "DSC signing seam: signing would be applied with configured certificate");
-
-  // TODO: Implement actual PKCS#7 signing when a signing library is added
-  // const { signPdfBuffer } = await import("./dsc-signer.js");
-  // return { buffer: await signPdfBuffer(buffer, p12Path, passphrase), applied: true };
-
-  return { buffer, applied: false };
+  try {
+    const result = await signPdfWithDsc(buffer, dsc);
+    return { buffer: result.buffer, applied: true };
+  } catch (err) {
+    console.error({ err: (err as Error).message }, "DSC signing failed — returning unsigned PDF");
+    return { buffer, applied: false };
+  }
 }

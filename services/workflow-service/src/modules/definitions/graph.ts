@@ -6,6 +6,7 @@ import { validateCondition } from "../../shared/condition.js";
 // must treat every known type correctly so a new type can't strand an instance.
 const KNOWN_NODE_TYPES = new Set([
   "task", "split", "parallel", "join", "start", "end", "timer", "xor", "exclusive", "call",
+  "message_catch", "message_throw", "signal_catch", "decision",
 ]);
 const ASSIGN_STRATEGIES = new Set(["none", "round_robin", "least_loaded", "hierarchy"]);
 
@@ -147,6 +148,49 @@ export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValida
       if (badTargets.length) {
         errors.push(`deemed-approval timer '${n.nodeKey}' has an outgoing edge directly to terminal/end node(s) (${badTargets.join(", ")}); a human step is required before completion (it would auto-dispatch a domain approval)`);
       }
+    }
+  }
+
+  // Validation for message_catch nodes: must declare message_name AND correlation_key_expr
+  for (const n of nodes) {
+    if (n.nodeType !== "message_catch") continue;
+    if (!n.messageName || n.messageName.trim() === "") {
+      errors.push(`message_catch node '${n.nodeKey}' must declare message_name`);
+    }
+    if (!n.correlationKeyExpr || n.correlationKeyExpr.trim() === "") {
+      errors.push(`message_catch node '${n.nodeKey}' must declare correlation_key_expr`);
+    }
+  }
+
+  // Validation for message_throw nodes: must declare message_topic
+  for (const n of nodes) {
+    if (n.nodeType !== "message_throw") continue;
+    if (!n.messageTopic || n.messageTopic.trim() === "") {
+      errors.push(`message_throw node '${n.nodeKey}' must declare message_topic`);
+    }
+  }
+
+  // Validation for signal_catch nodes: must declare signal_name
+  for (const n of nodes) {
+    if (n.nodeType !== "signal_catch") continue;
+    if (!n.signalName || n.signalName.trim() === "") {
+      errors.push(`signal_catch node '${n.nodeKey}' must declare signal_name`);
+    }
+  }
+
+  // Validation for decision nodes: must declare decision_table_code
+  for (const n of nodes) {
+    if (n.nodeType !== "decision") continue;
+    if (!n.decisionTableCode || n.decisionTableCode.trim() === "") {
+      errors.push(`decision node '${n.nodeKey}' must declare decision_table_code`);
+    }
+  }
+
+  // Multi-instance nodes: if multi_instance_collection is set, the node must have an outgoing edge
+  for (const n of nodes) {
+    if (!n.multiInstanceCollection || n.multiInstanceCollection.trim() === "") continue;
+    if (!hasOutgoing.has(n.nodeKey)) {
+      errors.push(`multi-instance node '${n.nodeKey}' has no outgoing edge (it can never advance after completion)`);
     }
   }
 

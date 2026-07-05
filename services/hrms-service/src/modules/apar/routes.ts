@@ -181,7 +181,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
           tenantId: ctx.tenantId, appraisalId: id, attribute: s.attribute,
           weight: String(s.weight), score: s.score,
           ...(s.remarks !== undefined ? { remarks: s.remarks } : {}),
-          scoredBy: ctx.actorId,
+          scoredBy: ctx.actorId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
         });
       }
       await repo.updateAppraisal(tx, id, {
@@ -223,6 +223,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
           await repo.upsertScore(tx, {
             tenantId: ctx.tenantId, appraisalId: id, attribute: v.attribute,
             weight: row.weight, score: v.score, scoredBy: ctx.actorId,
+            createdBy: ctx.actorId, updatedBy: ctx.actorId,
             remarks: `varied by reviewing officer (was ${row.score})`,
           });
         }

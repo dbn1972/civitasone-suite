@@ -19,6 +19,11 @@ import { statutoryReturnsRoutes } from "./modules/statutory-returns/routes.js";
 import { challanRoutes } from "./modules/statutory-returns/challan-routes.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 import { bankTransferRoutes } from "./modules/bank-transfer/routes.js";
+import { sponsorConfigRoutes } from "./modules/sponsor-config/routes.js";
+import { nachReturnRoutes } from "./modules/nach-return/routes.js";
+import { fnfRoutes } from "./modules/fnf/routes.js";
+import { dscConfigRoutes } from "./modules/dsc-config/routes.js";
+import { form16VerifyRoutes } from "./modules/form16-verify/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -49,8 +54,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(statutoryReturnsRoutes);
   await app.register(challanRoutes);
   await app.register(bankTransferRoutes);
+  await app.register(sponsorConfigRoutes);
+  await app.register(nachReturnRoutes);
+  await app.register(fnfRoutes);
+  await app.register(dscConfigRoutes);
+  await app.register(form16VerifyRoutes);
   const { worldClassPayrollRoutes } = await import("./modules/payroll/world-class-routes.js");
   await app.register(worldClassPayrollRoutes);
+  const { gapRoutes } = await import("./modules/payroll/gap-routes.js");
+  await app.register(gapRoutes);
   await app.register((await import("./modules/form16-pdf/routes.js")).form16PdfRoutes);
 
   registerSchemaErrorHandler(app, HttpError);

@@ -11,8 +11,10 @@
  * The export converts our internal schema back to valid BPMN 2.0 XML.
  */
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { definitions } from "../definitions/schema.js";
 import * as defRepo from "../definitions/repo.js";
 import { randomUUID } from "node:crypto";
 
@@ -144,32 +146,57 @@ export async function bpmnRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_BPMN", "No process elements found in the BPMN XML");
     }
 
-    const defId = randomUUID();
-    const name = body.name ?? parsed.processName;
+    const code = `imported_${Date.now()}`;
+    const result = await db.transaction(async (tx) => {
+      const latest = await defRepo.findLatestVersionTx(tx, ctx.tenantId, code);
+      const version = latest ? latest.version + 1 : 1;
+      const defId = randomUUID();
 
-    // Convert to internal format
-    const internalNodes = parsed.nodes.map((n) => ({
-      id: n.id,
-      name: n.name,
-      type: n.type,
-    }));
-    const internalEdges = parsed.edges.map((e) => ({
-      id: e.id,
-      from: e.sourceRef,
-      to: e.targetRef,
-      label: e.name,
-    }));
+      // Map BPMN types to internal types
+      const typeMap: Record<string, string> = {
+        startEvent: "start", endEvent: "end", userTask: "task",
+        serviceTask: "task", exclusiveGateway: "xor",
+        parallelGateway: "split", intermediateEvent: "message_catch",
+      };
 
-    // TODO: persist via CQRS command (createDefinition with nodes/edges)
-    // For now, return the parsed structure
+      await tx.insert(definitions).values({
+        id: defId,
+        tenantId: ctx.tenantId,
+        code,
+        name: body.name ?? parsed.processName,
+        version,
+        status: "draft",
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
+
+      const nodes = parsed.nodes.map((n, idx) => ({
+        nodeKey: n.id,
+        name: n.name,
+        nodeType: typeMap[n.type] ?? "task",
+        sortOrder: idx + 1,
+      }));
+
+      const edges = parsed.edges.map((e) => ({
+        fromNode: e.sourceRef,
+        toNode: e.targetRef,
+        condition: e.condition,
+      }));
+
+      await defRepo.insertGraphTx(tx, defId, nodes, edges);
+      return { defId, version, code };
+    });
+
     return reply.code(201).send({
-      id: defId,
-      name,
-      nodeCount: internalNodes.length,
-      edgeCount: internalEdges.length,
-      nodes: internalNodes,
-      edges: internalEdges,
-      status: "imported",
+      data: {
+        id: result.defId,
+        code: result.code,
+        name: body.name ?? parsed.processName,
+        version: result.version,
+        status: "draft",
+        nodeCount: parsed.nodes.length,
+        edgeCount: parsed.edges.length,
+      },
     });
   });
 
@@ -194,5 +221,17 @@ export async function bpmnRoutes(app: FastifyInstance): Promise<void> {
       .header("Content-Type", "application/xml")
       .header("Content-Disposition", `attachment; filename="${def.name.replace(/[^a-zA-Z0-9-_]/g, "_")}.bpmn"`)
       .send(xml);
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
 }

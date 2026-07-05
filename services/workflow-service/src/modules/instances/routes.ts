@@ -34,6 +34,28 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, instancesListSchema, await queries.listInstances(ctx.tenantId, q.limit, q.offset));
   });
 
+  // Rich instance search with filtering
+  app.get("/v1/workflow/instances/search", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = z.object({
+      status: z.enum(["active", "completed", "cancelled", "suspended"]).optional(),
+      refType: z.string().max(64).optional(),
+      refId: z.string().uuid().optional(),
+      definitionCode: z.string().max(64).optional(),
+      sla: z.enum(["breached", "at_risk", "on_track"]).optional(),
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      assignee: z.string().uuid().optional(),
+      q: z.string().max(200).optional(), // text search on name
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+
+    const results = await queries.searchInstances(ctx.tenantId, q);
+    return reply.send(results);
+  });
+
   app.get("/v1/workflow/instances/:id/history", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);

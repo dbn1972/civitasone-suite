@@ -6,6 +6,9 @@ import { registerPayrollConsumers } from "./modules/payroll/consumer.js";
 import { registerLoansConsumers }   from "./modules/loans/consumer.js";
 import { registerTaxConsumers }     from "./modules/tax/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
+import { registerNachReturnConsumers } from "./modules/nach-return/consumer.js";
+import { registerFnfConsumers } from "./modules/fnf/consumer.js";
+import { registerForm16BulkConsumers } from "./modules/form16-pdf/bulk-consumer.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 
 const log = pino({ name: "payroll-worker" });
@@ -16,6 +19,9 @@ registerPayrollConsumers(queue);
 registerLoansConsumers(queue);
 registerTaxConsumers(queue);
 registerIntegrationConsumers(queue);
+registerNachReturnConsumers(queue);
+registerFnfConsumers(queue);
+registerForm16BulkConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

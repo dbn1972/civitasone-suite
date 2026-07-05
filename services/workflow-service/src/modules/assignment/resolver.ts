@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { tasks } from "../tasks/schema.js";
+import { resolveFromMatrix, findActiveSubstitute } from "./matrix-repo.js";
 
 const domainSchema = pgSchema("workflow");
 
@@ -50,6 +51,13 @@ export async function activeMembersTx(tx: Writer, tenantId: string, roleRef: str
  *  - hierarchy: the role-holder whose reports_to == assignRef (the role-holder
  *    reporting to a given manager); falls back to round-robin among the
  *    matching set if several report to the same manager.
+ *  - matrix: evaluate responsibility_matrix condition rules against context,
+ *    return first matching user by priority.
+ *  - authority_chain: walk up reports_to N levels (assignRef = number of levels).
+ *    Start from context.creatorId or first role member.
+ *
+ * After resolving, checks substitution_rules: if the resolved user has an active
+ * substitution for today, returns the substitute instead.
  *
  * Runs inside the spawning transaction so the cursor advance commits atomically
  * with the task insert.
@@ -60,24 +68,38 @@ export async function resolveAssignee(
   roleRef: string | null,
   strategy: string | null | undefined,
   assignRef: string | null | undefined,
+  context?: Record<string, unknown>,
 ): Promise<string | null> {
   if (!roleRef || !strategy || strategy === "none") return null;
-  const members = await activeMembersTx(tx, tenantId, roleRef);
-  if (members.length === 0) return null;
 
-  if (strategy === "hierarchy") {
-    const reporting = assignRef ? members.filter((m) => m.reportsTo === assignRef) : members;
-    const pool = reporting.length > 0 ? reporting : members;
-    // deterministic pick within the matching set via the round-robin cursor.
-    return nextRoundRobin(tx, tenantId, roleRef, pool);
+  let assignee: string | null = null;
+
+  if (strategy === "matrix") {
+    assignee = await resolveFromMatrix(tx, tenantId, roleRef, context ?? {});
+  } else if (strategy === "authority_chain") {
+    assignee = await resolveAuthorityChain(tx, tenantId, roleRef, assignRef, context);
+  } else {
+    const members = await activeMembersTx(tx, tenantId, roleRef);
+    if (members.length === 0) return null;
+
+    if (strategy === "hierarchy") {
+      const reporting = assignRef ? members.filter((m) => m.reportsTo === assignRef) : members;
+      const pool = reporting.length > 0 ? reporting : members;
+      assignee = await nextRoundRobin(tx, tenantId, roleRef, pool);
+    } else if (strategy === "least_loaded") {
+      assignee = await leastLoaded(tx, tenantId, roleRef, members);
+    } else {
+      // default: round_robin
+      assignee = await nextRoundRobin(tx, tenantId, roleRef, members);
+    }
   }
 
-  if (strategy === "least_loaded") {
-    return leastLoaded(tx, tenantId, roleRef, members);
-  }
+  if (!assignee) return null;
 
-  // default: round_robin
-  return nextRoundRobin(tx, tenantId, roleRef, members);
+  // Substitution check: if the resolved user has an active substitute, use them instead.
+  const today = new Date().toISOString().slice(0, 10);
+  const substitute = await findActiveSubstitute(tx, tenantId, assignee, today);
+  return substitute ?? assignee;
 }
 
 async function nextRoundRobin(tx: Writer, tenantId: string, roleRef: string, pool: MemberRow[]): Promise<string | null> {
@@ -106,4 +128,36 @@ async function leastLoaded(tx: Writer, tenantId: string, roleRef: string, member
     if (count < bestCount) { bestCount = count; best = m.userId; }
   }
   return best;
+}
+
+/**
+ * Authority chain strategy: walk up reports_to N levels from a starting user.
+ * assignRef = the number of levels to climb (e.g., "2" = grandparent manager).
+ * Start from context.creatorId if available, otherwise the first role member.
+ */
+async function resolveAuthorityChain(
+  tx: Writer,
+  tenantId: string,
+  roleRef: string,
+  assignRef: string | null | undefined,
+  context?: Record<string, unknown>,
+): Promise<string | null> {
+  const levels = Math.max(1, parseInt(assignRef ?? "1", 10) || 1);
+  const members = await activeMembersTx(tx, tenantId, roleRef);
+  if (members.length === 0) return null;
+
+  // Determine starting user: prefer context.creatorId, then first member
+  const startUserId = (context?.creatorId as string) ?? members[0]?.userId;
+  if (!startUserId) return null;
+
+  // Walk up the reports_to chain N levels
+  let currentId: string | null = startUserId;
+  for (let i = 0; i < levels; i++) {
+    const member = members.find((m) => m.userId === currentId);
+    if (!member?.reportsTo) break;
+    currentId = member.reportsTo;
+  }
+
+  // Return the resolved manager (if we moved up), otherwise null
+  return currentId !== startUserId ? currentId : null;
 }

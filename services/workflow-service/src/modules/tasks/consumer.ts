@@ -1,5 +1,7 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
+import { sql, eq, and } from "drizzle-orm";
+import { pino } from "pino";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -8,14 +10,21 @@ import { computeDueAt } from "../../shared/sla.js";
 import { normalizeContext } from "../../shared/condition.js";
 import { COMMANDS, EVENTS, DISPATCH, TASK_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { tasks as tasksTable } from "./schema.js";
 import * as instanceRepo from "../instances/repo.js";
 import * as defRepo from "../definitions/repo.js";
 import * as historyRepo from "../history/repo.js";
 import { resolveAssignee } from "../assignment/resolver.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
 import { SYSTEM_ACTOR_ID } from "./sweeper.js";
+import { insertMessageSubscription, insertSignalSubscription } from "../messages/repo.js";
+import { evaluateDecisionTable } from "../decisions/domain.js";
+import * as decisionRepo from "../decisions/repo.js";
+import { appendCompletedNode } from "../compensation/executor.js";
 import type { TaskView } from "./schema.js";
 import type { InstanceRow } from "../instances/schema.js";
+
+const log = pino({ name: "workflow-tasks-consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -23,6 +32,9 @@ const AUDIT_TOPIC = "audit.event.record";
 // A spawn that would push the child past this is rejected (fail the parent, no
 // spawn) so a recursive/mutually-recursive call graph cannot fork-bomb.
 const MAX_CALL_DEPTH = Math.max(1, Number(process.env.WORKFLOW_MAX_CALL_DEPTH ?? 10));
+
+// Multi-instance fan-out cap: reject the instance if a collection exceeds this.
+const MAX_MI_TASKS = Math.max(1, Number(process.env.WORKFLOW_MAX_MI_TASKS ?? 100));
 
 // The transaction handle passed by drizzle's db.transaction() — needs
 // select/insert/update + execute (for the assignment resolver's atomic cursor).
@@ -110,6 +122,12 @@ export function registerTasksConsumers(queue: Queue): void {
         detail: sodOverride ? { sodOverride: true, overriddenBy: "super_admin" } : {},
       });
 
+      // 11.3 — Track completed nodes for compensation handlers.
+      const completedNodeKey = p.nodeKey ?? instance?.currentNode ?? null;
+      if (completedNodeKey && instance && decision === "approve") {
+        await appendCompletedNode(tx as Parameters<typeof appendCompletedNode>[0], instance.id, completedNodeKey);
+      }
+
       if (decision === "reject" && instance) {
         await completeInstance(tx, msg, instance, "reject");
         if (instance.refType === "estab_file" && instance.refId) {
@@ -191,6 +209,13 @@ async function handleAdvance(
   p: CompletePayload,
 ): Promise<void> {
   const fromNode = p.nodeKey ?? instance.currentNode!;
+
+  // 12 — Multi-instance completion: if the completed task is part of an MI group,
+  // delegate to the MI completion handler (which manages sequential spawn / completion
+  // condition evaluation / cancellation).
+  const miHandled = await handleMiCompletion(tx, msg, instance, p);
+  if (miHandled) return;
+
   const srcNode = await defRepo.findNodeByKeyTx(tx, instance.definitionId!, fromNode);
   const isParallel = srcNode?.nodeType === "split" || srcNode?.nodeType === "parallel";
   await advanceFrom(tx, msg, instance, fromNode, isParallel ? "branch" : "advance");
@@ -305,6 +330,160 @@ async function enterNode(
   // is_call=true + child_instance_id) until the child reaches a terminal state.
   if (node.nodeType === "call") {
     await spawnCallActivity(tx, msg, instance, fromNode, node);
+    return;
+  }
+
+  // 3.2 — message_catch: create a subscription + wait task, pause until message arrives.
+  if (node.nodeType === "message_catch") {
+    await instanceRepo.updateCurrentNode(tx, instance.id, nodeKey, msg.actorId);
+    const waitTaskId = randomUUID();
+    await repo.insert(tx, {
+      id: waitTaskId,
+      tenantId: instance.tenantId,
+      instanceId: instance.id,
+      name: `Message Wait: ${node.name}`,
+      status: "pending",
+      roleRef: null,
+      nodeKey,
+      refType: instance.refType,
+      refId: instance.refId,
+      isCall: true, // non-human wait task
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+      version: 1,
+    });
+    // Resolve correlation key from instance context via dot-path
+    const context = normalizeContext(instance.context);
+    const correlationKey = node.correlationKeyExpr
+      ? String(resolveDotPath(context, node.correlationKeyExpr) ?? "")
+      : "";
+    // Compute timeout if the node declares timerMinutes
+    const timeoutAt = node.timerMinutes ? computeDueAt(node.timerMinutes) : null;
+    await insertMessageSubscription(tx as Parameters<typeof insertMessageSubscription>[0], {
+      tenantId: instance.tenantId,
+      instanceId: instance.id,
+      taskId: waitTaskId,
+      messageName: node.messageName ?? "",
+      correlationKey,
+      nodeKey,
+      ...(timeoutAt ? { timeoutAt } : {}),
+    });
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: waitTaskId,
+      fromNode, toNode: nodeKey, action: "message_wait", decision: null, actorId: msg.actorId,
+      detail: { messageName: node.messageName, correlationKey },
+    });
+    return; // pause — do not advance
+  }
+
+  // 3.3 — message_throw: publish a message to an external topic + auto-advance.
+  if (node.nodeType === "message_throw") {
+    await instanceRepo.updateCurrentNode(tx, instance.id, nodeKey, msg.actorId);
+    const context = normalizeContext(instance.context);
+    const payload = node.messagePayloadExpr
+      ? (resolveDotPath(context, node.messagePayloadExpr) as Record<string, unknown> ?? context)
+      : context;
+    if (node.messageTopic) {
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: node.messageTopic,
+        eventType: node.messageTopic,
+        tenantId: instance.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: typeof payload === "object" && payload !== null ? payload as Record<string, unknown> : { value: payload },
+      });
+    }
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: nodeKey, action: "message_throw", decision: null, actorId: msg.actorId,
+      detail: { messageTopic: node.messageTopic, messageName: node.messageName },
+    });
+    await advanceFrom(tx, msg, instance, nodeKey, "advance");
+    return;
+  }
+
+  // 3.4 — signal_catch: create a signal subscription + wait task, pause until signal arrives.
+  if (node.nodeType === "signal_catch") {
+    await instanceRepo.updateCurrentNode(tx, instance.id, nodeKey, msg.actorId);
+    const waitTaskId = randomUUID();
+    await repo.insert(tx, {
+      id: waitTaskId,
+      tenantId: instance.tenantId,
+      instanceId: instance.id,
+      name: `Signal Wait: ${node.name}`,
+      status: "pending",
+      roleRef: null,
+      nodeKey,
+      refType: instance.refType,
+      refId: instance.refId,
+      isCall: true, // non-human wait task
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+      version: 1,
+    });
+    await insertSignalSubscription(tx as Parameters<typeof insertSignalSubscription>[0], {
+      tenantId: instance.tenantId,
+      instanceId: instance.id,
+      taskId: waitTaskId,
+      signalName: node.signalName ?? "",
+      nodeKey,
+    });
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: waitTaskId,
+      fromNode, toNode: nodeKey, action: "signal_wait", decision: null, actorId: msg.actorId,
+      detail: { signalName: node.signalName },
+    });
+    return; // pause — do not advance
+  }
+
+  // 6.1 — decision: load table, evaluate, merge outputs into context, auto-advance.
+  if (node.nodeType === "decision") {
+    await instanceRepo.updateCurrentNode(tx, instance.id, nodeKey, msg.actorId);
+    const tableCode = node.decisionTableCode;
+    if (!tableCode) {
+      await historyRepo.record(tx, {
+        tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+        fromNode, toNode: nodeKey, action: "decision_error", decision: null, actorId: msg.actorId,
+        detail: { reason: "no_decision_table_code" },
+      });
+      await completeInstance(tx, msg, instance, "reject");
+      return;
+    }
+    const table = await decisionRepo.findByCodeTx(tx as Parameters<typeof decisionRepo.findByCodeTx>[0], instance.tenantId, tableCode);
+    if (!table || table.status !== "active") {
+      await historyRepo.record(tx, {
+        tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+        fromNode, toNode: nodeKey, action: "decision_error", decision: null, actorId: msg.actorId,
+        detail: { reason: "decision_table_not_found_or_inactive", decisionTableCode: tableCode },
+      });
+      await completeInstance(tx, msg, instance, "reject");
+      return;
+    }
+    const context = normalizeContext(instance.context);
+    const evalResult = evaluateDecisionTable(
+      { hitPolicy: table.hitPolicy as "first" | "collect" | "unique", inputs: table.inputs as never[], outputs: table.outputs as never[], rules: table.rules as never[] },
+      context,
+    );
+    // Merge outputs into instance context
+    if (evalResult.matched && Object.keys(evalResult.outputs).length > 0) {
+      await (tx as Parameters<typeof enqueue>[0]).execute(
+        sql`UPDATE workflow.instances SET context = COALESCE(context, '{}'::jsonb) || ${JSON.stringify(evalResult.outputs)}::jsonb WHERE id = ${instance.id}`,
+      );
+      // Update the in-memory instance context for advanceFrom edge evaluation
+      Object.assign(instance.context as Record<string, unknown>, evalResult.outputs);
+    }
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: nodeKey, action: "decision_evaluate", decision: null, actorId: msg.actorId,
+      detail: { decisionTableCode: tableCode, matched: evalResult.matched, matchedRules: evalResult.matchedRules },
+    });
+    await advanceFrom(tx, msg, instance, nodeKey, "advance");
+    return;
+  }
+
+  // 12 — Multi-instance: if the node declares a collection, spawn N tasks.
+  if (node.multiInstanceCollection) {
+    await handleMultiInstance(tx, msg, instance, fromNode, node, action);
     return;
   }
 
@@ -627,6 +806,229 @@ async function handleReturn(
   const node = await defRepo.findNodeByKeyTx(tx, instance.definitionId!, priorKey);
   if (!node) return;
   await spawnTask(tx, msg, instance, fromNode, node, "return");
+}
+
+// ---------------------------------------------------------------------------
+// Helpers: dot-path resolution for message/decision/MI context lookups
+// ---------------------------------------------------------------------------
+
+function resolveDotPath(ctx: Record<string, unknown>, path: string): unknown {
+  return path.split(".").reduce<unknown>((acc, key) => {
+    if (acc !== null && acc !== undefined && typeof acc === "object" && Object.prototype.hasOwnProperty.call(acc, key)) {
+      return (acc as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, ctx);
+}
+
+// ---------------------------------------------------------------------------
+// 12 — Multi-instance task handler
+// ---------------------------------------------------------------------------
+
+async function handleMultiInstance(
+  tx: Tx,
+  msg: CommandEnvelope,
+  instance: InstanceRow,
+  fromNode: string,
+  node: {
+    nodeKey: string; name: string; roleRef: string | null; slaMinutes: number | null;
+    nodeType?: string; timerMinutes?: number | null;
+    assignStrategy?: string | null; assignRef?: string | null;
+    multiInstanceCollection?: string | null;
+    multiInstanceMode?: string | null;
+    multiInstanceCompletion?: string | null;
+  },
+  action: string,
+): Promise<void> {
+  const context = normalizeContext(instance.context);
+  const collectionPath = node.multiInstanceCollection!;
+  const collection = resolveDotPath(context, collectionPath);
+
+  // Validate: must be a non-empty array
+  if (!Array.isArray(collection) || collection.length === 0) {
+    log.warn({ instanceId: instance.id, nodeKey: node.nodeKey, collectionPath }, "multi-instance: collection not an array or empty — advancing past node");
+    await instanceRepo.updateCurrentNode(tx, instance.id, node.nodeKey, msg.actorId);
+    await advanceFrom(tx, msg, instance, node.nodeKey, "advance");
+    return;
+  }
+
+  // Cap fan-out
+  if (collection.length > MAX_MI_TASKS) {
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: node.nodeKey, action: "mi_error", decision: null, actorId: msg.actorId,
+      detail: { reason: "collection_exceeds_cap", size: collection.length, max: MAX_MI_TASKS },
+    });
+    await completeInstance(tx, msg, instance, "reject");
+    return;
+  }
+
+  await instanceRepo.updateCurrentNode(tx, instance.id, node.nodeKey, msg.actorId);
+  const multiInstanceParentId = randomUUID();
+  const mode = node.multiInstanceMode ?? "parallel";
+
+  if (mode === "sequential") {
+    // Spawn only the first task
+    await spawnMiTask(tx, msg, instance, fromNode, node, action, multiInstanceParentId, 0, collection[0]);
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: node.nodeKey, action: "mi_start", decision: null, actorId: msg.actorId,
+      detail: { mode: "sequential", collectionSize: collection.length, multiInstanceParentId },
+    });
+  } else {
+    // Parallel: spawn all N tasks
+    for (let i = 0; i < collection.length; i++) {
+      await spawnMiTask(tx, msg, instance, fromNode, node, action, multiInstanceParentId, i, collection[i]);
+    }
+    await historyRepo.record(tx, {
+      tenantId: instance.tenantId, instanceId: instance.id, taskId: null,
+      fromNode, toNode: node.nodeKey, action: "mi_start", decision: null, actorId: msg.actorId,
+      detail: { mode: "parallel", collectionSize: collection.length, multiInstanceParentId },
+    });
+  }
+}
+
+async function spawnMiTask(
+  tx: Tx,
+  msg: CommandEnvelope,
+  instance: InstanceRow,
+  fromNode: string,
+  node: {
+    nodeKey: string; name: string; roleRef: string | null; slaMinutes: number | null;
+    assignStrategy?: string | null; assignRef?: string | null;
+  },
+  action: string,
+  multiInstanceParentId: string,
+  index: number,
+  element: unknown,
+): Promise<void> {
+  const newTaskId = randomUUID();
+  const dueAt = computeDueAt(node.slaMinutes);
+  const assigneeId = (node.assignStrategy && node.assignStrategy !== "none")
+    ? await resolveAssignee(tx, instance.tenantId, node.roleRef ?? null, node.assignStrategy, node.assignRef ?? null)
+    : null;
+
+  await repo.insert(tx, {
+    id: newTaskId,
+    tenantId: instance.tenantId,
+    instanceId: instance.id,
+    name: `${node.name} [${index}]`,
+    status: "pending",
+    roleRef: node.roleRef,
+    nodeKey: node.nodeKey,
+    refType: instance.refType,
+    refId: instance.refId,
+    dueAt,
+    multiInstanceIndex: index,
+    multiInstanceParentId,
+    ...(assigneeId ? { assigneeId } : {}),
+    createdBy: msg.actorId,
+    updatedBy: msg.actorId,
+    version: 1,
+  });
+  // Inject the MI element into instance context for this task. We store it in
+  // the instance context as _miElement (overwritten per task in sequential mode;
+  // in parallel each task reads at spawn time through the history detail).
+  await (tx as Parameters<typeof enqueue>[0]).execute(
+    sql`UPDATE workflow.instances SET context = COALESCE(context, '{}'::jsonb) || ${JSON.stringify({ _miElement: element, _miIndex: index })}::jsonb WHERE id = ${instance.id}`,
+  );
+  await emit(tx, msg, EVENTS.taskAssigned, {
+    taskId: newTaskId,
+    instanceId: instance.id,
+    name: `${node.name} [${index}]`,
+    roleRef: node.roleRef,
+    refType: instance.refType,
+    refId: instance.refId,
+    multiInstanceIndex: index,
+    multiInstanceParentId,
+  }, "assign_task", newTaskId, {
+    recipient: node.roleRef ?? instance.id,
+    variables: {
+      taskId: newTaskId,
+      instanceId: instance.id,
+      summary: `Task assigned: ${node.name} [${index}]`,
+      link: `/workflow/tasks/${newTaskId}`,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 12 — Multi-instance completion handling
+// ---------------------------------------------------------------------------
+
+async function handleMiCompletion(
+  tx: Tx,
+  msg: CommandEnvelope,
+  instance: InstanceRow,
+  completedTask: CompletePayload,
+): Promise<boolean> {
+  // Check if this task is part of a multi-instance group
+  const taskRow = await repo.findByIdTx(tx, completedTask.id, completedTask.tenantId);
+  if (!taskRow?.multiInstanceParentId) return false;
+
+  const miParentId = taskRow.multiInstanceParentId;
+  const nodeKey = taskRow.nodeKey ?? instance.currentNode ?? "";
+  const node = await defRepo.findNodeByKeyTx(tx, instance.definitionId!, nodeKey);
+  if (!node) return false;
+
+  const completionCondition = node.multiInstanceCompletion ?? "all";
+  const mode = node.multiInstanceMode ?? "parallel";
+
+  // Count open + completed MI tasks with same parent.
+  const allSiblings = await (tx as typeof db).select().from(tasksTable)
+    .where(and(
+      eq(tasksTable.instanceId, instance.id),
+      eq(tasksTable.multiInstanceParentId, miParentId),
+    ))
+    .limit(MAX_MI_TASKS + 10);
+
+  const openCount = allSiblings.filter((t) => t.status === "pending").length;
+  const completedCount = allSiblings.filter((t) => t.status === "completed").length;
+
+  // Sequential mode: spawn next task if there are more elements
+  if (mode === "sequential" && openCount === 0) {
+    const context = normalizeContext(instance.context);
+    const collectionPath = node.multiInstanceCollection ?? "";
+    const collection = resolveDotPath(context, collectionPath);
+    if (Array.isArray(collection) && completedCount < collection.length) {
+      // Spawn next sequential task
+      const nextIndex = completedCount;
+      await spawnMiTask(tx, msg, instance, nodeKey, node, "mi_sequential", miParentId, nextIndex, collection[nextIndex]);
+      return true; // handled — don't advance yet
+    }
+  }
+
+  // Evaluate completion condition
+  let shouldAdvance = false;
+  if (completionCondition === "all") {
+    shouldAdvance = openCount === 0;
+  } else if (completionCondition === "first") {
+    shouldAdvance = true; // any one completes → advance
+    // Cancel all sibling MI tasks
+    if (openCount > 0) {
+      for (const t of allSiblings) {
+        if (t.status === "pending" && t.id !== completedTask.id) {
+          await repo.markCompleted(tx, t.id, t.tenantId, SYSTEM_ACTOR_ID, "cancelled", true);
+        }
+      }
+    }
+  } else if (completionCondition.startsWith("n_of_m:")) {
+    const nRequired = parseInt(completionCondition.split(":")[1] ?? "1", 10);
+    shouldAdvance = completedCount >= nRequired;
+    // Cancel remaining if threshold met
+    if (shouldAdvance && openCount > 0) {
+      for (const t of allSiblings) {
+        if (t.status === "pending" && t.id !== completedTask.id) {
+          await repo.markCompleted(tx, t.id, t.tenantId, SYSTEM_ACTOR_ID, "cancelled", true);
+        }
+      }
+    }
+  }
+
+  if (shouldAdvance) {
+    await advanceFrom(tx, msg, instance, nodeKey, "advance");
+  }
+  return true; // This was an MI task — handled regardless of advance
 }
 
 async function dispatchDomainApprove(

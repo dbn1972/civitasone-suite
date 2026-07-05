@@ -14,6 +14,12 @@ import { delegationRoutes } from "./modules/delegations/routes.js";
 import { analyticsRoutes } from "./modules/analytics/routes.js";
 import { adminRoutes } from "./modules/admin/routes.js";
 import { bpmnRoutes } from "./modules/bpmn/routes.js";
+import { assignmentRoutes } from "./modules/assignment/routes.js";
+import { messageRoutes } from "./modules/messages/routes.js";
+import { forwardingRoutes } from "./modules/forwarding/routes.js";
+import { decisionRoutes } from "./modules/decisions/routes.js";
+import { simulationRoutes } from "./modules/simulation/routes.js";
+import { externalTaskRoutes } from "./modules/external-tasks/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -30,6 +36,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(analyticsRoutes);
   await app.register(adminRoutes);
   await app.register(bpmnRoutes);
+  await app.register(assignmentRoutes);
+  await app.register(messageRoutes);
+  await app.register(forwardingRoutes);
+  await app.register(decisionRoutes);
+  await app.register(simulationRoutes);
+  await app.register(externalTaskRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

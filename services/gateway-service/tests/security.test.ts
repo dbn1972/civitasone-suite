@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
+
+// HS256 test token
+const SECRET = "test_secret_for_civitasone_32chr";
+const VALID_TOKEN = signToken({ sub: "actor-1", tid: "tenant-1", roles: ["admin"] }, SECRET, 3600);
 
 // Stub upstream fetch so we can verify what headers reach "upstream" services.
 let lastUpstreamHeaders: Record<string, string> = {};
@@ -56,7 +61,7 @@ describe("FIX-00: x-internal auth bypass", () => {
       method: "GET",
       url: "/api/v1/finance/bills",
       headers: {
-        authorization: "Bearer valid-token",
+        authorization: `Bearer ${VALID_TOKEN}`,
         "x-internal": "1",
         "x-internal-secret": "leaked",
         "x-internal-caller": "attacker",
@@ -75,7 +80,7 @@ describe("FIX-00: x-internal auth bypass", () => {
       method: "GET",
       url: "/api/v1/finance/bills",
       headers: {
-        authorization: "Bearer valid-token",
+        authorization: `Bearer ${VALID_TOKEN}`,
         "x-correlation-id": "test-corr-123",
         "x-tenant-id": "00000000-0000-0000-0000-000000000001",
       },

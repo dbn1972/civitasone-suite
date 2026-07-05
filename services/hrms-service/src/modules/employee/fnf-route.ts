@@ -6,7 +6,7 @@
  * - notice_buyout = (basic/30) * (notice_days - served_days)
  * - leave_encashment = (basic/30) * leave_balance_days
  * - gratuity = (basic * 15/26) * years_of_service (if >= 5 years)
- * Returns the F&F breakdown.
+ * Returns the F&F breakdown with optional tax breakdown from payroll-service.
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
@@ -15,6 +15,7 @@ import { db } from "../../shared/db.js";
 import { eq, and } from "drizzle-orm";
 import { hrmsEmployees } from "./schema.js";
 import { hrmsLeaveAllocs } from "../leave/schema.js";
+import { fetchFnfTaxBreakdown, PayrollUnavailableError } from "../../shared/payroll-client.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer", "payroll_admin"];
 
@@ -25,6 +26,22 @@ const fnfBody = z.object({
   noticePeriodDays: z.number().int().min(0).default(90),
   noticeDaysServed: z.number().int().min(0).default(0),
   lastWorkingDate: z.string().optional(),
+  // Optional fields for tax computation (if provided, enables tax breakdown)
+  separationType: z.enum(["retirement", "superannuation", "resignation", "retrenchment", "vrs", "death"]).optional(),
+  employeeCategory: z.enum(["govt", "non_govt_covered", "non_govt_uncovered"]).optional(),
+  avgSalaryLast10MonthsMinor: z.string().optional(), // bigint string
+  priorLeaveEncashExemptionMinor: z.string().default("0"),
+  remainingMonthsToRetirement: z.number().int().min(0).default(0),
+  taxRegime: z.enum(["old", "new"]).default("new"),
+  salaryYtdMinor: z.string().default("0"),
+  tdsYtdMinor: z.string().default("0"),
+  deductions80cMinor: z.string().default("0"),
+  deductions80dMinor: z.string().default("0"),
+  otherDeductionsMinor: z.string().default("0"),
+  fyStartYear: z.number().int().optional(),
+  retrenchmentCompMinor: z.string().default("0"),
+  vrsCompMinor: z.string().default("0"),
+  arrearsMinor: z.string().default("0"),
 });
 
 export async function fnfRoutes(app: FastifyInstance): Promise<void> {
@@ -74,7 +91,105 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     // Total F&F
     const totalMinor = noticeBuyoutMinor + leaveEncashmentMinor + gratuityMinor;
 
-    return reply.send({
+    // Attempt tax breakdown from payroll-service (graceful degradation)
+    let taxBreakdown: Record<string, unknown> | undefined;
+    let warning: string | undefined;
+
+    // Derive FY start year from separation date (FY runs Apr–Mar in India)
+    const sepMonth = separationDate.getMonth(); // 0-indexed
+    const derivedFyStartYear = body.fyStartYear ?? (sepMonth >= 3 ? separationDate.getFullYear() : separationDate.getFullYear() - 1);
+
+    try {
+      const taxResult = await fetchFnfTaxBreakdown(ctx.tenantId, {
+        employeeId: id,
+        separationDate: body.separationDate,
+        separationType: body.separationType ?? "resignation",
+        employeeCategory: body.employeeCategory ?? "non_govt_covered",
+        noticeBuyoutMinor: String(noticeBuyoutMinor),
+        leaveEncashmentGrossMinor: String(leaveEncashmentMinor),
+        gratuityGrossMinor: String(gratuityMinor),
+        retrenchmentCompMinor: body.retrenchmentCompMinor,
+        vrsCompMinor: body.vrsCompMinor,
+        arrearsMinor: body.arrearsMinor,
+        lastDrawnWagesMinor: String(basicMinor), // basic monthly as last drawn wages
+        completedYears,
+        avgSalaryLast10MonthsMinor: body.avgSalaryLast10MonthsMinor ?? String(basicMinor),
+        leaveBalanceDays: totalLeaveBalance,
+        priorLeaveEncashExemptionMinor: body.priorLeaveEncashExemptionMinor,
+        remainingMonthsToRetirement: body.remainingMonthsToRetirement,
+        taxRegime: body.taxRegime,
+        salaryYtdMinor: body.salaryYtdMinor,
+        tdsYtdMinor: body.tdsYtdMinor,
+        deductions80cMinor: body.deductions80cMinor,
+        deductions80dMinor: body.deductions80dMinor,
+        otherDeductionsMinor: body.otherDeductionsMinor,
+        fyStartYear: derivedFyStartYear,
+      });
+
+      taxBreakdown = {
+        components: [
+          {
+            name: "gratuity",
+            grossMinor: String(gratuityMinor),
+            exemptMinor: taxResult.gratuityExemption.exemptMinor,
+            taxableMinor: taxResult.gratuityExemption.taxableMinor,
+            section: "10(10)",
+            reason: completedYears >= 5 ? "eligible" : "ineligible (< 5 years)",
+          },
+          {
+            name: "leaveEncashment",
+            grossMinor: String(leaveEncashmentMinor),
+            exemptMinor: taxResult.leaveEncashExemption.exemptMinor,
+            taxableMinor: taxResult.leaveEncashExemption.taxableMinor,
+            section: "10(10AA)",
+            reason: "leave encashment on separation",
+          },
+          {
+            name: "noticeBuyout",
+            grossMinor: String(noticeBuyoutMinor),
+            exemptMinor: "0",
+            taxableMinor: String(noticeBuyoutMinor),
+            section: null,
+            reason: "fully taxable",
+          },
+          ...(taxResult.retrenchmentExemption
+            ? [{
+                name: "retrenchmentCompensation",
+                grossMinor: body.retrenchmentCompMinor,
+                exemptMinor: taxResult.retrenchmentExemption.exemptMinor,
+                taxableMinor: taxResult.retrenchmentExemption.taxableMinor,
+                section: "10(10B)",
+                reason: "retrenchment compensation",
+              }]
+            : []),
+          ...(taxResult.vrsExemption
+            ? [{
+                name: "vrsCompensation",
+                grossMinor: body.vrsCompMinor,
+                exemptMinor: taxResult.vrsExemption.exemptMinor,
+                taxableMinor: taxResult.vrsExemption.taxableMinor,
+                section: "10(10C)",
+                reason: "voluntary retirement scheme",
+              }]
+            : []),
+        ],
+        totalTaxableOnSeparationMinor: taxResult.totalTaxableOnSeparationMinor,
+        estimatedTdsOnSeparationMinor: taxResult.tdsOnSeparationMinor,
+        totalExemptMinor: taxResult.totalExemptMinor,
+        annualTaxableMinor: taxResult.annualTaxableMinor,
+        netPayableMinor: taxResult.netPayableMinor,
+      };
+    } catch (err) {
+      if (err instanceof PayrollUnavailableError) {
+        req.log.warn({ err }, "payroll-service unavailable for fnf tax breakdown");
+        warning = "Tax computation unavailable";
+      } else {
+        req.log.warn({ err }, "unexpected error fetching fnf tax breakdown");
+        warning = "Tax computation unavailable";
+      }
+    }
+
+    const response: Record<string, unknown> = {
       employeeId: id,
       employeeNo: emp.employeeNo,
       fullName: emp.fullName,
@@ -101,7 +216,16 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
         },
       },
       totalFnfMinor: totalMinor,
-    });
+    };
+
+    if (taxBreakdown) {
+      response.taxBreakdown = taxBreakdown;
+    }
+    if (warning) {
+      response.warning = warning;
+    }
+
+    return reply.send(response);
   });
 
   app.setErrorHandler(errorHandler);

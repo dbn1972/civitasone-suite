@@ -3,6 +3,8 @@ export default defineConfig({
   test: {
     env: {
       NODE_ENV: "test",
+      JWT_ALGORITHM: "HS256",
+      JWT_SECRET: "test_secret_for_civitasone_32chr",
     },
     coverage: {
       provider: "v8",

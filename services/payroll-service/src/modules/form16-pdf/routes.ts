@@ -1,14 +1,28 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { eq, and } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { resolveContext, requireRole, enforceEmployeeOwnership, HttpError } from "../../shared/context.js";
 import { buildForm16, parseFy } from "../tax/form16.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { renderPdf } from "@civitasone/render";
+import { signPdfWithDsc, DscValidationError } from "@civitasone/render";
+import { loadDsc } from "../dsc-config/loader.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { queue } from "../../shared/infra.js";
+import { payrollSlips } from "../payroll/schema.js";
+import { form16BulkJobs } from "./schema.js";
+import { COMMANDS } from "../../topics.js";
+import { getObject, presignedGetUrl } from "@civitasone/storage";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
+const ADMIN_ROLES = ["payroll_admin", "super_admin"];
+const AUDIT_TOPIC = "audit.event.record";
 
 const inr = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2 });
 
-function renderForm16(f: Awaited<ReturnType<typeof buildForm16>>): string {
+function renderForm16Html(f: Awaited<ReturnType<typeof buildForm16>>): string {
   const a = f.form16PartA, b = f.form16PartB;
   const row = (label: string, val: number, bold = false) =>
     `<tr><td>${bold ? `<strong>${label}</strong>` : label}</td><td class="amount">${bold ? `<strong>₹ ${inr(val)}</strong>` : `₹ ${inr(val)}`}</td></tr>`;
@@ -62,25 +76,327 @@ ${b.balanceTaxPayable > 0 ? row("Balance Tax Payable", b.balanceTaxPayable, true
 </body></html>`;
 }
 
+/**
+ * Add "UNSIGNED — NOT VALID FOR FILING" watermark overlay to HTML before PDF rendering.
+ * This is a simple text overlay that appears diagonally across the page.
+ */
+function addUnsignedWatermark(html: string): string {
+  const watermarkStyle = `
+<style>
+.unsigned-watermark {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  font-size: 48px;
+  color: rgba(255, 0, 0, 0.15);
+  font-weight: bold;
+  z-index: 9999;
+  pointer-events: none;
+  white-space: nowrap;
+}
+</style>
+<div class="unsigned-watermark">UNSIGNED — NOT VALID FOR FILING</div>`;
+  // Insert before </body>
+  return html.replace("</body>", `${watermarkStyle}\n</body>`);
+}
+
+/**
+ * Look up the employeeNo from payroll slips for use in the PDF filename.
+ * Falls back to a short prefix of the employeeId if no slip is found.
+ */
+async function resolveEmployeeNo(tenantId: string, employeeId: string): Promise<string> {
+  const [slip] = await db.select({ employeeNo: payrollSlips.employeeNo })
+    .from(payrollSlips)
+    .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId)))
+    .limit(1);
+  return slip?.employeeNo ?? employeeId.slice(0, 8);
+}
+
 export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/tax/form16/:employeeId/pdf", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
-    const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.query);
-    // M5: strict FY (suffix arithmetic) beyond the shape check above → 400.
+
+    const { employeeId: requestedId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
+
+    // Self-service enforcement: employee role can only access own employeeId
+    const employeeId = enforceEmployeeOwnership(ctx, requestedId);
+
+    const q = z.object({
+      fy: z.string().regex(/^\d{4}-\d{2}$/),
+      output: z.enum(["pdf", "html"]).default("pdf"),
+    }).parse(req.query);
+
+    // Strict FY validation (suffix arithmetic)
     try { parseFy(q.fy); }
     catch { throw new HttpError(400, "VALIDATION_FAILED", "fy second component must be (startYear+1) mod 100, e.g. 2025-26"); }
 
     try {
       const f = await buildForm16(ctx.tenantId, employeeId, q.fy);
-      return reply.header("content-type", "text/html; charset=utf-8").send(renderForm16(f));
+      const html = renderForm16Html(f);
+
+      // ─── HTML output (backward compatible) ───────────────────────────
+      if (q.output === "html") {
+        return reply
+          .header("content-type", "text/html; charset=utf-8")
+          .header("x-dsc-signed", "false")
+          .send(html);
+      }
+
+      // ─── PDF output ──────────────────────────────────────────────────
+      const pdfResult = await renderPdf({ html, format: "A4" });
+
+      // If renderer fell back to HTML mode (Playwright unavailable) → 503
+      if (pdfResult.mode === "html-only") {
+        throw new HttpError(503, "PDF_RENDERER_UNAVAILABLE", "PDF rendering engine (Chromium) is unavailable");
+      }
+
+      let pdfBuffer = pdfResult.buffer;
+      let dscSigned = false;
+
+      // Attempt to load and apply DSC
+      const dscMaterial = await loadDsc(ctx.tenantId);
+
+      if (dscMaterial) {
+        // Sign the PDF with tenant/global DSC
+        const signResult = await signPdfWithDsc(pdfBuffer, {
+          p12Buffer: dscMaterial.p12Buffer,
+          passphrase: dscMaterial.passphrase,
+        });
+        pdfBuffer = signResult.buffer;
+        dscSigned = true;
+
+        // Emit audit event: form16_signed
+        await db.transaction(async (tx) => {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC,
+            eventType: AUDIT_TOPIC,
+            tenantId: ctx.tenantId,
+            actorId: ctx.actorId,
+            correlationId: ctx.correlationId,
+            payload: {
+              service: "payroll",
+              action: "form16_signed",
+              resourceType: "form16",
+              resourceId: `${employeeId}_${q.fy}`,
+              outcome: "success",
+              detail: {
+                signerCN: signResult.signerCN,
+                serialNumber: signResult.serialNumber,
+                signedAt: signResult.signedAt,
+                sha256Fingerprint: signResult.sha256Fingerprint,
+              },
+            },
+          });
+        });
+      } else {
+        // No DSC available → re-render with watermark
+        const watermarkedHtml = addUnsignedWatermark(html);
+        const watermarkedResult = await renderPdf({ html: watermarkedHtml, format: "A4" });
+        if (watermarkedResult.mode === "html-only") {
+          throw new HttpError(503, "PDF_RENDERER_UNAVAILABLE", "PDF rendering engine (Chromium) is unavailable");
+        }
+        pdfBuffer = watermarkedResult.buffer;
+
+        // Emit audit event: form16_generated_unsigned
+        await db.transaction(async (tx) => {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC,
+            eventType: AUDIT_TOPIC,
+            tenantId: ctx.tenantId,
+            actorId: ctx.actorId,
+            correlationId: ctx.correlationId,
+            payload: {
+              service: "payroll",
+              action: "form16_generated_unsigned",
+              resourceType: "form16",
+              resourceId: `${employeeId}_${q.fy}`,
+              outcome: "success",
+              detail: { reason: "no_dsc_configured" },
+            },
+          });
+        });
+      }
+
+      // Resolve employeeNo for filename
+      const employeeNo = await resolveEmployeeNo(ctx.tenantId, employeeId);
+
+      return reply
+        .header("content-type", "application/pdf")
+        .header("content-disposition", `attachment; filename="Form16_${employeeNo}_${q.fy}.pdf"`)
+        .header("x-dsc-signed", String(dscSigned))
+        .send(pdfBuffer);
     } catch (err) {
-      // M4: HRMS unreachable → 502 (do not emit a blank-identity Form 16 PDF).
+      // DSC validation failures → 500 with specific code
+      if (err instanceof DscValidationError) {
+        throw new HttpError(500, err.code, err.message);
+      }
+      // HRMS unreachable → 502
       if (err instanceof HrmsUnavailableError) {
         throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot issue Form 16 PDF: HRMS identity source unreachable");
       }
       throw err;
     }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // POST /v1/payroll/tax/form16/bulk-generate — creates job, publishes command, returns 202
+  // ═══════════════════════════════════════════════════════════════════
+
+  app.post("/v1/payroll/tax/form16/bulk-generate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+
+    const body = z.object({
+      fy: z.string().regex(/^\d{4}-\d{2}$/),
+      employeeIds: z.array(z.string().uuid()).nullable().optional().default(null),
+    }).parse(req.body);
+
+    // Validate FY format
+    try { parseFy(body.fy); }
+    catch { throw new HttpError(400, "VALIDATION_FAILED", "fy must be in format YYYY-YY e.g. 2025-26"); }
+
+    // Check for duplicate running job for same tenant + FY
+    const [existingJob] = await db
+      .select({ id: form16BulkJobs.id, status: form16BulkJobs.status })
+      .from(form16BulkJobs)
+      .where(
+        and(
+          eq(form16BulkJobs.tenantId, ctx.tenantId),
+          eq(form16BulkJobs.fy, body.fy),
+        ),
+      )
+      .limit(1);
+
+    if (existingJob && (existingJob.status === "pending" || existingJob.status === "processing")) {
+      throw new HttpError(409, "BULK_JOB_IN_PROGRESS", `A bulk Form 16 generation job is already running for FY ${body.fy}`);
+    }
+
+    // Create the job row
+    const jobId = randomUUID();
+    await db.insert(form16BulkJobs).values({
+      id: jobId,
+      tenantId: ctx.tenantId,
+      fy: body.fy,
+      status: "pending",
+      createdBy: ctx.actorId,
+    });
+
+    // Publish command to queue
+    await queue.publish(COMMANDS.form16BulkGenerate, {
+      type: COMMANDS.form16BulkGenerate,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        jobId,
+        tenantId: ctx.tenantId,
+        fy: body.fy,
+        employeeIds: body.employeeIds,
+      },
+    });
+
+    return reply.status(202).send({
+      data: { jobId, message: "bulk Form 16 generation queued", fy: body.fy },
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // GET /v1/payroll/tax/form16/bulk-status — returns job progress
+  // ═══════════════════════════════════════════════════════════════════
+
+  app.get("/v1/payroll/tax/form16/bulk-status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+
+    const q = z.object({
+      fy: z.string().regex(/^\d{4}-\d{2}$/),
+    }).parse(req.query);
+
+    const [job] = await db
+      .select()
+      .from(form16BulkJobs)
+      .where(
+        and(
+          eq(form16BulkJobs.tenantId, ctx.tenantId),
+          eq(form16BulkJobs.fy, q.fy),
+        ),
+      )
+      .limit(1);
+
+    if (!job) {
+      throw new HttpError(404, "NOT_FOUND", `No bulk Form 16 job found for FY ${q.fy}`);
+    }
+
+    return reply.send({
+      data: {
+        jobId: job.id,
+        fy: job.fy,
+        status: job.status,
+        totalEmployees: job.totalEmployees,
+        generated: job.generated,
+        failed: job.failed,
+        storagePrefix: job.storagePrefix,
+        errorDetails: job.errorDetails,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt,
+      },
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // GET /v1/payroll/tax/form16/bulk-download — returns presigned URL for ZIP from S3 prefix
+  // ═══════════════════════════════════════════════════════════════════
+
+  app.get("/v1/payroll/tax/form16/bulk-download", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+
+    const q = z.object({
+      fy: z.string().regex(/^\d{4}-\d{2}$/),
+    }).parse(req.query);
+
+    // Find the completed job
+    const [job] = await db
+      .select()
+      .from(form16BulkJobs)
+      .where(
+        and(
+          eq(form16BulkJobs.tenantId, ctx.tenantId),
+          eq(form16BulkJobs.fy, q.fy),
+        ),
+      )
+      .limit(1);
+
+    if (!job) {
+      throw new HttpError(404, "NOT_FOUND", `No bulk Form 16 job found for FY ${q.fy}`);
+    }
+
+    if (job.status !== "completed") {
+      throw new HttpError(422, "JOB_NOT_COMPLETED", `Bulk job is still ${job.status}. Wait for completion before downloading.`);
+    }
+
+    if (!job.storagePrefix) {
+      throw new HttpError(404, "NOT_FOUND", "No generated PDFs found for this job");
+    }
+
+    // Return a presigned URL for the storage prefix (clients can fetch individual PDFs)
+    // Since we don't have a ZIP aggregation service, return the prefix + download URL
+    const downloadUrl = await presignedGetUrl({
+      key: `${job.storagePrefix}/archive.zip`,
+      expiresIn: 3600,
+    });
+
+    return reply.send({
+      data: {
+        fy: job.fy,
+        storagePrefix: job.storagePrefix,
+        downloadUrl,
+        generated: job.generated,
+        failed: job.failed,
+      },
+    });
   });
 }

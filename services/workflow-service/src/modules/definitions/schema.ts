@@ -17,6 +17,8 @@ export const definitions = domainSchema.table("definitions", {
   // Gap 7 — a platform/global template definition that can be cloned into a
   // tenant as a new draft.
   isTemplate: boolean("is_template").notNull().default(false),
+  // Visual designer layout metadata
+  layout: jsonb("layout").$type<{ width?: number; height?: number; zoom?: number; gridSize?: number }>(),
 });
 
 export const definitionNodes = domainSchema.table("definition_nodes", {
@@ -45,6 +47,23 @@ export const definitionNodes = domainSchema.table("definition_nodes", {
   assignStrategy: varchar("assign_strategy", { length: 24 }),
   // for 'hierarchy': a reference user whose reporting line we resolve against.
   assignRef: varchar("assign_ref", { length: 128 }),
+  // Visual designer position
+  positionX: integer("position_x"),
+  positionY: integer("position_y"),
+  // Message/Signal events
+  messageName: varchar("message_name", { length: 128 }),
+  correlationKeyExpr: varchar("correlation_key_expr", { length: 256 }),
+  signalName: varchar("signal_name", { length: 128 }),
+  messageTopic: varchar("message_topic", { length: 128 }),
+  messagePayloadExpr: varchar("message_payload_expr", { length: 512 }),
+  // Decision tables
+  decisionTableCode: varchar("decision_table_code", { length: 64 }),
+  // Compensation
+  compensationHandlerKey: varchar("compensation_handler_key", { length: 64 }),
+  // Multi-instance
+  multiInstanceCollection: varchar("multi_instance_collection", { length: 128 }),
+  multiInstanceMode: varchar("multi_instance_mode", { length: 16 }),
+  multiInstanceCompletion: varchar("multi_instance_completion", { length: 32 }),
   sortOrder: integer("sort_order").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -55,6 +74,7 @@ export const definitionEdges = domainSchema.table("definition_edges", {
   fromNode: varchar("from_node", { length: 64 }).notNull(),
   toNode: varchar("to_node", { length: 64 }).notNull(),
   condition: varchar("condition", { length: 512 }),
+  waypoints: jsonb("waypoints").$type<Array<{ x: number; y: number }>>(),
   sortOrder: integer("sort_order").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -40,6 +40,10 @@ tags:
     description: Tickets, SLA, escalation
   - name: Audit
     description: Events, compliance, observations
+  - name: Payroll
+    description: Pay runs, F&F settlements, tax computation
+  - name: Workflow
+    description: Decision tables, workflow instances, tasks
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -484,6 +488,967 @@ paths:
                 $ref: "#/components/schemas/ValidationError"
         "401":
           description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+
+  # ─── HRMS Gap Features: Compensation Planning ───────────────────────────
+
+  /v1/hrms/compensation/plans:
+    post:
+      operationId: createCompensationPlan
+      tags: [HRMS]
+      summary: Create a compensation plan
+      description: |
+        Creates a compensation planning cycle for a financial year with a
+        total budget envelope and guidelines. Used by HR to plan increments,
+        bonuses, and pay revisions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, fy, budgetMinor]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                fy:
+                  type: string
+                  pattern: '^\d{4}-\d{2}$'
+                  description: Financial year (e.g. "2025-26")
+                budgetMinor:
+                  type: integer
+                  minimum: 0
+                  description: Total budget in paise
+                guidelines:
+                  type: object
+                  additionalProperties: true
+                  description: Guidelines key-value map
+      responses:
+        "201":
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      fy:
+                        type: string
+                      budgetMinor:
+                        type: integer
+                      status:
+                        type: string
+                        enum: [draft]
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listCompensationPlans
+      tags: [HRMS]
+      summary: List compensation plans
+      description: |
+        Returns compensation plans for the current tenant, ordered by creation
+        date descending. Limited to 50 results.
+      responses:
+        "200":
+          description: List of compensation plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        fy:
+                          type: string
+                        budget_minor:
+                          type: integer
+                        status:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, hr_officer, manager, or employee
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/compensation/plans/{id}/model:
+    post:
+      operationId: modelCompensationPlan
+      tags: [HRMS]
+      summary: Generate compensation model recommendations
+      description: |
+        Runs a simplified compensation modelling scenario for the specified plan.
+        Returns increment recommendations based on plan budget.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Model recommendations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      planId:
+                        type: string
+                        format: uuid
+                      model:
+                        type: string
+                      recommendations:
+                        type: array
+                        items:
+                          type: object
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+        "404":
+          description: Plan not found
+      security:
+        - bearerAuth: []
+
+  # ─── HRMS Gap Features: Learning Management System ─────────────────────
+
+  /v1/hrms/lms/courses:
+    post:
+      operationId: createLmsCourse
+      tags: [HRMS]
+      summary: Create an LMS course
+      description: |
+        Creates a training course in the Learning Management System. Courses
+        can be marked as mandatory for specific roles (compliance training).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 32
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                description:
+                  type: string
+                  maxLength: 2000
+                durationHours:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                  default: 1
+                skillsGained:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+                mandatoryForRoles:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+      responses:
+        "201":
+          description: Course created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      code:
+                        type: string
+                      name:
+                        type: string
+                      durationHours:
+                        type: integer
+                      skillsGained:
+                        type: array
+                        items:
+                          type: string
+                      mandatoryForRoles:
+                        type: array
+                        items:
+                          type: string
+                      status:
+                        type: string
+                        enum: [active]
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listLmsCourses
+      tags: [HRMS]
+      summary: List active LMS courses
+      description: |
+        Returns all active courses available for enrollment. Limited to 100 results.
+      responses:
+        "200":
+          description: List of courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        code:
+                          type: string
+                        name:
+                          type: string
+                        duration_hours:
+                          type: integer
+                        skills_gained:
+                          type: array
+                          items:
+                            type: string
+                        mandatory_for_roles:
+                          type: array
+                          items:
+                            type: string
+                        status:
+                          type: string
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, hr_officer, manager, or employee
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/lms/courses/{id}/enroll:
+    post:
+      operationId: enrollInCourse
+      tags: [HRMS]
+      summary: Enroll an employee in a course
+      description: |
+        Enrolls an employee into the specified LMS course. Idempotent — enrolling
+        an already-enrolled employee is a no-op.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employeeId]
+              properties:
+                employeeId:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Enrollment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      courseId:
+                        type: string
+                        format: uuid
+                      employeeId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum: [enrolled]
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, hr_officer, manager, or employee
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/lms/enrollments/{id}/complete:
+    post:
+      operationId: completeEnrollment
+      tags: [HRMS]
+      summary: Mark an enrollment as completed
+      description: |
+        Marks a course enrollment as completed, optionally recording a score.
+        Used by HR admins to confirm course completion.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+      responses:
+        "200":
+          description: Enrollment marked as completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum: [completed]
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/lms/my-learning:
+    get:
+      operationId: getMyLearning
+      tags: [HRMS]
+      summary: Get my learning history
+      description: |
+        Returns the authenticated employee's course enrollments including
+        status, completion date, and scores.
+      responses:
+        "200":
+          description: Employee's learning records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        code:
+                          type: string
+                        status:
+                          type: string
+                          enum: [enrolled, in_progress, completed]
+                        enrolled_at:
+                          type: string
+                          format: date-time
+                        completed_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        score:
+                          type: number
+                          nullable: true
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, hr_officer, manager, or employee
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/lms/compliance:
+    get:
+      operationId: getLmsCompliance
+      tags: [HRMS]
+      summary: Get LMS compliance report
+      description: |
+        Returns compliance status for mandatory training courses including
+        completed and total enrolled counts per course.
+      responses:
+        "200":
+          description: Compliance report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        code:
+                          type: string
+                        name:
+                          type: string
+                        mandatory_for_roles:
+                          type: array
+                          items:
+                            type: string
+                        completed_count:
+                          type: integer
+                        total_enrolled:
+                          type: integer
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  # ─── HRMS Gap Features: Skills Matrix ──────────────────────────────────
+
+  /v1/hrms/skills/competencies:
+    post:
+      operationId: createCompetency
+      tags: [HRMS]
+      summary: Create a competency definition
+      description: |
+        Defines a competency/skill in the skills matrix with configurable
+        proficiency levels.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                category:
+                  type: string
+                  maxLength: 64
+                  default: technical
+                proficiencyLevels:
+                  type: array
+                  items:
+                    type: string
+                  default: ["beginner", "intermediate", "advanced", "expert"]
+      responses:
+        "201":
+          description: Competency created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      category:
+                        type: string
+                      proficiencyLevels:
+                        type: array
+                        items:
+                          type: string
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/skills/role-matrix:
+    post:
+      operationId: upsertRoleCompetencyMapping
+      tags: [HRMS]
+      summary: Map a competency to a role
+      description: |
+        Creates or updates the required proficiency level for a competency
+        within a role. Used to build the skills matrix (what skills each role
+        needs at what level).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleRef, competencyId, requiredLevel]
+              properties:
+                roleRef:
+                  type: string
+                  maxLength: 128
+                  description: Role identifier (designation code or role name)
+                competencyId:
+                  type: string
+                  format: uuid
+                requiredLevel:
+                  type: string
+                  maxLength: 32
+                  description: Required proficiency level for this role
+      responses:
+        "201":
+          description: Mapping created/updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      roleRef:
+                        type: string
+                      competencyId:
+                        type: string
+                        format: uuid
+                      requiredLevel:
+                        type: string
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/skills/assessments:
+    post:
+      operationId: createSkillAssessment
+      tags: [HRMS]
+      summary: Assess an employee's skill level
+      description: |
+        Records a skill/competency assessment for an employee. The assessed
+        level is compared against the role-matrix to identify gaps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employeeId, competencyId, assessedLevel]
+              properties:
+                employeeId:
+                  type: string
+                  format: uuid
+                competencyId:
+                  type: string
+                  format: uuid
+                assessedLevel:
+                  type: string
+                  maxLength: 32
+                notes:
+                  type: string
+                  maxLength: 512
+      responses:
+        "201":
+          description: Assessment recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      employeeId:
+                        type: string
+                        format: uuid
+                      competencyId:
+                        type: string
+                        format: uuid
+                      assessedLevel:
+                        type: string
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/skills/gap-analysis:
+    get:
+      operationId: getSkillGapAnalysis
+      tags: [HRMS]
+      summary: Get skill gap analysis for an employee
+      description: |
+        Compares an employee's assessed skill levels against the required
+        levels defined in the role-competency matrix. Returns each competency
+        with required vs actual level.
+      parameters:
+        - name: employeeId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Gap analysis results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        competency:
+                          type: string
+                        required_level:
+                          type: string
+                        actual_level:
+                          type: string
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, hr_officer, manager, or employee
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/skills/team-heatmap:
+    get:
+      operationId: getSkillTeamHeatmap
+      tags: [HRMS]
+      summary: Get team skills heatmap
+      description: |
+        Returns aggregated skill assessment counts grouped by competency and
+        proficiency level. Used to visualize team capabilities as a heatmap.
+      parameters:
+        - name: departmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Heatmap data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        competency:
+                          type: string
+                        assessed_level:
+                          type: string
+                        count:
+                          type: integer
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  # ─── HRMS Gap Features: Succession Planning ────────────────────────────
+
+  /v1/hrms/succession/critical-roles:
+    post:
+      operationId: createSuccessionPlan
+      tags: [HRMS]
+      summary: Mark a role as critical for succession
+      description: |
+        Registers a role as critical and creates a succession plan entry.
+        Critical roles without ready nominees surface in the risk report.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleRef]
+              properties:
+                roleRef:
+                  type: string
+                  maxLength: 128
+                  description: Role identifier (designation code)
+                departmentId:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Succession plan created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      roleRef:
+                        type: string
+                      isCritical:
+                        type: boolean
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/succession/nominees:
+    post:
+      operationId: addSuccessionNominee
+      tags: [HRMS]
+      summary: Add a succession nominee
+      description: |
+        Adds an employee as a potential successor for a critical role.
+        Includes readiness assessment and optional development plan.
+        Upserts on (tenant, plan, employee).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId, employeeId]
+              properties:
+                planId:
+                  type: string
+                  format: uuid
+                employeeId:
+                  type: string
+                  format: uuid
+                readiness:
+                  type: string
+                  enum: [now, 1yr, 2yr, 3yr]
+                  default: 1yr
+                developmentPlan:
+                  type: string
+                  maxLength: 2000
+      responses:
+        "201":
+          description: Nominee added/updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      planId:
+                        type: string
+                        format: uuid
+                      employeeId:
+                        type: string
+                        format: uuid
+                      readiness:
+                        type: string
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/succession/pipeline:
+    get:
+      operationId: getSuccessionPipeline
+      tags: [HRMS]
+      summary: Get succession pipeline overview
+      description: |
+        Returns all critical roles with nominee counts and ready-now counts.
+        Provides a high-level view of succession bench strength.
+      responses:
+        "200":
+          description: Pipeline data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        role_ref:
+                          type: string
+                        department_id:
+                          type: string
+                          format: uuid
+                          nullable: true
+                        nominee_count:
+                          type: integer
+                        ready_now:
+                          type: integer
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/succession/risk:
+    get:
+      operationId: getSuccessionRisk
+      tags: [HRMS]
+      summary: Get succession risk report
+      description: |
+        Returns critical roles that have ZERO ready-now nominees, indicating
+        a succession risk. These roles need immediate attention.
+      responses:
+        "200":
+          description: At-risk roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        role_ref:
+                          type: string
+                        department_id:
+                          type: string
+                          format: uuid
+                          nullable: true
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin, super_admin, or hr_officer
       security:
         - bearerAuth: []
 
@@ -1061,6 +2026,394 @@ paths:
           description: Missing or invalid bearer token
         "403":
           description: Insufficient role — requires super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/admin/platform-config:
+    get:
+      operationId: getPlatformConfig
+      tags: [Admin]
+      summary: Get platform configuration
+      description: |
+        Returns the full platform configuration including controllable settings
+        (cache TTL, rate limits, log level, notifications) and read-only
+        infrastructure parameters (database, Redis, queue, auth, encryption).
+      responses:
+        "200":
+          description: Platform configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  controllable:
+                    type: object
+                    properties:
+                      cacheTtl:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                        description: Per-service cache TTL in seconds
+                      rateLimits:
+                        type: object
+                        properties:
+                          perMinute:
+                            type: integer
+                          burstMax:
+                            type: integer
+                      logLevel:
+                        type: string
+                        enum: [debug, info, warn, error]
+                      debugModeUntil:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      notifications:
+                        type: object
+                        properties:
+                          emailProvider:
+                            type: string
+                          smsProvider:
+                            type: string
+                          emailFrom:
+                            type: string
+                            format: email
+                          smsFrom:
+                            type: string
+                  infrastructure:
+                    type: object
+                    properties:
+                      database:
+                        type: object
+                        properties:
+                          host:
+                            type: string
+                          port:
+                            type: integer
+                          databases:
+                            type: integer
+                          poolMode:
+                            type: string
+                          maxConnections:
+                            type: integer
+                          rlsEnabled:
+                            type: boolean
+                      redis:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                          status:
+                            type: string
+                      queue:
+                        type: object
+                        properties:
+                          driver:
+                            type: string
+                          endpoint:
+                            type: string
+                          region:
+                            type: string
+                      auth:
+                        type: object
+                        properties:
+                          provider:
+                            type: string
+                          algorithm:
+                            type: string
+                          realm:
+                            type: string
+                          audienceConfigured:
+                            type: boolean
+                      pgbouncer:
+                        type: object
+                        properties:
+                          configured:
+                            type: boolean
+                          port:
+                            type: integer
+                          poolMode:
+                            type: string
+                          maxClientConn:
+                            type: integer
+                          defaultPoolSize:
+                            type: integer
+                      encryption:
+                        type: object
+                        properties:
+                          piiAtRest:
+                            type: boolean
+                          mfaAtRest:
+                            type: boolean
+                          algorithm:
+                            type: string
+                      storage:
+                        type: object
+                        properties:
+                          driver:
+                            type: string
+                          bucket:
+                            type: string
+                          endpoint:
+                            type: string
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires platform_admin or super_admin
+      security:
+        - bearerAuth: []
+    patch:
+      operationId: patchPlatformConfig
+      tags: [Admin]
+      summary: Update controllable platform settings
+      description: |
+        Partially updates the controllable platform configuration. Only provided
+        fields are updated; omitted fields remain unchanged. Supports cache TTL
+        overrides, rate limit tuning, log level changes, and notification settings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                cacheTtl:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    minimum: 5
+                    maximum: 3600
+                  description: Per-service cache TTL overrides (seconds)
+                rateLimits:
+                  type: object
+                  properties:
+                    perMinute:
+                      type: integer
+                      minimum: 10
+                    burstMax:
+                      type: integer
+                      minimum: 5
+                logLevel:
+                  type: string
+                  enum: [debug, info, warn, error]
+                debugModeUntil:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: ISO timestamp for auto-reverting debug mode (null = off)
+                notifications:
+                  type: object
+                  properties:
+                    emailProvider:
+                      type: string
+                    smsProvider:
+                      type: string
+                    emailFrom:
+                      type: string
+                      format: email
+                    smsFrom:
+                      type: string
+      responses:
+        "200":
+          description: Updated controllable config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    examples: ["updated"]
+                  controllable:
+                    type: object
+                    description: Full controllable config after patch
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires platform_admin or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/admin/platform-config/debug-mode:
+    post:
+      operationId: enableDebugMode
+      tags: [Admin]
+      summary: Enable time-limited debug mode
+      description: |
+        Enables debug-level logging for a specified duration. Automatically
+        reverts to the previous log level when the duration expires. Useful
+        for live-debugging production issues without a redeployment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                durationMinutes:
+                  type: integer
+                  minimum: 5
+                  maximum: 60
+                  default: 15
+                  description: Duration in minutes before auto-revert
+      responses:
+        "200":
+          description: Debug mode enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    examples: ["debug_enabled"]
+                  until:
+                    type: string
+                    format: date-time
+                    description: ISO timestamp when debug mode expires
+                  durationMinutes:
+                    type: integer
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires platform_admin or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/admin/platform-config/gateway:
+    get:
+      operationId: getGatewayConfig
+      tags: [Admin]
+      summary: Get gateway service configuration
+      description: |
+        Returns the current runtime configuration of the API gateway service
+        including JWT edge verification mode, upstream timeouts, circuit breaker
+        settings, rate limits, and body size limits. Proxied via internal API
+        to the gateway service.
+      responses:
+        "200":
+          description: Gateway configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    description: Current gateway runtime config
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires platform_admin or super_admin
+        "502":
+          description: Gateway service unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+    patch:
+      operationId: patchGatewayConfig
+      tags: [Admin]
+      summary: Update gateway configuration
+      description: |
+        Partially updates the gateway service runtime configuration. Changes
+        take effect immediately without restart. Proxied to the gateway's
+        internal config endpoint. Only provided fields are updated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                jwtEdgeVerify:
+                  type: string
+                  enum: ["true", "audit", "off"]
+                  description: |
+                    JWT verification mode at edge: "true" = reject invalid tokens,
+                    "audit" = log but allow, "off" = skip verification
+                upstreamTimeoutMs:
+                  type: integer
+                  minimum: 1000
+                  maximum: 120000
+                  description: Upstream service timeout in milliseconds
+                cbFailureThreshold:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  description: Circuit breaker failure count before opening
+                cbRecoveryMs:
+                  type: integer
+                  minimum: 1000
+                  maximum: 300000
+                  description: Circuit breaker recovery period in milliseconds
+                rateLimitMax:
+                  type: integer
+                  minimum: 10
+                  maximum: 100000
+                  description: Global rate limit (requests per window)
+                rateLimitTenantMax:
+                  type: integer
+                  minimum: 10
+                  maximum: 10000
+                  description: Per-tenant rate limit (requests per window)
+                authRateLimitMax:
+                  type: integer
+                  minimum: 3
+                  maximum: 1000
+                  description: Auth endpoint rate limit (login/token requests per window)
+                bodyLimitBytes:
+                  type: integer
+                  minimum: 1024
+                  maximum: 52428800
+                  description: Maximum request body size in bytes (1KB–50MB)
+      responses:
+        "200":
+          description: Gateway config updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    examples: ["updated"]
+                  data:
+                    type: object
+                    description: Updated gateway config
+        "400":
+          description: Validation error (invalid values or unknown fields)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires platform_admin or super_admin
+        "502":
+          description: Gateway service unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
       security:
         - bearerAuth: []
 
@@ -1725,6 +3078,1118 @@ paths:
                     $ref: "#/components/schemas/Pagination"
         "401":
           description: Missing or invalid bearer token
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Workflow Service — BPMN Import/Export
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/workflow/definitions/import:
+    post:
+      operationId: importBpmnDefinition
+      tags: [Workflow]
+      summary: Import a BPMN 2.0 XML file as a workflow definition
+      description: |
+        Parses a BPMN 2.0 XML document and creates a new workflow definition
+        in draft status. Extracts process nodes (tasks, gateways, events) and
+        sequence flows, mapping them to the internal definition schema (nodes +
+        edges). The imported definition can then be reviewed, edited, and
+        deployed through the standard definition lifecycle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [xml]
+              properties:
+                xml:
+                  type: string
+                  minLength: 50
+                  maxLength: 1000000
+                  description: BPMN 2.0 XML content
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Optional name override (defaults to process name from XML)
+      responses:
+        "201":
+          description: Definition created from BPMN import
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      code:
+                        type: string
+                      name:
+                        type: string
+                      version:
+                        type: integer
+                      status:
+                        type: string
+                        enum: [draft]
+                      nodeCount:
+                        type: integer
+                      edgeCount:
+                        type: integer
+        "400":
+          description: Invalid BPMN XML (no process elements found or malformed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/definitions/{id}/bpmn:
+    get:
+      operationId: exportBpmnDefinition
+      tags: [Workflow]
+      summary: Export a workflow definition as BPMN 2.0 XML
+      description: |
+        Converts an internal workflow definition (nodes + edges) into a valid
+        BPMN 2.0 XML document. The response is served as application/xml with
+        a Content-Disposition header for download.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Workflow definition ID
+      responses:
+        "200":
+          description: BPMN 2.0 XML document
+          content:
+            application/xml:
+              schema:
+                type: string
+                description: Valid BPMN 2.0 XML
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Attachment filename for download
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_admin, super_admin, or tenant_admin
+        "404":
+          description: Workflow definition not found
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Workflow Service — Decision Tables
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/workflow/decision-tables:
+    post:
+      operationId: createDecisionTable
+      tags: [Workflow]
+      summary: Create a decision table
+      description: |
+        Creates a new decision table in draft status. Decision tables encode
+        business rules as structured input → output mappings with configurable
+        hit policies (first match, collect all, unique). Used by the workflow
+        engine to evaluate conditions at runtime without hardcoded logic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDecisionTableRequest"
+      responses:
+        "201":
+          description: Decision table created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DecisionTable"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listDecisionTables
+      tags: [Workflow]
+      summary: List decision tables
+      description: |
+        Returns a paginated list of decision tables for the current tenant.
+        Includes both draft and active tables.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: Paginated list of decision tables
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DecisionTable"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/decision-tables/{id}:
+    get:
+      operationId: getDecisionTable
+      tags: [Workflow]
+      summary: Get a decision table by ID
+      description: |
+        Returns the full decision table definition including inputs, outputs,
+        rules, and current status (draft or active).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Decision table details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DecisionTable"
+        "400":
+          description: Invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Decision table not found
+      security:
+        - bearerAuth: []
+    put:
+      operationId: updateDecisionTable
+      tags: [Workflow]
+      summary: Update a draft decision table
+      description: |
+        Updates a decision table that is still in draft status. Once deployed
+        (active), the table becomes immutable — create a new version instead.
+        Supports partial updates (only supplied fields are changed).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDecisionTableRequest"
+      responses:
+        "200":
+          description: Decision table updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DecisionTable"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_admin, super_admin, or tenant_admin
+        "404":
+          description: Decision table not found
+        "409":
+          description: Decision table is not in draft status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/decision-tables/{id}/deploy:
+    post:
+      operationId: deployDecisionTable
+      tags: [Workflow]
+      summary: Deploy (activate) a decision table
+      description: |
+        Deploys a decision table, changing its status from draft to active.
+        Once active, the table is available for evaluation by the workflow
+        engine. An already-active table returns 409.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Decision table deployed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DecisionTable"
+                  message:
+                    type: string
+                    examples: ["decision table deployed"]
+        "400":
+          description: Invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_admin, super_admin, or tenant_admin
+        "404":
+          description: Decision table not found
+        "409":
+          description: Decision table already active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/decision-tables/{id}/evaluate:
+    post:
+      operationId: evaluateDecisionTable
+      tags: [Workflow]
+      summary: Evaluate a decision table against a context
+      description: |
+        Test-evaluates a decision table by running the rules engine against the
+        provided context object. Returns the matching output(s) based on the
+        table's hit policy. Useful for testing rules before deploying or for
+        ad-hoc runtime evaluation.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [context]
+              properties:
+                context:
+                  type: object
+                  additionalProperties: true
+                  description: Key-value pairs matching the table's input definitions
+      responses:
+        "200":
+          description: Evaluation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    description: Matched output(s) — single object for "first"/"unique" hit policy, array for "collect"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+        "404":
+          description: Decision table not found
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Workflow Service — Analytics
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/workflow/analytics/summary:
+    get:
+      operationId: getWorkflowAnalyticsSummary
+      tags: [Workflow]
+      summary: Get workflow analytics summary
+      description: |
+        Returns aggregate workflow metrics for the current tenant including
+        instance counts by status, average cycle time, SLA breach rate, and
+        escalation count. Read-only reporting endpoint.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WorkflowAnalyticsSummary"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/analytics/bottlenecks:
+    get:
+      operationId: getWorkflowBottlenecks
+      tags: [Workflow]
+      summary: Get workflow bottleneck report
+      description: |
+        Identifies bottleneck nodes by average dwell time and pending task
+        counts. Groups by workflow node and role to highlight where work
+        is accumulating. Useful for process optimization.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: Bottleneck report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WorkflowBottlenecksReport"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/analytics/cycle-time:
+    get:
+      operationId: getWorkflowCycleTime
+      tags: [Workflow]
+      summary: Get cycle time by definition
+      description: |
+        Returns average, min, and max cycle times for completed workflow
+        instances, grouped by workflow definition. Helps identify which
+        processes are slowest end-to-end.
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of definitions to return (default 50, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Cycle time metrics per definition
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkflowCycleTimeMetric"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/analytics/automation-rate:
+    get:
+      operationId: getWorkflowAutomationRate
+      tags: [Workflow]
+      summary: Get workflow automation rate
+      description: |
+        Returns the ratio of automatically completed tasks (timers, call
+        activities, SoD-overridden) vs. human-completed tasks. Measures how
+        much of the workflow execution is automated.
+      responses:
+        "200":
+          description: Automation rate metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WorkflowAutomationRate"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/analytics/sla-compliance:
+    get:
+      operationId: getWorkflowSlaCompliance
+      tags: [Workflow]
+      summary: Get SLA compliance by node and role
+      description: |
+        Returns SLA compliance metrics for completed tasks grouped by node
+        and role. Shows tracked, within-SLA, and breached counts with a
+        compliance percentage. Ordered by breach count descending.
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of rows to return (default 50, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: SLA compliance metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkflowSlaComplianceMetric"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/analytics/version-comparison:
+    get:
+      operationId: getWorkflowVersionComparison
+      tags: [Workflow]
+      summary: Compare workflow definition versions
+      description: |
+        Compares performance metrics across different versions of a workflow
+        definition. Returns cycle time, completion count, rejection rate, and
+        average tasks per instance for each deployed version. Useful for
+        measuring the impact of process changes.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Workflow definition code to compare versions of
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        "200":
+          description: Version comparison metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkflowVersionComparison"
+        "400":
+          description: Validation error (missing or invalid code parameter)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, or tenant_admin
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Workflow Service — Messages & Signals
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/workflow/messages/deliver:
+    post:
+      operationId: deliverWorkflowMessage
+      tags: [Workflow]
+      summary: Deliver a correlated message to a waiting instance
+      description: |
+        Delivers a named message to a workflow instance that holds an active
+        message subscription matching the (messageName, correlationKey) pair.
+        The matched subscription's waiting task is auto-completed and the
+        instance advances along the message catch node's outgoing edge.
+
+        Returns 404 if no active subscription matches (the instance hasn't
+        reached the message catch event yet, or it was already delivered).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messageName, correlationKey]
+              properties:
+                messageName:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  pattern: "^[a-zA-Z][a-zA-Z0-9._-]*$"
+                  description: The message name the subscription is waiting for
+                  examples: ["payment.confirmed", "vendor.approved"]
+                correlationKey:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                  description: Correlation key to match the specific subscription
+                  examples: ["PO-2026-001", "INV-42"]
+                payload:
+                  type: object
+                  additionalProperties: true
+                  description: Optional data payload delivered to the instance context
+                  default: {}
+      responses:
+        "202":
+          description: Message delivery accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error (invalid messageName pattern, missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, estab_officer, or estab_admin
+        "404":
+          description: No active subscription matches the provided message name and correlation key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/signals/broadcast:
+    post:
+      operationId: broadcastWorkflowSignal
+      tags: [Workflow]
+      summary: Broadcast a signal to all active signal subscribers
+      description: |
+        Broadcasts a named signal to all workflow instances in the tenant that
+        hold an active signal subscription for the given signal name. Unlike
+        messages (1:1), signals fan out to every matching listener.
+
+        Returns the count of matched subscriptions. A count of 0 is valid
+        (no instance is currently waiting for this signal).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signalName]
+              properties:
+                signalName:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  pattern: "^[a-zA-Z][a-zA-Z0-9._-]*$"
+                  description: The signal name to broadcast
+                  examples: ["fiscal_year.closed", "budget.released"]
+                payload:
+                  type: object
+                  additionalProperties: true
+                  description: Optional data payload delivered to each matched instance
+                  default: {}
+      responses:
+        "202":
+          description: Signal broadcast accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matched:
+                    type: integer
+                    description: Number of subscriptions that matched
+                    examples: [3]
+                  status:
+                    type: string
+                    examples: ["accepted"]
+                  correlationId:
+                    type: string
+                    format: uuid
+        "400":
+          description: Validation error (invalid signalName pattern, missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_admin or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/workflow/instances/{instanceId}/subscriptions:
+    get:
+      operationId: listInstanceSubscriptions
+      tags: [Workflow]
+      summary: List message and signal subscriptions for an instance
+      description: |
+        Returns all message and signal subscriptions (both active and matched)
+        for a given workflow instance. Used by the UI to show what an instance
+        is currently waiting for.
+      parameters:
+        - name: instanceId
+          in: path
+          required: true
+          description: Workflow instance UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Subscriptions for the instance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      messages:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/MessageSubscription"
+                      signals:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SignalSubscription"
+        "400":
+          description: Invalid instanceId (not a UUID)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires workflow_user, workflow_admin, super_admin, estab_officer, or estab_admin
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Payroll Service — F&F (Full & Final Settlement)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/payroll/fnf/compute:
+    post:
+      operationId: computeFnfSettlement
+      tags: [Payroll]
+      summary: Compute F&F settlement
+      description: |
+        Publishes a Full & Final settlement computation command for async processing.
+        Computes gratuity, leave encashment, retrenchment/VRS compensation exemptions
+        per Income Tax Act sections 10(10), 10(10AA), 10(10B), 10(10C), and calculates
+        TDS on the separation package using old/new regime slab rates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComputeFnfRequest"
+      responses:
+        "202":
+          description: F&F computation queued for async processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: fnf compute queued
+                      employeeId:
+                        type: string
+                        format: uuid
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires payroll_admin, hr_admin, super_admin, or finance_officer
+      security:
+        - bearerAuth: []
+
+  /v1/payroll/fnf/settlements/{id}:
+    get:
+      operationId: getFnfSettlement
+      tags: [Payroll]
+      summary: Get a single F&F settlement
+      description: |
+        Returns the full computation result for a specific F&F settlement,
+        including all exemption breakdowns and TDS computation detail.
+        Tenant-scoped — only returns settlements belonging to the caller's tenant.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Settlement detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FnfSettlement"
+        "400":
+          description: Invalid UUID parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires payroll_admin, hr_admin, super_admin, or finance_officer
+        "404":
+          description: Settlement not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/payroll/fnf/settlements:
+    get:
+      operationId: listFnfSettlements
+      tags: [Payroll]
+      summary: List F&F settlements
+      description: |
+        Returns a paginated list of F&F settlements for the current tenant.
+        Supports filtering by employeeId.
+      parameters:
+        - name: employeeId
+          in: query
+          description: Filter by employee UUID
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          description: Maximum number of items to return (default 50, max 200)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          description: Number of items to skip for pagination
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of settlements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FnfSettlement"
+                  meta:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires payroll_admin, hr_admin, super_admin, or finance_officer
+      security:
+        - bearerAuth: []
+
+  /v1/payroll/internal/fnf-tax-breakdown:
+    get:
+      operationId: getFnfTaxBreakdown
+      tags: [Payroll]
+      summary: Internal — compute F&F tax breakdown on-the-fly
+      description: |
+        Internal endpoint used by hrms-service to compute a full F&F tax breakdown
+        without persisting. Loads exemption ceilings from DB for the given FY and
+        returns the complete tax computation result. Not intended for end-user UI.
+      parameters:
+        - name: employeeId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: separationDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: separationType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [retirement, superannuation, resignation, retrenchment, vrs, death]
+        - name: employeeCategory
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [govt, non_govt_covered, non_govt_uncovered]
+        - name: taxRegime
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [old, new]
+        - name: lastDrawnWagesMinor
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Bigint as string (paise)
+        - name: completedYears
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: avgSalaryLast10MonthsMinor
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Bigint as string (paise)
+        - name: leaveBalanceDays
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: salaryYtdMinor
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Bigint as string (paise)
+        - name: tdsYtdMinor
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Bigint as string (paise)
+        - name: fyStartYear
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: noticeBuyoutMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: leaveEncashmentGrossMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: gratuityGrossMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: retrenchmentCompMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: vrsCompMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: arrearsMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: priorLeaveEncashExemptionMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: remainingMonthsToRetirement
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: deductions80cMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: deductions80dMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: otherDeductionsMinor
+          in: query
+          schema:
+            type: string
+            default: "0"
+      responses:
+        "200":
+          description: F&F tax breakdown computed on-the-fly
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FnfTaxBreakdown"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires payroll_admin, hr_admin, super_admin, or finance_officer
       security:
         - bearerAuth: []
 
@@ -2975,6 +5440,168 @@ components:
               value:
                 description: New value for the attribute
 
+    # ─── Workflow — Decision Tables ─────────────────────────────────────────────
+
+    DecisionTableInput:
+      type: object
+      required: [key, label, type]
+      properties:
+        key:
+          type: string
+          description: Unique key for the input (used in rule conditions)
+          maxLength: 64
+        label:
+          type: string
+          description: Human-readable label
+          maxLength: 200
+        type:
+          type: string
+          enum: [string, number, boolean]
+
+    DecisionTableOutput:
+      type: object
+      required: [key, label, type]
+      properties:
+        key:
+          type: string
+          description: Unique key for the output
+          maxLength: 64
+        label:
+          type: string
+          description: Human-readable label
+          maxLength: 200
+        type:
+          type: string
+          enum: [string, number, boolean]
+        defaultValue:
+          description: Default value when no rule matches
+
+    DecisionTableRule:
+      type: object
+      required: [inputs, outputs]
+      properties:
+        inputs:
+          type: object
+          additionalProperties:
+            type: string
+          description: Input conditions as key → expression string
+        outputs:
+          type: object
+          additionalProperties: true
+          description: Output values when this rule matches
+        priority:
+          type: integer
+          description: Rule priority (lower = evaluated first within hit policy)
+
+    DecisionTable:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          description: Unique code within the tenant
+          maxLength: 64
+        name:
+          type: string
+          maxLength: 200
+        hitPolicy:
+          type: string
+          enum: [first, collect, unique]
+          description: |
+            first — return the first matching rule's output.
+            collect — return outputs from all matching rules.
+            unique — exactly one rule must match (error if 0 or >1).
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableInput"
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableOutput"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableRule"
+        status:
+          type: string
+          enum: [draft, active]
+        version:
+          type: integer
+        createdBy:
+          type: string
+          format: uuid
+        updatedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateDecisionTableRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          description: Unique code within the tenant
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        hitPolicy:
+          type: string
+          enum: [first, collect, unique]
+          default: first
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableInput"
+          default: []
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableOutput"
+          default: []
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableRule"
+          default: []
+
+    UpdateDecisionTableRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        hitPolicy:
+          type: string
+          enum: [first, collect, unique]
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableInput"
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableOutput"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/DecisionTableRule"
+
     ScimError:
       type: object
       properties:
@@ -2989,3 +5616,480 @@ components:
         status:
           type: string
           description: HTTP status code as string
+
+    # ─── Workflow Analytics ─────────────────────────────────────────────────────
+
+    WorkflowAnalyticsSummary:
+      type: object
+      properties:
+        instancesByStatus:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Count of instances grouped by status (active, completed, cancelled)
+        totalInstances:
+          type: integer
+          description: Total workflow instances for the tenant
+        avgCycleTimeSeconds:
+          type: number
+          nullable: true
+          description: Average time (seconds) from instance creation to completion
+        completedCount:
+          type: integer
+          description: Number of completed instances
+        slaBreachRate:
+          type: number
+          description: Fraction of SLA-tracked tasks that breached (0.0 to 1.0)
+        slaBreachedTasks:
+          type: integer
+          description: Number of tasks completed after their SLA due date
+        slaTrackedTasks:
+          type: integer
+          description: Number of completed tasks that had an SLA due date
+        escalations:
+          type: integer
+          description: Total escalation events across all tasks
+
+    WorkflowBottlenecksReport:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              nodeKey:
+                type: string
+                nullable: true
+              avgDwellSeconds:
+                type: number
+                nullable: true
+                description: Average time a task spent at this node before completion
+              completedTasks:
+                type: integer
+              pendingTasks:
+                type: integer
+        pendingByRole:
+          type: array
+          items:
+            type: object
+            properties:
+              roleRef:
+                type: string
+                nullable: true
+              pendingTasks:
+                type: integer
+
+    WorkflowCycleTimeMetric:
+      type: object
+      properties:
+        definitionCode:
+          type: string
+          nullable: true
+          description: Workflow definition code
+        definitionName:
+          type: string
+          nullable: true
+          description: Workflow definition display name
+        avgCycleTimeSeconds:
+          type: number
+          nullable: true
+          description: Average cycle time in seconds
+        minCycleTimeSeconds:
+          type: number
+          nullable: true
+          description: Minimum cycle time in seconds
+        maxCycleTimeSeconds:
+          type: number
+          nullable: true
+          description: Maximum cycle time in seconds
+        completedCount:
+          type: integer
+          description: Number of completed instances for this definition
+
+    WorkflowAutomationRate:
+      type: object
+      properties:
+        totalCompleted:
+          type: integer
+          description: Total completed tasks
+        humanCompleted:
+          type: integer
+          description: Tasks completed by human actors
+        autoCompleted:
+          type: integer
+          description: Tasks completed automatically (timers, call activities, SoD overrides)
+        automationRatePct:
+          type: number
+          description: Percentage of tasks completed automatically (0.00 to 100.00)
+
+    WorkflowSlaComplianceMetric:
+      type: object
+      properties:
+        nodeKey:
+          type: string
+          nullable: true
+          description: Workflow node key
+        roleName:
+          type: string
+          nullable: true
+          description: Role reference assigned to the tasks
+        totalTracked:
+          type: integer
+          description: Number of completed tasks with an SLA due date
+        withinSla:
+          type: integer
+          description: Tasks completed within SLA
+        breached:
+          type: integer
+          description: Tasks completed after SLA
+        compliancePct:
+          type: number
+          description: Percentage of tasks within SLA (0.00 to 100.00)
+
+    WorkflowVersionComparison:
+      type: object
+      properties:
+        version:
+          type: integer
+          description: Definition version number
+        definitionId:
+          type: string
+          format: uuid
+          description: Definition ID for this version
+        avgCycleTimeSeconds:
+          type: number
+          nullable: true
+          description: Average cycle time in seconds for this version
+        completedCount:
+          type: integer
+          description: Number of completed instances for this version
+        rejectionRate:
+          type: number
+          description: Percentage of instances that were cancelled/rejected (0.00 to 100.00)
+        avgTasksPerInstance:
+          type: number
+          nullable: true
+          description: Average number of tasks spawned per instance
+
+    MessageSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        instanceId:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        messageName:
+          type: string
+          description: The message name this subscription is waiting for
+        correlationKey:
+          type: string
+          description: Correlation key used to match incoming messages
+        nodeKey:
+          type: string
+          description: Workflow node that created this subscription
+        status:
+          type: string
+          enum: [active, matched, timeout]
+          description: Current subscription status
+        timeoutAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this subscription will expire if not matched
+        matchedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the message was delivered (null if still waiting)
+        createdAt:
+          type: string
+          format: date-time
+
+    SignalSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        instanceId:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        signalName:
+          type: string
+          description: The signal name this subscription is listening for
+        nodeKey:
+          type: string
+          description: Workflow node that created this subscription
+        status:
+          type: string
+          enum: [active, matched]
+          description: Current subscription status
+        matchedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the signal was received (null if still waiting)
+        createdAt:
+          type: string
+          format: date-time
+
+    # ─── Payroll F&F ───────────────────────────────────────────────────────────
+
+    ComputeFnfRequest:
+      type: object
+      required:
+        - employeeId
+        - separationDate
+        - separationType
+        - employeeCategory
+        - lastDrawnWagesMinor
+        - completedYears
+        - avgSalaryLast10MonthsMinor
+        - leaveBalanceDays
+        - taxRegime
+        - salaryYtdMinor
+        - tdsYtdMinor
+        - fyStartYear
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+        separationDate:
+          type: string
+          format: date
+          description: "YYYY-MM-DD"
+        separationType:
+          type: string
+          enum: [retirement, superannuation, resignation, retrenchment, vrs, death]
+        employeeCategory:
+          type: string
+          enum: [govt, non_govt_covered, non_govt_uncovered]
+          description: |
+            govt = Central/State government employee (gratuity fully exempt).
+            non_govt_covered = Private sector covered by Payment of Gratuity Act.
+            non_govt_uncovered = Private sector not covered by Gratuity Act.
+        noticeBuyoutMinor:
+          type: string
+          default: "0"
+          description: Notice period buyout amount in paise (fully taxable)
+        leaveEncashmentGrossMinor:
+          type: string
+          default: "0"
+          description: Leave encashment gross amount in paise (exempt under s.10(10AA))
+        gratuityGrossMinor:
+          type: string
+          default: "0"
+          description: Gratuity gross amount in paise (exempt under s.10(10))
+        retrenchmentCompMinor:
+          type: string
+          default: "0"
+          description: Retrenchment compensation in paise (exempt under s.10(10B))
+        vrsCompMinor:
+          type: string
+          default: "0"
+          description: VRS compensation in paise (exempt under s.10(10C))
+        arrearsMinor:
+          type: string
+          default: "0"
+          description: Salary arrears in paise (fully taxable)
+        lastDrawnWagesMinor:
+          type: string
+          description: Last drawn monthly wages (basic + DA) in paise
+        completedYears:
+          type: integer
+          minimum: 0
+          description: Completed years of service
+        avgSalaryLast10MonthsMinor:
+          type: string
+          description: Average monthly salary for last 10 months in paise
+        leaveBalanceDays:
+          type: integer
+          minimum: 0
+          description: Unused leave balance in days
+        priorLeaveEncashExemptionMinor:
+          type: string
+          default: "0"
+          description: Prior leave encashment exemption already claimed (in paise)
+        remainingMonthsToRetirement:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Months remaining until superannuation (for leave encashment ceiling)
+        taxRegime:
+          type: string
+          enum: [old, new]
+          description: Income tax regime (old regime with deductions or new simplified regime)
+        salaryYtdMinor:
+          type: string
+          description: Year-to-date salary income in paise (for total income computation)
+        tdsYtdMinor:
+          type: string
+          description: TDS already deducted year-to-date in paise
+        deductions80cMinor:
+          type: string
+          default: "0"
+          description: Section 80C deductions in paise (old regime only)
+        deductions80dMinor:
+          type: string
+          default: "0"
+          description: Section 80D deductions in paise (old regime only)
+        otherDeductionsMinor:
+          type: string
+          default: "0"
+          description: Other Chapter VI-A deductions in paise (old regime only)
+        fyStartYear:
+          type: integer
+          description: Financial year start year (e.g. 2024 for FY 2024-25)
+
+    FnfSettlement:
+      type: object
+      description: Persisted F&F settlement computation result
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+          nullable: true
+        separationType:
+          type: string
+          enum: [retirement, superannuation, resignation, retrenchment, vrs, death]
+        separationDate:
+          type: string
+          format: date
+        employeeCategory:
+          type: string
+          enum: [govt, non_govt_covered, non_govt_uncovered]
+        noticeBuyoutMinor:
+          type: string
+          description: Paise
+        leaveEncashmentGrossMinor:
+          type: string
+        gratuityGrossMinor:
+          type: string
+        retrenchmentCompMinor:
+          type: string
+        vrsCompMinor:
+          type: string
+        arrearsMinor:
+          type: string
+        gratuityExemptMinor:
+          type: string
+          description: Exempt portion of gratuity (s.10(10))
+        leaveEncashExemptMinor:
+          type: string
+          description: Exempt portion of leave encashment (s.10(10AA))
+        retrenchmentExemptMinor:
+          type: string
+          description: Exempt portion of retrenchment comp (s.10(10B))
+        vrsExemptMinor:
+          type: string
+          description: Exempt portion of VRS comp (s.10(10C))
+        totalTaxableMinor:
+          type: string
+          description: Total taxable amount on separation in paise
+        tdsOnSeparationMinor:
+          type: string
+          description: TDS computed on the separation package in paise
+        netPayableMinor:
+          type: string
+          description: Net amount payable to employee in paise
+        computationDetail:
+          type: object
+          additionalProperties: true
+          description: Full breakdown JSON (slab computation, exemption details)
+        status:
+          type: string
+          enum: [draft, approved, paid]
+        currency:
+          type: string
+          default: INR
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+        updatedBy:
+          type: string
+          format: uuid
+        version:
+          type: integer
+
+    FnfTaxBreakdown:
+      type: object
+      description: On-the-fly F&F tax computation result (not persisted)
+      properties:
+        totalGrossMinor:
+          type: string
+          description: Total gross separation package in paise
+        totalExemptMinor:
+          type: string
+          description: Total exempt amount in paise
+        totalTaxableOnSeparationMinor:
+          type: string
+          description: Taxable portion of separation components in paise
+        annualTaxableMinor:
+          type: string
+          description: Annual taxable income (salary YTD + separation taxable) in paise
+        annualTaxMinor:
+          type: string
+          description: Annual tax computed on total income in paise
+        tdsAlreadyDeductedMinor:
+          type: string
+          description: TDS already deducted year-to-date in paise
+        tdsOnSeparationMinor:
+          type: string
+          description: Incremental TDS to deduct on separation in paise
+        netPayableMinor:
+          type: string
+          description: Net payable (gross - TDS on separation) in paise
+        gratuityExemption:
+          type: object
+          properties:
+            exemptMinor:
+              type: string
+            taxableMinor:
+              type: string
+        leaveEncashExemption:
+          type: object
+          properties:
+            exemptMinor:
+              type: string
+            taxableMinor:
+              type: string
+        retrenchmentExemption:
+          type: object
+          nullable: true
+          properties:
+            exemptMinor:
+              type: string
+            taxableMinor:
+              type: string
+        vrsExemption:
+          type: object
+          nullable: true
+          properties:
+            exemptMinor:
+              type: string
+            taxableMinor:
+              type: string

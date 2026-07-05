@@ -128,6 +128,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(recruitmentAiRoutes);
   const { aiPluginRegistryRoutes } = await import("./modules/ai-ml/plugin-registry.js");
   await app.register(aiPluginRegistryRoutes);
+  const { hrmsGapRoutes } = await import("./modules/gap-features/routes.js");
+  await app.register(hrmsGapRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

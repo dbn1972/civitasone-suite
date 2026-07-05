@@ -1,17 +1,21 @@
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
+import { Readable } from "node:stream";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { quotaCheckPlugin } from "@civitasone/db";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { resolveRoute } from "./registry.js";
 import { checkModuleEnabled } from "./module-guard.js";
 import { checkPolicy } from "./policy-check.js";
 import { createRedisQuotaStore, createInMemoryQuotaStore } from "./quota-store.js";
 import { registerResponseMetrics } from "./response-metrics.js";
 import { registerScreenManifestRoute } from "./screen-manifest.js";
+import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
+import { jwtEdgeVerify } from "./jwt-edge.js";
+import { getConfig, applyConfig, ConfigError, type GatewayRuntimeConfig } from "./runtime-config.js";
 
 // x-internal is intentionally absent: external clients must never inject it.
 // The gateway sets it itself only when it originates an internal service call.
@@ -37,6 +41,15 @@ const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "
  * and the first-run installer remain public.
  */
 const PUBLIC_PREFIXES = ["/api/identity", "/api/v1/install", "/api/v1/careers"];
+
+/** Verify the internal service-to-service secret (timing-safe). */
+function verifyInternalSecret(req: FastifyRequest): boolean {
+  const secret = req.headers["x-internal-secret"] as string | undefined;
+  const expected = process.env.INTERNAL_SERVICE_SECRET;
+  if (!expected || expected.length === 0) return false;
+  if (!secret || secret.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
+}
 
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const pathname = req.url.split("?")[0] ?? "/";
@@ -82,14 +95,64 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
-  const init: RequestInit = { method: req.method, headers };
-  if (hasBody) init.body = JSON.stringify(req.body ?? {});
-  const upstream = await fetch(targetUrl, init);
+  const body = hasBody ? JSON.stringify(req.body ?? {}) : null;
 
+  // ── Per-upstream circuit breaker + timeout ──────────────────────────────────
+  const result = await proxyFetch({
+    serviceName: route.name,
+    url: targetUrl,
+    method: req.method,
+    headers,
+    body,
+  });
+
+  if (!result.ok) {
+    return reply.code(result.status).send({
+      code: result.code,
+      message: result.message,
+      correlationId: req.id,
+    });
+  }
+
+  const upstream = result.response;
+
+  // ── Stream piping — avoid buffering large responses in gateway memory ───────
   reply.code(upstream.status);
   const ct = upstream.headers.get("content-type");
   if (ct) reply.header("content-type", ct);
-  return reply.send(await upstream.text());
+
+  // Forward content-disposition for file downloads (reports, exports)
+  const cd = upstream.headers.get("content-disposition");
+  if (cd) reply.header("content-disposition", cd);
+
+  // Forward content-length so the client knows how much to expect
+  const cl = upstream.headers.get("content-length");
+  if (cl) reply.header("content-length", cl);
+
+  if (!upstream.body) {
+    return reply.send("");
+  }
+
+  // Convert the web ReadableStream to a Node.js Readable and pipe it.
+  // This avoids buffering the entire response body in gateway memory —
+  // critical for large report exports, CSV downloads, etc.
+  const reader = upstream.body.getReader();
+  const nodeStream = new Readable({
+    async read() {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          this.push(null);
+        } else {
+          this.push(Buffer.from(value));
+        }
+      } catch {
+        this.destroy();
+      }
+    },
+  });
+
+  return reply.send(nodeStream);
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -166,6 +229,40 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerResponseMetrics(app);
   registerScreenManifestRoute(app);
+
+  // ── JWT edge verification — validate token signatures before proxying ─────
+  // Runs as a preHandler on all routes. In "off" mode it's a no-op.
+  app.addHook("preHandler", jwtEdgeVerify);
+
+  // ── Circuit breaker state endpoint (ops visibility) ─────────────────────────
+  app.get("/ops/breakers", async (_req, reply) => {
+    return reply.send({ breakers: getBreakerStates() });
+  });
+
+  // ── Internal runtime config endpoints (service-to-service) ─────────────────
+  // Called by admin-service to push config changes. Authenticated via x-internal-secret.
+  app.get("/internal/config", async (req, reply) => {
+    if (!verifyInternalSecret(req)) {
+      return reply.code(403).send({ code: "FORBIDDEN", message: "invalid internal secret" });
+    }
+    return reply.send({ data: getConfig() });
+  });
+
+  app.patch("/internal/config", async (req, reply) => {
+    if (!verifyInternalSecret(req)) {
+      return reply.code(403).send({ code: "FORBIDDEN", message: "invalid internal secret" });
+    }
+    try {
+      const patch = req.body as Partial<GatewayRuntimeConfig>;
+      const updated = applyConfig(patch);
+      return reply.send({ status: "updated", data: updated });
+    } catch (err) {
+      if (err instanceof ConfigError) {
+        return reply.code(400).send({ code: "VALIDATION_FAILED", message: err.message });
+      }
+      throw err;
+    }
+  });
 
   registerOpsRoutes(app, {
     service: "gateway-service",
