@@ -120,7 +120,7 @@ function extractEntities(message: string): Record<string, string> {
   else if (/maternity/i.test(message)) entities.leaveType = "ML";
 
   // Date patterns
-  const dateMatch = message.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  const dateMatch = message.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
   if (dateMatch) entities.date = dateMatch[0];
 
   // Duration (days)

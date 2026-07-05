@@ -27,6 +27,7 @@
     "contract:score": "node scripts/contract/score.mjs",
     "qa:score": "node scripts/qa-readiness-score.mjs",
     "arch:guard": "node scripts/ci/arch-guard.mjs",
+    "test:e2e-live": "playwright test --config tests/e2e-live/playwright.config.ts",
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },
   "devDependencies": {

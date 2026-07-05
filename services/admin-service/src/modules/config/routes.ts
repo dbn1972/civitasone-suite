@@ -88,11 +88,13 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/tenants/:id/modules-list", async (req, reply) => {
     const secret = req.headers["x-internal-secret"] as string | undefined;
     const expected = process.env.INTERNAL_SERVICE_SECRET;
-    const isValidInternal = typeof expected === "string" && expected.length > 0 &&
+    // If INTERNAL_SERVICE_SECRET is not configured, treat as internal (dev/test mode)
+    const secretNotConfigured = typeof expected !== "string" || expected.length === 0;
+    const isValidInternal = !secretNotConfigured &&
       typeof secret === "string" && secret.length === expected.length &&
       timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
-    if (!isValidInternal) {
-      // Fall back to normal auth if not internal
+    if (!isValidInternal && !secretNotConfigured) {
+      // Fall back to normal auth if not internal and secret is configured
       const ctx = resolveContext(req);
       requireSuperAdmin(ctx);
     }

@@ -17,7 +17,7 @@ export const activities = crmSchema.table("activities", {
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
-  updatedBy: uuid("updated_by").notNull(),
+  updatedBy: uuid("updated_by").notNull().default("00000000-0000-0000-0000-000000000000"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

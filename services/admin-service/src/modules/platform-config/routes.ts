@@ -11,13 +11,15 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
 
+const VALID_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
+
 const patchConfigSchema = z.object({
   cacheTtl: z.record(z.string(), z.number().int().min(5).max(3600)).optional(),
   rateLimits: z.object({
     perMinute: z.number().int().min(10).optional(),
     burstMax: z.number().int().min(5).optional(),
   }).optional(),
-  logLevel: z.enum(["debug", "info", "warn", "error"]).optional(),
+  logLevel: z.string().optional(),
   debugModeUntil: z.string().nullable().optional(),
   notifications: z.object({
     emailProvider: z.string().optional(),
@@ -28,7 +30,7 @@ const patchConfigSchema = z.object({
 }).strict();
 
 const debugModeSchema = z.object({
-  durationMinutes: z.number().int().min(5).max(60).optional(),
+  durationMinutes: z.number().int().positive().optional(),
 }).strict();
 
 const gatewayConfigSchema = z.object({
@@ -170,7 +172,10 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
       if (body.rateLimits.burstMax !== undefined) controllable.rateLimits.burstMax = body.rateLimits.burstMax;
     }
     if (body.logLevel) {
-      controllable.logLevel = body.logLevel;
+      if ((VALID_LOG_LEVELS as readonly string[]).includes(body.logLevel)) {
+        controllable.logLevel = body.logLevel;
+      }
+      // invalid logLevel values are silently ignored
     }
     if (body.debugModeUntil !== undefined) {
       // Auto-reverts: set a future ISO timestamp; null = off
@@ -189,7 +194,8 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, PLATFORM_ADMIN);
     const body = debugModeSchema.parse(req.body);
-    const mins = body.durationMinutes ?? 15;
+    const raw = body.durationMinutes ?? 15;
+    const mins = Math.min(60, Math.max(5, raw)); // clamp to [5, 60]
     const until = new Date(Date.now() + mins * 60000).toISOString();
     controllable.debugModeUntil = until;
     controllable.logLevel = "debug";

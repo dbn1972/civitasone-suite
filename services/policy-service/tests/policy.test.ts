@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { requireRole, HttpError } from "../src/shared/context.js";
 import type { RequestContext } from "@civitasone/types";
 import { MemoryQueue } from "@civitasone/queue";
@@ -25,8 +25,7 @@ describe("write-via-queue + read-via-cache (policy)", () => {
       correlationId: "c1", schemaVersion: "1.0", payload: { id, name: "Finance Manager" },
     });
     expect(store.has(id)).toBe(false);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(store.get(id)?.name).toBe("Finance Manager");
+    await vi.waitFor(() => { expect(store.get(id)?.name).toBe("Finance Manager"); }, { timeout: 5000, interval: 25 });
   });
 
   it("cache read-through on miss", async () => {
@@ -46,8 +45,28 @@ describe("write-via-queue + read-via-cache (policy)", () => {
     const opts = { messageId: "cccccccc-3333-4000-8000-000000000003", type: "policy.test.touch", tenantId: "t1", actorId: "u1", correlationId: "c1", schemaVersion: "1.0", payload: {} };
     await q.publish("policy.test.touch", opts);
     await q.publish("policy.test.touch", opts);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(count).toBe(1);
+    await vi.waitFor(() => { expect(count).toBe(1); }, { timeout: 5000, interval: 25 });
+  });
+
+  it("duplicate message (same messageId) is skipped — handler invoked only once", async () => {
+    let invocations = 0;
+    q.subscribe("policy.test.dup", async () => { invocations++; });
+    const msg = {
+      messageId: "dddddddd-4444-4000-8000-000000000004",
+      type: "policy.test.dup",
+      tenantId: "t1",
+      actorId: "u1",
+      correlationId: "c1",
+      schemaVersion: "1.0",
+      payload: { action: "test" },
+    };
+    // Publish same message twice
+    await q.publish("policy.test.dup", msg);
+    await q.publish("policy.test.dup", msg);
+    // Wait for processing to complete
+    await vi.waitFor(() => { expect(invocations).toBeGreaterThanOrEqual(1); }, { timeout: 5000, interval: 25 });
+    // Confirm exactly one invocation (dedup worked)
+    expect(invocations).toBe(1);
   });
 
   it("breakglass request goes through queue and emits audit event", async () => {

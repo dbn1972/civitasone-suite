@@ -1936,6 +1936,116 @@ export async function getProcurementPOById(id: string): Promise<LoaderResult<POD
   });
 }
 
+// Procurement — Bid Evaluation, Reverse Auction, GeM, EMD/BG, Empanelment, Pre-Bid
+
+export type BidEvaluation = {
+  id: string;
+  tender: string;
+  bidder: string;
+  technicalScore: number;
+  financialScore: number;
+  totalScore: number;
+  rank: number;
+  status: string;
+};
+
+export async function getProcurementBidEvaluations(): Promise<LoaderResult<BidEvaluation[]>> {
+  return fetchJson<unknown, BidEvaluation[]>("/api/v1/procurement/bid-evaluations", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.bid_evaluations",
+    mapResponse: (p) => getArrayPayload(p) as BidEvaluation[] | null,
+  });
+}
+
+export type ReverseAuction = {
+  id: string;
+  item: string;
+  startPrice: number;
+  currentLowest: number;
+  bidders: number;
+  timeRemaining: string;
+  status: string;
+};
+
+export async function getProcurementReverseAuctions(): Promise<LoaderResult<ReverseAuction[]>> {
+  return fetchJson<unknown, ReverseAuction[]>("/api/v1/procurement/reverse-auctions", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "procurement.reverse_auctions",
+    mapResponse: (p) => getArrayPayload(p) as ReverseAuction[] | null,
+  });
+}
+
+export type GemItem = {
+  id: string;
+  orderId: string;
+  item: string;
+  supplier: string;
+  amount: number;
+  deliveryDate: string;
+  gemStatus: string;
+};
+
+export async function getProcurementGem(): Promise<LoaderResult<GemItem[]>> {
+  return fetchJson<unknown, GemItem[]>("/api/v1/procurement/gem/items", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "procurement.gem",
+    mapResponse: (p) => getArrayPayload(p) as GemItem[] | null,
+  });
+}
+
+export type EmdBgEntry = {
+  id: string;
+  vendor: string;
+  type: string;
+  amount: number;
+  validity: string;
+  bank: string;
+  status: string;
+};
+
+export async function getProcurementEMD(): Promise<LoaderResult<EmdBgEntry[]>> {
+  return fetchJson<unknown, EmdBgEntry[]>("/api/v1/procurement/emd", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "procurement.emd_bg",
+    mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
+  });
+}
+
+export type EmpanelmentEntry = {
+  id: string;
+  vendorName: string;
+  category: string;
+  validUntil: string;
+  rating: number;
+  status: string;
+};
+
+export async function getProcurementEmpanelment(): Promise<LoaderResult<EmpanelmentEntry[]>> {
+  return fetchJson<unknown, EmpanelmentEntry[]>("/api/v1/procurement/empanelment", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "procurement.empanelment",
+    mapResponse: (p) => getArrayPayload(p) as EmpanelmentEntry[] | null,
+  });
+}
+
+export type PreBidConference = {
+  id: string;
+  tender: string;
+  date: string;
+  queriesRaised: number;
+  responses: number;
+  attendees: number;
+  status: string;
+};
+
+export async function getProcurementPreBid(): Promise<LoaderResult<PreBidConference[]>> {
+  return fetchJson<unknown, PreBidConference[]>("/api/v1/procurement/pre-bid-conferences", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.pre_bid",
+    mapResponse: (p) => getArrayPayload(p) as PreBidConference[] | null,
+  });
+}
+
 // CRM dashboard + detail loaders
 
 const CRM_DASHBOARD_EMPTY: CRMDashboard = {
@@ -2153,6 +2263,78 @@ export async function getRTIApplications(): Promise<LoaderResult<RTISummary[]>> 
     telemetryKey: "citizen.rti",
     responseSchema: RTISummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as RTISummary[] | null,
+  });
+}
+
+// Citizen — Portal, Alerts, Notices, Surveys
+
+export type CitizenPortalMetric = {
+  id: string;
+  metric: string;
+  category: string;
+  currentMonth: string;
+  previousMonth: string;
+  change: string;
+  status: string;
+};
+
+export async function getCitizenPortal(): Promise<LoaderResult<CitizenPortalMetric[]>> {
+  return fetchJson<unknown, CitizenPortalMetric[]>("/api/v1/citizen/portal/metrics", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "citizen.portal",
+    mapResponse: (p) => getArrayPayload(p) as CitizenPortalMetric[] | null,
+  });
+}
+
+export type CitizenAlert = {
+  id: string;
+  title: string;
+  category: string;
+  publishedDate: string;
+  targetAudience: string;
+  status: string;
+};
+
+export async function getCitizenAlerts(): Promise<LoaderResult<CitizenAlert[]>> {
+  return fetchJson<unknown, CitizenAlert[]>("/api/v1/citizen/alerts", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "citizen.alerts",
+    mapResponse: (p) => getArrayPayload(p) as CitizenAlert[] | null,
+  });
+}
+
+export type CitizenNotice = {
+  id: string;
+  noticeNo: string;
+  subject: string;
+  department: string;
+  published: string;
+  expiry: string;
+  type: string;
+};
+
+export async function getCitizenNotices(): Promise<LoaderResult<CitizenNotice[]>> {
+  return fetchJson<unknown, CitizenNotice[]>("/api/v1/citizen/notices", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "citizen.notices",
+    mapResponse: (p) => getArrayPayload(p) as CitizenNotice[] | null,
+  });
+}
+
+export type CitizenSurvey = {
+  id: string;
+  surveyName: string;
+  responses: number;
+  completion: string;
+  period: string;
+  status: string;
+};
+
+export async function getCitizenSurveys(): Promise<LoaderResult<CitizenSurvey[]>> {
+  return fetchJson<unknown, CitizenSurvey[]>("/api/v1/citizen/surveys", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "citizen.surveys",
+    mapResponse: (p) => getArrayPayload(p) as CitizenSurvey[] | null,
   });
 }
 

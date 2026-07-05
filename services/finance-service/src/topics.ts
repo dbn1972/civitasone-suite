@@ -36,6 +36,7 @@ export const EVENTS = {
   billMismatch:     "finance.bill.mismatch",
   paymentMade:      "finance.payment.made",
   glPosted:         "finance.gl.posted",
+  glRejected:       "finance.gl.rejected",
   ucReconciled:     "finance.uc.reconciled",
 } as const;
 
@@ -44,6 +45,7 @@ export const CONSUMED_EVENTS = {
   eftInitiate:              "finance.payment.eft.initiate",
   auditParaPendingRecovery: "audit.para.pending_recovery",
   payrollRunApproved:       "payroll.run.approved",
+  payrollRunFinalized:      "payroll.run.finalized",
   grnAccepted:              "procurement.grn.accepted",
   grantUcSubmitted:         "grant.uc.submitted",
   sanctionFileDecided:      "finance.sanction.file_decided",

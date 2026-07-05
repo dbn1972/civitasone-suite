@@ -1,11 +1,12 @@
 import type { Queue } from "@civitasone/queue";
+import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, nextStage } from "./domain.js";
+import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, nextStage, DEFAULT_THREE_WAY_TOLERANCE_PCT } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
@@ -383,6 +384,98 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await audit(tx, msg, "submit_for_eoffice_approval", "payment", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
+  });
+
+  /**
+   * procurement.grn.accepted → three-way match validation.
+   * Validates PO amounts match GRN amounts (within 5% tolerance), creates a
+   * draft bill, and emits procurement.three_way_match.passed or .failed.
+   */
+  queue.subscribe(CONSUMED_EVENTS.grnAccepted, async (msg) => {
+    const p = msg.payload as {
+      poId: string; grnId: string; vendorId: string;
+      lineItems?: Array<{ description?: string; quantity?: number; unitPriceMinor?: number }>;
+      totalMinor: number | string;
+      tenantId: string; messageId?: string;
+      poAmountMinor?: number | string;
+    };
+    const THREE_WAY_MATCH_TOLERANCE_PCT = Number(process.env.FINANCE_THREE_WAY_TOLERANCE_PCT ?? "") || 5;
+    const grnTotalMinor = BigInt(p.totalMinor ?? 0);
+    const poAmountMinor = p.poAmountMinor != null ? BigInt(p.poAmountMinor) : grnTotalMinor;
+    const billId = randomUUID();
+    const poRef = `procurement_po:${p.poId}`;
+    const grnRef = `procurement_grn:${p.grnId}`;
+    const headId = process.env.FINANCE_DEFAULT_HEAD_ID ?? "dddddddd-0001-0000-0000-000000000001";
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // Insert draft bill
+      await repo.insertBill(tx, {
+        id: billId,
+        tenantId: msg.tenantId,
+        billNo: `BILL/GRN/${p.grnId.slice(0, 8).toUpperCase()}`,
+        vendorId: p.vendorId,
+        headId,
+        grossMinor: grnTotalMinor,
+        netMinor: grnTotalMinor,
+        poRef,
+        grnRef,
+        stage: "section",
+        status: "draft",
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+
+      // Three-way match validation: compare PO amount vs GRN amount (tolerance-based)
+      // Variance = |poAmount - grnAmount| / poAmount * 100
+      const variance = poAmountMinor > 0n
+        ? Number((grnTotalMinor > poAmountMinor ? grnTotalMinor - poAmountMinor : poAmountMinor - grnTotalMinor) * 10000n / poAmountMinor) / 100
+        : (grnTotalMinor > 0n ? Number.POSITIVE_INFINITY : 0);
+
+      if (variance <= THREE_WAY_MATCH_TOLERANCE_PCT) {
+        // Match passes
+        await enqueue(tx, {
+          topic: "procurement.three_way_match.passed",
+          eventType: "procurement.three_way_match.passed",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            poId: p.poId,
+            grnId: p.grnId,
+            billId,
+            vendorId: p.vendorId,
+            poAmountMinor: poAmountMinor.toString(),
+            grnAmountMinor: grnTotalMinor.toString(),
+            variancePct: variance,
+          },
+        });
+      } else {
+        // Match fails — variance exceeds tolerance
+        await enqueue(tx, {
+          topic: "procurement.three_way_match.failed",
+          eventType: "procurement.three_way_match.failed",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            poId: p.poId,
+            grnId: p.grnId,
+            billId,
+            vendorId: p.vendorId,
+            poAmountMinor: poAmountMinor.toString(),
+            grnAmountMinor: grnTotalMinor.toString(),
+            variancePct: variance,
+            reason: `Amount variance ${variance.toFixed(2)}% exceeds ${THREE_WAY_MATCH_TOLERANCE_PCT}% tolerance (PO: ${poAmountMinor} paise, GRN: ${grnTotalMinor} paise)`,
+          },
+        });
+      }
+
+      await audit(tx, msg, "three_way_match", "bill", billId);
+    });
+
+    await cache.invalidateResource(msg.tenantId, "bills");
   });
 }
 

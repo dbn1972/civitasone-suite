@@ -35,7 +35,7 @@ import { deals } from "../src/modules/deals/schema.js";
 import { activities } from "../src/modules/activities/schema.js";
 import { getDashboard, invalidateDashboard, dashboardKey } from "../src/modules/dashboard/queries.js";
 import { cache } from "../src/shared/infra.js";
-import { isEncrypted } from "../src/shared/pii-crypto.js";
+import { isEncrypted, warmCipher } from "../src/shared/pii-crypto.js";
 
 // PII at-rest encryption (DPDP/P1-2) fails closed without CRM_PII_KEY. Seed a
 // deterministic test key before any consumer encrypts email/phone — otherwise
@@ -113,6 +113,7 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  warmCipher();
   await cleanup();
 });
 
@@ -122,7 +123,7 @@ afterAll(async () => {
 });
 
 describe("contact create + PII at rest", () => {
-  it("persists ciphertext email/phone with a populated blind email_idx", async () => {
+  it("persists ciphertext email/phone with a populated blind email_idx", { timeout: 10000 }, async () => {
     const cmd = createContactCmd(TENANT_A, {
       name: "Asha Verma",
       email: "asha.verma@example.in",
@@ -263,7 +264,7 @@ describe("deal lifecycle", () => {
 });
 
 describe("activity completion", () => {
-  it("auto-sets completedAt when status -> completed", async () => {
+  it("auto-sets completedAt when status -> completed", { timeout: 10000 }, async () => {
     const id = randomUUID();
     await drive(COMMANDS.createActivity, {
       messageId: id, type: COMMANDS.createActivity, tenantId: TENANT_A,

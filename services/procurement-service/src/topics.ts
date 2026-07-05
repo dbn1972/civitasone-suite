@@ -56,6 +56,9 @@ export const EVENTS = {
   pbgCollected:  "procurement.pbg.collected",
   pbgForfeited:  "procurement.pbg.forfeited",
   pbgReleased:   "procurement.pbg.released",
+  // Three-way match (PO ↔ GRN ↔ Invoice) outcome events emitted by finance-service consumer
+  threeWayMatchPassed: "procurement.three_way_match.passed",
+  threeWayMatchFailed: "procurement.three_way_match.failed",
 } as const;
 
 /** Finance accounting (GL) post — paise as strings. */

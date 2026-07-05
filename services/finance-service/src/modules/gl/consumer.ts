@@ -3,7 +3,7 @@ import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances } from "./domain.js";
@@ -232,6 +232,84 @@ export function registerGlConsumers(queue: Queue): void {
       await postJournal(tx, msg, p);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+  });
+
+  /**
+   * payroll.run.finalized → GL journal entries for payroll salary posting.
+   * Validates all headCodes exist in the Chart of Accounts, inserts balanced
+   * journal entries, and emits finance.gl.posted or finance.gl.rejected.
+   */
+  queue.subscribe(CONSUMED_EVENTS.payrollRunFinalized, async (msg) => {
+    const p = msg.payload as {
+      runId: string;
+      tenantId: string;
+      fy: string;
+      entries: Array<{ headCode: string; debitMinor: string | number; creditMinor: string | number }>;
+      messageId?: string;
+    };
+
+    const journalId = deterministicId(`payroll_run:${p.runId}`);
+    const today = new Date().toISOString().slice(0, 10);
+
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+
+        // Validate all headCodes exist in COA for this tenant
+        const resolvedLines: JournalLine[] = [];
+        for (const entry of p.entries) {
+          const head = await budgetRepo.findHeadByCodeTx(
+            tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0],
+            msg.tenantId,
+            entry.headCode,
+          );
+          if (!head) {
+            throw new Error(`INVALID_HEAD_CODE: head code '${entry.headCode}' not found in Chart of Accounts for tenant ${msg.tenantId}`);
+          }
+          resolvedLines.push({
+            accountCode: head.id,
+            debitMinor: BigInt(entry.debitMinor).toString(),
+            creditMinor: BigInt(entry.creditMinor).toString(),
+          });
+        }
+
+        // Validate the journal is balanced (sum debits === sum credits)
+        assertJournalBalances(resolvedLines);
+
+        // Post journal via the standard postJournal path
+        await postJournal(tx, msg, {
+          id: journalId,
+          tenantId: msg.tenantId,
+          voucherNo: `PAY/${p.fy}/${p.runId.slice(0, 8).toUpperCase()}`,
+          type: "payroll",
+          postingDate: today,
+          lines: resolvedLines,
+        });
+      });
+
+      await cache.invalidateResource(msg.tenantId, "journals");
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : String(err);
+
+      // If the error is a headCode validation failure or unbalanced journal, emit gl.rejected
+      if (reason.startsWith("INVALID_HEAD_CODE") || reason.includes("JOURNAL_UNBALANCED") || reason.includes("JOURNAL_TOO_FEW_LINES")) {
+        await db.transaction(async (tx) => {
+          await enqueue(tx, {
+            topic: EVENTS.glRejected,
+            eventType: EVENTS.glRejected,
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: { runId: p.runId, journalId, reason },
+          });
+        });
+        await cache.invalidateResource(msg.tenantId, "journals");
+        return;
+      }
+
+      // Re-throw other errors (e.g. period closed, DB failure) for DLQ retry
+      throw err;
+    }
   });
 
   // P0-3: reversal = contra-as-creation. Post a NEW mirror journal (debits and

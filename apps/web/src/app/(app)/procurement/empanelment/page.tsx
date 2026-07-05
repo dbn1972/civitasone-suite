@@ -1,40 +1,32 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { getProcurementEmpanelment } from "../../../_data/loaders";
+import { EmpanelmentTable } from "./EmpanelmentTable";
 
-export default function EmpanelmentPage() {
-  type Row = { vendorName: string; category: string; validUntil: string; rating: number; status: string };
+export default async function EmpanelmentPage() {
+  const { data: vendors, source } = await getProcurementEmpanelment();
 
-  const rows: Row[] = [
-    { vendorName: "Aravali Constructions Pvt Ltd", category: "Civil Works", validUntil: "2026-03-31", rating: 4.2, status: "Active" },
-    { vendorName: "DigiGov Solutions", category: "IT Services", validUntil: "2025-12-31", rating: 4.6, status: "Active" },
-    { vendorName: "Surgipharma India", category: "Medical Supplies", validUntil: "2025-09-30", rating: 3.8, status: "Active" },
-    { vendorName: "TechServe India", category: "IT Hardware", validUntil: "2025-02-15", rating: 3.2, status: "Expiring" },
-    { vendorName: "Bharat Infrastructure Ltd", category: "Civil Works", validUntil: "2024-12-31", rating: 4.0, status: "Expired" },
-    { vendorName: "PowerGrid Solutions", category: "Electrical", validUntil: "2026-06-30", rating: 4.5, status: "Active" },
-    { vendorName: "Godrej Interio", category: "Furniture", validUntil: "2025-08-15", rating: 4.1, status: "Active" },
-    { vendorName: "JK Paper Ltd", category: "Stationery", validUntil: "2025-11-30", rating: 3.9, status: "Under Review" },
-  ];
-
-  const columns = [
-    { key: "vendorName" as const, label: "Vendor Name" },
-    { key: "category" as const, label: "Category" },
-    { key: "validUntil" as const, label: "Valid Until" },
-    { key: "rating" as const, label: "Rating", align: "center" as const },
-    { key: "status" as const, label: "Status", cellType: "status" as const },
-  ];
+  const active = vendors.filter((v) => v.status === "Active").length;
+  const expiring = vendors.filter((v) => v.status === "Expiring").length;
+  const totalRating = vendors.reduce((sum, v) => sum + v.rating, 0);
+  const avgRating = vendors.length > 0 ? (totalRating / vendors.length).toFixed(1) : "—";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Vendor Empanelment" subtitle="Empanelled vendors with category-wise validity and performance ratings." back="/procurement" />
+    <>
+      <PageHeader
+        title="Vendor Empanelment"
+        subtitle="Empanelled vendors with category-wise validity and performance ratings."
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+      />
+
       <StatGrid>
-        <StatCard icon="🏢" iconBg="#eef2ff" label="Total Empanelled" value={8} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={5} />
-        <StatCard icon="⏰" iconBg="#fffaeb" label="Expiring Soon" value={1} />
-        <StatCard icon="⭐" iconBg="#fce7ee" label="Avg. Rating" value="4.0" />
+        <StatCard icon="🏢" iconBg="#eef2ff" label="Total Empanelled" value={vendors.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
+        <StatCard icon="⏰" iconBg="#fffaeb" label="Expiring Soon" value={expiring} />
+        <StatCard icon="⭐" iconBg="#fce7ee" label="Avg. Rating" value={avgRating} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Empanelled Vendors</h3></div>
-        <DataTable columns={columns} rows={rows} sortable filterable />
-      </div>
-    </main>
+
+      <EmpanelmentTable vendors={vendors} source={source} />
+    </>
   );
 }

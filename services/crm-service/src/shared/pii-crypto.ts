@@ -188,6 +188,16 @@ export function safeTimingEqualHex(a: string, b: string): boolean {
 }
 
 /**
+ * Pre-warm the AES-GCM cipher path: initializes cached key material (scrypt
+ * derivation) and JIT-compiles the encrypt code path with a throwaway call.
+ * Safe to call multiple times (idempotent — keyring is cached after first call).
+ */
+export function warmCipher(): void {
+  keyring();
+  encryptPii("warmup");
+}
+
+/**
  * Drizzle custom column type: cleartext in app, AES-256-GCM ciphertext at rest.
  */
 export const encryptedText = customType<{ data: string; driverData: string }>({
