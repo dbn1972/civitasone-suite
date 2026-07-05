@@ -1,43 +1,30 @@
-import { PageHeader, StatGrid, StatCard, DataTable, EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { getFinanceOutcomeBudget } from "@/app/_data/loaders";
+import { OutcomeBudgetTable } from "./OutcomeBudgetTable";
 
-export default function OutcomeBudgetPage() {
-  type Row = { scheme: string; outputIndicator: string; target: string; achieved: string; percentage: string; status: string; [k: string]: unknown };
-  const rows: Row[] = [
-    { scheme: "PM Gram Sadak Yojana", outputIndicator: "Roads constructed (km)", target: "12,500", achieved: "9,800", percentage: "78%", status: "active" },
-    { scheme: "Swachh Bharat Mission", outputIndicator: "Toilets built (units)", target: "50,000", achieved: "48,200", percentage: "96%", status: "approved" },
-    { scheme: "Mid-Day Meal Scheme", outputIndicator: "Children covered (lakhs)", target: "85", achieved: "82", percentage: "96%", status: "active" },
-    { scheme: "MGNREGA", outputIndicator: "Person-days (Cr)", target: "280", achieved: "195", percentage: "70%", status: "active" },
-    { scheme: "PM Awas Yojana", outputIndicator: "Houses completed", target: "25,000", achieved: "18,500", percentage: "74%", status: "active" },
-    { scheme: "National Health Mission", outputIndicator: "Health centres upgraded", target: "450", achieved: "312", percentage: "69%", status: "pending" },
-  ];
+export default async function OutcomeBudgetPage() {
+  const { data: outcomes, source } = await getFinanceOutcomeBudget();
+  const achieved = outcomes.filter((o) => Number(o.achievementPct ?? 0) >= 100).length;
+  const inProgress = outcomes.filter((o) => { const p = Number(o.achievementPct ?? 0); return p > 0 && p < 100; }).length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Outcome Budget" subtitle="Scheme-wise outcome indicators with target vs achievement tracking." back="/finance" />
+      <PageHeader
+        title="Outcome Budget"
+        subtitle="Scheme output indicators and achievement tracking."
+        back="/finance"
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+      />
       <StatGrid>
-        <StatCard icon="🎯" iconBg="#e7edfd" label="Schemes Tracked" value={42} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="On Track" value={28} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Below Target" value={14} />
-        <StatCard icon="📊" iconBg="#eff6ff" label="Avg. Achievement" value="79%" />
+        <StatCard icon="🎯" iconBg="#e7edfd" label="Total Indicators" value={outcomes.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Achieved" value={achieved} />
+        <StatCard icon="📈" iconBg="#fffaeb" label="In Progress" value={inProgress} />
+        <StatCard icon="⏳" iconBg="#eff6ff" label="Not Started" value={outcomes.length - achieved - inProgress} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Outcome Indicators</h3></div>
-        {rows.length === 0 ? (
-          <EmptyState icon="🎯" title="No data" message="No outcome budget data available." />
-        ) : (
-          <DataTable<Row>
-            columns={[
-              { key: "scheme", label: "Scheme" },
-              { key: "outputIndicator", label: "Output Indicator" },
-              { key: "target", label: "Target", align: "right" },
-              { key: "achieved", label: "Achieved", align: "right" },
-              { key: "percentage", label: "Achievement %", align: "right" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={rows}
-          />
-        )}
-      </div>
+      <Card title="Outcome Indicators">
+        <OutcomeBudgetTable outcomes={outcomes} source={source === "error" ? "error" : "api"} />
+      </Card>
     </main>
   );
 }
