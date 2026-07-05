@@ -1,40 +1,24 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { getSAEntitlements } from "@/app/_data/loaders";
+import { EntitlementsTable } from "./EntitlementsTable";
 
-export default function EntitlementsPage() {
-  type Row = { module: string; edition: string; limit: string; override: string; status: string };
-
-  const rows: Row[] = [
-    { module: "Finance & Accounts", edition: "Government", limit: "Unlimited users", override: "—", status: "Active" },
-    { module: "HRMS & Payroll", edition: "Small Office", limit: "50 employees", override: "75 (custom)", status: "Override" },
-    { module: "Procurement", edition: "PSU", limit: "500 POs/month", override: "—", status: "Active" },
-    { module: "Projects & Works", edition: "Government", limit: "100 active projects", override: "—", status: "Active" },
-    { module: "Citizen Services", edition: "Municipal", limit: "50,000 requests/month", override: "—", status: "Active" },
-    { module: "Asset Management", edition: "Small Office", limit: "1,000 assets", override: "2,000 (custom)", status: "Override" },
-    { module: "AI Insights", edition: "Enterprise", limit: "Unlimited", override: "—", status: "Active" },
-    { module: "API Access", edition: "Trial", limit: "10,000 calls/month", override: "—", status: "Rate Limited" },
-  ];
-
-  const columns = [
-    { key: "module" as const, label: "Module" },
-    { key: "edition" as const, label: "Edition" },
-    { key: "limit" as const, label: "Limit" },
-    { key: "override" as const, label: "Override" },
-    { key: "status" as const, label: "Status", cellType: "status" as const },
-  ];
+export default async function EntitlementsPage() {
+  const { data: entitlements, source } = await getSAEntitlements();
+  const active = entitlements.filter((e) => String(e.status).toLowerCase() === "active").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Entitlement Rules" subtitle="Module-level limits and overrides per edition." back="/admin" />
+      <PageHeader title="Entitlements" subtitle="Module and feature entitlements per edition and tenant override." back="/admin" actions={source === "error" ? <DataSourceBadge source={source} /> : null} />
       <StatGrid>
-        <StatCard icon="🔑" iconBg="#eef2ff" label="Total Rules" value={8} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={5} />
-        <StatCard icon="⚡" iconBg="#fffaeb" label="Overrides" value={2} />
-        <StatCard icon="🚫" iconBg="#fce7ee" label="Rate Limited" value={1} />
+        <StatCard icon="🔑" iconBg="#eef2ff" label="Total Entitlements" value={entitlements.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
+        <StatCard icon="⛔" iconBg="#fffaeb" label="Revoked" value={entitlements.length - active} />
+        <StatCard icon="📦" iconBg="#eff6ff" label="Editions" value={new Set(entitlements.map((e) => String(e.edition ?? ""))).size} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Entitlement Matrix</h3></div>
-        <DataTable columns={columns} rows={rows} sortable filterable />
-      </div>
+      <Card title="Entitlement Matrix">
+        <EntitlementsTable entitlements={entitlements} source={source === "error" ? "error" : "api"} />
+      </Card>
     </main>
   );
 }

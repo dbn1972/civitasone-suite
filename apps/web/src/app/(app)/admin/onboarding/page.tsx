@@ -1,39 +1,26 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { getSAOnboarding } from "@/app/_data/loaders";
+import { OnboardingTable } from "./OnboardingTable";
 
-export default function OnboardingPage() {
-  type Row = { org: string; contact: string; requested: string; assigned: string; stage: string };
-
-  const rows: Row[] = [
-    { org: "Bihar State Road Transport Corp", contact: "Sh. Arvind Mishra", requested: "2025-02-08", assigned: "Priya Menon", stage: "Document Collection" },
-    { org: "Odisha Mining Corporation", contact: "Smt. Lata Panda", requested: "2025-02-05", assigned: "Rahul Sharma", stage: "Edition Selection" },
-    { org: "Punjab Water Supply Board", contact: "Sh. Gurpreet Singh", requested: "2025-02-01", assigned: "Priya Menon", stage: "Module Configuration" },
-    { org: "Assam State Transport Corp", contact: "Sh. Bhaskar Deka", requested: "2025-01-28", assigned: "Deepika Patel", stage: "Admin Setup" },
-    { org: "Jharkhand Urban Infra Dev Co", contact: "Smt. Rekha Soren", requested: "2025-01-25", assigned: "Rahul Sharma", stage: "UAT" },
-    { org: "Telangana State Housing Corp", contact: "Sh. Narasimha Reddy", requested: "2025-01-20", assigned: "Vijay Nair", stage: "Go-Live Pending" },
-    { org: "Uttarakhand Jal Sansthan", contact: "Sh. Manoj Rawat", requested: "2025-02-10", assigned: "Unassigned", stage: "New Request" },
-  ];
-
-  const columns = [
-    { key: "org" as const, label: "Organisation" },
-    { key: "contact" as const, label: "Contact" },
-    { key: "requested" as const, label: "Requested" },
-    { key: "assigned" as const, label: "Assigned To" },
-    { key: "stage" as const, label: "Stage", cellType: "status" as const },
-  ];
+export default async function OnboardingPage() {
+  const { data: queue, source } = await getSAOnboarding();
+  const newReqs = queue.filter((q) => String(q.stage).toLowerCase() === "new request").length;
+  const inProgress = queue.filter((q) => !["new request", "go-live pending", "completed"].includes(String(q.stage).toLowerCase())).length;
+  const ready = queue.filter((q) => String(q.stage).toLowerCase() === "go-live pending").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Tenant Onboarding Queue" subtitle="New tenant requests and onboarding pipeline status." back="/admin" />
+      <PageHeader title="Tenant Onboarding Queue" subtitle="New tenant requests and onboarding pipeline status." back="/admin" actions={source === "error" ? <DataSourceBadge source={source} /> : null} />
       <StatGrid>
-        <StatCard icon="📥" iconBg="#eef2ff" label="In Queue" value={7} />
-        <StatCard icon="🆕" iconBg="#ecfdf3" label="New Requests" value={1} />
-        <StatCard icon="🔄" iconBg="#fffaeb" label="In Progress" value={5} />
-        <StatCard icon="🚀" iconBg="#fce7ee" label="Ready for Go-Live" value={1} />
+        <StatCard icon="📥" iconBg="#eef2ff" label="In Queue" value={queue.length} />
+        <StatCard icon="🆕" iconBg="#ecfdf3" label="New Requests" value={newReqs} />
+        <StatCard icon="🔄" iconBg="#fffaeb" label="In Progress" value={inProgress} />
+        <StatCard icon="🚀" iconBg="#fce7ee" label="Ready for Go-Live" value={ready} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Onboarding Pipeline</h3></div>
-        <DataTable columns={columns} rows={rows} sortable filterable />
-      </div>
+      <Card title="Onboarding Pipeline">
+        <OnboardingTable queue={queue} source={source === "error" ? "error" : "api"} />
+      </Card>
     </main>
   );
 }

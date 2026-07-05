@@ -2758,6 +2758,92 @@ export async function getTenantModules(): Promise<LoaderResult<TenantModule[]>> 
   });
 }
 
+// ─── SA Admin: Platform Management Loaders ───────────────────────────────────
+
+export async function getSATenants(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/tenants", [], {
+    revalidateSeconds: 60, telemetryKey: "sa.tenants",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAMetering(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/billing/metering", [], {
+    revalidateSeconds: 60, telemetryKey: "sa.metering",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAFeatureFlags(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/feature-flags", [], {
+    revalidateSeconds: 30, telemetryKey: "sa.feature-flags",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAGateways(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/gateways", [], {
+    revalidateSeconds: 60, telemetryKey: "sa.gateways",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAEditions(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/editions", [], {
+    revalidateSeconds: 300, telemetryKey: "sa.editions",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAOperators(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/operators", [], {
+    revalidateSeconds: 60, telemetryKey: "sa.operators",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAOnboarding(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/onboarding", [], {
+    revalidateSeconds: 30, telemetryKey: "sa.onboarding",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAInvoices(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/billing/invoices", [], {
+    revalidateSeconds: 120, telemetryKey: "sa.invoices",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAEntitlements(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/entitlements", [], {
+    revalidateSeconds: 300, telemetryKey: "sa.entitlements",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSAApiMonitoring(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/api-monitoring", [], {
+    revalidateSeconds: 30, telemetryKey: "sa.api-monitoring",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSATechAdmin(): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/health/services", [], {
+    revalidateSeconds: 30, telemetryKey: "sa.tech-admin",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
+export async function getSADashboard(): Promise<LoaderResult<Record<string, unknown>>> {
+  return fetchJson<unknown, Record<string, unknown>>("/api/v1/admin/sa-dashboard", {}, {
+    revalidateSeconds: 30, telemetryKey: "sa.dashboard",
+    mapResponse: (p) => (isRecord(p) ? p as Record<string, unknown> : null),
+  });
+}
+
 export async function getActiveSessions(): Promise<LoaderResult<SessionSummary[]>> {
   return fetchJson<unknown, SessionSummary[]>("/api/identity/sessions", [], {
     revalidateSeconds: 30,

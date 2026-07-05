@@ -1,39 +1,25 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { getSAOperators } from "@/app/_data/loaders";
+import { OperatorsTable } from "./OperatorsTable";
 
-export default function OperatorsPage() {
-  type Row = { name: string; role: string; lastLogin: string; twoFaStatus: string; permissions: string };
-
-  const rows: Row[] = [
-    { name: "Anand Krishnamurthy", role: "Super Admin", lastLogin: "2025-02-10 09:15", twoFaStatus: "Enabled", permissions: "Full Access" },
-    { name: "Priya Menon", role: "Platform Engineer", lastLogin: "2025-02-10 08:45", twoFaStatus: "Enabled", permissions: "Infrastructure + Deploy" },
-    { name: "Rahul Sharma", role: "Support Lead", lastLogin: "2025-02-09 17:30", twoFaStatus: "Enabled", permissions: "Read + Tenant Support" },
-    { name: "Deepika Patel", role: "Billing Admin", lastLogin: "2025-02-08 14:20", twoFaStatus: "Enabled", permissions: "Billing + Invoices" },
-    { name: "Vijay Nair", role: "DevOps Engineer", lastLogin: "2025-02-10 07:00", twoFaStatus: "Enabled", permissions: "Infrastructure + Monitoring" },
-    { name: "Sneha Gupta", role: "Security Analyst", lastLogin: "2025-02-09 11:45", twoFaStatus: "Enabled", permissions: "Audit + Security" },
-    { name: "Manoj Kumar (Inactive)", role: "Platform Engineer", lastLogin: "2024-12-15 10:30", twoFaStatus: "Disabled", permissions: "Suspended" },
-  ];
-
-  const columns = [
-    { key: "name" as const, label: "Name" },
-    { key: "role" as const, label: "Role" },
-    { key: "lastLogin" as const, label: "Last Login" },
-    { key: "twoFaStatus" as const, label: "2FA Status", cellType: "status" as const },
-    { key: "permissions" as const, label: "Permissions" },
-  ];
+export default async function OperatorsPage() {
+  const { data: operators, source } = await getSAOperators();
+  const active = operators.filter((o) => String(o.status ?? o.twoFaStatus ?? "").toLowerCase() !== "suspended" && String(o.status ?? o.twoFaStatus ?? "").toLowerCase() !== "disabled").length;
+  const twoFa = operators.filter((o) => String(o.twoFaStatus ?? "").toLowerCase() === "enabled").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Platform Operators" subtitle="Super admin and platform team accounts with access controls." back="/admin" />
+      <PageHeader title="Platform Operators" subtitle="Super admin and platform team accounts with access controls." back="/admin" actions={source === "error" ? <DataSourceBadge source={source} /> : null} />
       <StatGrid>
-        <StatCard icon="👤" iconBg="#eef2ff" label="Total Operators" value={7} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={6} />
-        <StatCard icon="🔐" iconBg="#fffaeb" label="2FA Enabled" value={6} />
-        <StatCard icon="⛔" iconBg="#fce7ee" label="Suspended" value={1} />
+        <StatCard icon="👤" iconBg="#eef2ff" label="Total Operators" value={operators.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
+        <StatCard icon="🔐" iconBg="#fffaeb" label="2FA Enabled" value={twoFa} />
+        <StatCard icon="⛔" iconBg="#fce7ee" label="Suspended" value={operators.length - active} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Operator Directory</h3></div>
-        <DataTable columns={columns} rows={rows} sortable filterable />
-      </div>
+      <Card title="Operator Directory">
+        <OperatorsTable operators={operators} source={source === "error" ? "error" : "api"} />
+      </Card>
     </main>
   );
 }
