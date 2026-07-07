@@ -6,7 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, nextStage, DEFAULT_THREE_WAY_TOLERANCE_PCT } from "./domain.js";
+import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, assertDistinctMakerChecker, nextStage, DEFAULT_THREE_WAY_TOLERANCE_PCT } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
@@ -165,6 +165,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const bill = await repo.findBillByIdTx(tx, p.id);
       if (!bill) throw new Error(`bill ${p.id} not found`);
+      // C4 FIX: Maker-checker on bill approval — the approver must differ from
+      // the bill creator. Self-approval of a bill is a segregation-of-duties violation.
+      assertDistinctMakerChecker(bill.createdBy, msg.actorId);
       // 3-way match must be valid before passing. When the bill carries the
       // authoritative PO + GRN(accepted) amounts (snapshotted at create or
       // resolved from the AP read-model), enforce the real tri-leg
@@ -236,6 +239,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       assertBillPassed(bill.status ?? "pending");
       assertValidPaymentMode(p.mode);
+      // C4 FIX: Maker-checker on payment initiation — the payer must differ
+      // from the bill creator. Prevents one actor from creating AND paying a bill.
+      assertDistinctMakerChecker(bill.createdBy, msg.actorId);
       // C3 FIX: Payment amount conservation invariant.
       // The payment amount MUST equal the bill's net amount (full payment).
       // Part-payments are not yet supported — reject mismatches to prevent

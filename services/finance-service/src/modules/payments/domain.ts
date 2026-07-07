@@ -7,6 +7,19 @@ export class DomainError extends Error {
   }
 }
 
+/**
+ * C4 FIX: Segregation of duties — the approver/payer (checker) must differ
+ * from the creator (maker). Enforced on bill approve and payment initiate.
+ */
+export function assertDistinctMakerChecker(creatorId: string, approverId: string): void {
+  if (creatorId && approverId && creatorId === approverId) {
+    throw new DomainError(
+      "MAKER_CHECKER_VIOLATION",
+      "maker and checker must be different actors (self-approval rejected on money path)",
+    );
+  }
+}
+
 /** Bill must reference a PO and a GRN for 3-way match. */
 export function assertThreeWayMatchPresent(poRef: string | null | undefined, grnRef: string | null | undefined): void {
   if (!poRef || !grnRef) {
