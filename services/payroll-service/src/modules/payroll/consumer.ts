@@ -25,14 +25,23 @@ async function resolveDaRateBps(tenantId: string, month: string): Promise<bigint
   return v != null ? BigInt(v) : 0n;
 }
 
-/** Active Professional Tax slabs for the tenant (Iter5). */
-async function resolvePtSlabs(tenantId: string): Promise<Array<{ from: bigint; to: bigint; amount: bigint }>> {
-  const rows = (await db.execute(sql`
-    SELECT slab_from_minor, slab_to_minor, pt_amount_minor
-    FROM payroll.payroll_professional_tax
-    WHERE tenant_id = ${tenantId}::uuid AND is_active = true
-    ORDER BY slab_from_minor
-  `)) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>;
+/** Active Professional Tax slabs for the tenant + state (H14 fix). */
+async function resolvePtSlabs(tenantId: string, stateCode?: string): Promise<Array<{ from: bigint; to: bigint; amount: bigint }>> {
+  // H14 FIX: filter by employee's state_code. Without this, a two-state tenant
+  // (e.g. Karnataka + Maharashtra) would apply the same PT schedule to everyone.
+  const rows = stateCode
+    ? (await db.execute(sql`
+        SELECT slab_from_minor, slab_to_minor, pt_amount_minor
+        FROM payroll.payroll_professional_tax
+        WHERE tenant_id = ${tenantId}::uuid AND is_active = true AND state_code = ${stateCode}
+        ORDER BY slab_from_minor
+      `)) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>
+    : (await db.execute(sql`
+        SELECT slab_from_minor, slab_to_minor, pt_amount_minor
+        FROM payroll.payroll_professional_tax
+        WHERE tenant_id = ${tenantId}::uuid AND is_active = true
+        ORDER BY slab_from_minor
+      `)) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>;
   return rows.map((r) => ({ from: BigInt(r.slab_from_minor), to: BigInt(r.slab_to_minor), amount: BigInt(r.pt_amount_minor) }));
 }
 
@@ -456,7 +465,9 @@ async function processPayrollRun(
   // Multi-DDO: the departments this DDO pays (null => whole tenant, legacy).
   const ddoDepartments = await resolveDdoDepartments(p.tenantId, p.ddoCode ?? null);
   const daRateBps = await resolveDaRateBps(p.tenantId, p.month);
-  const ptSlabs = await resolvePtSlabs(p.tenantId);
+  // H14 FIX: PT slabs are now resolved per-employee (by state_code) inside the loop.
+  // A tenant-level fallback is kept for employees without a state_code.
+  const ptSlabsFallback = await resolvePtSlabs(p.tenantId);
   const protectedNetFloorMinor = await resolveProtectedNetFloorMinor(p.tenantId);
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
@@ -562,7 +573,14 @@ async function processPayrollRun(
         pensionScheme: emp.pensionScheme ?? "NPS",
         daRateBps,
         cityClass,
-        ptMinor: resolvePt(ptSlabs, basicMinor + daMinor),
+        ptMinor: resolvePt(
+          // H14 FIX: use employee's state_code for PT schedule lookup.
+          // Falls back to tenant-level slabs when employee has no state.
+          (emp as { stateCode?: string }).stateCode
+            ? await resolvePtSlabs(p.tenantId, (emp as { stateCode?: string }).stateCode)
+            : ptSlabsFallback,
+          basicMinor + daMinor,
+        ),
         taxRegime: decl?.regime ?? emp.taxRegime ?? "new",
         fyStartYear: fyStart,
         tdsYtdMinor,
