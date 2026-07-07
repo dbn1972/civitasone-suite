@@ -8,6 +8,10 @@ import { createSqlClient } from "@civitasone/db";
 import { schema as callsModule } from "../modules/calls/schema.js";
 import { schema as queuesModule } from "../modules/queues/schema.js";
 import { schema as agentsModule } from "../modules/agents/schema.js";
+import { schema as didModule } from "../modules/did/schema.js";
+import { schema as ivrModule } from "../modules/ivr/schema.js";
+import { schema as recordingsModule } from "../modules/recordings/schema.js";
+import { schema as transcriptionModule } from "../modules/transcription/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -16,7 +20,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://telephony_svc:**
 export const sqlClient = createSqlClient(url);
 
 export const db = drizzle(sqlClient, {
-  schema: { ...callsModule, ...queuesModule, ...agentsModule, ...outboxSchema },
+  schema: { ...callsModule, ...queuesModule, ...agentsModule, ...didModule, ...ivrModule, ...recordingsModule, ...transcriptionModule, ...outboxSchema },
 });
 
 export type Db = typeof db;

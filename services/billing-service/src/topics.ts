@@ -19,6 +19,8 @@ export const COMMANDS = {
   dunningRetry:         "billing.dunning.retry",
   einvoiceGenerate:     "billing.einvoice.generate",
   einvoiceCancel:       "billing.einvoice.cancel",
+  revenueLedgerCreate:  "billing.revenue.ledger_create",
+  revenueAccrualProcess:"billing.revenue.accrual_process",
 } as const;
 
 export const EVENTS = {

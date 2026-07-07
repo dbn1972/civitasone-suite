@@ -1,6 +1,8 @@
 import { eq, asc, and, notInArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tickets, type TicketRow, type TicketInsert, type TicketView } from "./schema.js";
+import { slaPolicies } from "../sla/schema.js";
+import { evaluateSlaStatus, resolvePolicy, DEFAULT_SLA_POLICIES, type SlaPolicy, type SlaEvalStatus } from "../sla/domain.js";
 
 function mapStatus(status: string): TicketView["status"] {
   const s = status.toLowerCase();
@@ -18,21 +20,76 @@ function mapPriority(priority: string): TicketView["priority"] {
   return "Medium";
 }
 
-export type SlaStatus = "within_sla" | "at_risk" | "breached";
+export type SlaStatus = SlaEvalStatus;
 
-/** SLA window: 3 business-equivalent days for High/Critical, 5 otherwise. */
+/** SLA window: 3 business-equivalent days for High/Critical, 5 otherwise (legacy fallback). */
 export function slaDays(priority: string | null | undefined): number {
   const p = priority?.toLowerCase() ?? "medium";
   return (p === "high" || p === "critical") ? 3 : 5;
 }
 
-/** Compute SLA due date + breach status for a ticket row at a given instant. */
-export function computeSla(r: TicketRow, now: Date = new Date()): { dueDate: string; slaStatus: SlaStatus } {
+/**
+ * Compute SLA due date + breach status for a ticket row at a given instant.
+ * Uses policy-based computation when policies are provided, otherwise falls back
+ * to the legacy day-based computation.
+ */
+export function computeSla(
+  r: TicketRow,
+  now: Date = new Date(),
+  policies?: SlaPolicy[],
+): { dueDate: string; slaStatus: SlaStatus } {
   const created = new Date(r.createdAt as unknown as string);
+
+  // Policy-based computation
+  if (policies && policies.length > 0) {
+    const policy = resolvePolicy(policies, r.priority, null);
+    if (policy) {
+      const { status, deadlines } = evaluateSlaStatus(now, created, policy);
+      return { dueDate: deadlines.resolutionDeadline.toISOString(), slaStatus: status };
+    }
+  }
+
+  // Legacy fallback: simple day-based computation
   const due = new Date(created.getTime() + slaDays(r.priority) * 24 * 60 * 60 * 1000);
-  const hoursLeft = (due.getTime() - now.getTime()) / (1000 * 60 * 60);
-  const slaStatus: SlaStatus = hoursLeft < 0 ? "breached" : hoursLeft < 24 ? "at_risk" : "within_sla";
+  const totalWindow = due.getTime() - created.getTime();
+  const elapsed = now.getTime() - created.getTime();
+  const threshold = totalWindow * 0.8;
+
+  let slaStatus: SlaStatus;
+  if (elapsed >= totalWindow) slaStatus = "breached";
+  else if (elapsed >= threshold) slaStatus = "at_risk";
+  else slaStatus = "within_sla";
+
   return { dueDate: due.toISOString(), slaStatus };
+}
+
+/** Load SLA policies for a given tenant. Returns empty array if none configured. */
+export async function loadPolicies(tenantId: string): Promise<SlaPolicy[]> {
+  try {
+    const rows = await db.select().from(slaPolicies).where(eq(slaPolicies.tenantId, tenantId));
+    return rows.map((r) => ({
+      id: r.id,
+      tenantId: r.tenantId,
+      priority: r.priority,
+      category: r.category,
+      responseMinutes: r.responseMinutes,
+      resolutionMinutes: r.resolutionMinutes,
+    }));
+  } catch {
+    // Table may not exist yet if migration hasn't run — return empty
+    return [];
+  }
+}
+
+/** Build effective policies: tenant-configured or defaults. */
+export async function getEffectivePolicies(tenantId: string): Promise<SlaPolicy[]> {
+  const tenantPolicies = await loadPolicies(tenantId);
+  if (tenantPolicies.length > 0) return tenantPolicies;
+  return DEFAULT_SLA_POLICIES.map((p, i) => ({
+    id: `default-${i}`,
+    tenantId,
+    ...p,
+  }));
 }
 
 export function toView(r: TicketRow): TicketView {
@@ -200,6 +257,30 @@ export async function assign(
     .set({
       assigneeId,
       status: "assigned",
+      updatedBy: actorId,
+      updatedAt: now,
+      version: sql`${tickets.version} + 1`,
+    })
+    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId)))
+    .returning();
+  return res[0] ?? null;
+}
+
+/**
+ * Transition a ticket's status (ITIL workflow). Tenant-scoped, bumps version.
+ * Returns the updated row, or null if not found.
+ */
+export async function transitionStatus(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  newStatus: string,
+  actorId: string,
+  now: Date,
+): Promise<TicketRow | null> {
+  const res = await (tx as typeof db).update(tickets)
+    .set({
+      status: newStatus,
       updatedBy: actorId,
       updatedAt: now,
       version: sql`${tickets.version} + 1`,

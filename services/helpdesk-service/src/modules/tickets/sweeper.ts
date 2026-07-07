@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import type { SlaPolicy } from "../sla/domain.js";
 
 const log = pino({ name: "helpdesk-sla-sweeper" });
 
@@ -27,69 +28,84 @@ export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000d1";
  * all under one correlationId. The marker makes it fire exactly once per stage,
  * so re-running the sweeper (restart-safe) never double-notifies.
  *
+ * Uses per-tenant SLA policies for deadline computation (at-risk at 80% of
+ * resolution deadline). Falls back to default policies if none configured.
+ *
  * Returns the number of (ticket, stage) notifications emitted this sweep.
  */
 export async function sweepSlaBreaches(now: Date = new Date(), batch = 200): Promise<number> {
   const candidates = await repo.findOpenForSla(batch);
   let notified = 0;
 
+  // Group candidates by tenant so we load policies once per tenant
+  const byTenant = new Map<string, typeof candidates>();
   for (const t of candidates) {
-    const { dueDate, slaStatus } = repo.computeSla(t, now);
-    if (slaStatus === "within_sla") continue;
+    const group = byTenant.get(t.tenantId) ?? [];
+    group.push(t);
+    byTenant.set(t.tenantId, group);
+  }
 
-    // breached supersedes at_risk: if breached, only fire the breach stage
-    // (if not already sent); else fire at_risk.
-    const stage: "at_risk" | "breached" = slaStatus === "breached" ? "breached" : "at_risk";
-    const alreadySent = stage === "breached" ? t.slaBreachedNotifiedAt : t.slaAtRiskNotifiedAt;
-    if (alreadySent) continue;
+  for (const [tenantId, tenantTickets] of byTenant) {
+    const policies = await repo.getEffectivePolicies(tenantId);
 
-    // recipient: the assignee where set, else the creator (a real user UUID).
-    const recipient = t.assigneeId ?? t.createdBy;
+    for (const t of tenantTickets) {
+      const { slaStatus } = repo.computeSla(t, now, policies);
+      if (slaStatus === "within_sla") continue;
 
-    await db.transaction(async (tx) => {
-      const claimed = await repo.markSlaNotified(tx as repo.Writer, t.id, t.tenantId, stage, now);
-      if (!claimed) return; // another sweep/run already notified this stage
+      // breached supersedes at_risk: if breached, only fire the breach stage
+      // (if not already sent); else fire at_risk.
+      const stage: "at_risk" | "breached" = slaStatus === "breached" ? "breached" : "at_risk";
+      const alreadySent = stage === "breached" ? t.slaBreachedNotifiedAt : t.slaAtRiskNotifiedAt;
+      if (alreadySent) continue;
 
-      const correlationId = randomUUID();
-      const tx2 = tx as Parameters<typeof enqueue>[0];
+      // recipient: the assignee where set, else the creator (a real user UUID).
+      const recipient = t.assigneeId ?? t.createdBy;
 
-      await enqueue(tx2, {
-        topic: ESCALATION_TOPIC, eventType: ESCALATION_TOPIC,
-        tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
-        payload: {
-          ticketId: t.id, subject: t.subject, priority: t.priority,
-          slaStatus: stage, dueDate, recipient,
-        },
-      });
+      await db.transaction(async (tx) => {
+        const claimed = await repo.markSlaNotified(tx as repo.Writer, t.id, t.tenantId, stage, now);
+        if (!claimed) return; // another sweep/run already notified this stage
 
-      await enqueue(tx2, {
-        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
-        tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
-        payload: buildNotificationPayload({
-          eventType: ESCALATION_TOPIC,
-          recipient,
-          variables: {
-            ticketId: t.id,
-            slaStatus: stage,
-            summary: stage === "breached"
-              ? `SLA breached — ticket overdue: ${t.subject}`
-              : `SLA at risk — ticket due soon: ${t.subject}`,
-            link: `/helpdesk/tickets/${t.id}`,
+        const correlationId = randomUUID();
+        const tx2 = tx as Parameters<typeof enqueue>[0];
+
+        await enqueue(tx2, {
+          topic: ESCALATION_TOPIC, eventType: ESCALATION_TOPIC,
+          tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
+          payload: {
+            ticketId: t.id, subject: t.subject, priority: t.priority,
+            slaStatus: stage, recipient,
           },
-        }),
-      });
+        });
 
-      await enqueue(tx2, {
-        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-        tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
-        payload: {
-          service: "helpdesk", action: stage === "breached" ? "sla_breach" : "sla_at_risk",
-          resourceType: "ticket", resourceId: t.id, outcome: "success",
-        },
-      });
+        await enqueue(tx2, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
+          payload: buildNotificationPayload({
+            eventType: ESCALATION_TOPIC,
+            recipient,
+            variables: {
+              ticketId: t.id,
+              slaStatus: stage,
+              summary: stage === "breached"
+                ? `SLA breached — ticket overdue: ${t.subject}`
+                : `SLA at risk — ticket due soon: ${t.subject}`,
+              link: `/helpdesk/tickets/${t.id}`,
+            },
+          }),
+        });
 
-      notified++;
-    });
+        await enqueue(tx2, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
+          payload: {
+            service: "helpdesk", action: stage === "breached" ? "sla_breach" : "sla_at_risk",
+            resourceType: "ticket", resourceId: t.id, outcome: "success",
+          },
+        });
+
+        notified++;
+      });
+    }
   }
 
   if (notified > 0) log.info({ notified }, "helpdesk sla sweeper emitted breach/at-risk notifications");

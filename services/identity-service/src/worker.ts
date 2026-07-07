@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { startOutboxPurge } from "@civitasone/outbox";
 import { registerUserConsumers }    from "./modules/users/consumer.js";
 import { registerRbacConsumers }    from "./modules/rbac/consumer.js";
 import { registerSessionConsumers } from "./modules/sessions/consumer.js";
@@ -23,6 +24,12 @@ registerSyncFeederConsumers(queue);
 registerIdentityTenantOnboardConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
+// G7: scheduled outbox purge — remove published messages older than 7 days.
+const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+  intervalMs: 60 * 60_000,
+  batchSize: 1000,
+  logger: log,
+});
 
 // P1-2: periodic expired-session reaper. Flips active-but-past-expiry sessions
 // to "expired" so they stop counting as active sessions.
@@ -62,6 +69,7 @@ log.info("identity-service worker: consumers + outbox relay + session reaper + k
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
+  clearInterval(purge);
   clearInterval(relay);
   clearInterval(reaper);
   clearInterval(bgSweeper);

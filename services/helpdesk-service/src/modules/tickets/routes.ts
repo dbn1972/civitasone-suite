@@ -3,9 +3,10 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createTicketBody, assignTicketBody, idParam, ticketsListSchema } from "./validators.js";
+import { createTicketBody, assignTicketBody, transitionTicketBody, idParam, ticketsListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import type { TicketType } from "./itil-domain.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
 const HELPDESK_ADMIN_ROLES = ["helpdesk_admin", "super_admin"];
@@ -41,6 +42,27 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = assignTicketBody.parse(req.body);
     sendAccepted(reply, acceptedResponseSchema, await commands.assignTicket(ctx, id, body));
+  });
+
+  // ITIL — transition a ticket's status per its type-specific workflow.
+  app.post("/v1/helpdesk/tickets/:id/transition", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = transitionTicketBody.parse(req.body);
+
+    // Fetch ticket to determine its type and current status
+    const ticket = await queries.getTicketRaw(id, ctx.tenantId);
+    if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    if (!ticket.ticketType) {
+      throw new HttpError(422, "NO_TICKET_TYPE", "Cannot transition a ticket without a defined ticket type");
+    }
+
+    sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.transitionTicket(ctx, id, ticket.ticketType as TicketType, ticket.status, body),
+    );
   });
 
   app.setErrorHandler((err, req, reply) => {

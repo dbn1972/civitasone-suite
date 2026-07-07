@@ -16,6 +16,14 @@ export const COMMANDS = {
   counselBriefAssign:   "legal.counsel_brief.assign",
   filingRecord:         "legal.filing.record",
   reminderCreate:       "legal.reminder.create",
+  documentCreate:       "legal.document.create",
+  documentUpdate:       "legal.document.update",
+  documentDelete:       "legal.document.delete",
+  documentHoldApply:    "legal.document.hold_apply",
+  documentHoldRelease:  "legal.document.hold_release",
+  limitationCreate:     "legal.limitation.create",
+  limitationUpdate:     "legal.limitation.update",
+  limitationDelete:     "legal.limitation.delete",
 } as const;
 
 export const EVENTS = {

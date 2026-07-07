@@ -1,4 +1,4 @@
-import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getTenantAdminDashboard } from "@/app/_data/loaders";
@@ -31,7 +31,6 @@ export default async function ReadinessPage() {
   const { data: dashboard, source } = await getTenantAdminDashboard();
   const readiness = dashboard.readiness;
 
-  // Use real data if available, otherwise fall back to mock checklist
   const passed = readiness
     ? Math.round((readiness.overall / 100) * readinessChecklist.length)
     : readinessChecklist.filter((i) => i.status === "pass").length;
@@ -46,7 +45,7 @@ export default async function ReadinessPage() {
         title="Tenant Readiness Score"
         subtitle="Overall readiness assessment — track configuration progress and go-live checklist completion."
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="🎯" iconBg="#eff6ff" label="Overall Readiness" value={`${overallPct}%`} />
@@ -64,18 +63,22 @@ export default async function ReadinessPage() {
         </div>
       </Card>
       <Card title="Readiness Checklist" padding>
-        <ul aria-label="Readiness items" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {readinessChecklist.map((item) => (
-            <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
-              <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{statusIcon(item.status)}</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{item.label}</p>
-                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>{item.description}</p>
-              </div>
-              <StatusPill status={item.status === "pass" ? "active" : item.status === "fail" ? "failed" : "in progress"} label={item.status === "pass" ? "Pass" : item.status === "fail" ? "Fail" : "In Progress"} />
-            </li>
-          ))}
-        </ul>
+        {readinessChecklist.length === 0 ? (
+          <EmptyState icon="🎯" title="No readiness checks configured" message="Readiness checks will appear here once your organisation setup is in progress." />
+        ) : (
+          <ul aria-label="Readiness items" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {readinessChecklist.map((item) => (
+              <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+                <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{statusIcon(item.status)}</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{item.label}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>{item.description}</p>
+                </div>
+                <StatusPill status={item.status === "pass" ? "active" : item.status === "fail" ? "failed" : "in progress"} label={item.status === "pass" ? "Pass" : item.status === "fail" ? "Fail" : "In Progress"} />
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </main>
   );

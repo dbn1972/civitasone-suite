@@ -1,8 +1,11 @@
 import { pino } from "pino";
+import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { startOutboxPurge } from "@civitasone/outbox";
 import { registerEmployeeConsumers }   from "./modules/employee/consumer.js";
+import { registerLifecycleConsumers }  from "./modules/lifecycle/consumer.js";
 import { registerEOfficeDecisionConsumers } from "./modules/lifecycle/eoffice-consumer.js";
 import { registerPromotionEOfficeConsumers } from "./modules/lifecycle/promotion-eoffice-consumer.js";
 import { registerDisciplinaryConsumers } from "./modules/disciplinary/consumer.js";
@@ -50,6 +53,7 @@ import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 const log = pino({ name: "hrms-worker" });
 
 registerEmployeeConsumers(queue);
+registerLifecycleConsumers(queue);
 registerEOfficeDecisionConsumers(queue);
 registerPromotionEOfficeConsumers(queue);
 registerDisciplinaryConsumers(queue);
@@ -95,6 +99,27 @@ registerVisitingCardConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
+// G7: scheduled outbox purge — remove published messages older than 7 days.
+const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+  intervalMs: 60 * 60_000,
+  batchSize: 1000,
+  logger: log,
+});
+
+// G6.4: Partition maintenance — auto-create monthly partitions 3 months ahead.
+// Runs daily. Safe to call repeatedly (idempotent, IF NOT EXISTS guards).
+async function ensurePartitions(): Promise<void> {
+  try {
+    await db.execute(sql`SELECT _outbox.create_future_partitions()`);
+    log.info("partition maintenance: future partitions ensured");
+  } catch (err) {
+    log.warn({ err }, "partition maintenance: failed to create future partitions");
+  }
+}
+// Run immediately on startup, then every 24 hours.
+void ensurePartitions();
+const partitionMaint = setInterval(() => void ensurePartitions(), 24 * 60 * 60_000);
+partitionMaint.unref();
 
 // Scheduled-job layer: periodic tick producing tenant-aware due-lists
 // (superannuation / probation). Interval is configurable; defaults to hourly.
@@ -122,6 +147,8 @@ log.info({ schedulerIntervalMs: SCHEDULER_INTERVAL_MS },
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
+  clearInterval(partitionMaint);
+  clearInterval(purge);
   clearInterval(relay);
   clearTimeout(schedulerKickoff);
   clearInterval(schedulerTimer);

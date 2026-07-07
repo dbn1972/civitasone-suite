@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "@/app/_components/ds";
+import { useSeededResource } from "@/lib/sync/resource";
 
 export type DprRow = {
   dprNo: string;
@@ -26,15 +27,35 @@ const COLUMNS: {
   { key: "reviewingAuthority", label: "Reviewing Authority" },
 ];
 
-export function DprTrackingTable({ rows }: { rows: DprRow[] }) {
+export function DprTrackingTable({ rows, source = "api" }: { rows: DprRow[]; source?: "api" | "error" }) {
+  const { data, fromCache, offline, cachedAt } = useSeededResource<DprRow[]>(
+    "projects.dprs",
+    rows,
+    source,
+    (d) => d.length === 0,
+  );
+
+  const cacheNote =
+    offline || fromCache
+      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      : null;
+
   return (
-    <DataTable<DprRow>
-      columns={COLUMNS}
-      rows={rows}
-      sortable
-      filterable
-      filterPlaceholder="Filter DPRs…"
-      pageSize={15}
-    />
+    <>
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
+      <DataTable<DprRow>
+        columns={COLUMNS}
+        rows={data}
+        sortable
+        filterable
+        filterPlaceholder="Filter DPRs…"
+        pageSize={15}
+        exportable
+        exportFilename="project-dprs"
+        emptyIcon="📄"
+        emptyTitle="No DPRs"
+        emptyMessage="No DPRs match the current filter."
+      />
+    </>
   );
 }

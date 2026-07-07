@@ -937,26 +937,26 @@ describe("Calls routes — lifecycle transitions", () => {
   });
 
   describe("POST /v1/telephony/calls/:id/ivr-hits", () => {
-    it("returns 202 with valid body", async () => {
+    it("returns 201 with valid batch body", async () => {
       const res = await app.inject({
         method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: authHeader(),
-        payload: { menuKey: "main_menu", digit: "1" },
+        payload: { hits: [{ menuKey: "main_menu", digit: "1", timestamp: "2024-06-15T10:00:00Z" }] },
       });
-      expect(res.statusCode).toBe(202);
+      expect(res.statusCode).toBe(201);
     });
 
-    it("returns 202 with DTMF special chars", async () => {
+    it("returns 201 with DTMF special chars", async () => {
       const res = await app.inject({
         method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: authHeader(),
-        payload: { menuKey: "support", digit: "*#" },
+        payload: { hits: [{ menuKey: "support", digit: "*#", timestamp: "2024-06-15T10:00:00Z" }] },
       });
-      expect(res.statusCode).toBe(202);
+      expect(res.statusCode).toBe(201);
     });
 
     it("returns 400 without menuKey", async () => {
       const res = await app.inject({
         method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: authHeader(),
-        payload: { digit: "1" },
+        payload: { hits: [{ digit: "1", timestamp: "2024-06-15T10:00:00Z" }] },
       });
       expect(res.statusCode).toBe(400);
     });
@@ -964,7 +964,7 @@ describe("Calls routes — lifecycle transitions", () => {
     it("returns 400 without digit", async () => {
       const res = await app.inject({
         method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: authHeader(),
-        payload: { menuKey: "main" },
+        payload: { hits: [{ menuKey: "main", timestamp: "2024-06-15T10:00:00Z" }] },
       });
       expect(res.statusCode).toBe(400);
     });
@@ -972,7 +972,7 @@ describe("Calls routes — lifecycle transitions", () => {
     it("returns 400 with non-DTMF digit", async () => {
       const res = await app.inject({
         method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: authHeader(),
-        payload: { menuKey: "main", digit: "abc" },
+        payload: { hits: [{ menuKey: "main", digit: "abc", timestamp: "2024-06-15T10:00:00Z" }] },
       });
       expect(res.statusCode).toBe(400);
     });
@@ -980,7 +980,7 @@ describe("Calls routes — lifecycle transitions", () => {
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
         method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: noRoleAuthHeader(),
-        payload: { menuKey: "main", digit: "1" },
+        payload: { hits: [{ menuKey: "main", digit: "1", timestamp: "2024-06-15T10:00:00Z" }] },
       });
       expect(res.statusCode).toBe(403);
     });

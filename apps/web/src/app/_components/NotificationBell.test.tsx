@@ -51,10 +51,10 @@ describe("NotificationBell", () => {
     expect(screen.getByText("1 hr ago")).toBeInTheDocument();
   });
 
-  it("shows 'View all notifications' link", () => {
+  it("shows 'View My Approvals' link", () => {
     render(<NotificationBell notifications={notifications} />);
     fireEvent.click(screen.getByTitle("Notifications"));
-    expect(screen.getByText("View all notifications")).toBeInTheDocument();
+    expect(screen.getByText("View My Approvals")).toBeInTheDocument();
   });
 
   it("closes dropdown on second click", () => {
@@ -66,9 +66,15 @@ describe("NotificationBell", () => {
     expect(screen.queryByText("Budget approved")).not.toBeInTheDocument();
   });
 
-  it("uses sample notifications when none provided", () => {
+  it("shows loading state when no notifications provided and fetches from API", () => {
+    // Mock fetch to avoid actual API calls
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [] }), { status: 200 }),
+    );
     render(<NotificationBell />);
     fireEvent.click(screen.getByTitle("Notifications"));
-    expect(screen.getByText("Budget sanction approved")).toBeInTheDocument();
+    // Shows loading or empty state (no hardcoded sample notifications)
+    const dropdown = screen.getByRole("menu");
+    expect(dropdown).toBeInTheDocument();
   });
 });

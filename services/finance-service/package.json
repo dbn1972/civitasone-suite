@@ -17,6 +17,7 @@
   "dependencies": {
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
+    "@civitasone/circuit-breaker": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/eoffice-sdk": "workspace:*",
     "@civitasone/events": "workspace:*",
@@ -24,6 +25,7 @@
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",
     "@civitasone/schemas": "workspace:*",
+    "@civitasone/search": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "drizzle-orm": "^0.30.0",

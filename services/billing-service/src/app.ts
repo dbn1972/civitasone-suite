@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
-import { sqlClient } from "./shared/db.js";
+import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
@@ -14,6 +15,9 @@ import { invoicesRoutes } from "./modules/invoices/routes.js";
 import { paymentsRoutes } from "./modules/payments/routes.js";
 import { checkoutRoutes } from "./modules/payments/checkout-routes.js";
 import { einvoiceRoutes } from "./modules/einvoice/routes.js";
+import { revenueRoutes } from "./modules/revenue/routes.js";
+import { gstnRoutes } from "./modules/gstn/routes.js";
+import { gatewayRoutes } from "./modules/gateways/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -25,6 +29,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authPlugin);
 
+  // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
+  // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
+  app.addHook("onRequest", createTenantTxHook(db));
+
   registerOpsRoutes(app, { service: "billing-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -35,6 +43,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(paymentsRoutes);
   await app.register(checkoutRoutes);
   await app.register(einvoiceRoutes);
+  await app.register(revenueRoutes);
+  await app.register(gstnRoutes);
+  await app.register(gatewayRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

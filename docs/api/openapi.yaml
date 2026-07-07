@@ -44,6 +44,8 @@ tags:
     description: Pay runs, F&F settlements, tax computation
   - name: Workflow
     description: Decision tables, workflow instances, tasks
+  - name: Analytics
+    description: Query engine, joins, calculated fields, drill-through
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -4193,6 +4195,109 @@ paths:
       security:
         - bearerAuth: []
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Analytics Service — Query Engine
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/analytics/query:
+    post:
+      operationId: runAnalyticsQuery
+      tags: [Analytics]
+      summary: Run an analytics query with joins and calculated fields
+      description: |
+        Executes an analytics query against whitelisted metrics and dimensions.
+        Supports cross-table joins (max 3), calculated fields via a structured
+        expression language (max 10 per query), and filter conditions on
+        whitelisted fields. All queries are tenant-scoped. No raw SQL is accepted.
+        Join queries are capped at 1000 rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyticsQueryRequest"
+      responses:
+        "200":
+          description: Query result with aggregated rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsQueryResult"
+        "400":
+          description: Validation error (unknown metric/dimension, expression too deep, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires analytics_viewer or analytics_admin
+      security:
+        - bearerAuth: []
+
+  /v1/analytics/drill-through/{reportId}/{cellId}:
+    get:
+      operationId: drillThroughAnalytics
+      tags: [Analytics]
+      summary: Drill through an aggregated cell to detail rows
+      description: |
+        Given a report ID and cell ID from a previously executed analytics query,
+        returns the underlying detail rows that compose the aggregated value.
+        Capped at 200 rows per request. Tenant-scoped.
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the stored analytics report/query run
+        - name: cellId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+          description: Identifier of the aggregated cell to drill into
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 200
+          description: Maximum rows to return (capped at 200)
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Offset for pagination
+      responses:
+        "200":
+          description: Detail rows for the specified cell
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DrillThroughResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires analytics_viewer or analytics_admin
+        "404":
+          description: Report or cell not found
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -6093,3 +6198,231 @@ components:
               type: string
             taxableMinor:
               type: string
+
+    # ─── Analytics Query Schemas ──────────────────────────────────────────────
+
+    AnalyticsQueryRequest:
+      type: object
+      required: [metrics]
+      properties:
+        metrics:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: string
+            enum: [event_count, amount_sum, amount_avg, amount_max, amount_min]
+          description: Metrics to aggregate (whitelisted keys only)
+        dimensions:
+          type: array
+          maxItems: 4
+          items:
+            type: string
+            enum: [source, event_type, category, status]
+          default: []
+          description: Dimensions to group by (whitelisted keys only)
+        filters:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AnalyticsFilter"
+          default: []
+          description: Filter conditions on whitelisted fields
+        dateFrom:
+          type: string
+          format: date-time
+          description: ISO 8601 lower date bound (inclusive)
+        dateTo:
+          type: string
+          format: date-time
+          description: ISO 8601 upper date bound (inclusive)
+        joins:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/AnalyticsJoinCondition"
+          default: []
+          description: Cross-table join conditions (max 3 per query)
+        calculatedFields:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/AnalyticsCalculatedField"
+          default: []
+          description: Calculated fields via structured expression language (max 10)
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+          description: Row limit (capped at 1000 for join queries)
+
+    AnalyticsFilter:
+      type: object
+      required: [field, op, value]
+      properties:
+        field:
+          type: string
+          enum: [source, event_type, category, status, amount, occurred_at]
+          description: Whitelisted filter field key
+        op:
+          type: string
+          enum: [eq, neq, gt, gte, lt, lte, in]
+          description: Comparison operator
+        value:
+          oneOf:
+            - type: string
+              maxLength: 256
+            - type: number
+            - type: boolean
+            - type: array
+              maxItems: 100
+              items:
+                oneOf:
+                  - type: string
+                    maxLength: 256
+                  - type: number
+          description: Filter value (scalar or array for 'in' operator)
+
+    AnalyticsJoinCondition:
+      type: object
+      required: [leftKey, rightKey]
+      properties:
+        leftKey:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Left-side column key (must be whitelisted)
+        rightKey:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Right-side column key (must be whitelisted)
+        type:
+          type: string
+          enum: [inner, left]
+          default: inner
+          description: Join type
+
+    AnalyticsCalculatedField:
+      type: object
+      required: [alias, expression]
+      properties:
+        alias:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Output column name for this calculated field
+        expression:
+          $ref: "#/components/schemas/CalcExpression"
+          description: Structured expression (serialized JSON max 500 chars)
+
+    CalcExpression:
+      type: object
+      required: [op, left, right]
+      description: |
+        Arithmetic expression node. Only whitelisted operators (add, subtract,
+        multiply, divide) and column keys are allowed. Max depth 5.
+      properties:
+        op:
+          type: string
+          enum: [add, subtract, multiply, divide]
+          description: Arithmetic operator
+        left:
+          $ref: "#/components/schemas/CalcOperand"
+        right:
+          $ref: "#/components/schemas/CalcOperand"
+
+    CalcOperand:
+      description: An operand in a calculated field expression
+      oneOf:
+        - type: object
+          required: [type, key]
+          properties:
+            type:
+              type: string
+              enum: [column]
+            key:
+              type: string
+              minLength: 1
+              maxLength: 64
+              description: Whitelisted column key
+        - type: object
+          required: [type, value]
+          properties:
+            type:
+              type: string
+              enum: [literal]
+            value:
+              type: number
+              description: Finite numeric literal
+        - type: object
+          required: [type, expr]
+          properties:
+            type:
+              type: string
+              enum: [expression]
+            expr:
+              $ref: "#/components/schemas/CalcExpression"
+
+    AnalyticsQueryResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            rows:
+              type: array
+              items:
+                type: object
+                additionalProperties:
+                  oneOf:
+                    - type: string
+                    - type: number
+                    - type: "null"
+              description: Result rows (key-value maps of metric/dimension/calc values)
+            rowCount:
+              type: integer
+              description: Number of rows returned
+            metrics:
+              type: array
+              items:
+                type: string
+              description: Metric keys included in the result
+            dimensions:
+              type: array
+              items:
+                type: string
+              description: Dimension keys used for grouping
+            calculatedFields:
+              type: array
+              items:
+                type: string
+              description: Calculated field aliases in the result
+
+    DrillThroughResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            rows:
+              type: array
+              items:
+                type: object
+                additionalProperties:
+                  oneOf:
+                    - type: string
+                    - type: number
+                    - type: "null"
+              description: Detail rows underlying the aggregated cell
+            rowCount:
+              type: integer
+              description: Number of detail rows returned
+            reportId:
+              type: string
+              format: uuid
+              description: The report/query run ID
+            cellId:
+              type: string
+              description: The cell identifier that was drilled into

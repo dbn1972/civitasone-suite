@@ -19,6 +19,8 @@ export async function createLocation(ctx: RequestContext, body: CreateLocationBo
     parentId: body.parentId ?? null,
     type: body.type,
     lgdCode: body.lgdCode ?? null,
+    latitude: body.latitude ?? null,
+    longitude: body.longitude ?? null,
     status: "active",
     isSample: false,
     version: 1,

@@ -13,6 +13,7 @@ import { checkPolicy } from "./policy-check.js";
 import { createRedisQuotaStore, createInMemoryQuotaStore } from "./quota-store.js";
 import { registerResponseMetrics } from "./response-metrics.js";
 import { registerScreenManifestRoute } from "./screen-manifest.js";
+import { registerSearchRoute } from "./search-route.js";
 import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
 import { getConfig, applyConfig, ConfigError, type GatewayRuntimeConfig } from "./runtime-config.js";
@@ -229,6 +230,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerResponseMetrics(app);
   registerScreenManifestRoute(app);
+  registerSearchRoute(app);
 
   // ── JWT edge verification — validate token signatures before proxying ─────
   // Runs as a preHandler on all routes. In "off" mode it's a no-op.

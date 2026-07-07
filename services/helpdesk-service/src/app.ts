@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
-import { sqlClient } from "./shared/db.js";
+import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
@@ -9,6 +10,7 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { ticketRoutes } from "./modules/tickets/routes.js";
 import { slaRoutes } from "./modules/sla/routes.js";
+import { automationRoutes } from "./modules/automation/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -20,10 +22,15 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authPlugin);
 
+  // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
+  // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
+  app.addHook("onRequest", createTenantTxHook(db));
+
   registerOpsRoutes(app, { service: "helpdesk-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(ticketRoutes);
   await app.register(slaRoutes);
+  await app.register(automationRoutes);
   const { slaEngineRoutes } = await import("./modules/sla-engine/routes.js");
   await app.register(slaEngineRoutes);
   registerSchemaErrorHandler(app, HttpError);

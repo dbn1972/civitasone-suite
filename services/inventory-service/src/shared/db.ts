@@ -7,6 +7,9 @@ import { createSqlClient } from "@civitasone/db";
 import { schema as itemsModule } from "../modules/items/schema.js";
 import { schema as storesModule } from "../modules/stores/schema.js";
 import { schema as movementsModule } from "../modules/movements/schema.js";
+import { schema as batchesModule } from "../modules/batches/schema.js";
+import { schema as cycleCountModule } from "../modules/cycle-count/schema.js";
+import { schema as matchingModule } from "../modules/matching/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -15,7 +18,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://inventory_svc:**
 export const sqlClient = createSqlClient(url);
 
 export const db = drizzle(sqlClient, {
-  schema: { ...itemsModule, ...storesModule, ...movementsModule, ...outboxSchema },
+  schema: { ...itemsModule, ...storesModule, ...movementsModule, ...batchesModule, ...cycleCountModule, ...matchingModule, ...outboxSchema },
 });
 
 export type Db = typeof db;

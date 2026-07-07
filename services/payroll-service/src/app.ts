@@ -21,6 +21,7 @@ import { loadTaxConfig } from "./modules/tax/config.js";
 import { bankTransferRoutes } from "./modules/bank-transfer/routes.js";
 import { sponsorConfigRoutes } from "./modules/sponsor-config/routes.js";
 import { nachReturnRoutes } from "./modules/nach-return/routes.js";
+import { nachRoutes } from "./modules/nach/routes.js";
 import { fnfRoutes } from "./modules/fnf/routes.js";
 import { dscConfigRoutes } from "./modules/dsc-config/routes.js";
 import { form16VerifyRoutes } from "./modules/form16-verify/routes.js";
@@ -56,6 +57,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(bankTransferRoutes);
   await app.register(sponsorConfigRoutes);
   await app.register(nachReturnRoutes);
+  await app.register(nachRoutes);
   await app.register(fnfRoutes);
   await app.register(dscConfigRoutes);
   await app.register(form16VerifyRoutes);

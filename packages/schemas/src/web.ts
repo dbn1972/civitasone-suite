@@ -1305,6 +1305,39 @@ export const AuditExportJobSchema = z.object({
 });
 export const AuditExportJobListSchema = z.array(AuditExportJobSchema);
 
+export const CagParaSummarySchema = z.object({
+  id: z.string(),
+  reportYear: z.string(),
+  paraNo: z.string(),
+  department: z.string(),
+  totalParas: z.number(),
+  settled: z.number(),
+  pending: z.number(),
+  status: z.enum(["under_review", "partially_settled", "nearly_settled", "settled"]),
+});
+export const CagParaSummaryListSchema = z.array(CagParaSummarySchema);
+
+export const VigilanceCaseSummarySchema = z.object({
+  id: z.string(),
+  caseNo: z.string(),
+  officer: z.string(),
+  charges: z.string(),
+  inquiryStatus: z.enum(["preliminary_enquiry", "under_investigation", "charge_sheet_issued", "inquiry_complete"]),
+  outcome: z.enum(["pending", "major_penalty", "minor_penalty", "exonerated"]),
+});
+export const VigilanceCaseSummaryListSchema = z.array(VigilanceCaseSummarySchema);
+
+export const InvestigationSummarySchema = z.object({
+  id: z.string(),
+  caseId: z.string(),
+  subject: z.string(),
+  assignedTo: z.string(),
+  started: z.string(),
+  findings: z.string(),
+  status: z.enum(["in_progress", "findings_submitted", "closed"]),
+});
+export const InvestigationSummaryListSchema = z.array(InvestigationSummarySchema);
+
 // ── Legal schemas ─────────────────────────────────────────────────────────────
 
 export const LegalDashboardSchema = z.object({

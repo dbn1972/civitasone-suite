@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean, doublePrecision } from "drizzle-orm/pg-core";
 
 export const locationSchema = pgSchema("location");
 
@@ -14,6 +14,9 @@ export const locations = locationSchema.table("locations", {
   type: varchar("type", { length: 24 }).notNull().default("office"),
   lgdCode: varchar("lgd_code", { length: 32 }),
   status: varchar("status", { length: 24 }).notNull().default("active"),
+  // Spatial: DOUBLE PRECISION lat/lng with CHECK constraints at DB level.
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
   // Clearly-marked example record a clerk can add to explore, then clear in one
   // action. Clearing deletes ONLY is_sample rows, never real data.
   isSample: boolean("is_sample").notNull().default(false),
@@ -37,6 +40,8 @@ export type LocationView = {
   parentId: string | null;
   type: string;
   lgdCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
   status: string;
   isSample: boolean;
   version: number;

@@ -5,8 +5,19 @@ export const createTicketBody = z.object({
   subject: z.string().min(1),
   description: z.string().optional(),
   priority: z.enum(["Low", "Medium", "High", "Critical"]).optional(),
+  // ITIL ticket type — optional for backward compatibility (legacy tickets have no type).
+  ticketType: z.enum(["incident", "problem", "change"]).optional(),
+  // Type-specific required fields.
+  typeFields: z.record(z.unknown()).optional(),
+  // CMDB asset linkage — optional list of asset IDs.
+  assetIds: z.array(z.string().uuid()).optional(),
 });
 export type CreateTicketBody = z.infer<typeof createTicketBody>;
+
+export const transitionTicketBody = z.object({
+  status: z.string().min(1),
+});
+export type TransitionTicketBody = z.infer<typeof transitionTicketBody>;
 
 export const assignTicketBody = z.object({
   assigneeId: z.string().uuid(),

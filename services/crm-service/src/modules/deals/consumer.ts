@@ -27,6 +27,7 @@ export function registerDealConsumers(queue: Queue): void {
       }
       await repo.insert(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name, stage: p.stage,
+        pipelineId: p.pipelineId, stageId: p.stageId,
         valueMinor: BigInt(p.valueMinor), currency: p.currency,
         contactId: p.contactId, ownerId: p.ownerId,
         closeDate: p.closeDate, probability: p.probability,
@@ -41,11 +42,24 @@ export function registerDealConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.updateDealStage, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; stage: string; probability?: number };
+    const p = msg.payload as { id: string; tenantId: string; stage: string; stageId?: string; version: number; probability?: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateStage(tx, p.id, p.tenantId, p.stage, msg.actorId, p.probability);
-      await emit(tx, msg, EVENTS.dealStageUpdated, { dealId: p.id, stage: p.stage }, "update_stage", p.id);
+      const result = await repo.updateStageWithVersion(
+        tx, p.id, p.tenantId, p.stage, p.stageId, p.version, msg.actorId, p.probability,
+      );
+      if (!result.updated) {
+        // Version conflict — emit audit indicating conflict
+        await emitAudit(tx, msg, "update_stage", p.id, "version_conflict");
+        return;
+      }
+      // Emit stage transition audit event with prev/new stage
+      await emit(tx, msg, EVENTS.dealStageUpdated, {
+        dealId: p.id,
+        previousStage: result.previousStage,
+        newStage: p.stage,
+        transitionTimestamp: new Date().toISOString(),
+      }, "update_stage", p.id);
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);

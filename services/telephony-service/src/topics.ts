@@ -29,6 +29,7 @@ export const EVENTS = {
   callLinked: "telephony.call.linked",
   callIvrRecorded: "telephony.call.ivr_recorded",
   callRecordingAttached: "telephony.call.recording_attached",
+  callTranscriptionCompleted: "telephony.call.transcription_completed",
   queueCreated: "telephony.queue.created",
   agentUpserted: "telephony.agent.upserted",
   agentStatusChanged: "telephony.agent.status_changed",

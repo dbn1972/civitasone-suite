@@ -25,6 +25,8 @@ export const createLocationBody = z.object({
     .regex(/^\d+$/, "LGD code must contain digits only")
     .optional(),
   parentId: z.string().uuid("Select a valid parent office").optional(),
+  latitude: z.number().min(-90, "Latitude must be between -90 and 90").max(90, "Latitude must be between -90 and 90").optional(),
+  longitude: z.number().min(-180, "Longitude must be between -180 and 180").max(180, "Longitude must be between -180 and 180").optional(),
 });
 export type CreateLocationBody = z.infer<typeof createLocationBody>;
 
@@ -40,6 +42,8 @@ export const locationViewSchema = z.object({
   parentId: z.string().uuid().nullable(),
   type: z.string(),
   lgdCode: z.string().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
   status: z.string(),
   isSample: z.boolean(),
   version: z.number().int(),
@@ -59,3 +63,12 @@ export const locationTreeNodeSchema: z.ZodType<LocationTreeNode> = locationViewS
 export const locationTreeSchema = z.object({
   data: z.array(locationTreeNodeSchema),
 });
+
+/** Validator for GET /v1/locations/nearby query params */
+export const nearbyQuerySchema = z.object({
+  lat: z.coerce.number().min(-90, "Latitude must be between -90 and 90").max(90, "Latitude must be between -90 and 90"),
+  lng: z.coerce.number().min(-180, "Longitude must be between -180 and 180").max(180, "Longitude must be between -180 and 180"),
+  radiusKm: z.coerce.number().min(0.01, "Radius must be at least 0.01 km").max(500, "Radius must not exceed 500 km").default(10),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type NearbyQuery = z.infer<typeof nearbyQuerySchema>;

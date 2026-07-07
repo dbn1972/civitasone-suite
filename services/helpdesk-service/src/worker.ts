@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTicketConsumers } from "./modules/tickets/consumer.js";
 import { startSlaSweeper } from "./modules/tickets/sweeper.js";
 
@@ -10,12 +11,19 @@ const log = pino({ name: "helpdesk-worker" });
 registerTicketConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
+// G7: scheduled outbox purge — remove published messages older than 7 days.
+const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+  intervalMs: 60 * 60_000,
+  batchSize: 1000,
+  logger: log,
+});
 // HD1 — SLA-breach sweeper: notifies + escalates + audits once per breach/at-risk stage.
 const slaSweeper = startSlaSweeper(Number(process.env.HELPDESK_SLA_SWEEP_MS ?? 30_000));
 log.info("helpdesk-service worker: consumers + outbox relay + sla sweeper running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
+  clearInterval(purge);
   clearInterval(relay);
   clearInterval(slaSweeper);
   await queue.stop();

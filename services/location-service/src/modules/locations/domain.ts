@@ -9,6 +9,25 @@
 export type HierarchyEdge = { id: string; parentId: string | null };
 
 /**
+ * Validates that a coordinate is within valid range.
+ * Latitude: [-90, 90], Longitude: [-180, 180].
+ */
+export function isValidLatitude(lat: number): boolean {
+  return lat >= -90 && lat <= 90;
+}
+
+export function isValidLongitude(lng: number): boolean {
+  return lng >= -180 && lng <= 180;
+}
+
+/**
+ * Validates a lat/lng coordinate pair. Returns true if both are valid.
+ */
+export function isValidCoordinate(lat: number, lng: number): boolean {
+  return isValidLatitude(lat) && isValidLongitude(lng);
+}
+
+/**
  * Returns true if attaching `childId` under `parentId` would create a cycle,
  * i.e. the proposed parent is the child itself or one of the child's
  * descendants. `allEdges` is the current flat set of child -> parent links.

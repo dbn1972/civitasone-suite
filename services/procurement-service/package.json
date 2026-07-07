@@ -12,11 +12,13 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "migrate:encrypt-pii": "tsx scripts/migrate-encrypt-pii.ts"
   },
   "dependencies": {
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
+    "@civitasone/circuit-breaker": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/eoffice-sdk": "workspace:*",
     "@civitasone/events": "workspace:*",
@@ -24,6 +26,7 @@
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",
     "@civitasone/schemas": "workspace:*",
+    "@civitasone/search": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "drizzle-orm": "^0.30.0",
@@ -38,6 +41,7 @@
     "tsx": "^4.16.0",
     "vitest": "^2.0.0",
     "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^2.0.0"
+    "@vitest/coverage-v8": "^2.0.0",
+    "fast-check": "^4.8.0"
   }
 }

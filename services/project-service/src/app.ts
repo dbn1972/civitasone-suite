@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
-import { sqlClient } from "./shared/db.js";
+import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
@@ -25,6 +26,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authPlugin);
 
+  // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
+  // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
+  app.addHook("onRequest", createTenantTxHook(db));
+
   registerOpsRoutes(app, { service: "project-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -38,6 +43,18 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const { worldClassProjectRoutes } = await import("./modules/project/world-class-routes.js");
   await app.register(worldClassProjectRoutes);
+
+  const { mockEliminationRoutes } = await import("./modules/project/mock-elimination-routes.js");
+  await app.register(mockEliminationRoutes);
+
+  const { schedulingRoutes } = await import("./modules/scheduling/routes.js");
+  await app.register(schedulingRoutes);
+
+  const { baselineRoutes } = await import("./modules/scheduling/baselines.js");
+  await app.register(baselineRoutes);
+
+  const { wbsRoutes } = await import("./modules/scheduling/wbs-routes.js");
+  await app.register(wbsRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

@@ -14,12 +14,22 @@ type CreatePayload = {
   description: string | null;
   priority: string;
   status: string;
+  ticketType?: string | null;
+  typeFields?: Record<string, unknown> | null;
+  assetIds?: string[] | null;
+  assetVerified?: boolean;
 };
 
 type AssignPayload = {
   id: string;
   tenantId: string;
   assigneeId: string;
+};
+
+type TransitionPayload = {
+  id: string;
+  tenantId: string;
+  newStatus: string;
 };
 
 /** telephony.call.missed event payload (foreign producer — HD2). */
@@ -58,8 +68,33 @@ export function registerTicketConsumers(queue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
+        ticketType: p.ticketType ?? null,
+        typeFields: p.typeFields ?? null,
+        assetIds: p.assetIds ?? null,
+        assetVerified: p.assetVerified ?? false,
       });
-      await emit(tx, msg, EVENTS.ticketCreated, { ticketId: p.id, subject: p.subject }, "create", p.id);
+      await emit(tx, msg, EVENTS.ticketCreated, { ticketId: p.id, subject: p.subject, ticketType: p.ticketType ?? null }, "create", p.id);
+    });
+    const row = await repo.findById(msg.payload.id, msg.tenantId);
+    if (row) await cache.put(keyFor(msg.tenantId, msg.payload.id), row);
+    await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+
+  // ---- ITIL: transition status --------------------------------------------
+  queue.subscribe<TransitionPayload>(COMMANDS.transitionTicket, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const p = msg.payload;
+      const updated = await repo.transitionStatus(tx, p.id, p.tenantId, p.newStatus, msg.actorId, new Date());
+      if (!updated) {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "helpdesk", action: "transition", resourceType: "ticket", resourceId: p.id, outcome: "rejected_not_found" },
+        });
+        return;
+      }
+      await emit(tx, msg, EVENTS.ticketTransitioned, { ticketId: p.id, newStatus: p.newStatus }, "transition", p.id);
     });
     const row = await repo.findById(msg.payload.id, msg.tenantId);
     if (row) await cache.put(keyFor(msg.tenantId, msg.payload.id), row);

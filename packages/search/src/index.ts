@@ -18,6 +18,14 @@
 export type { SearchEngine, SearchEngineConfig, SearchDocument, SearchQuery, SearchResponse, SearchResult } from "./types.js";
 export { MeilisearchEngine, type MeilisearchOptions } from "./meilisearch.js";
 export { OpenSearchEngine, type OpenSearchOptions } from "./opensearch.js";
+export {
+  publishSearchIndex,
+  SEARCH_INDEX_TOPIC,
+  SEARCH_INDEX_EVENT_TYPE,
+  type SearchIndexDocument,
+  type PublishSearchIndexInput,
+} from "./indexing.js";
+export type { DrizzleTx } from "./indexing-types.js";
 
 import type { SearchEngine } from "./types.js";
 import { MeilisearchEngine } from "./meilisearch.js";

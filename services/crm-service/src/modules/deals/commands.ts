@@ -22,6 +22,8 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
   const projected: DealView = {
     id,
     tenantId: ctx.tenantId,
+    pipelineId: body.pipelineId ?? null,
+    stageId: body.stageId ?? null,
     name: body.name,
     stage: body.stage,
     valueMinor: valueMinor.toString(),
@@ -31,6 +33,7 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
     contactName: null,
     ownerId: body.ownerId ?? ctx.actorId,
     closeDate: body.closeDate ?? null,
+    closedAt: null,
     probability: body.probability ?? 0,
     status: "active",
     version: 1,
@@ -51,7 +54,14 @@ export async function updateDealStage(ctx: RequestContext, id: string, body: Upd
   await queue.publish(COMMANDS.updateDealStage, {
     messageId: msgId, type: COMMANDS.updateDealStage,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, stage: body.stage, ...(body.probability !== undefined ? { probability: body.probability } : {}) },
+    payload: {
+      id,
+      tenantId: ctx.tenantId,
+      stage: body.stage,
+      stageId: body.stageId,
+      version: body.version,
+      ...(body.probability !== undefined ? { probability: body.probability } : {}),
+    },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
   await cache.invalidateResource(ctx.tenantId, RESOURCE);

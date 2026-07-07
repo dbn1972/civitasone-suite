@@ -20,7 +20,15 @@ export function TopBar({ crumb }: TopBarProps) {
       </nav>
       <div className="tb-search">
         <span style={{ fontSize: 14 }}>🔍</span>
-        <input placeholder="Search… (Ctrl+K)" aria-label="Search" />
+        <input
+          placeholder="Search… (Ctrl+K)"
+          aria-label="Search"
+          onFocus={(e) => {
+            e.target.blur();
+            document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
+          }}
+          readOnly
+        />
       </div>
       <div className="tb-actions">
         <ConnectionStatus />

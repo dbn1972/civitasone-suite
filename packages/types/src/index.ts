@@ -1316,6 +1316,36 @@ export type AuditExportJob = {
   downloadUrl?: string;
 };
 
+export type CagParaSummary = {
+  id: string;
+  reportYear: string;
+  paraNo: string;
+  department: string;
+  totalParas: number;
+  settled: number;
+  pending: number;
+  status: "under_review" | "partially_settled" | "nearly_settled" | "settled";
+};
+
+export type VigilanceCaseSummary = {
+  id: string;
+  caseNo: string;
+  officer: string;
+  charges: string;
+  inquiryStatus: "preliminary_enquiry" | "under_investigation" | "charge_sheet_issued" | "inquiry_complete";
+  outcome: "pending" | "major_penalty" | "minor_penalty" | "exonerated";
+};
+
+export type InvestigationSummary = {
+  id: string;
+  caseId: string;
+  subject: string;
+  assignedTo: string;
+  started: string;
+  findings: string;
+  status: "in_progress" | "findings_submitted" | "closed";
+};
+
 // ── Legal types ───────────────────────────────────────────────────────────────
 
 export type LegalDashboard = {

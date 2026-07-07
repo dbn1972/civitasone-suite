@@ -3,9 +3,10 @@
  * Extracts route definitions from all services and generates OpenAPI 3.1 YAML.
  * Run: node scripts/docs/generate-openapi.mjs > docs/api/openapi-generated.yaml
  *
- * Scans services/{name}/src/modules/{module}/routes.ts for Fastify route
- * registrations and outputs a complete OpenAPI 3.1 document with tags per
- * service and paths grouped by tag.
+ * Scans services/{name}/src/modules/ for Fastify route files matching:
+ * routes.ts, *-routes.ts, *.routes.ts, and *-route.ts patterns.
+ * Outputs a complete OpenAPI 3.1 document with tags per service and paths
+ * grouped by tag.
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
@@ -24,7 +25,8 @@ const ROUTE_REGEX = new RegExp(
 );
 
 /**
- * Recursively find all routes.ts files under a service's src/modules directory.
+ * Recursively find all route files under a service's src/modules directory.
+ * Matches: routes.ts, *-routes.ts, *.routes.ts, *-route.ts
  */
 function findRouteFiles(dir) {
   const results = [];

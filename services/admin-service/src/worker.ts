@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTenantConsumers } from "./modules/tenants/consumer.js";
 import { registerConfigConsumers } from "./modules/config/consumer.js";
 import { registerBackupConsumers } from "./modules/backup/consumer.js";
@@ -26,6 +27,12 @@ registerFeatureFlagConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
+// G7: scheduled outbox purge — remove published messages older than 7 days.
+const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+  intervalMs: 60 * 60_000,
+  batchSize: 1000,
+  logger: log,
+});
 
 // P1-2: periodically auto-close break-glass grants past their TTL.
 const breakGlassSweepMs = Number(process.env.BREAK_GLASS_SWEEP_MS ?? 60_000);
@@ -40,6 +47,7 @@ log.info("admin-service worker: consumers + outbox relay + break-glass sweeper r
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
+  clearInterval(purge);
   clearInterval(relay);
   clearInterval(breakGlassSweeper);
   await queue.stop();

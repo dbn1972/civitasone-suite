@@ -2,12 +2,14 @@
 export const COMMANDS = {
   createTicket: "helpdesk.ticket.create",
   assignTicket: "helpdesk.ticket.assign",
+  transitionTicket: "helpdesk.ticket.transition",
 } as const;
 
 export const EVENTS = {
   ticketCreated: "helpdesk.ticket.created",
   ticketAssigned: "helpdesk.ticket.assigned",
   ticketEscalated: "helpdesk.ticket.escalated",
+  ticketTransitioned: "helpdesk.ticket.transitioned",
 } as const;
 
 /** Foreign producer topics this service CONSUMES (HD2 inbound linkage). */

@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
-import { sqlClient } from "./shared/db.js";
+import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
@@ -17,6 +18,9 @@ import { reminderRoutes } from "./modules/reminders/routes.js";
 import { opinionRoutes } from "./modules/opinions/routes.js";
 import { counselBriefRoutes } from "./modules/counsel/routes.js";
 import { filingRoutes } from "./modules/filings/routes.js";
+import { ecourtsRoutes } from "./modules/ecourts/routes.js";
+import { documentRoutes } from "./modules/documents/routes.js";
+import { limitationRoutes } from "./modules/limitations/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -27,6 +31,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
+  // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
+  app.addHook("onRequest", createTenantTxHook(db));
+
   registerOpsRoutes(app, { service: "legal-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -40,6 +49,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(opinionRoutes);
   await app.register(counselBriefRoutes);
   await app.register(filingRoutes);
+  await app.register(ecourtsRoutes);
+  await app.register(documentRoutes);
+  await app.register(limitationRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

@@ -8,7 +8,7 @@ import { findProjectByIdTx } from "./repo.js";
 import {
   projectIdParam, billParam, extParam,
   createRiskBody, computeEvmBody, createRaBillBody, createTimeExtBody,
-  createPenaltyBody, createResourceBody, createBaselineBody,
+  createPenaltyBody, createResourceBody,
 } from "./world-class-validators.js";
 
 const PROJ_ROLES   = ["project_manager", "project_officer", "super_admin"];
@@ -79,6 +79,49 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = projectIdParam.parse(req.params);
+
+    // Check if a baseline exists in new baselines table (Req 11.5)
+    const baselineCheck = await db.execute(sql`
+      SELECT id, label FROM project.baselines
+      WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
+      ORDER BY created_at DESC LIMIT 1
+    `);
+
+    // Also check legacy project_baselines for backward compat
+    if (baselineCheck.length === 0) {
+      const legacyCheck = await db.execute(sql`
+        SELECT id FROM project.project_baselines
+        WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
+        LIMIT 1
+      `);
+      if (legacyCheck.length === 0) {
+        throw new HttpError(422, "BASELINE_REQUIRED", "a baseline snapshot is required before EVM metrics can be computed");
+      }
+    }
+
+    // If pv/ev/ac query params present, compute real-time EVM metrics
+    const query = req.query as Record<string, string | undefined>;
+    if (query.pv !== undefined && query.ev !== undefined && query.ac !== undefined) {
+      const { computeEvm } = await import("../scheduling/evm.js");
+      const pv = BigInt(query.pv);
+      const ev = BigInt(query.ev);
+      const ac = BigInt(query.ac);
+      const metrics = computeEvm(pv, ev, ac);
+      const baseline = baselineCheck[0] as { id: string; label: string } | undefined;
+      return reply.send({
+        data: {
+          baselineId: baseline?.id ?? null,
+          baselineLabel: baseline?.label ?? null,
+          pv: metrics.pv.toString(),
+          ev: metrics.ev.toString(),
+          ac: metrics.ac.toString(),
+          spi: metrics.spi,
+          cpi: metrics.cpi,
+        },
+      });
+    }
+
+    // Fallback: return historical EVM records
     const rows = await db.execute(sql`
       SELECT * FROM project.project_evm
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
@@ -330,38 +373,7 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   });
 
   // ─── Baselines ──────────────────────────────────────────────────────────────
-
-  app.get("/v1/projects/:id/baselines", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
-    const { id } = projectIdParam.parse(req.params);
-    const rows = await db.execute(sql`
-      SELECT * FROM project.project_baselines
-      WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
-      ORDER BY baseline_no DESC
-    `);
-    return reply.send({ data: rows });
-  });
-
-  app.post("/v1/projects/:id/baselines", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, PROJ_ROLES);
-    const { id } = projectIdParam.parse(req.params);
-    const b = createBaselineBody.parse(req.body);
-    const plannedCost = BigInt(b.plannedCostMinor);
-    const newId = await db.transaction(async (tx) => {
-      await assertParent(tx, id, ctx.tenantId);
-      const rows = await tx.execute(sql`
-        INSERT INTO project.project_baselines (tenant_id, project_id, baseline_no, snapshot_date, planned_start, planned_end, planned_cost_minor, milestones_snapshot, created_by)
-        VALUES (${ctx.tenantId}, ${id}, ${b.baselineNo}, ${b.snapshotDate}, ${b.plannedStart}, ${b.plannedEnd}, ${plannedCost}, ${JSON.stringify(b.milestonesSnapshot)}, ${ctx.actorId})
-        RETURNING id
-      `);
-      const rid = (rows[0] as { id: string }).id;
-      await audit(tx, ctx, "create", "baseline", rid);
-      return rid;
-    });
-    return reply.code(201).send({ id: newId, message: "baseline created" });
-  });
+  // NOTE: Baselines and EVM routes moved to scheduling/baselines.ts (task 12.3)
 
   // ─── Error handler ──────────────────────────────────────────────────────────
 

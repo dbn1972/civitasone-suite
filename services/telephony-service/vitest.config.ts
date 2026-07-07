@@ -22,6 +22,8 @@ export default defineConfig({
         "src/modules/calls/consumer.ts",
         "src/modules/queues/consumer.ts",
         "src/modules/agents/consumer.ts",
+        "src/modules/recordings/consumer.ts",
+        "src/modules/transcription/consumer.ts",
       ],
       thresholds: {
         lines: 80,

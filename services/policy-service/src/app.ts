@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
-import { sqlClient } from "./shared/db.js";
+import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
@@ -22,6 +23,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
+  // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
+  app.addHook("onRequest", createTenantTxHook(db));
+
   registerOpsRoutes(app, { service: "policy-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 

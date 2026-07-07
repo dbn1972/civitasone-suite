@@ -53,6 +53,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(vendorBlacklistRoutes);
   await app.register(securityRoutes);
   await app.register((await import("./modules/po-print/routes.js")).poPrintRoutes);
+  const { gemRoutes } = await import("./modules/gem/routes.js");
+  await app.register(gemRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

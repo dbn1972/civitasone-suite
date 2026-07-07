@@ -8,6 +8,8 @@ import { createSqlClient } from "@civitasone/db";
 import { schema as contactsModule } from "../modules/contacts/schema.js";
 import { schema as dealsModule } from "../modules/deals/schema.js";
 import { schema as activitiesModule } from "../modules/activities/schema.js";
+import { schema as pipelinesModule } from "../modules/pipelines/schema.js";
+import { schema as customFieldsModule } from "../modules/custom-fields/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -16,7 +18,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://crm_svc:***@host
 export const sqlClient = createSqlClient(url);
 
 export const db = drizzle(sqlClient, {
-  schema: { ...contactsModule, ...dealsModule, ...activitiesModule, ...outboxSchema },
+  schema: { ...contactsModule, ...dealsModule, ...activitiesModule, ...pipelinesModule, ...customFieldsModule, ...outboxSchema },
 });
 
 export type Db = typeof db;

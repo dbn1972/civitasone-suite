@@ -28,7 +28,54 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
 });
 
-final dbProvider = FutureProvider<SyncDatabase>((ref) => SyncDatabase.open());
+/// Authenticated session state: holds the current tenant+user context.
+/// When this changes, the [syncDbProvider] will close the old partition and
+/// open the new one (Requirement 4.4).
+class AuthSession {
+  const AuthSession({required this.tenantId, required this.userId});
+  final String tenantId;
+  final String userId;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AuthSession && tenantId == other.tenantId && userId == other.userId;
+
+  @override
+  int get hashCode => Object.hash(tenantId, userId);
+}
+
+/// Holds the current authenticated session (tenant+user). Set after login,
+/// cleared on logout. Drives [syncDbProvider] lifecycle.
+final authSessionProvider = StateProvider<AuthSession?>((ref) => null);
+
+/// Opens (or switches) the SyncDatabase partition for the authenticated session.
+/// Returns null when no session is active (Requirement 4.3, 4.4).
+final syncDbProvider = FutureProvider<SyncDatabase?>((ref) async {
+  final session = ref.watch(authSessionProvider);
+  if (session == null) {
+    // No active session — close any open partition.
+    await SyncDatabase.closePartition();
+    return null;
+  }
+  // switchAccount handles: close old partition → clear memory → open new.
+  return SyncDatabase.switchAccount(
+    tenantId: session.tenantId,
+    userId: session.userId,
+  );
+});
+
+/// Legacy provider for backward compatibility (pre-login default DB).
+final dbProvider = FutureProvider<SyncDatabase>((ref) {
+  final session = ref.watch(authSessionProvider);
+  if (session != null) {
+    return SyncDatabase.openForAccount(
+      tenantId: session.tenantId,
+      userId: session.userId,
+    );
+  }
+  return SyncDatabase.open();
+});
 
 final syncEngineProvider = Provider<SyncEngine?>((ref) {
   final db = ref.watch(dbProvider).valueOrNull;

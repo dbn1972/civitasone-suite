@@ -26,6 +26,38 @@
     },
     {
       "method": "GET",
+      "path": "/v1/admin/custom-domains"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/custom-domains"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/admin/custom-domains/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/custom-domains/:id/dns-instructions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/custom-domains/:id/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/data-export"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/data-export"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/data-export/:id/download"
+    },
+    {
+      "method": "GET",
       "path": "/v1/admin/feature-flags"
     },
     {
@@ -35,6 +67,26 @@
     {
       "method": "PATCH",
       "path": "/v1/admin/feature-flags/:key/override"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/feature-flags/manage"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/feature-flags/manage"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/admin/feature-flags/manage/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/admin/feature-flags/manage/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/feature-flags/manage/:id/kill"
     },
     {
       "method": "GET",
@@ -66,7 +118,47 @@
     },
     {
       "method": "GET",
+      "path": "/v1/admin/platform-config/gateway"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/admin/platform-config/gateway"
+    },
+    {
+      "method": "GET",
       "path": "/v1/admin/queue-metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/scheduled-jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/scheduled-jobs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/admin/scheduled-jobs/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/admin/scheduled-jobs/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/scheduled-jobs/:id/history"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/scheduled-jobs/:id/pause"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/scheduled-jobs/:id/resume"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/scheduled-jobs/:id/run-now"
     },
     {
       "method": "POST",
@@ -139,6 +231,30 @@
     {
       "method": "POST",
       "path": "/v1/admin/uploads/presign"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/webhooks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/webhooks"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/admin/webhooks/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/admin/webhooks/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/webhooks/:id/deliveries"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admin/webhooks/:id/test"
     }
   ],
   "analytics-service": [
@@ -189,6 +305,10 @@
     {
       "method": "POST",
       "path": "/v1/analytics/exports"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/analytics/exports/:id/download"
     },
     {
       "method": "GET",
@@ -561,6 +681,18 @@
       "path": "/v1/billing/invoices/:id/cancel"
     },
     {
+      "method": "POST",
+      "path": "/v1/billing/invoices/:id/cancel-irn"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/billing/invoices/:id/einvoice"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/billing/invoices/:id/generate-irn"
+    },
+    {
       "method": "PATCH",
       "path": "/v1/billing/invoices/:id/issue"
     },
@@ -749,6 +881,10 @@
     {
       "method": "POST",
       "path": "/v1/citizen/rti/:id/respond"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/citizen/rti/:id/transfer"
     },
     {
       "method": "GET",
@@ -1820,6 +1956,38 @@
     },
     {
       "method": "GET",
+      "path": "/v1/finance/simplified/cashflow"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/simplified/expenses"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/simplified/income"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/simplified/record-expense"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/simplified/record-income"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/simplified/record-payment-made"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/finance/simplified/record-payment-received"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/finance/simplified/summary"
+    },
+    {
+      "method": "GET",
       "path": "/v1/finance/statements"
     },
     {
@@ -2234,6 +2402,18 @@
     },
     {
       "method": "POST",
+      "path": "/v1/hrms/benefits/elections"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/benefits/my-elections"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/benefits/plans"
+    },
+    {
+      "method": "POST",
       "path": "/v1/hrms/birthdays/:id/wish"
     },
     {
@@ -2263,6 +2443,18 @@
     {
       "method": "POST",
       "path": "/v1/hrms/comp-off/:id/redeem"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/compensation/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/compensation/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/compensation/plans/:id/model"
     },
     {
       "method": "GET",
@@ -2437,6 +2629,10 @@
       "path": "/v1/hrms/employees/:id/disciplinary-cases"
     },
     {
+      "method": "POST",
+      "path": "/v1/hrms/employees/:id/fnf-calculate"
+    },
+    {
       "method": "GET",
       "path": "/v1/hrms/employees/:id/gpf"
     },
@@ -2534,6 +2730,22 @@
     },
     {
       "method": "GET",
+      "path": "/v1/hrms/engagement/eNPS"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/engagement/surveys"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/engagement/surveys/:id/respond"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/engagement/surveys/:id/results"
+    },
+    {
+      "method": "GET",
       "path": "/v1/hrms/expenses"
     },
     {
@@ -2543,6 +2755,22 @@
     {
       "method": "PATCH",
       "path": "/v1/hrms/expenses/:id/approve"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/feedback/cycles"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/feedback/cycles/:id/nominate-raters"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/feedback/cycles/:id/report"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/feedback/responses"
     },
     {
       "method": "GET",
@@ -2662,6 +2890,10 @@
     },
     {
       "method": "PATCH",
+      "path": "/v1/hrms/leave-applications/:id/cancel"
+    },
+    {
+      "method": "PATCH",
       "path": "/v1/hrms/leave-applications/:id/reject"
     },
     {
@@ -2683,6 +2915,10 @@
     {
       "method": "PATCH",
       "path": "/v1/hrms/leave-requests/:id/reject"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/leave-types"
     },
     {
       "method": "POST",
@@ -2715,6 +2951,30 @@
     {
       "method": "POST",
       "path": "/v1/hrms/lifecycle/transfers/:id/relieve"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/lms/compliance"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/lms/courses"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lms/courses"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lms/courses/:id/enroll"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/lms/enrollments/:id/complete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/lms/my-learning"
     },
     {
       "method": "GET",
@@ -2795,6 +3055,18 @@
     {
       "method": "POST",
       "path": "/v1/hrms/office-locations"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/onboarding/:id/steps/:stepIdx/complete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/onboarding/active"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/onboarding/templates"
     },
     {
       "method": "GET",
@@ -2953,8 +3225,44 @@
       "path": "/v1/hrms/service-book/entries/:entryId/attest"
     },
     {
+      "method": "POST",
+      "path": "/v1/hrms/skills/assessments"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/skills/competencies"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/skills/gap-analysis"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/skills/role-matrix"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/skills/team-heatmap"
+    },
+    {
       "method": "GET",
       "path": "/v1/hrms/social/feed"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/succession/critical-roles"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hrms/succession/nominees"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/succession/pipeline"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hrms/succession/risk"
     },
     {
       "method": "POST",
@@ -3184,6 +3492,74 @@
     },
     {
       "method": "POST",
+      "path": "/v1/identity/saml/acs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/saml/config"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/identity/saml/config"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/saml/metadata"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/scim/ServiceProviderConfig"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/scim/Users"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/identity/scim/Users"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/identity/scim/Users/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/scim/Users/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/identity/scim/Users/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/identity/scim/Users/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/identity/webauthn/authenticate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/webauthn/authenticate/options"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/webauthn/credentials"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/identity/webauthn/credentials/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/identity/webauthn/register"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/identity/webauthn/register/options"
+    },
+    {
+      "method": "POST",
       "path": "/v1/sync/pull"
     },
     {
@@ -3219,6 +3595,10 @@
     {
       "method": "GET",
       "path": "/v1/install/steps"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/install/steps/:id/:verb"
     }
   ],
   "inventory-service": [
@@ -3294,6 +3674,38 @@
   "knowledge-service": [
     {
       "method": "GET",
+      "path": "/v1/knowledge/categories"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/categories"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/knowledge/categories/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/categories/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/knowledge/categories/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/categories/:id/ancestors"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/categories/:id/children"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/categories/reorder"
+    },
+    {
+      "method": "GET",
       "path": "/v1/knowledge/documents"
     },
     {
@@ -3302,11 +3714,79 @@
     },
     {
       "method": "GET",
+      "path": "/v1/knowledge/documents/:documentId/versions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/documents/:documentId/versions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/documents/:documentId/versions/:versionId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/documents/:documentId/versions/:versionId/restore"
+    },
+    {
+      "method": "GET",
       "path": "/v1/knowledge/records"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/retention-policies"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/retention-policies"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/retention-policies/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/knowledge/retention-policies/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/retention-policies/:id/apply"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/retention-policies/expiring"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/retention/due"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/search"
     },
     {
       "method": "POST",
       "path": "/v1/knowledge/search"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/shares"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge/shares"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/knowledge/shares/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/shares/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge/shares/document/:documentId"
     }
   ],
   "legal-service": [
@@ -3341,6 +3821,10 @@
     {
       "method": "POST",
       "path": "/v1/legal/cases/:id/reminder"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/legal/cases/:id/reminders"
     },
     {
       "method": "POST",
@@ -3430,6 +3914,70 @@
   "location-service": [
     {
       "method": "GET",
+      "path": "/v1/geofences"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/geofences"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/geofences/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/geofences/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/geofences/:id/check"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hierarchy"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hierarchy"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hierarchy/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/hierarchy/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hierarchy/:id/ancestors"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hierarchy/:id/children"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hierarchy/:id/descendants"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/hierarchy/bulk-sync"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/jurisdictions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/jurisdictions"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/jurisdictions/:id"
+    },
+    {
+      "method": "GET",
       "path": "/v1/locations"
     },
     {
@@ -3451,6 +3999,18 @@
     {
       "method": "GET",
       "path": "/v1/locations/tree"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/pincodes/:code"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/pincodes/bulk-import"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/pincodes/search"
     }
   ],
   "notification-service": [
@@ -3562,7 +4122,27 @@
     },
     {
       "method": "GET",
+      "path": "/v1/payroll/calendar"
+    },
+    {
+      "method": "GET",
       "path": "/v1/payroll/comparison"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/corrections"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/corrections"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/costing/report"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/costing/rules"
     },
     {
       "method": "POST",
@@ -3581,6 +4161,46 @@
       "path": "/v1/payroll/ddos"
     },
     {
+      "method": "DELETE",
+      "path": "/v1/payroll/dsc-config"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/dsc-config"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/payroll/dsc-config"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/flex-benefits/elections"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/flex-benefits/my-elections"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/flex-benefits/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/fnf/compute"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/fnf/settlements"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/fnf/settlements/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/internal/fnf-tax-breakdown"
+    },
+    {
       "method": "GET",
       "path": "/v1/payroll/loans"
     },
@@ -3591,6 +4211,26 @@
     {
       "method": "PATCH",
       "path": "/v1/payroll/loans/:id/disburse"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/off-cycle"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/off-cycle"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/off-cycle/:id/process"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/pay-groups"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/pay-groups"
     },
     {
       "method": "GET",
@@ -3637,8 +4277,16 @@
       "path": "/v1/payroll/runs/:id/disburse"
     },
     {
+      "method": "POST",
+      "path": "/v1/payroll/runs/:id/nach-return"
+    },
+    {
       "method": "PATCH",
       "path": "/v1/payroll/runs/:id/revert"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/runs/:id/simulate"
     },
     {
       "method": "GET",
@@ -3654,7 +4302,19 @@
     },
     {
       "method": "GET",
+      "path": "/v1/payroll/slips/:id/download"
+    },
+    {
+      "method": "GET",
       "path": "/v1/payroll/slips/:id/pdf"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/sponsor-bank-config"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/payroll/sponsor-bank-config"
     },
     {
       "method": "GET",
@@ -3722,6 +4382,14 @@
     },
     {
       "method": "GET",
+      "path": "/v1/payroll/statutory/state-rules"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/statutory/state-rules"
+    },
+    {
+      "method": "GET",
       "path": "/v1/payroll/statutory/tds"
     },
     {
@@ -3746,14 +4414,90 @@
     },
     {
       "method": "GET",
+      "path": "/v1/payroll/tax/exemption-ceilings"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/payroll/tax/exemption-ceilings"
+    },
+    {
+      "method": "GET",
       "path": "/v1/payroll/tax/form16"
     },
     {
       "method": "GET",
       "path": "/v1/payroll/tax/form16/:employeeId/pdf"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax/form16/bulk-download"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/tax/form16/bulk-generate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax/form16/bulk-status"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/payroll/tax/form16/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax/optimization"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/payroll/tax/regime-comparison"
     }
   ],
   "plugin-service": [
+    {
+      "method": "GET",
+      "path": "/v1/plugins"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/plugins/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/plugins/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/plugins/:id/config"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/plugins/:id/disable"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/plugins/:id/enable"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/plugins/hooks"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/plugins/hooks"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/plugins/hooks/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/plugins/hooks/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/plugins/install"
+    },
     {
       "method": "GET",
       "path": "/v1/plugins/items"
@@ -3831,6 +4575,26 @@
     {
       "method": "POST",
       "path": "/v1/policy/evaluate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/policy/role-features"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/policy/role-features"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/policy/role-features/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/policy/role-features/by-role/:role"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/policy/role-features/evaluate"
     }
   ],
   "procurement-service": [
@@ -4276,6 +5040,10 @@
     },
     {
       "method": "GET",
+      "path": "/v1/reports/jobs/:id/download"
+    },
+    {
+      "method": "GET",
       "path": "/v1/reports/kpis"
     },
     {
@@ -4306,11 +5074,35 @@
   "stock-service": [
     {
       "method": "GET",
+      "path": "/v1/stock/categories"
+    },
+    {
+      "method": "GET",
       "path": "/v1/stock/dashboard"
     },
     {
       "method": "POST",
       "path": "/v1/stock/entries"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/stock/eway-bills"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/stock/eway-bills"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/stock/eway-bills/:id"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/stock/eway-bills/:id/cancel"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/stock/eway-bills/:id/update-vehicle"
     },
     {
       "method": "GET",
@@ -4331,6 +5123,10 @@
     {
       "method": "POST",
       "path": "/v1/stock/physical-verification"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/stock/uoms"
     },
     {
       "method": "GET",
@@ -4421,12 +5217,160 @@
     {
       "method": "GET",
       "path": "/v1/telephony/queues/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/webhooks/exotel/inbound"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/webhooks/exotel/status"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/webhooks/twilio/inbound"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/webhooks/twilio/recording"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/telephony/webhooks/twilio/status"
     }
   ],
   "tenant-service": [
     {
+      "method": "GET",
+      "path": "/v1/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/plans"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/plans/:planId"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/plans/:planId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/quotas"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/quotas/:tenantId"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/quotas/:tenantId/:resource"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/quotas/check"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/quotas/increment"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/settings"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/settings"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/settings"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/settings/:key"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/settings/tenant/:tenantId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/subscriptions/:subscriptionId"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/subscriptions/:subscriptionId/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/subscriptions/:subscriptionId/renew"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/subscriptions/:subscriptionId/suspend"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/subscriptions/:subscriptionId/upgrade"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/subscriptions/current"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tenant/:tenantId/quotas"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/tenant/:tenantId/quotas"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tenant/msme-onboard"
+    },
+    {
       "method": "POST",
       "path": "/v1/tenant/onboard"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tenant/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tenant/subscription/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tenant/subscription/current"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tenant/subscription/downgrade"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tenant/subscription/invoice-history"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tenant/subscription/upgrade"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tenant/usage"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tenant/usage/increment"
     },
     {
       "method": "POST",
@@ -4456,6 +5400,50 @@
   "theme-service": [
     {
       "method": "GET",
+      "path": "/v1/themes/brand"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/themes/brand"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/themes/brand/apply-preset"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/themes/brand/css"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/themes/brand/presets"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/themes/branding"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/themes/branding"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/themes/branding/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/themes/templates"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/themes/templates"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/themes/templates/:id"
+    },
+    {
+      "method": "GET",
       "path": "/v1/themes/tokens"
     },
     {
@@ -4470,7 +5458,23 @@
   "workflow-service": [
     {
       "method": "GET",
+      "path": "/v1/workflow/analytics/assignment-recommendations"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/analytics/automation-rate"
+    },
+    {
+      "method": "GET",
       "path": "/v1/workflow/analytics/bottlenecks"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/analytics/cycle-time"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/analytics/sla-compliance"
     },
     {
       "method": "GET",
@@ -4478,7 +5482,55 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workflow/analytics/version-comparison"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/assignment/matrix"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/assignment/matrix"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workflow/assignment/matrix/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/assignment/substitutions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/assignment/substitutions"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workflow/assignment/substitutions/:id"
+    },
+    {
+      "method": "GET",
       "path": "/v1/workflow/audit/export"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/decisions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/decisions"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/decisions/:code/evaluate"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/decisions/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/decisions/:id/deploy"
     },
     {
       "method": "GET",
@@ -4493,8 +5545,20 @@
       "path": "/v1/workflow/definitions/:id"
     },
     {
+      "method": "GET",
+      "path": "/v1/workflow/definitions/:id/bpmn"
+    },
+    {
       "method": "POST",
       "path": "/v1/workflow/definitions/:id/deploy"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/definitions/:id/simulate"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/definitions/import"
     },
     {
       "method": "GET",
@@ -4515,6 +5579,22 @@
     {
       "method": "POST",
       "path": "/v1/workflow/dlq/:id/requeue"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/external-tasks/:id/complete"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/external-tasks/:id/extend-lock"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/external-tasks/:id/fail"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/external-tasks/fetch-and-lock"
     },
     {
       "method": "GET",
@@ -4546,11 +5626,27 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workflow/instances/:instanceId/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/instances/search"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/messages/deliver"
+    },
+    {
+      "method": "GET",
       "path": "/v1/workflow/role-members"
     },
     {
       "method": "PUT",
       "path": "/v1/workflow/role-members"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/signals/broadcast"
     },
     {
       "method": "GET",
@@ -4567,6 +5663,18 @@
     {
       "method": "POST",
       "path": "/v1/workflow/tasks/:id/complete"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/tasks/:id/forward"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflow/tasks/:id/forwards"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflow/tasks/:id/recall"
     },
     {
       "method": "POST",

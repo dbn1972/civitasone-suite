@@ -9,6 +9,9 @@ import { schema as opinionsModule } from "../modules/opinions/schema.js";
 import { schema as counselModule } from "../modules/counsel/schema.js";
 import { schema as filingsModule } from "../modules/filings/schema.js";
 import { schema as remindersModule } from "../modules/reminders/schema.js";
+import { syncSchema } from "../modules/ecourts/sync-schema.js";
+import { schema as documentsModule } from "../modules/documents/schema.js";
+import { schema as limitationsModule } from "../modules/limitations/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -16,6 +19,6 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://legal_svc:***@ho
 
 export const sqlClient = createSqlClient(url);
 export const db = drizzle(sqlClient, {
-  schema: { ...casesModule, ...hearingsModule, ...noticesModule, ...contractsModule, ...settlementsModule, ...opinionsModule, ...counselModule, ...filingsModule, ...remindersModule, ...outboxSchema },
+  schema: { ...casesModule, ...hearingsModule, ...noticesModule, ...contractsModule, ...settlementsModule, ...opinionsModule, ...counselModule, ...filingsModule, ...remindersModule, ...syncSchema, ...documentsModule, ...limitationsModule, ...outboxSchema },
 });
 export type Db = typeof db;

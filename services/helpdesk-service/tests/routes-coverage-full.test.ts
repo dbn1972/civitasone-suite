@@ -639,8 +639,9 @@ describe("repo.computeSla", () => {
   });
 
   it("Low priority ticket has 5-day SLA", () => {
+    // 4 days elapsed on a 5-day SLA = 80% → at_risk (new: 80% threshold)
     const row = { ...baseRow, priority: "Low", createdAt: new Date(Date.now() - 4 * 86400000) };
-    expect(repo.computeSla(row).slaStatus).toBe("within_sla");
+    expect(repo.computeSla(row).slaStatus).toBe("at_risk");
   });
 
   it("Medium priority ticket created 6 days ago is breached", () => {

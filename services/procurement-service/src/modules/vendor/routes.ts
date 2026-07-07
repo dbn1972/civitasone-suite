@@ -3,20 +3,53 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { vendorListResponseSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createVendorBody, empanelBody, blacklistBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import type { RequestContext } from "@civitasone/types";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer"];
+
+/** Roles authorized to view decrypted PII fields on vendor records. */
+export const PII_AUTHORIZED_ROLES = [
+  "procurement_officer",
+  "procurement_admin",
+  "finance_officer",
+  "tenant_admin",
+  "super_admin",
+  "audit_officer",
+] as const;
+
+/** Remove PII fields from a vendor record. */
+export function stripPii<T extends Record<string, unknown>>(vendor: T): Omit<T, "pan" | "email" | "phone" | "bankAccount" | "ifsc"> {
+  const { pan, email, phone, bankAccount, ifsc, ...safe } = vendor as Record<string, unknown>;
+  return safe as Omit<T, "pan" | "email" | "phone" | "bankAccount" | "ifsc">;
+}
+
+/** Check if a user context has PII read access. */
+function hasPiiAccess(ctx: RequestContext): boolean {
+  return hasAnyRole(ctx, PII_AUTHORIZED_ROLES as unknown as string[]);
+}
 
 export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/vendors", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, vendorListResponseSchema, await queries.listVendors(ctx.tenantId, q.limit, q.offset));
+    const result = await queries.listVendors(ctx.tenantId, q.limit, q.offset);
+
+    if (!hasPiiAccess(ctx)) {
+      return reply.code(403).send({
+        code: "PII_ACCESS_DENIED",
+        message: "insufficient role for PII access",
+        data: result.data.map((v) => stripPii(v)),
+      });
+    }
+
+    sendValidated(reply, vendorListResponseSchema, result);
   });
 
   app.post("/v1/procurement/vendors", async (req, reply) => {
@@ -48,7 +81,16 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const vendor = await queries.getVendor(id, ctx.tenantId);
     if (!vendor) throw new HttpError(404, "NOT_FOUND", "vendor not found");
-    return reply.send(vendor);
+
+    if (!hasPiiAccess(ctx)) {
+      return reply.code(403).send({
+        code: "PII_ACCESS_DENIED",
+        message: "insufficient role for PII access",
+        data: stripPii(vendor),
+      });
+    }
+
+    return reply.send({ data: vendor });
   });
 
   app.setErrorHandler(errorHandler);

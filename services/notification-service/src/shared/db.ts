@@ -5,6 +5,7 @@ import { deliveriesModuleSchema } from "../modules/deliveries/schema.js";
 import { channelsModuleSchema } from "../modules/channels/schema.js";
 import { alertsModuleSchema } from "../modules/alerts/schema.js";
 import { bulkModuleSchema } from "../modules/bulk/schema.js";
+import { streamModuleSchema } from "../modules/stream/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -18,6 +19,7 @@ export const db = drizzle(sqlClient, {
     ...channelsModuleSchema,
     ...alertsModuleSchema,
     ...bulkModuleSchema,
+    ...streamModuleSchema,
     ...outboxSchema,
   },
 });

@@ -1,0 +1,33 @@
+-- 0015_encrypt_plaintext_pii.sql
+-- Purpose: Data migration marker for batch encryption of plaintext PII rows.
+--
+--          Actual encryption happens at the application layer via the TypeScript
+--          script: scripts/migrate-encrypt-pii.ts
+--
+--          This script uses @civitasone/pii-crypto (AES-256-GCM) to encrypt
+--          pan, email, phone, bank_account, ifsc columns in vendor.procurement_vendors.
+--          Processes 1000 rows per transaction, sets pii_encrypted_at = now() per batch.
+--
+-- Run the TypeScript data migration:
+--   PII_ENC_KEY=<your-key> DATABASE_URL=<url> npx tsx scripts/migrate-encrypt-pii.ts
+--
+-- Rollback: UPDATE vendor.procurement_vendors SET pii_encrypted_at = NULL;
+--           (Note: encrypted data cannot be reverted to plaintext without the key)
+--
+-- Affected services: procurement-service
+-- Requirements: 2.2
+-- Depends on: 0014_add_pii_encrypted_at.sql
+
+-- This migration is intentionally a no-op SQL file.
+-- The data migration is performed by the TypeScript script because:
+--   1. Encryption must happen in the application layer (AES-256-GCM via Node crypto)
+--   2. The PII_ENC_KEY is an application secret, not available to SQL migrations
+--   3. Drizzle's encryptedText() custom type handles encrypt/decrypt transparently
+--
+-- Verification query (check progress):
+--   SELECT
+--     COUNT(*) FILTER (WHERE pii_encrypted_at IS NOT NULL) AS encrypted,
+--     COUNT(*) FILTER (WHERE pii_encrypted_at IS NULL) AS pending
+--   FROM vendor.procurement_vendors;
+
+SELECT 1; -- no-op placeholder to satisfy migration runner ordering

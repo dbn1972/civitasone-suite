@@ -103,6 +103,9 @@ import type {
   AuditPlanItem,
   AuditComplianceItem,
   AuditExportJob,
+  CagParaSummary,
+  VigilanceCaseSummary,
+  InvestigationSummary,
   LegalDashboard,
   LegalCaseSummary,
   LegalCaseDetail,
@@ -231,6 +234,9 @@ import {
   AuditPlanListSchema,
   AuditComplianceListSchema,
   AuditExportJobListSchema,
+  CagParaSummaryListSchema,
+  VigilanceCaseSummaryListSchema,
+  InvestigationSummaryListSchema,
   LegalDashboardSchema,
   LegalCaseSummaryListSchema,
   LegalCaseDetailSchema,
@@ -2111,6 +2117,106 @@ export async function getDealById(id: string): Promise<LoaderResult<DealSummary 
   });
 }
 
+// ── CRM Pipeline (Kanban) loaders ─────────────────────────────────────────────
+
+export type PipelineStageView = {
+  id: string;
+  name: string;
+  probability: number;
+  ordinal: number;
+};
+
+export type PipelineView = {
+  id: string;
+  name: string;
+  stages: PipelineStageView[];
+  status: string;
+};
+
+export type PipelineDealCard = {
+  id: string;
+  name: string;
+  stageId: string | null;
+  stage: string;
+  valueMinor: string;
+  valueDisplay: string;
+  probability: number;
+  ownerId: string | null;
+  contactName: string | null;
+  version: number;
+};
+
+function mapPipelines(payload: unknown): PipelineView[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: PipelineView[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    const status = toText(row.status) ?? "active";
+    if (!id || !name) continue;
+    const stages: PipelineStageView[] = [];
+    const rawStages = Array.isArray(row.stages) ? row.stages : [];
+    for (const s of rawStages) {
+      if (!isRecord(s)) continue;
+      const sid = toText(s.id);
+      const sname = toText(s.name);
+      if (!sid || !sname) continue;
+      stages.push({
+        id: sid,
+        name: sname,
+        probability: typeof s.probability === "number" ? s.probability : 0,
+        ordinal: typeof s.ordinal === "number" ? s.ordinal : 0,
+      });
+    }
+    stages.sort((a, b) => a.ordinal - b.ordinal);
+    mapped.push({ id, name, stages, status });
+  }
+  return mapped.length > 0 ? mapped : null;
+}
+
+export async function getPipelines(): Promise<LoaderResult<PipelineView[]>> {
+  return fetchJson<unknown, PipelineView[]>("/api/v1/crm/pipelines", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "crm.pipelines",
+    mapResponse: mapPipelines,
+  });
+}
+
+function mapPipelineDeals(payload: unknown): PipelineDealCard[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: PipelineDealCard[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (!id || !name) continue;
+    mapped.push({
+      id,
+      name,
+      stageId: toText(row.stageId) ?? null,
+      stage: toText(row.stage) ?? "Lead",
+      valueMinor: toText(row.valueMinor) ?? "0",
+      valueDisplay: toText(row.valueDisplay) ?? "₹0.00",
+      probability: typeof row.probability === "number" ? row.probability : 0,
+      ownerId: toText(row.ownerId) ?? null,
+      contactName: toText(row.contactName) ?? null,
+      version: typeof row.version === "number" ? row.version : 1,
+    });
+  }
+  return mapped.length > 0 ? mapped : null;
+}
+
+export async function getPipelineDeals(): Promise<LoaderResult<PipelineDealCard[]>> {
+  return fetchJson<unknown, PipelineDealCard[]>("/api/v1/crm/deals?limit=200", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "crm.pipeline.deals",
+    mapResponse: mapPipelineDeals,
+  });
+}
+
 export async function getContactById(id: string): Promise<LoaderResult<ContactDetail | null>> {
   return fetchJson<unknown, ContactDetail | null>(`/api/v1/crm/contacts/${id}/detail`, null, {
     revalidateSeconds: 60,
@@ -2824,6 +2930,102 @@ export async function getAuditExports(): Promise<LoaderResult<AuditExportJob[]>>
   });
 }
 
+export type { CagParaSummary, VigilanceCaseSummary, InvestigationSummary } from "@civitasone/types";
+
+export async function getCagParas(): Promise<LoaderResult<CagParaSummary[]>> {
+  return fetchJson<unknown, CagParaSummary[]>("/api/v1/audit/paras", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "audit.cag-paras",
+    responseSchema: CagParaSummaryListSchema,
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      const mapped: CagParaSummary[] = [];
+      for (const row of rows) {
+        if (!isRecord(row)) continue;
+        const id = toText(row.id);
+        const paraNo = toText(row.paraNo) ?? "";
+        const reportYear = toText(row.reportYear) ?? toText(row.sourceRef) ?? "";
+        const department = toText(row.department) ?? toText(row.deptRef) ?? "";
+        const status = row.status === "settled" ? "settled" :
+                       row.status === "closed" ? "settled" :
+                       row.status === "replied" ? "partially_settled" :
+                       row.status === "pending_recovery" ? "nearly_settled" :
+                       "under_review";
+        if (!id) continue;
+        mapped.push({
+          id,
+          reportYear,
+          paraNo,
+          department,
+          totalParas: 1,
+          settled: status === "settled" ? 1 : 0,
+          pending: status === "settled" ? 0 : 1,
+          status,
+        });
+      }
+      return mapped.length > 0 ? mapped : null;
+    },
+  });
+}
+
+export async function getVigilanceCases(): Promise<LoaderResult<VigilanceCaseSummary[]>> {
+  return fetchJson<unknown, VigilanceCaseSummary[]>("/api/v1/audit/vigilance", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "audit.vigilance",
+    responseSchema: VigilanceCaseSummaryListSchema,
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      const mapped: VigilanceCaseSummary[] = [];
+      for (const row of rows) {
+        if (!isRecord(row)) continue;
+        const id = toText(row.id);
+        const caseNo = toText(row.caseNo) ?? "";
+        const officer = toText(row.officer) ?? "";
+        const charges = toText(row.charges) ?? "";
+        const rawInquiry = toText(row.inquiryStatus) ?? "preliminary_enquiry";
+        const inquiryStatus = (rawInquiry === "preliminary_enquiry" || rawInquiry === "under_investigation" || rawInquiry === "charge_sheet_issued" || rawInquiry === "inquiry_complete")
+          ? rawInquiry : "preliminary_enquiry";
+        const rawOutcome = toText(row.outcome) ?? "pending";
+        const outcome = (rawOutcome === "pending" || rawOutcome === "major_penalty" || rawOutcome === "minor_penalty" || rawOutcome === "exonerated")
+          ? rawOutcome : "pending";
+        if (!id) continue;
+        mapped.push({ id, caseNo, officer, charges, inquiryStatus, outcome });
+      }
+      return mapped.length > 0 ? mapped : null;
+    },
+  });
+}
+
+export async function getInvestigations(): Promise<LoaderResult<InvestigationSummary[]>> {
+  return fetchJson<unknown, InvestigationSummary[]>("/api/v1/audit/investigations", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "audit.investigations",
+    responseSchema: InvestigationSummaryListSchema,
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      const mapped: InvestigationSummary[] = [];
+      for (const row of rows) {
+        if (!isRecord(row)) continue;
+        const id = toText(row.id);
+        const caseId = toText(row.caseId) ?? "";
+        const subject = toText(row.subject) ?? "";
+        const assignedTo = toText(row.assignedTo) ?? "";
+        const started = toText(row.started) ?? "";
+        const findings = toText(row.findings) ?? "";
+        const rawStatus = toText(row.status) ?? "in_progress";
+        const status = (rawStatus === "in_progress" || rawStatus === "findings_submitted" || rawStatus === "closed")
+          ? rawStatus : "in_progress";
+        if (!id) continue;
+        mapped.push({ id, caseId, subject, assignedTo, started, findings, status });
+      }
+      return mapped.length > 0 ? mapped : null;
+    },
+  });
+}
+
 // ── Legal loaders ─────────────────────────────────────────────────────────────
 
 const LEGAL_DASHBOARD_EMPTY: LegalDashboard = {
@@ -3246,4 +3448,532 @@ export async function getPensioners(): Promise<LoaderResult<PensionerSummary[]>>
     telemetryKey: "payroll.pensioners",
     mapResponse: (p) => getArrayPayload(p) as PensionerSummary[] | null,
   });
+}
+
+// ── Tenant Admin: Mock Page Elimination loaders ───────────────────────────────
+
+export type SsoProvider = {
+  id: string;
+  name: string;
+  protocol: string;
+  entityId: string;
+  status: string;
+  lastSync: string;
+};
+
+export async function getSsoProviders(): Promise<LoaderResult<SsoProvider[]>> {
+  return fetchJson<unknown, SsoProvider[]>("/api/v1/admin/sso/providers", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.sso.providers",
+    mapResponse: (p) => getArrayPayload(p) as SsoProvider[] | null,
+  });
+}
+
+export type UsageResource = {
+  resource: string;
+  label: string;
+  icon: string;
+  limit: number;
+  used: number;
+  unit: string;
+  projectedOverageDate: string | null;
+};
+
+export async function getUsageQuotas(): Promise<LoaderResult<UsageResource[]>> {
+  return fetchJson<unknown, UsageResource[]>("/api/v1/admin/usage", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.usage",
+    mapResponse: (p) => getArrayPayload(p) as UsageResource[] | null,
+  });
+}
+
+export type SiemAlert = {
+  id: string;
+  timestamp: string;
+  title: string;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  status: string;
+};
+
+export async function getSiemAlerts(): Promise<LoaderResult<SiemAlert[]>> {
+  return fetchJson<unknown, SiemAlert[]>("/api/v1/admin/siem/alerts", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "admin.siem.alerts",
+    mapResponse: (p) => getArrayPayload(p) as SiemAlert[] | null,
+  });
+}
+
+export type PlanSummary = {
+  id: string;
+  name: string;
+  pricePerMonth: number;
+  maxUsers: number;
+  storageGb: number;
+  maxApiCalls: number;
+  modules: string[];
+};
+
+export type InvoiceSummary = {
+  id: string;
+  date: string;
+  amount: number;
+  status: "paid" | "pending" | "failed";
+};
+
+export type PlansData = {
+  plans: PlanSummary[];
+  currentPlanId: string;
+  invoices: InvoiceSummary[];
+  trialDaysLeft: number | null;
+};
+
+export async function getPlansData(): Promise<LoaderResult<PlansData>> {
+  return fetchJson<unknown, PlansData>(
+    "/api/v1/billing/plans",
+    { plans: [], currentPlanId: "", invoices: [], trialDaysLeft: null },
+    {
+      revalidateSeconds: 300,
+      telemetryKey: "admin.plans",
+      mapResponse: (p) => (isRecord(p) ? (p as PlansData) : null),
+    },
+  );
+}
+
+export type SecurityEvent = {
+  id: string;
+  timestamp: string;
+  type: string;
+  actor: string;
+  ipAddress: string;
+  outcome: string;
+};
+
+export type SecurityOverview = {
+  activeSessions: number;
+  failedLogins24h: number;
+  mfaAdoptionRate: number;
+  trustedDevices: number;
+  events: SecurityEvent[];
+};
+
+export async function getSecurityOverview(): Promise<LoaderResult<SecurityOverview>> {
+  return fetchJson<unknown, SecurityOverview>(
+    "/api/v1/admin/security/overview",
+    { activeSessions: 0, failedLogins24h: 0, mfaAdoptionRate: 0, trustedDevices: 0, events: [] },
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "admin.security.overview",
+      mapResponse: (p) => (isRecord(p) ? (p as SecurityOverview) : null),
+    },
+  );
+}
+
+export type DataExportRequest = {
+  id: string;
+  type: "full" | "module" | "entity";
+  moduleFilter: string | null;
+  format: "csv" | "json" | "pdf";
+  status: "pending" | "processing" | "ready" | "expired" | "failed";
+  fileSizeBytes: number | null;
+  createdAt: string;
+  expiresAt: string | null;
+};
+
+export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]>> {
+  return fetchJson<unknown, DataExportRequest[]>("/api/v1/admin/data-exports", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "admin.data-exports",
+    mapResponse: (p) => getArrayPayload(p) as DataExportRequest[] | null,
+  });
+}
+
+export type OrgHierarchyNode = {
+  id: string;
+  name: string;
+  headCount: number;
+  children?: OrgHierarchyNode[];
+};
+
+export async function getOrgHierarchy(): Promise<LoaderResult<OrgHierarchyNode[]>> {
+  return fetchJson<unknown, OrgHierarchyNode[]>("/api/v1/admin/org-hierarchy", [], {
+    revalidateSeconds: 300,
+    telemetryKey: "admin.org-hierarchy",
+    mapResponse: (p) => getArrayPayload(p) as OrgHierarchyNode[] | null,
+  });
+}
+
+export type MfaUserStatus = {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  mfaStatus: string;
+  enrolledAt: string | null;
+};
+
+export async function getMfaUsers(): Promise<LoaderResult<MfaUserStatus[]>> {
+  return fetchJson<unknown, MfaUserStatus[]>("/api/v1/admin/mfa/users", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.mfa.users",
+    mapResponse: (p) => getArrayPayload(p) as MfaUserStatus[] | null,
+  });
+}
+
+export type IdpProviderSummary = {
+  id: string;
+  name: string;
+  protocol: string;
+  status: string;
+  usersSynced: number;
+  lastSync: string;
+  endpoint: string;
+};
+
+export async function getIdpProviders(): Promise<LoaderResult<IdpProviderSummary[]>> {
+  return fetchJson<unknown, IdpProviderSummary[]>("/api/v1/admin/idp/providers", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.idp.providers",
+    mapResponse: (p) => getArrayPayload(p) as IdpProviderSummary[] | null,
+  });
+}
+
+export type CustomDomain = {
+  id: string;
+  domain: string;
+  status: "pending_verification" | "verified" | "active" | "failed" | "revoked";
+  verificationMethod: "dns_txt" | "dns_cname";
+  verificationToken: string;
+  sslStatus: "pending" | "issued" | "expired";
+  sslExpiresAt: string | null;
+  createdAt: string;
+};
+
+export async function getCustomDomains(): Promise<LoaderResult<CustomDomain[]>> {
+  return fetchJson<unknown, CustomDomain[]>("/api/v1/admin/domains", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "admin.domains",
+    mapResponse: (p) => getArrayPayload(p) as CustomDomain[] | null,
+  });
+}
+
+export type ComplianceCheck = {
+  id: string;
+  timestamp: string;
+  title: string;
+  result: "pass" | "warn" | "fail";
+};
+
+export type ComplianceOverview = {
+  dpdpScore: number;
+  certInReadiness: number;
+  retentionStatus: string;
+  checks: ComplianceCheck[];
+};
+
+export async function getComplianceOverview(): Promise<LoaderResult<ComplianceOverview>> {
+  return fetchJson<unknown, ComplianceOverview>(
+    "/api/v1/admin/compliance",
+    { dpdpScore: 0, certInReadiness: 0, retentionStatus: "Unknown", checks: [] },
+    {
+      revalidateSeconds: 120,
+      telemetryKey: "admin.compliance",
+      mapResponse: (p) => (isRecord(p) ? (p as ComplianceOverview) : null),
+    },
+  );
+}
+
+export type WebhookSummary = {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  description: string;
+  lastDeliveryStatus: number | null;
+  createdAt: string;
+};
+
+export type WebhookDelivery = {
+  id: string;
+  eventType: string;
+  statusCode: number;
+  attempt: number;
+  deliveredAt: string;
+  responseBody: string;
+};
+
+export async function getWebhooks(): Promise<LoaderResult<WebhookSummary[]>> {
+  return fetchJson<unknown, WebhookSummary[]>("/api/v1/admin/webhooks", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.webhooks",
+    mapResponse: (p) => getArrayPayload(p) as WebhookSummary[] | null,
+  });
+}
+
+export async function getWebhookDeliveries(webhookId: string): Promise<LoaderResult<WebhookDelivery[]>> {
+  return fetchJson<unknown, WebhookDelivery[]>(`/api/v1/admin/webhooks/${webhookId}/deliveries`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "admin.webhooks.deliveries",
+    mapResponse: (p) => getArrayPayload(p) as WebhookDelivery[] | null,
+  });
+}
+
+// ── Admin Tenant Detail loaders ───────────────────────────────────────────────
+
+export type AdminTenantDetail = {
+  id: string;
+  name: string;
+  domain: string;
+  edition: string;
+  status: string;
+  region: string;
+  settings: Record<string, unknown>;
+};
+
+export type AdminTenantModuleUsage = {
+  module: string;
+  enabled: string;
+  users: number;
+  lastActivity: string;
+  usage: string;
+};
+
+export async function getAdminTenantDetail(id: string): Promise<LoaderResult<AdminTenantDetail | null>> {
+  return fetchJson<unknown, AdminTenantDetail | null>(`/api/v1/admin/tenants/${id}`, null, {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.tenant.detail",
+    mapResponse: (p) => (isRecord(p) ? (p as AdminTenantDetail) : null),
+  });
+}
+
+export async function getAdminTenantModules(id: string): Promise<LoaderResult<AdminTenantModuleUsage[]>> {
+  return fetchJson<unknown, AdminTenantModuleUsage[]>(`/api/v1/admin/tenants/${id}/config`, [], {
+    revalidateSeconds: 120,
+    telemetryKey: "admin.tenant.modules",
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      const modules = getArrayPayload(p.modules ?? p.data ?? p);
+      if (!modules) return [];
+      return modules.filter(isRecord).map((m) => ({
+        module: String(m.module ?? m.name ?? "Unknown"),
+        enabled: m.enabled === true || m.enabled === "Yes" ? "Yes" : "No",
+        users: typeof m.users === "number" ? m.users : 0,
+        lastActivity: typeof m.lastActivity === "string" ? m.lastActivity : "—",
+        usage: typeof m.usage === "string" ? m.usage : "—",
+      }));
+    },
+  });
+}
+
+// ── Project sub-resource loaders ──────────────────────────────────────────────
+
+export type ProjectEscalationRow = {
+  escalationId: string;
+  project: string;
+  issue: string;
+  severity: string;
+  escalatedTo: string;
+  raisedDate: string;
+  status: string;
+};
+
+export async function getProjectEscalations(): Promise<LoaderResult<ProjectEscalationRow[]>> {
+  return fetchJson<unknown, ProjectEscalationRow[]>("/api/v1/projects/escalations", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "projects.escalations",
+    mapResponse: (p) => getArrayPayload(p) as ProjectEscalationRow[] | null,
+  });
+}
+
+export type ProjectBeneficiaryRow = {
+  id: string;
+  name: string;
+  project: string;
+  district: string;
+  category: string;
+  verified: string;
+  disbursement: string;
+};
+
+export async function getProjectBeneficiaries(): Promise<LoaderResult<ProjectBeneficiaryRow[]>> {
+  return fetchJson<unknown, ProjectBeneficiaryRow[]>("/api/v1/projects/beneficiaries", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "projects.beneficiaries",
+    mapResponse: (p) => getArrayPayload(p) as ProjectBeneficiaryRow[] | null,
+  });
+}
+
+export type ProjectDprRow = {
+  dprNo: string;
+  projectTitle: string;
+  submittedBy: string;
+  submittedDate: string;
+  estimatedCost: string;
+  status: string;
+  reviewingAuthority: string;
+};
+
+export async function getProjectDprs(): Promise<LoaderResult<ProjectDprRow[]>> {
+  return fetchJson<unknown, ProjectDprRow[]>("/api/v1/projects/dprs", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "projects.dprs",
+    mapResponse: (p) => getArrayPayload(p) as ProjectDprRow[] | null,
+  });
+}
+
+export type ProjectWbsNode = {
+  id: string;
+  name: string;
+  status: string;
+  parentId: string | null;
+};
+
+export async function getProjectWbs(): Promise<LoaderResult<ProjectWbsNode[]>> {
+  return fetchJson<unknown, ProjectWbsNode[]>("/api/v1/projects/wbs", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "projects.wbs",
+    mapResponse: (p) => getArrayPayload(p) as ProjectWbsNode[] | null,
+  });
+}
+
+export type ProjectDelayRow = {
+  project: string;
+  originalDeadline: string;
+  revisedDeadline: string;
+  delayDays: number;
+  cause: string;
+  rag: string;
+};
+
+export async function getProjectDelayAnalysis(): Promise<LoaderResult<ProjectDelayRow[]>> {
+  return fetchJson<unknown, ProjectDelayRow[]>("/api/v1/projects/delay-analysis", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "projects.delay-analysis",
+    mapResponse: (p) => getArrayPayload(p) as ProjectDelayRow[] | null,
+  });
+}
+
+// ── Analytics sub-resource loaders ────────────────────────────────────────────
+
+export type AnalyticsKpiRow = {
+  kpiName: string;
+  category: string;
+  currentValue: string;
+  target: string;
+  trend: string;
+  owner: string;
+};
+
+export async function getAnalyticsKpis(): Promise<LoaderResult<AnalyticsKpiRow[]>> {
+  return fetchJson<unknown, AnalyticsKpiRow[]>("/api/v1/analytics/kpis", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "analytics.kpis",
+    mapResponse: (p) => getArrayPayload(p) as AnalyticsKpiRow[] | null,
+  });
+}
+
+export type AnalyticsDataWarehouseRow = {
+  dataset: string;
+  lastRefresh: string;
+  records: string;
+  size: string;
+  qualityScore: string;
+  status: string;
+};
+
+export async function getAnalyticsDataWarehouse(): Promise<LoaderResult<AnalyticsDataWarehouseRow[]>> {
+  return fetchJson<unknown, AnalyticsDataWarehouseRow[]>("/api/v1/analytics/data-warehouse", [], {
+    revalidateSeconds: 300,
+    telemetryKey: "analytics.data-warehouse",
+    mapResponse: (p) => getArrayPayload(p) as AnalyticsDataWarehouseRow[] | null,
+  });
+}
+
+export type AnalyticsAiInsightRow = {
+  insightTitle: string;
+  module: string;
+  confidence: string;
+  generatedDate: string;
+  actionRecommended: string;
+  status: string;
+};
+
+export async function getAnalyticsAiInsights(): Promise<LoaderResult<AnalyticsAiInsightRow[]>> {
+  return fetchJson<unknown, AnalyticsAiInsightRow[]>("/api/v1/analytics/ai-insights", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "analytics.ai-insights",
+    mapResponse: (p) => getArrayPayload(p) as AnalyticsAiInsightRow[] | null,
+  });
+}
+
+// ── My Approvals unified inbox loader ─────────────────────────────────────────
+
+export type MyApprovalItem = {
+  id: string;
+  taskId: string;
+  instanceName: string;
+  refType: string;
+  refId: string;
+  module: string;
+  status: string;
+  assignedAt: string;
+  dueDate: string | null;
+  link: string;
+};
+
+export async function getMyApprovals(page = 1, pageSize = 15, sortBy = "date", sortDir: "asc" | "desc" = "desc"): Promise<LoaderResult<MyApprovalItem[]>> {
+  const params = new URLSearchParams({
+    status: "pending",
+    limit: String(Math.min(pageSize, 200)),
+    offset: String((page - 1) * pageSize),
+  });
+  return fetchJson<unknown, MyApprovalItem[]>(
+    `/api/v1/workflow/tasks?${params.toString()}`,
+    [] as MyApprovalItem[],
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "approvals.my",
+      mapResponse: (payload) => {
+        const rows = getArrayPayload(payload);
+        if (!rows) return [];
+        return rows.filter(isRecord).map((row) => {
+          const refType = String(row.refType ?? row.ref_type ?? "");
+          const module = refType.split("_")[0] || "workflow";
+          const refId = String(row.refId ?? row.ref_id ?? "");
+          const taskId = String(row.id ?? "");
+          return {
+            id: taskId,
+            taskId,
+            instanceName: String(row.name ?? row.instanceName ?? "Approval Task"),
+            refType,
+            refId,
+            module,
+            status: String(row.status ?? "pending"),
+            assignedAt: String(row.createdAt ?? row.created_at ?? ""),
+            dueDate: row.dueAt ? String(row.dueAt) : row.due_at ? String(row.due_at) : null,
+            link: buildApprovalLink(module, refType, refId, taskId),
+          };
+        });
+      },
+    },
+  );
+}
+
+function buildApprovalLink(module: string, refType: string, refId: string, taskId: string): string {
+  switch (refType) {
+    case "leave_app":
+      return `/hr/leave/approvals`;
+    case "payroll_run":
+      return `/hr/payroll`;
+    case "procurement_indent":
+      return `/procurement/indents/${refId}`;
+    case "procurement_po":
+      return `/procurement/purchase-orders/${refId}`;
+    case "finance_bill":
+      return `/finance/bills/${refId}`;
+    case "estab_file":
+      return `/estab/files/${refId}`;
+    default:
+      return `/workflow/tasks`;
+  }
 }

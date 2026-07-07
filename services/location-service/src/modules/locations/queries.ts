@@ -30,6 +30,21 @@ export async function listLocations(
 }
 
 /**
+ * Spatial nearby query: returns locations within radiusKm of (lat, lng).
+ * Uses PostGIS GIST index for efficient spatial filtering.
+ */
+export async function findNearby(
+  tenantId: string,
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  limit: number
+): Promise<{ data: Array<LocationView & { distanceKm: number }> }> {
+  const results = await repo.findNearby(tenantId, lat, lng, radiusKm, limit);
+  return { data: results };
+}
+
+/**
  * Builds the tenant's branch-office hierarchy as a nested tree (parent -> children)
  * from the flat location list. Roots are locations with no parent (or whose parent
  * is not visible to this tenant); children are sorted by name for stable output.

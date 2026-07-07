@@ -5,6 +5,8 @@ import { schema as schemeModule }      from "../modules/scheme/schema.js";
 import { schema as progressModule }    from "../modules/progress/schema.js";
 import { schema as utilisationModule } from "../modules/utilisation/schema.js";
 import { schema as geoModule }         from "../modules/geo/schema.js";
+import { schema as schedulingModule }  from "../modules/scheduling/schema.js";
+import { baselinesSchema }             from "../modules/scheduling/baselines.js";
 import { outboxSchema }                from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -19,6 +21,8 @@ export const db = drizzle(sqlClient, {
     ...progressModule,
     ...utilisationModule,
     ...geoModule,
+    ...schedulingModule,
+    ...baselinesSchema,
     ...outboxSchema,
   },
 });

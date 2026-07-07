@@ -1,5 +1,5 @@
 import type { HelpdeskTicketSummary } from "@civitasone/types";
-import { pgSchema, uuid, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 
 export const helpdeskSchema = pgSchema("helpdesk");
 
@@ -22,6 +22,14 @@ export const tickets = helpdeskSchema.table("tickets", {
   // HD2 — provenance for tickets auto-opened from a foreign producer event.
   source: varchar("source", { length: 32 }),
   sourceRef: varchar("source_ref", { length: 128 }),
+  // ITIL — ticket type classification (incident, problem, change) or null for legacy tickets.
+  ticketType: varchar("ticket_type", { length: 24 }),
+  // ITIL — type-specific required fields stored as JSON.
+  typeFields: jsonb("type_fields").$type<Record<string, unknown>>(),
+  // CMDB — asset linkage: IDs of configuration items from asset-service.
+  assetIds: jsonb("asset_ids").$type<string[]>(),
+  // CMDB — whether the asset linkage has been verified against asset-service.
+  assetVerified: boolean("asset_verified").default(false),
 });
 
 export type TicketRow = typeof tickets.$inferSelect;

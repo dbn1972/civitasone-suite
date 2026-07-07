@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { startOutboxPurge } from "@civitasone/outbox";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { registerPortalConsumers }      from "./modules/portal/consumer.js";
 import { registerApplicationConsumers } from "./modules/application/consumer.js";
@@ -23,12 +24,19 @@ registerHelpdeskConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
+// G7: scheduled outbox purge — remove published messages older than 7 days.
+const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+  intervalMs: 60 * 60_000,
+  batchSize: 1000,
+  logger: log,
+});
 // P0-2: periodic SLA-breach sweep (grievances/applications/tickets/RTIs).
 const slaSweep = startSlaSweep(queue, log);
 log.info("citizen-service worker: consumers + outbox relay + sla sweep running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
+  clearInterval(purge);
   clearInterval(relay);
   if (slaSweep) clearInterval(slaSweep);
   await queue.stop();

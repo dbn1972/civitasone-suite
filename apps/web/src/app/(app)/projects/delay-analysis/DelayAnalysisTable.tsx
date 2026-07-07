@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "@/app/_components/ds";
+import { useSeededResource } from "@/lib/sync/resource";
 
 export type DelayRow = {
   project: string;
@@ -25,15 +26,35 @@ const COLUMNS: {
   { key: "rag", label: "RAG Status", cellType: "status" },
 ];
 
-export function DelayAnalysisTable({ rows }: { rows: DelayRow[] }) {
+export function DelayAnalysisTable({ rows, source = "api" }: { rows: DelayRow[]; source?: "api" | "error" }) {
+  const { data, fromCache, offline, cachedAt } = useSeededResource<DelayRow[]>(
+    "projects.delay-analysis",
+    rows,
+    source,
+    (d) => d.length === 0,
+  );
+
+  const cacheNote =
+    offline || fromCache
+      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      : null;
+
   return (
-    <DataTable<DelayRow>
-      columns={COLUMNS}
-      rows={rows}
-      sortable
-      filterable
-      filterPlaceholder="Filter projects…"
-      pageSize={15}
-    />
+    <>
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
+      <DataTable<DelayRow>
+        columns={COLUMNS}
+        rows={data}
+        sortable
+        filterable
+        filterPlaceholder="Filter projects…"
+        pageSize={15}
+        exportable
+        exportFilename="project-delay-analysis"
+        emptyIcon="📋"
+        emptyTitle="No delay data"
+        emptyMessage="No projects match the current filter."
+      />
+    </>
   );
 }

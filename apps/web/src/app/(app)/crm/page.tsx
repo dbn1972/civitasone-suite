@@ -5,7 +5,8 @@ import { PageShell } from "../../_components/PageShell";
 const crmTiles: NavTile[] = [
 	{ title: "Dashboard", href: "/crm/dashboard" },
 	{ title: "Contacts", href: "/crm/contacts" },
-	{ title: "Deal Pipeline", href: "/crm/deals" },
+	{ title: "Deals", href: "/crm/deals" },
+	{ title: "Pipeline Board", href: "/crm/pipeline" },
 	{ title: "Activities", href: "/crm/activities" },
 ];
 

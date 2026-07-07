@@ -50,6 +50,8 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
   return {
     id: r.id,
     tenantId: r.tenantId,
+    pipelineId: r.pipelineId,
+    stageId: r.stageId,
     name: r.name,
     stage: r.stage,
     valueMinor: r.valueMinor.toString(),
@@ -59,6 +61,7 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
     contactName: contactName ?? null,
     ownerId: r.ownerId,
     closeDate: r.closeDate ?? null,
+    closedAt: r.closedAt?.toISOString() ?? null,
     probability: r.probability,
     status: r.status,
     version: r.version,
@@ -107,6 +110,59 @@ export async function updateStage(tx: Writer, id: string, tenantId: string, stag
   await (tx as typeof db).update(deals)
     .set(patch)
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
+}
+
+/**
+ * Stage transition with optimistic locking (version check).
+ * Returns true if updated, false if version conflict (for 409 response).
+ * Records transition timestamp (closedAt for Won/Lost stages).
+ * Accepts optional stageId and pipelineId for pipeline-aware transitions.
+ */
+export async function updateStageWithVersion(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  stage: string,
+  stageId: string | undefined,
+  expectedVersion: number,
+  actorId: string,
+  probability?: number,
+): Promise<{ updated: boolean; previousStage?: string }> {
+  // Fetch current deal for previous stage (for audit event)
+  const current = await (tx as typeof db).select({ stage: deals.stage, version: deals.version })
+    .from(deals)
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`))
+    .limit(1);
+  if (!current[0]) return { updated: false };
+
+  const previousStage = current[0].stage;
+  const dealStatus = stage === "Won" ? "won" : stage === "Lost" ? "lost" : "active";
+  const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
+  const now = new Date();
+
+  const patch: Record<string, unknown> = {
+    stage,
+    status: dealStatus,
+    updatedAt: now,
+    updatedBy: actorId,
+    version: sql`${deals.version} + 1`,
+  };
+  if (stageId !== undefined) patch.stageId = stageId;
+  if (prob !== undefined) patch.probability = prob;
+  // Record closedAt timestamp for Won/Lost transitions
+  if (stage === "Won" || stage === "Lost") patch.closedAt = now;
+
+  const result = await (tx as typeof db).update(deals)
+    .set(patch)
+    .where(and(
+      eq(deals.id, id),
+      eq(deals.tenantId, tenantId),
+      eq(deals.version, expectedVersion),
+      sql`${deals.status} <> 'deleted'`,
+    ))
+    .returning({ id: deals.id });
+
+  return { updated: result.length > 0, previousStage };
 }
 
 /** Tenant-scoped existence check for a deal (cross-tenant FK guard). */

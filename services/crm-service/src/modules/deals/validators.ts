@@ -5,6 +5,8 @@ const dealStage = z.enum(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
 
 export const createDealBody = z.object({
   name: z.string().min(1).max(200),
+  pipelineId: z.string().uuid().optional(),
+  stageId: z.string().uuid().optional(),
   stage: dealStage.default("Lead"),
   valueMinor: z.number().int().nonnegative().default(0),
   currency: z.string().length(3).default("INR"),
@@ -17,7 +19,9 @@ export type CreateDealBody = z.infer<typeof createDealBody>;
 
 export const updateDealStageBody = z.object({
   stage: dealStage,
+  stageId: z.string().uuid().optional(),
   probability: z.number().int().min(0).max(100).optional(),
+  version: z.number().int().min(1),
 });
 export type UpdateDealStageBody = z.infer<typeof updateDealStageBody>;
 
@@ -35,6 +39,8 @@ export const idParam = z.object({ id: z.string().uuid() });
 export const dealViewSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
+  pipelineId: z.string().uuid().nullable().optional(),
+  stageId: z.string().uuid().nullable().optional(),
   name: z.string(),
   stage: dealStage,
   valueMinor: z.string(),
@@ -44,6 +50,7 @@ export const dealViewSchema = z.object({
   contactName: z.string().nullable().optional(),
   ownerId: z.string().uuid().nullable().optional(),
   closeDate: z.string().nullable().optional(),
+  closedAt: z.string().nullable().optional(),
   probability: z.number().int().optional(),
   status: z.string(),
   version: z.number().int(),

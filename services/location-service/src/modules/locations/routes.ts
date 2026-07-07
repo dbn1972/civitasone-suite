@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createLocationBody, idParam, locationsListSchema, locationTreeSchema } from "./validators.js";
+import { createLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -42,6 +42,14 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LOCATION_ROLES);
     sendValidated(reply, locationTreeSchema, await queries.getLocationTree(ctx.tenantId));
+  });
+
+  app.get("/v1/locations/nearby", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_ROLES);
+    const { lat, lng, radiusKm, limit } = nearbyQuerySchema.parse(req.query);
+    const result = await queries.findNearby(ctx.tenantId, lat, lng, radiusKm, limit);
+    return reply.send(result);
   });
 
   // Sample data ("try it"): add clearly-marked example offices, or clear them.

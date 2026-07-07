@@ -12,12 +12,14 @@ import { outboxSchema } from "./outbox.js";
 import { schema as messagesModule } from "../modules/messages/schema.js";
 import { schema as decisionsModule } from "../modules/decisions/schema.js";
 import { schema as forwardingModule } from "../modules/forwarding/schema.js";
+import { schema as designerModule } from "../modules/designer/schema.js";
+import { schema as dmnModule } from "../modules/dmn/schema.js";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required (postgres://workflow_svc:***@host/civitas_workflow)");
 
 export const sqlClient = createSqlClient(url);
 export const db = drizzle(sqlClient, {
-  schema: { ...instancesModule, ...tasksModule, ...definitionsModule, ...historyModule, ...delegationsModule, roleMembers, assignmentCursors, ...assignmentModule, consumerAttempts, deadLetters, ...outboxSchema, ...messagesModule, ...decisionsModule, ...forwardingModule },
+  schema: { ...instancesModule, ...tasksModule, ...definitionsModule, ...historyModule, ...delegationsModule, roleMembers, assignmentCursors, ...assignmentModule, consumerAttempts, deadLetters, ...outboxSchema, ...messagesModule, ...decisionsModule, ...forwardingModule, ...designerModule },
 });
 export type Db = typeof db;

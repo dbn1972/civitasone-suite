@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "@/app/_components/ds";
+import { useSeededResource } from "@/lib/sync/resource";
 
 export type BeneficiaryRow = {
   id: string;
@@ -26,15 +27,35 @@ const COLUMNS: {
   { key: "disbursement", label: "Disbursement (₹)" },
 ];
 
-export function BeneficiariesTable({ rows }: { rows: BeneficiaryRow[] }) {
+export function BeneficiariesTable({ rows, source = "api" }: { rows: BeneficiaryRow[]; source?: "api" | "error" }) {
+  const { data, fromCache, offline, cachedAt } = useSeededResource<BeneficiaryRow[]>(
+    "projects.beneficiaries",
+    rows,
+    source,
+    (d) => d.length === 0,
+  );
+
+  const cacheNote =
+    offline || fromCache
+      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      : null;
+
   return (
-    <DataTable<BeneficiaryRow>
-      columns={COLUMNS}
-      rows={rows}
-      sortable
-      filterable
-      filterPlaceholder="Filter beneficiaries…"
-      pageSize={15}
-    />
+    <>
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
+      <DataTable<BeneficiaryRow>
+        columns={COLUMNS}
+        rows={data}
+        sortable
+        filterable
+        filterPlaceholder="Filter beneficiaries…"
+        pageSize={15}
+        exportable
+        exportFilename="project-beneficiaries"
+        emptyIcon="👥"
+        emptyTitle="No beneficiaries"
+        emptyMessage="No beneficiaries match the current filter."
+      />
+    </>
   );
 }

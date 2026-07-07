@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
-import { sqlClient } from "./shared/db.js";
+import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
@@ -11,6 +12,10 @@ import { callRoutes } from "./modules/calls/routes.js";
 import { queueRoutes } from "./modules/queues/routes.js";
 import { agentRoutes } from "./modules/agents/routes.js";
 import { webhookRoutes } from "./modules/webhooks/routes.js";
+import { didRoutes } from "./modules/did/routes.js";
+import { ivrRoutes } from "./modules/ivr/routes.js";
+import { recordingRoutes } from "./modules/recordings/routes.js";
+import { transcriptionRoutes } from "./modules/transcription/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -21,12 +26,20 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
   await app.register(authPlugin);
 
+  // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
+  // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
+  app.addHook("onRequest", createTenantTxHook(db));
+
   registerOpsRoutes(app, { service: "telephony-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(callRoutes);
   await app.register(queueRoutes);
   await app.register(agentRoutes);
   await app.register(webhookRoutes);
+  await app.register(didRoutes);
+  await app.register(ivrRoutes);
+  await app.register(recordingRoutes);
+  await app.register(transcriptionRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

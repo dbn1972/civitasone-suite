@@ -132,6 +132,39 @@ export type PaymentReceivedPayload = { paymentId: string; invoiceId: string; amo
 export type NotificationDeliveredPayload = { notificationId: string; channel: string; recipientId: string };
 export type NotificationFailedPayload = { notificationId: string; channel: string; reason: string };
 
+// ─── Search index events ─────────────────────────────────────────────────────
+/**
+ * Cross-module search index update event. Published by all services via the
+ * outbox when entities are created, updated, or soft-deleted. Consumed by a
+ * centralized search consumer that writes to Meilisearch/OpenSearch.
+ *
+ * Topic: search.index.update
+ * Event type: search.index.updated
+ */
+export type SearchIndexUpdatePayload = {
+  /** Entity UUID. */
+  id: string;
+  /** Tenant isolation key. */
+  tenantId: string;
+  /** Source module (e.g. "hrms", "finance", "procurement"). */
+  module: string;
+  /** Primary display name. */
+  name: string;
+  /** Reference number (employee no, bill no, etc.). */
+  refNumber: string | null;
+  /** Description or summary. */
+  description: string | null;
+  /** Current entity status. */
+  status: string;
+  /** Whether to index/update or remove from index. */
+  action: "upsert" | "delete";
+};
+
+export const SEARCH_INDEX = {
+  topic: "search.index.update",
+  eventType: "search.index.updated",
+} as const;
+
 // ─── Payroll events ──────────────────────────────────────────────────────────
 export type PayrollRunApprovedPayload = { runId: string; period: string; totalNet: number; employeeCount: number };
 export type PayrollRunCompletedDetailPayload = { runId: string; period: string; bankFileGenerated: boolean };

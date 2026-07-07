@@ -1,42 +1,58 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { getAdminTenantDetail, getAdminTenantModules } from "@/app/_data/loaders";
+import { TenantModulesTable } from "./TenantModulesTable";
 
 export default async function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const [detailResult, modulesResult] = await Promise.all([
+    getAdminTenantDetail(id),
+    getAdminTenantModules(id),
+  ]);
 
-  type Row = { module: string; enabled: string; users: number; lastActivity: string; usage: string };
+  const tenant = detailResult.data;
+  const modules = modulesResult.data;
+  const source = detailResult.source === "error" || modulesResult.source === "error" ? "error" : "api";
 
-  const rows: Row[] = [
-    { module: "Finance & Accounts", enabled: "Yes", users: 45, lastActivity: "2025-02-10", usage: "High" },
-    { module: "HRMS & Payroll", enabled: "Yes", users: 28, lastActivity: "2025-02-10", usage: "High" },
-    { module: "Procurement", enabled: "Yes", users: 32, lastActivity: "2025-02-09", usage: "Medium" },
-    { module: "Projects & Works", enabled: "Yes", users: 18, lastActivity: "2025-02-08", usage: "Medium" },
-    { module: "Citizen Services", enabled: "Yes", users: 12, lastActivity: "2025-02-10", usage: "High" },
-    { module: "Audit & Compliance", enabled: "Yes", users: 8, lastActivity: "2025-02-07", usage: "Low" },
-    { module: "Asset Management", enabled: "No", users: 0, lastActivity: "—", usage: "—" },
-    { module: "Legal Case Management", enabled: "No", users: 0, lastActivity: "—", usage: "—" },
-  ];
+  if (!tenant) {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Tenant Not Found" back="/admin/tenants" />
+        <Card>
+          <EmptyState
+            icon="🔍"
+            title="Tenant not found"
+            message="No tenant exists for the given ID. It may have been removed."
+          />
+        </Card>
+      </main>
+    );
+  }
 
-  const columns = [
-    { key: "module" as const, label: "Module" },
-    { key: "enabled" as const, label: "Enabled" },
-    { key: "users" as const, label: "Active Users", align: "right" as const },
-    { key: "lastActivity" as const, label: "Last Activity" },
-    { key: "usage" as const, label: "Usage Level", cellType: "status" as const },
-  ];
+  const enabledCount = modules.filter((m) => m.enabled === "Yes").length;
+  const totalUsers = modules.reduce((sum, m) => sum + m.users, 0);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={`Tenant: ${decodeURIComponent(id)}`} subtitle="Configuration, enabled modules and usage statistics." back="/admin/tenants" />
+      <PageHeader
+        title={`Tenant: ${tenant.name}`}
+        subtitle={`Edition: ${tenant.edition} · Status: ${tenant.status} · Region: ${tenant.region}`}
+        back="/admin/tenants"
+      />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="📦" iconBg="#eef2ff" label="Modules Enabled" value={6} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Active Users" value={143} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="API Calls (30d)" value="1.2M" />
-        <StatCard icon="💾" iconBg="#fce7ee" label="Storage Used" value="2.8 GB" />
+        <StatCard icon="📦" iconBg="#eef2ff" label="Modules Enabled" value={enabledCount} />
+        <StatCard icon="👥" iconBg="#ecfdf3" label="Active Users" value={totalUsers} />
+        <StatCard icon="🏢" iconBg="#fffaeb" label="Edition" value={tenant.edition} />
+        <StatCard icon="🔒" iconBg="#fce7ee" label="Status" value={tenant.status} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Module Usage</h3></div>
-        <DataTable columns={columns} rows={rows} sortable />
-      </div>
+      <Card title="Module Usage">
+        {modules.length === 0 ? (
+          <EmptyState icon="📦" title="No modules" message="No modules configured for this tenant." />
+        ) : (
+          <TenantModulesTable modules={modules} source={source === "error" ? "error" : "api"} />
+        )}
+      </Card>
     </main>
   );
 }

@@ -14,7 +14,6 @@ import {
   completeCallBody,
   endCallBody,
   assignCallBody,
-  ivrHitBody,
   linkCallBody,
   recordingBody,
   listCallsQuery,
@@ -122,14 +121,6 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = assignCallBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.assignCall(ctx, id, body));
-  });
-
-  app.post("/v1/telephony/calls/:id/ivr-hits", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, TELEPHONY_ROLES);
-    const { id } = idParam.parse(req.params);
-    const body = ivrHitBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.recordIvrHit(ctx, id, body));
   });
 
   app.post("/v1/telephony/calls/:id/link", async (req, reply) => {

@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { startOutboxPurge } from "@civitasone/outbox";
 import { registerProjectConsumers }     from "./modules/project/consumer.js";
 import { registerSchemeConsumers }      from "./modules/scheme/consumer.js";
 import { registerProgressConsumers }    from "./modules/progress/consumer.js";
@@ -19,11 +20,18 @@ registerGeoConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
+// G7: scheduled outbox purge — remove published messages older than 7 days.
+const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+  intervalMs: 60 * 60_000,
+  batchSize: 1000,
+  logger: log,
+});
 const ragScheduler = startRagScheduler();
 log.info("project-service worker: consumers + outbox relay + RAG scheduler running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
+  clearInterval(purge);
   clearInterval(relay);
   clearInterval(ragScheduler);
   await queue.stop();

@@ -18,6 +18,9 @@ import { pluginHooks } from "../hooks/schema.js";
 import { plugins } from "../registry/schema.js";
 import { eq, and } from "drizzle-orm";
 import { executeHooks, type PluginHookDef, type PluginManifest } from "./engine.js";
+import { shouldDeliverEvent } from "../events/domain.js";
+import { isPluginAllowed } from "../events/preview.js";
+import type { PluginManifest as SandboxManifest, PluginPermission } from "../sandbox/types.js";
 
 const log = pino({ name: "plugin-runtime-consumer" });
 
@@ -62,6 +65,24 @@ export function registerRuntimeConsumers(queue: Queue): void {
     for (const p of pluginRows) {
       if (pluginIds.includes(p.id)) {
         const manifest = p.manifestJson as Record<string, unknown>;
+        const sandboxManifest: SandboxManifest = {
+          id: p.id,
+          permissions: ((manifest["permissions"] as string[]) ?? []) as PluginPermission[],
+          events: (manifest["events"] as string[]) ?? [],
+        };
+
+        // Skip preview plugins when the feature gate is disabled
+        if (!isPluginAllowed(sandboxManifest)) {
+          log.debug({ pluginId: p.id }, "skipping preview plugin — feature gate disabled");
+          continue;
+        }
+
+        // Only deliver event if manifest declares this event type
+        if (!shouldDeliverEvent(sandboxManifest, eventType)) {
+          log.debug({ pluginId: p.id, eventType }, "skipping plugin — not subscribed to event");
+          continue;
+        }
+
         manifestMap.set(p.id, {
           name: (manifest["name"] as string) ?? "unknown",
           version: (manifest["version"] as string) ?? "0.0.0",

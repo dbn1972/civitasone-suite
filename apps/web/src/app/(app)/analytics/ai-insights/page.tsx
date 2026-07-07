@@ -1,40 +1,33 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { getAnalyticsAiInsights } from "@/app/_data/loaders";
+import { AiInsightsTable } from "./AiInsightsTable";
 
-export default function AiInsightsPage() {
-  type Row = { insightTitle: string; module: string; confidence: string; generatedDate: string; actionRecommended: string; status: string };
+export default async function AiInsightsPage() {
+  const { data: rows, source } = await getAnalyticsAiInsights();
 
-  const rows: Row[] = [
-    { insightTitle: "Budget under-utilisation predicted for Q4 – PWD", module: "Finance", confidence: "92%", generatedDate: "2025-02-10", actionRecommended: "Expedite pending sanctions", status: "New" },
-    { insightTitle: "Vendor concentration risk – IT hardware", module: "Procurement", confidence: "87%", generatedDate: "2025-02-09", actionRecommended: "Diversify vendor base", status: "Reviewed" },
-    { insightTitle: "Leave pattern anomaly – Dept of Education", module: "HR", confidence: "78%", generatedDate: "2025-02-08", actionRecommended: "Review attendance data", status: "In Progress" },
-    { insightTitle: "Revenue surge expected – Property tax zone 4", module: "Revenue", confidence: "85%", generatedDate: "2025-02-07", actionRecommended: "Prepare collection capacity", status: "Actioned" },
-    { insightTitle: "Citizen grievance spike predicted – Ward 12", module: "Citizen Services", confidence: "81%", generatedDate: "2025-02-06", actionRecommended: "Pre-deploy mobile team", status: "New" },
-    { insightTitle: "Project delay risk – NH widening Phase 2", module: "Projects", confidence: "94%", generatedDate: "2025-02-05", actionRecommended: "Escalate to PMU", status: "Reviewed" },
-    { insightTitle: "Duplicate payment pattern detected", module: "Finance", confidence: "96%", generatedDate: "2025-02-04", actionRecommended: "Trigger internal audit", status: "Actioned" },
-  ];
-
-  const columns = [
-    { key: "insightTitle" as const, label: "Insight" },
-    { key: "module" as const, label: "Module" },
-    { key: "confidence" as const, label: "Confidence" },
-    { key: "generatedDate" as const, label: "Generated" },
-    { key: "actionRecommended" as const, label: "Recommended Action" },
-    { key: "status" as const, label: "Status", cellType: "status" as const },
-  ];
+  const total = rows.length;
+  const newInsights = rows.filter((r) => r.status === "New").length;
+  const actioned = rows.filter((r) => r.status === "Actioned").length;
+  const avgConf = total > 0 ? Math.round(rows.reduce((s, r) => s + (parseInt(r.confidence, 10) || 0), 0) / total) : 0;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="AI Insights" subtitle="Machine learning generated insights and recommended actions across modules." back="/analytics" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🤖" iconBg="#eef2ff" label="Total Insights" value={7} />
-        <StatCard icon="🆕" iconBg="#ecfdf3" label="New (Unread)" value={2} />
-        <StatCard icon="✅" iconBg="#fffaeb" label="Actioned" value={2} />
-        <StatCard icon="🎯" iconBg="#fce7ee" label="Avg. Confidence" value="88%" />
+        <StatCard icon="🤖" iconBg="#eef2ff" label="Total Insights" value={total} />
+        <StatCard icon="🆕" iconBg="#ecfdf3" label="New (Unread)" value={newInsights} />
+        <StatCard icon="✅" iconBg="#fffaeb" label="Actioned" value={actioned} />
+        <StatCard icon="🎯" iconBg="#fce7ee" label="Avg. Confidence" value={avgConf > 0 ? `${avgConf}%` : "—"} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>AI-Generated Insights</h3></div>
-        <DataTable columns={columns} rows={rows} sortable filterable />
-      </div>
+      <Card title="AI-Generated Insights">
+        {rows.length === 0 ? (
+          <EmptyState icon="🤖" title="No AI insights" message="AI insights are generated when the AI assistant is enabled. Enable the AI assistant in platform settings to see recommendations." />
+        ) : (
+          <AiInsightsTable rows={rows} source={source === "error" ? "error" : "api"} />
+        )}
+      </Card>
     </main>
   );
 }

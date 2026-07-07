@@ -117,34 +117,88 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
 /**
  * G7: Scheduled outbox purge — deletes published outbox rows older than
  * `retentionDays` (default 7). Also purges old inbox/processed entries.
- * Returns the number of deleted rows. Safe to call from any service worker.
+ * Processes deletions in batches of `batchSize` (default 1000).
+ * Returns the total number of deleted rows. Safe to call from any service worker.
  */
-export async function purgeOutbox(db: DrizzleTx, retentionDays = 7): Promise<number> {
+export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 1000): Promise<number> {
   const { sql } = await import("drizzle-orm");
   const cutoff = sql`now() - interval '${sql.raw(String(retentionDays))} days'`;
 
-  // Delete published outbox messages older than retention
-  const deletedOutbox = await db.execute(sql`
-    DELETE FROM _outbox.messages
-    WHERE published_at IS NOT NULL AND published_at < ${cutoff}
-  `);
+  // Delete published outbox messages older than retention in batches
+  let totalDeleted = 0;
+  let batchDeleted: number;
+  do {
+    const result = await db.execute(sql`
+      DELETE FROM _outbox.messages
+      WHERE id IN (
+        SELECT id FROM _outbox.messages
+        WHERE published_at IS NOT NULL AND published_at < ${cutoff}
+        LIMIT ${sql.raw(String(batchSize))}
+      )
+    `);
+    batchDeleted = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+    totalDeleted += batchDeleted;
+  } while (batchDeleted >= batchSize);
 
-  // Delete processed inbox entries older than retention
-  await db.execute(sql`
-    DELETE FROM _inbox.processed
-    WHERE processed_at < ${cutoff}
-  `);
+  // Delete processed inbox entries older than retention in batches
+  let inboxBatchDeleted: number;
+  do {
+    const result = await db.execute(sql`
+      DELETE FROM _inbox.processed
+      WHERE message_id IN (
+        SELECT message_id FROM _inbox.processed
+        WHERE processed_at < ${cutoff}
+        LIMIT ${sql.raw(String(batchSize))}
+      )
+    `);
+    inboxBatchDeleted = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+  } while (inboxBatchDeleted >= batchSize);
 
-  return (deletedOutbox as unknown as { rowCount?: number }).rowCount ?? 0;
+  return totalDeleted;
+}
+
+export interface OutboxPurgeOptions {
+  /** Interval between purge cycles in ms (default: 60 min). */
+  intervalMs?: number;
+  /** Retention period in days for processed outbox rows (default: 7). */
+  retentionDays?: number;
+  /** Batch size for DELETE operations (default: 1000). */
+  batchSize?: number;
+  /** Pino-compatible logger for WARN logging (optional). */
+  logger?: { warn: (obj: Record<string, unknown>, msg: string) => void };
 }
 
 /**
  * Start a periodic outbox purge. Runs every `intervalMs` (default: 1 hour).
+ * Deletes processed outbox entries older than 7 days in batches of 1000.
+ * Logs a WARN if a purge cycle deletes zero rows but the table exceeds 10K entries.
  * Returns the interval handle for cleanup on shutdown.
  */
-export function startOutboxPurge(db: DrizzleTx, intervalMs = 3_600_000, retentionDays = 7): NodeJS.Timeout {
+export function startOutboxPurge(db: DrizzleTx, opts: OutboxPurgeOptions = {}): NodeJS.Timeout {
+  const { intervalMs = 3_600_000, retentionDays = 7, batchSize = 1000, logger } = opts;
+
   const timer = setInterval(() => {
-    purgeOutbox(db, retentionDays).catch(() => { /* swallow — non-critical maintenance */ });
+    void (async () => {
+      try {
+        const deleted = await purgeOutbox(db, retentionDays, batchSize);
+        if (deleted === 0 && logger) {
+          // Check if outbox has >10K entries — indicates stuck/stale situation
+          const { sql } = await import("drizzle-orm");
+          const countResult = await db.execute(
+            sql`SELECT count(*)::int AS cnt FROM _outbox.messages`
+          );
+          const count = (countResult as unknown as { rows?: Array<{ cnt: number }> }).rows?.[0]?.cnt ?? 0;
+          if (count > 10_000) {
+            logger.warn(
+              { outboxCount: count, deleted: 0, retentionDays },
+              "outbox purge deleted zero rows but table has >10K entries — possible stale/stuck state"
+            );
+          }
+        }
+      } catch {
+        /* swallow — non-critical maintenance */
+      }
+    })();
   }, intervalMs);
   timer.unref();
   return timer;

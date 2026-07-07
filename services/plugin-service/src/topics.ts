@@ -7,6 +7,8 @@ export const COMMANDS = {
   pluginConfigure: "plugins.registry.configure",
   hookRegister: "plugins.hook.register",
   hookDeregister: "plugins.hook.deregister",
+  storePut: "plugins.store.put",
+  storeDelete: "plugins.store.delete",
 } as const;
 
 export const EVENTS = {
@@ -18,6 +20,8 @@ export const EVENTS = {
   pluginConfigured: "plugins.registry.configured",
   hookRegistered: "plugins.hook.registered",
   hookDeregistered: "plugins.hook.deregistered",
+  storeUpdated: "plugins.store.updated",
+  storeDeleted: "plugins.store.deleted",
 } as const;
 
 export const SERVICE = "plugins";

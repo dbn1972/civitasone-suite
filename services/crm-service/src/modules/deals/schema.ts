@@ -5,6 +5,8 @@ export const crmSchema = pgSchema("crm");
 export const deals = crmSchema.table("deals", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
+  pipelineId: uuid("pipeline_id"),
+  stageId: uuid("stage_id"),
   name: varchar("name", { length: 200 }).notNull(),
   stage: varchar("stage", { length: 24 }).notNull().default("Lead"),
   valueMinor: bigint("value_minor", { mode: "bigint" }).notNull().default(0n),
@@ -12,6 +14,7 @@ export const deals = crmSchema.table("deals", {
   contactId: uuid("contact_id"),
   ownerId: uuid("owner_id"),
   closeDate: date("close_date"),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   probability: integer("probability").notNull().default(0),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -27,6 +30,8 @@ export type DealInsert = typeof deals.$inferInsert;
 export type DealView = {
   id: string;
   tenantId: string;
+  pipelineId: string | null;
+  stageId: string | null;
   name: string;
   stage: string;
   valueMinor: string;
@@ -36,6 +41,7 @@ export type DealView = {
   contactName: string | null;
   ownerId: string | null;
   closeDate: string | null;
+  closedAt: string | null;
   probability: number;
   status: string;
   version: number;

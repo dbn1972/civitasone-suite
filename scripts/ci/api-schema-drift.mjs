@@ -79,7 +79,7 @@ function findRouteFiles(serviceDir) {
         const stat = statSync(fullPath);
         if (stat.isDirectory()) {
           walk(fullPath);
-        } else if (entry === "routes.ts" || entry.endsWith("-routes.ts")) {
+        } else if (entry === "routes.ts" || entry.endsWith("-routes.ts") || entry.endsWith("-route.ts")) {
           files.push(fullPath);
         }
       } catch { /* skip */ }
