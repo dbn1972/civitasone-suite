@@ -22,8 +22,76 @@ const RP_ID = process.env.WEBAUTHN_RP_ID ?? "localhost";
 const RP_NAME = process.env.WEBAUTHN_RP_NAME ?? "CivitasOne";
 const ORIGIN = process.env.WEBAUTHN_ORIGIN ?? "http://localhost:3000";
 
-// In-memory challenge store (should be Redis in production)
-const challenges = new Map<string, { challenge: string; expiresAt: number }>();
+// H9 FIX: Challenge store backed by Redis for fleet-wide consistency.
+// In a multi-pod deployment, "begin" on pod A and "finish" on pod B must work.
+// Falls back to in-memory Map when Redis is unavailable (dev/test).
+import { createClient, type RedisClientType } from "redis";
+
+interface ChallengeEntry { challenge: string; expiresAt: number }
+
+class RedisChallengeStore {
+  private client: RedisClientType;
+  private prefix = "webauthn:challenge:";
+  private ttlSeconds = 300; // 5 minutes
+
+  constructor(redisUrl: string) {
+    this.client = createClient({ url: redisUrl }) as RedisClientType;
+    this.client.connect().catch(() => { /* handled in get/set gracefully */ });
+  }
+
+  async set(key: string, entry: ChallengeEntry): Promise<void> {
+    try {
+      await this.client.setEx(
+        `${this.prefix}${key}`,
+        this.ttlSeconds,
+        JSON.stringify(entry),
+      );
+    } catch {
+      // Fallback: if Redis is down, the challenge will fail on verify (fail-closed)
+    }
+  }
+
+  async get(key: string): Promise<ChallengeEntry | undefined> {
+    try {
+      const raw = await this.client.get(`${this.prefix}${key}`);
+      return raw ? JSON.parse(raw) as ChallengeEntry : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    try {
+      await this.client.del(`${this.prefix}${key}`);
+    } catch { /* best effort */ }
+  }
+}
+
+class InMemoryChallengeStore {
+  private store = new Map<string, ChallengeEntry>();
+
+  async set(key: string, entry: ChallengeEntry): Promise<void> {
+    this.store.set(key, entry);
+  }
+
+  async get(key: string): Promise<ChallengeEntry | undefined> {
+    const entry = this.store.get(key);
+    if (entry && Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return undefined;
+    }
+    return entry;
+  }
+
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+}
+
+const REDIS_URL = process.env.REDIS_URL ?? "";
+const challengeStore = REDIS_URL
+  ? new RedisChallengeStore(REDIS_URL)
+  : new InMemoryChallengeStore();
 
 function generateChallenge(): string {
   return randomBytes(32).toString("base64url");
@@ -34,7 +102,7 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/identity/webauthn/register/options", async (req, reply) => {
     const ctx = resolveContext(req);
     const challenge = generateChallenge();
-    challenges.set(ctx.actorId, { challenge, expiresAt: Date.now() + 300_000 });
+    await challengeStore.set(ctx.actorId, { challenge, expiresAt: Date.now() + 300_000 });
 
     return reply.send({
       challenge,
@@ -71,11 +139,11 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
       }),
     }).parse(req.body);
 
-    const stored = challenges.get(ctx.actorId);
+    const stored = await challengeStore.get(ctx.actorId);
     if (!stored || Date.now() > stored.expiresAt) {
       throw new HttpError(400, "CHALLENGE_EXPIRED", "Registration challenge expired — request new options");
     }
-    challenges.delete(ctx.actorId);
+    await challengeStore.delete(ctx.actorId);
 
     // TODO: Decode attestationObject, verify challenge matches clientDataJSON,
     // extract public key, store credential in webauthn_credentials table.
@@ -95,7 +163,7 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
     const challenge = generateChallenge();
     // Store challenge keyed by session or a temp ID
     const tempId = randomUUID();
-    challenges.set(tempId, { challenge, expiresAt: Date.now() + 300_000 });
+    await challengeStore.set(tempId, { challenge, expiresAt: Date.now() + 300_000 });
 
     return reply.send({
       challenge,
@@ -121,11 +189,11 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
       }),
     }).parse(req.body);
 
-    const stored = challenges.get(body._tempId);
+    const stored = await challengeStore.get(body._tempId);
     if (!stored || Date.now() > stored.expiresAt) {
       throw new HttpError(400, "CHALLENGE_EXPIRED", "Authentication challenge expired");
     }
-    challenges.delete(body._tempId);
+    await challengeStore.delete(body._tempId);
 
     // TODO: Look up credential by body.id, verify signature against stored public key,
     // verify challenge in clientDataJSON, increment sign counter, issue JWT session.
