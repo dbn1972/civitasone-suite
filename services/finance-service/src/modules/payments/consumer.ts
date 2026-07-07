@@ -223,9 +223,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.paymentInitiate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
-      amountMinor: number; currency?: string; eftRef?: string; bankAccountId?: string;
+      amountMinor: number | string; currency?: string; eftRef?: string; bankAccountId?: string;
     };
     assertValidDdoCode(p.ddoCode);
+    const paymentAmount = BigInt(p.amountMinor);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const bill = await repo.findBillByIdTx(tx, p.billId);
@@ -235,6 +236,17 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       assertBillPassed(bill.status ?? "pending");
       assertValidPaymentMode(p.mode);
+      // C3 FIX: Payment amount conservation invariant.
+      // The payment amount MUST equal the bill's net amount (full payment).
+      // Part-payments are not yet supported — reject mismatches to prevent
+      // amount divergence between AP settlement, GL posting, and cash book.
+      const billNet = BigInt(bill.netMinor);
+      if (paymentAmount !== billNet) {
+        throw new Error(
+          `PAYMENT_AMOUNT_MISMATCH: payment ${paymentAmount} paise does not equal bill net ${billNet} paise. ` +
+          `Full payment required (part-payment not yet supported).`,
+        );
+      }
       // C3: derive the period from the underlying bill's own value/posting date,
       // not wall-clock. Falls back to the bill's create date if no billDate set.
       const payDate = (bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10));

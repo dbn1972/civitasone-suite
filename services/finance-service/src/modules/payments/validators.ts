@@ -36,7 +36,12 @@ export const initiateEftBody = z.object({
   billId:      z.string().uuid(),
   ddoCode:     ddoCodeField,
   mode:        z.enum(["NEFT", "RTGS", "IMPS", "DBT", "PFMS", "cheque"]),
-  amountMinor: z.number().int().positive(),
+  // C3 FIX: use string-encoded bigint to avoid 2^53 precision loss.
+  // The consumer validates amountMinor === bill.netMinor (conservation invariant).
+  amountMinor: z.union([
+    z.number().int().positive(),
+    z.string().regex(/^\d+$/, "amountMinor must be a positive integer string"),
+  ]),
   currency:    z.string().length(3).default("INR"),
   eftRef:      z.string().optional(),
   bankAccountId: z.string().uuid().optional(),
