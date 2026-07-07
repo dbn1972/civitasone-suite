@@ -38,6 +38,7 @@ export function registerFactsConsumers(queue: Queue): void {
         await ingestEvent(eventType, msg);
       } catch (err) {
         log.error({ err, messageId: msg.messageId, type: eventType }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
       }
     });
   }

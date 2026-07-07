@@ -47,6 +47,7 @@ export function registerWebhookConsumers(queue: Queue): void {
       await cache.invalidate(cacheKey(msg.payload.tenantId));
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: "admin.webhook.create" }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
     }
   });
 
@@ -71,6 +72,7 @@ export function registerWebhookConsumers(queue: Queue): void {
       await cache.invalidate(cacheKey(msg.payload.tenantId));
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: "admin.webhook.update" }, "Consumer processing failed");
+      throw err; // H11 FIX
     }
   });
 
@@ -87,6 +89,7 @@ export function registerWebhookConsumers(queue: Queue): void {
       await cache.invalidate(cacheKey(msg.payload.tenantId));
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: "admin.webhook.delete" }, "Consumer processing failed");
+      throw err; // H11 FIX
     }
   });
 
@@ -110,6 +113,7 @@ export function registerWebhookConsumers(queue: Queue): void {
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: "admin.webhook.test" }, "Consumer processing failed");
+      throw err; // H11 FIX
     }
   });
 }

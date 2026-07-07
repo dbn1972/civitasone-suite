@@ -81,6 +81,7 @@ export function registerDashboardsConsumers(queue: Queue): void {
       await cache.invalidateResource(msg.tenantId, DASHBOARD_RESOURCE);
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.createDashboard }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
     }
   });
 
@@ -113,6 +114,7 @@ export function registerDashboardsConsumers(queue: Queue): void {
       await cache.invalidateResource(msg.tenantId, DASHBOARD_RESOURCE);
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.updateDashboard }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
     }
   });
 
@@ -146,6 +148,7 @@ export function registerDashboardsConsumers(queue: Queue): void {
       await cache.invalidate(cache.makeKey(msg.tenantId, DASHBOARD_RESOURCE, p.dashboardId));
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.addWidget }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
     }
   });
 
@@ -177,6 +180,7 @@ export function registerDashboardsConsumers(queue: Queue): void {
       await cache.invalidate(cache.makeKey(msg.tenantId, DASHBOARD_RESOURCE, p.dashboardId));
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.shareDashboard }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
     }
   });
 }

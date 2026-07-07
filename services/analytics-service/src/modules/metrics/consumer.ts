@@ -50,6 +50,7 @@ export function registerMetricsConsumers(queue: Queue): void {
       await cache.invalidateResource(msg.tenantId, METRIC_RESOURCE);
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.saveMetric }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
     }
   });
 }
