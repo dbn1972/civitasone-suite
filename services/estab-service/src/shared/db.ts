@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient, TenantRouter, envTenantResolver, cachedResolver } from "@civitasone/db";
+import { createSqlClient, TenantRouter, envTenantResolver, cachedResolver, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as filesModule }      from "../modules/files/schema.js";
 import { schema as committeeModule }  from "../modules/committee/schema.js";
 import { schema as assetsModule }     from "../modules/assets/schema.js";
@@ -23,9 +23,10 @@ const ESTAB_SCHEMA = {
   ...outboxSchema,
 };
 
-export const db = drizzle(sqlClient, { schema: ESTAB_SCHEMA });
+const _rawDb = drizzle(sqlClient, { schema: ESTAB_SCHEMA });
 
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;
 
 // ── Tiered multi-tenancy (Option B) ──────────────────────────────────────────
 // Pool tenants reuse the shared `sqlClient` above (no second connection); silo

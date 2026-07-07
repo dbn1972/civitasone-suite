@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as plansModule } from "../modules/plans/schema.js";
 import { schema as subscriptionsModule } from "../modules/subscriptions/schema.js";
 import { schema as usageModule } from "../modules/usage/schema.js";
@@ -13,7 +13,8 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required (postgres://billing_svc:***@host/civitas_billing)");
 
 export const sqlClient = createSqlClient(url);
-export const db = drizzle(sqlClient, {
+const _rawDb = drizzle(sqlClient, {
   schema: { ...plansModule, ...subscriptionsModule, ...usageModule, ...invoicesModule, ...paymentsModule, ...einvoiceModule, ...revenueModule, ...outboxSchema },
 });
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;

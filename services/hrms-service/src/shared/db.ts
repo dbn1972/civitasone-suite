@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as employeeModule }    from "../modules/employee/schema.js";
 import { schema as recruitmentModule } from "../modules/recruitment/schema.js";
 import { schema as attendanceModule }  from "../modules/attendance/schema.js";
@@ -22,11 +22,12 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://hrms_svc:***@hos
 
 export const sqlClient = createSqlClient(url);
 
-export const db = drizzle(sqlClient, {
+const _rawDb = drizzle(sqlClient, {
   schema: { ...employeeModule, ...recruitmentModule, ...attendanceModule, ...leaveModule, ...trainingModule, ...lifecycleModule, ...serviceBookModule, ...appraisalModule, ...aparModule, ...gpfModule, ...deputationModule, ...claimsModule, ...schedulerModule, ...disciplinaryModule, ...reservationModule, ...outboxSchema },
 });
 
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;
 
 /**
  * node-postgres-style adapter over the postgres-js client.

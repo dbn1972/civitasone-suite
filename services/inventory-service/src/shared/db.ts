@@ -3,7 +3,7 @@
  * Connects with the inventory_svc role to the civitas_inventory database ONLY (L1).
  */
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as itemsModule } from "../modules/items/schema.js";
 import { schema as storesModule } from "../modules/stores/schema.js";
 import { schema as movementsModule } from "../modules/movements/schema.js";
@@ -17,8 +17,9 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://inventory_svc:**
 
 export const sqlClient = createSqlClient(url);
 
-export const db = drizzle(sqlClient, {
+const _rawDb = drizzle(sqlClient, {
   schema: { ...itemsModule, ...storesModule, ...movementsModule, ...batchesModule, ...cycleCountModule, ...matchingModule, ...outboxSchema },
 });
 
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;

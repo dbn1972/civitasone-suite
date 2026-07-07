@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as instancesModule } from "../modules/instances/schema.js";
 import { schema as tasksModule } from "../modules/tasks/schema.js";
 import { schema as definitionsModule } from "../modules/definitions/schema.js";
@@ -19,7 +19,8 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required (postgres://workflow_svc:***@host/civitas_workflow)");
 
 export const sqlClient = createSqlClient(url);
-export const db = drizzle(sqlClient, {
+const _rawDb = drizzle(sqlClient, {
   schema: { ...instancesModule, ...tasksModule, ...definitionsModule, ...historyModule, ...delegationsModule, roleMembers, assignmentCursors, ...assignmentModule, consumerAttempts, deadLetters, ...outboxSchema, ...messagesModule, ...decisionsModule, ...forwardingModule, ...designerModule },
 });
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;

@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as projectModule }     from "../modules/project/schema.js";
 import { schema as schemeModule }      from "../modules/scheme/schema.js";
 import { schema as progressModule }    from "../modules/progress/schema.js";
@@ -14,7 +14,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://project_svc:***@
 
 export const sqlClient = createSqlClient(url);
 
-export const db = drizzle(sqlClient, {
+const _rawDb = drizzle(sqlClient, {
   schema: {
     ...projectModule,
     ...schemeModule,
@@ -27,4 +27,5 @@ export const db = drizzle(sqlClient, {
   },
 });
 
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;

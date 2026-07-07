@@ -4,7 +4,7 @@
  * Drizzle is bound to this service's module schemas + the outbox schema.
  */
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as callsModule } from "../modules/calls/schema.js";
 import { schema as queuesModule } from "../modules/queues/schema.js";
 import { schema as agentsModule } from "../modules/agents/schema.js";
@@ -19,8 +19,9 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://telephony_svc:**
 
 export const sqlClient = createSqlClient(url);
 
-export const db = drizzle(sqlClient, {
+const _rawDb = drizzle(sqlClient, {
   schema: { ...callsModule, ...queuesModule, ...agentsModule, ...didModule, ...ivrModule, ...recordingsModule, ...transcriptionModule, ...outboxSchema },
 });
 
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;

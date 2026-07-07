@@ -40,6 +40,8 @@ export { tenantStorage, getCurrentTenantId, runWithTenant, setTenantContext } fr
 export { createTenantDb } from "./tenant-db.js";
 // SAST-003e: Consumer handler wrapper for tenant context propagation.
 export { withTenantConsumer } from "./tenant-consumer.js";
+// SAST-003f: One-line db wrapper for tenant GUC injection.
+export { wrapWithTenantGuc } from "./wrap-tenant-db.js";
 // Phase 1 hyperscale: per-tenant quota enforcement plugin.
 export { quotaCheckPlugin, type QuotaCheckStore, type QuotaCheckOptions, type TenantQuota } from "./quota-check.js";
 

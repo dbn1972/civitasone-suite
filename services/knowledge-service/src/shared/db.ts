@@ -2,7 +2,7 @@
  * knowledge-service DB connection.
  */
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, wrapWithTenantGuc } from "@civitasone/db";
 import { schema as documentsModule } from "../modules/documents/schema.js";
 import { outboxSchema } from "./outbox.js";
 
@@ -11,8 +11,9 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://knowledge_svc:**
 
 export const sqlClient = createSqlClient(url);
 
-export const db = drizzle(sqlClient, {
+const _rawDb = drizzle(sqlClient, {
   schema: { ...documentsModule, ...outboxSchema },
 });
 
-export type Db = typeof db;
+export const db = wrapWithTenantGuc(_rawDb);
+export type Db = typeof _rawDb;
