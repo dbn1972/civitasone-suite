@@ -15,6 +15,7 @@
  * the common db.transaction() pattern used across all services.
  */
 import { setTenantGuc } from "./tenant-scope.js";
+import { tenantStorage } from "./tenant-context.js";
 
 type DrizzleDb = {
   transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
@@ -37,19 +38,31 @@ export async function tenantTransaction<T>(
 }
 
 /**
- * Fastify onRequest hook factory — sets up a per-request db helper.
- * Services can register this hook to make req.tenantTx available.
+ * Fastify onRequest hook factory — sets up a per-request db helper AND stores
+ * tenantId in AsyncLocalStorage so that ANY db.transaction() within the request
+ * lifecycle (including bare calls in repos/consumers) automatically gets the GUC.
  *
  * Usage in app.ts:
- *   app.decorateRequest("tenantTx", null);
  *   app.addHook("onRequest", createTenantTxHook(db));
  *
  * Then in routes:
  *   const tx = await req.tenantTx(async (tx) => { ... });
+ *   // OR simply use db.transaction() — GUC is auto-set via AsyncLocalStorage
  */
 export function createTenantTxHook(db: DrizzleDb) {
-  return async function tenantTxHook(req: { headers: Record<string, string | string[] | undefined> }) {
+  return async function tenantTxHook(
+    req: { headers: Record<string, string | string[] | undefined> },
+    _reply: unknown,
+  ) {
     const tenantId = req.headers["x-tenant-id"] as string | undefined;
+
+    // Store tenantId in AsyncLocalStorage so tenant-aware db.transaction()
+    // picks it up automatically (fixes bare db.transaction() calls).
+    if (tenantId) {
+      tenantStorage.enterWith({ tenantId });
+    }
+
+    // Also provide the explicit req.tenantTx helper for backward compat
     (req as unknown as { tenantTx: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> }).tenantTx =
       tenantId
         ? <T>(fn: (tx: unknown) => Promise<T>) => tenantTransaction(db, tenantId, fn)

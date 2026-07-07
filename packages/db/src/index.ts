@@ -34,6 +34,12 @@ export { assertP95, measureP95, assertIndexUsed } from "./perf.js";
 export { withTenantScope, setTenantGuc } from "./tenant-scope.js";
 // SAST-003b: simplified tenant-scoped transaction factory.
 export { tenantTransaction, createTenantTxHook } from "./tenant-tx.js";
+// SAST-003c: AsyncLocalStorage tenant context for automatic GUC propagation.
+export { tenantStorage, getCurrentTenantId, runWithTenant, setTenantContext } from "./tenant-context.js";
+// SAST-003d: Tenant-aware DB wrapper — auto-sets GUC on every transaction.
+export { createTenantDb } from "./tenant-db.js";
+// SAST-003e: Consumer handler wrapper for tenant context propagation.
+export { withTenantConsumer } from "./tenant-consumer.js";
 // Phase 1 hyperscale: per-tenant quota enforcement plugin.
 export { quotaCheckPlugin, type QuotaCheckStore, type QuotaCheckOptions, type TenantQuota } from "./quota-check.js";
 
