@@ -2,7 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { trialExpiresAt } from "./domain.js";
 
@@ -42,6 +42,30 @@ export function registerSubscriptionsConsumers(queue: Queue): void {
       await audit(tx, msg, "subscription_cancel", msg.payload.id);
     });
   });
+
+  // H12 FIX: Wire dunning exhausted event → suspend subscription.
+  // Previously this event was published but had NO subscriber, so subscriptions
+  // were never suspended after 3 failed payment retries.
+  queue.subscribe<{ invoiceId: string; subscriptionId?: string; attempts: number }>(
+    EVENTS.dunningExhausted,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const subId = msg.payload.subscriptionId;
+        if (!subId) return; // cannot suspend without subscription reference
+        await repo.updateStatus(tx, subId, "suspended", "system");
+        await enqueue(tx as any, {
+          topic: "billing.subscription.suspended",
+          eventType: "billing.subscription.suspended",
+          tenantId: msg.tenantId,
+          actorId: "system",
+          correlationId: msg.correlationId,
+          payload: { subscriptionId: subId, reason: "dunning_exhausted", attempts: msg.payload.attempts },
+        });
+        await audit(tx, msg, "subscription_suspend_dunning", subId);
+      });
+    },
+  );
 }
 
 async function audit(tx: unknown, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string): Promise<void> {
