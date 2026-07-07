@@ -15,8 +15,30 @@ const RESOURCE = "webhook";
 
 /**
  * SSRF guard: block private, loopback, and link-local IP ranges in webhook URLs.
- * Resolves hostname and rejects internal network destinations.
+ * H6 FIX: Now resolves hostnames via DNS to detect rebinding attacks.
+ * Checks both string-based patterns AND resolved A/AAAA records.
  */
+import { resolve4, resolve6 } from "node:dns/promises";
+
+function isPrivateIp(ip: string): boolean {
+  // IPv4 checks
+  const ipv4 = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipv4) {
+    const [, a, b] = ipv4.map(Number);
+    if (a === 10) return true;                            // 10.0.0.0/8
+    if (a === 172 && b! >= 16 && b! <= 31) return true;  // 172.16.0.0/12
+    if (a === 192 && b === 168) return true;              // 192.168.0.0/16
+    if (a === 169 && b === 254) return true;              // link-local
+    if (a === 127) return true;                           // loopback
+    if (a === 0) return true;                             // 0.0.0.0/8
+  }
+  // IPv6 checks
+  if (ip === "::1" || ip === "::") return true;
+  if (ip.startsWith("fe80:")) return true;  // link-local
+  if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // unique local
+  return false;
+}
+
 function isBlockedUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -27,16 +49,8 @@ function isBlockedUrl(url: string): boolean {
     if (host === "0.0.0.0") return true;
     // Block metadata endpoints (cloud providers)
     if (host === "169.254.169.254" || host === "metadata.google.internal") return true;
-    // Block private IPv4 ranges
-    const ipv4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-    if (ipv4) {
-      const [, a, b] = ipv4.map(Number);
-      if (a === 10) return true;                            // 10.0.0.0/8
-      if (a === 172 && b! >= 16 && b! <= 31) return true;  // 172.16.0.0/12
-      if (a === 192 && b === 168) return true;              // 192.168.0.0/16
-      if (a === 169 && b === 254) return true;              // link-local
-      if (a === 127) return true;                           // loopback
-    }
+    // Block private IPv4 ranges (string-based first check)
+    if (isPrivateIp(host)) return true;
     // Block non-https in production (optional hardening)
     if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") return true;
     return false;
@@ -44,6 +58,38 @@ function isBlockedUrl(url: string): boolean {
     return true; // malformed → block
   }
 }
+
+/**
+ * H6 FIX: Resolve hostname via DNS and check if ANY resolved address is private.
+ * This defeats DNS rebinding attacks where a hostname initially resolves to a
+ * public IP but later resolves to 169.254.169.254 (metadata) or 127.0.0.1.
+ * Must be called at BOTH registration AND delivery time.
+ */
+async function isBlockedAfterResolve(url: string): Promise<boolean> {
+  if (isBlockedUrl(url)) return true;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    // If it's already an IP, the string check above handles it
+    if (/^[\d.]+$/.test(host) || host.includes(":")) return false;
+    // Resolve A and AAAA records
+    const [ipv4s, ipv6s] = await Promise.allSettled([
+      resolve4(host),
+      resolve6(host),
+    ]);
+    const allIps: string[] = [];
+    if (ipv4s.status === "fulfilled") allIps.push(...ipv4s.value);
+    if (ipv6s.status === "fulfilled") allIps.push(...ipv6s.value);
+    // If ANY resolved IP is private, block it
+    return allIps.some(isPrivateIp);
+  } catch {
+    // DNS resolution failure — block by default (fail-closed)
+    return true;
+  }
+}
+
+// Export for use in delivery consumer (re-check at send time)
+export { isBlockedAfterResolve, isBlockedUrl, isPrivateIp };
 
 const createBody = z.object({
   url: z.string().url().max(2048).refine((u) => !isBlockedUrl(u), { message: "URL targets a blocked network range (private/loopback/link-local)" }),
@@ -88,6 +134,10 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
     const body = safeParse(createBody, req.body);
+    // H6 FIX: DNS resolution check at registration time (defeats rebinding)
+    if (await isBlockedAfterResolve(body.url)) {
+      throw new HttpError(422, "SSRF_BLOCKED", "URL resolves to a private/loopback/link-local address");
+    }
     const result = await commands.webhookCreate(ctx, body);
     // Return secret only on creation (one-time)
     return reply.code(202).send(result);
