@@ -4583,21 +4583,42 @@ components:
 
     CreatePaymentRequest:
       type: object
-      required: [billId, amountPaise, mode]
+      required: [billId, amountMinor, mode, ddoCode]
       properties:
         billId:
           type: string
           format: uuid
-        amountPaise:
-          type: integer
-          format: int64
-          minimum: 1
+        ddoCode:
+          type: string
+          pattern: '^[A-Za-z0-9]{6,12}$'
+          description: DDO code in PFMS format (6–12 alphanumeric characters)
         mode:
           type: string
-          enum: [pfms, neft, rtgs, cheque, cash]
+          enum: [NEFT, RTGS, IMPS, DBT, PFMS, cheque]
+        amountMinor:
+          oneOf:
+            - type: integer
+              format: int64
+              minimum: 1
+            - type: string
+              pattern: '^\d+$'
+          description: |
+            Payment amount in paise (minor units). Accepts either an integer or a
+            string-encoded integer for bigint safety (avoids 2^53 precision loss).
+            Must equal the bill's netMinor (conservation invariant).
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          default: INR
+          description: ISO 4217 currency code
+        eftRef:
+          type: string
+          description: External EFT reference (optional tracking ID)
         bankAccountId:
           type: string
           format: uuid
+          description: Target bank account for the payment (optional)
 
     GlEntry:
       type: object
