@@ -10,6 +10,8 @@ services:
       POSTGRES_DB: civitasone
     ports:
       - "5435:5432"
+    volumes:
+      - ./init-roles.sql:/docker-entrypoint-initdb.d/01-roles.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U civitasone"]
       interval: 5s
@@ -54,7 +56,6 @@ services:
       NODE_ENV: test
       PORT: "8080"
       JWT_SECRET: test_secret_for_civitasone_32chr
-      DATABASE_URL: postgres://civitasone:civitasone@postgres:5432/civitasone
       REDIS_URL: redis://redis:6379
       QUEUE_DRIVER: sqs
       AWS_ENDPOINT: http://localstack:4566
@@ -88,7 +89,7 @@ services:
       NODE_ENV: test
       PORT: "3001"
       JWT_SECRET: test_secret_for_civitasone_32chr
-      DATABASE_URL: postgres://civitasone:civitasone@postgres:5432/civitasone
+      DATABASE_URL: postgres://identity_svc:identity_svc_pw@postgres:5432/civitas_identity
       REDIS_URL: redis://redis:6379
       QUEUE_DRIVER: sqs
       AWS_ENDPOINT: http://localstack:4566
@@ -115,7 +116,7 @@ services:
       NODE_ENV: test
       PORT: "3007"
       JWT_SECRET: test_secret_for_civitasone_32chr
-      DATABASE_URL: postgres://civitasone:civitasone@postgres:5432/civitasone
+      DATABASE_URL: postgres://finance_svc:finance_svc_pw@postgres:5432/civitas_finance
       REDIS_URL: redis://redis:6379
       QUEUE_DRIVER: sqs
       AWS_ENDPOINT: http://localstack:4566
@@ -142,7 +143,7 @@ services:
       NODE_ENV: test
       PORT: "3008"
       JWT_SECRET: test_secret_for_civitasone_32chr
-      DATABASE_URL: postgres://civitasone:civitasone@postgres:5432/civitasone
+      DATABASE_URL: postgres://procurement_svc:procurement_svc_pw@postgres:5432/civitas_procurement
       REDIS_URL: redis://redis:6379
       QUEUE_DRIVER: sqs
       AWS_ENDPOINT: http://localstack:4566
@@ -169,7 +170,7 @@ services:
       NODE_ENV: test
       PORT: "3012"
       JWT_SECRET: test_secret_for_civitasone_32chr
-      DATABASE_URL: postgres://civitasone:civitasone@postgres:5432/civitasone
+      DATABASE_URL: postgres://hrms_svc:hrms_svc_pw@postgres:5432/civitas_hrms
       REDIS_URL: redis://redis:6379
       QUEUE_DRIVER: sqs
       AWS_ENDPOINT: http://localstack:4566
