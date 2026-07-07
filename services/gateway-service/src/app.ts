@@ -199,10 +199,18 @@ export async function buildApp(): Promise<FastifyInstance> {
       },
     },
   });
+  // H8 FIX: Back rate-limit with Redis so it is fleet-wide (not per-pod).
+  // @fastify/rate-limit accepts a `redis` option for distributed counters.
+  const rateLimitRedisUrl = process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
+  const rateLimitStore = rateLimitRedisUrl
+    ? { url: rateLimitRedisUrl }
+    : undefined;
+
   await app.register(rateLimit, {
     global: true,
     max: Number(process.env.GATEWAY_RATE_LIMIT_MAX ?? 1000),
     timeWindow: process.env.GATEWAY_RATE_LIMIT_WINDOW ?? "1 minute",
+    ...(rateLimitStore ? { redis: rateLimitStore } : {}),
   });
 
   // SC-5: Per-tenant rate limit (second tier, registered after the global one).
@@ -214,6 +222,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     keyGenerator: (req) => (req.headers["x-tenant-id"] as string) || (req.ip ?? "unknown"),
     max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
     timeWindow: "1 minute",
+    ...(rateLimitStore ? { redis: rateLimitStore } : {}),
   });
 
   // Phase 1 hyperscale: per-tenant configurable quota enforcement.
