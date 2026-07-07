@@ -17,6 +17,17 @@ export async function findApplicationByIdTx(tx: Writer, id: string, tenantId: st
   return rows[0] ?? null;
 }
 
+/**
+ * M1 FIX: Locked read for disbursement guard — SELECT FOR UPDATE prevents
+ * concurrent disbursements from both passing the sum check before either inserts.
+ */
+export async function findApplicationByIdForUpdate(tx: Writer, id: string, tenantId: string): Promise<ApplicationRow | null> {
+  const rows = await (tx as typeof db).execute(
+    sql`SELECT * FROM ${grantApplications} WHERE id = ${id}::uuid AND tenant_id = ${tenantId}::uuid LIMIT 1 FOR UPDATE`,
+  ) as unknown as ApplicationRow[];
+  return rows[0] ?? null;
+}
+
 export async function insertApplication(tx: Writer, row: ApplicationInsert): Promise<void> {
   await tx.insert(grantApplications).values(row);
 }

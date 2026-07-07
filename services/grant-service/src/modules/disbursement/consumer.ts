@@ -78,7 +78,8 @@ export function registerDisbursementConsumers(queue: Queue): void {
       }
 
       // Guard: total disbursed must not exceed approved amount
-      const app = await appRepo.findApplicationByIdTx(tx, installment.applicationId, installment.tenantId);
+      // M1 FIX: use FOR UPDATE lock to prevent concurrent over-disbursement.
+      const app = await appRepo.findApplicationByIdForUpdate(tx, installment.applicationId, installment.tenantId);
       if (app) {
         const alreadyDisbursed = await repo.sumDisbursedForApplication(tx, installment.applicationId, installment.tenantId);
         try {
