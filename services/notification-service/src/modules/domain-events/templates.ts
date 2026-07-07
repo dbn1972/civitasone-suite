@@ -127,6 +127,50 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
       body: "Dear {{departmentHeadName}},\n\nAudit para {{paraNo}} has been issued for {{departmentName}}.\n\nSubject: {{subject}}\nResponse due by: {{dueDate}}\n\nPlease coordinate with the concerned section and submit the response.\n\nRegards,\nAudit Department",
     },
   },
+  {
+    eventType: "ml.prediction.breach_risk_high",
+    push: {
+      title: "SLA Breach Risk Detected",
+      body: "A ticket has high predicted SLA breach risk. Review and consider reassignment.",
+    },
+    email: {
+      title: "SLA Breach Risk Alert",
+      body: "A helpdesk ticket has been flagged with high SLA breach probability. Please review the ticket and consider reassignment to avoid SLA violation.\n\nRegards,\nML Intelligence System",
+    },
+  },
+  {
+    eventType: "ml.prediction.task_high_risk",
+    push: {
+      title: "High Task Delay Risk",
+      body: "A project task has been flagged with high delay risk. Consider resource reallocation.",
+    },
+    email: {
+      title: "Project Task Delay Risk Alert",
+      body: "A project task has been flagged with high delay risk based on schedule variance and resource contention analysis. Please review and consider corrective action.\n\nRegards,\nML Intelligence System",
+    },
+  },
+  {
+    eventType: "ml.prediction.churn_risk_high",
+    push: {
+      title: "Subscription Churn Risk",
+      body: "A subscription has been flagged with high churn probability. Review retention actions.",
+    },
+    email: {
+      title: "Subscription Churn Risk Alert",
+      body: "A subscription has been identified as at-risk for churn based on usage patterns and engagement metrics. Please review and initiate retention measures.\n\nRegards,\nML Intelligence System",
+    },
+  },
+  {
+    eventType: "ml.prediction.anomaly_detected",
+    push: {
+      title: "Financial Anomaly Detected",
+      body: "A transaction has been flagged as anomalous. Review for potential issues.",
+    },
+    email: {
+      title: "Financial Anomaly Alert",
+      body: "A financial transaction has been flagged as anomalous based on historical spending patterns. Please review the transaction for potential errors or irregularities.\n\nRegards,\nML Intelligence System",
+    },
+  },
 ];
 
 const templateMap = new Map<string, NotificationTemplate>();

@@ -4,11 +4,13 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTicketConsumers } from "./modules/tickets/consumer.js";
+import { registerBreachRiskConsumers } from "./modules/ml-breach/consumer.js";
 import { startSlaSweeper } from "./modules/tickets/sweeper.js";
 
 const log = pino({ name: "helpdesk-worker" });
 
 registerTicketConsumers(queue);
+registerBreachRiskConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

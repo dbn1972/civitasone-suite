@@ -10,6 +10,7 @@ import { registerChannelConsumers } from "./modules/channels/consumer.js";
 import { registerAlertConsumers } from "./modules/alerts/consumer.js";
 import { registerBulkConsumers } from "./modules/bulk/consumer.js";
 import { registerDomainEventConsumers } from "./modules/domain-events/consumer.js";
+import { registerMLPredictionConsumers } from "./modules/ml-predictions/consumer.js";
 import { startRetrySweeper } from "./modules/deliveries/sweeper.js";
 
 const log = pino({ name: "notification-worker" });
@@ -19,6 +20,7 @@ registerChannelConsumers(queue);
 registerAlertConsumers(queue);
 registerBulkConsumers(queue);
 registerDomainEventConsumers(queue);
+registerMLPredictionConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

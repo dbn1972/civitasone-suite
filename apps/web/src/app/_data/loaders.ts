@@ -2144,6 +2144,13 @@ export type PipelineDealCard = {
   ownerId: string | null;
   contactName: string | null;
   version: number;
+  /** ML prediction data (present when lead scoring is active) */
+  prediction?: {
+    probability: number;
+    confidence: number;
+    factors?: Array<{ feature: string; contribution: number; direction: "positive" | "negative" }>;
+    isFallback?: boolean;
+  } | null;
 };
 
 function mapPipelines(payload: unknown): PipelineView[] | null {
@@ -2193,6 +2200,7 @@ function mapPipelineDeals(payload: unknown): PipelineDealCard[] | null {
     const id = toText(row.id);
     const name = toText(row.name);
     if (!id || !name) continue;
+    const predRaw = isRecord(row.prediction) ? row.prediction : null;
     mapped.push({
       id,
       name,
@@ -2204,6 +2212,12 @@ function mapPipelineDeals(payload: unknown): PipelineDealCard[] | null {
       ownerId: toText(row.ownerId) ?? null,
       contactName: toText(row.contactName) ?? null,
       version: typeof row.version === "number" ? row.version : 1,
+      prediction: predRaw ? {
+        probability: typeof predRaw.probability === "number" ? predRaw.probability : 0,
+        confidence: typeof predRaw.confidence === "number" ? predRaw.confidence : 0,
+        factors: Array.isArray(predRaw.factors) ? predRaw.factors as Array<{ feature: string; contribution: number; direction: "positive" | "negative" }> : undefined,
+        isFallback: predRaw.isFallback === true,
+      } : undefined,
     });
   }
   return mapped.length > 0 ? mapped : null;

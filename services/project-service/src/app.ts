@@ -56,6 +56,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { wbsRoutes } = await import("./modules/scheduling/wbs-routes.js");
   await app.register(wbsRoutes);
 
+  const { delayForecastRoutes } = await import("./modules/delay-forecast/routes.js");
+  await app.register(delayForecastRoutes);
+
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

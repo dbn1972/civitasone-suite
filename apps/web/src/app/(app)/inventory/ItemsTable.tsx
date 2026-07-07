@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
+import { PredictionBadge } from "@/app/_components/ds/PredictionBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { InventoryItemRow } from "./_data";
@@ -22,6 +23,22 @@ const columns: Col[] = [
   { key: "reorderLevel", label: "Reorder Level", align: "right" },
   { key: "unitCostMinor", label: "Std. Cost", align: "right", render: (r) => formatMoney(r.unitCostMinor) },
   { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
+  {
+    key: "demandForecast" as keyof InventoryItemRow & string,
+    label: "Demand Forecast",
+    render: (r) => {
+      const pred = (r as Record<string, unknown>).demandForecast as { confidence: number; totalDemand: number; isFallback?: boolean; factors?: Array<{ feature: string; contribution: number; direction: "positive" | "negative" }> } | undefined;
+      if (!pred) return null;
+      return (
+        <PredictionBadge
+          confidence={pred.confidence}
+          label={`${pred.totalDemand} units`}
+          factors={pred.factors}
+          isFallback={pred.isFallback}
+        />
+      );
+    },
+  },
 ];
 
 export function ItemsTable({ items, source = "api" }: { items: InventoryItemRow[]; source?: "api" | "error" }) {

@@ -38,6 +38,8 @@ export const EVENTS = {
   glPosted:         "finance.gl.posted",
   glRejected:       "finance.gl.rejected",
   ucReconciled:     "finance.uc.reconciled",
+  /** Transaction posted (journal entry committed) — consumed by ml-service for anomaly detection. */
+  transactionPosted: "finance.transaction.posted",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching) */
@@ -51,6 +53,8 @@ export const CONSUMED_EVENTS = {
   sanctionFileDecided:      "finance.sanction.file_decided",
   paymentFileDecided:       "finance.payment.file_decided",
   reappropriationFileDecided: "finance.reappropriation.file_decided",
+  /** ml-service emits anomaly detected when transaction Z-score > 3. */
+  mlAnomalyDetected:        "ml.prediction.anomaly_detected",
 } as const;
 
 export const SERVICE  = "finance";

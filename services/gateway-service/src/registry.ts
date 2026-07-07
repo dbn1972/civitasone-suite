@@ -51,6 +51,7 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "knowledge",    prefix: "/api/v1/knowledge", upstream: upstream("knowledge", 3028) },
   { name: "workflow",     prefix: "/api/v1/workflow",  upstream: upstream("workflow", 3029) },
   { name: "analytics",    prefix: "/api/v1/analytics", upstream: upstream("analytics", 3031) },
+  { name: "ml",           prefix: "/api/v1/ml",        upstream: upstream("ml", 3032) },
   { name: "locations",    prefix: "/api/v1/locations", upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },

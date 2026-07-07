@@ -7,6 +7,8 @@ export const COMMANDS = {
 
 export const EVENTS = {
   ticketCreated: "helpdesk.ticket.created",
+  /** Ticket updated (status, assignment, priority change) — consumed by ml-service for breach risk re-scoring. */
+  ticketUpdated: "helpdesk.ticket.updated",
   ticketAssigned: "helpdesk.ticket.assigned",
   ticketEscalated: "helpdesk.ticket.escalated",
   ticketTransitioned: "helpdesk.ticket.transitioned",
@@ -18,6 +20,8 @@ export const CONSUMES = {
   telephonyCallMissed: "telephony.call.missed",
   // A CRM complaint/case opens a linked helpdesk ticket (chain #5).
   crmCaseOpened: "crm.case.opened",
+  /** ml-service emits breach risk high when ticket breach probability > 0.70. */
+  mlBreachRiskHigh: "ml.prediction.breach_risk_high",
 } as const;
 
 /** source tag stamped on tickets auto-opened from a foreign event. */

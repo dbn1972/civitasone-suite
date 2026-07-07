@@ -37,6 +37,11 @@ export const CONSUMED_EVENTS = {
   helpdeskTicketEscalated:  "helpdesk.ticket.escalated",
   citizenRequestCreated:    "citizen.request.created",
   auditParaIssued:          "audit.para.issued",
+  /** ML prediction events — high-risk notifications */
+  mlBreachRiskHigh:         "ml.prediction.breach_risk_high",
+  mlTaskHighRisk:           "ml.prediction.task_high_risk",
+  mlChurnRiskHigh:          "ml.prediction.churn_risk_high",
+  mlAnomalyDetected:        "ml.prediction.anomaly_detected",
 } as const;
 
 export const SERVICE = "notification";

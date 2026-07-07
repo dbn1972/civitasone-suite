@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "@/app/_components/ds";
+import { PredictionBadge } from "@/app/_components/ds/PredictionBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import type { ProjectDetail } from "@civitasone/types";
 
@@ -21,6 +22,27 @@ const MILESTONE_COLUMNS: {
     render: (r) => formatIndianDate(r.completedDate as string | undefined),
   },
   { key: "status", label: "Status", cellType: "status" },
+  {
+    key: "delayRisk" as keyof MilestoneRow & string,
+    label: "Delay Risk",
+    render: (row: MilestoneRow) => {
+      const pred = (row as Record<string, unknown>).delayRisk as {
+        riskScore: number;
+        confidence: number;
+        factors?: Array<{ feature: string; contribution: number; direction: "positive" | "negative" }>;
+        isFallback?: boolean;
+      } | undefined;
+      if (!pred) return null;
+      return (
+        <PredictionBadge
+          confidence={pred.confidence}
+          label={`${Math.round(pred.riskScore * 100)}% delay`}
+          factors={pred.factors}
+          isFallback={pred.isFallback}
+        />
+      );
+    },
+  },
 ];
 
 const FUND_RELEASE_COLUMNS: {

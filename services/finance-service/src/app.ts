@@ -82,6 +82,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(simplifiedRoutes);
   const { tracesRoutes } = await import("./modules/traces/routes.js");
   await app.register(tracesRoutes);
+  const { anomalyRoutes } = await import("./modules/anomaly/routes.js");
+  await app.register(anomalyRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

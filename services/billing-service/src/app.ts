@@ -18,6 +18,7 @@ import { einvoiceRoutes } from "./modules/einvoice/routes.js";
 import { revenueRoutes } from "./modules/revenue/routes.js";
 import { gstnRoutes } from "./modules/gstn/routes.js";
 import { gatewayRoutes } from "./modules/gateways/routes.js";
+import { churnRoutes } from "./modules/churn/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -46,6 +47,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(revenueRoutes);
   await app.register(gstnRoutes);
   await app.register(gatewayRoutes);
+  await app.register(churnRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

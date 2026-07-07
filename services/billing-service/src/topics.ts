@@ -25,6 +25,8 @@ export const COMMANDS = {
 
 export const EVENTS = {
   subscriptionExpired: "billing.subscription.expired",
+  /** Subscription updated (plan change, usage, payment status) — consumed by ml-service for churn scoring. */
+  subscriptionUpdated: "billing.subscription.updated",
   invoiceIssued:       "billing.invoice.issued",
   invoiceCancelled:    "billing.invoice.cancelled",
   invoicePaid:         "billing.invoice.paid",
@@ -32,6 +34,12 @@ export const EVENTS = {
   checkoutCompleted:   "billing.checkout.completed",
   checkoutFailed:      "billing.checkout.failed",
   dunningExhausted:    "billing.dunning.exhausted",
+} as const;
+
+/** Topics consumed from other services (cross-service stitching). */
+export const CONSUMED_EVENTS = {
+  /** ml-service emits churn risk high when subscription churn probability > 0.70. */
+  mlChurnRiskHigh: "ml.prediction.churn_risk_high",
 } as const;
 
 export const SERVICE = "billing";

@@ -30,6 +30,7 @@ import { registerReportsConsumers }       from "./modules/reports/consumer.js";
 import { registerSubledgerConsumers }     from "./modules/subledger/consumer.js";
 import { registerTdsConsumers }           from "./modules/tds/consumer.js";
 import { registerVoucherPrintConsumers }  from "./modules/voucher-print/consumer.js";
+import { registerAnomalyConsumers }       from "./modules/anomaly/consumer.js";
 
 const log = pino({ name: "finance-worker" });
 
@@ -59,6 +60,7 @@ registerReportsConsumers(queue);
 registerSubledgerConsumers(queue);
 registerTdsConsumers(queue);
 registerVoucherPrintConsumers(queue);
+registerAnomalyConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

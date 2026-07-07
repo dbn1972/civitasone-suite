@@ -33,8 +33,18 @@ export const EVENTS = {
   activityUpdated: "crm.activity.updated",
   accountCreated: "crm.account.created",
   leadScoreRecalculated: "crm.lead.score_recalculated",
+  /** Lead entity updated — consumed by ml-service for feature recomputation. */
+  leadUpdated: "crm.lead.updated",
+  /** Lead entity created — consumed by ml-service for initial scoring. */
+  leadCreated: "crm.lead.created",
   // A logged customer complaint/escalation opens a CRM case (ticket-worthy).
   caseOpened: "crm.case.opened",
+} as const;
+
+/** Topics consumed from other services (cross-service stitching). */
+export const CONSUMED_EVENTS = {
+  /** ml-service emits lead scored after computing conversion probability. */
+  mlLeadScored: "ml.prediction.lead_scored",
 } as const;
 
 export const SERVICE = "crm";

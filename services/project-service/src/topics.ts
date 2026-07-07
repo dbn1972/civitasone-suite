@@ -20,6 +20,8 @@ export const EVENTS = {
   projectCreated:          "project.project.created",
   taskCreated:             "project.task.created",
   taskStatusUpdated:       "project.task.status_updated",
+  /** Task updated (progress, assignment, dates) — consumed by ml-service for delay risk re-computation. */
+  taskUpdated:             "project.task.updated",
   milestoneCompleted:      "project.milestone.completed",
   schemeCreated:           "project.scheme.created",
   fundReleaseApproved:     "project.fund_release.approved",
@@ -30,6 +32,12 @@ export const EVENTS = {
   ucSubmitted:             "project.uc.submitted",
   ucExpenditureExceeded:   "project.uc.expenditure_exceeded",
   geoTagged:               "project.geo.tagged",
+} as const;
+
+/** Topics consumed from other services (cross-service stitching). */
+export const CONSUMED_EVENTS = {
+  /** ml-service emits task high risk when delay risk score > 0.80. */
+  mlTaskHighRisk: "ml.prediction.task_high_risk",
 } as const;
 
 export const SERVICE = "project";

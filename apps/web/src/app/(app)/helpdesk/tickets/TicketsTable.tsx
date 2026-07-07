@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { PredictionBadge } from "../../../_components/ds/PredictionBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Ticket = {
@@ -12,6 +13,12 @@ type Ticket = {
   priority: string;
   slaStatus: string;
   status: string;
+  breachRisk?: {
+    probability: number;
+    confidence: number;
+    factors?: Array<{ feature: string; contribution: number; direction: "positive" | "negative" }>;
+    isFallback?: boolean;
+  } | null;
 } & Record<string, unknown>;
 
 type Row = {
@@ -22,6 +29,7 @@ type Row = {
   priority: string;
   slaStatus: string;
   status: string;
+  breachRisk?: Ticket["breachRisk"];
 };
 
 const TABS = ["All", "Open", "Pending", "Resolved"] as const;
@@ -49,6 +57,7 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
     priority: t.priority,
     slaStatus: t.slaStatus.replace(/_/g, " "),
     status: t.status.replace(/_/g, " "),
+    breachRisk: t.breachRisk ?? undefined,
   }));
 
   const filtered =
@@ -84,6 +93,19 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
             { key: "priority", label: "Priority", cellType: "status" },
             { key: "slaStatus", label: "SLA", cellType: "status" },
             { key: "status", label: "Status", cellType: "status" },
+            {
+              key: "breachRisk" as keyof Row & string,
+              label: "Breach Risk",
+              render: (row: Row) =>
+                row.breachRisk ? (
+                  <PredictionBadge
+                    confidence={row.breachRisk.confidence}
+                    label={`${Math.round(row.breachRisk.probability * 100)}% breach`}
+                    factors={row.breachRisk.factors}
+                    isFallback={row.breachRisk.isFallback}
+                  />
+                ) : null,
+            },
           ]}
           rows={filtered}
           rowLinkKey="id"

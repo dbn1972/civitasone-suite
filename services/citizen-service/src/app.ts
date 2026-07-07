@@ -18,6 +18,7 @@ import { analyticsRoutes }   from "./modules/analytics/routes.js";
 import { escalationRoutes } from "./modules/escalation/routes.js";
 import { slaRulesRoutes } from "./modules/sla-rules/routes.js";
 import { aiTriageRoutes } from "./modules/ai/routes.js";
+import { citizenRoutingRoutes } from "./modules/routing/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   // P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so we never boot fail-open.
@@ -48,6 +49,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(escalationRoutes);
   await app.register(slaRulesRoutes);
   await app.register(aiTriageRoutes);
+  await app.register(citizenRoutingRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

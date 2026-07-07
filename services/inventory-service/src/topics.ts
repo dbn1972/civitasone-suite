@@ -71,6 +71,8 @@ export const EVENTS = {
 export const CONSUMED = {
   /** procurement-service signals a Goods Receipt Note has been accepted. */
   grnAccepted: "procurement.grn.accepted",
+  /** ml-service emits stockout risk when demand forecast crosses reorder point. */
+  mlStockoutRisk: "ml.prediction.stockout_risk",
 } as const;
 
 /** Cross-cutting topics inventory-service publishes to. */

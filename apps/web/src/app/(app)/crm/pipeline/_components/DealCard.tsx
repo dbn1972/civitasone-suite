@@ -3,6 +3,7 @@
 import type { DragEvent, KeyboardEvent } from "react";
 import { useCallback } from "react";
 import { formatMoney } from "@/lib/formatters";
+import { PredictionBadge } from "../../../../_components/ds/PredictionBadge";
 import type { PipelineDealCard } from "../../../../_data/loaders";
 
 type Props = {
@@ -73,6 +74,18 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
           {deal.probability}%
         </span>
       </div>
+
+      {/* ML Prediction Badge */}
+      {deal.prediction != null && (
+        <div className="mt-1.5">
+          <PredictionBadge
+            confidence={deal.prediction.confidence}
+            label={`${Math.round(deal.prediction.probability * 100)}% conversion`}
+            factors={deal.prediction.factors}
+            isFallback={deal.prediction.isFallback}
+          />
+        </div>
+      )}
 
       {/* Contact / assignee */}
       {deal.contactName && (

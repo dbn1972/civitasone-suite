@@ -21,6 +21,7 @@ import { filingRoutes } from "./modules/filings/routes.js";
 import { ecourtsRoutes } from "./modules/ecourts/routes.js";
 import { documentRoutes } from "./modules/documents/routes.js";
 import { limitationRoutes } from "./modules/limitations/routes.js";
+import { intelligenceRoutes } from "./modules/intelligence/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -52,6 +53,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(ecourtsRoutes);
   await app.register(documentRoutes);
   await app.register(limitationRoutes);
+  await app.register(intelligenceRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

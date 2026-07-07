@@ -15,6 +15,8 @@ export interface Notification {
   createdAt?: string;
   read: boolean;
   icon?: string;
+  /** Optional "Review" action link (e.g., for ML risk notifications) */
+  actionUrl?: string;
 }
 
 interface NotificationBellProps {
@@ -44,6 +46,7 @@ const MODULE_ICONS: Record<string, string> = {
   estab: "📁",
   asset: "🏢",
   citizen: "👥",
+  ml: "🧠",
 };
 
 function formatRelativeTime(iso: string): string {
@@ -99,6 +102,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         createdAt: payload.createdAt,
         read: false,
         icon: MODULE_ICONS[payload.type?.split(".")[0] ?? ""] ?? "🔔",
+        actionUrl: (payload.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined,
       };
       setItems((prev) => [newNotification, ...prev].slice(0, MAX_DROPDOWN_ITEMS));
       setLocalUnreadCount((prev) => prev + 1);
@@ -382,6 +386,21 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
                       <span style={{ fontSize: 11, color: "var(--text-muted, #94a3b8)" }}>
                         {n.time}
                       </span>
+                      {n.actionUrl && (
+                        <Link
+                          href={n.actionUrl}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: "var(--primary, #4f46e5)",
+                            textDecoration: "none",
+                            marginLeft: "auto",
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Review
+                        </Link>
+                      )}
                     </div>
                   </div>
                   {!n.read && (

@@ -10,6 +10,8 @@ import { registerItemConsumers } from "./modules/items/consumer.js";
 import { registerStoreConsumers } from "./modules/stores/consumer.js";
 import { registerMovementConsumers } from "./modules/movements/consumer.js";
 import { registerWarehouseConsumers } from "./modules/warehouses/consumer.js";
+import { registerForecastConsumers } from "./modules/forecast/consumer.js";
+import { startForecastRefresh } from "./modules/forecast/scheduler.js";
 
 const log = pino({ name: "inventory-worker" });
 
@@ -17,6 +19,7 @@ registerItemConsumers(queue);
 registerStoreConsumers(queue);
 registerMovementConsumers(queue);
 registerWarehouseConsumers(queue);
+registerForecastConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue, 500, "inventory-service");
@@ -26,12 +29,15 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
   batchSize: 1000,
   logger: log,
 });
+// ML: daily forecast refresh (gated behind FEATURE_ML_ENABLED)
+const forecastRefreshInterval = startForecastRefresh();
 log.info("inventory-service worker: consumers + outbox relay running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
   clearInterval(relay);
+  if (forecastRefreshInterval) clearInterval(forecastRefreshInterval);
   await queue.stop();
   await sqlClient.end();
   log.info("shutdown complete");

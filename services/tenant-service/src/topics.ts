@@ -32,6 +32,8 @@ export const EVENTS = {
   tenantCreated: "tenant.tenant.created",
   tenantUpdated: "tenant.tenant.updated",
   tenantSuspended: "tenant.tenant.suspended",
+  /** Tenant fully deleted — consumed by ml-service (and others) for data purge. */
+  tenantDeleted: "tenant.deleted",
   tenantOnboarded: "tenant.tenant.onboarded",
   tenantIsolationChanged: "tenant.tenant.isolation_changed",
   // ── plans ──────────────────────────────────────────────────────────

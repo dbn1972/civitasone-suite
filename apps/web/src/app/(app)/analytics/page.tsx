@@ -12,6 +12,7 @@ export default function Page() {
         { href: "/analytics/kpi", label: "KPI Library", note: "Organisation-wide Key Performance Indicators" },
         { href: "/analytics/data-warehouse", label: "Data Warehouse", note: "Consolidated datasets and data quality metrics" },
         { href: "/analytics/ai-insights", label: "AI Insights", note: "ML-powered insights and recommendations" },
+        { href: "/analytics/ml-insights", label: "ML Insights", note: "Model performance, accuracy trends, and prediction explainability per domain" },
       ]}
     />
   );

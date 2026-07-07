@@ -9,6 +9,7 @@ import { registerProgressConsumers }    from "./modules/progress/consumer.js";
 import { registerUcConsumers }          from "./modules/utilisation/consumer.js";
 import { registerGeoConsumers }         from "./modules/geo/consumer.js";
 import { startRagScheduler }            from "./modules/project/rag.js";
+import { registerDelayForecastConsumers } from "./modules/delay-forecast/consumer.js";
 
 const log = pino({ name: "project-worker" });
 
@@ -17,6 +18,7 @@ registerSchemeConsumers(queue);
 registerProgressConsumers(queue);
 registerUcConsumers(queue);
 registerGeoConsumers(queue);
+registerDelayForecastConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

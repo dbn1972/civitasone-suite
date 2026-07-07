@@ -67,9 +67,9 @@ describe("domain-events templates", () => {
     }
   });
 
-  it("getRegisteredEventTypes returns all 10 event types", () => {
+  it("getRegisteredEventTypes returns all 14 event types", () => {
     const types = getRegisteredEventTypes();
-    expect(types).toHaveLength(10);
+    expect(types).toHaveLength(14);
     expect(types).toContain("hrms.leave.approved");
     expect(types).toContain("audit.para.issued");
   });
