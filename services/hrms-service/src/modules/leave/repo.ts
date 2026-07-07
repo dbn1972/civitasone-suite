@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps,
@@ -78,19 +78,27 @@ export async function updateLeaveApp(tx: Writer, id: string, patch: Partial<type
 }
 
 export async function debitLeaveBalance(tx: Writer, allocId: string, days: number): Promise<void> {
-  const rows = await (tx as typeof db).select({ balanceDays: hrmsLeaveAllocs.balanceDays })
-    .from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, allocId)).limit(1);
-  const current = rows[0]?.balanceDays ?? 0;
-  await tx.update(hrmsLeaveAllocs)
-    .set({ balanceDays: current - days, updatedAt: new Date() })
-    .where(eq(hrmsLeaveAllocs.id, allocId));
+  // H7 FIX: Guarded atomic UPDATE prevents lost updates under concurrency.
+  // WHERE balance_days >= days ensures we never go negative; RETURNING confirms success.
+  // If no rows are updated, the balance was insufficient (concurrent approval drained it).
+  const result = await tx.update(hrmsLeaveAllocs)
+    .set({
+      balanceDays: sql`${hrmsLeaveAllocs.balanceDays} - ${days}`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(hrmsLeaveAllocs.id, allocId), gte(hrmsLeaveAllocs.balanceDays, days)))
+    .returning({ balanceDays: hrmsLeaveAllocs.balanceDays });
+  if (result.length === 0) {
+    throw new Error(`INSUFFICIENT_LEAVE_BALANCE: allocation ${allocId} has fewer than ${days} days remaining`);
+  }
 }
 
 export async function creditLeaveBalance(tx: Writer, allocId: string, days: number): Promise<void> {
-  const rows = await (tx as typeof db).select({ balanceDays: hrmsLeaveAllocs.balanceDays })
-    .from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, allocId)).limit(1);
-  const current = rows[0]?.balanceDays ?? 0;
+  // H7 FIX: Atomic credit (no read-modify-write). Safe under concurrency.
   await tx.update(hrmsLeaveAllocs)
-    .set({ balanceDays: current + days, updatedAt: new Date() })
+    .set({
+      balanceDays: sql`${hrmsLeaveAllocs.balanceDays} + ${days}`,
+      updatedAt: new Date(),
+    })
     .where(eq(hrmsLeaveAllocs.id, allocId));
 }
