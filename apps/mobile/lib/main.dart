@@ -17,6 +17,11 @@ import 'core/device_heartbeat.dart';
 import 'core/onboarding_screen.dart';
 import 'features/finance/payments_screen.dart';
 import 'features/finance/journal_screen.dart';
+import 'features/finance/bill_approval_screen.dart';
+import 'features/finance/budget_dashboard_screen.dart';
+import 'features/notifications/notification_center_screen.dart';
+import 'features/hr/medical_claim_screen.dart';
+import 'features/workflow/my_tasks_screen.dart';
 import 'features/hr/hr_module.dart';
 import 'features/procurement/indents_screen.dart';
 import 'features/procurement/pos_screen.dart';
@@ -158,6 +163,10 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
             GoRoute(path: '/finance/payments', builder: (_, __) => const PaymentsScreen()),
             GoRoute(path: '/finance/journals', builder: (_, __) => const JournalScreen()),
+            GoRoute(path: '/finance/bill-approvals', builder: (_, __) => const BillApprovalScreen()),
+            GoRoute(path: '/finance/budget', builder: (_, __) => const BudgetDashboardScreen()),
+            GoRoute(path: '/notifications', builder: (_, __) => const NotificationCenterScreen()),
+            GoRoute(path: '/workflow/tasks', builder: (_, __) => const MyTasksScreen()),
             ...hrShellRoutes(),
             GoRoute(path: '/procurement/indents', builder: (_, __) => const IndentsScreen()),
             GoRoute(path: '/procurement/pos', builder: (_, __) => const PurchaseOrdersScreen()),
@@ -221,6 +230,10 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
         ),
         // Write-path screens rendered outside the shell (no bottom nav).
         ...hrFullScreenRoutes(),
+        GoRoute(
+          path: '/hr/medical-claim',
+          builder: (_, __) => const MedicalClaimScreen(),
+        ),
         GoRoute(
           path: '/helpdesk/tickets/new',
           builder: (_, __) => const TicketCreateScreen(),
