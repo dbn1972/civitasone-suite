@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import * as repo from "./repo.js";
 
 const log = pino({ name: "medical-consumer" });
 const AUDIT = "audit.event.record";
@@ -26,7 +27,25 @@ export function registerMedicalConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Insert medical claim with status 'pending'
+
+      await repo.insertClaim(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        employeeId: p.employeeId,
+        claimType: p.claimType,
+        amountMinor: BigInt(p.amountMinor),
+        hospitalName: p.hospitalName,
+        ...(p.hospitalId ? { hospitalId: p.hospitalId } : {}),
+        diagnosis: p.diagnosis,
+        documents: p.documents,
+        ...(p.dependantName ? { dependantName: p.dependantName } : {}),
+        ...(p.dependantRelation ? { dependantRelation: p.dependantRelation } : {}),
+        ...(p.remarks ? { remarks: p.remarks } : {}),
+        status: "pending",
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -57,7 +76,20 @@ export function registerMedicalConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Update medical claim status, set approved amount if approved
+
+      await repo.updateClaimStatus(tx, p.claimId, {
+        status: p.status,
+        ...(p.status === "approved" && p.approvedAmountMinor != null
+          ? { approvedAmountMinor: BigInt(p.approvedAmountMinor) }
+          : {}),
+        approvedBy: msg.actorId,
+        approvedAt: new Date(),
+        ...(p.status === "rejected" && p.remarks
+          ? { rejectionReason: p.remarks }
+          : {}),
+        updatedBy: msg.actorId,
+      });
+
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -66,7 +98,7 @@ export function registerMedicalConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload: {
           service: "hrms",
-          action: "approve",
+          action: p.status === "approved" ? "approve" : "reject",
           resourceType: "medical_claim",
           resourceId: p.claimId,
           outcome: "success",

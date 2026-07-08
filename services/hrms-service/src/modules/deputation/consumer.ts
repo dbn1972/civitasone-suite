@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import * as repo from "./repo.js";
 
 const log = pino({ name: "deputation-consumer" });
 const AUDIT = "audit.event.record";
@@ -15,6 +16,8 @@ export function registerDeputationConsumers(queue: Queue): void {
       tenantId: string;
       employeeId: string;
       parentCadre: string;
+      parentDepartmentId: string;
+      parentManagerId?: string;
       borrowingDepartment: string;
       borrowingDepartmentId?: string;
       borrowingManagerId?: string;
@@ -26,7 +29,27 @@ export function registerDeputationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Insert deputation record, update employee posting
+
+      await repo.insertDeputation(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        employeeId: p.employeeId,
+        parentCadre: p.parentCadre,
+        parentDepartmentId: p.parentDepartmentId,
+        ...(p.parentManagerId ? { parentManagerId: p.parentManagerId } : {}),
+        borrowingDepartment: p.borrowingDepartment,
+        ...(p.borrowingDepartmentId ? { borrowingDepartmentId: p.borrowingDepartmentId } : {}),
+        ...(p.borrowingManagerId ? { borrowingManagerId: p.borrowingManagerId } : {}),
+        deputationAllowanceMinor: BigInt(p.deputationAllowanceMinor),
+        tenureFrom: p.tenureFrom,
+        tenureTo: p.tenureTo,
+        status: "active",
+        ...(p.orderRef ? { orderRef: p.orderRef } : {}),
+        ...(p.remarks ? { remarks: p.remarks } : {}),
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -58,7 +81,14 @@ export function registerDeputationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Extend deputation tenure end date
+
+      await repo.closeDeputation(tx, msg.tenantId, p.deputationId, {
+        tenureTo: p.newTenureTo,
+        ...(p.orderRef ? { orderRef: p.orderRef } : {}),
+        ...(p.remarks ? { remarks: p.remarks } : {}),
+        updatedBy: msg.actorId,
+      }, (await repo.findById(msg.tenantId, p.deputationId))?.version ?? 1);
+
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -89,7 +119,17 @@ export function registerDeputationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Close deputation, restore parent posting on employee master
+
+      const dep = await repo.findById(msg.tenantId, p.deputationId);
+      const version = dep?.version ?? 1;
+
+      await repo.closeDeputation(tx, msg.tenantId, p.deputationId, {
+        status: "repatriated",
+        repatriatedOn: p.repatriatedOn,
+        ...(p.note ? { repatriationNote: p.note } : {}),
+        updatedBy: msg.actorId,
+      }, version);
+
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
