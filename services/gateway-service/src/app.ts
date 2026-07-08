@@ -241,6 +241,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerScreenManifestRoute(app);
   registerSearchRoute(app);
 
+  // ── W1.4: API Key authentication — runs BEFORE JWT verification ───────────
+  // If x-api-key is present, resolves key → scopes → tenant context.
+  // If absent, falls through to JWT auth path.
+  const { apiKeyPreHandler } = await import("./api-key-auth.js");
+  app.addHook("preHandler", apiKeyPreHandler);
+
   // ── JWT edge verification — validate token signatures before proxying ─────
   // Runs as a preHandler on all routes. In "off" mode it's a no-op.
   app.addHook("preHandler", jwtEdgeVerify);
