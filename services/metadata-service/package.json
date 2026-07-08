@@ -1,0 +1,32 @@
+{
+  "name": "@civitasone/metadata-service",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@civitasone/auth": "workspace:*",
+    "@civitasone/cache": "workspace:*",
+    "@civitasone/db": "workspace:*",
+    "@civitasone/observability": "workspace:*",
+    "@civitasone/outbox": "workspace:*",
+    "@civitasone/queue": "workspace:*",
+    "@civitasone/schemas": "workspace:*",
+    "@civitasone/types": "workspace:*",
+    "drizzle-orm": "0.30.10",
+    "fastify": "4.28.1",
+    "postgres": "3.4.4",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5",
+    "vitest": "2.1.9",
+    "tsx": "4.7.1"
+  }
+}
