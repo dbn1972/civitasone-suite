@@ -123,3 +123,21 @@ export async function findReleasableInstallmentsByMilestone(
     ))
     .limit(200);
 }
+
+/** Resolve beneficiary bank details from a reference. Returns null if not found. */
+export async function findBeneficiaryByRef(
+  _tx: Writer,
+  _ref: string,
+  _tenantId: string,
+): Promise<{ name: string; accountNo: string; ifsc: string } | null> {
+  // TODO: look up from grant_bank_accounts table once wired
+  return null;
+}
+
+export async function findBeneficiaryByRef(tx: Writer, ref: string, tenantId: string): Promise<{ name: string; accountNo: string; ifsc: string } | null> {
+  const rows = await (tx as typeof db).execute(
+    sql`SELECT beneficiary_name AS name, account_no, ifsc FROM disbursement.grant_bank_accounts WHERE id = ${ref}::uuid AND tenant_id = ${tenantId}::uuid LIMIT 1`,
+  ) as unknown as Array<{ name: string; account_no: string; ifsc: string }>;
+  const r = rows[0];
+  return r ? { name: r.name, accountNo: r.account_no, ifsc: r.ifsc } : null;
+}

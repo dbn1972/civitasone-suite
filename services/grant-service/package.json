@@ -15,6 +15,7 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@civitasone/gov-adapters": "workspace:*",
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
     "@civitasone/db": "workspace:*",
