@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
+import 'file_actions.dart';
 
 /// eFile — digital file management (equivalent to NIC eOffice).
 /// View files, track movements, add notings, approve/move files.
@@ -223,6 +224,15 @@ class _FileDetailState extends ConsumerState<_FileDetailScreen> with SingleTicke
     finally { if (mounted) setState(() => _loading = false); }
   }
 
+  /// Whether the file is pending and the current user is the holder.
+  bool get _canApproveReject {
+    if (_file == null) return false;
+    final status = (_file!['status'] as String? ?? '').toLowerCase();
+    final session = ref.read(authSessionProvider);
+    final currentHolder = _file!['currentHolderId'] as String? ?? '';
+    return status == 'pending' && session != null && currentHolder == session.userId;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -237,11 +247,29 @@ class _FileDetailState extends ConsumerState<_FileDetailScreen> with SingleTicke
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(controller: _tabCtrl, children: [
-              _buildDetails(theme),
-              _buildNotings(theme),
-              _buildMovements(theme),
+          : Column(children: [
+              Expanded(
+                child: TabBarView(controller: _tabCtrl, children: [
+                  _buildDetails(theme),
+                  _buildNotings(theme),
+                  _buildMovements(theme),
+                ]),
+              ),
+              // Show approve/reject bar when file is pending with current user
+              if (_canApproveReject)
+                ApproveRejectActions(fileId: widget.fileId, onSuccess: _fetch),
             ]),
+      floatingActionButton: _loading
+          ? null
+          : FloatingActionButton(
+              onPressed: () => showFileActionsSheet(
+                context: context,
+                fileId: widget.fileId,
+                showApproveReject: _canApproveReject,
+                onRefresh: _fetch,
+              ),
+              child: const Icon(Icons.more_vert),
+            ),
     );
   }
 
