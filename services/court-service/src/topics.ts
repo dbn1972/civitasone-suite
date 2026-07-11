@@ -71,6 +71,9 @@ export const COMMANDS = {
   /** §30 certified copies — apply, pay, issue */
   requestCertifiedCopy:       "court.copy.request",
   transitionCertifiedCopy:    "court.copy.transition",
+  /** revenue land subject — parcels in dispute */
+  addParcel:                  "court.parcel.add",
+  updateParcel:               "court.parcel.update",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -121,6 +124,8 @@ export const EVENTS = {
   configDeactivated:          "court.config.deactivated",
   certifiedCopyRequested:     "court.copy.requested",
   certifiedCopyTransitioned:  "court.copy.transitioned",
+  parcelAdded:                "court.parcel.added",
+  parcelUpdated:              "court.parcel.updated",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
