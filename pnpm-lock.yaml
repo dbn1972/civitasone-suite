@@ -1217,6 +1217,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/gov-adapters':
+        specifier: workspace:*
+        version: link:../../packages/gov-adapters
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -1837,6 +1840,137 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/meeting-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/circuit-breaker':
+        specifier: workspace:*
+        version: link:../../packages/circuit-breaker
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/render':
+        specifier: workspace:*
+        version: link:../../packages/render
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/search':
+        specifier: workspace:*
+        version: link:../../packages/search
+      '@civitasone/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: 9.0.1
+        version: 9.0.1
+      drizzle-orm:
+        specifier: 0.30.10
+        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: 4.29.1
+        version: 4.29.1
+      ioredis:
+        specifier: 5.11.1
+        version: 5.11.1
+      pino:
+        specifier: 8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 20.19.43
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      fast-check:
+        specifier: 4.8.0
+        version: 4.8.0
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/metadata-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      drizzle-orm:
+        specifier: 0.30.10
+        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1)
+      fastify:
+        specifier: 4.28.1
+        version: 4.28.1
+      postgres:
+        specifier: 3.4.4
+        version: 3.4.4
+      zod:
+        specifier: 3.23.8
+        version: 3.23.8
+    devDependencies:
+      tsx:
+        specifier: 4.7.1
+        version: 4.7.1
+      typescript:
+        specifier: 5.4.5
+        version: 5.4.5
+      vitest:
+        specifier: 2.1.9
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
   services/ml-service:
@@ -2721,6 +2855,82 @@ importers:
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/visitor-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/circuit-breaker':
+        specifier: workspace:*
+        version: link:../../packages/circuit-breaker
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.28.1
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.11.1
+      jose:
+        specifier: ^6.2.0
+        version: 6.2.3
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.4
+      zod:
+        specifier: ^3.23.0
+        version: 3.23.8
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      fast-check:
+        specifier: ^4.8.0
+        version: 4.8.0
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.4.5
       vitest:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
@@ -3985,79 +4195,66 @@ packages:
     resolution: {integrity: sha512-n1GJHPOvpIfhi3TmrCeh6S6URt9BFCt0KQE3qvexyGCTAKpR4Lg+eWvNZEqu7epxwus/8ElT3hacYEucm49SZg==}
     cpu: [arm]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-arm-musleabihf@4.62.2':
     resolution: {integrity: sha512-JqgflS8wEB+UXV/vS1RpRbifGBeN4D5lz8D8oOFbFZw4vedvdOgCFAjfBmIMdW3yL10XpQQ0Ambepw6MXrhOnA==}
     cpu: [arm]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-arm64-gnu@4.62.2':
     resolution: {integrity: sha512-wnFJkogWvN4jm/hQRF2UBaeUmk20j5+DmHvoyWii2b8HJDyvz1MF2OU/6ynXt2KR63rbZLWkFpoytpdc/yBuSA==}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-arm64-musl@4.62.2':
     resolution: {integrity: sha512-HVu2bp0zhvJ8xHEV9+UUs7S90VadmBSY3LcIMvozbPo4AuMGDWlz3ymHLHZPX4hR67TKTt8Qp5PJ5RBg/i+RMQ==}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-loong64-gnu@4.62.2':
     resolution: {integrity: sha512-mQqqAV8QaoSgr9I2fKDLY2BAVvmKjWoGiu/cSYQonsLvtqwEn1E4QYfnCOcp5zoEqNhsDYin1s6jx/VJmrxlZg==}
     cpu: [loong64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-loong64-musl@4.62.2':
     resolution: {integrity: sha512-IxKLoxCQ2IWi6bT2akyDUBGsOImDKB+sPp4EsTmwFQ/fMwpCKm8uLSSgP/Kx/QYUgKis6SEZ5/Nlhup0DIA0PQ==}
     cpu: [loong64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-ppc64-gnu@4.62.2':
     resolution: {integrity: sha512-Mk5ha2RQSgyFfmYYLkBpPnUk8D8FriBxesO1u9O75X0mHgXL1UQcH5Itl2lurWL2tj0RxV9b9tJgipac0hRY9A==}
     cpu: [ppc64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-ppc64-musl@4.62.2':
     resolution: {integrity: sha512-CjvEnqJL/0/TQ3TXX3OPIJ/kmBellrWd4heXUmHeJlTnmwjKpSJzoehLaL6Xk0ZnMHBu9dZuFADNOrtjF4v+2w==}
     cpu: [ppc64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-riscv64-gnu@4.62.2':
     resolution: {integrity: sha512-1SiZbzwdkaDURsew/tSOrooKiYy7EQGT6m8ufavAi9NEyQb/6VuIxFXAL1fqa4iZe3g4NbNk4P7J32z2tw5Mgg==}
     cpu: [riscv64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-riscv64-musl@4.62.2':
     resolution: {integrity: sha512-nQts12zJ3NQRoE6uYljOH89v7szzLDvG2JD/vsX+vGXU8w/At1GowTZ5/7qeFQ8m7L55rpR8Okugnuo5bgjy2Q==}
     cpu: [riscv64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-s390x-gnu@4.62.2':
     resolution: {integrity: sha512-E9/ll019jhPIJgpzfZoIkBGhcz+kKNgVWYRY0zr9srBdPPFVpvOKW8VaJKUbeK+eZXyQF9ltME+Kk6affeaPgg==}
     cpu: [s390x]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-x64-gnu@4.62.2':
     resolution: {integrity: sha512-5BqxR/pshjey51iliyzTD5Xi3EN0aLmQ2lZ3lvefVV9c82BvrLo2/6OT55iifpWBufs6kdwWbuOKS841DrmK9A==}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-x64-musl@4.62.2':
     resolution: {integrity: sha512-uNN83XxQrRAh/w0/pmAfibcwyb6YWt4gP+dpnQKPVJshAloQ785ii8CT8ZCIxkGg9opVsvAlGhFitSm6D1Jjpg==}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-openbsd-x64@4.62.2':
     resolution: {integrity: sha512-srjEIxSH3LRnJN6THczDHWQplqEMFiAJrTab0msUryh9kwNpkICf3Ea6q6MN/2cZwRFUNx5w+h6Hpi4QuHS6Zg==}
@@ -5628,6 +5825,9 @@ packages:
   fastify-plugin@4.5.1:
     resolution: {integrity: sha512-stRHYGeuqpEZTL1Ef0Ovr2ltazUT9g844X5z/zEBFLG8RYlpDiOCIG+ATvYEp+/zmc7sN29mcIMp8gvYplYPIQ==}
 
+  fastify@4.28.1:
+    resolution: {integrity: sha512-kFWUtpNr4i7t5vY2EJPCN2KgMVpuqfU4NjnJNCgiNB900oiDeYqaNDRcAfeBbOF5hGixixxcKnOU4KN9z6QncQ==}
+
   fastify@4.29.1:
     resolution: {integrity: sha512-m2kMNHIG92tSNWv+Z3UeTR9AWLLuo7KctC7mlFPtMEVrfjIhmQhkQnT9v15qA/BfVq3vvj134Y0jl9SBje3jXQ==}
 
@@ -6077,6 +6277,9 @@ packages:
 
   jose@4.15.9:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
+
+  jose@6.2.3:
+    resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -6685,6 +6888,10 @@ packages:
     resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postgres@3.4.4:
+    resolution: {integrity: sha512-IbyN+9KslkqcXa8AO9fxpk97PA4pzewvpi2B3Dwy9u4zpV32QicaEdgmF3eSQUzdRk7ttDHQejNgAEr4XoeH4A==}
+    engines: {node: '>=12'}
+
   postgres@3.4.9:
     resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
     engines: {node: '>=12'}
@@ -7238,6 +7445,11 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  tsx@4.7.1:
+    resolution: {integrity: sha512-8d6VuibXHtlN5E3zFkgY8u4DX7Y3Z27zvvPKVmLon/D4AjuKzarkUBTLDBgj9iTQ0hg5xM7c/mYiRVM+HETf0g==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
   turbo@2.9.18:
     resolution: {integrity: sha512-bwabv6PupzeavybzEoArBAkwq5fnzwf8OFnRtpHwnviFWuwJPFxtyH+aVp36TmIqK3aYYgtTJ3J0m2ysxxSzQg==}
     hasBin: true
@@ -7274,6 +7486,11 @@ packages:
 
   typedarray@0.0.6:
     resolution: {integrity: sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==}
+
+  typescript@5.4.5:
+    resolution: {integrity: sha512-vcI4UpRgg81oIRUFwR0WSIHKt11nJ7SAVlYNIu+QpqeyXP+gpQJy/Z4+F0aGxSE4MqwjyXvW/TzgkLAx2AGHwQ==}
+    engines: {node: '>=14.17'}
+    hasBin: true
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -7524,6 +7741,9 @@ packages:
   zip-stream@4.1.1:
     resolution: {integrity: sha512-9qv4rlDiopXg4E69k+vMHjNN63YFMe9sZMrdlvKnCjlCRWeCBswPPMPUfx+ipsAWq1LXHe70RcbaHdJJpS6hyQ==}
     engines: {node: '>= 10'}
+
+  zod@3.23.8:
+    resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
@@ -8475,10 +8695,10 @@ snapshots:
     dependencies:
       hono: 4.12.26
 
-  '@hono/zod-validator@0.2.2(hono@4.12.26)(zod@3.25.76)':
+  '@hono/zod-validator@0.2.2(hono@4.12.26)(zod@3.23.8)':
     dependencies:
       hono: 4.12.26
-      zod: 3.25.76
+      zod: 3.23.8
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -9997,7 +10217,7 @@ snapshots:
     dependencies:
       '@esbuild-kit/esm-loader': 2.6.5
       '@hono/node-server': 1.19.14(hono@4.12.26)
-      '@hono/zod-validator': 0.2.2(hono@4.12.26)(zod@3.25.76)
+      '@hono/zod-validator': 0.2.2(hono@4.12.26)(zod@3.23.8)
       camelcase: 7.0.1
       chalk: 5.6.2
       commander: 9.5.0
@@ -10011,7 +10231,7 @@ snapshots:
       minimatch: 7.4.9
       semver: 7.8.5
       superjson: 2.2.6
-      zod: 3.25.76
+      zod: 3.23.8
     transitivePeerDependencies:
       - supports-color
 
@@ -10025,9 +10245,15 @@ snapshots:
       glob: 8.1.0
       hanji: 0.0.5
       json-diff: 0.9.0
-      zod: 3.25.76
+      zod: 3.23.8
     transitivePeerDependencies:
       - supports-color
+
+  drizzle-orm@0.30.10(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1):
+    optionalDependencies:
+      '@types/react': 18.3.31
+      postgres: 3.4.4
+      react: 18.3.1
 
   drizzle-orm@0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1):
     optionalDependencies:
@@ -10642,6 +10868,25 @@ snapshots:
 
   fastify-plugin@4.5.1: {}
 
+  fastify@4.28.1:
+    dependencies:
+      '@fastify/ajv-compiler': 3.6.0
+      '@fastify/error': 3.4.1
+      '@fastify/fast-json-stringify-compiler': 4.3.0
+      abstract-logging: 2.0.1
+      avvio: 8.4.0
+      fast-content-type-parse: 1.1.0
+      fast-json-stringify: 5.16.1
+      find-my-way: 8.2.2
+      light-my-request: 5.14.0
+      pino: 9.14.0
+      process-warning: 3.0.0
+      proxy-addr: 2.0.7
+      rfdc: 1.4.1
+      secure-json-parse: 2.7.0
+      semver: 7.8.5
+      toad-cache: 3.7.1
+
   fastify@4.29.1:
     dependencies:
       '@fastify/ajv-compiler': 3.6.0
@@ -11129,6 +11374,8 @@ snapshots:
   jiti@1.21.7: {}
 
   jose@4.15.9: {}
+
+  jose@6.2.3: {}
 
   js-tokens@4.0.0: {}
 
@@ -11756,6 +12003,8 @@ snapshots:
       nanoid: 3.3.13
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postgres@3.4.4: {}
 
   postgres@3.4.9: {}
 
@@ -12404,6 +12653,13 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
+  tsx@4.7.1:
+    dependencies:
+      esbuild: 0.19.12
+      get-tsconfig: 4.14.0
+    optionalDependencies:
+      fsevents: 2.3.3
+
   turbo@2.9.18:
     optionalDependencies:
       '@turbo/darwin-64': 2.9.18
@@ -12457,6 +12713,8 @@ snapshots:
       reflect.getprototypeof: 1.0.10
 
   typedarray@0.0.6: {}
+
+  typescript@5.4.5: {}
 
   typescript@5.9.3: {}
 
@@ -12760,6 +13018,8 @@ snapshots:
       archiver-utils: 3.0.4
       compress-commons: 4.1.2
       readable-stream: 3.6.2
+
+  zod@3.23.8: {}
 
   zod@3.25.76: {}
 

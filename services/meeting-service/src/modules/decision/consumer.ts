@@ -1,0 +1,881 @@
+/**
+ * decision module — SQS / RabbitMQ consumer handlers (CQRS write side, Req 11.x, 12.x, 22.x).
+ *
+ * Every handler follows the mandatory order (steering: Concurrency & Data Integrity):
+ *   1. ONE `db.transaction()` per message.
+ *   2. `markProcessed(tx, msg.messageId)` FIRST — idempotency guard; if it returns false the
+ *      message was already processed, so we skip (P30).
+ *   3. Business write (INSERT, or optimistic-locked `versionedUpdate`).
+ *   4. Emit domain EVENTS + an audit event into the transactional outbox (same tx, so
+ *      "DB committed ⇒ event delivered" with no dual-write hole).
+ *   5. AFTER commit, invalidate the read-through cache.
+ *
+ * Pure logic lives in domain.ts and is wired here to persistence:
+ *   - `computeVoteResult`            — resolution outcome per majority rule (Req 11.3, P16).
+ *   - `nextResolutionSequence` +
+ *     `generateResolutionNumber`     — sequential per-committee-per-FY numbering (Req 11.4, P25).
+ *   - `requiredResponseCount`        — circulation validity threshold (Req 12.2).
+ *   - `routeDecisionEvents`          — typed ERP fan-out (Req 22.1–22.5): every decision emits the
+ *                                      generic `decision.recorded` fact; ERP-routable types
+ *                                      (procurement/financial/hr/project/legal) also emit a typed event.
+ *
+ * Money (steering: bigint paise): `financialImplication` arrives as a canonical base-10 STRING
+ * (normalised by the validator) and is rebuilt to an exact `bigint` with `parseMinor` before it
+ * touches the `BIGINT` column — never via a lossy JS `number`. Events carry the value back as a
+ * string for the same reason.
+ *
+ * Post-decision workflow routing (Req 11.7, 20.8 — GFR delegation of financial powers): a
+ * decision whose financial implication meets the configured counter-signature threshold is
+ * flagged (`workflow_triggered = true`) and routed to Workflow_Service via a
+ * `workflow.instance.create` command for the competent financial authority's counter-signature.
+ *
+ * Permanent (non-retryable) violations — a missing anchor meeting, an unsignable resolution, an
+ * invalid DSC keystore — are re-thrown as `NonRetryableError` so they go to the DLQ instead of
+ * retrying forever. Optimistic-lock conflicts surface as `VersionConflictError` (409).
+ *
+ * Registration: `registerDecisionConsumers(register)` maps each decision COMMANDS topic to its
+ * handler; worker.ts (task 19.1) passes its `registerConsumer` here.
+ *
+ * _Requirements: 11.1, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 22.1, 22.2, 22.3, 22.4, 22.5_
+ */
+import { randomUUID, createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { and, eq, ne, isNull, asc, desc, gte } from "drizzle-orm";
+import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
+import { parseMinor } from "@civitasone/schemas";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import {
+  renderPdf,
+  signPdfWithDsc,
+  DscValidationError,
+  type DscSignInput,
+} from "@civitasone/render";
+import { db } from "../../shared/db.js";
+import { cache, storage } from "../../shared/infra.js";
+import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
+import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
+import { meetings } from "../meeting-core/schema.js";
+import { committees, committeeMembers } from "../committee/schema.js";
+import { votes } from "../voting/schema.js";
+import { decisions, resolutions } from "./schema.js";
+import {
+  computeFinancialYear,
+  computeVoteResult,
+  generateResolutionNumber,
+  nextResolutionSequence,
+  requiredResponseCount,
+  routeDecisionEvents,
+  type MajorityRule,
+} from "./domain.js";
+
+const AUDIT_TOPIC = "audit.event.record";
+const DECISION_RESOURCE = "decision";
+const RESOLUTION_RESOURCE = "resolution";
+
+/**
+ * Cross-service command topic to start a Workflow_Service approval instance (Req 11.7). Hard-coded
+ * as the published contract (workflow-service `COMMANDS.createInstance`) rather than imported so
+ * this service keeps no build dependency on another service's source.
+ */
+const WORKFLOW_CREATE_INSTANCE = "workflow.instance.create";
+
+/**
+ * GFR counter-signature threshold in money MINOR units (paise). A financial decision at or above
+ * this implication is routed to Workflow_Service (Req 20.8). Configurable per deployment via
+ * `MEETING_GFR_FINANCIAL_THRESHOLD_MINOR`; defaults to ₹10,00,000 (10 lakh) = 100,000,000 paise.
+ */
+const GFR_FINANCIAL_THRESHOLD_MINOR: bigint = (() => {
+  const raw = process.env.MEETING_GFR_FINANCIAL_THRESHOLD_MINOR;
+  if (!raw) return 100_000_000n;
+  try {
+    return parseMinor(raw);
+  } catch {
+    return 100_000_000n;
+  }
+})();
+
+// ─── Command payload contracts (mirror topics.ts + validators.ts) ───────────────
+
+interface DecisionRecordPayload {
+  decisionId: string;
+  meetingId: string;
+  tenantId: string;
+  agendaItemId?: string;
+  text: string;
+  type: string;
+  authority?: string;
+  effectiveDate?: string;
+  responsibleOfficer?: string;
+  deadline?: string;
+  /** Money MINOR units as a canonical base-10 string (rebuilt with parseMinor). */
+  financialImplication?: string;
+  currency?: string;
+  linkedDecisionIds?: string[];
+}
+
+interface DecisionPatchPayload {
+  text?: string;
+  type?: string;
+  authority?: string | null;
+  effectiveDate?: string | null;
+  responsibleOfficer?: string | null;
+  deadline?: string | null;
+  financialImplication?: string | null;
+  currency?: string | null;
+  status?: string;
+  supersededById?: string | null;
+}
+
+interface DecisionUpdatePayload {
+  meetingId: string;
+  tenantId: string;
+  decisionId: string;
+  version: number;
+  patch: DecisionPatchPayload;
+}
+
+interface ResolutionRecordPayload {
+  resolutionId: string;
+  meetingId: string;
+  tenantId: string;
+  decisionId?: string;
+  text: string;
+  voteType: string;
+  majorityRule: MajorityRule;
+  votesFor: number;
+  votesAgainst: number;
+  votesAbstain: number;
+  effectiveDate?: string;
+}
+
+interface ResolutionSignPayload {
+  resolutionId: string;
+  meetingId: string;
+  tenantId: string;
+  signerId: string;
+}
+
+interface CirculationInitPayload {
+  resolutionId: string;
+  tenantId: string;
+  committeeId: string;
+  text: string;
+  supportingDocumentIds?: string[];
+  deadline: string;
+  requiredResponseRate?: number;
+  majorityRule: MajorityRule;
+}
+
+interface DissentRecordPayload {
+  resolutionId: string;
+  meetingId: string;
+  tenantId: string;
+  memberId: string;
+  note: string;
+}
+
+// ─── Shared helpers ────────────────────────────────────────────────────────────
+
+type MsgMeta = { tenantId: string; actorId: string; correlationId: string };
+
+/** Emit an audit fact for every mutation (steering: audit on every mutation). */
+async function audit(
+  tx: DrizzleTx,
+  msg: MsgMeta,
+  action: string,
+  resourceType: string,
+  resourceId: string,
+  detail?: Record<string, unknown>,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT_TOPIC,
+    eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId,
+    actorId: msg.actorId,
+    correlationId: msg.correlationId,
+    payload: {
+      service: SERVICE,
+      action,
+      resourceType,
+      resourceId,
+      outcome: "success",
+      ...(detail ? { detail } : {}),
+    },
+  });
+}
+
+/** Best-effort read-cache invalidation for a resource (single key + resource list) after commit. */
+async function invalidate(tenantId: string, resource: string, id: string): Promise<void> {
+  await cache.invalidate(cache.makeKey(tenantId, resource, id));
+  await cache.invalidateResource(tenantId, resource);
+}
+
+/** Load a meeting row (scoped to tenant) within the tx. */
+async function loadMeeting(tx: DrizzleTx, meetingId: string, tenantId: string) {
+  const rows = await tx
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Load a resolution row (scoped to tenant) within the tx. */
+async function loadResolution(tx: DrizzleTx, resolutionId: string, tenantId: string) {
+  const rows = await tx
+    .select()
+    .from(resolutions)
+    .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Extract the trailing numeric sequence from a resolution number like "FC/RES/2025-26/007" → 7. */
+function parseResolutionSequence(resolutionNumber: string | null): number | null {
+  if (!resolutionNumber) return null;
+  const tail = resolutionNumber.split("/").pop() ?? "";
+  const n = Number.parseInt(tail, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Assign a sequential resolution number scoped to (committee, financial year) (Req 11.4, P25).
+ * Reads the numbers already issued in the same scope (resolutions joined to their meetings),
+ * computes the next sequence via the pure `nextResolutionSequence`, and formats it via
+ * `generateResolutionNumber`. The DB UNIQUE(tenant, meeting, resolution_number) constraint is
+ * the final guard against a per-meeting collision; committee-FY uniqueness holds by construction.
+ */
+async function computeResolutionNumber(
+  tx: DrizzleTx,
+  args: { tenantId: string; committeeId: string | null; financialYear: string },
+): Promise<string> {
+  let committeeCode: string | null = null;
+  if (args.committeeId) {
+    const c = await tx
+      .select({ code: committees.code })
+      .from(committees)
+      .where(and(eq(committees.id, args.committeeId), eq(committees.tenantId, args.tenantId)))
+      .limit(1);
+    committeeCode = c[0]?.code ?? null;
+  }
+
+  const scopeFilter = args.committeeId
+    ? eq(meetings.committeeId, args.committeeId)
+    : isNull(meetings.committeeId);
+  const rows = await tx
+    .select({ resolutionNumber: resolutions.resolutionNumber })
+    .from(resolutions)
+    .innerJoin(meetings, eq(resolutions.meetingId, meetings.id))
+    .where(
+      and(
+        eq(resolutions.tenantId, args.tenantId),
+        eq(meetings.financialYear, args.financialYear),
+        scopeFilter,
+      ),
+    );
+
+  const sequences = rows
+    .map((r) => parseResolutionSequence(r.resolutionNumber))
+    .filter((n): n is number => n !== null);
+  const sequence = nextResolutionSequence(sequences);
+  return generateResolutionNumber({ committeeCode, financialYear: args.financialYear, sequence });
+}
+
+/**
+ * Resolve the meeting a circulation resolution anchors to. A circulation resolution is decided
+ * outside a meeting but the `resolutions.meeting_id` FK is NOT NULL, and Req 12.7 requires passed
+ * circulation resolutions to be ratified at the next formal meeting — so we anchor to the
+ * committee's next upcoming (non-cancelled) meeting, falling back to the most recent one. Returns
+ * null when the committee has no meeting at all (a permanent error for the caller).
+ */
+async function resolveCirculationMeeting(
+  tx: DrizzleTx,
+  tenantId: string,
+  committeeId: string,
+): Promise<{ meetingId: string; financialYear: string } | null> {
+  const now = new Date();
+  const upcoming = await tx
+    .select({ id: meetings.id, financialYear: meetings.financialYear, scheduledAt: meetings.scheduledAt })
+    .from(meetings)
+    .where(
+      and(
+        eq(meetings.tenantId, tenantId),
+        eq(meetings.committeeId, committeeId),
+        ne(meetings.status, "cancelled"),
+        gte(meetings.scheduledAt, now),
+      ),
+    )
+    .orderBy(asc(meetings.scheduledAt))
+    .limit(1);
+
+  let row = upcoming[0];
+  if (!row) {
+    const recent = await tx
+      .select({ id: meetings.id, financialYear: meetings.financialYear, scheduledAt: meetings.scheduledAt })
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.tenantId, tenantId),
+          eq(meetings.committeeId, committeeId),
+          ne(meetings.status, "cancelled"),
+        ),
+      )
+      .orderBy(desc(meetings.scheduledAt))
+      .limit(1);
+    row = recent[0];
+  }
+  if (!row) return null;
+  const financialYear = row.financialYear ?? computeFinancialYear(row.scheduledAt ?? now);
+  return { meetingId: row.id, financialYear };
+}
+
+/** Count active committee members (denominator for the circulation response threshold, Req 12.2). */
+async function countActiveMembers(tx: DrizzleTx, tenantId: string, committeeId: string): Promise<number> {
+  const rows = await tx
+    .select({ memberId: committeeMembers.memberId })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.status, "active"),
+      ),
+    );
+  return rows.length;
+}
+
+// ─── DSC signing of the resolution document (Req 11.5) ──────────────────────────
+
+/** Signed-resolution artifacts persisted onto the resolution row. */
+interface SignedResolutionArtifacts {
+  storageKey: string | null;
+  /** DSC certificate SHA-256 fingerprint (the durable signature marker); null when unsigned. */
+  signature: string | null;
+  /** DSC signer Common Name; null when no keystore is configured. */
+  signerName: string | null;
+  signedAt: Date | null;
+  /** SHA-256 of the canonical resolution content — QR-verifiable integrity anchor (Req 11.5). */
+  hashCurrent: string;
+}
+
+/** Canonical, signature-bound representation of a resolution (number + text). */
+function canonicalResolutionContent(args: { resolutionNumber: string; text: string }): string {
+  return `${args.resolutionNumber}\n${args.text}`;
+}
+
+/** Minimal HTML body for the rendered/signed resolution document. */
+function buildResolutionHtml(args: { resolutionNumber: string; text: string }): string {
+  const esc = (s: string): string =>
+    s.replace(/[&<>]/g, (c) => (c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"));
+  return (
+    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+    `<title>Resolution ${esc(args.resolutionNumber)}</title></head>` +
+    `<body><h1>Resolution ${esc(args.resolutionNumber)}</h1>` +
+    `<p>${esc(args.text)}</p></body></html>`
+  );
+}
+
+/** Read PKCS#12 DSC material from env, or null when signing is not configured (dev/test). */
+async function loadDscMaterial(): Promise<DscSignInput | null> {
+  const p12Path = process.env.DSC_P12_PATH;
+  const passphrase = process.env.DSC_PASSPHRASE;
+  if (!p12Path || !passphrase) return null;
+  const p12Buffer = await readFile(p12Path);
+  return { p12Buffer, passphrase };
+}
+
+/** Store the resolution PDF in object storage; best-effort (the signature + hash are the record). */
+async function storeResolutionPdf(tenantId: string, resolutionId: string, buffer: Buffer): Promise<string | null> {
+  const key = `meeting/${tenantId}/resolutions/${resolutionId}.pdf`;
+  try {
+    await storage.putObject(key, buffer, "application/pdf");
+    return key;
+  } catch {
+    // Object storage unavailable — the document can be re-rendered from the immutable resolution
+    // content on demand, so we do not fail the sign write over a storage hiccup.
+    return null;
+  }
+}
+
+/**
+ * Render the resolution to a PDF and apply the chairperson's DSC (Req 11.5). When a keystore is
+ * configured (DSC_P12_PATH / DSC_PASSPHRASE) the PKCS#7 detached signature is applied and the
+ * signer metadata captured; otherwise the (unsigned) document is stored with only the integrity
+ * hash so we never claim a signature we did not apply. A configured-but-invalid keystore is a
+ * permanent failure (→ DLQ).
+ */
+async function signResolutionDocument(args: {
+  tenantId: string;
+  resolutionId: string;
+  resolutionNumber: string;
+  text: string;
+}): Promise<SignedResolutionArtifacts> {
+  const hashCurrent = createHash("sha256").update(canonicalResolutionContent(args)).digest("hex");
+
+  let pdf: Buffer;
+  try {
+    const rendered = await renderPdf({ html: buildResolutionHtml(args) });
+    pdf = rendered.buffer;
+  } catch {
+    pdf = Buffer.from(buildResolutionHtml(args), "utf-8");
+  }
+
+  const dsc = await loadDscMaterial();
+  if (!dsc) {
+    const storageKey = await storeResolutionPdf(args.tenantId, args.resolutionId, pdf);
+    return { storageKey, signature: null, signerName: null, signedAt: null, hashCurrent };
+  }
+
+  let signed;
+  try {
+    signed = await signPdfWithDsc(pdf, dsc);
+  } catch (err) {
+    const detail = err instanceof DscValidationError ? `${err.code}: ${err.message}` : String(err);
+    throw new NonRetryableError(`DSC signing failed for resolution ${args.resolutionId}: ${detail}`, err);
+  }
+
+  const storageKey = await storeResolutionPdf(args.tenantId, args.resolutionId, signed.buffer);
+  return {
+    storageKey,
+    signature: signed.sha256Fingerprint,
+    signerName: signed.signerCN,
+    signedAt: new Date(signed.signedAt),
+    hashCurrent,
+  };
+}
+
+// ─── Handlers ──────────────────────────────────────────────────────────────────
+
+/**
+ * decision.record → INSERT decision + typed ERP fan-out (Req 22.1–22.5) + optional GFR
+ * counter-signature routing (Req 11.7, 20.8). Money rebuilt with `parseMinor`.
+ */
+async function handleDecisionRecord(msg: CommandEnvelope<DecisionRecordPayload>): Promise<void> {
+  const p = msg.payload;
+  const financial = p.financialImplication !== undefined ? parseMinor(p.financialImplication) : null;
+  const currency = p.currency ?? "INR";
+  // Req 20.8: a financial decision at/above the GFR delegation threshold needs counter-signature.
+  const routeToWorkflow = financial !== null && financial >= GFR_FINANCIAL_THRESHOLD_MINOR;
+
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    await tx.insert(decisions).values({
+      id: p.decisionId,
+      tenantId: p.tenantId,
+      meetingId: p.meetingId,
+      agendaItemId: p.agendaItemId ?? null,
+      text: p.text,
+      type: p.type,
+      authority: p.authority ?? null,
+      effectiveDate: p.effectiveDate ?? null,
+      status: "effective",
+      responsibleOfficer: p.responsibleOfficer ?? null,
+      deadline: p.deadline ? new Date(p.deadline) : null,
+      financialImplication: financial,
+      currency,
+      linkedDecisionIds: p.linkedDecisionIds ?? null,
+      workflowTriggered: routeToWorkflow,
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+    });
+
+    // Typed ERP fan-out: generic `decision.recorded` first, then the type-specific event (if any).
+    const financialStr = financial !== null ? financial.toString() : undefined;
+    for (const topic of routeDecisionEvents(p.type)) {
+      const payload =
+        topic === EVENTS.decisionRecorded
+          ? {
+              decisionId: p.decisionId,
+              meetingId: p.meetingId,
+              type: p.type,
+              ...(financialStr !== undefined ? { financialImplication: financialStr, currency } : {}),
+            }
+          : {
+              decisionId: p.decisionId,
+              meetingId: p.meetingId,
+              text: p.text,
+              ...(p.authority ? { authority: p.authority } : {}),
+              ...(p.effectiveDate ? { effectiveDate: p.effectiveDate } : {}),
+              ...(financialStr !== undefined ? { financialImplication: financialStr, currency } : {}),
+            };
+      await enqueue(tx, {
+        topic,
+        eventType: topic,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload,
+      });
+    }
+
+    // Post-decision workflow routing (Req 11.7): counter-signature by the competent authority.
+    if (routeToWorkflow) {
+      await enqueue(tx, {
+        topic: WORKFLOW_CREATE_INSTANCE,
+        eventType: WORKFLOW_CREATE_INSTANCE,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          id: randomUUID(),
+          tenantId: msg.tenantId,
+          name: `Financial counter-signature — decision ${p.decisionId}`,
+          status: "active",
+          version: 1,
+          initialTaskName: "Counter-signature",
+          definitionCode: "meeting_financial_countersignature",
+          refType: "meeting_decision",
+          refId: p.decisionId,
+          context: {
+            meetingId: p.meetingId,
+            decisionType: p.type,
+            ...(financialStr !== undefined ? { financialImplication: financialStr, currency } : {}),
+            ...(p.authority ? { authority: p.authority } : {}),
+          },
+        },
+      });
+    }
+
+    await audit(tx, msg, "record", "decision", p.decisionId, {
+      type: p.type,
+      ...(routeToWorkflow ? { workflowTriggered: true } : {}),
+    });
+  });
+
+  await invalidate(msg.tenantId, DECISION_RESOURCE, p.meetingId);
+}
+
+/** decision.update → optimistic-locked field patch (Req 11.8). Money rebuilt with `parseMinor`. */
+async function handleDecisionUpdate(msg: CommandEnvelope<DecisionUpdatePayload>): Promise<void> {
+  const p = msg.payload;
+
+  // A decision cannot supersede itself (would create a self-loop in the lineage graph, Req 11.8).
+  if (p.patch.supersededById != null && p.patch.supersededById === p.decisionId) {
+    throw new NonRetryableError(`decision ${p.decisionId} cannot supersede itself`);
+  }
+
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const rows = await tx
+      .select({ id: decisions.id })
+      .from(decisions)
+      .where(and(eq(decisions.id, p.decisionId), eq(decisions.tenantId, msg.tenantId)))
+      .limit(1);
+    if (rows.length === 0) return;
+
+    const patch = p.patch;
+    const set: Record<string, unknown> = { updatedBy: msg.actorId, updatedAt: new Date() };
+    if (patch.text !== undefined) set.text = patch.text;
+    if (patch.type !== undefined) set.type = patch.type;
+    if (patch.authority !== undefined) set.authority = patch.authority;
+    if (patch.effectiveDate !== undefined) set.effectiveDate = patch.effectiveDate;
+    if (patch.responsibleOfficer !== undefined) set.responsibleOfficer = patch.responsibleOfficer;
+    if (patch.deadline !== undefined) set.deadline = patch.deadline === null ? null : new Date(patch.deadline);
+    if (patch.currency !== undefined) set.currency = patch.currency;
+    if (patch.status !== undefined) set.status = patch.status;
+    if (patch.supersededById !== undefined) set.supersededById = patch.supersededById;
+    if (patch.financialImplication !== undefined) {
+      set.financialImplication = patch.financialImplication === null ? null : parseMinor(patch.financialImplication);
+    }
+
+    await versionedUpdate(tx, decisions, {
+      id: p.decisionId,
+      tenantId: msg.tenantId,
+      expectedVersion: p.version,
+      set,
+      entity: "decision",
+    });
+    await audit(tx, msg, "update", "decision", p.decisionId);
+  });
+
+  await invalidate(msg.tenantId, DECISION_RESOURCE, p.meetingId);
+}
+
+/**
+ * resolution.record → compute result + assign sequential number + INSERT resolution + emit
+ * `resolution.passed` / `resolution.rejected` (Req 11.3, 11.4).
+ */
+async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPayload>): Promise<void> {
+  const p = msg.payload;
+
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
+    if (!meeting) {
+      throw new NonRetryableError(`meeting ${p.meetingId} not found for resolution ${p.resolutionId}`);
+    }
+
+    const financialYear = meeting.financialYear ?? computeFinancialYear(meeting.scheduledAt ?? new Date());
+    const resolutionNumber = await computeResolutionNumber(tx, {
+      tenantId: msg.tenantId,
+      committeeId: meeting.committeeId,
+      financialYear,
+    });
+
+    const result = computeVoteResult(
+      { votesFor: p.votesFor, votesAgainst: p.votesAgainst, votesAbstain: p.votesAbstain },
+      p.majorityRule,
+    );
+
+    await tx.insert(resolutions).values({
+      id: p.resolutionId,
+      tenantId: p.tenantId,
+      meetingId: p.meetingId,
+      decisionId: p.decisionId ?? null,
+      resolutionNumber,
+      text: p.text,
+      voteType: p.voteType,
+      votesFor: p.votesFor,
+      votesAgainst: p.votesAgainst,
+      votesAbstain: p.votesAbstain,
+      majorityRule: p.majorityRule,
+      result,
+      effectiveDate: p.effectiveDate ?? null,
+      status: "effective",
+      isCirculation: false,
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+    });
+
+    const topic = result === "passed" ? EVENTS.resolutionPassed : EVENTS.resolutionRejected;
+    await enqueue(tx, {
+      topic,
+      eventType: topic,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: {
+        resolutionId: p.resolutionId,
+        meetingId: p.meetingId,
+        resolutionNumber,
+        votesFor: p.votesFor,
+        votesAgainst: p.votesAgainst,
+        votesAbstain: p.votesAbstain,
+      },
+    });
+    await audit(tx, msg, "record", "resolution", p.resolutionId, { result, resolutionNumber });
+  });
+
+  await invalidate(msg.tenantId, RESOLUTION_RESOURCE, p.meetingId);
+}
+
+/** resolution.sign → render + DSC-sign the passed resolution + emit `resolution.signed` (Req 11.5). */
+async function handleResolutionSign(msg: CommandEnvelope<ResolutionSignPayload>): Promise<void> {
+  const p = msg.payload;
+
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const resolution = await loadResolution(tx, p.resolutionId, msg.tenantId);
+    if (!resolution) {
+      throw new NonRetryableError(`resolution ${p.resolutionId} not found`);
+    }
+    // Only a passed resolution is signed (Req 11.5).
+    if (resolution.result !== "passed") {
+      throw new NonRetryableError(
+        `resolution ${p.resolutionId} is "${resolution.result}"; only passed resolutions can be signed`,
+      );
+    }
+
+    const artifacts = await signResolutionDocument({
+      tenantId: msg.tenantId,
+      resolutionId: p.resolutionId,
+      resolutionNumber: resolution.resolutionNumber,
+      text: resolution.text,
+    });
+
+    await versionedUpdate(tx, resolutions, {
+      id: p.resolutionId,
+      tenantId: msg.tenantId,
+      expectedVersion: resolution.version,
+      set: {
+        dscSignature: artifacts.signature,
+        dscSignerName: artifacts.signerName,
+        dscSignedAt: artifacts.signedAt,
+        hashCurrent: artifacts.hashCurrent,
+        storageKey: artifacts.storageKey,
+        updatedBy: msg.actorId,
+        updatedAt: new Date(),
+      },
+      entity: "resolution",
+    });
+
+    await enqueue(tx, {
+      topic: EVENTS.resolutionSigned,
+      eventType: EVENTS.resolutionSigned,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: {
+        resolutionId: p.resolutionId,
+        meetingId: resolution.meetingId,
+        dscSignerName: artifacts.signerName,
+        hashCurrent: artifacts.hashCurrent,
+      },
+    });
+    await audit(tx, msg, "sign", "resolution", p.resolutionId, { signerId: p.signerId });
+  });
+
+  await invalidate(msg.tenantId, RESOLUTION_RESOURCE, p.meetingId);
+}
+
+/**
+ * resolution.circulation_init → create a circulation resolution, anchor it to the committee's
+ * next/most-recent meeting, and distribute the proposal to all active members (Req 12.1, 12.2).
+ * The outcome stays provisional (`result = "invalid"`, i.e. not yet a valid passed/rejected) with
+ * `response_rate` NULL until the deadline/close step computes it via `computeCirculationResult`.
+ */
+async function handleResolutionCirculationInit(msg: CommandEnvelope<CirculationInitPayload>): Promise<void> {
+  const p = msg.payload;
+
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const anchor = await resolveCirculationMeeting(tx, msg.tenantId, p.committeeId);
+    if (!anchor) {
+      throw new NonRetryableError(
+        `committee ${p.committeeId} has no meeting to anchor a circulation resolution to`,
+      );
+    }
+
+    const resolutionNumber = await computeResolutionNumber(tx, {
+      tenantId: msg.tenantId,
+      committeeId: p.committeeId,
+      financialYear: anchor.financialYear,
+    });
+
+    // Response threshold denominator (Req 12.2) — recorded for the status view via requiredCount.
+    const totalMembers = await countActiveMembers(tx, msg.tenantId, p.committeeId);
+    const requiredCount = requiredResponseCount(
+      totalMembers,
+      p.requiredResponseRate !== undefined ? { minResponseRatePct: p.requiredResponseRate } : undefined,
+    );
+
+    await tx.insert(resolutions).values({
+      id: p.resolutionId,
+      tenantId: msg.tenantId,
+      meetingId: anchor.meetingId,
+      resolutionNumber,
+      text: p.text,
+      voteType: "circulation_resolution",
+      majorityRule: p.majorityRule,
+      // Provisional until the deadline/close computes the final outcome (Req 12.4).
+      result: "invalid",
+      status: "effective",
+      isCirculation: true,
+      circulationDeadline: new Date(p.deadline),
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+    });
+
+    // Distribute the proposal to every active committee member (Req 12.1) and track responses via
+    // the votes table (the voting module's circulation-respond handler). recipientId carries the
+    // member id; notification-service resolves the delivery address (no PII crosses this boundary).
+    const members = await tx
+      .select({ memberId: committeeMembers.memberId })
+      .from(committeeMembers)
+      .where(
+        and(
+          eq(committeeMembers.tenantId, msg.tenantId),
+          eq(committeeMembers.committeeId, p.committeeId),
+          eq(committeeMembers.status, "active"),
+        ),
+      );
+    for (const m of members) {
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND,
+        eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: COMMANDS.resolutionCirculationInit,
+          recipient: m.memberId,
+          recipientId: m.memberId,
+          channel: "in_app",
+          variables: { resolutionId: p.resolutionId, resolutionNumber, deadline: p.deadline },
+        }),
+      });
+    }
+
+    await audit(tx, msg, "circulation_init", "resolution", p.resolutionId, {
+      committeeId: p.committeeId,
+      totalMembers,
+      requiredCount,
+    });
+  });
+
+  await invalidate(msg.tenantId, RESOLUTION_RESOURCE, p.resolutionId);
+}
+
+/**
+ * dissent.record → attach a recorded dissent note to a resolution (Req 11.6). To preserve the
+ * vote-count invariant (P14: `count(votes) == votes_for + votes_against + votes_abstain`) and the
+ * unique-vote guard (P17), we do NOT insert a new votes row: if the member already recorded a
+ * vote we attach the note to that row's `reason`; either way the dissent is captured durably in
+ * the audit trail (the annexure source the minutes module includes with the signed minutes).
+ */
+async function handleDissentRecord(msg: CommandEnvelope<DissentRecordPayload>): Promise<void> {
+  const p = msg.payload;
+
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const resolution = await loadResolution(tx, p.resolutionId, msg.tenantId);
+    if (!resolution) {
+      throw new NonRetryableError(`resolution ${p.resolutionId} not found for dissent note`);
+    }
+
+    const existing = await tx
+      .select({ id: votes.id })
+      .from(votes)
+      .where(
+        and(
+          eq(votes.tenantId, msg.tenantId),
+          eq(votes.resolutionId, p.resolutionId),
+          eq(votes.memberId, p.memberId),
+        ),
+      )
+      .limit(1);
+    const existingVote = existing[0];
+    if (existingVote) {
+      await tx
+        .update(votes)
+        .set({ reason: p.note })
+        .where(and(eq(votes.id, existingVote.id), eq(votes.tenantId, msg.tenantId)));
+    }
+
+    // Durable annexure record (Req 11.6): the dissent note is a governance record, not PII.
+    await audit(tx, msg, "dissent_record", "resolution", p.resolutionId, {
+      memberId: p.memberId,
+      note: p.note,
+      attachedToVote: Boolean(existingVote),
+    });
+  });
+
+  await invalidate(msg.tenantId, RESOLUTION_RESOURCE, p.meetingId);
+}
+
+// ─── Registration ──────────────────────────────────────────────────────────────
+
+/** A single-topic consumer handler (matches worker.ts `ConsumerHandler`). */
+type ConsumerHandler<T = unknown> = (msg: CommandEnvelope<T>) => Promise<void>;
+/** worker.ts `registerConsumer` shape — kept structural to avoid importing the worker. */
+type RegisterConsumer = <T>(topic: string, handler: ConsumerHandler<T>) => void;
+
+/**
+ * Register every decision/resolution command handler. worker.ts (task 19.1) calls this with its
+ * `registerConsumer`, wiring the decision COMMANDS topics to the handlers above.
+ */
+export function registerDecisionConsumers(register: RegisterConsumer): void {
+  register(COMMANDS.decisionRecord, handleDecisionRecord);
+  register(COMMANDS.decisionUpdate, handleDecisionUpdate);
+  register(COMMANDS.resolutionRecord, handleResolutionRecord);
+  register(COMMANDS.resolutionSign, handleResolutionSign);
+  register(COMMANDS.resolutionCirculationInit, handleResolutionCirculationInit);
+  register(COMMANDS.dissentRecord, handleDissentRecord);
+}

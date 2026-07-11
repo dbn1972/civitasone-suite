@@ -46,6 +46,10 @@ tags:
     description: Decision tables, workflow instances, tasks
   - name: Analytics
     description: Query engine, joins, calculated fields, drill-through
+  - name: Visitor
+    description: Visitor management, badge printing, document scanning, turnstile control
+  - name: Meeting
+    description: Meeting lifecycle, committees, agenda, minutes, decisions, action items, voting
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -4298,6 +4302,1122 @@ paths:
       security:
         - bearerAuth: []
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Visitor Service — Badge Print Module
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/visitor/badges/templates:
+    post:
+      operationId: createBadgeTemplate
+      tags: [Visitor]
+      summary: Create a new badge template
+      description: |
+        Creates a new badge label template for visitor badge printing.
+        Templates define the printer language (ZPL or ESC/POS), physical
+        dimensions, and body content with placeholder tokens.
+        Requires facility_admin, security_admin, tenant_admin, or super_admin role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, printerLanguage, templateBody]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  description: Template display name
+                printerLanguage:
+                  type: string
+                  enum: [zpl, escpos]
+                  description: Printer command language
+                templateBody:
+                  type: string
+                  minLength: 1
+                  description: Template body with placeholder tokens (e.g. {{visitor_name}})
+                badgeWidthMm:
+                  type: integer
+                  minimum: 1
+                  default: 54
+                  description: Badge width in millimeters
+                badgeHeightMm:
+                  type: integer
+                  minimum: 1
+                  default: 86
+                  description: Badge height in millimeters
+                visitorCategory:
+                  type: string
+                  enum: [default, walk_in, pre_registered, vip, contractor, group]
+                  default: default
+                  description: Visitor category this template applies to
+      responses:
+        "202":
+          description: Template creation accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listBadgeTemplates
+      tags: [Visitor]
+      summary: List badge templates
+      description: |
+        Returns a paginated list of badge templates for the current tenant.
+        Supports filtering by printer language, visitor category, and status.
+      parameters:
+        - name: printerLanguage
+          in: query
+          schema:
+            type: string
+            enum: [zpl, escpos]
+        - name: visitorCategory
+          in: query
+          schema:
+            type: string
+            enum: [default, walk_in, pre_registered, vip, contractor, group]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, archived]
+            default: active
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        "200":
+          description: Paginated list of badge templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BadgeTemplate"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/templates/{templateId}:
+    get:
+      operationId: getBadgeTemplate
+      tags: [Visitor]
+      summary: Get badge template details
+      description: Returns the full badge template record including body content and version chain.
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Badge template details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BadgeTemplate"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Template not found
+      security:
+        - bearerAuth: []
+    patch:
+      operationId: updateBadgeTemplate
+      tags: [Visitor]
+      summary: Update a badge template (creates new version)
+      description: |
+        Updates an existing badge template by creating a new version.
+        Only provided fields are modified. The previous version is retained
+        for rollback support. All fields are optional.
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                templateBody:
+                  type: string
+                  minLength: 1
+                badgeWidthMm:
+                  type: integer
+                  minimum: 1
+                badgeHeightMm:
+                  type: integer
+                  minimum: 1
+                visitorCategory:
+                  type: string
+                  enum: [default, walk_in, pre_registered, vip, contractor, group]
+      responses:
+        "202":
+          description: Template update accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/templates/{templateId}/archive:
+    post:
+      operationId: archiveBadgeTemplate
+      tags: [Visitor]
+      summary: Archive a badge template
+      description: Marks a badge template as archived so it is no longer used for new print jobs.
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Archive accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/templates/{templateId}/rollback:
+    post:
+      operationId: rollbackBadgeTemplate
+      tags: [Visitor]
+      summary: Rollback to previous template version
+      description: |
+        Re-activates the previous version of the badge template.
+        Returns 422 if no previous version exists.
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Rollback accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Template not found
+        "422":
+          description: No previous version available for rollback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/jobs/poll:
+    get:
+      operationId: pollBadgePrintJob
+      tags: [Visitor]
+      summary: Printer polls for next print job
+      description: |
+        Device-authenticated endpoint for printers to poll for their next
+        queued print job. Returns the highest-priority job (ZPOPMIN from Redis
+        sorted set). Returns 204 if no jobs are pending.
+      responses:
+        "200":
+          description: Next print job available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PrintJob"
+        "204":
+          description: No jobs pending
+        "401":
+          description: Missing or invalid device token
+        "403":
+          description: Device inactive or suspended
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/jobs/{jobId}/acknowledge:
+    post:
+      operationId: acknowledgePrintJob
+      tags: [Visitor]
+      summary: Printer acknowledges successful print
+      description: |
+        Device-authenticated endpoint for printers to confirm a job was
+        printed successfully. Transitions the job to completed state.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Acknowledgment accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: Missing or invalid device token
+        "403":
+          description: Device inactive or suspended
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/jobs/{jobId}/fail:
+    post:
+      operationId: failPrintJob
+      tags: [Visitor]
+      summary: Printer reports print failure
+      description: |
+        Device-authenticated endpoint for printers to report a print failure.
+        Triggers retry logic (exponential backoff, max 3 retries) or marks
+        the job as failed after exhausting retries.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Optional error message describing the failure
+      responses:
+        "202":
+          description: Failure report accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: Missing or invalid device token
+        "403":
+          description: Device inactive or suspended
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/jobs:
+    get:
+      operationId: listPrintJobs
+      tags: [Visitor]
+      summary: List print jobs
+      description: |
+        Returns a paginated list of print jobs for the current tenant.
+        Supports filtering by device and status.
+      parameters:
+        - name: deviceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [queued, in_progress, completed, failed]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        "200":
+          description: Paginated list of print jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PrintJob"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/jobs/{jobId}/requeue:
+    post:
+      operationId: requeuePrintJob
+      tags: [Visitor]
+      summary: Manually re-queue a failed print job
+      description: |
+        Admin endpoint to re-queue a print job that has reached the failed
+        terminal state. Creates a new queue entry for the same job.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Requeue accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/visitor/badges/jobs/priority:
+    post:
+      operationId: createPriorityPrintJob
+      tags: [Visitor]
+      summary: Create a priority print job
+      description: |
+        Admin endpoint to create a high-priority print job for a visitor pass.
+        High-priority jobs are served before standard jobs in the printer queue.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [passId]
+              properties:
+                passId:
+                  type: string
+                  format: uuid
+                  description: The visitor digital pass to print a badge for
+                deviceId:
+                  type: string
+                  format: uuid
+                  description: Target printer device (optional, consumer resolves if omitted)
+                priority:
+                  type: string
+                  enum: [standard, high]
+                  default: high
+                  description: Print priority level
+      responses:
+        "202":
+          description: Priority job creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Meeting Service (meeting-core module)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/meetings:
+    post:
+      operationId: createMeeting
+      tags: [Meeting]
+      summary: Create a meeting
+      description: |
+        Creates a meeting in `draft` state (Req 1.2). CQRS async — returns 202 with
+        the minted meeting id. The consumer assigns a sequential meeting number and
+        emits `meeting.created`.
+        Roles: meeting_admin, committee_secretary, tenant_admin, super_admin, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMeetingRequest"
+      responses:
+        "202":
+          description: Meeting creation accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listMeetings
+      tags: [Meeting]
+      summary: List meetings
+      description: |
+        Returns a paginated, filterable list of meetings for the current tenant (Req 1.1).
+        Read-only — all meeting roles within the tenant.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/MeetingState"
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/MeetingType"
+        - name: committeeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: seriesId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: chairpersonId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: confidentialityLevel
+          in: query
+          schema:
+            $ref: "#/components/schemas/ConfidentialityLevel"
+        - name: from
+          in: query
+          description: Lower bound (inclusive) on scheduledAt (ISO 8601 with offset)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Upper bound (inclusive) on scheduledAt (ISO 8601 with offset)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Paginated meeting list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingListResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/types:
+    get:
+      operationId: listMeetingTypes
+      tags: [Meeting]
+      summary: List meeting-type templates
+      description: Returns meeting-type templates (tenant config). Read-only — all meeting roles.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: isStatutory
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Paginated meeting-type list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingListResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createMeetingType
+      tags: [Meeting]
+      summary: Create a meeting-type template
+      description: |
+        Creates a meeting-type template (tenant configuration).
+        Admin-only: meeting_admin, tenant_admin, super_admin, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMeetingTypeRequest"
+      responses:
+        "202":
+          description: Meeting-type creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires meeting_admin/tenant_admin
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/series:
+    get:
+      operationId: listMeetingSeries
+      tags: [Meeting]
+      summary: List recurring meeting series
+      description: Returns recurring meeting series, filterable by committee/active. Read-only.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - name: committeeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Paginated meeting-series list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingListResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createMeetingSeries
+      tags: [Meeting]
+      summary: Constitute a recurring meeting series
+      description: |
+        Creates a recurring meeting series (Req 14.5).
+        Roles: meeting_admin, committee_secretary, tenant_admin, super_admin, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMeetingSeriesRequest"
+      responses:
+        "202":
+          description: Series creation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/series/{seriesId}:
+    patch:
+      operationId: updateMeetingSeries
+      tags: [Meeting]
+      summary: Amend a recurring meeting series
+      description: |
+        Updates a recurring series (optimistic-locked on `version`).
+        Roles: meeting_admin, committee_secretary, tenant_admin, super_admin, admin.
+      parameters:
+        - name: seriesId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeetingSeriesRequest"
+      responses:
+        "202":
+          description: Series update accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Meeting series not found (MEETING_NOT_FOUND)
+        "409":
+          description: Optimistic-lock version conflict (MEETING_VERSION_CONFLICT)
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/series/{seriesId}/generate:
+    post:
+      operationId: generateMeetingSeriesInstances
+      tags: [Meeting]
+      summary: Generate meeting instances from a series
+      description: |
+        Materializes concrete `draft` meeting instances from the series pattern up to
+        `upToDate`, carrying committee membership forward (Req 14.5).
+        Roles: meeting_admin, committee_secretary, tenant_admin, super_admin, admin.
+      parameters:
+        - name: seriesId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateMeetingSeriesRequest"
+      responses:
+        "202":
+          description: Generation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Meeting series not found (MEETING_NOT_FOUND)
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/dashboard/leadership:
+    get:
+      operationId: getMeetingLeadershipDashboard
+      tags: [Meeting]
+      summary: Leadership (chairperson) dashboard
+      description: |
+        Returns the calling user's leadership dashboard. Admins may inspect another
+        user's dashboard via `?userId=`; non-admins requesting another user get 403.
+      parameters:
+        - name: userId
+          in: query
+          description: Target user (admin-only when different from caller)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Leadership dashboard projection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingDashboardResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role (non-admin requesting another user's dashboard)
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/dashboard/secretariat:
+    get:
+      operationId: getMeetingSecretariatDashboard
+      tags: [Meeting]
+      summary: Secretariat (secretary) dashboard
+      description: |
+        Returns the calling user's secretariat dashboard. Admins may inspect another
+        user's dashboard via `?userId=`; non-admins requesting another user get 403.
+      parameters:
+        - name: userId
+          in: query
+          description: Target user (admin-only when different from caller)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Secretariat dashboard projection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingDashboardResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/dashboard/participant:
+    get:
+      operationId: getMeetingParticipantDashboard
+      tags: [Meeting]
+      summary: Participant dashboard
+      description: |
+        Returns the calling user's participant dashboard. Admins may inspect another
+        user's dashboard via `?userId=`; non-admins requesting another user get 403.
+      parameters:
+        - name: userId
+          in: query
+          description: Target user (admin-only when different from caller)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Participant dashboard projection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingDashboardResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/{meetingId}:
+    get:
+      operationId: getMeeting
+      tags: [Meeting]
+      summary: Get meeting details
+      description: Returns a single meeting (Req 1.1). Read-only — all meeting roles.
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Meeting details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Meeting not found (MEETING_NOT_FOUND)
+      security:
+        - bearerAuth: []
+    patch:
+      operationId: updateMeeting
+      tags: [Meeting]
+      summary: Update a meeting
+      description: |
+        Updates an editable meeting field set (optimistic-locked on `version`). `status`
+        is excluded — status changes flow through the transition endpoint.
+        Roles: meeting_admin, committee_secretary, tenant_admin, super_admin, admin.
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeetingRequest"
+      responses:
+        "202":
+          description: Meeting update accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Meeting not found (MEETING_NOT_FOUND)
+        "409":
+          description: Optimistic-lock version conflict (MEETING_VERSION_CONFLICT)
+      security:
+        - bearerAuth: []
+    delete:
+      operationId: cancelMeeting
+      tags: [Meeting]
+      summary: Cancel (soft) a meeting
+      description: |
+        Soft-cancels a meeting by publishing `meeting.cancel`, moving it to the terminal
+        `cancelled` state (Req 1.6). Never a hard delete. `reason` is required and recorded
+        in the transition audit log.
+        Roles: meeting_admin, committee_chairperson, tenant_admin, super_admin, admin.
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelMeetingRequest"
+      responses:
+        "202":
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Meeting not found (MEETING_NOT_FOUND)
+        "409":
+          description: Optimistic-lock version conflict (MEETING_VERSION_CONFLICT)
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/{meetingId}/transition:
+    post:
+      operationId: transitionMeeting
+      tags: [Meeting]
+      summary: Drive a meeting state-machine transition
+      description: |
+        Transitions a meeting to a target state (Req 1.3–1.6). The consumer validates the
+        transition against the tenant-configurable state machine and prerequisites (e.g.
+        draft→scheduled needs a chairperson, ≥1 agenda item and a future date).
+        Roles: meeting_admin, committee_chairperson, tenant_admin, super_admin, admin.
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransitionMeetingRequest"
+      responses:
+        "202":
+          description: Transition accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingAcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Meeting not found (MEETING_NOT_FOUND)
+        "409":
+          description: Optimistic-lock version conflict (MEETING_VERSION_CONFLICT)
+        "422":
+          description: |
+            Business-rule violation — invalid transition (MEETING_INVALID_TRANSITION)
+            or quorum not established (MEETING_QUORUM_NOT_MET)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/meetings/{meetingId}/transitions:
+    get:
+      operationId: getMeetingTransitions
+      tags: [Meeting]
+      summary: Get the meeting transition audit log
+      description: Returns the state-transition audit log for a meeting (Req 1.7). Read-only.
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Transition audit log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingTransitionLogResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Meeting not found (MEETING_NOT_FOUND)
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -4406,6 +5526,87 @@ components:
           type: boolean
 
     # ─── Finance ───────────────────────────────────────────────────────────────
+
+    # ─── Visitor / Badge Print ─────────────────────────────────────────────────
+
+    BadgeTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        printerLanguage:
+          type: string
+          enum: [zpl, escpos]
+        templateBody:
+          type: string
+        badgeWidthMm:
+          type: integer
+        badgeHeightMm:
+          type: integer
+        status:
+          type: string
+          enum: [active, archived]
+        visitorCategory:
+          type: string
+          enum: [default, walk_in, pre_registered, vip, contractor, group]
+        templateVersion:
+          type: integer
+        previousVersionId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PrintJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        passId:
+          type: string
+          format: uuid
+        templateId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, in_progress, completed, failed]
+        priority:
+          type: string
+          enum: [standard, high]
+        renderedPayload:
+          type: string
+          nullable: true
+        retryCount:
+          type: integer
+        nextRetryAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ─── Finance (continued) ──────────────────────────────────────────────────
 
     Bill:
       type: object
@@ -6447,3 +7648,462 @@ components:
             cellId:
               type: string
               description: The cell identifier that was drilled into
+
+    # ─── Meeting Service ───────────────────────────────────────────────────────
+
+    MeetingState:
+      type: string
+      description: Meeting lifecycle state (Req 1.1)
+      enum:
+        - draft
+        - scheduled
+        - agenda_locked
+        - in_progress
+        - adjourned
+        - minutes_pending
+        - minutes_approved
+        - closed
+        - archived
+        - cancelled
+
+    MeetingType:
+      type: string
+      description: Meeting classification (Req 1.2)
+      enum: [committee, board, departmental, ad_hoc, statutory]
+
+    ConfidentialityLevel:
+      type: string
+      description: 5-level confidentiality model
+      enum: [public, internal, confidential, secret, top_secret]
+
+    SeriesPattern:
+      type: string
+      description: Recurring meeting-series pattern
+      enum: [weekly, fortnightly, monthly, quarterly, half_yearly, annual]
+
+    MeetingTypeFrequency:
+      type: string
+      description: Statutory meeting-frequency obligation
+      enum: [weekly, fortnightly, monthly, quarterly, half_yearly, annual, ad_hoc]
+
+    MeetingAcceptedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, status, correlationId]
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: The meeting / series / meeting-type id the client can poll
+            status:
+              type: string
+              enum: [accepted]
+            correlationId:
+              type: string
+              description: Request correlation ID for tracing
+
+    CreateMeetingRequest:
+      type: object
+      required: [title, type, scheduledAt, durationMinutes, chairpersonId, secretaryId]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        type:
+          $ref: "#/components/schemas/MeetingType"
+        description:
+          type: string
+          maxLength: 20000
+        scheduledAt:
+          type: string
+          format: date-time
+          description: ISO 8601 with timezone offset
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+        committeeId:
+          type: string
+          format: uuid
+        chairpersonId:
+          type: string
+          format: uuid
+        secretaryId:
+          type: string
+          format: uuid
+        convenerId:
+          type: string
+          format: uuid
+        venue:
+          type: string
+          maxLength: 1000
+        vcEnabled:
+          type: boolean
+        confidentialityLevel:
+          $ref: "#/components/schemas/ConfidentialityLevel"
+        fileReference:
+          type: string
+          maxLength: 200
+
+    MeetingPatch:
+      type: object
+      minProperties: 1
+      description: |
+        Editable meeting fields. `status` is intentionally excluded — status changes flow
+        through the transition endpoint. Nullable fields may be cleared by sending `null`.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 20000
+          nullable: true
+        type:
+          $ref: "#/components/schemas/MeetingType"
+        committeeId:
+          type: string
+          format: uuid
+          nullable: true
+        chairpersonId:
+          type: string
+          format: uuid
+        secretaryId:
+          type: string
+          format: uuid
+        convenerId:
+          type: string
+          format: uuid
+          nullable: true
+        scheduledAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+        venue:
+          type: string
+          maxLength: 1000
+          nullable: true
+        vcEnabled:
+          type: boolean
+        vcLink:
+          type: string
+          format: uri
+          maxLength: 2000
+          nullable: true
+        confidentialityLevel:
+          $ref: "#/components/schemas/ConfidentialityLevel"
+        fileReference:
+          type: string
+          maxLength: 200
+          nullable: true
+
+    UpdateMeetingRequest:
+      type: object
+      required: [version, patch]
+      properties:
+        version:
+          type: integer
+          minimum: 0
+          description: Optimistic-lock version (must match current)
+        patch:
+          $ref: "#/components/schemas/MeetingPatch"
+
+    TransitionMeetingRequest:
+      type: object
+      required: [version, to]
+      properties:
+        version:
+          type: integer
+          minimum: 0
+        to:
+          $ref: "#/components/schemas/MeetingState"
+        reason:
+          type: string
+          maxLength: 2000
+          description: Required for adjournment/cancellation-style transitions (audit log)
+        nextMeetingDate:
+          type: string
+          format: date-time
+          description: Optionally accompanies an adjournment (Req 1.5)
+
+    CancelMeetingRequest:
+      type: object
+      required: [version, reason]
+      properties:
+        version:
+          type: integer
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Cancellation reason, recorded in the transition audit log
+
+    CreateMeetingTypeRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: Tenant-unique short key
+        name:
+          type: string
+          minLength: 1
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 20000
+        templateConfig:
+          type: object
+          additionalProperties: true
+          description: Minutes/agenda template shape (opaque JSON)
+        isStatutory:
+          type: boolean
+        frequency:
+          $ref: "#/components/schemas/MeetingTypeFrequency"
+
+    CreateMeetingSeriesRequest:
+      type: object
+      required: [committeeId, pattern, startDate]
+      properties:
+        committeeId:
+          type: string
+          format: uuid
+        pattern:
+          $ref: "#/components/schemas/SeriesPattern"
+        startDate:
+          type: string
+          format: date
+          description: ISO calendar date (YYYY-MM-DD)
+        endDate:
+          type: string
+          format: date
+          description: On or after startDate
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0=Sun … 6=Sat (weekly/fortnightly patterns)
+        dayOfMonth:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of month (monthly+ patterns)
+        timeOfDay:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: Wall-clock start HH:MM (24h)
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+
+    UpdateMeetingSeriesRequest:
+      type: object
+      minProperties: 1
+      description: |
+        Series patch — all fields optional; at least one must be supplied. The optional
+        top-level `version` is used for optimistic locking (falls back to the current version).
+      properties:
+        version:
+          type: integer
+          minimum: 0
+        pattern:
+          $ref: "#/components/schemas/SeriesPattern"
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+          nullable: true
+        dayOfMonth:
+          type: integer
+          minimum: 1
+          maximum: 31
+          nullable: true
+        timeOfDay:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          nullable: true
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+        isActive:
+          type: boolean
+
+    GenerateMeetingSeriesRequest:
+      type: object
+      required: [upToDate]
+      properties:
+        upToDate:
+          type: string
+          format: date
+          description: Materialize concrete instances up to this date (inclusive)
+
+    Meeting:
+      type: object
+      description: A meeting entity (meeting-core). Fields mirror the meetings table.
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/MeetingType"
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/MeetingState"
+        committeeId:
+          type: string
+          format: uuid
+          nullable: true
+        chairpersonId:
+          type: string
+          format: uuid
+          nullable: true
+        secretaryId:
+          type: string
+          format: uuid
+          nullable: true
+        convenerId:
+          type: string
+          format: uuid
+          nullable: true
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        actualStartAt:
+          type: string
+          format: date-time
+          nullable: true
+        actualEndAt:
+          type: string
+          format: date-time
+          nullable: true
+        durationMinutes:
+          type: integer
+        venue:
+          type: string
+          nullable: true
+        vcEnabled:
+          type: boolean
+        vcLink:
+          type: string
+          nullable: true
+        confidentialityLevel:
+          $ref: "#/components/schemas/ConfidentialityLevel"
+        seriesId:
+          type: string
+          format: uuid
+          nullable: true
+        quorumEstablished:
+          type: boolean
+        meetingNumber:
+          type: string
+          nullable: true
+        financialYear:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+        updatedBy:
+          type: string
+          format: uuid
+        version:
+          type: integer
+
+    MeetingResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Meeting"
+
+    MeetingListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+
+    MeetingTransition:
+      type: object
+      description: A single state-transition audit-log entry
+      properties:
+        id:
+          type: string
+          format: uuid
+        meetingId:
+          type: string
+          format: uuid
+        fromState:
+          $ref: "#/components/schemas/MeetingState"
+        toState:
+          $ref: "#/components/schemas/MeetingState"
+        reason:
+          type: string
+          nullable: true
+        actorId:
+          type: string
+          format: uuid
+        transitionedAt:
+          type: string
+          format: date-time
+
+    MeetingTransitionLogResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeetingTransition"
+
+    MeetingDashboardResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+          description: Role-scoped dashboard projection (shape depends on repo query)
