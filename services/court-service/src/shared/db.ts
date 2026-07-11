@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
 import { createSqlClient, getCurrentTenantId } from "@civitasone/db";
 import { caseRegistrySchema } from "../modules/case-registry/schema.js";
+import { courtRegistrySchema } from "../modules/court-registry/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 /**
@@ -34,6 +35,7 @@ const TENANT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // spread object so future modules add one line each without touching the wrapper.
 const schema = {
   ...caseRegistrySchema,
+  ...courtRegistrySchema,
   ...outboxSchema,
   // ...courtRegistrySchema, ...causeListSchema, ...hearingSchema, (added per module task)
 };

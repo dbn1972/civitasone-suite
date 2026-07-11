@@ -7,6 +7,7 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { caseRegistryRoutes } from "./modules/case-registry/routes.js";
+import { courtRegistryRoutes } from "./modules/court-registry/routes.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
@@ -55,6 +56,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // in the same order as the design's module table so a missing one is obvious:
   //   case-registry, court-registry, cause-list, hearing, order, filing.
   await app.register(caseRegistryRoutes);
+  await app.register(courtRegistryRoutes);
   // await app.register(courtRegistryRoutes);
   // await app.register(causeListRoutes);
   // await app.register(hearingRoutes);
