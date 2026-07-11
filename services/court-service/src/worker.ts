@@ -37,6 +37,7 @@ import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { COMMANDS, CONSUMED_EVENTS, SERVICE } from "./topics.js";
 import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
 import { registerCourtRegistryConsumers } from "./modules/court-registry/consumer.js";
+import { registerCaseLifecycleConsumers } from "./modules/case-lifecycle/consumer.js";
 
 const log = pino({ name: "court-worker" });
 
@@ -84,6 +85,7 @@ type ModuleRegistrar = (register: typeof registerConsumer) => void;
 const MODULE_REGISTRARS: ModuleRegistrar[] = [
   registerCaseRegistryConsumers,
   registerCourtRegistryConsumers,
+  registerCaseLifecycleConsumers,
   // registerCauseListConsumers,
   // registerHearingConsumers,
   // registerOrderConsumers,

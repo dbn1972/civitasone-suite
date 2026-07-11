@@ -8,6 +8,7 @@ import { HttpError } from "./shared/context.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { caseRegistryRoutes } from "./modules/case-registry/routes.js";
 import { courtRegistryRoutes } from "./modules/court-registry/routes.js";
+import { caseLifecycleRoutes } from "./modules/case-lifecycle/routes.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
@@ -57,6 +58,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   //   case-registry, court-registry, cause-list, hearing, order, filing.
   await app.register(caseRegistryRoutes);
   await app.register(courtRegistryRoutes);
+  await app.register(caseLifecycleRoutes);
   // await app.register(courtRegistryRoutes);
   // await app.register(causeListRoutes);
   // await app.register(hearingRoutes);
