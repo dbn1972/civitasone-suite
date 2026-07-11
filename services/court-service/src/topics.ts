@@ -54,6 +54,12 @@ export const COMMANDS = {
   registerAppeal:             "court.appeal.register",
   decideAppeal:               "court.appeal.decide",
   withdrawAppeal:             "court.appeal.withdraw",
+  /** §14/§15 parties + advocates (PII encrypted at rest) */
+  addParty:                   "court.party.add",
+  updateAdvocate:             "court.party.update_advocate",
+  /** §22 evidence + exhibits (SHA-256 tamper-evidence) */
+  submitEvidence:             "court.evidence.submit",
+  ruleOnEvidence:             "court.evidence.rule",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -92,6 +98,10 @@ export const EVENTS = {
   complianceUpdated:          "court.compliance.updated",
   appealFiled:                "court.appeal.filed",
   appealStatusChanged:        "court.appeal.status_changed",
+  partyAdded:                 "court.party.added",
+  advocateUpdated:            "court.party.advocate_updated",
+  evidenceSubmitted:          "court.evidence.submitted",
+  evidenceRuled:              "court.evidence.ruled",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */

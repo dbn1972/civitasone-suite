@@ -17,6 +17,8 @@ import { scrutinyRoutes } from "./modules/scrutiny/routes.js";
 import { noticeRoutes } from "./modules/notice/routes.js";
 import { complianceRoutes } from "./modules/compliance/routes.js";
 import { appealRoutes } from "./modules/appeal/routes.js";
+import { partyRoutes } from "./modules/party/routes.js";
+import { evidenceRoutes } from "./modules/evidence/routes.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
@@ -75,6 +77,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(noticeRoutes);
   await app.register(complianceRoutes);
   await app.register(appealRoutes);
+  await app.register(partyRoutes);
+  await app.register(evidenceRoutes);
   // await app.register(courtRegistryRoutes);
   // await app.register(causeListRoutes);
   // await app.register(hearingRoutes);
