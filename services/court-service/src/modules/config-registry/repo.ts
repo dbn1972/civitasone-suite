@@ -36,6 +36,25 @@ export async function getConfigForUpdate(
   return rows[0];
 }
 
+/**
+ * List the ACTIVE config keys for a (tenant, namespace) on the caller's tx
+ * (inside the handler transaction) so a consumer can validate a value against
+ * tenant configuration on the same GUC-scoped connection. Used by the config/
+ * metadata engine (§47) — e.g. court-registry validates courtType.
+ */
+export async function listActiveKeys(
+  tx: Writer, tenantId: string, namespace: string,
+): Promise<string[]> {
+  const rows = await tx.select({ configKey: configEntries.configKey })
+    .from(configEntries)
+    .where(and(
+      eq(configEntries.tenantId, tenantId),
+      eq(configEntries.namespace, namespace),
+      eq(configEntries.active, true),
+    ));
+  return rows.map((r) => r.configKey);
+}
+
 // ─── Reads (used by routes) — via scopedRead so RLS is enforced on the read path ─
 
 export async function listByNamespace(

@@ -41,3 +41,23 @@ export function deriveCourtId(tenantId: string, establishmentCode: string | unde
 export function deriveBenchId(tenantId: string, courtId: string, name: string): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:bench:${courtId}:${name.trim().toLowerCase()}`);
 }
+
+/**
+ * Default court/authority types (§5.1) used as a FALLBACK when a tenant has
+ * not configured its own `court_type` namespace in the config/metadata engine
+ * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
+ * admin can ADD a bespoke court type via config with no code change, while the
+ * standard quasi-judicial authorities always remain valid.
+ */
+export const DEFAULT_COURT_TYPES = [
+  "revenue_court", "collector_court", "sub_divisional_magistrate", "tehsildar",
+  "sdm_court", "consumer_commission", "tribunal", "civil_court", "rent_control",
+  "labour_court", "appellate_authority",
+] as const;
+
+/** Throw INVALID_COURT_TYPE unless `courtType` is in the effective allowed set. */
+export function assertCourtTypeAllowed(courtType: string, allowed: ReadonlySet<string>): void {
+  if (!allowed.has(courtType)) {
+    throw new Error(`INVALID_COURT_TYPE: ${courtType} is not an allowed court type for this tenant`);
+  }
+}

@@ -28,6 +28,10 @@ vi.mock("../src/modules/court-registry/repo.js", () => ({
   insertBench: vi.fn(async () => {}),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: { createCourt: "court.court.create", createBench: "court.bench.create" },
   EVENTS: { courtRegistered: "court.court.registered", benchRegistered: "court.bench.registered" },
@@ -35,6 +39,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerCourtRegistryConsumers } from "../src/modules/court-registry/consumer.js";
 import * as repo from "../src/modules/court-registry/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue } from "../src/shared/outbox.js";
 
 /** Capture the (topic, handler) each module registers — mirrors the worker's
@@ -104,5 +109,42 @@ describe("court-registry consumer — idempotency", () => {
     expect(repo.insertBench).toHaveBeenCalledTimes(1);
     const topics = (enqueue as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[1] as { topic: string }).topic);
     expect(topics).toContain("court.bench.registered");
+  });
+});
+
+describe("court-registry consumer — config-driven courtType (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  function mk(courtType: string) {
+    const id = randomUUID();
+    return { messageId: id, type: "court.court.create", tenantId: randomUUID(), actorId: randomUUID(),
+      correlationId: "c", schemaVersion: "1.0",
+      payload: { id, tenantId: randomUUID(), name: "X", courtType } };
+  }
+
+  it("rejects a courtType that is neither a default nor tenant-configured", async () => {
+    const { register, deliver } = makeHarness();
+    registerCourtRegistryConsumers(register);
+    await expect(deliver("court.court.create", mk("made_up_xyz"))).rejects.toThrow(/INVALID_COURT_TYPE/);
+    expect(repo.insertCourt).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bespoke courtType supplied ONLY by tenant config (nothing hardcoded)", async () => {
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue(["special_tribunal"]);
+    const { register, deliver } = makeHarness();
+    registerCourtRegistryConsumers(register);
+    await deliver("court.court.create", mk("special_tribunal"));
+    expect(repo.insertCourt).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a standard default courtType with no tenant config", async () => {
+    const { register, deliver } = makeHarness();
+    registerCourtRegistryConsumers(register);
+    await deliver("court.court.create", mk("tehsildar"));
+    expect(repo.insertCourt).toHaveBeenCalledTimes(1);
   });
 });

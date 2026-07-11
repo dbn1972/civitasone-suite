@@ -1,8 +1,10 @@
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as configRepo from "../config-registry/repo.js";
+import { DEFAULT_COURT_TYPES, assertCourtTypeAllowed } from "./domain.js";
 
 type CreateCourtPayload = {
   id: string;
@@ -37,6 +39,14 @@ export function registerCourtRegistryConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // §47 config/metadata: courtType must be in (defaults ∪ tenant config).
+      const configured = await configRepo.listActiveKeys(tx, p.tenantId, "court_type");
+      const allowedTypes = new Set<string>([...DEFAULT_COURT_TYPES, ...configured]);
+      try {
+        assertCourtTypeAllowed(p.courtType, allowedTypes);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
       await repo.insertCourt(tx, {
         id: p.id,
         tenantId: p.tenantId,
