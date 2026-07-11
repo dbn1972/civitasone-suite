@@ -7,6 +7,7 @@ import {
 import { assertValidNamespace, assertValidKey } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import * as presets from "./presets.js";
 
 // Config is administrative metadata: only court admins may write it. Reads are
 // open to the operational roles that consume config-driven enums/rules.
@@ -46,6 +47,16 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     const item = await repo.getConfig(ctx.tenantId, namespace, q.key ?? "");
     if (!item) throw new HttpError(404, "CONFIG_NOT_FOUND", `no config ${namespace}/${q.key}`);
     return reply.send({ item, source: "db" });
+  });
+
+  // Apply a VERTICAL PRESET (§47 onboarding): seed the tenant's config for a
+  // vertical (revenue | consumer | tribunal) in one call. Idempotent per entry.
+  app.post("/v1/court/config/presets/:preset", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CONFIG_WRITE_ROLES);
+    const preset = (req.params as { preset: string }).preset;
+    const result = await presets.applyPreset(ctx, preset);
+    return reply.code(202).send(result);
   });
 
   // Deactivate (soft-retire) a config entry by id.
