@@ -53,6 +53,19 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ items, count: items.length, asOf, source: "db" });
   });
 
+  // Analytics dashboard summary (NCMS-style clearance rate + pendency age).
+  app.get("/v1/court/cases/analytics", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, COURT_READ_ROLES);
+    const q = req.query as { from?: string; to?: string };
+    const rx = /^\d{4}-\d{2}-\d{2}$/;
+    const from = q.from && rx.test(q.from) ? q.from : "1970-01-01";
+    const to = q.to && rx.test(q.to) ? q.to : new Date().toISOString().slice(0, 10);
+    const a = await repo.caseAnalytics(ctx.tenantId, from, to);
+    const clearanceRatePct = a.instituted > 0 ? Math.round((a.disposed / a.instituted) * 1000) / 10 : null;
+    return reply.send({ period: { from, to }, ...a, clearanceRatePct, source: "db" });
+  });
+
   // Pendency summary — pending-case counts by status.
   app.get("/v1/court/cases/pendency", async (req, reply) => {
     const ctx = resolveContext(req);

@@ -62,6 +62,36 @@ export async function listOverdueCases(
     .offset(offset));
 }
 
+/**
+ * Case analytics for a period [fromDate, toDate] (YYYY-MM-DD), tenant-scoped:
+ * institution & disposal counts within the window, current pending count, and
+ * average / oldest pendency age (days) of still-pending cases. Single aggregate
+ * run inside scopedRead so RLS is enforced on the read path.
+ */
+export type CaseAnalytics = {
+  instituted: number; disposed: number; pending: number;
+  avgPendencyDays: number; oldestPendingDays: number;
+};
+export async function caseAnalytics(tenantId: string, fromDate: string, toDate: string): Promise<CaseAnalytics> {
+  const rows = await scopedRead<Array<{
+    instituted: number; disposed: number; pending: number;
+    avg_pendency_days: number; oldest_pending_days: number;
+  }>>((tx) => tx.execute(sql`
+    select
+      count(*) filter (where filing_date >= ${fromDate} and filing_date <= ${toDate})::int as instituted,
+      count(*) filter (where disposal_date >= ${fromDate} and disposal_date <= ${toDate})::int as disposed,
+      count(*) filter (where disposal_date is null)::int as pending,
+      coalesce(avg(current_date - filing_date) filter (where disposal_date is null), 0)::int as avg_pendency_days,
+      coalesce(max(current_date - filing_date) filter (where disposal_date is null), 0)::int as oldest_pending_days
+    from court.cases where tenant_id = ${tenantId}
+  `) as unknown as Promise<Array<{ instituted: number; disposed: number; pending: number; avg_pendency_days: number; oldest_pending_days: number }>>);
+  const r = rows[0] ?? { instituted: 0, disposed: 0, pending: 0, avg_pendency_days: 0, oldest_pending_days: 0 };
+  return {
+    instituted: r.instituted, disposed: r.disposed, pending: r.pending,
+    avgPendencyDays: r.avg_pendency_days, oldestPendingDays: r.oldest_pending_days,
+  };
+}
+
 /** Pending-case counts grouped by status (disposal_date IS NULL), tenant-scoped. */
 export async function pendencySummary(tenantId: string): Promise<{ status: string; count: number }[]> {
   return scopedRead<{ status: string; count: number }[]>((tx) => tx
