@@ -38,6 +38,10 @@ export const COMMANDS = {
   generateCauseList:          "court.causelist.generate",
   /** payload: { id, courtId, listDate, benchId?, listType? } — list a case onto a slot */
   listCaseOnCauseList:        "court.causelist.list_case",
+  /** §13 registry scrutiny + defect management */
+  recordScrutiny:             "court.scrutiny.record",
+  raiseDefect:                "court.defect.raise",
+  resolveDefect:              "court.defect.resolve",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -66,6 +70,9 @@ export const EVENTS = {
   causeListGenerated:         "court.causelist.generated",
   /** payload: { causeListId, caseId, slot, courtroom } */
   causeListItemAdded:         "court.causelist.item_added",
+  scrutinyRecorded:           "court.scrutiny.recorded",
+  defectRaised:               "court.defect.raised",
+  defectResolved:             "court.defect.resolved",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */

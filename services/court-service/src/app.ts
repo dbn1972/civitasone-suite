@@ -13,6 +13,7 @@ import { hearingRoutes } from "./modules/hearing/routes.js";
 import { filingRoutes } from "./modules/filing/routes.js";
 import { orderRoutes } from "./modules/order/routes.js";
 import { causeListRoutes } from "./modules/cause-list/routes.js";
+import { scrutinyRoutes } from "./modules/scrutiny/routes.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
@@ -67,6 +68,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(filingRoutes);
   await app.register(orderRoutes);
   await app.register(causeListRoutes);
+  await app.register(scrutinyRoutes);
   // await app.register(courtRegistryRoutes);
   // await app.register(causeListRoutes);
   // await app.register(hearingRoutes);
