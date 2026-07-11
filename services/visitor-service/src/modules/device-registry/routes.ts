@@ -42,6 +42,7 @@ import {
 import {
   getDeviceById,
   listDevices,
+  toPublicDevice,
   getAllLocationHealthSummaries,
   getLocationHealthSummary,
   getDeviceAuditLog,
@@ -99,7 +100,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
       query.page,
       query.pageSize,
     );
-    return reply.send({ data: result.data, meta: result.meta });
+    return reply.send({ data: result.data.map(toPublicDevice), meta: result.meta });
   });
 
   /**
@@ -237,7 +238,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     if (!device) {
       throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
     }
-    return reply.send({ data: device });
+    return reply.send({ data: toPublicDevice(device) });
   });
 
   /**

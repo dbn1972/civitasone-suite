@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
+import { scannerDb } from "./shared/scanner-db.js";
 import { runWithTenant } from "@civitasone/db";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -92,7 +93,7 @@ startImageCleanupWorker();
 // Scheduled auto-reject + reminder — checks every 15 minutes for stale pending visit requests.
 // - 4h threshold: sends reminder notification to host (Requirement 3.4)
 // - 24h threshold: auto-rejects and notifies visitor (Requirement 3.5)
-const autoReject = startVisitRequestAutoReject(db, queue, {
+const autoReject = startVisitRequestAutoReject(scannerDb, queue, {
   intervalMs: 15 * 60_000,
   reminderThresholdMs: 4 * 60 * 60_000,
   autoRejectThresholdMs: 24 * 60 * 60_000,
@@ -102,7 +103,7 @@ const autoReject = startVisitRequestAutoReject(db, queue, {
 // Scheduled overstay detection — checks every 10 minutes for visitors past valid_until.
 // - Standard overstay: publishes overstayDetect command (Requirement 6.3)
 // - 2h+ overstay: escalates to security supervisor (Requirement 6.4)
-const overstayDetection = startOvrstayDetection(db, queue, {
+const overstayDetection = startOvrstayDetection(scannerDb, queue, {
   intervalMs: 10 * 60_000,
   escalationThresholdMs: 2 * 60 * 60_000,
   logger: log,
@@ -116,13 +117,13 @@ const noShowDetection = startNoShowDetection(db, queue, {
   warningThresholdMs: 30 * 60_000,
   noShowThresholdMs: 2 * 60 * 60_000,
   logger: log,
-});
+}, scannerDb);
 
 // Scheduled recurring-pass expiry notification — checks daily for active recurring passes
 // expiring within 7 days. Notifies pass holder (SMS) + issuing manager (push).
 // Requirement 12.5: "WHEN a Recurring_Pass expires or is revoked, THE Notification_Service
 // SHALL notify the pass holder and the issuing facility manager."
-const recurringPassExpiry = startRecurringPassExpiryCheck(db, queue, {
+const recurringPassExpiry = startRecurringPassExpiryCheck(scannerDb, queue, {
   intervalMs: 24 * 60 * 60_000,
   daysBeforeExpiry: 7,
   logger: log,
@@ -132,7 +133,7 @@ const recurringPassExpiry = startRecurringPassExpiryCheck(db, queue, {
 // 10+ minutes ago but whose host has not yet acknowledged their arrival.
 // Requirement 16.5: "WHEN a visitor is waiting in the lobby for more than 10 minutes
 // after check-in, THE Notification_Service SHALL send a waiting reminder to the Host."
-const waitingReminder = startWaitingReminderCheck(db, queue, {
+const waitingReminder = startWaitingReminderCheck(scannerDb, queue, {
   intervalMs: 5 * 60_000,
   waitingThresholdMs: 10 * 60_000,
   waitingUpperBoundMs: 15 * 60_000,
@@ -147,14 +148,15 @@ const waitingReminder = startWaitingReminderCheck(db, queue, {
 const nightlyAggregation = startNightlyAggregation(db, {
   intervalMs: 24 * 60 * 60_000,
   logger: log,
-});
+}, scannerDb);
 
 // Scheduled DPDP data-retention PII purge — runs daily, purges PII from visit
 // records whose last activity is older than the retention period (default 365 days).
 // Requirement 18.3: retains anonymized statistical records after purging PII.
-const dataRetentionPurge = startDataRetentionPurge(db, {
+const dataRetentionPurge = startDataRetentionPurge(db, scannerDb, {
   intervalMs: 24 * 60 * 60_000,
   retentionPeriodMs: 365 * 24 * 60 * 60_000,
+  erasureSlaMs: 72 * 60 * 60_000,
   batchSize: 500,
   logger: log,
 });

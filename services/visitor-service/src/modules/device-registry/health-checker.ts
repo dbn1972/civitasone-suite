@@ -24,7 +24,9 @@
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { cache, queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
@@ -84,7 +86,10 @@ export function stopHealthChecker(): void {
  */
 export async function runHealthCheck(): Promise<void> {
   // Query all active devices (across all tenants — this worker is system-level)
-  const activeDevices = await db
+  // Cross-tenant scan via the BYPASSRLS scanner pool — a bare db.select() under
+  // FORCE RLS as visitor_svc returns zero rows, so this worker would never see
+  // any device and never flag one offline.
+  const activeDevices = await scannerDb
     .select()
     .from(devices)
     .where(eq(devices.status, "active"));
@@ -156,7 +161,7 @@ async function transitionToOffline(
   now: Date,
 ): Promise<void> {
   try {
-    await db.transaction(async (tx) => {
+    await runWithTenant(tenantId, () => db.transaction(async (tx) => {
       await tx
         .update(devices)
         .set({ online: false, updatedAt: now })
@@ -178,7 +183,7 @@ async function transitionToOffline(
           lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
         },
       });
-    });
+    }));
 
     log.info({
       event: "device_offline",
@@ -203,7 +208,7 @@ async function transitionToOnline(
   now: Date,
 ): Promise<void> {
   try {
-    await db.transaction(async (tx) => {
+    await runWithTenant(tenantId, () => db.transaction(async (tx) => {
       await tx
         .update(devices)
         .set({ online: true, updatedAt: now })
@@ -224,7 +229,7 @@ async function transitionToOnline(
           name: device.name,
         },
       });
-    });
+    }));
 
     log.info({
       event: "device_online",

@@ -19,20 +19,37 @@ import {
 const RESOURCE = "location";
 
 /**
+ * A location row safe to serialize in API responses / cache: the per-location
+ * RSA key pair is stripped. The PRIVATE key signs pass QR codes and must NEVER
+ * leave the server; the PUBLIC key is only needed server-side (check-in QR
+ * verification reads it via its own scoped query), so it is withheld from read
+ * DTOs too. Callers that legitimately need a key select it explicitly.
+ */
+export type PublicLocationRow = Omit<LocationRow, "rsaPrivateKey" | "rsaPublicKey">;
+
+/** Strip the RSA key pair from a location row before it leaves the service. */
+export function toPublicLocation(row: LocationRow): PublicLocationRow {
+  const { rsaPrivateKey: _priv, rsaPublicKey: _pub, ...rest } = row;
+  return rest;
+}
+
+/**
  * `visitor:{tenant}:location:{id}` — cache.getOrLoad read-through, per
  * Requirement 22.2. Returns null (and does not cache) when the location
  * does not exist or belongs to another tenant.
  */
-export async function getLocationById(tenantId: string, id: string): Promise<LocationRow | null> {
-  return cache.getOrLoad<LocationRow>(cache.makeKey(tenantId, RESOURCE, id), async () => {
+export async function getLocationById(tenantId: string, id: string): Promise<PublicLocationRow | null> {
+  return cache.getOrLoad<PublicLocationRow>(cache.makeKey(tenantId, RESOURCE, id), async () => {
     const rows = await scopedRead((tx) => tx.select().from(locations)
       .where(and(eq(locations.id, id), eq(locations.tenantId, tenantId))));
-    return rows[0] ?? null;
+    const row = rows[0];
+    return row ? toPublicLocation(row) : null;
   });
 }
 
-export async function listLocations(tenantId: string): Promise<LocationRow[]> {
-  return scopedRead((tx) => tx.select().from(locations).where(eq(locations.tenantId, tenantId)));
+export async function listLocations(tenantId: string): Promise<PublicLocationRow[]> {
+  const rows = await scopedRead((tx) => tx.select().from(locations).where(eq(locations.tenantId, tenantId)));
+  return rows.map(toPublicLocation);
 }
 
 export interface CreateLocationInput {
@@ -48,7 +65,7 @@ export async function createLocation(
   tenantId: string,
   actorId: string,
   input: CreateLocationInput,
-): Promise<LocationRow> {
+): Promise<PublicLocationRow> {
   const now = new Date();
   const id = randomUUID();
   const row: LocationInsert = {
@@ -68,7 +85,7 @@ export async function createLocation(
   };
   const [created] = await db.transaction((tx) => tx.insert(locations).values(row).returning());
   await cache.invalidate(cache.makeKey(tenantId, RESOURCE, id));
-  return created!;
+  return toPublicLocation(created!);
 }
 
 export async function getAreaById(tenantId: string, id: string): Promise<AreaRow | null> {

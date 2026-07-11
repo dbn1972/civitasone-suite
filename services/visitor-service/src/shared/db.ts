@@ -19,19 +19,21 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://visitor_svc:***@
 
 export const sqlClient = createSqlClient(url);
 
-const _rawDb = drizzle(sqlClient, {
-  schema: {
-    ...checkInModule,
-    ...digitalPassModule,
-    ...visitRequestModule,
-    ...locationModule,
-    ...dpdpModule,
-    ...analyticsModule,
-    blacklistEntries,
-    watchlistEntries,
-    ...outboxSchema,
-  },
-});
+// Exported so the cross-tenant scanner pool (shared/scanner-db.ts) registers the
+// exact same tables without duplicating the module list.
+export const visitorSchemaMap = {
+  ...checkInModule,
+  ...digitalPassModule,
+  ...visitRequestModule,
+  ...locationModule,
+  ...dpdpModule,
+  ...analyticsModule,
+  blacklistEntries,
+  watchlistEntries,
+  ...outboxSchema,
+};
+
+const _rawDb = drizzle(sqlClient, { schema: visitorSchemaMap });
 
 export const db = wrapWithTenantGuc(_rawDb);
 export type Db = typeof _rawDb;

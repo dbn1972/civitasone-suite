@@ -16,7 +16,7 @@ import { Redis } from "ioredis";
 import type { Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { badgeTemplates, printJobs } from "./schema.js";
@@ -252,15 +252,17 @@ export function registerBadgePrintConsumers(queue: Queue): void {
         throw new Error(`print job '${p.jobId}' not found for tenant '${msg.tenantId}'`);
       }
 
-      await tx
-        .update(printJobs)
-        .set({
+      await versionedUpdate(tx, printJobs, {
+        id: p.jobId,
+        tenantId: msg.tenantId,
+        expectedVersion: job.version,
+        set: {
           status: "completed",
           completedAt: now,
           updatedAt: now,
-          version: job.version + 1,
-        })
-        .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)));
+        },
+        entity: "print_job",
+      });
 
       // Outbox: printJobCompleted event
       await enqueue(tx, {
@@ -320,26 +322,30 @@ export function registerBadgePrintConsumers(queue: Queue): void {
       if (shouldRetry(job.retryCount)) {
         // Can retry: increment retry count, compute next retry time, keep queued
         const nextRetryAt = computeNextRetryAt(job.retryCount, now);
-        await tx
-          .update(printJobs)
-          .set({
+        await versionedUpdate(tx, printJobs, {
+          id: p.jobId,
+          tenantId: msg.tenantId,
+          expectedVersion: job.version,
+          set: {
             retryCount: job.retryCount + 1,
             nextRetryAt,
             status: "queued",
             updatedAt: now,
-            version: job.version + 1,
-          })
-          .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)));
+          },
+          entity: "print_job",
+        });
       } else {
         // Max retries reached: mark as failed
-        await tx
-          .update(printJobs)
-          .set({
+        await versionedUpdate(tx, printJobs, {
+          id: p.jobId,
+          tenantId: msg.tenantId,
+          expectedVersion: job.version,
+          set: {
             status: "failed",
             updatedAt: now,
-            version: job.version + 1,
-          })
-          .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)));
+          },
+          entity: "print_job",
+        });
 
         // Alert facility ops via notification
         await enqueue(tx, {
@@ -412,15 +418,17 @@ export function registerBadgePrintConsumers(queue: Queue): void {
 
       // Re-enqueue with queued status
       const score = computeJobScore(job.priority as "standard" | "high", now);
-      await tx
-        .update(printJobs)
-        .set({
+      await versionedUpdate(tx, printJobs, {
+        id: p.jobId,
+        tenantId: msg.tenantId,
+        expectedVersion: job.version,
+        set: {
           status: "queued",
           nextRetryAt: null,
           updatedAt: now,
-          version: job.version + 1,
-        })
-        .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)));
+        },
+        entity: "print_job",
+      });
 
       await enqueue(tx, {
         topic: EVENTS.printJobCreated,
@@ -489,16 +497,18 @@ export function registerBadgePrintConsumers(queue: Queue): void {
       const score = computeJobScore(job.priority as "standard" | "high", now);
 
       // Update the job's device assignment and reset status to queued
-      await tx
-        .update(printJobs)
-        .set({
+      await versionedUpdate(tx, printJobs, {
+        id: p.jobId,
+        tenantId: msg.tenantId,
+        expectedVersion: job.version,
+        set: {
           deviceId: p.deviceId,
           status: "queued",
           nextRetryAt: null,
           updatedAt: now,
-          version: job.version + 1,
-        })
-        .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)));
+        },
+        entity: "print_job",
+      });
 
       await enqueue(tx, {
         topic: EVENTS.printJobCreated,
@@ -661,15 +671,17 @@ export function registerBadgePrintConsumers(queue: Queue): void {
       });
 
       // Archive the previous version
-      await tx
-        .update(badgeTemplates)
-        .set({
+      await versionedUpdate(tx, badgeTemplates, {
+        id: p.templateId,
+        tenantId: msg.tenantId,
+        expectedVersion: current.version,
+        set: {
           status: "archived",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: current.version + 1,
-        })
-        .where(and(eq(badgeTemplates.id, p.templateId), eq(badgeTemplates.tenantId, msg.tenantId)));
+        },
+        entity: "badge_template",
+      });
 
       // Outbox: badgeTemplateUpdated event
       await enqueue(tx, {

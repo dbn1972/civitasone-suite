@@ -12,7 +12,9 @@
  */
 import { pino } from "pino";
 import { and, eq, lte } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { scanSessions } from "./schema.js";
 
 const log = pino({ name: "document-scan-image-cleanup" });
@@ -64,7 +66,9 @@ export async function runCleanupCycle(): Promise<number> {
   const now = new Date();
 
   // Find scan sessions with expired images that have not been deleted
-  const expiredSessions = await db
+  // Cross-tenant scan via the BYPASSRLS scanner pool (bare db.select() under
+  // FORCE RLS as visitor_svc returns zero rows -> expired images never purged).
+  const expiredSessions = await scannerDb
     .select({
       id: scanSessions.id,
       tenantId: scanSessions.tenantId,
@@ -88,10 +92,14 @@ export async function runCleanupCycle(): Promise<number> {
   for (const session of expiredSessions) {
     if (!session.imageStorageKey) {
       // No storage key — just mark as deleted
-      await db
-        .update(scanSessions)
-        .set({ imageDeleted: true })
-        .where(eq(scanSessions.id, session.id));
+      await runWithTenant(session.tenantId, () =>
+        db.transaction((tx) =>
+          tx
+            .update(scanSessions)
+            .set({ imageDeleted: true })
+            .where(and(eq(scanSessions.id, session.id), eq(scanSessions.tenantId, session.tenantId))),
+        ),
+      );
       deletedCount++;
       continue;
     }
@@ -100,11 +108,15 @@ export async function runCleanupCycle(): Promise<number> {
       // Delete from S3/MinIO
       await deleteFromStorage(session.imageStorageKey);
 
-      // Mark as deleted in database
-      await db
-        .update(scanSessions)
-        .set({ imageDeleted: true })
-        .where(eq(scanSessions.id, session.id));
+      // Mark as deleted in database (inside the session's tenant scope for RLS)
+      await runWithTenant(session.tenantId, () =>
+        db.transaction((tx) =>
+          tx
+            .update(scanSessions)
+            .set({ imageDeleted: true })
+            .where(and(eq(scanSessions.id, session.id), eq(scanSessions.tenantId, session.tenantId))),
+        ),
+      );
 
       deletedCount++;
 

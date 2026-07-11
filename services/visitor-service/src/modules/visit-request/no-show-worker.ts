@@ -21,6 +21,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, lt, isNotNull, inArray } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { visitRequests } from "./schema.js";
@@ -28,6 +29,7 @@ import { digitalPasses } from "../digital-pass/schema.js";
 import { vehiclePasses } from "../vehicle-pass/schema.js";
 import { checkIns } from "../check-in/schema.js";
 import type { Db } from "../../shared/db.js";
+import { versionedUpdate } from "../../shared/outbox.js";
 
 export interface NoShowWorkerOptions {
   /** Interval between checks in milliseconds. Default: 15 minutes. */
@@ -48,6 +50,7 @@ export function startNoShowDetection(
   db: Db,
   queue: Queue,
   opts: NoShowWorkerOptions = {},
+  scannerDb: Db = db,
 ): NodeJS.Timeout {
   const {
     intervalMs = 15 * 60_000,
@@ -59,7 +62,7 @@ export function startNoShowDetection(
   const timer = setInterval(() => {
     void (async () => {
       try {
-        await processNoShowCycle(db, queue, warningThresholdMs, noShowThresholdMs, logger);
+        await processNoShowCycle(db, queue, warningThresholdMs, noShowThresholdMs, logger, scannerDb);
       } catch (err) {
         // Non-critical maintenance — swallow to avoid crashing the worker
         logger?.warn(
@@ -82,6 +85,7 @@ export async function processNoShowCycle(
   warningThresholdMs: number,
   noShowThresholdMs: number,
   logger?: { info: (...args: any[]) => void; warn: (...args: any[]) => void },
+  scannerDb: Db = db,
 ): Promise<{ warnings: number; noShows: number }> {
   const now = new Date();
   const warningCutoff = new Date(now.getTime() - warningThresholdMs);
@@ -90,7 +94,7 @@ export async function processNoShowCycle(
   // ── Step 1: Find visit request IDs that have a check-in (exclude) ────
   // A check-in is linked to a visit request through the digital pass.
   // Get all pass IDs that have at least one check-in (direction='in').
-  const checkedInPassRows = await db
+  const checkedInPassRows = await scannerDb
     .selectDistinct({ passId: checkIns.passId })
     .from(checkIns)
     .where(eq(checkIns.direction, "in"));
@@ -99,7 +103,7 @@ export async function processNoShowCycle(
   // Map checked-in pass IDs to their visit request IDs
   let visitReqIdsWithCheckIn: string[] = [];
   if (checkedInPassIds.length > 0) {
-    const passToVisitRows = await db
+    const passToVisitRows = await scannerDb
       .selectDistinct({ visitRequestId: digitalPasses.visitRequestId })
       .from(digitalPasses)
       .where(inArray(digitalPasses.id, checkedInPassIds));
@@ -109,7 +113,7 @@ export async function processNoShowCycle(
 
   // ── Step 2: Auto no-show for requests older than 2h ──────────────────
   // Query approved visit requests with scheduledAt before the no-show cutoff
-  const noShowCandidates = await db
+  const noShowCandidates = await scannerDb
     .select({
       id: visitRequests.id,
       tenantId: visitRequests.tenantId,
@@ -136,24 +140,29 @@ export async function processNoShowCycle(
     if (visitReqsWithCheckInSet.has(req.id)) continue;
 
     try {
-      // Transition to no_show status
-      await db
-        .update(visitRequests)
-        .set({
-          status: "no_show",
-          updatedAt: now,
-          updatedBy: "00000000-0000-0000-0000-000000000000", // system
-          version: req.version + 1,
-        })
-        .where(
-          and(
-            eq(visitRequests.id, req.id),
-            eq(visitRequests.version, req.version),
-          ),
-        );
+      // Transition to no_show status inside the row's tenant scope so the
+      // write is RLS-checked. versionedUpdate is a compare-and-swap on version:
+      // a concurrent check-in that already advanced the row throws
+      // VersionConflictError, which the surrounding try/catch treats as "raced,
+      // skip" (no duplicate no_show event).
+      await runWithTenant(req.tenantId, () =>
+        db.transaction((tx) =>
+          versionedUpdate(tx, visitRequests, {
+            id: req.id,
+            tenantId: req.tenantId,
+            expectedVersion: req.version,
+            set: {
+              status: "no_show",
+              updatedAt: now,
+              updatedBy: "00000000-0000-0000-0000-000000000000", // system
+            },
+            entity: "visit_request",
+          }),
+        ),
+      );
 
-      // Release parking slot if vehicle pass exists
-      const vehiclePassRows = await db
+      // Release parking slot if vehicle pass exists (cross-tenant-safe read).
+      const vehiclePassRows = await scannerDb
         .select({
           id: vehiclePasses.id,
           parkingSlotId: vehiclePasses.parkingSlotId,
@@ -212,7 +221,7 @@ export async function processNoShowCycle(
   }
 
   // ── Step 3: Warning for requests 30m+ past scheduled but not yet 2h ──
-  const warningCandidates = await db
+  const warningCandidates = await scannerDb
     .select({
       id: visitRequests.id,
       tenantId: visitRequests.tenantId,

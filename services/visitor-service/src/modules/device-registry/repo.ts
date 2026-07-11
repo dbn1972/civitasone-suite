@@ -18,6 +18,29 @@ import { cache } from "../../shared/infra.js";
 import { devices, deviceAuditLog, type DeviceRow, type DeviceAuditLogRow } from "./schema.js";
 import { setDeviceLoader, type DeviceRecord } from "./device-auth.js";
 
+/**
+ * A device row safe to serialize in API responses: the device authentication
+ * secrets — the (encrypted) bearer-token hashes and the mTLS certificate
+ * fingerprint — are stripped. These are credential material used only by the
+ * device-auth lookup path (getDeviceByTokenHash / getDeviceByCertFingerprint)
+ * and MUST NOT be echoed back in admin read endpoints.
+ */
+export type PublicDeviceRow = Omit<
+  DeviceRow,
+  "deviceTokenHash" | "oldTokenHash" | "certificateFingerprint"
+>;
+
+/** Strip device auth secrets from a device row before it leaves the service. */
+export function toPublicDevice(row: DeviceRow): PublicDeviceRow {
+  const {
+    deviceTokenHash: _t,
+    oldTokenHash: _o,
+    certificateFingerprint: _c,
+    ...rest
+  } = row;
+  return rest;
+}
+
 const RESOURCE = "device";
 
 // ── Single-entity lookups ─────────────────────────────────────────────────

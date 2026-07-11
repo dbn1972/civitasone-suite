@@ -35,6 +35,7 @@ import {
 import { verifyPassBody, checkInBody, checkOutBody, gateSyncParam } from "./validators.js";
 import * as commands from "./commands.js";
 import { getDeviceBoundToGate } from "../device-registry/repo.js";
+import { loadGateSyncSnapshot } from "./gate-sync.js";
 import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 
 // Gate-terminal roles: security personnel operating gates + admin staff.
@@ -224,17 +225,7 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
       revokedPassIds: string[];
       blacklistHashes: string[];
       watchlistHashes: string[];
-    }>(cacheKey, async () => {
-      // Fallback: return empty sets when no data is cached yet.
-      // The revocation and screening stores populate these sets as passes
-      // are revoked and blacklist/watchlist entries are created. A full sync
-      // can be triggered by the operational runbook if needed.
-      return {
-        revokedPassIds: [],
-        blacklistHashes: [],
-        watchlistHashes: [],
-      };
-    });
+    }>(cacheKey, () => loadGateSyncSnapshot(ctx.tenantId, gate.locationId));
 
     return reply.send({
       data: {
