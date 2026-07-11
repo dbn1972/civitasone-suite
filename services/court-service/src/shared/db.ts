@@ -4,6 +4,7 @@ import { createSqlClient, getCurrentTenantId } from "@civitasone/db";
 import { caseRegistrySchema } from "../modules/case-registry/schema.js";
 import { courtRegistrySchema } from "../modules/court-registry/schema.js";
 import { hearingSchema } from "../modules/hearing/schema.js";
+import { filingSchema } from "../modules/filing/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 /**
@@ -38,6 +39,7 @@ const schema = {
   ...caseRegistrySchema,
   ...courtRegistrySchema,
   ...hearingSchema,
+  ...filingSchema,
   ...outboxSchema,
   // ...courtRegistrySchema, ...causeListSchema, ...hearingSchema, (added per module task)
 };
