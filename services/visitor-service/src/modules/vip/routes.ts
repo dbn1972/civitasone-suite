@@ -23,7 +23,7 @@ import { resolveContext, HttpError } from "../../shared/context.js";
 import { assertCanViewVipLog } from "./domain.js";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { visitRequests } from "../visit-request/schema.js";
 
 // ---------------------------------------------------------------------------
@@ -97,10 +97,10 @@ export async function vipRoutes(app: FastifyInstance): Promise<void> {
       conditions.push(eq(visitRequests.locationId, query.locationId));
     }
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(visitRequests)
-      .where(and(...conditions));
+      .where(and(...conditions)));
 
     return reply.send({ data: rows });
   });

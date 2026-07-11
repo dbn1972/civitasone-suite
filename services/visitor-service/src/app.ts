@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -53,6 +53,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
+
+  // Visitor-service hardening: source the RLS tenant from the AUTHENTICATED
+  // token (req.ctx, populated by authPlugin earlier), NOT the client-supplied
+  // x-tenant-id header. The header-based hook above is spoofable; the verified
+  // JWT must win. Sets the app.tenant_id GUC (via AsyncLocalStorage) for
+  // token-based requests so RLS enforces isolation on reads AND writes.
+  // Mirrors court-service / meeting-service (commit 904c302).
+  app.addHook("onRequest", async (req) => {
+    const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+    if (tid) tenantStorage.enterWith({ tenantId: tid });
+  });
 
   registerOpsRoutes(app, { service: "visitor-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 

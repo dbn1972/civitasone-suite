@@ -17,7 +17,7 @@
  * provided.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { logPiiAccess } from "../dpdp/consent.js";
 import { visitRequests, type VisitRequestRow } from "./schema.js";
@@ -41,13 +41,15 @@ export async function listVisitRequests(tenantId: string, filter: ListVisitReque
   if (filter.status !== undefined) conditions.push(eq(visitRequests.status, filter.status));
   if (filter.locationId !== undefined) conditions.push(eq(visitRequests.locationId, filter.locationId));
   if (filter.hostEmployeeId !== undefined) conditions.push(eq(visitRequests.hostEmployeeId, filter.hostEmployeeId));
-  const rows = await db.select().from(visitRequests).where(and(...conditions));
+  const rows = await scopedRead((tx) => tx.select().from(visitRequests).where(and(...conditions)));
 
   // Requirement 18.6: log PII access for each row containing decrypted PII
   if (piiCtx && rows.length > 0) {
-    for (const row of rows) {
-      await logPiiAccess(db, tenantId, piiCtx.actorId, "visit_request", row.id, "list_view", piiCtx.correlationId);
-    }
+    await scopedRead(async (tx) => {
+      for (const row of rows) {
+        await logPiiAccess(tx, tenantId, piiCtx.actorId, "visit_request", row.id, "list_view", piiCtx.correlationId);
+      }
+    });
   }
 
   return rows;
@@ -61,14 +63,14 @@ export async function listVisitRequests(tenantId: string, filter: ListVisitReque
  */
 export async function getVisitRequestById(tenantId: string, id: string, piiCtx?: PiiAccessContext): Promise<VisitRequestRow | null> {
   const row = await cache.getOrLoad<VisitRequestRow>(cache.makeKey(tenantId, RESOURCE_VISIT_REQUEST, id), async () => {
-    const rows = await db.select().from(visitRequests)
-      .where(and(eq(visitRequests.id, id), eq(visitRequests.tenantId, tenantId)));
+    const rows = await scopedRead((tx) => tx.select().from(visitRequests)
+      .where(and(eq(visitRequests.id, id), eq(visitRequests.tenantId, tenantId))));
     return rows[0] ?? null;
   });
 
   // Requirement 18.6: log PII access when a row with decrypted PII is returned
   if (piiCtx && row) {
-    await logPiiAccess(db, tenantId, piiCtx.actorId, "visit_request", row.id, "detail_view", piiCtx.correlationId);
+    await scopedRead((tx) => logPiiAccess(tx, tenantId, piiCtx.actorId, "visit_request", row.id, "detail_view", piiCtx.correlationId));
   }
 
   return row;

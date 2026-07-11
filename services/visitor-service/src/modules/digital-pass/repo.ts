@@ -7,7 +7,7 @@
  * is read-only.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { digitalPasses, type DigitalPassRow } from "./schema.js";
 
@@ -24,8 +24,8 @@ export async function getPassById(tenantId: string, id: string): Promise<Digital
   return cache.getOrLoad<DigitalPassRow>(
     cache.makeKey(tenantId, RESOURCE_PASS, id),
     async () => {
-      const rows = await db.select().from(digitalPasses)
-        .where(and(eq(digitalPasses.id, id), eq(digitalPasses.tenantId, tenantId)));
+      const rows = await scopedRead((tx) => tx.select().from(digitalPasses)
+        .where(and(eq(digitalPasses.id, id), eq(digitalPasses.tenantId, tenantId))));
       return rows[0] ?? null;
     },
     PASS_TTL_SECONDS,

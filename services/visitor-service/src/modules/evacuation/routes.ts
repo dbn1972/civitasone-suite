@@ -26,23 +26,56 @@ import * as commands from "./commands.js";
 // fire wardens, and admin-level roles.
 const WRITE_ROLES = ["security_admin", "fire_warden", "tenant_admin", "super_admin"];
 
+// Break-glass roles allowed to pull the (decrypted-PII) evacuation roster /
+// headcount. The roster is sensitive PII, so it is NOT anonymous: a valid JWT
+// carrying one of these roles is required IN ADDITION to the IP allowlist.
+const EMERGENCY_READ_ROLES = ["security_admin", "fire_warden", "gate_terminal", "tenant_admin", "super_admin"];
+
 /**
- * IP-allowlist middleware for emergency GET endpoints.
+ * IP-allowlist for the emergency GET endpoints (roster / headcount).
  *
- * Reads `EVACUATION_ALLOWED_IPS` from environment at startup (comma-separated
- * list of IPs or CIDRs — for simplicity, only exact IP matching is
- * implemented; CIDR range support can be added later if needed).
+ * `EVACUATION_ALLOWED_IPS` is a comma-separated list of exact IPv4 addresses
+ * and/or CIDR ranges (e.g. "10.0.0.5,192.168.1.0/24"). A request is allowed
+ * only if the client IP matches an entry.
  *
- * When the env var is unset or empty, ALL IPs are allowed (dev/test
- * convenience — production deployments MUST set this variable).
+ * FAIL-CLOSED: when the variable is unset or empty, ALL requests are DENIED
+ * (this replaces the previous fail-open "empty = allow all" default, a P0).
+ * Production deployments MUST set an explicit allowlist for the break-glass
+ * emergency console / PA system. The env is read per-request so the allowlist
+ * can be provisioned without a restart.
  */
-function parseAllowedIps(): Set<string> {
+function parseAllowedRules(): string[] {
   const raw = process.env.EVACUATION_ALLOWED_IPS ?? "";
-  if (!raw.trim()) return new Set(); // empty = allow all (dev mode)
-  return new Set(raw.split(",").map((ip) => ip.trim()).filter(Boolean));
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-const allowedIps = parseAllowedIps();
+/** Parse an IPv4 dotted-quad into a 32-bit unsigned int, or null if invalid. */
+function ipv4ToInt(ip: string): number | null {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip.trim());
+  if (!m) return null;
+  let out = 0;
+  for (let i = 1; i <= 4; i++) {
+    const octet = Number(m[i]);
+    if (octet > 255) return null;
+    out = (out << 8) | octet;
+  }
+  return out >>> 0;
+}
+
+/** True if `ip` matches `rule` — either an exact IPv4 or an `a.b.c.d/len` CIDR. */
+function ipMatchesRule(ip: string, rule: string): boolean {
+  if (rule.includes("/")) {
+    const [net, lenStr] = rule.split("/");
+    const len = Number(lenStr);
+    const netInt = ipv4ToInt(net ?? "");
+    const ipInt = ipv4ToInt(ip);
+    if (netInt === null || ipInt === null || !Number.isInteger(len) || len < 0 || len > 32) return false;
+    if (len === 0) return true;
+    const mask = (0xffffffff << (32 - len)) >>> 0;
+    return (netInt & mask) === (ipInt & mask);
+  }
+  return rule === ip;
+}
 
 function getClientIp(req: FastifyRequest): string {
   // Prefer X-Forwarded-For (first entry) from gateway/load balancer, fall
@@ -57,10 +90,13 @@ function getClientIp(req: FastifyRequest): string {
 }
 
 function requireAllowedIp(req: FastifyRequest): void {
-  // If the allowlist is empty (env not set), skip check (dev/test mode).
-  if (allowedIps.size === 0) return;
+  const rules = parseAllowedRules();
+  // FAIL-CLOSED: no allowlist configured => deny (never allow-all).
+  if (rules.length === 0) {
+    throw new HttpError(403, "IP_NOT_ALLOWED", "emergency endpoints require a configured IP allowlist");
+  }
   const clientIp = getClientIp(req);
-  if (!allowedIps.has(clientIp)) {
+  if (!rules.some((rule) => ipMatchesRule(clientIp, rule))) {
     throw new HttpError(403, "IP_NOT_ALLOWED", "request origin is not authorized for emergency endpoints");
   }
 }
@@ -72,9 +108,16 @@ export async function evacuationRoutes(app: FastifyInstance): Promise<void> {
    * Returns full roster for a given location + tenant (query params).
    */
   app.get("/v1/visitor/evacuation/roster", async (req: FastifyRequest, reply: FastifyReply) => {
+    // Break-glass but NOT anonymous: the roster is decrypted-PII. Require a valid
+    // JWT (authPlugin already 401s a missing/invalid token) carrying an emergency
+    // role, THEN the fail-closed IP allowlist.
+    const ctx = resolveContext(req);
+    requireRole(ctx, EMERGENCY_READ_ROLES);
     requireAllowedIp(req);
     const query = rosterQuery.parse(req.query);
-    const roster = await getFullRoster(query.tenantId, query.locationId);
+    // Tenant comes from the AUTHENTICATED token, never the (spoofable) query
+    // param, so a token for tenant A cannot pull tenant B's roster.
+    const roster = await getFullRoster(ctx.tenantId, query.locationId);
     return reply.send({ data: roster });
   });
 
@@ -84,9 +127,11 @@ export async function evacuationRoutes(app: FastifyInstance): Promise<void> {
    * Returns headcount for a given location + tenant.
    */
   app.get("/v1/visitor/evacuation/count", async (req: FastifyRequest, reply: FastifyReply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, EMERGENCY_READ_ROLES);
     requireAllowedIp(req);
     const query = rosterQuery.parse(req.query);
-    const count = await getVisitorCount(query.tenantId, query.locationId);
+    const count = await getVisitorCount(ctx.tenantId, query.locationId);
     return reply.send({ data: { count } });
   });
 

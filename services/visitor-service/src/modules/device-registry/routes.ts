@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { deviceAuth } from "./device-auth.js";
 import { devices } from "./schema.js";
@@ -190,7 +191,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     }, 90);
 
     // 2. Update device lastSeenAt and firmwareVersion in DB.
-    await db
+    await runWithTenant(deviceCtx.tenantId, () => db.transaction((tx) => tx
       .update(devices)
       .set({
         lastSeenAt: now,
@@ -203,7 +204,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
           eq(devices.id, deviceCtx.deviceId),
           eq(devices.tenantId, deviceCtx.tenantId),
         ),
-      );
+      )));
 
     // 3. Check for pending config and return it in the response.
     const device = await getDeviceById(deviceCtx.tenantId, deviceCtx.deviceId);

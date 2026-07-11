@@ -63,8 +63,8 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     // Requirement 18.1: capture explicit consent before any PII write.
     // The visitor implicitly consents by submitting the form; we log which
     // data fields are collected and the stated purposes.
-    await logConsent(
-      db,
+    await db.transaction((tx) => logConsent(
+      tx,
       ctx.tenantId,
       body.visitorPhone, // non-PII visitor reference (phone used as identifier before visit ID exists)
       "visit_management,security,emergency_contact",
@@ -73,7 +73,7 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
         if (f === "identity_doc") return body.identityDocRef !== undefined;
         return true;
       }),
-    );
+    ));
 
     // zod's `.nullable().optional()` fields carry an explicit `| undefined`
     // arm (exactOptionalPropertyTypes-incompatible with commands.ts's plain

@@ -5,7 +5,7 @@
 import { buildApp } from "./app.js";
 import { sqlClient } from "./shared/db.js";
 
-const port = Number(process.env.PORT ?? 3032);
+const port = Number(process.env.PORT ?? 3035);
 const app = await buildApp();
 
 await app.listen({ port, host: process.env.BIND_HOST ?? "127.0.0.1" });

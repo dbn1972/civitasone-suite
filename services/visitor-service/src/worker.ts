@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
@@ -38,6 +39,23 @@ const log = pino({ name: "visitor-worker" });
 
 // Fail-fast if VISITOR_PII_KEY is absent/too short so the worker never runs fail-open.
 assertPiiKeyConfigured();
+
+// RLS write-path enforcement: visitor.* tables are FORCE ROW LEVEL SECURITY, so
+// under the NOBYPASSRLS visitor_svc role a consumer can only read/write its
+// tenant's rows when app.tenant_id is set. Wrap every consumer handler so the
+// message's tenant context is active for its duration — getCurrentTenantId()
+// then returns msg.tenantId and wrapWithTenantGuc sets the GUC on the handler's
+// db.transaction(). Single-point wrap mirrors meeting-service's makeRouter
+// runWithTenant (commit 904c302).
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 // Module consumer registrations — added one per module as each is scaffolded.
 registerBlacklistConsumers(queue);

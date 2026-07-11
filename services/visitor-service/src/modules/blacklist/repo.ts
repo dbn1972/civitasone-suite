@@ -16,7 +16,7 @@
  * provided.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { logPiiAccess } from "../dpdp/consent.js";
 import {
@@ -41,13 +41,15 @@ export async function listBlacklistEntries(tenantId: string, filter: ListBlackli
   const conditions = [eq(blacklistEntries.tenantId, tenantId)];
   if (filter.status !== undefined) conditions.push(eq(blacklistEntries.status, filter.status));
   if (filter.locationId !== undefined) conditions.push(eq(blacklistEntries.locationId, filter.locationId));
-  const rows = await db.select().from(blacklistEntries).where(and(...conditions));
+  const rows = await scopedRead((tx) => tx.select().from(blacklistEntries).where(and(...conditions)));
 
   // Requirement 18.6: log PII access for each row containing decrypted personName
   if (piiCtx && rows.length > 0) {
-    for (const row of rows) {
-      await logPiiAccess(db, tenantId, piiCtx.actorId, "blacklist", row.id, "list_view", piiCtx.correlationId);
-    }
+    await scopedRead(async (tx) => {
+      for (const row of rows) {
+        await logPiiAccess(tx, tenantId, piiCtx.actorId, "blacklist", row.id, "list_view", piiCtx.correlationId);
+      }
+    });
   }
 
   return rows;
@@ -60,14 +62,14 @@ export async function listBlacklistEntries(tenantId: string, filter: ListBlackli
  */
 export async function getBlacklistEntryById(tenantId: string, id: string, piiCtx?: PiiAccessContext): Promise<BlacklistEntryRow | null> {
   const row = await cache.getOrLoad<BlacklistEntryRow>(cache.makeKey(tenantId, RESOURCE_BLACKLIST, id), async () => {
-    const rows = await db.select().from(blacklistEntries)
-      .where(and(eq(blacklistEntries.id, id), eq(blacklistEntries.tenantId, tenantId)));
+    const rows = await scopedRead((tx) => tx.select().from(blacklistEntries)
+      .where(and(eq(blacklistEntries.id, id), eq(blacklistEntries.tenantId, tenantId))));
     return rows[0] ?? null;
   });
 
   // Requirement 18.6: log PII access when a row with decrypted PII is returned
   if (piiCtx && row) {
-    await logPiiAccess(db, tenantId, piiCtx.actorId, "blacklist", row.id, "detail_view", piiCtx.correlationId);
+    await scopedRead((tx) => logPiiAccess(tx, tenantId, piiCtx.actorId, "blacklist", row.id, "detail_view", piiCtx.correlationId));
   }
 
   return row;
@@ -80,13 +82,15 @@ export interface ListWatchlistFilter {
 export async function listWatchlistEntries(tenantId: string, filter: ListWatchlistFilter = {}, piiCtx?: PiiAccessContext): Promise<WatchlistEntryRow[]> {
   const conditions = [eq(watchlistEntries.tenantId, tenantId)];
   if (filter.locationId !== undefined) conditions.push(eq(watchlistEntries.locationId, filter.locationId));
-  const rows = await db.select().from(watchlistEntries).where(and(...conditions));
+  const rows = await scopedRead((tx) => tx.select().from(watchlistEntries).where(and(...conditions)));
 
   // Requirement 18.6: log PII access for each row containing decrypted personName
   if (piiCtx && rows.length > 0) {
-    for (const row of rows) {
-      await logPiiAccess(db, tenantId, piiCtx.actorId, "watchlist", row.id, "list_view", piiCtx.correlationId);
-    }
+    await scopedRead(async (tx) => {
+      for (const row of rows) {
+        await logPiiAccess(tx, tenantId, piiCtx.actorId, "watchlist", row.id, "list_view", piiCtx.correlationId);
+      }
+    });
   }
 
   return rows;

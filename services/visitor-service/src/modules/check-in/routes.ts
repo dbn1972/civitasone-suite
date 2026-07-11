@@ -18,7 +18,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { verifyPassQr, type PassQrPayload } from "../../shared/qr-crypto.js";
 import { gates, locations } from "../location/schema.js";
@@ -57,20 +57,20 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const body = verifyPassBody.parse(req.body);
 
     // 1. Resolve the gate to determine location_id and area_id for scope checks.
-    const gateRows = await db
+    const gateRows = await scopedRead((tx) => tx
       .select()
       .from(gates)
       .where(and(eq(gates.id, body.gateId), eq(gates.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const gate = gateRows[0];
     if (!gate) throw new HttpError(404, "GATE_NOT_FOUND", "gate not found");
 
     // 2. Resolve the location's RSA public key for QR signature verification.
-    const locationRows = await db
+    const locationRows = await scopedRead((tx) => tx
       .select({ rsaPublicKey: locations.rsaPublicKey })
       .from(locations)
       .where(and(eq(locations.id, gate.locationId), eq(locations.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const location = locationRows[0];
     if (!location?.rsaPublicKey) {
       throw new HttpError(500, "LOCATION_KEY_MISSING", "location RSA public key not configured");
@@ -209,11 +209,11 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const { gateId } = gateSyncParam.parse(req.params);
 
     // Validate the gate exists and belongs to the tenant.
-    const gateRows = await db
+    const gateRows = await scopedRead((tx) => tx
       .select()
       .from(gates)
       .where(and(eq(gates.id, gateId), eq(gates.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const gate = gateRows[0];
     if (!gate) throw new HttpError(404, "GATE_NOT_FOUND", "gate not found");
 

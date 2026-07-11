@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import {
   locations, areas, parkingSlots,
@@ -25,14 +25,14 @@ const RESOURCE = "location";
  */
 export async function getLocationById(tenantId: string, id: string): Promise<LocationRow | null> {
   return cache.getOrLoad<LocationRow>(cache.makeKey(tenantId, RESOURCE, id), async () => {
-    const rows = await db.select().from(locations)
-      .where(and(eq(locations.id, id), eq(locations.tenantId, tenantId)));
+    const rows = await scopedRead((tx) => tx.select().from(locations)
+      .where(and(eq(locations.id, id), eq(locations.tenantId, tenantId))));
     return rows[0] ?? null;
   });
 }
 
 export async function listLocations(tenantId: string): Promise<LocationRow[]> {
-  return db.select().from(locations).where(eq(locations.tenantId, tenantId));
+  return scopedRead((tx) => tx.select().from(locations).where(eq(locations.tenantId, tenantId)));
 }
 
 export interface CreateLocationInput {
@@ -66,20 +66,20 @@ export async function createLocation(
     updatedBy: actorId,
     version: 1,
   };
-  const [created] = await db.insert(locations).values(row).returning();
+  const [created] = await db.transaction((tx) => tx.insert(locations).values(row).returning());
   await cache.invalidate(cache.makeKey(tenantId, RESOURCE, id));
   return created!;
 }
 
 export async function getAreaById(tenantId: string, id: string): Promise<AreaRow | null> {
-  const rows = await db.select().from(areas)
-    .where(and(eq(areas.id, id), eq(areas.tenantId, tenantId)));
+  const rows = await scopedRead((tx) => tx.select().from(areas)
+    .where(and(eq(areas.id, id), eq(areas.tenantId, tenantId))));
   return rows[0] ?? null;
 }
 
 export async function listAreas(tenantId: string, locationId: string): Promise<AreaRow[]> {
-  return db.select().from(areas)
-    .where(and(eq(areas.tenantId, tenantId), eq(areas.locationId, locationId)));
+  return scopedRead((tx) => tx.select().from(areas)
+    .where(and(eq(areas.tenantId, tenantId), eq(areas.locationId, locationId))));
 }
 
 export interface CreateAreaInput {
@@ -112,7 +112,7 @@ export async function createArea(
     updatedBy: actorId,
     version: 1,
   };
-  const [created] = await db.insert(areas).values(row).returning();
+  const [created] = await db.transaction((tx) => tx.insert(areas).values(row).returning());
   // Areas are read as part of a location's detail in some future consumers;
   // invalidate the parent location's cache entry too so a subsequent read
   // reflects the new area if it ever gets embedded there.
@@ -121,6 +121,6 @@ export async function createArea(
 }
 
 export async function listParkingSlots(tenantId: string, locationId: string): Promise<ParkingSlotRow[]> {
-  return db.select().from(parkingSlots)
-    .where(and(eq(parkingSlots.tenantId, tenantId), eq(parkingSlots.locationId, locationId)));
+  return scopedRead((tx) => tx.select().from(parkingSlots)
+    .where(and(eq(parkingSlots.tenantId, tenantId), eq(parkingSlots.locationId, locationId))));
 }
