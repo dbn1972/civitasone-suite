@@ -1,5 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { courts, benches } from "./schema.js";
 
 /** Narrow write surface accepted for the transactional (GUC-scoped) path. */
@@ -35,10 +36,16 @@ export async function listCourts(
 }
 
 export async function getCourtById(tenantId: string, id: string): Promise<CourtRow | undefined> {
-  const rows = await scopedRead<CourtRow[]>((tx) => tx.select().from(courts)
-    .where(and(eq(courts.tenantId, tenantId), eq(courts.id, id)))
-    .limit(1));
-  return rows[0];
+  // Read-through cache. Courts are immutable after creation (no update path in
+  // this module), so no invalidation is required; the wire response is JSON either
+  // way so a cached vs fresh Date makes no observable difference.
+  const cached = await cache.getOrLoad<CourtRow>(cache.makeKey(tenantId, "court", id), async () => {
+    const rows = await scopedRead<CourtRow[]>((tx) => tx.select().from(courts)
+      .where(and(eq(courts.tenantId, tenantId), eq(courts.id, id)))
+      .limit(1));
+    return rows[0] ?? null;
+  });
+  return cached ?? undefined;
 }
 
 export async function listBenchesByCourt(tenantId: string, courtId: string): Promise<BenchRow[]> {

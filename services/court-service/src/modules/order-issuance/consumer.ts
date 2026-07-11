@@ -4,6 +4,7 @@ import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { orders } from "../order/schema.js";
 import * as repo from "./repo.js";
+import { cache } from "../../shared/infra.js";
 import { assertTransition, assertDifferentApprover } from "./domain.js";
 
 type SubmitForApprovalPayload = {
@@ -94,6 +95,7 @@ export function registerOrderIssuanceConsumers(
         payload: { orderId: p.orderId, status: "pending_approval" },
       });
       await audit(tx, msg, "submit_for_approval", "court_order", p.orderId);
+      await cache.invalidateAfterCommit(tx, cache.makeKey(msg.tenantId, "order", p.orderId));
     });
   });
 
@@ -163,6 +165,7 @@ export function registerOrderIssuanceConsumers(
         payload: { orderId: p.orderId, approvedBy: msg.actorId, issuedDate: p.issuedDate ?? null },
       });
       await audit(tx, msg, "approve_and_issue", "court_order", p.orderId);
+      await cache.invalidateAfterCommit(tx, cache.makeKey(msg.tenantId, "order", p.orderId));
     });
   });
 
@@ -208,6 +211,7 @@ export function registerOrderIssuanceConsumers(
         payload: { orderId: p.orderId, status: "draft", remarks: p.remarks ?? null },
       });
       await audit(tx, msg, "send_back", "court_order", p.orderId);
+      await cache.invalidateAfterCommit(tx, cache.makeKey(msg.tenantId, "order", p.orderId));
     });
   });
 
@@ -254,6 +258,7 @@ export function registerOrderIssuanceConsumers(
         payload: { orderId: p.orderId, recallReason: p.recallReason },
       });
       await audit(tx, msg, "recall", "court_order", p.orderId);
+      await cache.invalidateAfterCommit(tx, cache.makeKey(msg.tenantId, "order", p.orderId));
     });
   });
 }

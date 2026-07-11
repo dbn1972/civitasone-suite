@@ -79,7 +79,7 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, COURT_READ_ROLES);
     const { id } = idParam.parse(req.params);
-    const found = await repo.getCaseById(id);
+    const found = await repo.getCaseById(ctx.tenantId, id);
     // Tenant guard: never leak a case belonging to another tenant.
     if (!found || found.tenantId !== ctx.tenantId) {
       throw new HttpError(404, "CASE_NOT_FOUND", "case not found");

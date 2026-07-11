@@ -4,6 +4,7 @@ import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { cases } from "../case-registry/schema.js";
 import * as repo from "./repo.js";
+import { cache } from "../../shared/infra.js";
 import { assertTransition, deriveStage, type CaseStatus } from "./domain.js";
 
 type UpdateCaseStatusPayload = {
@@ -89,6 +90,7 @@ export function registerCaseLifecycleConsumers(
       });
 
       await audit(tx, msg, "update_status", "court_case", p.caseId);
+      await cache.invalidateAfterCommit(tx, cache.makeKey(msg.tenantId, "case", p.caseId));
     });
   });
 }

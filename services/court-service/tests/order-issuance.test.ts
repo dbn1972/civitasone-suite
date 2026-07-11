@@ -5,6 +5,11 @@
  * integrity logic is genuinely exercised end-to-end.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+vi.mock("../src/shared/infra.js", () => ({
+  cache: { invalidateAfterCommit: vi.fn(async () => {}), makeKey: (...a: string[]) => a.join(":") },
+  queue: { publish: vi.fn(async () => {}) },
+}));
 import { randomUUID } from "node:crypto";
 
 const processedIds = new Set<string>();

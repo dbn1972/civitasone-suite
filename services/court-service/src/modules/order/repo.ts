@@ -1,5 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { orders } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -18,8 +19,12 @@ export async function listOrdersByCase(tenantId: string, caseId: string): Promis
 }
 
 export async function getOrderById(tenantId: string, id: string): Promise<OrderRow | undefined> {
-  const rows = await scopedRead<OrderRow[]>((tx) => tx.select().from(orders)
-    .where(and(eq(orders.tenantId, tenantId), eq(orders.id, id)))
-    .limit(1));
-  return rows[0];
+  // Read-through cache; invalidated by the order-issuance consumer on every transition.
+  const cached = await cache.getOrLoad<OrderRow>(cache.makeKey(tenantId, "order", id), async () => {
+    const rows = await scopedRead<OrderRow[]>((tx) => tx.select().from(orders)
+      .where(and(eq(orders.tenantId, tenantId), eq(orders.id, id)))
+      .limit(1));
+    return rows[0] ?? null;
+  });
+  return cached ?? undefined;
 }

@@ -1,5 +1,6 @@
 import { eq, and, desc, asc, lt, isNull, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { cases, caseParties, caseStateTransitions } from "./schema.js";
 
 /** Narrow write surface accepted for the transactional (GUC-scoped) path. */
@@ -101,9 +102,13 @@ export async function pendencySummary(tenantId: string): Promise<{ status: strin
     .groupBy(cases.status));
 }
 
-export async function getCaseById(id: string): Promise<CaseRow | null> {
-  const rows = await scopedRead<CaseRow[]>((tx) => tx.select().from(cases).where(eq(cases.id, id)).limit(1));
-  return rows[0] ?? null;
+export async function getCaseById(tenantId: string, id: string): Promise<CaseRow | null> {
+  // Read-through cache; invalidated by the case-lifecycle consumer on status change.
+  return cache.getOrLoad<CaseRow>(cache.makeKey(tenantId, "case", id), async () => {
+    const rows = await scopedRead<CaseRow[]>((tx) => tx.select().from(cases)
+      .where(and(eq(cases.tenantId, tenantId), eq(cases.id, id))).limit(1));
+    return rows[0] ?? null;
+  });
 }
 
 export async function getCasePartiesByCaseId(caseId: string): Promise<CasePartyRow[]> {
