@@ -44,6 +44,8 @@ import { registerOrderConsumers } from "./modules/order/consumer.js";
 import { registerCauseListConsumers } from "./modules/cause-list/consumer.js";
 import { registerScrutinyConsumers } from "./modules/scrutiny/consumer.js";
 import { registerNoticeConsumers } from "./modules/notice/consumer.js";
+import { registerComplianceConsumers } from "./modules/compliance/consumer.js";
+import { registerAppealConsumers } from "./modules/appeal/consumer.js";
 
 const log = pino({ name: "court-worker" });
 
@@ -98,6 +100,8 @@ const MODULE_REGISTRARS: ModuleRegistrar[] = [
   registerCauseListConsumers,
   registerScrutinyConsumers,
   registerNoticeConsumers,
+  registerComplianceConsumers,
+  registerAppealConsumers,
   // registerCauseListConsumers,
   // registerHearingConsumers,
   // registerOrderConsumers,

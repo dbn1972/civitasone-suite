@@ -46,6 +46,14 @@ export const COMMANDS = {
   issueNotice:                "court.notice.issue",
   recordService:              "court.notice.serve",
   updateNoticeStatus:         "court.notice.update_status",
+  /** §26 execution + compliance monitoring */
+  createDirection:            "court.compliance.direct",
+  updateCompliance:           "court.compliance.update",
+  /** §25 appeal / revision / review */
+  fileAppeal:                 "court.appeal.file",
+  registerAppeal:             "court.appeal.register",
+  decideAppeal:               "court.appeal.decide",
+  withdrawAppeal:             "court.appeal.withdraw",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -80,6 +88,10 @@ export const EVENTS = {
   noticeIssued:               "court.notice.issued",
   noticeServiceRecorded:      "court.notice.service_recorded",
   noticeStatusChanged:        "court.notice.status_changed",
+  complianceDirected:         "court.compliance.directed",
+  complianceUpdated:          "court.compliance.updated",
+  appealFiled:                "court.appeal.filed",
+  appealStatusChanged:        "court.appeal.status_changed",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
