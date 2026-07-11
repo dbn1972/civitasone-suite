@@ -1,4 +1,4 @@
-import { eq, and, sql, gte, desc } from "drizzle-orm";
+import { eq, and, sql, gte, lt, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { publicEstablishments, otpChallenges } from "./schema.js";
 import { cases } from "../case-registry/schema.js";
@@ -81,20 +81,34 @@ export async function getChallenge(id: string): Promise<OtpChallengeRow | undefi
   return rows[0];
 }
 
-/** Bump the attempt counter for a failed verification (attempt-cap enforcement). */
-export async function incrementChallengeAttempt(id: string): Promise<void> {
-  await db
+/**
+ * ATOMIC attempt-claim: increment the counter AND enforce (not consumed, under the
+ * attempt cap, not expired) in ONE statement, returning the otp_hash only if the
+ * challenge is still verifiable. This closes the check-then-act race where concurrent
+ * verify requests could each read attempts=0 and brute-force past the cap.
+ */
+export async function claimAttempt(id: string): Promise<{ otpHash: string } | null> {
+  const rows = await db
     .update(otpChallenges)
     .set({ attempts: sql`${otpChallenges.attempts} + 1` })
-    .where(eq(otpChallenges.id, id));
+    .where(and(
+      eq(otpChallenges.id, id),
+      sql`${otpChallenges.consumedAt} IS NULL`,
+      sql`${otpChallenges.attempts} < ${otpChallenges.maxAttempts}`,
+      sql`${otpChallenges.expiresAt} > now()`,
+    ))
+    .returning({ otpHash: otpChallenges.otpHash });
+  return rows[0] ?? null;
 }
 
-/** Mark a challenge single-use consumed (only if not already consumed). */
-export async function consumeChallenge(id: string): Promise<void> {
-  await db
+/** Mark a challenge single-use consumed atomically; returns true iff WE consumed it. */
+export async function consumeChallenge(id: string): Promise<boolean> {
+  const rows = await db
     .update(otpChallenges)
     .set({ consumedAt: new Date() })
-    .where(and(eq(otpChallenges.id, id), sql`${otpChallenges.consumedAt} IS NULL`));
+    .where(and(eq(otpChallenges.id, id), sql`${otpChallenges.consumedAt} IS NULL`))
+    .returning({ id: otpChallenges.id });
+  return rows.length > 0;
 }
 
 /** Count challenges created for a mobile hash since `sinceIso` (per-mobile rate limit). */
@@ -104,6 +118,20 @@ export async function countRecentChallenges(mobileHash: string, sinceIso: string
     .from(otpChallenges)
     .where(and(eq(otpChallenges.mobileHash, mobileHash), gte(otpChallenges.createdAt, new Date(sinceIso))));
   return rows[0]?.count ?? 0;
+}
+
+/** Count challenges from an IP hash since `sinceIso` (per-IP rate limit — anti SMS-bomb). */
+export async function countRecentByIpHash(ipHash: string, sinceIso: string): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(otpChallenges)
+    .where(and(eq(otpChallenges.ipHash, ipHash), gte(otpChallenges.createdAt, new Date(sinceIso))));
+  return rows[0]?.count ?? 0;
+}
+
+/** Delete OTP challenges whose expiry is older than `olderThanIso` (scheduled cleanup). */
+export async function purgeExpiredChallenges(olderThanIso: string): Promise<void> {
+  await db.delete(otpChallenges).where(lt(otpChallenges.expiresAt, new Date(olderThanIso)));
 }
 
 // ─── Tenant-scoped PUBLIC case read (court.cases HAS RLS) ────────────────────────

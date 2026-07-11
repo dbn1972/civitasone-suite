@@ -54,6 +54,7 @@ import { registerConfigConsumers } from "./modules/config-registry/consumer.js";
 import { registerCertifiedCopyConsumers } from "./modules/certified-copy/consumer.js";
 import { registerParcelConsumers } from "./modules/case-parcel/consumer.js";
 import { registerPublicLookupConsumers } from "./modules/public-lookup/consumer.js";
+import { purgeExpiredChallenges } from "./modules/public-lookup/repo.js";
 
 const log = pino({ name: "court-worker" });
 
@@ -244,6 +245,11 @@ export async function startWorker(): Promise<void> {
     batchSize: 1000,
     logger: log,
   });
+  // Scheduled cleanup of expired OTP challenges (public-lookup, security review #5).
+  const otpPurge = setInterval(() => {
+    void purgeExpiredChallenges(new Date(Date.now() - 24 * 3600_000).toISOString())
+      .catch((e) => log.error({ err: e }, "otp challenge purge failed"));
+  }, 60 * 60_000);
   log.info(
     { topics: SUBSCRIBED_TOPICS.length, consumers: consumerRegistry.size },
     "court-service worker: consumers + outbox relay running",
@@ -251,6 +257,7 @@ export async function startWorker(): Promise<void> {
   async function shutdown(signal: string): Promise<void> {
     log.info({ signal }, "shutting down");
     clearInterval(purge);
+    clearInterval(otpPurge);
     clearInterval(relay);
     await queue.stop();
     await sqlClient.end();

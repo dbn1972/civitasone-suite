@@ -19,7 +19,16 @@ import { createHash, randomInt, timingSafeEqual } from "node:crypto";
  * to phone numbers without also holding the app secret. Sourced from the environment;
  * a fixed dev fallback keeps local/test deterministic (production MUST set the env).
  */
-const OTP_PEPPER = process.env.COURT_OTP_PEPPER ?? "court-otp-dev-pepper-do-not-use-in-prod";
+const OTP_PEPPER = ((): string => {
+  const p = process.env.COURT_OTP_PEPPER;
+  if (p) return p;
+  // Fail-fast in production (mirrors shared/db.ts): a hardcoded pepper would let a
+  // DB read reverse mobile hashes back to real numbers.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("COURT_OTP_PEPPER is required in production (public-lookup mobile hashing)");
+  }
+  return "court-otp-dev-pepper-do-not-use-in-prod";
+})();
 
 /** UUIDv5 namespace for public-lookup deterministic ids (distinct per module). */
 export const COURT_NAMESPACE = "b2e7a4d1-9c33-4f0a-8e21-5d6c7b8a9f01";
@@ -181,7 +190,11 @@ export function verifyCaptcha(token: string | undefined): boolean {
     // TODO(integrator): verify `token` with the configured captcha provider.
     return false;
   }
-  return token === (process.env.COURT_CAPTCHA_DEV_TOKEN ?? "test-captcha-ok");
+  // Non-production: accept a dev token ONLY if COURT_CAPTCHA_DEV_TOKEN is EXPLICITLY
+  // set (no baked-in default), so an unset/misconfigured NODE_ENV fails closed rather
+  // than accepting a well-known string.
+  const devToken = process.env.COURT_CAPTCHA_DEV_TOKEN;
+  return typeof devToken === "string" && devToken.length > 0 && token === devToken;
 }
 
 /** The shareable PUBLIC case-status page link a court publishes for its citizens,
@@ -190,4 +203,10 @@ export function verifyCaptcha(token: string | undefined): boolean {
 export function publicCaseUrl(slug: string): string {
   const base = (process.env.COURT_PUBLIC_PORTAL_BASE ?? "https://courts.gov.in").replace(/\/+$/, "");
   return `${base}/case-status/${slug}`;
+}
+
+/** Peppered SHA-256 of the caller IP — for per-IP OTP-request rate limiting. The raw
+ *  IP is never stored. */
+export function hashIp(ip: string | undefined): string {
+  return createHash("sha256").update(`${OTP_PEPPER}:ip:${ip ?? "unknown"}`).digest("hex");
 }

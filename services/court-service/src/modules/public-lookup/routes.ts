@@ -8,7 +8,7 @@ import { queue } from "../../shared/infra.js";
 import { normalizeCnr } from "../case-registry/domain.js";
 import {
   hashMobile, hashOtp, generateOtp, constantTimeEqualHex, cnrPrefix, toPublicDocket,
-  resolveAccessMode, verifyCaptcha, publicCaseUrl,
+  resolveAccessMode, verifyCaptcha, publicCaseUrl, hashIp,
 } from "./domain.js";
 import { publishEstablishmentBody, requestOtpBody, lookupBody } from "./validators.js";
 import * as commands from "./commands.js";
@@ -22,6 +22,7 @@ const PUBLIC_DIR_ADMIN_ROLES = ["court_admin", "super_admin"];
 const OTP_TTL_SEC = 300;                 // 5 minutes
 const OTP_RATE_WINDOW_MS = 15 * 60_000;  // 15 minutes
 const OTP_RATE_MAX = 5;                   // max challenges per mobile per window
+const OTP_IP_RATE_MAX = 20;               // max challenges per IP per window (anti SMS-bomb)
 
 /**
  * SMS dispatch topic. topics.ts owns NO notification/SMS topic today, so we use the
@@ -68,6 +69,12 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
     if (recent >= OTP_RATE_MAX) {
       throw new HttpError(429, "OTP_RATE_LIMITED", "Too many OTP requests; try again later");
     }
+    // Per-IP limit: stops SMS-bombing arbitrary numbers from one source (the per-mobile
+    // cap alone can't, since an attacker can submit unlimited DISTINCT numbers).
+    const ipHash = hashIp(req.ip);
+    if ((await repo.countRecentByIpHash(ipHash, sinceIso)) >= OTP_IP_RATE_MAX) {
+      throw new HttpError(429, "OTP_RATE_LIMITED", "Too many OTP requests; try again later");
+    }
 
     const challengeId = randomUUID();
     const otp = generateOtp(); // NEVER logged
@@ -76,6 +83,7 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
       id: challengeId,
       mobileHash,
       otpHash: hashOtp(otp, challengeId),
+      ipHash,
       purpose: "case_status",
       expiresAt: new Date(Date.now() + OTP_TTL_SEC * 1000),
     });
@@ -131,18 +139,25 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
       if (!body.challengeId || !body.otp) {
         throw new HttpError(400, "OTP_REQUIRED", "This court requires OTP verification (request an OTP first)");
       }
-      const challenge = await repo.getChallenge(body.challengeId);
-      if (!challenge || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now()) {
+      // Atomic attempt-claim: increments + enforces (unconsumed, under cap, not expired)
+      // in ONE statement — closes the check-then-act race against the 5-try cap.
+      const claimed = await repo.claimAttempt(body.challengeId);
+      if (!claimed) {
+        // Security decision already made above; this read only shapes the error signal
+        // (429 lockout vs 401) — a race here is cosmetic, not exploitable.
+        const c = await repo.getChallenge(body.challengeId);
+        if (c && !c.consumedAt && c.attempts >= c.maxAttempts) {
+          throw new HttpError(429, "OTP_LOCKED", "Too many incorrect attempts");
+        }
         throw new HttpError(401, "OTP_INVALID", "OTP is invalid or expired");
       }
-      if (challenge.attempts >= challenge.maxAttempts) {
-        throw new HttpError(429, "OTP_LOCKED", "Too many incorrect attempts");
-      }
-      if (!constantTimeEqualHex(challenge.otpHash, hashOtp(body.otp, body.challengeId))) {
-        await repo.incrementChallengeAttempt(body.challengeId);
+      if (!constantTimeEqualHex(claimed.otpHash, hashOtp(body.otp, body.challengeId))) {
         throw new HttpError(401, "OTP_INVALID", "OTP is invalid or expired");
       }
-      await repo.consumeChallenge(body.challengeId); // single-use, consume before the read
+      // Atomic single-use consume; if we lost the consume race, reject.
+      if (!(await repo.consumeChallenge(body.challengeId))) {
+        throw new HttpError(401, "OTP_INVALID", "OTP is invalid or expired");
+      }
     } else if (mode === "captcha") {
       // eCourts / High-Court / Supreme-Court style: a CAPTCHA gates the public view.
       if (!verifyCaptcha(body.captchaToken)) {

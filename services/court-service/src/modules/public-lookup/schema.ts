@@ -40,6 +40,7 @@ export const publicEstablishments = courtSchema.table("public_establishments", {
 export const otpChallenges = courtSchema.table("otp_challenges", {
   id:          uuid("id").primaryKey().defaultRandom(),
   mobileHash:  varchar("mobile_hash", { length: 64 }).notNull(),
+  ipHash:      varchar("ip_hash", { length: 64 }),
   otpHash:     varchar("otp_hash", { length: 64 }).notNull(),
   purpose:     varchar("purpose", { length: 24 }).notNull().default("case_status"),
   attempts:    integer("attempts").notNull().default(0),
