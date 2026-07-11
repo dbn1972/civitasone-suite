@@ -1,0 +1,1729 @@
+openapi: 3.0.3
+info:
+  title: CivitasOne court-service API
+  version: "1.0.0"
+  description: >-
+    Machine-readable cross-layer contract for the CivitasOne court-management
+    microservice. Extracted from src/modules/*/routes.ts + validators.ts and
+    verified against the live service on http://127.0.0.1:3034, the
+    court.* PostgreSQL schema, and the web consoles under web/*.html.
+    73 endpoints across 19 modules. Write paths return 202 Accepted
+    (command-bus) with an envelope { accepted, ... }; read paths return a
+    tenant-scoped { items, count, source } or a single resource.
+    x-public marks unauthenticated routes; x-roles lists the roles the
+    route requires (requireRole = ANY-of).
+servers:
+  - url: http://127.0.0.1:3034
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorEnvelope:
+      type: object
+      description: Standard error shape. case-registry uses a flat variant
+        (code,message,correlationId,retryable,fieldErrors); all other modules
+        nest under `error`.
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: {}
+    Accepted:
+      type: object
+      description: 202 command-bus acknowledgement (fields vary per command,
+        commonly id + accepted/status).
+      additionalProperties: true
+    Case:
+      type: object
+      description: court.cases row (Drizzle camelCase mapping).
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        cnrNumber: { type: string }
+        caseType: { type: string }
+        filingNumber: { type: [string, "null"] }
+        filingDate: { type: string }
+        title: { type: string }
+        status: { type: string }
+        stage: { type: string }
+        courtId: { type: [string, "null"], format: uuid }
+        benchId: { type: [string, "null"], format: uuid }
+        disposalDate: { type: [string, "null"] }
+        targetDisposalDate: { type: [string, "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        createdBy: { type: [string, "null"] }
+        updatedBy: { type: [string, "null"] }
+        version: { type: integer }
+    Court:
+      type: object
+      description: court.courts row.
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        name: { type: string }
+        courtType: { type: string }
+        jurisdiction: { type: [string, "null"] }
+        establishmentCode: { type: [string, "null"] }
+        parentCourtId: { type: [string, "null"], format: uuid }
+        address: { type: [string, "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        createdBy: { type: [string, "null"] }
+        updatedBy: { type: [string, "null"] }
+        version: { type: integer }
+    Bench:
+      type: object
+      description: court.benches row.
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        courtId: { type: string, format: uuid }
+        name: { type: string }
+        presidingJudgeId: { type: [string, "null"], format: uuid }
+        benchType: { type: [string, "null"] }
+        version: { type: integer }
+    Party:
+      type: object
+      description: >-
+        court.case_parties row, PII masked per role. name_enc/address_enc/
+        phone_enc/email_enc are AES-256-GCM columns that decrypt to cleartext
+        on read; the route reveals name/address/phone/email in cleartext only
+        to PII_PRIVILEGED_ROLES (judge, court_admin, super_admin), else
+        name/address=null and phone/email masked. piiRevealed flags which.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        partyRole: { type: string }
+        name: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        advocateName: { type: [string, "null"] }
+        advocateBarId: { type: [string, "null"] }
+        version: { type: integer }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    Hearing:
+      type: object
+      description: court.hearings row.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        benchId: { type: [string, "null"], format: uuid }
+        scheduledDate: { type: string }
+        status: { type: string }
+        nextDate: { type: [string, "null"] }
+        purpose: { type: [string, "null"] }
+        adjournmentReason: { type: [string, "null"] }
+        version: { type: integer }
+    Order:
+      type: object
+      description: court.orders row.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        hearingId: { type: [string, "null"], format: uuid }
+        orderType: { type: string }
+        orderText: { type: [string, "null"] }
+        signedBy: { type: [string, "null"] }
+        dscSignature: { type: [string, "null"] }
+        orderDate: { type: [string, "null"] }
+        status: { type: string }
+        approvedBy: { type: [string, "null"] }
+        issuedAt: { type: [string, "null"] }
+        recallReason: { type: [string, "null"] }
+        version: { type: integer }
+    Filing:
+      type: object
+      description: court.filings row (fee columns are integer minor units).
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        filingType: { type: string }
+        filingFeeMinor: { type: integer }
+        courtFeeMinor: { type: integer }
+        status: { type: string }
+        version: { type: integer }
+    Evidence:
+      type: object
+      description: court.evidence row.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        filingId: { type: [string, "null"], format: uuid }
+        exhibitNumber: { type: [string, "null"] }
+        title: { type: string }
+        evidenceType: { type: [string, "null"] }
+        storageRef: { type: [string, "null"] }
+        contentHash: { type: [string, "null"] }
+        status: { type: string }
+        submittedBy: { type: [string, "null"] }
+        rulingRemarks: { type: [string, "null"] }
+        ruledBy: { type: [string, "null"] }
+        ruledAt: { type: [string, "null"] }
+        version: { type: integer }
+    Notice:
+      type: object
+      description: >-
+        court.notices row. NOTE: issuedTo and renderedBody are PLAINTEXT
+        columns (no _enc) surfaced by a SELECT * repo; issuedTo can hold
+        addressee PII and is returned UNMASKED to all NOTICE_READ_ROLES —
+        inconsistent with the party/certified-copy encrypt+mask pattern.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        noticeType: { type: string }
+        issuedTo: { type: [string, "null"] }
+        status: { type: string }
+        issueDate: { type: string }
+        renderedBody: { type: [string, "null"] }
+        version: { type: integer }
+    NoticeService:
+      type: object
+      description: >-
+        court.notice_service row. recipient and proof are PLAINTEXT columns
+        (SELECT *); recipient can hold PII and is returned UNMASKED.
+      properties:
+        id: { type: string, format: uuid }
+        noticeId: { type: string, format: uuid }
+        serviceMode: { type: string }
+        recipient: { type: [string, "null"] }
+        dispatchRef: { type: [string, "null"] }
+        deliveryStatus: { type: string }
+        servedAt: { type: [string, "null"] }
+        proof: { type: [string, "null"] }
+        version: { type: integer }
+    Compliance:
+      type: object
+      description: court.compliance_directions row.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        orderId: { type: [string, "null"], format: uuid }
+        direction: { type: string }
+        responsibleAuthority: { type: [string, "null"] }
+        dueDate: { type: [string, "null"] }
+        status: { type: string }
+        progressNotes: { type: [string, "null"] }
+        closedAt: { type: [string, "null"] }
+        version: { type: integer }
+    Appeal:
+      type: object
+      description: court.appeals row.
+      properties:
+        id: { type: string, format: uuid }
+        originalCaseId: { type: string, format: uuid }
+        appellateCaseId: { type: [string, "null"], format: uuid }
+        appealType: { type: string }
+        grounds: { type: string }
+        status: { type: string }
+        filedDate: { type: string }
+        decidedDate: { type: [string, "null"] }
+        decisionSummary: { type: [string, "null"] }
+        version: { type: integer }
+    Parcel:
+      type: object
+      description: court.case_parcels row. areaSqm is a bigint serialised to string.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        surveyNumber: { type: string }
+        khasraNumber: { type: [string, "null"] }
+        khataNumber: { type: [string, "null"] }
+        village: { type: string }
+        tehsil: { type: [string, "null"] }
+        district: { type: [string, "null"] }
+        areaSqm: { type: [string, "null"], description: "bigint as string" }
+        subjectType: { type: [string, "null"] }
+        ownershipRef: { type: [string, "null"] }
+        remarks: { type: [string, "null"] }
+        active: { type: boolean }
+        version: { type: integer }
+    CertifiedCopy:
+      type: object
+      description: >-
+        court.certified_copies row, hand-serialised. applicantName decrypts
+        from applicant_name_enc and is revealed only to PII_PRIVILEGED_ROLES
+        (else null). feeMinor is a bigint serialised to string.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        orderId: { type: [string, "null"], format: uuid }
+        documentRef: { type: [string, "null"] }
+        applicantName: { type: [string, "null"] }
+        copiesCount: { type: integer }
+        urgent: { type: boolean }
+        feeMinor: { type: string, description: "bigint as string" }
+        feeSource: { type: [string, "null"] }
+        status: { type: string }
+        requestedBy: { type: [string, "null"] }
+        issuedBy: { type: [string, "null"] }
+        issuedAt: { type: [string, "null"] }
+        deliveryMode: { type: [string, "null"] }
+        remarks: { type: [string, "null"] }
+        version: { type: integer }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    CauseListItem:
+      type: object
+      description: court.cause_list_items row.
+      properties:
+        id: { type: string, format: uuid }
+        causeListId: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        itemNumber: { type: integer }
+        slot: { type: string }
+        courtroom: { type: string }
+        listDate: { type: [string, "null"] }
+        version: { type: integer }
+    Defect:
+      type: object
+      description: court.case_defect row.
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        scrutinyId: { type: [string, "null"], format: uuid }
+        category: { type: string }
+        description: { type: string }
+        severity: { type: string }
+        status: { type: string }
+        rectificationDeadline: { type: [string, "null"] }
+        version: { type: integer }
+    ConfigEntry:
+      type: object
+      description: court.config_entries row.
+      properties:
+        id: { type: string, format: uuid }
+        namespace: { type: string }
+        configKey: { type: string }
+        value: {}
+        label: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        active: { type: boolean }
+        sortOrder: { type: [integer, "null"] }
+        effectiveFrom: { type: [string, "null"] }
+        effectiveTo: { type: [string, "null"] }
+        version: { type: integer }
+    Establishment:
+      type: object
+      description: >-
+        court.public_establishments row (public projection). publicUrl is a
+        computed field (publicCaseUrl(publicSlug)). No PII, no tenantId leak in
+        the public listing projection: courtName, publicSlug, establishmentCode.
+      properties:
+        courtName: { type: string }
+        publicSlug: { type: string }
+        establishmentCode: { type: string }
+        publicUrl: { type: string, description: "computed" }
+    PublicDocket:
+      type: object
+      description: >-
+        toPublicDocket() projection over court.cases — PUBLIC record fields
+        only. Deliberately omits id, tenantId, courtId, parties, and all PII.
+      properties:
+        cnrNumber: { type: string }
+        caseType: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        status: { type: string }
+        stage: { type: [string, "null"] }
+        filingDate: { type: [string, "null"] }
+        disposalDate: { type: [string, "null"] }
+    Analytics:
+      type: object
+      description: >-
+        Computed aggregate over court.cases. instituted/disposed/pending/
+        avgPendencyDays/oldestPendingDays are computed, not columns.
+        clearanceRatePct = round(disposed/instituted*100,1) or null.
+      properties:
+        period:
+          type: object
+          properties: { from: { type: string }, to: { type: string } }
+        instituted: { type: integer }
+        disposed: { type: integer }
+        pending: { type: integer }
+        avgPendencyDays: { type: integer }
+        oldestPendingDays: { type: integer }
+        clearanceRatePct: { type: [number, "null"], description: "computed" }
+        source: { type: string, enum: [db] }
+    Pendency:
+      type: object
+      description: Computed group-by-status counts. total is computed (sum).
+      properties:
+        summary:
+          type: array
+          items:
+            type: object
+            properties: { status: { type: string }, count: { type: integer } }
+        total: { type: integer, description: "computed" }
+        source: { type: string, enum: [db] }
+  responses:
+    ErrorResponse:
+      description: Error envelope
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+security:
+  - bearerAuth: []
+paths:
+  # ─────────────────────────── case-registry ───────────────────────────
+  /v1/court/cases:
+    post:
+      tags: [case-registry]
+      summary: Register a new case
+      x-roles: [registrar, court_admin, super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cnrNumber, caseType, filingDate, title, courtId, parties]
+              properties:
+                cnrNumber: { type: string, maxLength: 32 }
+                caseType: { type: string, maxLength: 32 }
+                filingNumber: { type: string, maxLength: 64 }
+                filingDate: { type: string }
+                title: { type: string, maxLength: 300 }
+                courtId: { type: string, format: uuid }
+                benchId: { type: string, format: uuid }
+                parties:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [partyRole, name]
+                    properties:
+                      partyRole: { type: string }
+                      name: { type: string }
+                      address: { type: string }
+                      phone: { type: string }
+                      email: { type: string, format: email }
+                      advocateName: { type: string }
+                      advocateBarId: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+    get:
+      tags: [case-registry]
+      summary: List cases (tenant-scoped, paginated)
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: courtId, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Case' } }
+                  limit: { type: integer }
+                  offset: { type: integer }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/court/cases/overdue:
+    get:
+      tags: [case-registry]
+      summary: Overdue cases (past SLA target, not disposed)
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters:
+        - { name: asOf, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Case' } }
+                  count: { type: integer }
+                  asOf: { type: string, description: "computed" }
+                  source: { type: string, enum: [db] }
+  /v1/court/cases/analytics:
+    get:
+      tags: [case-registry]
+      summary: NCMS-style clearance-rate + pendency-age summary
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters:
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Analytics' } } } }
+  /v1/court/cases/pendency:
+    get:
+      tags: [case-registry]
+      summary: Pending-case counts by status
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Pendency' } } } }
+  /v1/court/cases/{id}:
+    get:
+      tags: [case-registry]
+      summary: Fetch a single case with its parties
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/Case' }
+                  - type: object
+                    properties:
+                      parties: { type: array, items: { $ref: '#/components/schemas/Party' } }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  # ─────────────────────────── case-lifecycle ───────────────────────────
+  /v1/court/cases/{id}/status:
+    patch:
+      tags: [case-lifecycle]
+      summary: Transition a case to a new status
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toStatus, expectedVersion]
+              properties:
+                toStatus: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, maxLength: 1000 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── court-registry ───────────────────────────
+  /v1/court/courts:
+    post:
+      tags: [court-registry]
+      summary: Create a court/authority
+      x-roles: [court_admin, super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, courtType]
+              properties:
+                name: { type: string, maxLength: 300 }
+                courtType: { type: string, maxLength: 32 }
+                jurisdiction: { type: string }
+                establishmentCode: { type: string }
+                parentCourtId: { type: string, format: uuid }
+                address: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [court-registry]
+      summary: List courts
+      x-roles: [court_admin, super_admin, registrar, judge, court_clerk]
+      parameters:
+        - { name: courtType, in: query, schema: { type: string } }
+        - { name: parentCourtId, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Court' } }
+                  limit: { type: integer }
+                  offset: { type: integer }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/courts/{id}:
+    get:
+      tags: [court-registry]
+      summary: Get one court + its benches
+      x-roles: [court_admin, super_admin, registrar, judge, court_clerk]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  court: { $ref: '#/components/schemas/Court' }
+                  benches: { type: array, items: { $ref: '#/components/schemas/Bench' } }
+                  source: { type: string, enum: [db] }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/court/courts/{id}/benches:
+    post:
+      tags: [court-registry]
+      summary: Create a bench under a court
+      x-roles: [court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 300 }
+                presidingJudgeId: { type: string, format: uuid }
+                benchType: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [court-registry]
+      summary: List benches of a court
+      x-roles: [court_admin, super_admin, registrar, judge, court_clerk]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Bench' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  # ─────────────────────────── hearing ───────────────────────────
+  /v1/court/cases/{id}/hearings:
+    post:
+      tags: [hearing]
+      summary: Schedule a hearing on a case
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scheduledAt]
+              properties:
+                benchId: { type: string, format: uuid }
+                scheduledAt: { type: string, format: date-time }
+                purpose: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [hearing]
+      summary: List a case's hearings
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Hearing' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/hearings/{id}/adjourn:
+    patch:
+      tags: [hearing]
+      summary: Adjourn a hearing
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, nextDate, expectedVersion]
+              properties:
+                reason: { type: string }
+                nextDate: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/hearings/{id}/outcome:
+    patch:
+      tags: [hearing]
+      summary: Record a hearing outcome (held/cancelled)
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome, expectedVersion]
+              properties:
+                outcome: { type: string, enum: [held, cancelled] }
+                notes: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── filing ───────────────────────────
+  /v1/court/cases/{id}/filings:
+    post:
+      tags: [filing]
+      summary: Submit a filing on a case
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filingType, filingFeeMinor, courtFeeMinor]
+              properties:
+                filingType: { type: string }
+                filingFeeMinor: { type: integer, minimum: 0 }
+                courtFeeMinor: { type: integer, minimum: 0 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [filing]
+      summary: List a case's filings
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Filing' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  # ─────────────────────────── order ───────────────────────────
+  /v1/court/cases/{id}/orders:
+    post:
+      tags: [order]
+      summary: Record (draft) an order on a case
+      x-roles: [judge, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderType, orderText]
+              properties:
+                hearingId: { type: string, format: uuid }
+                orderType: { type: string }
+                orderText: { type: string, maxLength: 20000 }
+                orderDate: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [order]
+      summary: List a case's orders
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Order' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/orders/{id}:
+    get:
+      tags: [order]
+      summary: Get a single order
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  # ─────────────────────────── order-issuance ───────────────────────────
+  /v1/court/orders/{id}/submit-for-approval:
+    patch:
+      tags: [order-issuance]
+      summary: Submit a drafted order for approval (draft -> pending_approval)
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties: { expectedVersion: { type: integer, minimum: 1 } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/orders/{id}/approve-issue:
+    patch:
+      tags: [order-issuance]
+      summary: Approve + issue (pronounce) an order; maker-checker + DSC (pending_approval -> issued)
+      x-roles: [judge, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dscSignature, expectedVersion]
+              properties:
+                dscSignature: { type: string }
+                issuedDate: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/orders/{id}/send-back:
+    patch:
+      tags: [order-issuance]
+      summary: Send a pending order back to its maker (pending_approval -> draft)
+      x-roles: [judge, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties:
+                remarks: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/orders/{id}/recall:
+    patch:
+      tags: [order-issuance]
+      summary: Recall an already-issued order (issued -> recalled)
+      x-roles: [judge, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recallReason, expectedVersion]
+              properties:
+                recallReason: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── cause-list ───────────────────────────
+  /v1/court/cause-lists:
+    post:
+      tags: [cause-list]
+      summary: Generate (materialize) a cause-list for a court/day
+      x-roles: [registrar, court_admin, super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courtId, listDate]
+              properties:
+                courtId: { type: string, format: uuid }
+                benchId: { type: string, format: uuid }
+                listDate: { type: string }
+                listType: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/cause-lists/{id}/items:
+    post:
+      tags: [cause-list]
+      summary: List a case onto a slot/courtroom of a cause-list
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseId, itemNumber, slot, courtroom]
+              properties:
+                caseId: { type: string, format: uuid }
+                itemNumber: { type: integer, minimum: 1 }
+                slot: { type: string }
+                courtroom: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [cause-list]
+      summary: List the items of a cause-list
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CauseListItem' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  # ─────────────────────────── scrutiny ───────────────────────────
+  /v1/court/cases/{id}/scrutiny:
+    post:
+      tags: [scrutiny]
+      summary: Record the registry scrutiny of a case
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseId]
+              properties:
+                caseId: { type: string, format: uuid }
+                status: { type: string, enum: [pending, cleared, defective] }
+                remarks: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/cases/{id}/defects:
+    post:
+      tags: [scrutiny]
+      summary: Raise a defect against a case
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseId, category, description]
+              properties:
+                caseId: { type: string, format: uuid }
+                category: { type: string }
+                description: { type: string }
+                severity: { type: string, enum: [minor, major, critical] }
+                rectificationDeadline: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [scrutiny]
+      summary: List a case's defects
+      x-roles: [registrar, court_admin, super_admin, court_clerk, judge]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Defect' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/scrutiny/{id}/resolve:
+    patch:
+      tags: [scrutiny]
+      summary: Resolve a scrutiny
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, expectedVersion]
+              properties:
+                status: { type: string, enum: [cleared, defective] }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/defects/{id}/resolve:
+    patch:
+      tags: [scrutiny]
+      summary: Resolve a defect
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution, expectedVersion]
+              properties:
+                resolution: { type: string, enum: [rectified, waived, rejected] }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── notice ───────────────────────────
+  /v1/court/cases/{id}/notices:
+    post:
+      tags: [notice]
+      summary: Issue a notice on a case
+      x-roles: [registrar, court_admin, bailiff, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseId, noticeType, issueDate]
+              properties:
+                caseId: { type: string, format: uuid }
+                noticeType: { type: string }
+                issuedTo: { type: string, description: "PII, plaintext at rest" }
+                issueDate: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [notice]
+      summary: List a case's notices
+      x-roles: [registrar, court_admin, bailiff, court_clerk, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK (issuedTo returned UNMASKED — see Notice schema note)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Notice' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/notices/{id}/service:
+    post:
+      tags: [notice]
+      summary: Record a service attempt against a notice
+      x-roles: [registrar, court_admin, bailiff, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serviceMode]
+              properties:
+                serviceMode: { type: string, enum: [post, email, publication, personal, substituted] }
+                recipient: { type: string, description: "PII, plaintext at rest" }
+                dispatchRef: { type: string }
+                deliveryStatus: { type: string, enum: [pending, served, unserved, refused] }
+                servedAt: { type: string }
+                proof: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [notice]
+      summary: List a notice's service attempts
+      x-roles: [registrar, court_admin, bailiff, court_clerk, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK (recipient returned UNMASKED — see NoticeService schema note)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/NoticeService' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/notices/{id}/status:
+    patch:
+      tags: [notice]
+      summary: Update a notice's lifecycle status
+      x-roles: [registrar, court_admin, bailiff, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, expectedVersion]
+              properties:
+                status: { type: string, enum: [served, unserved, cancelled] }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── compliance ───────────────────────────
+  /v1/court/cases/{id}/compliance:
+    post:
+      tags: [compliance]
+      summary: Create a compliance direction on a case
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseId, direction]
+              properties:
+                caseId: { type: string, format: uuid }
+                orderId: { type: string, format: uuid }
+                direction: { type: string }
+                responsibleAuthority: { type: string }
+                dueDate: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [compliance]
+      summary: List a case's compliance directions
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Compliance' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/compliance/{id}:
+    patch:
+      tags: [compliance]
+      summary: Record progress / close a compliance direction
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, expectedVersion]
+              properties:
+                status: { type: string, enum: [in_progress, completed, verified, non_compliant] }
+                progressNotes: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── appeal ───────────────────────────
+  /v1/court/appeals:
+    post:
+      tags: [appeal]
+      summary: File an appeal against an original case's order
+      x-roles: [registrar, court_admin, judge, super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [originalCaseId, grounds, filedDate]
+              properties:
+                originalCaseId: { type: string, format: uuid }
+                appealType: { type: string, enum: [appeal, revision, review] }
+                grounds: { type: string }
+                filedDate: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/cases/{id}/appeals:
+    get:
+      tags: [appeal]
+      summary: List the appeals filed against a case
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Appeal' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/appeals/{id}:
+    get:
+      tags: [appeal]
+      summary: Fetch a single appeal
+      x-roles: [registrar, court_admin, judge, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Appeal' } } } }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/court/appeals/{id}/register:
+    patch:
+      tags: [appeal]
+      summary: Register a filed appeal
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties: { expectedVersion: { type: integer, minimum: 1 } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/appeals/{id}/decide:
+    patch:
+      tags: [appeal]
+      summary: Decide a registered appeal
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, decisionSummary, decidedDate, expectedVersion]
+              properties:
+                decision: { type: string, enum: [allowed, dismissed, remanded, modified] }
+                decisionSummary: { type: string }
+                decidedDate: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/appeals/{id}/withdraw:
+    patch:
+      tags: [appeal]
+      summary: Withdraw an appeal
+      x-roles: [registrar, court_admin, judge, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties: { expectedVersion: { type: integer, minimum: 1 } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── party ───────────────────────────
+  /v1/court/cases/{id}/parties:
+    post:
+      tags: [party]
+      summary: Add a party / advocate to a case
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partyRole]
+              properties:
+                partyRole: { type: string }
+                partyIndex: { type: integer }
+                name: { type: string, description: "PII, AES-256-GCM at rest" }
+                address: { type: string, description: "PII, encrypted" }
+                phone: { type: string, description: "PII, encrypted" }
+                email: { type: string, format: email, description: "PII, encrypted" }
+                advocateName: { type: string }
+                advocateBarId: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [party]
+      summary: List a case's parties (PII masked per role — DPDP minimization)
+      x-roles: [registrar, court_admin, super_admin, court_clerk, judge]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK (piiRevealed=true only for judge/court_admin/super_admin)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Party' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+                  piiRevealed: { type: boolean }
+  /v1/court/parties/{id}/advocate:
+    patch:
+      tags: [party]
+      summary: Update an advocate's details on a party
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties:
+                advocateName: { type: string }
+                advocateBarId: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── evidence ───────────────────────────
+  /v1/court/cases/{id}/evidence:
+    post:
+      tags: [evidence]
+      summary: Submit a piece of evidence/exhibit on a case
+      x-roles: [registrar, court_admin, advocate, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseId, title]
+              properties:
+                caseId: { type: string, format: uuid }
+                filingId: { type: string, format: uuid }
+                exhibitNumber: { type: string }
+                title: { type: string }
+                evidenceType: { type: string }
+                storageRef: { type: string }
+                contentHash: { type: string, pattern: "^[0-9a-fA-F]{64}$" }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [evidence]
+      summary: List a case's evidence/exhibits
+      x-roles: [registrar, court_admin, advocate, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/evidence/{id}/rule:
+    patch:
+      tags: [evidence]
+      summary: Rule on an exhibit (admit | reject | mark) — bench only
+      x-roles: [judge, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ruling, expectedVersion]
+              properties:
+                ruling: { type: string, enum: [admitted, rejected, marked] }
+                rulingRemarks: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── certified-copy ───────────────────────────
+  /v1/court/cases/{id}/certified-copies:
+    post:
+      tags: [certified-copy]
+      summary: Apply for a certified copy on a case
+      x-roles: [registrar, court_admin, court_clerk, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseId]
+              properties:
+                caseId: { type: string, format: uuid }
+                orderId: { type: string, format: uuid }
+                documentRef: { type: string }
+                applicantName: { type: string, description: "PII, AES-256-GCM at rest" }
+                copiesCount: { type: integer, default: 1 }
+                urgent: { type: boolean }
+                feeMinorHint: { oneOf: [ { type: string }, { type: number } ] }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [certified-copy]
+      summary: List a case's certified copies (applicantName masked per role)
+      x-roles: [registrar, court_admin, court_clerk, super_admin, judge]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CertifiedCopy' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+                  piiRevealed: { type: boolean }
+  /v1/court/certified-copies/{id}:
+    get:
+      tags: [certified-copy]
+      summary: Get a single certified copy (applicantName masked per role)
+      x-roles: [registrar, court_admin, court_clerk, super_admin, judge]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item: { $ref: '#/components/schemas/CertifiedCopy' }
+                  source: { type: string, enum: [db] }
+                  piiRevealed: { type: boolean }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/court/certified-copies/{id}/status:
+    patch:
+      tags: [certified-copy]
+      summary: Transition a certified copy (advance / issue / reject)
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target, expectedVersion]
+              properties:
+                target: { type: string, enum: [fee_paid, prepared, issued, rejected] }
+                deliveryMode: { type: string }
+                remarks: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── case-parcel ───────────────────────────
+  /v1/court/cases/{id}/parcels:
+    post:
+      tags: [case-parcel]
+      summary: Attach a parcel to a case
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [surveyNumber, village]
+              properties:
+                surveyNumber: { type: string }
+                khasraNumber: { type: string }
+                khataNumber: { type: string }
+                village: { type: string }
+                tehsil: { type: string }
+                district: { type: string }
+                areaSqm: { type: integer, minimum: 0 }
+                subjectType: { type: string }
+                ownershipRef: { type: string }
+                remarks: { type: string }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+    get:
+      tags: [case-parcel]
+      summary: List a case's parcels
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Parcel' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/parcels/{id}:
+    patch:
+      tags: [case-parcel]
+      summary: Update / soft-detach a parcel
+      x-roles: [registrar, court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties:
+                areaSqm: { type: integer, minimum: 0 }
+                ownershipRef: { type: string }
+                remarks: { type: string }
+                active: { type: boolean }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/parcels/search:
+    get:
+      tags: [case-parcel]
+      summary: Cross-case reverse lookup by survey number
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters:
+        - { name: surveyNumber, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Parcel' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  # ─────────────────────────── config-registry ───────────────────────────
+  /v1/court/config:
+    post:
+      tags: [config-registry]
+      summary: Set (create or version-guarded update) a config entry
+      x-roles: [court_admin, super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [namespace, configKey, value]
+              properties:
+                namespace: { type: string }
+                configKey: { type: string }
+                value: {}
+                label: { type: string }
+                description: { type: string }
+                sortOrder: { type: integer }
+                effectiveFrom: { type: string }
+                effectiveTo: { type: string }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/config/{namespace}:
+    get:
+      tags: [config-registry]
+      summary: List a namespace's entries (?active=true filters)
+      x-roles: [court_admin, super_admin, registrar, judge, court_clerk]
+      parameters:
+        - { name: namespace, in: path, required: true, schema: { type: string } }
+        - { name: active, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ConfigEntry' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [db] }
+  /v1/court/config-entry:
+    get:
+      tags: [config-registry]
+      summary: Get ONE entry by (namespace, key)
+      x-roles: [court_admin, super_admin, registrar, judge, court_clerk]
+      parameters:
+        - { name: namespace, in: query, required: true, schema: { type: string } }
+        - { name: key, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item: { $ref: '#/components/schemas/ConfigEntry' }
+                  source: { type: string, enum: [db] }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/court/config/presets/{preset}:
+    post:
+      tags: [config-registry]
+      summary: Apply a vertical preset (revenue | consumer | tribunal)
+      x-roles: [court_admin, super_admin]
+      parameters: [ { name: preset, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/court/config/{id}/deactivate:
+    patch:
+      tags: [config-registry]
+      summary: Deactivate (soft-retire) a config entry by id
+      x-roles: [court_admin, super_admin]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties: { expectedVersion: { type: integer, minimum: 1 } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  # ─────────────────────────── court-documents (PDF) ───────────────────────────
+  /v1/court/cause-lists/{id}/pdf:
+    get:
+      tags: [court-documents]
+      summary: Render a cause list + its items as application/pdf
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/court/orders/{id}/pdf:
+    get:
+      tags: [court-documents]
+      summary: Render an order / judgment as application/pdf
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/court/certified-copies/{id}/pdf:
+    get:
+      tags: [court-documents]
+      summary: Render a certified copy of an order as application/pdf (no applicant PII printed)
+      x-roles: [registrar, court_admin, super_admin, judge, court_clerk]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  # ─────────────────────────── public-lookup ───────────────────────────
+  /v1/court/public-directory:
+    post:
+      tags: [public-lookup]
+      summary: Publish a public-directory establishment (authenticated, admin)
+      x-roles: [court_admin, super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [establishmentCode, courtName, publicSlug]
+              properties:
+                establishmentCode: { type: string }
+                cnrPrefix: { type: string }
+                courtName: { type: string }
+                publicSlug: { type: string, pattern: "^[a-z0-9-]{2,64}$" }
+                accessMode: { type: string, enum: [otp, captcha, open] }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+  /v1/public/establishments:
+    get:
+      tags: [public-lookup]
+      summary: Public directory listing
+      x-public: true
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Establishment' } }
+                  count: { type: integer }
+                  source: { type: string, enum: [public] }
+  /v1/public/case-status/otp:
+    post:
+      tags: [public-lookup]
+      summary: Request an OTP for a public case-status lookup
+      x-public: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mobile]
+              properties: { mobile: { type: string } }
+      responses:
+        '200':
+          description: OK (devOtp present only when NODE_ENV=test)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challengeId: { type: string, format: uuid }
+                  expiresInSec: { type: integer }
+                  devOtp: { type: string, description: "test-only" }
+        '429': { $ref: '#/components/responses/ErrorResponse' }
+  /v1/public/case-status:
+    post:
+      tags: [public-lookup]
+      summary: Public case-status lookup (per-court configurable gate — otp|captcha|open)
+      x-public: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cnr: { type: string }
+                slug: { type: string }
+                challengeId: { type: string, format: uuid }
+                otp: { type: string, pattern: "^\\d{6}$" }
+                captchaToken: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  case: { $ref: '#/components/schemas/PublicDocket' }
+                  accessMode: { type: string, enum: [otp, captcha, open] }
+                  source: { type: string, enum: [public] }
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+        '429': { $ref: '#/components/responses/ErrorResponse' }
