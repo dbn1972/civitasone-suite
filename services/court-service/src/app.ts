@@ -9,6 +9,7 @@ import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { caseRegistryRoutes } from "./modules/case-registry/routes.js";
 import { courtRegistryRoutes } from "./modules/court-registry/routes.js";
 import { caseLifecycleRoutes } from "./modules/case-lifecycle/routes.js";
+import { hearingRoutes } from "./modules/hearing/routes.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
@@ -59,6 +60,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(caseRegistryRoutes);
   await app.register(courtRegistryRoutes);
   await app.register(caseLifecycleRoutes);
+  await app.register(hearingRoutes);
   // await app.register(courtRegistryRoutes);
   // await app.register(causeListRoutes);
   // await app.register(hearingRoutes);

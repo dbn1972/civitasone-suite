@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { createSqlClient, getCurrentTenantId } from "@civitasone/db";
 import { caseRegistrySchema } from "../modules/case-registry/schema.js";
 import { courtRegistrySchema } from "../modules/court-registry/schema.js";
+import { hearingSchema } from "../modules/hearing/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 /**
@@ -36,6 +37,7 @@ const TENANT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const schema = {
   ...caseRegistrySchema,
   ...courtRegistrySchema,
+  ...hearingSchema,
   ...outboxSchema,
   // ...courtRegistrySchema, ...causeListSchema, ...hearingSchema, (added per module task)
 };

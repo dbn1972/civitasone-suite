@@ -28,6 +28,8 @@ export const COMMANDS = {
   updateCaseStatus:           "court.case.update_status",
   /** payload: { caseId, courtId, scheduledAt, purpose?, benchId?, judgeIds? } */
   scheduleHearing:            "court.hearing.schedule",
+  /** payload: { hearingId, reason, nextDate, expectedVersion } — §20 adjourn a hearing */
+  adjournHearing:             "court.hearing.adjourn",
   /** payload: { caseId, hearingId?, orderType, text, judgeIds?, effectiveDate? } */
   recordOrder:                "court.order.record",
   /** payload: { caseId, filingType, filedBy, documentIds?, feePaid? } */
@@ -52,6 +54,8 @@ export const EVENTS = {
   caseStatusChanged:          "court.case.status_changed",
   /** payload: { caseId, hearingId, courtId, scheduledAt, purpose? } */
   hearingScheduled:           "court.hearing.scheduled",
+  /** payload: { hearingId, nextDate, reason } */
+  hearingAdjourned:           "court.hearing.adjourned",
   /** payload: { caseId, orderId, orderType, effectiveDate? } */
   orderRecorded:              "court.order.recorded",
   /** payload: { caseId, filingId, filingType, filedBy } */
