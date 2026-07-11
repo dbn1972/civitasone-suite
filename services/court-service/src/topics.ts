@@ -60,6 +60,11 @@ export const COMMANDS = {
   /** §22 evidence + exhibits (SHA-256 tamper-evidence) */
   submitEvidence:             "court.evidence.submit",
   ruleOnEvidence:             "court.evidence.rule",
+  /** §23/§35.5 order issuance — maker-checker + DSC; AI never issues */
+  submitOrderForApproval:     "court.order.submit_approval",
+  approveAndIssueOrder:       "court.order.approve_issue",
+  sendBackOrder:              "court.order.send_back",
+  recallOrder:                "court.order.recall",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -102,6 +107,10 @@ export const EVENTS = {
   advocateUpdated:            "court.party.advocate_updated",
   evidenceSubmitted:          "court.evidence.submitted",
   evidenceRuled:              "court.evidence.ruled",
+  orderPendingApproval:       "court.order.pending_approval",
+  orderIssued:                "court.order.issued",
+  orderSentBack:              "court.order.sent_back",
+  orderRecalled:              "court.order.recalled",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
