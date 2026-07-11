@@ -53,6 +53,7 @@ import { registerAiAssistConsumers } from "./modules/ai-assist/consumer.js";
 // Cross-service consumed-event registrar — maps CONSUMED_EVENTS topics to handlers
 // (tenant.created, workflow.task.completed/assigned, hrms.employee.updated/separated).
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
+import { registerConfigRegistryConsumers } from "./modules/config-registry/consumer.js";
 // Graceful-shutdown-aware scheduled workers (return NodeJS.Timeout interval handles).
 import { startActionItemEscalationScheduler } from "./workers/action-item-escalation.js";
 import { startStatutoryFrequencyScheduler } from "./workers/statutory-frequency-check.js";
@@ -120,6 +121,8 @@ const MODULE_REGISTRARS: ModuleRegistrar[] = [
   registerAiAssistConsumers,
   // CONSUMED_EVENTS (tenant.created, workflow.task.*, hrms.employee.*) — cross-service stitching.
   registerIntegrationConsumers,
+  // Tenant config engine (config.set / config.deactivate).
+  registerConfigRegistryConsumers,
 ];
 
 for (const register of MODULE_REGISTRARS) register(registerConsumer);

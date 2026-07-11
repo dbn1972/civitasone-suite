@@ -183,6 +183,12 @@ export const COMMANDS = {
   aiDraftMinutes:             "meeting.ai.draft_minutes",
   /** payload: { meetingId, transcriptRef? } — extract candidate action items for human review */
   aiExtractActions:           "meeting.ai.extract_actions",
+
+  // ── Config Registry (tenant config engine) ──
+  /** payload: { id, namespace, configKey, value, label?, description?, sortOrder?, effectiveFrom?, effectiveTo?, expectedVersion? } */
+  setConfig:                  "meeting.config.set",
+  /** payload: { configId, expectedVersion } */
+  deactivateConfig:           "meeting.config.deactivate",
 } as const;
 
 /**
@@ -344,6 +350,12 @@ export const EVENTS = {
   complianceAlert:            "meeting.compliance.alert",
   /** payload: { committeeId, expectedBy, statutoryBasis } */
   statutoryMeetingOverdue:    "meeting.compliance.statutory_overdue",
+
+  // ── Config Registry ──
+  /** payload: { id, namespace, configKey } */
+  configSet:                  "meeting.config.set_done",
+  /** payload: { id, namespace } */
+  configDeactivated:          "meeting.config.deactivated",
 } as const;
 
 /**

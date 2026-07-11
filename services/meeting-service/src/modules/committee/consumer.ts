@@ -28,6 +28,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { committees, committeeMembers } from "./schema.js";
+import { getAllowedCommitteeTypes } from "../config-registry/policy.js";
 import {
   assertValidQuorumRule,
   assertMembershipTransition,
@@ -191,6 +192,16 @@ async function handleCommitteeCreate(msg: CommandEnvelope<CommitteeCreatePayload
 
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
+    // Tenant-configurable permitted committee types (config-registry,
+    // meeting_committee_types). effectiveAllowed: unconfigured ⇒ the full default
+    // set {standing, ad_hoc, statutory, board} ⇒ identical behavior. A tenant that
+    // has restricted its permitted types rejects a disallowed type to the DLQ.
+    const allowedTypes = await getAllowedCommitteeTypes(tx, msg.tenantId);
+    if (!allowedTypes.has(p.type)) {
+      throw new NonRetryableError(
+        `COMMITTEE_TYPE_NOT_PERMITTED: committee type '${p.type}' is not in this tenant's permitted set`,
+      );
+    }
     await tx.insert(committees).values({
       id: p.id,
       tenantId: p.tenantId,

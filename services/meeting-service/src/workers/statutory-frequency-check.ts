@@ -41,6 +41,7 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db as defaultDb } from "../shared/db.js";
+import { scannerDb } from "../shared/scanner-db.js";
 import { enqueue, type DrizzleTx } from "../shared/outbox.js";
 import { EVENTS, SERVICE } from "../topics.js";
 import { committees, committeeMembers } from "../modules/committee/schema.js";
@@ -392,7 +393,8 @@ export async function runStatutoryFrequencyCheck(
  * relay); the tenant GUC is applied on the per-tenant WRITE path, not this maintenance scan.
  */
 async function defaultLoadCandidates(): Promise<StatutoryCommitteeCandidate[]> {
-  const committeeRows = await defaultDb
+  // Cross-tenant scan via BYPASSRLS scanner pool (migration 0007) — see scanner-db.ts.
+  const committeeRows = await scannerDb
     .select({
       committeeId: committees.id,
       tenantId: committees.tenantId,
@@ -406,7 +408,7 @@ async function defaultLoadCandidates(): Promise<StatutoryCommitteeCandidate[]> {
   if (committeeRows.length === 0) return [];
 
   const committeeIds = committeeRows.map((r) => r.committeeId);
-  const lastMeetingRows = await defaultDb
+  const lastMeetingRows = await scannerDb
     .select({
       committeeId: meetings.committeeId,
       lastAt: sql<Date | null>`max(coalesce(${meetings.actualStartAt}, ${meetings.scheduledAt}))`,

@@ -22,6 +22,7 @@ import { calendarRoutes } from "./modules/calendar/routes.js";
 import { documentRoutes } from "./modules/document/routes.js";
 import { aiAssistRoutes } from "./modules/ai-assist/routes.js";
 import { vcRoutes } from "./modules/vc-integration/routes.js";
+import { configRegistryRoutes } from "./modules/config-registry/routes.js";
 
 /**
  * meeting-service Fastify application factory.
@@ -100,6 +101,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(calendarRoutes);
   await app.register(documentRoutes);
   await app.register(aiAssistRoutes);
+  await app.register(configRegistryRoutes);
 
   return app;
 }
