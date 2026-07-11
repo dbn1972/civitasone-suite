@@ -89,17 +89,13 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
+      return reply.code(400).send({ error: { code: "VALIDATION_FAILED", message: "Invalid request", details: err.issues } });
     }
     if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+      return reply.code(err.status).send({ error: { code: err.code, message: err.message } });
     }
     req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
+    return reply.code(500).send({ error: { code: "INTERNAL", message: "Internal error" } });
   });
 }

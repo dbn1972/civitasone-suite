@@ -141,6 +141,12 @@ export const EVENTS = {
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
   benchRegistered:            "court.bench.registered",
+  /**
+   * Cross-service integration-out topic consumed by notification-service (NOT owned
+   * or subscribed by court-service). Published fire-and-forget by public-lookup to
+   * dispatch the case-status OTP SMS. payload: { channel, to, template, otp }
+   */
+  notificationSend:           "notification.send",
 } as const;
 
 /**

@@ -6,6 +6,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { normalizeCnr } from "../case-registry/domain.js";
+import { EVENTS } from "../../topics.js";
 import {
   hashMobile, hashOtp, generateOtp, constantTimeEqualHex, cnrPrefix, toPublicDocket,
   resolveAccessMode, verifyCaptcha, publicCaseUrl, hashIp,
@@ -25,12 +26,12 @@ const OTP_RATE_MAX = 5;                   // max challenges per mobile per windo
 const OTP_IP_RATE_MAX = 20;               // max challenges per IP per window (anti SMS-bomb)
 
 /**
- * SMS dispatch topic. topics.ts owns NO notification/SMS topic today, so we use the
- * literal "notification.dispatch" — the ONE place the raw mobile + OTP leave this
- * service (fire-and-forget to the notification service). Reported to the integrator
- * to reconcile with the real notification contract.
+ * SMS dispatch topic — declared in topics.ts as EVENTS.notificationSend (an
+ * integration-out topic consumed by notification-service; court-service does NOT
+ * subscribe it). This is the ONE place the raw mobile + OTP leave this service
+ * (fire-and-forget to the notification service).
  */
-const SMS_DISPATCH_TOPIC = "notification.send";
+const SMS_DISPATCH_TOPIC = EVENTS.notificationSend;
 
 export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
   // ── Publish a public-directory establishment (AUTHENTICATED, admin) ───────────

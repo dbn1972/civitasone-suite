@@ -9,7 +9,8 @@
  * Standard mutable-entity columns: id (uuid PK), tenant_id, created_at, updated_at,
  * created_by, updated_by, version.
  */
-import { pgSchema, uuid, text, integer, date, varchar, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, integer, date, varchar, timestamp } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 /** The `court` PG schema — every court-service table is namespaced under it. */
 export const courtSchema = pgSchema("court");
@@ -21,8 +22,8 @@ export const notices = courtSchema.table("notices", {
   tenantId:   uuid("tenant_id").notNull(),
   caseId:     uuid("case_id").notNull(),
   noticeType: varchar("notice_type", { length: 48 }).notNull(),
-  issuedTo:   text("issued_to"),
-  renderedBody: text("rendered_body"),
+  issuedTo:   encryptedText("issued_to"),
+  renderedBody: encryptedText("rendered_body"),
   status:     varchar("status", { length: 16 }).notNull().default("issued"),
   issueDate:  date("issue_date").notNull(),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -39,11 +40,11 @@ export const noticeService = courtSchema.table("notice_service", {
   tenantId:       uuid("tenant_id").notNull(),
   noticeId:       uuid("notice_id").notNull(),
   serviceMode:    varchar("service_mode", { length: 24 }).notNull(),
-  recipient:      text("recipient"),
+  recipient:      encryptedText("recipient"),
   dispatchRef:    varchar("dispatch_ref", { length: 64 }),
   deliveryStatus: varchar("delivery_status", { length: 16 }).notNull().default("pending"),
   servedAt:       date("served_at"),
-  proof:          text("proof"),
+  proof:          encryptedText("proof"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by"),

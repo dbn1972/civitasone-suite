@@ -20,11 +20,24 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 // three tenants, one per access mode
 const T_OTP = randomUUID(), T_CAP = randomUUID(), T_OPEN = randomUUID();
 const ADMIN = "9999aaaa-9999-4999-8999-999999999999";
+// Per-run random prefixes/slugs so a crashed run never leaves colliding rows in the
+// (non-RLS, cross-tenant) public_establishments directory that would break the next run.
+const RC = () => ("T" + randomUUID().replace(/-/g, "").slice(0, 5)).toUpperCase();
+const B_OTP = RC(), B_CAP = RC(), B_OPEN = RC();
 const EST = {
-  otp: { code: "DLHC01", slug: "dl-otp-court", cnr: "DLHC010001112026", tenant: T_OTP, mode: "otp" },
-  cap: { code: "MHHC02", slug: "mh-cap-court", cnr: "MHHC020002222026", tenant: T_CAP, mode: "captcha" },
-  open: { code: "KAHC03", slug: "ka-open-court", cnr: "KAHC030003332026", tenant: T_OPEN, mode: "open" },
+  otp: { code: B_OTP, slug: B_OTP.toLowerCase() + "-court", cnr: B_OTP + "0001112026", tenant: T_OTP, mode: "otp" },
+  cap: { code: B_CAP, slug: B_CAP.toLowerCase() + "-court", cnr: B_CAP + "0002222026", tenant: T_CAP, mode: "captcha" },
+  open: { code: B_OPEN, slug: B_OPEN.toLowerCase() + "-court", cnr: B_OPEN + "0003332026", tenant: T_OPEN, mode: "open" },
 };
+
+// Unique source IP per run: the per-IP OTP rate-limit is a real prod control, but
+// app.inject collapses every request to one IP — a fresh IP per run avoids
+// cross-run accumulation tripping the limit.
+const _h = randomUUID().replace(/-/g, "");
+const CLIENT_IP = `10.${parseInt(_h.slice(0,2),16)}.${parseInt(_h.slice(2,4),16)}.${parseInt(_h.slice(4,6),16)}`;
+// Random 10-digit mobile per call: the per-MOBILE OTP rate-limit (5/15min) is keyed
+// on the number's hash, so fixed test numbers accumulate across runs and trip it.
+function mob(): string { return "9" + Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)).join(""); }
 
 function admTok(tenant: string) { return signToken({ sub: ADMIN, tid: tenant, roles: ["super_admin"], sid: "s" }, SECRET, 3600); }
 let app: FastifyInstance;
@@ -32,13 +45,13 @@ let app: FastifyInstance;
 async function jpost(url: string, body: unknown, token?: string) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (token) headers.authorization = `Bearer ${token}`;
-  const res = await app.inject({ method: "POST", url, headers, payload: body as object });
+  const res = await app.inject({ method: "POST", url, headers, payload: body as object, remoteAddress: CLIENT_IP });
   return { code: res.statusCode, body: res.statusCode < 500 ? res.json() : undefined };
 }
 async function jget(url: string, token?: string) {
   const headers: Record<string, string> = {};
   if (token) headers.authorization = `Bearer ${token}`;
-  const res = await app.inject({ method: "GET", url, headers });
+  const res = await app.inject({ method: "GET", url, headers, remoteAddress: CLIENT_IP });
   return { code: res.statusCode, body: res.statusCode < 500 ? res.json() : undefined };
 }
 async function waitFor(pred: () => Promise<boolean>, tries = 60, gap = 25) {
@@ -91,12 +104,12 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
     const r = await jget("/v1/public/establishments");
     expect(r.code).toBe(200);
     const item = (r.body.items as any[]).find((x) => x.publicSlug === EST.otp.slug);
-    expect(item.publicUrl).toMatch(/\/case-status\/dl-otp-court$/);
+    expect(item.publicUrl).toContain(`/case-status/${EST.otp.slug}`);
     expect(item.tenantId).toBeUndefined();
   });
 
   it("OTP mode: request OTP → verify → returns docket with NO PII", async () => {
-    const otpRes = await jpost("/v1/public/case-status/otp", { mobile: "9876543210" });
+    const otpRes = await jpost("/v1/public/case-status/otp", { mobile: mob() });
     expect(otpRes.code).toBe(200);
     const { challengeId, devOtp } = otpRes.body;
     const look = await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: devOtp });
@@ -111,7 +124,7 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
     const miss = await jpost("/v1/public/case-status", { cnr: EST.otp.cnr });
     expect(miss.code).toBe(400); // OTP_REQUIRED
 
-    const { challengeId, devOtp } = (await jpost("/v1/public/case-status/otp", { mobile: "9811111111" })).body;
+    const { challengeId, devOtp } = (await jpost("/v1/public/case-status/otp", { mobile: mob() })).body;
     for (let i = 0; i < 5; i++) {
       const wrong = await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: "000000" });
       expect(wrong.code).toBe(401);
@@ -120,7 +133,7 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
     expect(locked.code).toBe(429); // OTP_LOCKED even with the right OTP now
 
     // single-use: a fresh challenge, use it once, then reuse → invalid
-    const c2 = (await jpost("/v1/public/case-status/otp", { mobile: "9822222222" })).body;
+    const c2 = (await jpost("/v1/public/case-status/otp", { mobile: mob() })).body;
     expect((await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId: c2.challengeId, otp: c2.devOtp })).code).toBe(200);
     expect((await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId: c2.challengeId, otp: c2.devOtp })).code).toBe(401);
   });

@@ -95,6 +95,32 @@ describe("notice consumer", () => {
     expect(topics).toContain("audit.event.record");
   });
 
+  it("emits noticeIssued + audit with NO raw addressee PII in any payload (DPDP)", async () => {
+    const { register, deliver } = makeHarness();
+    registerNoticeConsumers(register);
+    const id = randomUUID();
+    await deliver("court.notice.issue", issueMsg(id));
+    // DPDP invariant: issued_to / recipient / proof must not leak into any emitted payload.
+    const forbidden = ["issuedTo", "issued_to", "recipient", "proof"];
+    for (const call of (enqueue as ReturnType<typeof vi.fn>).mock.calls) {
+      const payload = (call[1] as { payload: Record<string, unknown> }).payload;
+      for (const f of forbidden) expect(payload).not.toHaveProperty(f);
+      expect(JSON.stringify(payload)).not.toContain("Respondent 1");
+    }
+  });
+
+  it("emits noticeServiceRecorded with NO raw recipient/proof in any payload (DPDP)", async () => {
+    const { register, deliver } = makeHarness();
+    registerNoticeConsumers(register);
+    await deliver("court.notice.serve", serviceMsg(randomUUID()));
+    const forbidden = ["recipient", "proof", "issuedTo", "issued_to"];
+    for (const call of (enqueue as ReturnType<typeof vi.fn>).mock.calls) {
+      const payload = (call[1] as { payload: Record<string, unknown> }).payload;
+      for (const f of forbidden) expect(payload).not.toHaveProperty(f);
+      expect(JSON.stringify(payload)).not.toContain("Respondent 1");
+    }
+  });
+
   it("issue is exactly-once on redelivery", async () => {
     const { register, deliver } = makeHarness();
     registerNoticeConsumers(register);
