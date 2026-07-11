@@ -40,34 +40,64 @@ function auth(roles: string[], tid: string = TENANT) {
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  await sqlClient`DELETE FROM meeting.meeting_state_transitions WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meeting_series WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meeting_types WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_state_transitions WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_series WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_types WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.committees (id, tenant_id, name, code, type, constitution_date, quorum_rule, created_by, updated_by)
     VALUES (${COMMITTEE_ID}, ${TENANT}, 'Finance Committee', 'FC', 'finance', '2025-01-01', ${'{"minMembers":2}'}::jsonb, ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meetings
       (id, tenant_id, type, title, status, committee_id, chairperson_id, secretary_id, scheduled_at,
        financial_year, meeting_number, version, created_by, updated_by)
     VALUES (${MEETING_ID}, ${TENANT}, 'committee', 'Q1 Review', 'draft', ${COMMITTEE_ID}, ${CHAIR}, ${SECRETARY},
             '2026-06-01T09:00:00Z', '2025-26', 'FC/2025-26/001', 1, ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meeting_state_transitions (tenant_id, meeting_id, from_state, to_state, actor_id)
     VALUES (${TENANT}, ${MEETING_ID}, 'draft', 'draft', ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meeting_series (id, tenant_id, committee_id, pattern, start_date, version, created_by, updated_by)
     VALUES (${SERIES_ID}, ${TENANT}, ${COMMITTEE_ID}, 'monthly', '2026-01-05', 1, ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meeting_types (id, tenant_id, code, name, is_statutory, version, created_by, updated_by)
     VALUES (${TYPE_ID}, ${TENANT}, 'BRD', 'Board Meeting', true, 1, ${ACTOR}, ${ACTOR})`;
+  });
 
   app = await buildApp();
 });

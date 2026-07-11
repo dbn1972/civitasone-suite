@@ -143,23 +143,56 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   // Clean up any leftover test data
-  await sqlClient`DELETE FROM meeting.minutes_versions WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.minutes WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.decisions WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.attendance_records WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.participants WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.agenda_items WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meeting_state_transitions WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committee_members WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.minutes_versions WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.minutes WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.decisions WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.attendance_records WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.participants WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.agenda_items WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_state_transitions WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committee_members WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  });
 
   // Seed: committee with quorum rule requiring 2 members
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.committees (id, tenant_id, name, code, type, constitution_date, quorum_rule, voting_rule, created_by, updated_by)
     VALUES (${COMMITTEE}, ${TENANT}, 'Integration Test Committee', 'ITC', 'standing', '2025-01-01',
             ${JSON.stringify({ minMembers: 2 })}::jsonb, 'simple_majority', ${ACTOR}, ${ACTOR})
     ON CONFLICT (id) DO NOTHING`;
+  });
 
   // Seed: committee members (chairperson + secretary + 3 members)
   const members = [
@@ -170,10 +203,13 @@ beforeAll(async () => {
     { id: randomUUID(), memberId: MEMBER_C, role: "member" },
   ];
   for (const m of members) {
-    await sqlClient`
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      await sql`
       INSERT INTO meeting.committee_members (id, tenant_id, committee_id, member_id, role, appointment_date, status, voting_right, created_by, updated_by)
       VALUES (${m.id}, ${TENANT}, ${COMMITTEE}, ${m.memberId}, ${m.role}, '2025-01-01', 'active', true, ${ACTOR}, ${ACTOR})
       ON CONFLICT (id) DO NOTHING`;
+    });
   }
 
   app = await buildApp();

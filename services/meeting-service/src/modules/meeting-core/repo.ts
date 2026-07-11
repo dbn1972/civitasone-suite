@@ -27,7 +27,7 @@
  * _Requirements: 1.1, 1.7_
  */
 import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import {
   meetings,
@@ -116,11 +116,11 @@ export async function getMeetingById(tenantId: string, meetingId: string): Promi
 }
 
 async function loadMeetingById(tenantId: string, meetingId: string): Promise<MeetingRow | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(meetings)
     .where(and(eq(meetings.tenantId, tenantId), eq(meetings.id, meetingId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -165,13 +165,13 @@ async function loadMeetings(tenantId: string, query: ListMeetingsQuery): Promise
   if (query.to) conditions.push(lte(meetings.scheduledAt, new Date(query.to)));
 
   const where = and(...conditions);
-  const data = await db
+  const data = await scopedRead((tx) => tx
     .select()
     .from(meetings)
     .where(where)
     .orderBy(desc(meetings.scheduledAt), desc(meetings.createdAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   const total = await countWhere(meetings, where);
   return { data, meta: buildMeta(limit, offset, total) };
 }
@@ -189,11 +189,11 @@ export async function getTransitionLog(tenantId: string, meetingId: string): Pro
 }
 
 async function loadTransitionLog(tenantId: string, meetingId: string): Promise<MeetingStateTransitionRow[]> {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(meetingStateTransitions)
     .where(and(eq(meetingStateTransitions.tenantId, tenantId), eq(meetingStateTransitions.meetingId, meetingId)))
-    .orderBy(asc(meetingStateTransitions.transitionedAt));
+    .orderBy(asc(meetingStateTransitions.transitionedAt)));
 }
 
 // ─── Meeting types ──────────────────────────────────────────────────────────
@@ -202,11 +202,11 @@ async function loadTransitionLog(tenantId: string, meetingId: string): Promise<M
 export async function getMeetingTypeById(tenantId: string, meetingTypeId: string): Promise<MeetingTypeRow | null> {
   const key = cache.makeKey(tenantId, RESOURCE.type, meetingTypeId);
   const load = async (): Promise<MeetingTypeRow | null> => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(meetingTypes)
       .where(and(eq(meetingTypes.tenantId, tenantId), eq(meetingTypes.id, meetingTypeId)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   };
   return withDbFallback(() => cache.getOrLoad<MeetingTypeRow>(key, load), load);
@@ -232,13 +232,13 @@ async function loadMeetingTypes(tenantId: string, query: ListMeetingTypesQuery):
   if (query.isStatutory !== undefined) conditions.push(eq(meetingTypes.isStatutory, query.isStatutory));
 
   const where = and(...conditions);
-  const data = await db
+  const data = await scopedRead((tx) => tx
     .select()
     .from(meetingTypes)
     .where(where)
     .orderBy(asc(meetingTypes.code))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   const total = await countWhere(meetingTypes, where);
   return { data, meta: buildMeta(limit, offset, total) };
 }
@@ -249,11 +249,11 @@ async function loadMeetingTypes(tenantId: string, query: ListMeetingTypesQuery):
 export async function getMeetingSeriesById(tenantId: string, seriesId: string): Promise<MeetingSeriesRow | null> {
   const key = cache.makeKey(tenantId, RESOURCE.series, seriesId);
   const load = async (): Promise<MeetingSeriesRow | null> => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(meetingSeries)
       .where(and(eq(meetingSeries.tenantId, tenantId), eq(meetingSeries.id, seriesId)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   };
   return withDbFallback(() => cache.getOrLoad<MeetingSeriesRow>(key, load), load);
@@ -281,13 +281,13 @@ async function loadMeetingSeries(tenantId: string, query: ListSeriesQuery): Prom
   if (query.isActive !== undefined) conditions.push(eq(meetingSeries.isActive, query.isActive));
 
   const where = and(...conditions);
-  const data = await db
+  const data = await scopedRead((tx) => tx
     .select()
     .from(meetingSeries)
     .where(where)
     .orderBy(desc(meetingSeries.startDate))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   const total = await countWhere(meetingSeries, where);
   return { data, meta: buildMeta(limit, offset, total) };
 }
@@ -320,11 +320,11 @@ const dashboardColumns = {
 
 /** Counts of meetings grouped by status for a given predicate. */
 async function statusCounts(where: ReturnType<typeof and>): Promise<Record<string, number>> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ status: meetings.status, n: sql<number>`count(*)::int` })
     .from(meetings)
     .where(where)
-    .groupBy(meetings.status);
+    .groupBy(meetings.status));
   const out: Record<string, number> = {};
   for (const r of rows) out[r.status] = r.n;
   return out;
@@ -343,12 +343,12 @@ export async function getLeadershipDashboard(
   const load = async () => {
     const scope = and(eq(meetings.tenantId, tenantId), eq(meetings.chairpersonId, chairpersonId));
     const counts = await statusCounts(scope);
-    const upcoming = await db
+    const upcoming = await scopedRead((tx) => tx
       .select(dashboardColumns)
       .from(meetings)
       .where(and(scope, inArray(meetings.status, [...OPEN_STATES])))
       .orderBy(asc(meetings.scheduledAt))
-      .limit(20);
+      .limit(20));
     return { statusCounts: counts, upcoming };
   };
   const result = await withDbFallback(
@@ -376,18 +376,18 @@ export async function getSecretariatDashboard(
   const load = async () => {
     const scope = and(eq(meetings.tenantId, tenantId), eq(meetings.secretaryId, secretaryId));
     const counts = await statusCounts(scope);
-    const minutesPending = await db
+    const minutesPending = await scopedRead((tx) => tx
       .select(dashboardColumns)
       .from(meetings)
       .where(and(scope, eq(meetings.status, "minutes_pending")))
       .orderBy(asc(meetings.actualEndAt))
-      .limit(20);
-    const upcoming = await db
+      .limit(20));
+    const upcoming = await scopedRead((tx) => tx
       .select(dashboardColumns)
       .from(meetings)
       .where(and(scope, inArray(meetings.status, ["scheduled", "agenda_locked", "in_progress"])))
       .orderBy(asc(meetings.scheduledAt))
-      .limit(20);
+      .limit(20));
     return { statusCounts: counts, minutesPending, upcoming };
   };
   const result = await withDbFallback(
@@ -422,18 +422,18 @@ export async function getParticipantDashboard(
       eq(meetings.convenerId, userId),
     );
     const scope = and(eq(meetings.tenantId, tenantId), association);
-    const upcoming = await db
+    const upcoming = await scopedRead((tx) => tx
       .select(dashboardColumns)
       .from(meetings)
       .where(and(scope, inArray(meetings.status, [...OPEN_STATES])))
       .orderBy(asc(meetings.scheduledAt))
-      .limit(20);
-    const past = await db
+      .limit(20));
+    const past = await scopedRead((tx) => tx
       .select(dashboardColumns)
       .from(meetings)
       .where(and(scope, inArray(meetings.status, ["minutes_approved", "closed", "archived"])))
       .orderBy(desc(meetings.scheduledAt))
-      .limit(20);
+      .limit(20));
     return { upcoming, past };
   };
   const result = await withDbFallback(
@@ -450,6 +450,6 @@ async function countWhere(
   table: typeof meetings | typeof meetingTypes | typeof meetingSeries,
   where: ReturnType<typeof and>,
 ): Promise<number> {
-  const rows = await db.select({ n: sql<number>`count(*)::int` }).from(table).where(where);
+  const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(table).where(where));
   return rows[0]?.n ?? 0;
 }

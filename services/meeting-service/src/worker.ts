@@ -30,6 +30,7 @@ import type { CommandEnvelope, Handler } from "@civitasone/queue";
 import { isNonRetryable } from "@civitasone/queue";
 import { captureError, incrementDlqMessage } from "@civitasone/observability";
 import { startOutboxPurge } from "@civitasone/outbox";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -191,7 +192,11 @@ function makeRouter(topic: string): Handler {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        await handler(msg);
+        // Establish the tenant context from the message so the consumer's
+        // db.transaction() sets the app.tenant_id GUC — RLS is enforced on the
+        // write path too (not merely on a BYPASSRLS role). REQUIRED now that
+        // meeting.* tables are FORCE ROW LEVEL SECURITY (migration 0005).
+        await runWithTenant(msg.tenantId, () => handler(msg));
         return;
       } catch (err) {
         lastErr = err;

@@ -20,6 +20,7 @@ import { and, eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { meetings } from "../src/modules/meeting-core/schema.js";
 import { committees, committeeMembers } from "../src/modules/committee/schema.js";
 import { participants } from "../src/modules/participant/schema.js";
@@ -46,7 +47,7 @@ const auth = (roles?: string[], tid?: string) => ({ authorization: `Bearer ${tok
 const idem = { "x-idempotency-key": randomUUID(), "content-type": "application/json" };
 
 beforeAll(async () => {
-  await db.transaction(async (tx) => {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.insert(committees).values({
       id: COMMITTEE,
       tenantId: TENANT,
@@ -131,17 +132,17 @@ beforeAll(async () => {
       createdBy: ACTOR,
       updatedBy: ACTOR,
     });
-  });
+  }));
 });
 
 afterAll(async () => {
-  await db.transaction(async (tx) => {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(attendanceRecords).where(eq(attendanceRecords.tenantId, TENANT));
     await tx.delete(participants).where(eq(participants.tenantId, TENANT));
     await tx.delete(committeeMembers).where(eq(committeeMembers.tenantId, TENANT));
     await tx.delete(committees).where(eq(committees.tenantId, TENANT));
     await tx.delete(meetings).where(and(eq(meetings.tenantId, TENANT), eq(meetings.id, MEETING)));
-  });
+  }));
   await sqlClient.end();
 });
 
@@ -488,7 +489,7 @@ describe("POST /v1/meetings/:id/attendance/qr", () => {
 
 describe("attendance repo reads", () => {
   it("getAttendanceCount reports counts + live quorum evaluation (Req 6.4)", async () => {
-    const summary = await repo.getAttendanceCount(TENANT, MEETING);
+    const summary = await runWithTenant(TENANT, () => repo.getAttendanceCount(TENANT, MEETING));
     expect(summary).not.toBeNull();
     expect(summary!.present).toBeGreaterThanOrEqual(1);
     expect(summary!.quorumEstablished).toBe(true);
@@ -498,17 +499,17 @@ describe("attendance repo reads", () => {
   });
 
   it("getAttendanceCount returns null for an unknown meeting", async () => {
-    const summary = await repo.getAttendanceCount(TENANT, randomUUID());
+    const summary = await runWithTenant(TENANT, () => repo.getAttendanceCount(TENANT, randomUUID()));
     expect(summary).toBeNull();
   });
 
   it("getMeetingSnapshot returns null for an unknown meeting", async () => {
-    const snap = await repo.getMeetingSnapshot(TENANT, randomUUID());
+    const snap = await runWithTenant(TENANT, () => repo.getMeetingSnapshot(TENANT, randomUUID()));
     expect(snap).toBeNull();
   });
 
   it("generateAttendanceSheet returns null for an unknown meeting", async () => {
-    const sheet = await repo.generateAttendanceSheet(TENANT, randomUUID());
+    const sheet = await runWithTenant(TENANT, () => repo.generateAttendanceSheet(TENANT, randomUUID()));
     expect(sheet).toBeNull();
   });
 });

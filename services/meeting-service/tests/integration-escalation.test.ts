@@ -339,7 +339,7 @@ describe("integration: action item escalation lifecycle (Req 9.1, 9.4, 9.5, 9.6,
   it("step 5: ATR generation includes the overdue/escalated item (Req 10.1, 10.4)", async () => {
     const { getATR } = await import("../src/modules/action-item/repo.js");
 
-    const atr = await getATR(TENANT, COMMITTEE);
+    const atr = await runWithTenant(TENANT, () => getATR(TENANT, COMMITTEE));
 
     // The report should include our action item
     expect(atr.entries.length).toBeGreaterThanOrEqual(1);

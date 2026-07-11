@@ -45,47 +45,83 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   // Idempotent seed: clear then insert the fixture graph for the test tenant.
-  await sqlClient`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.agenda_items WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.agenda_items WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.committees
       (id, tenant_id, name, code, type, constitution_date, quorum_rule, created_by, updated_by)
     VALUES (${COMMITTEE}, ${TENANT}, 'Standing Committee', 'SC', 'standing', '2025-01-01',
             ${'{"minMembers":2}'}::jsonb, ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meetings
       (id, tenant_id, type, title, status, committee_id, scheduled_at, created_by, updated_by)
     VALUES (${MEETING}, ${TENANT}, 'committee', 'AI Test Meeting', 'minutes_pending', ${COMMITTEE},
             '2025-06-01T09:00:00Z', ${ACTOR}, ${ACTOR})`;
+  });
 
   // A prior agenda item so suggest-agenda has recurring-item context to surface.
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.agenda_items
       (tenant_id, meeting_id, sequence, title, outcome_type, status, created_by, updated_by)
     VALUES (${TENANT}, ${MEETING}, 1, 'Budget review', 'decision', 'accepted', ${ACTOR}, ${ACTOR})`;
+  });
 
   // A stored transcript artifact so GET .../ai/transcript returns 200 (metadata is authoritative;
   // the object body is fetched best-effort and may be null without live object storage).
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meeting_documents
       (id, tenant_id, meeting_id, file_name, mime_type, storage_key, hash, document_type,
        created_by, updated_by)
     VALUES (${TRANSCRIPT_DOC}, ${TENANT}, ${MEETING}, ${"transcript-" + MEETING + ".txt"}, 'text/plain',
             ${"ai/transcripts/" + TENANT + "/" + MEETING + ".txt"},
             ${"a".repeat(64)}, 'transcript', ${ACTOR}, ${ACTOR})`;
+  });
 
   app = await buildApp();
 });
 
 afterAll(async () => {
-  await sqlClient`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.agenda_items WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.agenda_items WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
   await app.close();
   await sqlClient.end();
 });

@@ -29,7 +29,7 @@
  * _Requirements: 11.1, 11.3, 11.4_
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { votes } from "./schema.js";
 import { resolutions } from "../decision/schema.js";
@@ -92,11 +92,11 @@ export interface MeetingRef {
  * or serving an active-votes listing. Owned by meeting-core; read here as a boundary guard.
  */
 export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, committeeId: meetings.committeeId, status: meetings.status })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -114,7 +114,7 @@ export interface ResolutionRef {
  * resolution belongs to the path meeting) before publishing a command.
  */
 export async function getResolutionRef(tenantId: string, resolutionId: string): Promise<ResolutionRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       id: resolutions.id,
       meetingId: resolutions.meetingId,
@@ -123,7 +123,7 @@ export async function getResolutionRef(tenantId: string, resolutionId: string): 
     })
     .from(resolutions)
     .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -168,15 +168,15 @@ export async function getVoteResults(tenantId: string, resolutionId: string): Pr
   return cache.getOrLoad<VoteResultsView>(
     cache.makeKey(tenantId, RESOURCE, resolutionId),
     async () => {
-      const resRows = await db
+      const resRows = await scopedRead((tx) => tx
         .select()
         .from(resolutions)
         .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       const resolution = resRows[0];
       if (!resolution) return null;
 
-      const ballotRows = await db
+      const ballotRows = await scopedRead((tx) => tx
         .select({ position: votes.position })
         .from(votes)
         .where(
@@ -185,7 +185,7 @@ export async function getVoteResults(tenantId: string, resolutionId: string): Pr
             eq(votes.tenantId, tenantId),
             eq(votes.isCirculation, resolution.isCirculation),
           ),
-        );
+        ));
       const tally = tallyOf(ballotRows.map((r) => r.position));
 
       const rule = isMajorityRule(resolution.majorityRule) ? resolution.majorityRule : "simple_majority";
@@ -239,7 +239,7 @@ export async function getActiveVotes(tenantId: string, meetingId: string): Promi
   const rows = await cache.getOrLoad<ActiveVoteView[]>(
     cache.makeKey(tenantId, RESOURCE, `${meetingId}:active`),
     async () => {
-      const openResolutions = await db
+      const openResolutions = await scopedRead((tx) => tx
         .select()
         .from(resolutions)
         .where(
@@ -249,15 +249,15 @@ export async function getActiveVotes(tenantId: string, meetingId: string): Promi
             inArray(resolutions.status, [...ACTIVE_STATUSES]),
           ),
         )
-        .orderBy(desc(resolutions.createdAt));
+        .orderBy(desc(resolutions.createdAt)));
       if (openResolutions.length === 0) return [];
 
       // Batch-fetch every ballot for the open resolutions in a single query (no N+1).
       const ids = openResolutions.map((r) => r.id);
-      const ballots = await db
+      const ballots = await scopedRead((tx) => tx
         .select({ resolutionId: votes.resolutionId, position: votes.position })
         .from(votes)
-        .where(and(eq(votes.tenantId, tenantId), inArray(votes.resolutionId, ids)));
+        .where(and(eq(votes.tenantId, tenantId), inArray(votes.resolutionId, ids))));
 
       const positionsByResolution = new Map<string, string[]>();
       for (const b of ballots) {
@@ -318,15 +318,15 @@ export async function getVoterPositions(tenantId: string, resolutionId: string):
   return cache.getOrLoad<VoterPositionsView>(
     cache.makeKey(tenantId, RESOURCE, `${resolutionId}:positions`),
     async () => {
-      const resRows = await db
+      const resRows = await scopedRead((tx) => tx
         .select({ id: resolutions.id, voteType: resolutions.voteType, isCirculation: resolutions.isCirculation })
         .from(resolutions)
         .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       const resolution = resRows[0];
       if (!resolution) return null;
 
-      const ballotRows = await db
+      const ballotRows = await scopedRead((tx) => tx
         .select({
           memberId: votes.memberId,
           position: votes.position,
@@ -341,7 +341,7 @@ export async function getVoterPositions(tenantId: string, resolutionId: string):
             eq(votes.isCirculation, resolution.isCirculation),
           ),
         )
-        .orderBy(asc(votes.votedAt));
+        .orderBy(asc(votes.votedAt)));
 
       const tally = tallyOf(ballotRows.map((r) => r.position));
       const secret = resolution.voteType === SECRET_BALLOT;

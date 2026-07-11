@@ -26,7 +26,7 @@
  * _Requirements: 14.1, 14.2, 14.3_
  */
 import { and, eq, inArray, lt, gt, ne } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { rooms, roomBookings, type RoomRow, type RoomBookingRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -56,11 +56,11 @@ export async function getRoomById(tenantId: string, roomId: string): Promise<Roo
   return cache.getOrLoad<RoomRow>(
     cache.makeKey(tenantId, RESOURCE_ROOM, roomId),
     async () => {
-      const rows = await db
+      const rows = await scopedRead((tx) => tx
         .select()
         .from(rooms)
         .where(and(eq(rooms.id, roomId), eq(rooms.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       return rows[0] ?? null;
     },
     ROOM_TTL,
@@ -77,7 +77,7 @@ export async function getRooms(tenantId: string, opts?: { status?: RoomStatus })
     (await cache.getOrLoad<RoomRow[]>(
       cache.makeKey(tenantId, RESOURCE_ROOM, "list"),
       async () => {
-        const rows = await db.select().from(rooms).where(eq(rooms.tenantId, tenantId));
+        const rows = await scopedRead((tx) => tx.select().from(rooms).where(eq(rooms.tenantId, tenantId)));
         return rows;
       },
       ROOM_TTL,
@@ -103,7 +103,7 @@ export interface MeetingRef {
 
 /** Direct (uncached) meeting existence lookup, tenant-scoped. Null when unknown / cross-tenant. */
 export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       id: meetings.id,
       type: meetings.type,
@@ -117,17 +117,17 @@ export async function getMeetingRef(tenantId: string, meetingId: string): Promis
     })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 /** Direct (uncached) booking lookup, tenant-scoped. Null when unknown / cross-tenant (route 404). */
 export async function getBookingById(tenantId: string, bookingId: string): Promise<RoomBookingRow | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(roomBookings)
     .where(and(eq(roomBookings.id, bookingId), eq(roomBookings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -154,10 +154,10 @@ export async function getRoomConfirmedBookings(
   ];
   if (excludeBookingId !== undefined) conditions.push(ne(roomBookings.id, excludeBookingId));
 
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: roomBookings.id, roomId: roomBookings.roomId, startAt: roomBookings.startAt, endAt: roomBookings.endAt, status: roomBookings.status })
     .from(roomBookings)
-    .where(and(...conditions));
+    .where(and(...conditions)));
   return rows.map((r) => ({ id: r.id, roomId: r.roomId, startAt: r.startAt, endAt: r.endAt, status: r.status }));
 }
 
@@ -175,25 +175,25 @@ async function gatherBusy(
   const busy: Interval[] = [];
 
   if (opts.roomIds && opts.roomIds.length > 0) {
-    const bookingRows = await db
+    const bookingRows = await scopedRead((tx) => tx
       .select({ startAt: roomBookings.startAt, endAt: roomBookings.endAt })
       .from(roomBookings)
       .where(
         and(
           eq(roomBookings.tenantId, tenantId),
-          inArray(roomBookings.roomId, [...opts.roomIds]),
+          inArray(roomBookings.roomId, [...opts.roomIds!]),
           eq(roomBookings.status, BOOKING_CONFIRMED),
           lt(roomBookings.startAt, opts.to),
           gt(roomBookings.endAt, opts.from),
         ),
-      );
+      ));
     for (const b of bookingRows) busy.push({ start: b.startAt, end: b.endAt });
   }
 
   if (opts.participantIds && opts.participantIds.length > 0) {
     // Meetings the requested employees are participants of, that are scheduled within the range
     // and not in a terminal (calendar-freeing) state.
-    const meetingRows = await db
+    const meetingRows = await scopedRead((tx) => tx
       .selectDistinct({
         id: meetings.id,
         scheduledAt: meetings.scheduledAt,
@@ -204,9 +204,9 @@ async function gatherBusy(
       .where(
         and(
           eq(meetings.tenantId, tenantId),
-          inArray(participants.employeeId, [...opts.participantIds]),
+          inArray(participants.employeeId, [...opts.participantIds!]),
         ),
-      );
+      ));
     for (const m of meetingRows) {
       if (!m.scheduledAt) continue;
       const start = m.scheduledAt;
@@ -254,7 +254,7 @@ export async function getRoomAvailability(
   const free = computeAvailability(busy, { start: from, end: to });
 
   // Re-query with meeting id / booking id for the calendar view (getRoomConfirmedBookings drops them).
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: roomBookings.id, meetingId: roomBookings.meetingId, startAt: roomBookings.startAt, endAt: roomBookings.endAt })
     .from(roomBookings)
     .where(
@@ -265,7 +265,7 @@ export async function getRoomAvailability(
         lt(roomBookings.startAt, to),
         gt(roomBookings.endAt, from),
       ),
-    );
+    ));
 
   return {
     roomId,

@@ -40,7 +40,7 @@
  * _Requirements: 9.1, 9.2, 9.7, 9.8, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
  */
 import { and, asc, desc, eq, inArray, notInArray, lt, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import { committees } from "../committee/schema.js";
@@ -155,11 +155,11 @@ export interface MeetingRef {
  * serving a listing. Owned by meeting-core; read here purely as a boundary guard.
  */
 export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, committeeId: meetings.committeeId })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -179,7 +179,7 @@ export interface ActionItemRef {
  * an optimistic-locked write — a stale cached version would cause spurious 409s.
  */
 export async function getActionItemRef(tenantId: string, actionItemId: string): Promise<ActionItemRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       id: actionItems.id,
       meetingId: actionItems.meetingId,
@@ -189,17 +189,17 @@ export async function getActionItemRef(tenantId: string, actionItemId: string): 
     })
     .from(actionItems)
     .where(and(eq(actionItems.id, actionItemId), eq(actionItems.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 /** Live committee existence check (uncached), tenant-scoped. Used by the ATR route for 404. */
 export async function committeeExists(tenantId: string, committeeId: string): Promise<boolean> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: committees.id })
     .from(committees)
     .where(and(eq(committees.id, committeeId), eq(committees.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }
 
@@ -214,11 +214,11 @@ export async function getActionItems(tenantId: string, meetingId: string): Promi
   const rows = await cache.getOrLoad<ActionItemView[]>(
     cache.makeKey(tenantId, RESOURCE, meetingId),
     async () => {
-      const found = await db
+      const found = await scopedRead((tx) => tx
         .select()
         .from(actionItems)
         .where(and(eq(actionItems.tenantId, tenantId), eq(actionItems.meetingId, meetingId)))
-        .orderBy(asc(actionItems.createdAt));
+        .orderBy(asc(actionItems.createdAt)));
       return found.map(toView);
     },
   );
@@ -236,11 +236,11 @@ export async function getMyActions(tenantId: string, assigneeId: string): Promis
   const rows = await cache.getOrLoad<ActionItemView[]>(
     cache.makeKey(tenantId, RESOURCE, `my:${assigneeId}`),
     async () => {
-      const found = await db
+      const found = await scopedRead((tx) => tx
         .select()
         .from(actionItems)
         .where(and(eq(actionItems.tenantId, tenantId), eq(actionItems.assigneeId, assigneeId)))
-        .orderBy(asc(actionItems.deadline));
+        .orderBy(asc(actionItems.deadline)));
       return found.map(toView);
     },
     LIVE_TTL_SECONDS,
@@ -269,19 +269,19 @@ export async function getOverdue(tenantId: string, committeeId?: string): Promis
         notInArray(actionItems.status, [...SETTLED_STATUSES]),
       );
       if (committeeId) {
-        const found = await db
+        const found = await scopedRead((tx) => tx
           .select({ item: actionItems })
           .from(actionItems)
           .innerJoin(meetings, eq(actionItems.meetingId, meetings.id))
           .where(and(overdueCondition, eq(meetings.committeeId, committeeId)))
-          .orderBy(asc(actionItems.deadline));
+          .orderBy(asc(actionItems.deadline)));
         return found.map((r) => toView(r.item));
       }
-      const found = await db
+      const found = await scopedRead((tx) => tx
         .select()
         .from(actionItems)
         .where(overdueCondition)
-        .orderBy(asc(actionItems.deadline));
+        .orderBy(asc(actionItems.deadline)));
       return found.map(toView);
     },
     LIVE_TTL_SECONDS,
@@ -320,12 +320,12 @@ export async function getATR(
     cache.makeKey(tenantId, RESOURCE, `atr:${committeeId}:${meetingWindow}`),
     async () => {
       // Req 10.1: the committee's last N meetings (newest scheduled first).
-      const recentMeetings = await db
+      const recentMeetings = await scopedRead((tx) => tx
         .select({ id: meetings.id })
         .from(meetings)
         .where(and(eq(meetings.tenantId, tenantId), eq(meetings.committeeId, committeeId)))
         .orderBy(desc(meetings.scheduledAt))
-        .limit(meetingWindow);
+        .limit(meetingWindow));
       const meetingIds = recentMeetings.map((m) => m.id);
 
       const now = new Date();
@@ -333,10 +333,10 @@ export async function getATR(
         return { ...compileAtr([], now), committeeId, meetingWindow, meetingIds };
       }
 
-      const items = await db
+      const items = await scopedRead((tx) => tx
         .select()
         .from(actionItems)
-        .where(and(eq(actionItems.tenantId, tenantId), inArray(actionItems.meetingId, meetingIds)));
+        .where(and(eq(actionItems.tenantId, tenantId), inArray(actionItems.meetingId, meetingIds))));
       const compiled = compileAtr(items.map(toAtrSource), now);
       return { ...compiled, committeeId, meetingWindow, meetingIds };
     },
@@ -367,11 +367,11 @@ export async function getProgressHistory(tenantId: string, actionItemId: string)
   const rows = await cache.getOrLoad<ProgressEntry[]>(
     cache.makeKey(tenantId, RESOURCE, `${actionItemId}:history`),
     async () => {
-      const found = await db
+      const found = await scopedRead((tx) => tx
         .select()
         .from(actionProgress)
         .where(and(eq(actionProgress.tenantId, tenantId), eq(actionProgress.actionItemId, actionItemId)))
-        .orderBy(asc(actionProgress.createdAt));
+        .orderBy(asc(actionProgress.createdAt)));
       return found.map((r) => ({
         id: r.id,
         actionItemId: r.actionItemId,

@@ -23,7 +23,7 @@
  *     requirement, and the embedded compliance summary.
  */
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import {
@@ -72,11 +72,11 @@ export async function getCommitteeById(tenantId: string, committeeId: string): P
   return cache.getOrLoad<CommitteeRow>(
     cache.makeKey(tenantId, RESOURCE, committeeId),
     async () => {
-      const rows = await db
+      const rows = await scopedRead((tx) => tx
         .select()
         .from(committees)
         .where(and(eq(committees.id, committeeId), eq(committees.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       return rows[0] ?? null;
     },
     COMMITTEE_TTL,
@@ -97,14 +97,14 @@ export async function listCommittees(tenantId: string, filter: ListCommitteesFil
   const where = and(...conditions);
 
   const [rows, countRows] = await Promise.all([
-    db
+    scopedRead((tx) => tx
       .select()
       .from(committees)
       .where(where)
       .orderBy(desc(committees.createdAt))
       .limit(filter.limit)
-      .offset(filter.offset),
-    db.select({ count: sql<number>`count(*)::int` }).from(committees).where(where),
+      .offset(filter.offset)),
+    scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(committees).where(where)),
   ]);
 
   return { rows, total: countRows[0]?.count ?? 0 };
@@ -117,11 +117,11 @@ export async function listCommittees(tenantId: string, filter: ListCommitteesFil
  * RLS-scoped; the committee's existence is checked separately by the route.
  */
 export async function getMembers(tenantId: string, committeeId: string): Promise<CommitteeMemberRow[]> {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(committeeMembers)
     .where(and(eq(committeeMembers.tenantId, tenantId), eq(committeeMembers.committeeId, committeeId)))
-    .orderBy(desc(committeeMembers.appointmentDate));
+    .orderBy(desc(committeeMembers.appointmentDate)));
 }
 
 /**
@@ -134,7 +134,7 @@ export async function getMemberById(
   committeeId: string,
   membershipId: string,
 ): Promise<CommitteeMemberRow | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(committeeMembers)
     .where(
@@ -144,7 +144,7 @@ export async function getMemberById(
         eq(committeeMembers.id, membershipId),
       ),
     )
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -155,11 +155,11 @@ export async function getMemberById(
  * date first (append-only audit table).
  */
 export async function getTermsHistory(tenantId: string, committeeId: string): Promise<CommitteeTermsHistoryRow[]> {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(committeeTermsHistory)
     .where(and(eq(committeeTermsHistory.tenantId, tenantId), eq(committeeTermsHistory.committeeId, committeeId)))
-    .orderBy(desc(committeeTermsHistory.effectiveDate));
+    .orderBy(desc(committeeTermsHistory.effectiveDate)));
 }
 
 // ─── Statutory compliance report (Req 2.5) ───────────────────────────────────────
@@ -256,7 +256,7 @@ export async function getComplianceReport(tenantId: string, committeeId: string)
 
 /** ISO date of the most recent actually-held meeting for a committee (or null). */
 async function getLastHeldMeetingDate(tenantId: string, committeeId: string): Promise<string | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ scheduledAt: meetings.scheduledAt, actualStartAt: meetings.actualStartAt })
     .from(meetings)
     .where(
@@ -267,7 +267,7 @@ async function getLastHeldMeetingDate(tenantId: string, committeeId: string): Pr
       ),
     )
     .orderBy(desc(meetings.scheduledAt))
-    .limit(1);
+    .limit(1));
   const row = rows[0];
   if (!row) return null;
   return toIsoDate(row.actualStartAt ?? row.scheduledAt);
@@ -347,11 +347,11 @@ async function getMeetingActivity(
   tenantId: string,
   committeeId: string,
 ): Promise<{ total: number; upcoming: number; held: number }> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ status: meetings.status, count: sql<number>`count(*)::int` })
     .from(meetings)
     .where(and(eq(meetings.tenantId, tenantId), eq(meetings.committeeId, committeeId), ne(meetings.status, "cancelled")))
-    .groupBy(meetings.status);
+    .groupBy(meetings.status));
 
   let total = 0;
   let upcoming = 0;

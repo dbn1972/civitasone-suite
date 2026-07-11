@@ -34,7 +34,7 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
 import { httpError } from "../../shared/context.js";
@@ -352,7 +352,7 @@ function resolutionContentHash(input: {
 
 /** Recompute the live tally from the recorded ballots and prime the 30s TTL cache (Req 11.3). */
 async function refreshTallyCache(tenantId: string, resolutionId: string, isCirculation: boolean): Promise<void> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ position: votes.position })
     .from(votes)
     .where(
@@ -361,7 +361,7 @@ async function refreshTallyCache(tenantId: string, resolutionId: string, isCircu
         eq(votes.tenantId, tenantId),
         eq(votes.isCirculation, isCirculation),
       ),
-    );
+    ));
   const positions = isCirculation ? rows.map((r) => normalizeCirculationPosition(r.position)) : rows.map((r) => r.position);
   const tally = computeTally(positions);
   await cache.put(cache.makeKey(tenantId, TALLY_RESOURCE, resolutionId), tally, TALLY_TTL_SECONDS);
