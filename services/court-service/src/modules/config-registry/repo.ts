@@ -11,6 +11,12 @@ export type ConfigEntryInsert = typeof configEntries.$inferInsert;
 
 // ─── Writes (used by the consumer, inside the handler's db.transaction) ──────────
 
+/** True for a Postgres unique/exclusion violation (SQLSTATE 23505 / 23P01). */
+export function isUniqueViolation(err: unknown): boolean {
+  const code = (err as { code?: string } | null | undefined)?.code;
+  return code === "23505" || code === "23P01";
+}
+
 export async function insertConfig(tx: Writer, row: ConfigEntryInsert): Promise<void> {
   // Idempotent on the deterministic id: a redelivery with the same id is a no-op.
   await tx.insert(configEntries).values(row).onConflictDoNothing({ target: configEntries.id });

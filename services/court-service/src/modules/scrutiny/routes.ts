@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { caseIdParam, defectIdParam, recordScrutinyBody, raiseDefectBody, resolveDefectBody } from "./validators.js";
+import { caseIdParam, scrutinyIdParam, defectIdParam, recordScrutinyBody, raiseDefectBody, resolveDefectBody, resolveScrutinyBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -36,6 +36,16 @@ export async function scrutinyRoutes(app: FastifyInstance): Promise<void> {
     const { id } = caseIdParam.parse(req.params);
     const items = await repo.listDefectsByCase(ctx.tenantId, id);
     return reply.send({ items, count: items.length, source: "db" });
+  });
+
+  // Resolve a scrutiny.
+  app.patch("/v1/court/scrutiny/:id/resolve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SCRUTINY_WRITE_ROLES);
+    const { id } = scrutinyIdParam.parse(req.params);
+    const body = resolveScrutinyBody.parse(req.body);
+    const result = await commands.resolveScrutiny(ctx, id, body);
+    return reply.code(202).send(result);
   });
 
   // Resolve a defect.

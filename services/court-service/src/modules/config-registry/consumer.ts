@@ -48,21 +48,33 @@ export function registerConfigConsumers(
 
       if (!current) {
         // First write for this (tenant, namespace, key) → create at version 1.
-        await repo.insertConfig(tx, {
-          id: p.id,
-          tenantId: p.tenantId,
-          namespace: p.namespace,
-          configKey: p.configKey,
-          value: p.value,
-          label: p.label ?? null,
-          description: p.description ?? null,
-          active: true,
-          sortOrder: p.sortOrder ?? 0,
-          effectiveFrom: p.effectiveFrom ?? null,
-          effectiveTo: p.effectiveTo ?? null,
-          createdBy: msg.actorId,
-          updatedBy: msg.actorId,
-        });
+        // A concurrent create with a DIFFERENT id but the same (tenant, namespace,
+        // config_key) trips the uq constraint; that is a permanent conflict, not a
+        // transient fault — surface it as NonRetryable so it never churns the DLQ.
+        try {
+          await repo.insertConfig(tx, {
+            id: p.id,
+            tenantId: p.tenantId,
+            namespace: p.namespace,
+            configKey: p.configKey,
+            value: p.value,
+            label: p.label ?? null,
+            description: p.description ?? null,
+            active: true,
+            sortOrder: p.sortOrder ?? 0,
+            effectiveFrom: p.effectiveFrom ?? null,
+            effectiveTo: p.effectiveTo ?? null,
+            createdBy: msg.actorId,
+            updatedBy: msg.actorId,
+          });
+        } catch (e) {
+          if (repo.isUniqueViolation(e)) {
+            throw new NonRetryableError(
+              `CONFIG_ALREADY_EXISTS: ${p.namespace}/${p.configKey} already exists for this tenant`,
+            );
+          }
+          throw e;
+        }
       } else {
         // Existing entry → version-guarded update. A provided-but-mismatched
         // expectedVersion is a conflict; absent means a blind write of the

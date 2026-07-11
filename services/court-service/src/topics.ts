@@ -30,6 +30,8 @@ export const COMMANDS = {
   scheduleHearing:            "court.hearing.schedule",
   /** payload: { hearingId, reason, nextDate, expectedVersion } — §20 adjourn a hearing */
   adjournHearing:             "court.hearing.adjourn",
+  /** payload: { hearingId, outcome, notes?, expectedVersion } — §20 record held/cancelled */
+  recordHearingOutcome:       "court.hearing.record_outcome",
   /** payload: { caseId, hearingId?, orderType, text, judgeIds?, effectiveDate? } */
   recordOrder:                "court.order.record",
   /** payload: { caseId, filingType, filedBy, documentIds?, feePaid? } */
@@ -42,6 +44,8 @@ export const COMMANDS = {
   recordScrutiny:             "court.scrutiny.record",
   raiseDefect:                "court.defect.raise",
   resolveDefect:              "court.defect.resolve",
+  /** payload: { scrutinyId, status, expectedVersion } — §13 resolve a scrutiny */
+  resolveScrutiny:            "court.scrutiny.resolve",
   /** §21 issuance + service of process */
   issueNotice:                "court.notice.issue",
   recordService:              "court.notice.serve",
@@ -96,6 +100,8 @@ export const EVENTS = {
   hearingScheduled:           "court.hearing.scheduled",
   /** payload: { hearingId, nextDate, reason } */
   hearingAdjourned:           "court.hearing.adjourned",
+  /** payload: { hearingId, outcome } */
+  hearingConcluded:           "court.hearing.concluded",
   /** payload: { caseId, orderId, orderType, effectiveDate? } */
   orderRecorded:              "court.order.recorded",
   /** payload: { caseId, filingId, filingType, filedBy } */
@@ -105,6 +111,8 @@ export const EVENTS = {
   /** payload: { causeListId, caseId, slot, courtroom } */
   causeListItemAdded:         "court.causelist.item_added",
   scrutinyRecorded:           "court.scrutiny.recorded",
+  /** payload: { scrutinyId, status } */
+  scrutinyResolved:           "court.scrutiny.resolved",
   defectRaised:               "court.defect.raised",
   defectResolved:             "court.defect.resolved",
   noticeIssued:               "court.notice.issued",

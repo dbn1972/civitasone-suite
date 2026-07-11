@@ -18,3 +18,12 @@ export const adjournHearingBody = z.object({
   expectedVersion: z.coerce.number().int().min(1),
 });
 export type AdjournHearingBody = z.infer<typeof adjournHearingBody>;
+
+/** Record the final outcome of a scheduled hearing (§20). `expectedVersion` is the
+ *  optimistic-lock token. */
+export const recordHearingOutcomeBody = z.object({
+  outcome:         z.enum(["held", "cancelled"]),
+  notes:           z.string().trim().max(1000).optional(),
+  expectedVersion: z.coerce.number().int().min(1),
+});
+export type RecordHearingOutcomeBody = z.infer<typeof recordHearingOutcomeBody>;

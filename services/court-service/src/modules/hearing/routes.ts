@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { caseIdParam, hearingIdParam, scheduleHearingBody, adjournHearingBody } from "./validators.js";
+import { caseIdParam, hearingIdParam, scheduleHearingBody, adjournHearingBody, recordHearingOutcomeBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -35,6 +35,16 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     const { id } = hearingIdParam.parse(req.params);
     const body = adjournHearingBody.parse(req.body);
     const result = await commands.adjournHearing(ctx, id, body);
+    return reply.code(202).send(result);
+  });
+
+  // Record a hearing outcome (held/cancelled).
+  app.patch("/v1/court/hearings/:id/outcome", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HEARING_WRITE_ROLES);
+    const { id } = hearingIdParam.parse(req.params);
+    const body = recordHearingOutcomeBody.parse(req.body);
+    const result = await commands.recordHearingOutcome(ctx, id, body);
     return reply.code(202).send(result);
   });
 

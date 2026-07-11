@@ -25,6 +25,14 @@ type AdjournHearingPayload = {
   expectedVersion: number;
 };
 
+type RecordHearingOutcomePayload = {
+  hearingId: string;
+  tenantId: string;
+  outcome: "held" | "cancelled";
+  notes?: string;
+  expectedVersion: number;
+};
+
 export function registerHearingConsumers(
   register: <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>) => void,
 ): void {
@@ -111,6 +119,51 @@ export function registerHearingConsumers(
         payload: { hearingId: p.hearingId, nextDate: p.nextDate, reason: p.reason },
       });
       await audit(tx, msg, "adjourn", "court_hearing", p.hearingId);
+    });
+  });
+
+  // Record the final outcome of a hearing (§20) — version-guarded, state-machine-checked.
+  register<RecordHearingOutcomePayload>(COMMANDS.recordHearingOutcome, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const current = await repo.getHearingForUpdate(tx, p.tenantId, p.hearingId);
+      if (!current) throw new NonRetryableError(`HEARING_NOT_FOUND: ${p.hearingId}`);
+      if (current.status === p.outcome) return; // already in target state; no-op
+
+      if (current.version !== p.expectedVersion) {
+        throw new NonRetryableError(
+          `VERSION_CONFLICT: hearing ${p.hearingId} expected v${p.expectedVersion}, found v${current.version}`,
+        );
+      }
+      try {
+        assertTransition(current.status, p.outcome);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
+
+      await versionedUpdate(tx, hearings, {
+        id: p.hearingId,
+        tenantId: p.tenantId,
+        expectedVersion: p.expectedVersion,
+        set: {
+          status: p.outcome,
+          updatedBy: msg.actorId,
+          updatedAt: new Date(),
+        },
+        entity: "hearing",
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.hearingConcluded,
+        eventType: EVENTS.hearingConcluded,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { hearingId: p.hearingId, outcome: p.outcome },
+      });
+      await audit(tx, msg, "record_outcome", "court_hearing", p.hearingId);
     });
   });
 }

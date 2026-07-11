@@ -33,6 +33,10 @@ vi.mock("../src/modules/config-registry/schema.js", () => ({ configEntries: {} }
 vi.mock("../src/modules/config-registry/repo.js", () => ({
   insertConfig: vi.fn(async () => {}),
   getConfigForUpdate: vi.fn(async () => currentConfig),
+  isUniqueViolation: (err: unknown) => {
+    const code = (err as { code?: string } | null | undefined)?.code;
+    return code === "23505" || code === "23P01";
+  },
 }));
 
 vi.mock("../src/topics.js", () => ({
@@ -135,6 +139,17 @@ describe("config-registry consumer — setConfig", () => {
     registerConfigConsumers(register);
     await expect(deliver("court.config.set", setMsg({ configKey: "bad key" }))).rejects.toThrow(/INVALID_CONFIG_KEY/);
     expect(repo.insertConfig).not.toHaveBeenCalled();
+  });
+
+  it("maps a concurrent unique violation on create to NonRetryable CONFIG_ALREADY_EXISTS", async () => {
+    currentConfig = undefined; // not-exists → create path
+    (repo.insertConfig as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" }),
+    );
+    const { register, deliver } = makeHarness();
+    registerConfigConsumers(register);
+    await expect(deliver("court.config.set", setMsg())).rejects.toThrow(/CONFIG_ALREADY_EXISTS/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
   });
 });
 

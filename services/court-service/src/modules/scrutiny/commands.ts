@@ -7,11 +7,13 @@ import {
   recordScrutinyBody, type RecordScrutinyBody,
   raiseDefectBody, type RaiseDefectBody,
   resolveDefectBody, type ResolveDefectBody,
+  resolveScrutinyBody, type ResolveScrutinyBody,
 } from "./validators.js";
 
 export type RecordScrutinyResult = { accepted: true; scrutinyId: string };
 export type RaiseDefectResult = { accepted: true; defectId: string };
 export type ResolveDefectResult = { accepted: true; defectId: string };
+export type ResolveScrutinyResult = { accepted: true; scrutinyId: string };
 
 /** Record the registry scrutiny of a case (§13). Idempotent per (case). */
 export async function recordScrutiny(
@@ -76,4 +78,28 @@ export async function resolveDefect(
   });
 
   return { accepted: true, defectId };
+}
+
+
+/** Resolve a scrutiny (§13). messageId is idempotent per (scrutiny + expectedVersion). */
+export async function resolveScrutiny(
+  ctx: RequestContext, scrutinyId: string, input: ResolveScrutinyBody,
+): Promise<ResolveScrutinyResult> {
+  const body = resolveScrutinyBody.parse(input);
+  const messageId = deterministicId(
+    COURT_NAMESPACE,
+    `${ctx.tenantId}:scrutiny-resolve:${scrutinyId}:${body.expectedVersion}`,
+  );
+
+  await queue.publish(COMMANDS.resolveScrutiny, {
+    messageId,
+    type: COMMANDS.resolveScrutiny,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { scrutinyId, tenantId: ctx.tenantId, ...body },
+  });
+
+  return { accepted: true, scrutinyId };
 }

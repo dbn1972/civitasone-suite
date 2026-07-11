@@ -35,8 +35,8 @@ vi.mock("../src/modules/config-registry/repo.js", () => ({
 }));
 
 vi.mock("../src/topics.js", () => ({
-  COMMANDS: { scheduleHearing: "court.hearing.schedule", adjournHearing: "court.hearing.adjourn" },
-  EVENTS: { hearingScheduled: "court.hearing.scheduled", hearingAdjourned: "court.hearing.adjourned" },
+  COMMANDS: { scheduleHearing: "court.hearing.schedule", adjournHearing: "court.hearing.adjourn", recordHearingOutcome: "court.hearing.record_outcome" },
+  EVENTS: { hearingScheduled: "court.hearing.scheduled", hearingAdjourned: "court.hearing.adjourned", hearingConcluded: "court.hearing.concluded" },
 }));
 
 import { registerHearingConsumers } from "../src/modules/hearing/consumer.js";
@@ -62,6 +62,13 @@ function adjournMsg(hearingId: string, expectedVersion: number, messageId = rand
     messageId, type: "court.hearing.adjourn",
     tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
     payload: { hearingId, tenantId: randomUUID(), reason: "counsel unavailable", nextDate: "2026-07-24", expectedVersion },
+  };
+}
+function outcomeMsg(hearingId: string, outcome: string, expectedVersion: number, messageId = randomUUID()) {
+  return {
+    messageId, type: "court.hearing.record_outcome",
+    tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
+    payload: { hearingId, tenantId: randomUUID(), outcome, notes: "disposed", expectedVersion },
   };
 }
 
@@ -121,6 +128,51 @@ describe("hearing consumer", () => {
     await expect(deliver("court.hearing.adjourn", adjournMsg("nope", 1))).rejects.toThrow(/HEARING_NOT_FOUND/);
     currentHearing = { status: "adjourned", version: 2 };
     await deliver("court.hearing.adjourn", adjournMsg("h1", 2));
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("records a scheduled hearing as held (version-guarded) and emits hearingConcluded + audit", async () => {
+    currentHearing = { status: "scheduled", version: 1 };
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await deliver("court.hearing.record_outcome", outcomeMsg("h1", "held", 1));
+    expect(versionedUpdate).toHaveBeenCalledTimes(1);
+    const topics = (enqueue as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[1] as { topic: string }).topic);
+    expect(topics).toContain("court.hearing.concluded");
+    expect(topics).toContain("audit.event.record");
+  });
+
+  it("records a scheduled hearing as cancelled", async () => {
+    currentHearing = { status: "scheduled", version: 1 };
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await deliver("court.hearing.record_outcome", outcomeMsg("h1", "cancelled", 1));
+    expect(versionedUpdate).toHaveBeenCalledTimes(1);
+    const topics = (enqueue as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[1] as { topic: string }).topic);
+    expect(topics).toContain("court.hearing.concluded");
+  });
+
+  it("rejects recording an outcome on a terminal (held) hearing (illegal transition)", async () => {
+    currentHearing = { status: "held", version: 2 };
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await expect(deliver("court.hearing.record_outcome", outcomeMsg("h1", "cancelled", 2))).rejects.toThrow(/INVALID_HEARING_TRANSITION/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects recording an outcome on an unknown hearing (HEARING_NOT_FOUND)", async () => {
+    currentHearing = undefined;
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await expect(deliver("court.hearing.record_outcome", outcomeMsg("nope", "held", 1))).rejects.toThrow(/HEARING_NOT_FOUND/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale optimistic-lock token on record outcome (VERSION_CONFLICT)", async () => {
+    currentHearing = { status: "scheduled", version: 5 };
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await expect(deliver("court.hearing.record_outcome", outcomeMsg("h1", "held", 1))).rejects.toThrow(/VERSION_CONFLICT/);
     expect(versionedUpdate).not.toHaveBeenCalled();
   });
 });

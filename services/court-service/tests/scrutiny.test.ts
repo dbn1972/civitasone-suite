@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 
 const processedIds = new Set<string>();
 let currentDefect: { status: string; version: number } | undefined;
+let currentScrutiny: { status: string; version: number } | undefined;
 
 vi.mock("../src/shared/db.js", () => ({
   db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }) },
@@ -29,6 +30,7 @@ vi.mock("../src/modules/scrutiny/repo.js", () => ({
   insertScrutiny: vi.fn(async () => {}),
   insertDefect: vi.fn(async () => {}),
   getDefectForUpdate: vi.fn(async () => currentDefect),
+  getScrutinyForUpdate: vi.fn(async () => currentScrutiny),
 }));
 
 vi.mock("../src/topics.js", () => ({
@@ -36,9 +38,11 @@ vi.mock("../src/topics.js", () => ({
     recordScrutiny: "court.scrutiny.record",
     raiseDefect: "court.defect.raise",
     resolveDefect: "court.defect.resolve",
+    resolveScrutiny: "court.scrutiny.resolve",
   },
   EVENTS: {
     scrutinyRecorded: "court.scrutiny.recorded",
+    scrutinyResolved: "court.scrutiny.resolved",
     defectRaised: "court.defect.raised",
     defectResolved: "court.defect.resolved",
   },
@@ -79,9 +83,16 @@ function resolveMsg(defectId: string, resolution: string, expectedVersion: numbe
     payload: { defectId, tenantId: randomUUID(), resolution, expectedVersion },
   };
 }
+function resolveScrutinyMsg(scrutinyId: string, status: string, expectedVersion: number, messageId = randomUUID()) {
+  return {
+    messageId, type: "court.scrutiny.resolve",
+    tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
+    payload: { scrutinyId, tenantId: randomUUID(), status, expectedVersion },
+  };
+}
 
 describe("scrutiny consumer", () => {
-  beforeEach(() => { processedIds.clear(); currentDefect = undefined; vi.clearAllMocks(); });
+  beforeEach(() => { processedIds.clear(); currentDefect = undefined; currentScrutiny = undefined; vi.clearAllMocks(); });
 
   it("records a scrutiny and emits scrutinyRecorded + audit", async () => {
     const { register, deliver } = makeHarness();
@@ -158,6 +169,67 @@ describe("scrutiny consumer", () => {
     expect(versionedUpdate).not.toHaveBeenCalled();
     // resolved → different resolution is an illegal transition
     await expect(deliver("court.defect.resolve", resolveMsg("d1", "waived", 2))).rejects.toThrow(/INVALID_DEFECT_TRANSITION/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("always inserts a scrutiny as pending, ignoring any payload-supplied status", async () => {
+    const { register, deliver } = makeHarness();
+    registerScrutinyConsumers(register);
+    const id = randomUUID();
+    await deliver("court.scrutiny.record", recordMsg(id, id, "cleared"));
+    const row = (repo.insertScrutiny as ReturnType<typeof vi.fn>).mock.calls[0][1] as { status: string };
+    expect(row.status).toBe("pending");
+    const topics = (enqueue as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[1] as { topic: string; payload: { status: string } }));
+    const recorded = topics.find((t) => t.topic === "court.scrutiny.recorded");
+    expect(recorded?.payload.status).toBe("pending");
+  });
+
+  it("resolves a pending scrutiny to cleared (version-guarded) and emits scrutinyResolved + audit", async () => {
+    currentScrutiny = { status: "pending", version: 1 };
+    const { register, deliver } = makeHarness();
+    registerScrutinyConsumers(register);
+    await deliver("court.scrutiny.resolve", resolveScrutinyMsg("s1", "cleared", 1));
+    expect(versionedUpdate).toHaveBeenCalledTimes(1);
+    const topics = (enqueue as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[1] as { topic: string }).topic);
+    expect(topics).toContain("court.scrutiny.resolved");
+    expect(topics).toContain("audit.event.record");
+  });
+
+  it("resolves a defective scrutiny to cleared", async () => {
+    currentScrutiny = { status: "defective", version: 3 };
+    const { register, deliver } = makeHarness();
+    registerScrutinyConsumers(register);
+    await deliver("court.scrutiny.resolve", resolveScrutinyMsg("s1", "cleared", 3));
+    expect(versionedUpdate).toHaveBeenCalledTimes(1);
+    const topics = (enqueue as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[1] as { topic: string }).topic);
+    expect(topics).toContain("court.scrutiny.resolved");
+  });
+
+  it("rejects resolving an unknown scrutiny (SCRUTINY_NOT_FOUND)", async () => {
+    currentScrutiny = undefined;
+    const { register, deliver } = makeHarness();
+    registerScrutinyConsumers(register);
+    await expect(deliver("court.scrutiny.resolve", resolveScrutinyMsg("nope", "cleared", 1))).rejects.toThrow(/SCRUTINY_NOT_FOUND/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale optimistic-lock token on scrutiny resolve (VERSION_CONFLICT)", async () => {
+    currentScrutiny = { status: "pending", version: 5 };
+    const { register, deliver } = makeHarness();
+    registerScrutinyConsumers(register);
+    await expect(deliver("court.scrutiny.resolve", resolveScrutinyMsg("s1", "cleared", 1))).rejects.toThrow(/VERSION_CONFLICT/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects an illegal scrutiny transition and is a no-op when already in target state", async () => {
+    currentScrutiny = { status: "cleared", version: 2 };
+    const { register, deliver } = makeHarness();
+    registerScrutinyConsumers(register);
+    // already cleared → resolving to cleared is a no-op (returns before version check)
+    await deliver("court.scrutiny.resolve", resolveScrutinyMsg("s1", "cleared", 2));
+    expect(versionedUpdate).not.toHaveBeenCalled();
+    // cleared is terminal → moving to defective is an illegal transition
+    await expect(deliver("court.scrutiny.resolve", resolveScrutinyMsg("s1", "defective", 2))).rejects.toThrow(/INVALID_SCRUTINY_TRANSITION/);
     expect(versionedUpdate).not.toHaveBeenCalled();
   });
 });

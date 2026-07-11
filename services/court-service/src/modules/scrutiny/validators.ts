@@ -28,3 +28,10 @@ export const resolveDefectBody = z.object({
   expectedVersion: z.coerce.number().int().min(1),
 });
 export type ResolveDefectBody = z.infer<typeof resolveDefectBody>;
+
+/** Resolve a scrutiny (§13). `expectedVersion` is the optimistic-lock token. */
+export const resolveScrutinyBody = z.object({
+  status:          z.enum(["cleared", "defective"]),
+  expectedVersion: z.coerce.number().int().min(1),
+});
+export type ResolveScrutinyBody = z.infer<typeof resolveScrutinyBody>;

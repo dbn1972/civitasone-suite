@@ -23,6 +23,16 @@ export async function getScrutiny(
   return rows[0];
 }
 
+export async function getScrutinyForUpdate(
+  tx: Writer, tenantId: string, id: string,
+): Promise<{ status: string; version: number } | undefined> {
+  const rows = await tx.select({ status: caseScrutiny.status, version: caseScrutiny.version })
+    .from(caseScrutiny)
+    .where(and(eq(caseScrutiny.tenantId, tenantId), eq(caseScrutiny.id, id)))
+    .limit(1);
+  return rows[0];
+}
+
 export async function insertDefect(tx: Writer, row: CaseDefectInsert): Promise<void> {
   // Idempotent on the deterministic id: a redelivery with the same id is a no-op.
   await tx.insert(caseDefect).values(row).onConflictDoNothing({ target: caseDefect.id });

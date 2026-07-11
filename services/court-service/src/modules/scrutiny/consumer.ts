@@ -2,9 +2,9 @@ import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { caseDefect } from "./schema.js";
+import { caseDefect, caseScrutiny } from "./schema.js";
 import * as repo from "./repo.js";
-import { assertDefectTransition, type DefectStatus } from "./domain.js";
+import { assertDefectTransition, assertScrutinyTransition, type DefectStatus, type ScrutinyStatus } from "./domain.js";
 
 type RecordScrutinyPayload = {
   id: string;
@@ -32,6 +32,13 @@ type ResolveDefectPayload = {
   expectedVersion: number;
 };
 
+type ResolveScrutinyPayload = {
+  scrutinyId: string;
+  tenantId: string;
+  status: ScrutinyStatus;
+  expectedVersion: number;
+};
+
 export function registerScrutinyConsumers(
   register: <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>) => void,
 ): void {
@@ -40,7 +47,10 @@ export function registerScrutinyConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const status = p.status ?? "pending";
+      // A scrutiny always STARTS pending — the outcome (cleared/defective) is set
+      // later via the guarded resolveScrutiny transition, never trusted from the
+      // creation payload.
+      const status = "pending";
       await repo.insertScrutiny(tx, {
         id: p.id,
         tenantId: p.tenantId,
@@ -142,6 +152,52 @@ export function registerScrutinyConsumers(
         payload: { defectId: p.defectId, resolution: p.resolution },
       });
       await audit(tx, msg, "resolve_defect", "court_defect", p.defectId);
+    });
+  });
+
+  // Resolve a scrutiny (§13) — version-guarded, state-machine-checked. A pending
+  // scrutiny is cleared or marked defective; a defective one is later cleared.
+  register<ResolveScrutinyPayload>(COMMANDS.resolveScrutiny, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const current = await repo.getScrutinyForUpdate(tx, p.tenantId, p.scrutinyId);
+      if (!current) throw new NonRetryableError(`SCRUTINY_NOT_FOUND: ${p.scrutinyId}`);
+      if (current.status === p.status) return; // already in target state; no-op
+
+      if (current.version !== p.expectedVersion) {
+        throw new NonRetryableError(
+          `VERSION_CONFLICT: scrutiny ${p.scrutinyId} expected v${p.expectedVersion}, found v${current.version}`,
+        );
+      }
+      try {
+        assertScrutinyTransition(current.status, p.status);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
+
+      await versionedUpdate(tx, caseScrutiny, {
+        id: p.scrutinyId,
+        tenantId: p.tenantId,
+        expectedVersion: p.expectedVersion,
+        set: {
+          status: p.status,
+          updatedBy: msg.actorId,
+          updatedAt: new Date(),
+        },
+        entity: "scrutiny",
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.scrutinyResolved,
+        eventType: EVENTS.scrutinyResolved,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { scrutinyId: p.scrutinyId, status: p.status },
+      });
+      await audit(tx, msg, "resolve_scrutiny", "court_scrutiny", p.scrutinyId);
     });
   });
 }

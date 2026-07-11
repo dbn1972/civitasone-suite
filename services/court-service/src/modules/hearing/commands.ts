@@ -6,10 +6,12 @@ import { deriveHearingId } from "./domain.js";
 import {
   scheduleHearingBody, type ScheduleHearingBody,
   adjournHearingBody, type AdjournHearingBody,
+  recordHearingOutcomeBody, type RecordHearingOutcomeBody,
 } from "./validators.js";
 
 export type ScheduleHearingResult = { accepted: true; hearingId: string };
 export type AdjournHearingResult = { accepted: true; hearingId: string };
+export type RecordHearingOutcomeResult = { accepted: true; hearingId: string };
 
 /** Schedule a hearing (§19). Idempotent per (case + scheduled instant). */
 export async function scheduleHearing(
@@ -45,6 +47,30 @@ export async function adjournHearing(
   await queue.publish(COMMANDS.adjournHearing, {
     messageId,
     type: COMMANDS.adjournHearing,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { hearingId, tenantId: ctx.tenantId, ...body },
+  });
+
+  return { accepted: true, hearingId };
+}
+
+
+/** Record a hearing outcome (§20). messageId is idempotent per (hearing + expectedVersion). */
+export async function recordHearingOutcome(
+  ctx: RequestContext, hearingId: string, input: RecordHearingOutcomeBody,
+): Promise<RecordHearingOutcomeResult> {
+  const body = recordHearingOutcomeBody.parse(input);
+  const messageId = deterministicId(
+    COURT_NAMESPACE,
+    `${ctx.tenantId}:hearing-outcome:${hearingId}:${body.expectedVersion}`,
+  );
+
+  await queue.publish(COMMANDS.recordHearingOutcome, {
+    messageId,
+    type: COMMANDS.recordHearingOutcome,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
