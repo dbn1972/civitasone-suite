@@ -1,0 +1,105 @@
+<title>Case Status — Tehsildar Court, Sadar</title>
+<style>
+  :root{
+    --paper:#eef0f4; --surface:#ffffff; --surface-2:#f3f5f8; --line:#dde1e9;
+    --ink:#1a1e2a; --muted:#5c6478; --faint:#8a92a5;
+    --accent:#37418c; --accent-2:#4b57b8; --accent-soft:#e9ebf7;
+    --good:#1f7a4d; --good-soft:#e4f2ea; --warn:#b7791f; --warn-soft:#f7efdd; --crit:#c0392b;
+    --shadow:0 1px 2px rgba(20,24,40,.05),0 10px 34px rgba(20,24,40,.09);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --paper:#0e1016; --surface:#161923; --surface-2:#1d212c; --line:#2a2f3c;
+    --ink:#eceef4; --muted:#a3abbd; --faint:#6c7487; --accent:#9aa4e8; --accent-2:#8590e0; --accent-soft:#20233a;
+    --good:#5cc48c; --good-soft:#16281f; --warn:#e0b055; --warn-soft:#2a2417; --crit:#e8837a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 40px rgba(0,0,0,.5);
+  }}
+  :root[data-theme="dark"]{--paper:#0e1016;--surface:#161923;--surface-2:#1d212c;--line:#2a2f3c;--ink:#eceef4;--muted:#a3abbd;--faint:#6c7487;--accent:#9aa4e8;--accent-2:#8590e0;--accent-soft:#20233a;--good:#5cc48c;--good-soft:#16281f;--warn:#e0b055;--warn-soft:#2a2417;--crit:#e8837a;--shadow:0 1px 2px rgba(0,0,0,.4),0 12px 40px rgba(0,0,0,.5)}
+  :root[data-theme="light"]{--paper:#eef0f4;--surface:#ffffff;--surface-2:#f3f5f8;--line:#dde1e9;--ink:#1a1e2a;--muted:#5c6478;--faint:#8a92a5;--accent:#37418c;--accent-2:#4b57b8;--accent-soft:#e9ebf7;--good:#1f7a4d;--good-soft:#e4f2ea;--warn:#b7791f;--warn-soft:#f7efdd;--crit:#c0392b;--shadow:0 1px 2px rgba(20,24,40,.05),0 10px 34px rgba(20,24,40,.09)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;padding:34px 18px 60px}
+  .serif{font-family:Georgia,"Times New Roman",serif}
+  .tnum{font-variant-numeric:tabular-nums}
+  .shell{width:100%;max-width:520px}
+  .brand{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:6px}
+  .seal{width:40px;height:40px;border-radius:10px;background:var(--accent);color:#fff;display:grid;place-items:center;
+    font-family:Georgia,serif;font-weight:700;font-size:20px}
+  .brand .n{font-family:Georgia,serif;font-size:18px;font-weight:600}
+  .tagline{text-align:center;color:var(--muted);font-size:13px;margin:0 0 22px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);
+    padding:22px 22px 24px}
+  .steps{display:flex;gap:6px;margin-bottom:20px}
+  .step{flex:1;text-align:center;font-size:11px;color:var(--faint);font-weight:600;letter-spacing:.03em}
+  .step .b{height:4px;border-radius:3px;background:var(--surface-2);margin-bottom:7px}
+  .step.done .b,.step.active .b{background:var(--accent)}
+  .step.done,.step.active{color:var(--accent)}
+  .lab{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em;margin-bottom:6px;display:block}
+  .field{width:100%;font-size:15px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;
+    background:var(--surface-2);color:var(--ink);font-family:ui-monospace,monospace;letter-spacing:.04em}
+  .row{display:flex;gap:10px}
+  .otpboxes{display:flex;gap:8px;justify-content:space-between;margin-top:2px}
+  .otpboxes .d{flex:1;text-align:center;font-size:19px;font-weight:700;padding:10px 0;border:1px solid var(--line);
+    border-radius:9px;background:var(--surface-2);font-family:ui-monospace,monospace}
+  .otpboxes .d.f{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .hint{font-size:11.5px;color:var(--faint);margin-top:8px}
+  .btn{margin-top:18px;width:100%;font-size:14.5px;font-weight:600;padding:12px;border:0;border-radius:10px;
+    background:var(--accent);color:#fff;cursor:pointer}
+  .divider{height:1px;background:var(--line);margin:22px 0}
+  /* result */
+  .res-head{display:flex;align-items:center;gap:11px;margin-bottom:4px}
+  .res-head .cnr{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted)}
+  .res-title{font-size:19px;font-weight:600;letter-spacing:-.01em;margin:2px 0 14px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px;text-transform:capitalize}
+  .p-pending{background:var(--warn-soft);color:var(--warn)}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin-top:4px}
+  .kv .k{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+  .kv .v{font-size:14.5px;font-weight:550;margin-top:2px}
+  .next{margin-top:18px;background:var(--accent-soft);border-radius:11px;padding:13px 15px;display:flex;align-items:center;gap:12px}
+  .next .cal{width:38px;height:38px;border-radius:9px;background:var(--surface);display:grid;place-items:center;flex:none}
+  .next .cal .m{font-size:8.5px;font-weight:700;color:var(--crit);letter-spacing:.05em}
+  .next .cal .d{font-size:16px;font-weight:700;line-height:1;color:var(--ink)}
+  .next .t{font-size:12px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .next .s{font-size:14px;font-weight:600;margin-top:1px}
+  .safety{font-size:11.5px;color:var(--faint);text-align:center;margin-top:18px;line-height:1.5}
+  .safety b{color:var(--muted)}
+</style>
+
+<div class="shell">
+  <div class="brand"><span class="seal serif">न्या</span><span class="n">Tehsildar Court, Sadar</span></div>
+  <p class="tagline">Public case-status enquiry · CivitasOne</p>
+
+  <div class="card">
+    <div class="steps">
+      <div class="step done"><div class="b"></div>Mobile</div>
+      <div class="step done"><div class="b"></div>Verify OTP</div>
+      <div class="step active"><div class="b"></div>Case status</div>
+    </div>
+
+    <label class="lab">CNR number</label>
+    <input class="field" value="DLHC010000012026" readonly>
+    <div class="hint">Verified for +91 ●●●●●●3210 · OTP confirmed — this court requires OTP verification to view status.</div>
+
+    <div class="divider"></div>
+
+    <div class="res-head">
+      <span class="pill p-pending">● Pending</span>
+      <span class="cnr">DLHC010000012026</span>
+    </div>
+    <div class="res-title serif">Ram v. State</div>
+
+    <div class="kv">
+      <div><div class="k">Case type</div><div class="v">Mutation</div></div>
+      <div><div class="k">Stage</div><div class="v">Part-heard</div></div>
+      <div><div class="k">Filed on</div><div class="v tnum">01 Feb 2026</div></div>
+      <div><div class="k">Court</div><div class="v">Tehsildar, Sadar</div></div>
+    </div>
+
+    <div class="next">
+      <div class="cal"><span class="m">JUL</span><span class="d tnum">18</span></div>
+      <div><div class="t">Next hearing</div><div class="s">18 Jul 2026 · for arguments</div></div>
+    </div>
+  </div>
+
+  <p class="safety"><b>Public record.</b> Only docket status is shown — no party contact details are ever disclosed. Access is OTP-verified; do not share your one-time code with anyone.</p>
+</div>
