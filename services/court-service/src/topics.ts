@@ -1,0 +1,68 @@
+/**
+ * Topic + event names owned by court-service. Naming: {service}.{entity}.{action}
+ *
+ * This file is the single source of truth for the court-service message contract.
+ * - COMMANDS         — write intents published by routes (route → zod → queue.publish → 202)
+ * - EVENTS           — domain facts published via the transactional outbox after a DB write
+ * - CONSUMED_EVENTS  — events owned by OTHER services that court-service subscribes to
+ *
+ * Each entry carries a JSDoc payload contract describing the message body. All payloads are
+ * wrapped in the standard CivitasOne CommandEnvelope (`{ messageId, tenantId, actorId,
+ * correlationId, occurredAt, payload }`); the JSDoc below documents the `payload` shape only.
+ *
+ * Cross-service contract note (per steering docs): when a CONSUMED_EVENT contract changes, the
+ * publisher's topics.ts and this file must be updated together. Consumers MUST tolerate unknown
+ * additional fields (forward-compatible) and treat new optional fields as additive.
+ *
+ * _Requirements: 25.3, 22.6, 22.7_
+ */
+
+/**
+ * Commands — write intents. Published by HTTP routes after zod validation; handled by consumers
+ * which call markProcessed(tx, messageId) first, then write, then enqueue EVENTS.
+ */
+export const COMMANDS = {
+  /** payload: { cnr?, caseType, filingNumber?, courtId, title, petitioners, respondents, actSection?, filedAt } */
+  registerCase:               "court.case.register",
+  /** payload: { caseId, version, to: CaseStatus, reason?, disposalType? } */
+  updateCaseStatus:           "court.case.update_status",
+  /** payload: { caseId, courtId, scheduledAt, purpose?, benchId?, judgeIds? } */
+  scheduleHearing:            "court.hearing.schedule",
+  /** payload: { caseId, hearingId?, orderType, text, judgeIds?, effectiveDate? } */
+  recordOrder:                "court.order.record",
+  /** payload: { caseId, filingType, filedBy, documentIds?, feePaid? } */
+  submitFiling:               "court.filing.submit",
+  /** payload: { courtId, forDate, benchId? } — materialize the cause-list for a court/day */
+  generateCauseList:          "court.causelist.generate",
+} as const;
+
+/**
+ * Events — domain facts emitted via the transactional outbox after a successful DB write.
+ * Consumed by Audit_Service, Analytics_Service, Notification_Service, and other services.
+ * All event payloads include at minimum: { caseId?, tenantId, occurredAt } plus the fields below.
+ */
+export const EVENTS = {
+  /** payload: { caseId, cnr, caseType, courtId, status: "filed" } */
+  caseRegistered:             "court.case.registered",
+  /** payload: { caseId, from, to, reason?, disposalType? } */
+  caseStatusChanged:          "court.case.status_changed",
+  /** payload: { caseId, hearingId, courtId, scheduledAt, purpose? } */
+  hearingScheduled:           "court.hearing.scheduled",
+  /** payload: { caseId, orderId, orderType, effectiveDate? } */
+  orderRecorded:              "court.order.recorded",
+  /** payload: { caseId, filingId, filingType, filedBy } */
+  filingSubmitted:            "court.filing.submitted",
+  /** payload: { courtId, causeListId, forDate, itemCount } */
+  causeListGenerated:         "court.causelist.generated",
+} as const;
+
+/**
+ * Consumed events — owned by other services. court-service subscribes to these to stitch
+ * cross-service behavior. Consumers MUST be idempotent and tolerate unknown extra fields.
+ *
+ * Cross-service contracts (payload shapes as guaranteed by the publishing service):
+ */
+export const CONSUMED_EVENTS = {} as const;
+
+/** Service identifier — first segment of every owned topic name. */
+export const SERVICE = "court";
