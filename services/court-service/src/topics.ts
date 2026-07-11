@@ -68,6 +68,9 @@ export const COMMANDS = {
   /** §47 config/metadata keystone — nothing hardcoded */
   setConfig:                  "court.config.set",
   deactivateConfig:           "court.config.deactivate",
+  /** §30 certified copies — apply, pay, issue */
+  requestCertifiedCopy:       "court.copy.request",
+  transitionCertifiedCopy:    "court.copy.transition",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -116,6 +119,8 @@ export const EVENTS = {
   orderRecalled:              "court.order.recalled",
   configSet:                  "court.config.set_done",
   configDeactivated:          "court.config.deactivated",
+  certifiedCopyRequested:     "court.copy.requested",
+  certifiedCopyTransitioned:  "court.copy.transitioned",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
