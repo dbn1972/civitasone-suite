@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
-    "worker": "tsx src/worker.ts",
+    "worker": "tsx src/worker-main.ts",
     "test": "vitest run",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",

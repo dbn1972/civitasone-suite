@@ -30,6 +30,7 @@ import type { CommandEnvelope, Handler } from "@civitasone/queue";
 import { isNonRetryable } from "@civitasone/queue";
 import { captureError, incrementDlqMessage } from "@civitasone/observability";
 import { startOutboxPurge } from "@civitasone/outbox";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -53,8 +54,8 @@ import { registerConfigConsumers } from "./modules/config-registry/consumer.js";
 
 const log = pino({ name: "court-worker" });
 
-// (1) Fail-fast on missing/short COURT_PII_KEY — never start fail-open.
-assertPiiKeyConfigured();
+// (Fail-fast PII assertion runs inside startWorker() so this module is safe to
+// import without side effects — see worker-main.ts.)
 
 // ── Retry + DLQ policy (design: Recovery Strategies) ─────────────────────────
 /** Max handler attempts before a message is dead-lettered. */
@@ -186,7 +187,10 @@ function makeRouter(topic: string): Handler {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        await handler(msg);
+        // Establish the tenant context from the message so the consumer's
+        // db.transaction() sets the app.tenant_id GUC — RLS is enforced on the
+        // write path too (not merely on a BYPASSRLS role).
+        await runWithTenant(msg.tenantId, () => handler(msg));
         return;
       } catch (err) {
         lastErr = err;
@@ -201,40 +205,52 @@ function makeRouter(topic: string): Handler {
   };
 }
 
-// (2) Subscribe to every owned COMMANDS topic + every CONSUMED_EVENTS topic.
+// Subscribe to every owned COMMANDS topic + every CONSUMED_EVENTS topic.
 const SUBSCRIBED_TOPICS: readonly string[] = [
   ...Object.values(COMMANDS),
   ...(Object.values(CONSUMED_EVENTS) as readonly string[]),
 ];
 
-for (const topic of SUBSCRIBED_TOPICS) {
-  queue.subscribe(topic, makeRouter(topic));
+/**
+ * Subscribe all module consumers to the queue. PURE wiring — no queue.start /
+ * relay / purge — so this module is import-safe: an in-process e2e can drive the
+ * REAL router (with tenant context + DLQ) without leaking interval timers.
+ */
+export function subscribeConsumers(): void {
+  for (const topic of SUBSCRIBED_TOPICS) {
+    queue.subscribe(topic, makeRouter(topic));
+  }
 }
 
-// (5) Start the queue consumer loops + outbox relay + scheduled purge.
-await queue.start();
-const relay = startRelay(db, queue);
-const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
-  intervalMs: 60 * 60_000,
-  batchSize: 1000,
-  logger: log,
-});
-
-log.info(
-  { topics: SUBSCRIBED_TOPICS.length, consumers: consumerRegistry.size },
-  "court-service worker: consumers + outbox relay running",
-);
-
-// (6) Graceful shutdown — stop consumers, stop timers, close the DB pool.
-async function shutdown(signal: string): Promise<void> {
-  log.info({ signal }, "shutting down");
-  clearInterval(purge);
-  clearInterval(relay);
-  await queue.stop();
-  await sqlClient.end();
-  log.info("shutdown complete");
-  process.exit(0);
+/**
+ * Full worker bootstrap (process entrypoint: worker-main.ts): fail-fast PII
+ * assertion, subscribe consumers, start the queue consumer loops, run the
+ * transactional-outbox relay + scheduled purge, and register graceful shutdown.
+ */
+export async function startWorker(): Promise<void> {
+  // Fail-fast on missing/short COURT_PII_KEY — never start fail-open.
+  assertPiiKeyConfigured();
+  subscribeConsumers();
+  await queue.start();
+  const relay = startRelay(db, queue);
+  const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+    intervalMs: 60 * 60_000,
+    batchSize: 1000,
+    logger: log,
+  });
+  log.info(
+    { topics: SUBSCRIBED_TOPICS.length, consumers: consumerRegistry.size },
+    "court-service worker: consumers + outbox relay running",
+  );
+  async function shutdown(signal: string): Promise<void> {
+    log.info({ signal }, "shutting down");
+    clearInterval(purge);
+    clearInterval(relay);
+    await queue.stop();
+    await sqlClient.end();
+    log.info("shutdown complete");
+    process.exit(0);
+  }
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
-
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
