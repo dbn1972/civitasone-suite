@@ -44,23 +44,40 @@ export function generatePassNumber(): string {
 
 export type PassType = "single" | "multi_day" | "recurring" | "event";
 
-const MULTI_DAY_MAX_MS = 7 * 24 * 60 * 60 * 1000; // Requirement 4.4: multi-day capped at 7 days
+/** Requirement 4.4 DEFAULT: multi-day pass capped at 7 days from requestedFrom. */
+export const MULTI_DAY_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+/** Requirement 12.2 DEFAULT: recurring/event pass capped at 90 days. */
+export const RECURRING_MAX_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Config-driven caps for pass validity. The HTTP/consumer path resolves these
+ * from the tenant's `visitor_policy` config (digital_pass.multi_day_max_days /
+ * digital_pass.recurring_max_days) and passes them in; when omitted the module
+ * DEFAULTS apply, so behavior is unchanged for an unconfigured tenant.
+ */
+export interface ValidityCaps {
+  multiDayMaxMs?: number;
+  recurringMaxMs?: number;
+}
 
 /**
  * Computes the [validFrom, validUntil] window for a Digital_Pass based on
  * pass type (Requirement 4.4):
  *  - single: valid from `requestedFrom` through the end of that calendar day.
  *  - multi_day: valid from `requestedFrom` through `requestedUntil`, capped
- *    at a maximum of 7 days from `requestedFrom`.
- *  - recurring / event: pass through `requestedUntil` as-is. Recurring pass
- *    duration (max 90 days) is enforced by the `recurring-pass` module, not
- *    here — see design.md Requirement 12.2.
+ *    at a maximum of `caps.multiDayMaxMs` (default 7 days) from `requestedFrom`.
+ *  - recurring / event: `requestedUntil`, capped at `caps.recurringMaxMs`
+ *    (default 90 days) from `requestedFrom`. The recurring-pass module also
+ *    enforces its own cap at request time (design.md Requirement 12.2).
  */
 export function computeValidityWindow(
   passType: PassType,
   requestedFrom: Date,
   requestedUntil?: Date,
+  caps: ValidityCaps = {},
 ): { validFrom: Date; validUntil: Date } {
+  const multiDayMaxMs = caps.multiDayMaxMs ?? MULTI_DAY_MAX_MS;
+  const recurringMaxMs = caps.recurringMaxMs ?? RECURRING_MAX_MS;
   if (passType === "single") {
     const validFrom = requestedFrom;
     const validUntil = new Date(
@@ -90,13 +107,20 @@ export function computeValidityWindow(
   }
 
   if (passType === "multi_day") {
-    const maxUntil = new Date(requestedFrom.getTime() + MULTI_DAY_MAX_MS);
+    const maxUntil = new Date(requestedFrom.getTime() + multiDayMaxMs);
     const validUntil = requestedUntil.getTime() > maxUntil.getTime() ? maxUntil : requestedUntil;
     return { validFrom: requestedFrom, validUntil };
   }
 
-  // recurring | event — pass through as-is; recurring's 90-day cap is
-  // enforced in modules/recurring-pass/domain.ts, not here.
+  if (passType === "recurring") {
+    // recurring — capped at recurringMaxMs from requestedFrom; the recurring-pass
+    // module also enforces its own cap at request time (belt-and-braces).
+    const maxUntil = new Date(requestedFrom.getTime() + recurringMaxMs);
+    const validUntil = requestedUntil.getTime() > maxUntil.getTime() ? maxUntil : requestedUntil;
+    return { validFrom: requestedFrom, validUntil };
+  }
+
+  // event — pass through as-is (event windows are set by the event, not capped).
   return { validFrom: requestedFrom, validUntil: requestedUntil };
 }
 

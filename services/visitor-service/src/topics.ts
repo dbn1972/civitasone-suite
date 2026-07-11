@@ -79,6 +79,10 @@ export const COMMANDS = {
   emergencyRestore:            "visitor.emergency.restore",
   passageRecord:               "visitor.passage.record",
   offlineSync:                 "visitor.device.offline_sync",
+
+  // Config/metadata keystone — nothing hardcoded (tenant-scoped policy engine)
+  setConfig:                   "visitor.config.set",
+  deactivateConfig:            "visitor.config.deactivate",
 } as const;
 
 export const EVENTS = {
@@ -153,6 +157,10 @@ export const EVENTS = {
   antiPassbackViolation:       "visitor.anti_passback.violation",
   emergencyUnlockTriggered:    "visitor.emergency.unlock.triggered",
   emergencyRestored:           "visitor.emergency.restored",
+
+  // Config/metadata keystone lifecycle
+  configSet:                   "visitor.config.set_done",
+  configDeactivated:           "visitor.config.deactivated",
 } as const;
 
 export const CONSUMED_EVENTS = {

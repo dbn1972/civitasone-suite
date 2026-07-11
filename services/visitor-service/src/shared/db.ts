@@ -8,6 +8,7 @@ import { schema as locationModule } from "../modules/location/schema.js";
 import { schema as dpdpModule } from "../modules/dpdp/schema.js";
 import { blacklistEntries, watchlistEntries } from "../modules/blacklist/schema.js";
 import { schema as analyticsModule } from "../modules/analytics/schema.js";
+import { schema as configRegistryModule } from "../modules/config-registry/schema.js";
 
 // NOTE: remaining modules' schema.ts files are merged in as their
 // consumers/routes are scaffolded (see tasks 3+). check-in, digital-pass,
@@ -28,6 +29,7 @@ export const visitorSchemaMap = {
   ...locationModule,
   ...dpdpModule,
   ...analyticsModule,
+  ...configRegistryModule,
   blacklistEntries,
   watchlistEntries,
   ...outboxSchema,

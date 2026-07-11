@@ -30,6 +30,8 @@ import { vehiclePasses } from "../vehicle-pass/schema.js";
 import { checkIns } from "../check-in/schema.js";
 import type { Db } from "../../shared/db.js";
 import { versionedUpdate } from "../../shared/outbox.js";
+import { loadNamespaceOverrides } from "../config-registry/repo.js";
+import { POLICY_NS, toNumber, MS_PER_MINUTE, MS_PER_HOUR } from "../config-registry/policy.js";
 
 export interface NoShowWorkerOptions {
   /** Interval between checks in milliseconds. Default: 15 minutes. */
@@ -88,8 +90,26 @@ export async function processNoShowCycle(
   scannerDb: Db = db,
 ): Promise<{ warnings: number; noShows: number }> {
   const now = new Date();
-  const warningCutoff = new Date(now.getTime() - warningThresholdMs);
-  const noShowCutoff = new Date(now.getTime() - noShowThresholdMs);
+
+  // Per-tenant thresholds are config-driven (visitor_policy keys
+  // visit_request.no_show_warning_minutes / visit_request.no_show_hours). Tenant
+  // override wins over the passed default; scan widened to the smallest threshold
+  // then re-checked per candidate against its tenant's own threshold. Unchanged
+  // when nothing is configured.
+  const overrides = await loadNamespaceOverrides(scannerDb, POLICY_NS);
+  const warningMsFor = (t: string) => {
+    const m = toNumber(overrides.get(t)?.get("visit_request.no_show_warning_minutes"));
+    return m !== undefined ? m * MS_PER_MINUTE : warningThresholdMs;
+  };
+  const noShowMsFor = (t: string) => {
+    const h = toNumber(overrides.get(t)?.get("visit_request.no_show_hours"));
+    return h !== undefined ? h * MS_PER_HOUR : noShowThresholdMs;
+  };
+  const minWarningMs = Math.min(warningThresholdMs, ...[...overrides.keys()].map(warningMsFor));
+  const minNoShowMs = Math.min(noShowThresholdMs, ...[...overrides.keys()].map(noShowMsFor));
+
+  const warningCutoff = new Date(now.getTime() - minWarningMs);
+  const noShowCutoff = new Date(now.getTime() - minNoShowMs);
 
   // ── Step 1: Find visit request IDs that have a check-in (exclude) ────
   // A check-in is linked to a visit request through the digital pass.
@@ -138,6 +158,8 @@ export async function processNoShowCycle(
   for (const req of noShowCandidates) {
     // Skip if a check-in already exists for this visit request
     if (visitReqsWithCheckInSet.has(req.id)) continue;
+    // Re-check against this tenant's own no-show threshold (scan was widened).
+    if (!req.scheduledAt || now.getTime() - req.scheduledAt.getTime() <= noShowMsFor(req.tenantId)) continue;
 
     try {
       // Transition to no_show status inside the row's tenant scope so the
@@ -245,6 +267,8 @@ export async function processNoShowCycle(
     if (noShowIds.has(req.id)) continue;
     // Skip if a check-in already exists for this visit request
     if (visitReqsWithCheckInSet.has(req.id)) continue;
+    // Re-check against this tenant's own warning threshold (scan was widened).
+    if (!req.scheduledAt || now.getTime() - req.scheduledAt.getTime() <= warningMsFor(req.tenantId)) continue;
 
     try {
       // Publish no-show warning notification to host (push channel)

@@ -39,6 +39,7 @@ import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import { generatePass, computeValidityWindow } from "../digital-pass/domain.js";
 import { validateGroupSize, confirmBulkCheckIn } from "./domain.js";
+import { getPolicyNumber, MS_PER_DAY } from "../config-registry/policy.js";
 import { isBlacklisted } from "../blacklist/screening-store.js";
 
 const log = pino({ name: "group-visit-consumer" });
@@ -146,10 +147,13 @@ export function registerGroupVisitConsumers(q: Queue): void {
       // 3. Create group_members rows + individual Digital_Passes per
       //    non-blacklisted member (Requirement 9.2, 9.5).
       const scheduledDate = p.scheduledAt ? new Date(p.scheduledAt) : now;
+      const multiDayMaxMs = (await getPolicyNumber(tx, p.tenantId, "digital_pass.multi_day_max_days")) * MS_PER_DAY;
+      const recurringMaxMs = (await getPolicyNumber(tx, p.tenantId, "digital_pass.recurring_max_days")) * MS_PER_DAY;
       const { validFrom, validUntil } = computeValidityWindow(
         (p.passType as "single" | "multi_day" | "recurring" | "event") ?? "single",
         scheduledDate,
         p.passType !== "single" ? new Date(scheduledDate.getTime() + 24 * 60 * 60 * 1000) : undefined,
+        { multiDayMaxMs, recurringMaxMs },
       );
 
       for (const member of memberScreening) {

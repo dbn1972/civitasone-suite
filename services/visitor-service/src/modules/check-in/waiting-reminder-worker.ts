@@ -33,6 +33,8 @@ import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import type { Db } from "../../shared/db.js";
+import { loadNamespaceOverrides } from "../config-registry/repo.js";
+import { POLICY_NS, toNumber, MS_PER_MINUTE } from "../config-registry/policy.js";
 
 export interface WaitingReminderWorkerOptions {
   /** Interval between checks in milliseconds. Default: 5 minutes. */
@@ -88,11 +90,29 @@ export async function processWaitingReminderCycle(
   logger?: { info: (...args: any[]) => void; warn: (...args: any[]) => void },
 ): Promise<{ reminders: number }> {
   const now = new Date();
+
+  // Config-driven per tenant (visitor_policy keys check_in.waiting_reminder_minutes
+  // / check_in.waiting_reminder_upper_minutes). Tenant override wins over the
+  // passed default; the scan is widened to the union band across tenants, then
+  // each candidate is re-checked against its own tenant's [threshold, upper]
+  // window. Unchanged when nothing is configured.
+  const overrides = await loadNamespaceOverrides(db, POLICY_NS);
+  const thresholdMsFor = (t: string) => {
+    const m = toNumber(overrides.get(t)?.get("check_in.waiting_reminder_minutes"));
+    return m !== undefined ? m * MS_PER_MINUTE : waitingThresholdMs;
+  };
+  const upperMsFor = (t: string) => {
+    const m = toNumber(overrides.get(t)?.get("check_in.waiting_reminder_upper_minutes"));
+    return m !== undefined ? m * MS_PER_MINUTE : waitingUpperBoundMs;
+  };
+  const maxUpperMs = Math.max(waitingUpperBoundMs, ...[...overrides.keys()].map(upperMsFor));
+  const minThresholdMs = Math.min(waitingThresholdMs, ...[...overrides.keys()].map(thresholdMsFor));
+
   // Visitors who checked in between (now - upperBound) and (now - threshold)
   // are in the "reminder window" — they have waited long enough but not so
   // long that we've already sent a reminder in a prior cycle.
-  const windowStart = new Date(now.getTime() - waitingUpperBoundMs);
-  const windowEnd = new Date(now.getTime() - waitingThresholdMs);
+  const windowStart = new Date(now.getTime() - maxUpperMs);
+  const windowEnd = new Date(now.getTime() - minThresholdMs);
 
   // Find check-in records in the reminder window where the pass is still
   // in `checked_in` state (host hasn't acknowledged / meeting hasn't started)
@@ -122,6 +142,10 @@ export async function processWaitingReminderCycle(
   let reminders = 0;
 
   for (const ci of waitingCheckIns) {
+    // Re-check against this tenant's own [threshold, upper] band (scan widened).
+    const ageMs = now.getTime() - ci.checkInTime.getTime();
+    if (ageMs <= thresholdMsFor(ci.tenantId) || ageMs >= upperMsFor(ci.tenantId)) continue;
+
     try {
       // Look up the visit request for host info
       const visitRows = await db

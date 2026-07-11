@@ -35,6 +35,7 @@ import deviceRegistryRoutes    from "./modules/device-registry/routes.js";
 import badgePrintRoutes        from "./modules/badge-print/routes.js";
 import documentScanRoutes      from "./modules/document-scan/routes.js";
 import turnstileControlRoutes  from "./modules/turnstile-control/routes.js";
+import { configRegistryRoutes } from "./modules/config-registry/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   // Fail-fast if VISITOR_PII_KEY is absent/too short so we never boot fail-open
@@ -86,6 +87,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(badgePrintRoutes);
   await app.register(documentScanRoutes);
   await app.register(turnstileControlRoutes);
+  await app.register(configRegistryRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

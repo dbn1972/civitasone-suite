@@ -23,6 +23,8 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { visitRequests } from "./schema.js";
 import type { Db } from "../../shared/db.js";
+import { loadNamespaceOverrides } from "../config-registry/repo.js";
+import { POLICY_NS, toNumber, MS_PER_HOUR } from "../config-registry/policy.js";
 
 export interface AutoRejectWorkerOptions {
   /** Interval between checks in milliseconds. Default: 15 minutes. */
@@ -79,15 +81,36 @@ export async function processAutoRejectCycle(
   logger?: { info: (...args: any[]) => void; warn: (...args: any[]) => void },
 ): Promise<{ reminders: number; autoRejected: number }> {
   const now = new Date();
-  const reminderCutoff = new Date(now.getTime() - reminderThresholdMs);
-  const autoRejectCutoff = new Date(now.getTime() - autoRejectThresholdMs);
 
-  // ── Step 1: Auto-reject requests older than 24h ──────────────────────
+  // Per-tenant thresholds are config-driven (visitor_policy keys
+  // visit_request.reminder_hours / visit_request.auto_reject_hours). A tenant's
+  // override WINS over the passed-in default; the cross-tenant scan is widened to
+  // the smallest threshold so no tenant's eligible rows are missed, and each
+  // candidate is then re-checked against its own tenant's threshold. With no
+  // overrides the widened cutoff and re-check both collapse to the default, so
+  // behavior is unchanged.
+  const overrides = await loadNamespaceOverrides(db, POLICY_NS);
+  const reminderMsFor = (t: string) => {
+    const h = toNumber(overrides.get(t)?.get("visit_request.reminder_hours"));
+    return h !== undefined ? h * MS_PER_HOUR : reminderThresholdMs;
+  };
+  const autoRejectMsFor = (t: string) => {
+    const h = toNumber(overrides.get(t)?.get("visit_request.auto_reject_hours"));
+    return h !== undefined ? h * MS_PER_HOUR : autoRejectThresholdMs;
+  };
+  const minReminderMs = Math.min(reminderThresholdMs, ...[...overrides.keys()].map(reminderMsFor));
+  const minAutoRejectMs = Math.min(autoRejectThresholdMs, ...[...overrides.keys()].map(autoRejectMsFor));
+
+  const reminderCutoff = new Date(now.getTime() - minReminderMs);
+  const autoRejectCutoff = new Date(now.getTime() - minAutoRejectMs);
+
+  // ── Step 1: Auto-reject requests older than the tenant's auto-reject window ──
   // Query first so we don't send reminders to requests that will be auto-rejected
-  const staleRequests = await db
+  const staleCandidates = await db
     .select({
       id: visitRequests.id,
       tenantId: visitRequests.tenantId,
+      createdAt: visitRequests.createdAt,
       hostEmployeeId: visitRequests.hostEmployeeId,
       visitorName: visitRequests.visitorName,
       visitorPhone: visitRequests.visitorPhone,
@@ -100,6 +123,10 @@ export async function processAutoRejectCycle(
         lt(visitRequests.createdAt, autoRejectCutoff),
       ),
     );
+  // Re-filter to each candidate's own tenant threshold.
+  const staleRequests = staleCandidates.filter(
+    (r) => now.getTime() - r.createdAt.getTime() > autoRejectMsFor(r.tenantId),
+  );
 
   let autoRejected = 0;
   for (const req of staleRequests) {
@@ -127,11 +154,13 @@ export async function processAutoRejectCycle(
   // Collect IDs of auto-rejected requests to exclude from reminder check
   const autoRejectedIds = new Set(staleRequests.map((r) => r.id));
 
-  // ── Step 2: Reminder for requests older than 4h but not yet 24h ──────
-  const reminderRequests = await db
+  // ── Step 2: Reminder for requests past the tenant's reminder window but not
+  //    yet past its auto-reject window ──
+  const reminderCandidates = await db
     .select({
       id: visitRequests.id,
       tenantId: visitRequests.tenantId,
+      createdAt: visitRequests.createdAt,
       hostEmployeeId: visitRequests.hostEmployeeId,
       visitorName: visitRequests.visitorName,
       purpose: visitRequests.purpose,
@@ -144,6 +173,9 @@ export async function processAutoRejectCycle(
         lt(visitRequests.createdAt, reminderCutoff),
       ),
     );
+  const reminderRequests = reminderCandidates.filter(
+    (r) => now.getTime() - r.createdAt.getTime() > reminderMsFor(r.tenantId),
+  );
 
   let reminders = 0;
   for (const req of reminderRequests) {

@@ -33,6 +33,7 @@ import { registerDeviceRegistryConsumers } from "./modules/device-registry/consu
 import { registerBadgePrintConsumers }     from "./modules/badge-print/consumer.js";
 import { registerDocumentScanConsumers }   from "./modules/document-scan/consumer.js";
 import { registerTurnstileControlConsumers } from "./modules/turnstile-control/consumer.js";
+import { registerConfigRegistryConsumers } from "./modules/config-registry/consumer.js";
 import { startHealthChecker, stopHealthChecker } from "./modules/device-registry/health-checker.js";
 import { startImageCleanupWorker, stopImageCleanupWorker } from "./modules/document-scan/image-cleanup.js";
 
@@ -73,6 +74,7 @@ registerDeviceRegistryConsumers(queue);
 registerBadgePrintConsumers(queue);
 registerDocumentScanConsumers(queue);
 registerTurnstileControlConsumers(queue);
+registerConfigRegistryConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

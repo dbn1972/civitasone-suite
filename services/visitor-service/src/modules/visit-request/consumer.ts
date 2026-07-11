@@ -51,6 +51,7 @@ import {
   type VisitRequestSource,
   type VisitorCategory,
 } from "./domain.js";
+import { getAutoApproveCategories } from "../config-registry/policy.js";
 
 const log = pino({ name: "visit-request-consumer" });
 
@@ -172,14 +173,25 @@ export function registerVisitRequestConsumers(queue: Queue): void {
   queue.subscribe<VisitRequestCreatePayload>(COMMANDS.visitRequestCreate, async (msg) => {
     const p = msg.payload;
 
-    const initialStatus = resolveInitialStatus(
-      p.source as VisitRequestSource,
-      p.visitorCategory as VisitorCategory,
-    );
     const trackingRef = generateTrackingRef();
+    // Hoisted so the post-commit auto-approve pass-generation can act on the
+    // config-driven decision resolved inside the tx below.
+    let autoApproved = false;
 
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+
+      // Approval policy is config-driven: resolve the tenant's effective
+      // auto-approve visitor-category set (defaults to {vip}) on the same
+      // GUC-scoped tx, so a tenant can auto-approve e.g. contractors without a
+      // code change. Unconfigured tenants get identical behavior.
+      const autoApproveCategories = await getAutoApproveCategories(tx, msg.tenantId);
+      const initialStatus = resolveInitialStatus(
+        p.source as VisitRequestSource,
+        p.visitorCategory as VisitorCategory,
+        autoApproveCategories,
+      );
+      autoApproved = initialStatus === "approved";
 
       await tx.insert(visitRequests).values({
         id: p.id,
@@ -265,8 +277,9 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       });
     });
 
-    // If VIP was auto-approved, trigger pass generation immediately
-    if (initialStatus === "approved") {
+    // If the visitor's category was auto-approved (config-driven), trigger pass
+    // generation immediately.
+    if (autoApproved) {
       try {
         await queueSingleton.publish(COMMANDS.passGenerate, {
           messageId: `${p.id}:pass-gen`,

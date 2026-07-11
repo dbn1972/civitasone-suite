@@ -22,10 +22,12 @@
  * Purged PII columns: visitorName, visitorPhone, visitorEmail, identityDocRef,
  * photoRef. The anonymized row is retained for statistical reporting.
  */
-import { and, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { visitRequests } from "../visit-request/schema.js";
 import type { Db } from "../../shared/db.js";
+import { loadNamespaceOverrides } from "../config-registry/repo.js";
+import { POLICY_NS, toNumber, MS_PER_DAY, MS_PER_HOUR } from "../config-registry/policy.js";
 
 /** Sentinel value written to PII columns to indicate purged state. */
 export const PURGED_SENTINEL = "[PURGED]";
@@ -98,55 +100,67 @@ export async function processPurgeCycle(
   } = opts;
 
   const now = Date.now();
-  const retentionCutoff = new Date(now - retentionPeriodMs).toISOString();
-  const erasureCutoff = new Date(now - erasureSlaMs).toISOString();
 
-  // Cross-tenant eligibility scan via the BYPASSRLS scanner pool.
-  const eligible = await scannerDb
-    .select({
-      id: visitRequests.id,
-      tenantId: visitRequests.tenantId,
-    })
+  // Per-tenant policy: retention window + erasure SLA are config-driven
+  // (visitor_policy keys retention.pii_days / retention.erasure_sla_hours). A
+  // tenant's config override WINS over the opts fallback (which itself defaults
+  // to 365d / 72h), so two offices can enforce different retention with no code
+  // change; a tenant that configured nothing behaves exactly as before. Loaded
+  // once per cycle cross-tenant via the BYPASSRLS scanner pool (no cache — the
+  // worker must see the freshest value the admin API just wrote).
+  const overrides = await loadNamespaceOverrides(scannerDb, POLICY_NS);
+
+  // Every tenant that still has un-purged visitor PII must be considered — not
+  // only those with a config override — so the scan enumerates distinct tenants.
+  const tenantRows = await scannerDb
+    .selectDistinct({ tenantId: visitRequests.tenantId })
     .from(visitRequests)
-    .where(
-      and(
-        sql`${visitRequests.visitorName} != ${PURGED_SENTINEL}`,
-        sql`(
-          COALESCE(
-            (
-              SELECT MAX(ci."timestamp")
-              FROM visitor.check_ins ci
-              INNER JOIN visitor.digital_passes dp ON dp.id = ci.pass_id
-              WHERE dp.visit_request_id = ${visitRequests.id}
-                AND ci.direction = 'out'
-            ),
-            ${visitRequests.createdAt}
-          ) < ${retentionCutoff}
-          OR (
-            ${visitRequests.erasureRequestedAt} IS NOT NULL
-            AND ${visitRequests.erasureRequestedAt} < ${erasureCutoff}
-          )
-        )`,
-      ),
-    )
-    .limit(batchSize);
-
-  if (eligible.length === 0) {
-    return { purgedCount: 0, purgedByTenant: {} };
-  }
-
-  // Group eligible ids by tenant so each tenant's purge runs in its own scope.
-  const idsByTenant = new Map<string, string[]>();
-  for (const row of eligible) {
-    const list = idsByTenant.get(row.tenantId) ?? [];
-    list.push(row.id);
-    idsByTenant.set(row.tenantId, list);
-  }
+    .where(sql`${visitRequests.visitorName} != ${PURGED_SENTINEL}`);
 
   const purgedByTenant: Record<string, number> = {};
   let purgedCount = 0;
 
-  for (const [tenantId, ids] of idsByTenant) {
+  for (const { tenantId } of tenantRows) {
+    // Resolve this tenant's cutoffs (config override → opts fallback → default).
+    const retDays = toNumber(overrides.get(tenantId)?.get("retention.pii_days"));
+    const retentionMs = retDays !== undefined ? retDays * MS_PER_DAY : retentionPeriodMs;
+    const erHours = toNumber(overrides.get(tenantId)?.get("retention.erasure_sla_hours"));
+    const erasureMs = erHours !== undefined ? erHours * MS_PER_HOUR : erasureSlaMs;
+
+    const retentionCutoff = new Date(now - retentionMs).toISOString();
+    const erasureCutoff = new Date(now - erasureMs).toISOString();
+
+    // Per-tenant eligibility scan via the BYPASSRLS scanner pool.
+    const eligible = await scannerDb
+      .select({ id: visitRequests.id })
+      .from(visitRequests)
+      .where(
+        and(
+          eq(visitRequests.tenantId, tenantId),
+          sql`${visitRequests.visitorName} != ${PURGED_SENTINEL}`,
+          sql`(
+            COALESCE(
+              (
+                SELECT MAX(ci."timestamp")
+                FROM visitor.check_ins ci
+                INNER JOIN visitor.digital_passes dp ON dp.id = ci.pass_id
+                WHERE dp.visit_request_id = ${visitRequests.id}
+                  AND ci.direction = 'out'
+              ),
+              ${visitRequests.createdAt}
+            ) < ${retentionCutoff}
+            OR (
+              ${visitRequests.erasureRequestedAt} IS NOT NULL
+              AND ${visitRequests.erasureRequestedAt} < ${erasureCutoff}
+            )
+          )`,
+        ),
+      )
+      .limit(batchSize);
+
+    if (eligible.length === 0) continue;
+    const ids = eligible.map((r) => r.id);
+
     try {
       await runWithTenant(tenantId, () =>
         db.transaction(async (tx) => {
