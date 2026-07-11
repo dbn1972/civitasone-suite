@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { courts, benches } from "./schema.js";
 
 /** Narrow write surface accepted for the transactional (GUC-scoped) path. */
@@ -27,22 +27,22 @@ export async function listCourts(
   const predicates = [eq(courts.tenantId, filters.tenantId)];
   if (filters.courtType) predicates.push(eq(courts.courtType, filters.courtType));
   if (filters.parentCourtId) predicates.push(eq(courts.parentCourtId, filters.parentCourtId));
-  return db.select().from(courts)
+  return scopedRead((tx) => tx.select().from(courts)
     .where(and(...predicates))
     .orderBy(desc(courts.createdAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 export async function getCourtById(tenantId: string, id: string): Promise<CourtRow | undefined> {
-  const rows = await db.select().from(courts)
+  const rows = await scopedRead<CourtRow[]>((tx) => tx.select().from(courts)
     .where(and(eq(courts.tenantId, tenantId), eq(courts.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0];
 }
 
 export async function listBenchesByCourt(tenantId: string, courtId: string): Promise<BenchRow[]> {
-  return db.select().from(benches)
+  return scopedRead((tx) => tx.select().from(benches)
     .where(and(eq(benches.tenantId, tenantId), eq(benches.courtId, courtId)))
-    .orderBy(desc(benches.createdAt));
+    .orderBy(desc(benches.createdAt)));
 }

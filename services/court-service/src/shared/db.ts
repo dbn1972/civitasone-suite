@@ -78,3 +78,15 @@ export const db: typeof baseDb = Object.assign(Object.create(baseDb), {
 }) as typeof baseDb;
 
 export type Db = typeof db;
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain `db.select()` runs on a pooled connection with no
+ * `app.tenant_id` GUC set, so under a NOBYPASSRLS role the fail-closed policy
+ * returns ZERO rows. Wrapping the read in `db.transaction` makes the wrapper
+ * (above) set the GUC from AsyncLocalStorage — reads are then correctly
+ * tenant-scoped by RLS, not merely by an app-layer WHERE.
+ */
+export function scopedRead<T>(fn: (tx: any) => Promise<T>): Promise<T> {
+  return db.transaction(fn);
+}
