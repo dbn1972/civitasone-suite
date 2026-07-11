@@ -206,7 +206,7 @@ class RedisPrintQueueStore implements PrintQueueStore {
   async zpopmin(key: string): Promise<[string, number] | null> {
     const result = await this.redis.zpopmin(key, 1);
     if (!result || result.length < 2) return null;
-    return [result[0], Number(result[1])];
+    return [result[0] ?? "", Number(result[1])];
   }
 }
 
@@ -297,7 +297,7 @@ export async function getTemplateVersionChain(
     const template = await getTemplateById(tenantId, currentId);
     if (!template) break;
     chain.push(template);
-    currentId = template.previousVersionId;
+    currentId = template.previousVersionId ?? null;
   }
 
   return chain;

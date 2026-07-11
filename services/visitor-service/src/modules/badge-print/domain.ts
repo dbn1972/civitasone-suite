@@ -123,11 +123,11 @@ export function shouldRetry(retryCount: number): boolean {
  * @returns Delay in milliseconds before the next retry attempt
  */
 export function getNextRetryDelay(retryCount: number): number {
-  if (retryCount < 0) return RETRY_DELAYS_MS[0];
+  if (retryCount < 0) return RETRY_DELAYS_MS[0] ?? 0;
   if (retryCount >= RETRY_DELAYS_MS.length) {
-    return RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+    return RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] ?? 0;
   }
-  return RETRY_DELAYS_MS[retryCount];
+  return RETRY_DELAYS_MS[retryCount] ?? 0;
 }
 
 /**

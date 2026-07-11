@@ -70,7 +70,7 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
     const deviceCtx = req.deviceContext!;
 
     // Parse multipart file
-    const file = await req.file();
+    const file = await (req as any).file();
     if (!file) {
       throw new HttpError(400, "MISSING_FILE", "multipart file upload required");
     }

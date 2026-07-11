@@ -58,6 +58,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
     const ctx = {
       tenantId: deviceCtx.tenantId,
       actorId: deviceCtx.deviceId,
+      actorType: "user" as const,
       correlationId: crypto.randomUUID(),
       roles: [],
       sessionId: "",
@@ -86,6 +87,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
     const ctx = {
       tenantId: deviceCtx.tenantId,
       actorId: deviceCtx.deviceId,
+      actorType: "user" as const,
       correlationId: crypto.randomUUID(),
       roles: [],
       sessionId: "",
@@ -200,6 +202,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
     const ctx = {
       tenantId: deviceCtx.tenantId,
       actorId: deviceCtx.deviceId,
+      actorType: "user" as const,
       correlationId: crypto.randomUUID(),
       roles: [],
       sessionId: "",

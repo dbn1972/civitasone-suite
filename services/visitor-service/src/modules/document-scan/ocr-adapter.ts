@@ -203,7 +203,7 @@ function parseTesseractOutput(text: string): OcrExtraction {
     // Date pattern (DD/MM/YYYY or DD-MM-YYYY)
     const dateMatch = line.match(/(\d{2}[/-]\d{2}[/-]\d{4})/);
     if (dateMatch && !dateOfBirth) {
-      dateOfBirth = dateMatch[1];
+      dateOfBirth = dateMatch[1] ?? null;
       scores["date_of_birth"] = 70;
       continue;
     }
@@ -211,7 +211,7 @@ function parseTesseractOutput(text: string): OcrExtraction {
     // Aadhaar pattern (12 digits, possibly with spaces)
     const aadhaarMatch = line.match(/(\d{4}\s?\d{4}\s?\d{4})/);
     if (aadhaarMatch && !idDocumentNumber) {
-      idDocumentNumber = aadhaarMatch[1].replace(/\s/g, "");
+      idDocumentNumber = aadhaarMatch[1]?.replace(/\s/g, "") ?? null;
       scores["id_document_number"] = 65;
       continue;
     }
@@ -219,7 +219,7 @@ function parseTesseractOutput(text: string): OcrExtraction {
     // PAN pattern (XXXXX1234X)
     const panMatch = line.match(/([A-Z]{5}\d{4}[A-Z])/);
     if (panMatch && !idDocumentNumber) {
-      idDocumentNumber = panMatch[1];
+      idDocumentNumber = panMatch[1] ?? null;
       scores["id_document_number"] = 70;
       continue;
     }
