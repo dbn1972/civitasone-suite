@@ -89,3 +89,29 @@ export function assertCaseTypeAllowed(caseType: string, allowed: ReadonlySet<str
     throw new Error(`INVALID_CASE_TYPE: ${caseType} is not an allowed case type for this tenant`);
   }
 }
+
+/** Default target disposal window (days) when a tenant has no sla_timer config. */
+export const DEFAULT_DISPOSAL_DAYS = 180;
+
+/** Resolve the disposal-day window from an sla_timer config value (§47).
+ * Expects `{ disposalDays: <positive int> }`; falls back to `defaultDays` on an
+ * absent or malformed value (SLA target is advisory — never block registration). */
+export function resolveDisposalDays(configValue: unknown, defaultDays: number): number {
+  if (configValue && typeof configValue === "object") {
+    const dd = (configValue as Record<string, unknown>).disposalDays;
+    if (Number.isInteger(dd) && (dd as number) > 0) return dd as number;
+  }
+  return defaultDays;
+}
+
+/** Add `days` calendar days to a YYYY-MM-DD date, returning YYYY-MM-DD (UTC, no
+ * timezone drift). Used to compute the target disposal date from the filing date. */
+export function addDays(isoDate: string, days: number): string {
+  const parts = isoDate.slice(0, 10).split("-");
+  const y = Number(parts[0] ?? "1970");
+  const m = Number(parts[1] ?? "1");
+  const d = Number(parts[2] ?? "1");
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}

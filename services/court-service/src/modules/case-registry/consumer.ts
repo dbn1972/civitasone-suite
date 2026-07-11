@@ -4,7 +4,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
-import { deriveInitialStatus, validateCnr, DEFAULT_CASE_TYPES, assertCaseTypeAllowed } from "./domain.js";
+import { deriveInitialStatus, validateCnr, DEFAULT_CASE_TYPES, assertCaseTypeAllowed, DEFAULT_DISPOSAL_DAYS, resolveDisposalDays, addDays } from "./domain.js";
 import { effectiveAllowed } from "../config-registry/domain.js";
 
 type RegisterCasePayload = {
@@ -49,6 +49,10 @@ export function registerCaseRegistryConsumers(
         throw new NonRetryableError((e as Error).message);
       }
 
+      // §47 sla_timer: derive the target disposal date from tenant config
+      // (disposal days by case type; default when unconfigured) + filing date.
+      const slaCfg = await configRepo.getConfigValueOnTx(tx, p.tenantId, "sla_timer", p.caseType);
+      const targetDisposalDate = addDays(p.filingDate, resolveDisposalDays(slaCfg, DEFAULT_DISPOSAL_DAYS));
       await repo.insertCase(tx, {
         id: p.id,
         tenantId: p.tenantId,
@@ -57,6 +61,7 @@ export function registerCaseRegistryConsumers(
         filingNumber: p.filingNumber ?? null,
         // `filing_date` is a DATE column (string mode) — pass YYYY-MM-DD.
         filingDate: p.filingDate.slice(0, 10),
+        targetDisposalDate,
         title: p.title,
         status: initialStatus,
         stage: initialStatus,

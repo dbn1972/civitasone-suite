@@ -36,6 +36,7 @@ export const cases = courtSchema.table("cases", {
   courtId:      uuid("court_id"),
   benchId:      uuid("bench_id"),
   disposalDate: date("disposal_date"),
+  targetDisposalDate: date("target_disposal_date"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by"),

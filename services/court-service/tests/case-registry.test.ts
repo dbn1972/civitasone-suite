@@ -36,6 +36,7 @@ vi.mock("../src/modules/case-registry/repo.js", () => ({
 
 vi.mock("../src/modules/config-registry/repo.js", () => ({
   listActiveKeys: vi.fn(async () => [] as string[]),
+  getConfigValueOnTx: vi.fn(async () => undefined),
 }));
 
 // topics.js is a plain constant map; import the real one if present, else stub.
@@ -47,6 +48,7 @@ vi.mock("../src/topics.js", () => ({
 import { registerCaseRegistryConsumers } from "../src/modules/case-registry/consumer.js";
 import * as repo from "../src/modules/case-registry/repo.js";
 import * as configRepo from "../src/modules/config-registry/repo.js";
+import { addDays } from "../src/modules/case-registry/domain.js";
 import { enqueue } from "../src/shared/outbox.js";
 
 /** Test harness: capture the (topic, handler) the module registers, mirroring
@@ -165,5 +167,44 @@ describe("case-registry consumer — config-driven caseType (§47)", () => {
     // buildMessage already uses caseType "civil" (a default).
     await deliver("court.case.register", buildMessage(randomUUID(), randomUUID(), randomUUID()));
     expect(repo.insertCase).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("case-registry consumer — sla_timer disposal target (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("addDays is UTC-correct: 2026-07-01 + 180 = 2026-12-28", () => {
+    expect(addDays("2026-07-01", 180)).toBe("2026-12-28");
+  });
+
+  it("defaults the disposal target to filingDate + 180 days when no sla_timer config", async () => {
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
+    await deliver("court.case.register", buildMessage(randomUUID(), randomUUID(), randomUUID()));
+    const inserted = (repo.insertCase as ReturnType<typeof vi.fn>).mock.calls[0][1] as { targetDisposalDate: string };
+    expect(inserted.targetDisposalDate).toBe("2026-12-28"); // 2026-07-01 + 180
+  });
+
+  it("uses configured disposalDays for the case type when sla_timer is set", async () => {
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue({ disposalDays: 90 });
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
+    await deliver("court.case.register", buildMessage(randomUUID(), randomUUID(), randomUUID()));
+    const inserted = (repo.insertCase as ReturnType<typeof vi.fn>).mock.calls[0][1] as { targetDisposalDate: string };
+    expect(inserted.targetDisposalDate).toBe(addDays("2026-07-01", 90));
+  });
+
+  it("ignores a malformed sla_timer value and applies the default (never blocks)", async () => {
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue({ disposalDays: -5 });
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
+    await deliver("court.case.register", buildMessage(randomUUID(), randomUUID(), randomUUID()));
+    const inserted = (repo.insertCase as ReturnType<typeof vi.fn>).mock.calls[0][1] as { targetDisposalDate: string };
+    expect(inserted.targetDisposalDate).toBe("2026-12-28"); // default 180 despite bad config
   });
 });
