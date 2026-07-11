@@ -44,16 +44,13 @@ import { registerCaseRegistryConsumers } from "../src/modules/case-registry/cons
 import * as repo from "../src/modules/case-registry/repo.js";
 import { enqueue } from "../src/shared/outbox.js";
 
-/** Minimal Queue double that just captures the subscribed handler. */
-function makeQueue() {
+/** Test harness: capture the (topic, handler) the module registers, mirroring
+ *  the worker registerConsumer(topic, handler) contract. */
+function makeHarness() {
   const handlers = new Map<string, (msg: unknown) => Promise<void>>();
+  const register = (topic: string, h: (msg: unknown) => Promise<void>) => { handlers.set(topic, h); };
   return {
-    queue: {
-      subscribe: (topic: string, h: (msg: unknown) => Promise<void>) => { handlers.set(topic, h); },
-      publish: async () => {},
-      start: async () => {},
-      stop: async () => {},
-    } as never,
+    register: register as never,
     deliver: (topic: string, msg: unknown) => handlers.get(topic)!(msg),
   };
 }
@@ -91,8 +88,8 @@ describe("registerCaseRegistry consumer — idempotency", () => {
   });
 
   it("processes the first delivery: writes case + parties + transition and enqueues event", async () => {
-    const { queue, deliver } = makeQueue();
-    registerCaseRegistryConsumers(queue);
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
 
     const caseId = randomUUID();
     await deliver("court.case.register", buildMessage(caseId, randomUUID(), randomUUID()));
@@ -110,8 +107,8 @@ describe("registerCaseRegistry consumer — idempotency", () => {
   });
 
   it("treats a redelivery of the same messageId as a no-op", async () => {
-    const { queue, deliver } = makeQueue();
-    registerCaseRegistryConsumers(queue);
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
 
     const caseId = randomUUID();
     const msg = buildMessage(caseId, randomUUID(), randomUUID());

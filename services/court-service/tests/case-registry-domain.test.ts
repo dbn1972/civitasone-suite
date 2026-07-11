@@ -14,7 +14,8 @@ import {
 
 describe("case-registry domain — validateCnr", () => {
   it("accepts and normalizes a 16-char CNR with separators", () => {
-    expect(validateCnr("DLHC01-00012342026")).toBe("DLHC0100012342026".slice(0, 16));
+    // A real CNR is exactly 16 alphanumerics; separators are stripped, not truncated.
+    expect(validateCnr("DLHC01-0001234520")).toBe("DLHC010001234520");
   });
 
   it("normalizes case and strips non-alphanumerics", () => {
