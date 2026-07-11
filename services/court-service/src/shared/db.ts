@@ -12,6 +12,7 @@ import { noticeSchema } from "../modules/notice/schema.js";
 import { complianceSchema } from "../modules/compliance/schema.js";
 import { appealSchema } from "../modules/appeal/schema.js";
 import { evidenceSchema } from "../modules/evidence/schema.js";
+import { configSchema } from "../modules/config-registry/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 /**
@@ -54,6 +55,7 @@ const schema = {
   ...complianceSchema,
   ...appealSchema,
   ...evidenceSchema,
+  ...configSchema,
   ...outboxSchema,
   // ...courtRegistrySchema, ...causeListSchema, ...hearingSchema, (added per module task)
 };

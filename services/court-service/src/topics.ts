@@ -65,6 +65,9 @@ export const COMMANDS = {
   approveAndIssueOrder:       "court.order.approve_issue",
   sendBackOrder:              "court.order.send_back",
   recallOrder:                "court.order.recall",
+  /** §47 config/metadata keystone — nothing hardcoded */
+  setConfig:                  "court.config.set",
+  deactivateConfig:           "court.config.deactivate",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -111,6 +114,8 @@ export const EVENTS = {
   orderIssued:                "court.order.issued",
   orderSentBack:              "court.order.sent_back",
   orderRecalled:              "court.order.recalled",
+  configSet:                  "court.config.set_done",
+  configDeactivated:          "court.config.deactivated",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
