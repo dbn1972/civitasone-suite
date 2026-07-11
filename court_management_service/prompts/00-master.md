@@ -11,6 +11,7 @@ Authoritative inputs (read both before starting):
 - `services/court-service/` — the working foundation (chassis + core schema + `case-registry` slice).
 
 ## THE TEAM (each has a prompt file; invoke them as specialist agents)
+**Core software team**
 | Role | Prompt | Company standard | Owns |
 |---|---|---|---|
 | CTO | `01-cto-google.md` | Google | Technical strategy, standards, phase gates, final sign-off |
@@ -20,6 +21,17 @@ Authoritative inputs (read both before starting):
 | Staff Engineers | `05-engineering-google.md` | Google | Implement each module (CQRS), APIs, workflows, integrations, tests |
 | Designer | `06-designer-figma.md` | Figma | Screen catalogue, wireframes, court-room/kiosk/public displays, a11y, multilingual, design system |
 | QA Lead | `07-qa-microsoft.md` | Microsoft | Test strategy, invariant/property tests, security/a11y/perf/DR testing, UAT, release gate |
+
+**Specialist team (domain, trust, data, adoption — the load-bearing additions for a judicial platform)**
+| Role | Prompt | Owns | Gate authority |
+|---|---|---|---|
+| Judicial / Legal Domain Expert | `08-judicial-domain-expert.md` | Legal correctness of every lifecycle, limitation, evidence, order, appeal rule; domain test oracle | **Domain-correctness VETO at every gate** |
+| Security · Privacy · DPO | `09-security-compliance-dpo.md` | §39/§40/§41 — security architecture, DPDP privacy, audit integrity, evidence §65B, authZ, certification | **Security/privacy VETO at G0 & G4** |
+| Integration & Migration Engineer | `10-integration-migration-engineer.md` | §36/§37 ERP + e-Courts/land-records/GIS adapters (fail-closed); §55 legacy-data migration | Owns adapters + Phase-5 migration |
+| AI/ML + Governance | `11-ai-ml-governance.md` | §34/§35 intelligence substrate + assists; §35.5 governance (human-in-loop, never decides) | **AI-governance VETO on AI features** |
+| Accessibility & Localization | `12-accessibility-localization.md` | §50/§51 — WCAG 2.2 AA + GIGW, Hindi + regional i18n, translation workflow | a11y/language sign-off at G4 |
+| SRE / Reliability | `13-sre-reliability.md` | §52 operated — SLOs/error-budgets, OTel tracing, chaos/DR drills, runbooks, capacity | Reliability sign-off at G5 |
+| TPM · Change-Management · Training | `14-tpm-change-management.md` | Delivery/RACI, risk register, §58 deliverables, rollout, training, UAT, adoption | Convenes & records every gate |
 
 ## NON-NEGOTIABLE HOUSE RULES (every role inherits these)
 1. **Nothing domain-specific is hardcoded (spec §47, §57.19).** Court types, case types, lifecycles,

@@ -2,12 +2,14 @@
 
 This folder contains the **execution prompts** for building the CivitasOne Court Management Service
 as a world-class, national-scale adjudication platform. It is designed to be run by Claude Code (or
-any capable coding agent) as a **virtual expert team**.
+any capable coding agent) as a **virtual expert team of 14 specialists**.
 
 ## Contents
+
+**Core software team**
 | File | Role | Standard |
 |---|---|---|
-| `00-master.md` | **Master orchestrator** — run this first | — |
+| `00-master.md` | **Master orchestrator — run this first** | — |
 | `01-cto-google.md` | CTO — strategy, standards, phase gates G0–G5, final sign-off | Google |
 | `02-product-manager-apple.md` | Product Manager — stories, acceptance criteria, prioritization | Apple |
 | `03-solution-architect.md` | Solution Architect — bounded contexts, config engine, data/events/APIs | — |
@@ -15,6 +17,20 @@ any capable coding agent) as a **virtual expert team**.
 | `05-engineering-google.md` | Staff Engineers — implement modules (CQRS), APIs, integrations, tests | Google |
 | `06-designer-figma.md` | Designer — screens, dashboards, a11y, multilingual, config-driven UI | Figma |
 | `07-qa-microsoft.md` | QA Lead — invariant suite, security/a11y/perf/DR/UAT, release gate | Microsoft |
+
+**Specialist team** — the load-bearing additions for a national judicial platform
+| File | Role | Gate authority |
+|---|---|---|
+| `08-judicial-domain-expert.md` | Judicial/Legal SME — legal correctness of every rule; domain test oracle | **Domain-correctness veto — every gate** |
+| `09-security-compliance-dpo.md` | Security · Privacy · DPO — §39/§40/§41, evidence §65B, certification | **Security/privacy veto — G0 & G4** |
+| `10-integration-migration-engineer.md` | Integration & Migration — ERP + e-Courts/land-records adapters, §55 migration | Owns adapters + Phase-5 migration |
+| `11-ai-ml-governance.md` | AI/ML + Governance — §34/§35 assists, §35.5 (never decides) | **AI-governance veto — AI features** |
+| `12-accessibility-localization.md` | Accessibility & Localization — WCAG 2.2 AA/GIGW, Hindi + regional i18n | a11y/language sign-off — G4 |
+| `13-sre-reliability.md` | SRE — SLOs, OTel tracing, chaos/DR drills, runbooks, capacity | Reliability sign-off — G5 |
+| `14-tpm-change-management.md` | TPM + Change-Mgmt + Training — delivery, rollout, UAT, adoption | Convenes & records every gate |
+
+_The Judicial SME (`08`) is non-optional: a court platform built by a software team alone is legally
+wrong even when the code is flawless — its domain-correctness veto is wired into every gate._
 
 Sibling references (one level up):
 - `../REQUIREMENTS.md` — the 59-section product specification (source of truth).
@@ -24,11 +40,12 @@ The working code foundation lives at `services/court-service/` (chassis + core s
 RLS + a `case-registry` working slice).
 
 ## How to run
-1. **Start with `00-master.md`.** It defines the team, the six phases (0–5), the phase gates, and the
-   non-negotiable house rules every role inherits.
+1. **Start with `00-master.md`.** It defines the 14-role team, the six phases (0–5), the phase gates,
+   and the non-negotiable house rules every role inherits.
 2. For each phase, invoke the role prompts **in the master's order** as specialist agents, feeding each
    `REQUIREMENTS.md` + `EVALUATION.md` + the prior role's output.
-3. Do **not** advance a phase until its **CTO gate** passes (each gate is a concrete checklist in `01`).
+3. Do **not** advance a phase until its **gate** passes — each gate requires the CTO checklist *plus* the
+   relevant specialist sign-offs (domain, security, AI-governance, a11y, SRE) captured by the TPM.
 4. All work happens on the git branch **`court-management-service`** (isolated — never touch `main`).
 
 ## The three ideas that make this world-class (and hard)
@@ -36,8 +53,7 @@ RLS + a `case-registry` working slice).
    hierarchy, templates are versioned *configuration* in a metadata/rule engine — built **before** any
    domain module. This is what makes it a platform, not an app.
 2. **Reuse the ERP; own only court logic (§4.1).** Integrate with the real identity/policy, workflow
-   (BPMN/DMN), estab/eOffice, notification, finance, audit services and the shared packages — don't
-   rebuild them.
+   (BPMN/DMN), estab/eOffice, notification, finance, audit services and the shared packages.
 3. **Verify, then claim.** Every deliverable ships with a test that failed before and passes after, run
    as the least-privileged `court_svc` role so tenant-isolation failures are actually visible. This is
    the antidote to "green while broken."
