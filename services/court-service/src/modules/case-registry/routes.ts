@@ -40,6 +40,28 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Fetch a single case with its parties.
+  // Overdue cases (past SLA target, not disposed) — court MIS / pendency mgmt.
+  app.get("/v1/court/cases/overdue", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, COURT_READ_ROLES);
+    const q = req.query as { asOf?: string; limit?: string; offset?: string };
+    const asOf = q.asOf && /^\d{4}-\d{2}-\d{2}$/.test(q.asOf)
+      ? q.asOf : new Date().toISOString().slice(0, 10);
+    const limit = Math.min(Number(q.limit ?? 100) || 100, 500);
+    const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
+    const items = await repo.listOverdueCases(ctx.tenantId, asOf, limit, offset);
+    return reply.send({ items, count: items.length, asOf, source: "db" });
+  });
+
+  // Pendency summary — pending-case counts by status.
+  app.get("/v1/court/cases/pendency", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, COURT_READ_ROLES);
+    const summary = await repo.pendencySummary(ctx.tenantId);
+    const total = summary.reduce((a, s) => a + s.count, 0);
+    return reply.send({ summary, total, source: "db" });
+  });
+
   app.get("/v1/court/cases/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, COURT_READ_ROLES);

@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, asc, lt, isNull, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cases, caseParties, caseStateTransitions } from "./schema.js";
 
@@ -42,6 +42,33 @@ export async function listCases(
     .orderBy(desc(cases.createdAt))
     .limit(limit)
     .offset(offset));
+}
+
+/**
+ * Cases past their SLA target disposal date and not yet disposed, as of `asOf`
+ * (YYYY-MM-DD), oldest-target first. Tenant-scoped (RLS + explicit predicate).
+ */
+export async function listOverdueCases(
+  tenantId: string, asOf: string, limit: number, offset: number,
+): Promise<CaseRow[]> {
+  return scopedRead((tx) => tx.select().from(cases)
+    .where(and(
+      eq(cases.tenantId, tenantId),
+      isNull(cases.disposalDate),
+      lt(cases.targetDisposalDate, asOf),
+    ))
+    .orderBy(asc(cases.targetDisposalDate))
+    .limit(limit)
+    .offset(offset));
+}
+
+/** Pending-case counts grouped by status (disposal_date IS NULL), tenant-scoped. */
+export async function pendencySummary(tenantId: string): Promise<{ status: string; count: number }[]> {
+  return scopedRead<{ status: string; count: number }[]>((tx) => tx
+    .select({ status: cases.status, count: sql<number>`cast(count(*) as int)` })
+    .from(cases)
+    .where(and(eq(cases.tenantId, tenantId), isNull(cases.disposalDate)))
+    .groupBy(cases.status));
 }
 
 export async function getCaseById(id: string): Promise<CaseRow | null> {
