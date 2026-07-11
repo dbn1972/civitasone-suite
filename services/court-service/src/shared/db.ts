@@ -15,6 +15,7 @@ import { evidenceSchema } from "../modules/evidence/schema.js";
 import { configSchema } from "../modules/config-registry/schema.js";
 import { certifiedCopySchema } from "../modules/certified-copy/schema.js";
 import { parcelSchema } from "../modules/case-parcel/schema.js";
+import { publicLookupSchema } from "../modules/public-lookup/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 /**
@@ -60,6 +61,7 @@ const schema = {
   ...configSchema,
   ...certifiedCopySchema,
   ...parcelSchema,
+  ...publicLookupSchema,
   ...outboxSchema,
   // ...courtRegistrySchema, ...causeListSchema, ...hearingSchema, (added per module task)
 };

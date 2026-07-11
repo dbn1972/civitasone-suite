@@ -53,6 +53,7 @@ import { registerOrderIssuanceConsumers } from "./modules/order-issuance/consume
 import { registerConfigConsumers } from "./modules/config-registry/consumer.js";
 import { registerCertifiedCopyConsumers } from "./modules/certified-copy/consumer.js";
 import { registerParcelConsumers } from "./modules/case-parcel/consumer.js";
+import { registerPublicLookupConsumers } from "./modules/public-lookup/consumer.js";
 
 const log = pino({ name: "court-worker" });
 
@@ -115,6 +116,7 @@ const MODULE_REGISTRARS: ModuleRegistrar[] = [
   registerConfigConsumers,
   registerCertifiedCopyConsumers,
   registerParcelConsumers,
+  registerPublicLookupConsumers,
   // registerCauseListConsumers,
   // registerHearingConsumers,
   // registerOrderConsumers,

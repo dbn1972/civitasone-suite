@@ -74,6 +74,8 @@ export const COMMANDS = {
   /** revenue land subject — parcels in dispute */
   addParcel:                  "court.parcel.add",
   updateParcel:               "court.parcel.update",
+  /** public case-status directory (OTP/captcha/open configurable) */
+  publishEstablishment:       "court.public.publish_establishment",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -126,6 +128,7 @@ export const EVENTS = {
   certifiedCopyTransitioned:  "court.copy.transitioned",
   parcelAdded:                "court.parcel.added",
   parcelUpdated:              "court.parcel.updated",
+  establishmentPublished:     "court.public.establishment_published",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
