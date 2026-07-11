@@ -1,0 +1,105 @@
+<title>Order Issuance — Court Workflow</title>
+<style>
+  :root{
+    --paper:#f5f6f9; --surface:#ffffff; --surface-2:#f1f3f7; --line:#dde1e9;
+    --ink:#181c28; --muted:#5b6377; --faint:#8a92a5;
+    --accent:#37418c; --accent-soft:#e9ebf7;
+    --good:#1f7a4d; --good-soft:#e4f2ea; --warn:#b7791f; --warn-soft:#f8f0dc; --crit:#c0392b; --crit-soft:#f8e5e2;
+    --shadow:0 1px 2px rgba(20,24,40,.05),0 8px 26px rgba(20,24,40,.07);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --paper:#0e1016;--surface:#161923;--surface-2:#1d212c;--line:#2a2f3c;--ink:#eceef4;--muted:#a3abbd;--faint:#6c7487;
+    --accent:#9aa4e8;--accent-soft:#20233a;--good:#5cc48c;--good-soft:#16281f;--warn:#e0b055;--warn-soft:#2a2417;--crit:#e8837a;--crit-soft:#2b1a18;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 34px rgba(0,0,0,.5);
+  }}
+  :root[data-theme="dark"]{--paper:#0e1016;--surface:#161923;--surface-2:#1d212c;--line:#2a2f3c;--ink:#eceef4;--muted:#a3abbd;--faint:#6c7487;--accent:#9aa4e8;--accent-soft:#20233a;--good:#5cc48c;--good-soft:#16281f;--warn:#e0b055;--warn-soft:#2a2417;--crit:#e8837a;--crit-soft:#2b1a18;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 34px rgba(0,0,0,.5)}
+  :root[data-theme="light"]{--paper:#f5f6f9;--surface:#ffffff;--surface-2:#f1f3f7;--line:#dde1e9;--ink:#181c28;--muted:#5b6377;--faint:#8a92a5;--accent:#37418c;--accent-soft:#e9ebf7;--good:#1f7a4d;--good-soft:#e4f2ea;--warn:#b7791f;--warn-soft:#f8f0dc;--crit:#c0392b;--crit-soft:#f8e5e2;--shadow:0 1px 2px rgba(20,24,40,.05),0 8px 26px rgba(20,24,40,.07)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased;display:flex;justify-content:center;padding:30px 18px 60px}
+  .serif{font-family:Georgia,"Times New Roman",serif}
+  .tnum{font-variant-numeric:tabular-nums}
+  .shell{width:100%;max-width:600px}
+  .top{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+  .seal{width:36px;height:36px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-family:Georgia,serif;font-weight:700;font-size:18px}
+  .top .n{font-family:Georgia,serif;font-size:17px;font-weight:600}
+  .sub{color:var(--muted);font-size:12.5px;margin:0 0 20px 47px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);padding:20px 21px}
+  .stateline{display:flex;align-items:center;gap:0;margin-bottom:18px}
+  .st{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+  .st.done{color:var(--good)}.st.now{color:var(--accent)}
+  .arw{flex:1;height:2px;background:var(--line);margin:0 8px;min-width:14px}
+  .arw.done{background:var(--good)}
+  .ordhead{display:flex;align-items:baseline;gap:10px;margin-bottom:3px}
+  .ordhead .cnr{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--muted)}
+  .ordtitle{font-size:18px;font-weight:600;letter-spacing:-.01em;margin:0 0 3px}
+  .ordtype{font-size:12.5px;color:var(--muted);margin-bottom:15px}
+  .body{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:9px;padding:13px 15px;font-family:Georgia,serif;font-size:14.5px;line-height:1.6;color:var(--ink)}
+  .body .h{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-family:system-ui,sans-serif;font-weight:700;margin-bottom:6px}
+  /* maker-checker banner */
+  .mc{display:flex;gap:12px;margin-top:18px;background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 30%,var(--line));
+    border-radius:11px;padding:13px 15px}
+  .mc .ic{flex:none;font-size:17px;line-height:1.3}
+  .mc .t{font-size:13px;font-weight:700;color:var(--warn)}
+  .mc .d{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .mc .d b{color:var(--ink)}
+  .whoami{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:12.5px;color:var(--muted)}
+  .whoami .av{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:11px}
+  .dsc{display:flex;align-items:center;gap:9px;margin-top:14px;padding:11px 13px;border:1px dashed color-mix(in srgb,var(--good) 40%,var(--line));
+    border-radius:10px;background:var(--good-soft)}
+  .dsc .k{width:24px;height:24px;flex:none}
+  .dsc .t{font-size:12.5px;font-weight:600;color:var(--good)}
+  .dsc .s{font-size:11.5px;color:var(--muted)}
+  .actions{display:flex;gap:11px;margin-top:20px}
+  .btn{flex:1;font-size:14px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.primary:disabled{opacity:.5;cursor:not-allowed}
+  .note{font-size:11.5px;color:var(--faint);text-align:center;margin-top:16px;line-height:1.5}
+  .note code{font-family:ui-monospace,monospace;color:var(--muted)}
+</style>
+
+<div class="shell">
+  <div class="top"><span class="seal serif">न्या</span><span class="n">Tehsildar Court, Sadar</span></div>
+  <p class="sub">Order issuance · maker-checker workflow · §23 / §35.5</p>
+
+  <div class="card">
+    <div class="stateline">
+      <span class="st done">Draft</span><span class="arw done"></span>
+      <span class="st done">Signed by maker</span><span class="arw done"></span>
+      <span class="st now">Pending approval</span><span class="arw"></span>
+      <span class="st">Issued</span>
+    </div>
+
+    <div class="ordhead"><span class="cnr">DLHC010000012026</span></div>
+    <h1 class="ordtitle serif">Order — Ram v. State</h1>
+    <div class="ordtype">Final order · dated 15 Aug 2026 · recorded by <b>Reader (R. Sharma)</b></div>
+
+    <div class="body">
+      <div class="h">Operative portion</div>
+      The application for mutation is <b>allowed</b>. The Patwari is directed to effect the entry in the record of rights within 30 days and report compliance. No order as to costs.
+    </div>
+
+    <div class="mc">
+      <span class="ic">🛡️</span>
+      <div>
+        <div class="t">Maker-checker enforced</div>
+        <div class="d">This order was drafted &amp; signed by <b>R. Sharma (Reader)</b>. The issuing officer <b>must be a different person</b> — an order can never be self-issued. AI/service accounts never issue.</div>
+      </div>
+    </div>
+
+    <div class="whoami"><span class="av">PJ</span> Acting as <b style="color:var(--ink);margin:0 3px">Presiding Judge (P. Joshi)</b> · court_admin — you are not the maker, so you may issue.</div>
+
+    <div class="dsc">
+      <svg class="k" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--good)"><path d="M12 2l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      <div><div class="t">Digital signature (DSC) ready</div><div class="s">Token detected · pronouncement will be DSC-signed on issue</div></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn">Send back for revision</button>
+      <button class="btn primary">Approve &amp; issue (DSC)</button>
+    </div>
+  </div>
+
+  <p class="note">Every action is a queue-first command: <code>PATCH /v1/court/orders/:id/approve-issue</code> → the consumer verifies <code>approver ≠ maker</code> before the version-guarded write. A same-officer attempt is rejected end-to-end (dead-lettered), proven by the lifecycle e2e.</p>
+</div>
