@@ -1,0 +1,481 @@
+/**
+ * visitor-service: check-in / check-out / overstay-detect consumer.
+ *
+ * Handles `COMMANDS.checkInRecord` / `COMMANDS.checkOutRecord` / `COMMANDS.overstayDetect`:
+ *   markProcessed(tx, msg.messageId) -> insert `check_ins` row -> transition
+ *   the digital pass's `status` (via modules/check-in/domain.ts's
+ *   checkIn/checkOut state machine) -> capacity-threshold check (Property 28)
+ *   -> outbox `visitorCheckedIn`/`visitorCheckedOut`/`overstayAlerted` ->
+ *   evacuation roster add/remove -> NOTIFICATION_SEND to host (arrival) and
+ *   security control room (watchlist match).
+ *
+ * Requirements covered: 5.3, 5.5, 5.7, 6.1, 6.2, 6.3, 6.4, 19.5
+ *
+ * Roster wiring / graceful degradation (per roster.ts's module doc and
+ * steering "Error Handling & Resilience — Graceful degradation"): the
+ * roster call happens AFTER the DB transaction commits. A roster failure
+ * (e.g. Redis down) is caught, logged at WARN (not ERROR), and does NOT
+ * fail the message — the check-in/check-out has already been durably
+ * recorded in Postgres, and the roster is a best-effort ephemeral mirror
+ * that self-heals on the next check-in/out. Retrying/redelivering the
+ * message for a roster-only failure would be a needless DLQ risk for
+ * state that already committed.
+ */
+import { pino } from "pino";
+import { and, eq, lt } from "drizzle-orm";
+import type { Queue } from "@civitasone/queue";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import { db } from "../../shared/db.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
+import { checkIns } from "./schema.js";
+import { digitalPasses } from "../digital-pass/schema.js";
+import { visitRequests } from "../visit-request/schema.js";
+import { locations } from "../location/schema.js";
+import { checkIn as domainCheckIn, checkOut as domainCheckOut, type CheckInStatus } from "./domain.js";
+import { isOverCapacityThreshold } from "../location/domain.js";
+import { addToRoster, removeFromRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
+import { isWatchlisted } from "../blacklist/screening-store.js";
+
+const log = pino({ name: "check-in-consumer" });
+
+interface CheckInRecordPayload {
+  checkInId?: string;
+  passId: string;
+  gateId: string;
+  gateTerminalId?: string;
+  offlineRecorded?: boolean;
+  verificationMethod?: string;
+  timestamp?: string; // ISO — falls back to now() when absent (e.g. offline sync catch-up)
+}
+
+interface CheckOutRecordPayload {
+  checkOutId?: string;
+  passId: string;
+  gateId: string;
+  gateTerminalId?: string;
+  offlineRecorded?: boolean;
+  verificationMethod?: string;
+  timestamp?: string;
+}
+
+interface CommittedCheckIn {
+  locationId: string;
+  visitorName: string;
+  hostName: string;
+  hostEmployeeId: string;
+  contactNumber: string;
+  checkInTime: string;
+  identityDocHash: string | null;
+  capacityThreshold: number | null;
+}
+
+interface CommittedCheckOut {
+  locationId: string;
+}
+
+interface OvrstayDetectPayload {
+  /** Optional ISO timestamp; defaults to now() if absent. */
+  asOf?: string;
+  /** Optional location scope — when set, only checks passes at this location. */
+  locationId?: string;
+}
+
+export function registerCheckInConsumers(queue: Queue): void {
+  queue.subscribe<CheckInRecordPayload>(COMMANDS.checkInRecord, async (msg) => {
+    const p = msg.payload;
+
+    const committed: CommittedCheckIn | null = await db.transaction(async (tx): Promise<CommittedCheckIn | null> => {
+      if (!(await markProcessed(tx, msg.messageId))) return null;
+
+      const passRows = await tx
+        .select()
+        .from(digitalPasses)
+        .where(and(eq(digitalPasses.id, p.passId), eq(digitalPasses.tenantId, msg.tenantId)))
+        .limit(1);
+      const pass = passRows[0];
+      if (!pass) {
+        throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
+      }
+
+      const nextStatus = domainCheckIn(pass.status as CheckInStatus, { passType: pass.passType as never });
+
+      const timestamp = p.timestamp ? new Date(p.timestamp) : new Date();
+
+      await tx.insert(checkIns).values({
+        tenantId: msg.tenantId,
+        passId: p.passId,
+        locationId: pass.locationId,
+        gateId: p.gateId,
+        direction: "in",
+        timestamp,
+        ...(p.gateTerminalId !== undefined ? { gateTerminalId: p.gateTerminalId } : {}),
+        offlineRecorded: p.offlineRecorded ?? false,
+        verificationMethod: p.verificationMethod ?? "qr",
+        createdBy: msg.actorId,
+      });
+
+      await tx
+        .update(digitalPasses)
+        .set({ status: nextStatus, updatedAt: new Date(), updatedBy: msg.actorId })
+        .where(and(eq(digitalPasses.id, p.passId), eq(digitalPasses.tenantId, msg.tenantId)));
+
+      const visitRows = await tx
+        .select()
+        .from(visitRequests)
+        .where(and(eq(visitRequests.id, pass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
+        .limit(1);
+      const visit = visitRows[0];
+
+      await enqueue(tx, {
+        topic: EVENTS.visitorCheckedIn,
+        eventType: EVENTS.visitorCheckedIn,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { passId: p.passId, locationId: pass.locationId, gateId: p.gateId, timestamp: timestamp.toISOString() },
+      });
+
+      // Requirement 19.5 / Property 28: capacity-threshold check after check-in commits.
+      // Query current occupancy (roster count) and location's capacityThreshold.
+      const locationRows = await tx
+        .select({ capacityThreshold: locations.capacityThreshold })
+        .from(locations)
+        .where(and(eq(locations.id, pass.locationId), eq(locations.tenantId, msg.tenantId)))
+        .limit(1);
+      const location = locationRows[0];
+
+      // We'll check capacity AFTER this transaction commits (using roster count).
+      // For now, capture location info needed for the capacity check.
+
+      // Requirement 5.5: NOTIFICATION_SEND to host on visitor arrival (push)
+      if (visit?.hostEmployeeId) {
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND,
+          eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: EVENTS.visitorCheckedIn,
+            recipientId: visit.hostEmployeeId,
+            recipient: visit.hostEmployeeId,
+            channel: "push",
+            variables: {
+              visitorName: visit.visitorName ?? "",
+              gateId: p.gateId,
+              checkInTime: timestamp.toISOString(),
+            },
+          }),
+        });
+      }
+
+      return {
+        locationId: pass.locationId,
+        visitorName: visit?.visitorName ?? "",
+        hostName: "", // resolved by host-employee lookup out of scope
+        hostEmployeeId: visit?.hostEmployeeId ?? "",
+        contactNumber: visit?.visitorPhone ?? "",
+        checkInTime: timestamp.toISOString(),
+        identityDocHash: visit?.identityDocRef ?? null,
+        capacityThreshold: location?.capacityThreshold ?? null,
+      };
+    });
+
+    if (!committed) return; // already processed (idempotent replay)
+
+    // Requirement 19.5 / Property 28: capacity-threshold check AFTER commit.
+    // Uses the roster counter (already incremented by addToRoster below or
+    // by a prior successful check-in) to decide whether occupancy exceeds
+    // the location's configured threshold. On breach, outbox a
+    // `capacityThresholdReached` event + NOTIFICATION_SEND to security.
+    try {
+      if (committed.capacityThreshold != null) {
+        const occupancy = await getVisitorCount(msg.tenantId, committed.locationId);
+        if (isOverCapacityThreshold(occupancy, committed.capacityThreshold)) {
+          // Fire capacity alert in a new short transaction (already committed check-in)
+          await db.transaction(async (tx) => {
+            await enqueue(tx, {
+              topic: EVENTS.capacityThresholdReached,
+              eventType: EVENTS.capacityThresholdReached,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                locationId: committed.locationId,
+                occupancy,
+                capacityThreshold: committed.capacityThreshold,
+              },
+            });
+
+            // Notify security control room of capacity breach
+            await enqueue(tx, {
+              topic: NOTIFICATION_SEND,
+              eventType: NOTIFICATION_SEND,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: buildNotificationPayload({
+                eventType: EVENTS.capacityThresholdReached,
+                recipient: "security_control_room",
+                channel: "push",
+                variables: {
+                  locationId: committed.locationId,
+                  occupancy: String(occupancy),
+                  capacityThreshold: String(committed.capacityThreshold),
+                },
+              }),
+            });
+          });
+
+          log.info(
+            { tenantId: msg.tenantId, locationId: committed.locationId, occupancy, threshold: committed.capacityThreshold },
+            "capacity threshold reached; alert dispatched",
+          );
+        }
+      }
+    } catch (err) {
+      log.warn(
+        { err, tenantId: msg.tenantId, locationId: committed.locationId, event: "capacity_check_failed" },
+        "capacity-threshold check failed; check-in already committed",
+      );
+    }
+
+    // Requirement 5.7: if the visitor is watchlist-flagged, notify security
+    // control room. Best-effort — never fail the check-in for this.
+    try {
+      if (committed.identityDocHash) {
+        const flagged = await isWatchlisted(msg.tenantId, committed.identityDocHash);
+        if (flagged) {
+          await db.transaction(async (tx) => {
+            await enqueue(tx, {
+              topic: NOTIFICATION_SEND,
+              eventType: NOTIFICATION_SEND,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: buildNotificationPayload({
+                eventType: EVENTS.watchlistMatched,
+                recipient: "security_control_room",
+                channel: "push",
+                variables: {
+                  visitorName: committed.visitorName,
+                  passId: p.passId,
+                  gateId: p.gateId,
+                  locationId: committed.locationId,
+                  checkInTime: committed.checkInTime,
+                },
+              }),
+            });
+          });
+
+          log.info(
+            { tenantId: msg.tenantId, passId: p.passId, event: "watchlist_flagged_check_in" },
+            "watchlist-flagged visitor checked in; security control room notified",
+          );
+        }
+      }
+    } catch (err) {
+      log.warn(
+        { err, tenantId: msg.tenantId, passId: p.passId, event: "watchlist_notification_failed" },
+        "watchlist notification dispatch failed; check-in already committed",
+      );
+    }
+
+    // Requirement 17.1/17.2 — mirror the check-in into the evacuation
+    // roster. Best-effort: never fail an already-committed check-in
+    // because the roster (Redis) is unavailable.
+    try {
+      const entry: RosterEntry = {
+        passId: p.passId,
+        visitorName: committed.visitorName,
+        hostName: committed.hostName,
+        checkInTime: committed.checkInTime,
+        lastKnownGate: p.gateId,
+        contactNumber: committed.contactNumber,
+        evacuated: false,
+      };
+      await addToRoster(msg.tenantId, committed.locationId, entry);
+    } catch (err) {
+      log.warn(
+        { err, tenantId: msg.tenantId, passId: p.passId, event: "evacuation_roster_add_failed" },
+        "evacuation roster add failed; check-in already committed, roster will self-heal on next check-in/out",
+      );
+    }
+  });
+
+  queue.subscribe<CheckOutRecordPayload>(COMMANDS.checkOutRecord, async (msg) => {
+    const p = msg.payload;
+
+    const committed: CommittedCheckOut | null = await db.transaction(async (tx): Promise<CommittedCheckOut | null> => {
+      if (!(await markProcessed(tx, msg.messageId))) return null;
+
+      const passRows = await tx
+        .select()
+        .from(digitalPasses)
+        .where(and(eq(digitalPasses.id, p.passId), eq(digitalPasses.tenantId, msg.tenantId)))
+        .limit(1);
+      const pass = passRows[0];
+      if (!pass) {
+        throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
+      }
+
+      const nextStatus = domainCheckOut(pass.status as CheckInStatus);
+
+      const timestamp = p.timestamp ? new Date(p.timestamp) : new Date();
+
+      await tx.insert(checkIns).values({
+        tenantId: msg.tenantId,
+        passId: p.passId,
+        locationId: pass.locationId,
+        gateId: p.gateId,
+        direction: "out",
+        timestamp,
+        ...(p.gateTerminalId !== undefined ? { gateTerminalId: p.gateTerminalId } : {}),
+        offlineRecorded: p.offlineRecorded ?? false,
+        verificationMethod: p.verificationMethod ?? "qr",
+        createdBy: msg.actorId,
+      });
+
+      await tx
+        .update(digitalPasses)
+        .set({ status: nextStatus, updatedAt: new Date(), updatedBy: msg.actorId })
+        .where(and(eq(digitalPasses.id, p.passId), eq(digitalPasses.tenantId, msg.tenantId)));
+
+      await enqueue(tx, {
+        topic: EVENTS.visitorCheckedOut,
+        eventType: EVENTS.visitorCheckedOut,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { passId: p.passId, locationId: pass.locationId, gateId: p.gateId, timestamp: timestamp.toISOString() },
+      });
+
+      return { locationId: pass.locationId };
+    });
+
+    if (!committed) return; // already processed (idempotent replay)
+
+    // Requirement 17.1/17.2 — remove from the evacuation roster. Best-effort,
+    // same rationale as the check-in path above.
+    try {
+      await removeFromRoster(msg.tenantId, committed.locationId, p.passId);
+    } catch (err) {
+      log.warn(
+        { err, tenantId: msg.tenantId, passId: p.passId, event: "evacuation_roster_remove_failed" },
+        "evacuation roster remove failed; check-out already committed, roster will self-heal on next check-in/out",
+      );
+    }
+  });
+
+  // ─── overstayDetect ──────────────────────────────────────────────────
+  // Requirement 6.3/6.4: queries currently checked-in passes whose
+  // `valid_until` is in the past, outboxes `overstayAlerted` +
+  // NOTIFICATION_SEND to host and security for each overstayed visitor.
+  queue.subscribe<OvrstayDetectPayload>(COMMANDS.overstayDetect, async (msg) => {
+    const p = msg.payload;
+    const now = p.asOf ? new Date(p.asOf) : new Date();
+
+    await db.transaction(async (tx): Promise<void> => {
+      if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+
+      // Find all passes that are currently checked_in and past their valid_until
+      const overstayedPasses = await tx
+        .select({
+          passId: digitalPasses.id,
+          locationId: digitalPasses.locationId,
+          validUntil: digitalPasses.validUntil,
+          visitRequestId: digitalPasses.visitRequestId,
+        })
+        .from(digitalPasses)
+        .where(
+          and(
+            eq(digitalPasses.tenantId, msg.tenantId),
+            eq(digitalPasses.status, "checked_in"),
+            lt(digitalPasses.validUntil, now),
+            ...(p.locationId ? [eq(digitalPasses.locationId, p.locationId)] : []),
+          ),
+        );
+
+      for (const pass of overstayedPasses) {
+        // Look up the visit request for visitor/host info
+        const visitRows = await tx
+          .select({
+            visitorName: visitRequests.visitorName,
+            visitorPhone: visitRequests.visitorPhone,
+            hostEmployeeId: visitRequests.hostEmployeeId,
+          })
+          .from(visitRequests)
+          .where(and(eq(visitRequests.id, pass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
+          .limit(1);
+        const visit = visitRows[0];
+
+        // Outbox: overstayAlerted event (Requirement 6.3)
+        await enqueue(tx, {
+          topic: EVENTS.overstayAlerted,
+          eventType: EVENTS.overstayAlerted,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            passId: pass.passId,
+            locationId: pass.locationId,
+            validUntil: pass.validUntil.toISOString(),
+            detectedAt: now.toISOString(),
+            visitorName: visit?.visitorName ?? "",
+            hostEmployeeId: visit?.hostEmployeeId ?? "",
+          },
+        });
+
+        // Requirement 6.4: NOTIFICATION_SEND to host about overstay
+        if (visit?.hostEmployeeId) {
+          await enqueue(tx, {
+            topic: NOTIFICATION_SEND,
+            eventType: NOTIFICATION_SEND,
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: buildNotificationPayload({
+              eventType: EVENTS.overstayAlerted,
+              recipientId: visit.hostEmployeeId,
+              recipient: visit.hostEmployeeId,
+              channel: "push",
+              variables: {
+                visitorName: visit.visitorName ?? "",
+                passId: pass.passId,
+                validUntil: pass.validUntil.toISOString(),
+                detectedAt: now.toISOString(),
+              },
+            }),
+          });
+        }
+
+        // Requirement 6.4: NOTIFICATION_SEND to security control room
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND,
+          eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: EVENTS.overstayAlerted,
+            recipient: "security_control_room",
+            channel: "push",
+            variables: {
+              visitorName: visit?.visitorName ?? "",
+              passId: pass.passId,
+              locationId: pass.locationId,
+              validUntil: pass.validUntil.toISOString(),
+              detectedAt: now.toISOString(),
+            },
+          }),
+        });
+      }
+
+      log.info(
+        { tenantId: msg.tenantId, overstayedCount: overstayedPasses.length, asOf: now.toISOString() },
+        "overstay detection completed",
+      );
+    });
+  });
+}
