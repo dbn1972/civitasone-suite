@@ -55,6 +55,26 @@ export async function listActiveKeys(
   return rows.map((r) => r.configKey);
 }
 
+/**
+ * Read one ACTIVE config entry's JSONB value on the caller's tx (for consumers
+ * that resolve config within their handler transaction, e.g. filing fees).
+ * Undefined if there is no active entry for (tenant, namespace, key).
+ */
+export async function getConfigValueOnTx(
+  tx: Writer, tenantId: string, namespace: string, configKey: string,
+): Promise<unknown | undefined> {
+  const rows = await tx.select({ value: configEntries.value })
+    .from(configEntries)
+    .where(and(
+      eq(configEntries.tenantId, tenantId),
+      eq(configEntries.namespace, namespace),
+      eq(configEntries.configKey, configKey),
+      eq(configEntries.active, true),
+    ))
+    .limit(1);
+  return rows[0]?.value;
+}
+
 // ─── Reads (used by routes) — via scopedRead so RLS is enforced on the read path ─
 
 export async function listByNamespace(

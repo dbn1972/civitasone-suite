@@ -3,7 +3,8 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertNonNegativeFee } from "./domain.js";
+import * as configRepo from "../config-registry/repo.js";
+import { assertNonNegativeFee, resolveFees } from "./domain.js";
 
 type SubmitFilingPayload = {
   id: string;
@@ -23,11 +24,15 @@ export function registerFilingConsumers(
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // Money-conservation guard: fees are non-negative integer paise; a bad
-      // amount is a poison message, never retried.
+      // §47 fee_schedule: the SERVER-configured fee for this filing type is
+      // authoritative (client-supplied amounts cannot lower/tamper it); a
+      // malformed schedule or a negative amount is a poison message.
+      const feeCfg = await configRepo.getConfigValueOnTx(tx, p.tenantId, "fee_schedule", p.filingType);
+      let fees: { filingFeeMinor: number; courtFeeMinor: number; source: "config" | "client" };
       try {
-        assertNonNegativeFee(p.filingFeeMinor);
-        assertNonNegativeFee(p.courtFeeMinor);
+        fees = resolveFees(feeCfg, { filingFeeMinor: p.filingFeeMinor, courtFeeMinor: p.courtFeeMinor });
+        assertNonNegativeFee(fees.filingFeeMinor);
+        assertNonNegativeFee(fees.courtFeeMinor);
       } catch (e) {
         throw new NonRetryableError((e as Error).message);
       }
@@ -37,8 +42,8 @@ export function registerFilingConsumers(
         tenantId: p.tenantId,
         caseId: p.caseId,
         filingType: p.filingType,
-        filingFeeMinor: p.filingFeeMinor,
-        courtFeeMinor: p.courtFeeMinor,
+        filingFeeMinor: fees.filingFeeMinor,
+        courtFeeMinor: fees.courtFeeMinor,
         status: "submitted",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
@@ -53,8 +58,9 @@ export function registerFilingConsumers(
           caseId: p.caseId,
           filingId: p.id,
           filingType: p.filingType,
-          filingFeeMinor: p.filingFeeMinor,
-          courtFeeMinor: p.courtFeeMinor,
+          filingFeeMinor: fees.filingFeeMinor,
+          courtFeeMinor: fees.courtFeeMinor,
+          feeSource: fees.source,
         },
       });
       await audit(tx, msg, "submit", "court_filing", p.id);

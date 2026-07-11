@@ -25,6 +25,10 @@ vi.mock("../src/modules/filing/repo.js", () => ({
   insertFiling: vi.fn(async () => {}),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  getConfigValueOnTx: vi.fn(async () => undefined),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: { submitFiling: "court.filing.submit" },
   EVENTS: { filingSubmitted: "court.filing.submitted" },
@@ -32,6 +36,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerFilingConsumers } from "../src/modules/filing/consumer.js";
 import * as repo from "../src/modules/filing/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue } from "../src/shared/outbox.js";
 
 function makeHarness() {
@@ -77,6 +82,41 @@ describe("filing consumer", () => {
     await expect(
       deliver("court.filing.submit", submitMsg(randomUUID(), undefined, { courtFeeMinor: -1 })),
     ).rejects.toThrow(/INVALID_FEE/);
+    expect(repo.insertFiling).not.toHaveBeenCalled();
+  });
+});
+
+describe("filing consumer — fee_schedule (§47 authoritative fees)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("uses client-supplied fees when no fee_schedule is configured", async () => {
+    const { register, deliver } = makeHarness();
+    registerFilingConsumers(register);
+    await deliver("court.filing.submit", submitMsg(randomUUID(), undefined, { filingFeeMinor: 15000, courtFeeMinor: 5000 }));
+    expect((repo.insertFiling as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({ filingFeeMinor: 15000, courtFeeMinor: 5000 });
+  });
+
+  it("SERVER config fee overrides a client-supplied (tampered-low) amount", async () => {
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue({ filingFeeMinor: 25000, courtFeeMinor: 10000 });
+    const { register, deliver } = makeHarness();
+    registerFilingConsumers(register);
+    await deliver("court.filing.submit", submitMsg(randomUUID(), undefined, { filingFeeMinor: 1, courtFeeMinor: 1 }));
+    expect((repo.insertFiling as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({ filingFeeMinor: 25000, courtFeeMinor: 10000 });
+    const evt = (enqueue as ReturnType<typeof vi.fn>).mock.calls
+      .map((c) => c[1] as { topic: string; payload?: { feeSource?: string } })
+      .find((e) => e.topic === "court.filing.submitted");
+    expect(evt?.payload?.feeSource).toBe("config");
+  });
+
+  it("rejects a malformed fee_schedule value (poison) and does NOT insert", async () => {
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue({ filingFeeMinor: -5, courtFeeMinor: 10 });
+    const { register, deliver } = makeHarness();
+    registerFilingConsumers(register);
+    await expect(deliver("court.filing.submit", submitMsg(randomUUID()))).rejects.toThrow(/INVALID_FEE_SCHEDULE/);
     expect(repo.insertFiling).not.toHaveBeenCalled();
   });
 });
