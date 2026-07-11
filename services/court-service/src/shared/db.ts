@@ -8,6 +8,7 @@ import { filingSchema } from "../modules/filing/schema.js";
 import { orderSchema } from "../modules/order/schema.js";
 import { causeListSchema } from "../modules/cause-list/schema.js";
 import { scrutinySchema } from "../modules/scrutiny/schema.js";
+import { noticeSchema } from "../modules/notice/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 /**
@@ -46,6 +47,7 @@ const schema = {
   ...orderSchema,
   ...causeListSchema,
   ...scrutinySchema,
+  ...noticeSchema,
   ...outboxSchema,
   // ...courtRegistrySchema, ...causeListSchema, ...hearingSchema, (added per module task)
 };

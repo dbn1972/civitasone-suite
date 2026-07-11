@@ -42,6 +42,10 @@ export const COMMANDS = {
   recordScrutiny:             "court.scrutiny.record",
   raiseDefect:                "court.defect.raise",
   resolveDefect:              "court.defect.resolve",
+  /** §21 issuance + service of process */
+  issueNotice:                "court.notice.issue",
+  recordService:              "court.notice.serve",
+  updateNoticeStatus:         "court.notice.update_status",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -73,6 +77,9 @@ export const EVENTS = {
   scrutinyRecorded:           "court.scrutiny.recorded",
   defectRaised:               "court.defect.raised",
   defectResolved:             "court.defect.resolved",
+  noticeIssued:               "court.notice.issued",
+  noticeServiceRecorded:      "court.notice.service_recorded",
+  noticeStatusChanged:        "court.notice.status_changed",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
