@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { appeals } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -24,14 +24,14 @@ export async function getAppealForUpdate(
 }
 
 export async function listAppealsByCase(tenantId: string, originalCaseId: string): Promise<AppealRow[]> {
-  return db.select().from(appeals)
+  return scopedRead((tx) => tx.select().from(appeals)
     .where(and(eq(appeals.tenantId, tenantId), eq(appeals.originalCaseId, originalCaseId)))
-    .orderBy(desc(appeals.filedDate));
+    .orderBy(desc(appeals.filedDate)));
 }
 
 export async function getAppeal(tenantId: string, id: string): Promise<AppealRow | undefined> {
-  const rows = await db.select().from(appeals)
+  const rows = await scopedRead<AppealRow[]>((tx) => tx.select().from(appeals)
     .where(and(eq(appeals.tenantId, tenantId), eq(appeals.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0];
 }

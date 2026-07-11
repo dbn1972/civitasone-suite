@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cases, caseParties, caseStateTransitions } from "./schema.js";
 
 /** Narrow write surface accepted for the transactional (GUC-scoped) path. */
@@ -37,18 +37,18 @@ export async function listCases(
   const predicates = [eq(cases.tenantId, filters.tenantId)];
   if (filters.status) predicates.push(eq(cases.status, filters.status));
   if (filters.courtId) predicates.push(eq(cases.courtId, filters.courtId));
-  return db.select().from(cases)
+  return scopedRead((tx) => tx.select().from(cases)
     .where(and(...predicates))
     .orderBy(desc(cases.createdAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 export async function getCaseById(id: string): Promise<CaseRow | null> {
-  const rows = await db.select().from(cases).where(eq(cases.id, id)).limit(1);
+  const rows = await scopedRead<CaseRow[]>((tx) => tx.select().from(cases).where(eq(cases.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
 export async function getCasePartiesByCaseId(caseId: string): Promise<CasePartyRow[]> {
-  return db.select().from(caseParties).where(eq(caseParties.caseId, caseId));
+  return scopedRead((tx) => tx.select().from(caseParties).where(eq(caseParties.caseId, caseId)));
 }

@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { filings } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -12,7 +12,7 @@ export async function insertFiling(tx: Writer, row: FilingInsert): Promise<void>
 }
 
 export async function listFilingsByCase(tenantId: string, caseId: string): Promise<FilingRow[]> {
-  return db.select().from(filings)
+  return scopedRead((tx) => tx.select().from(filings)
     .where(and(eq(filings.tenantId, tenantId), eq(filings.caseId, caseId)))
-    .orderBy(desc(filings.createdAt));
+    .orderBy(desc(filings.createdAt)));
 }

@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { caseScrutiny, caseDefect } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -17,9 +17,9 @@ export async function insertScrutiny(tx: Writer, row: CaseScrutinyInsert): Promi
 export async function getScrutiny(
   tenantId: string, id: string,
 ): Promise<CaseScrutinyRow | undefined> {
-  const rows = await db.select().from(caseScrutiny)
+  const rows = await scopedRead<CaseScrutinyRow[]>((tx) => tx.select().from(caseScrutiny)
     .where(and(eq(caseScrutiny.tenantId, tenantId), eq(caseScrutiny.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0];
 }
 
@@ -39,7 +39,7 @@ export async function getDefectForUpdate(
 }
 
 export async function listDefectsByCase(tenantId: string, caseId: string): Promise<CaseDefectRow[]> {
-  return db.select().from(caseDefect)
+  return scopedRead((tx) => tx.select().from(caseDefect)
     .where(and(eq(caseDefect.tenantId, tenantId), eq(caseDefect.caseId, caseId)))
-    .orderBy(desc(caseDefect.createdAt));
+    .orderBy(desc(caseDefect.createdAt)));
 }

@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { hearings } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -22,7 +22,7 @@ export async function getHearingForUpdate(
 }
 
 export async function listHearingsByCase(tenantId: string, caseId: string): Promise<HearingRow[]> {
-  return db.select().from(hearings)
+  return scopedRead((tx) => tx.select().from(hearings)
     .where(and(eq(hearings.tenantId, tenantId), eq(hearings.caseId, caseId)))
-    .orderBy(desc(hearings.scheduledDate));
+    .orderBy(desc(hearings.scheduledDate)));
 }

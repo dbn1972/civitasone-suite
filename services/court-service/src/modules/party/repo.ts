@@ -1,5 +1,5 @@
 import { eq, and, asc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { caseParties } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -26,7 +26,7 @@ export async function getPartyForUpdate(
 /** List a case's parties. The encryptedText columns return CLEARTEXT here — the
  *  route layer masks per role before serialising to the client. */
 export async function listPartiesByCase(tenantId: string, caseId: string): Promise<CasePartyRow[]> {
-  return db.select().from(caseParties)
+  return scopedRead((tx) => tx.select().from(caseParties)
     .where(and(eq(caseParties.tenantId, tenantId), eq(caseParties.caseId, caseId)))
-    .orderBy(asc(caseParties.createdAt));
+    .orderBy(asc(caseParties.createdAt)));
 }

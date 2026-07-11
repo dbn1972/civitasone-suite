@@ -1,5 +1,5 @@
 import { eq, and, asc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { causeLists, causeListItems } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -26,10 +26,10 @@ export async function insertCauseList(tx: Writer, row: CauseListInsert): Promise
 export async function getCauseList(
   tenantId: string, id: string,
 ): Promise<{ id: string; listDate: string; courtId: string } | undefined> {
-  const rows = await db.select({ id: causeLists.id, listDate: causeLists.listDate, courtId: causeLists.courtId })
+  const rows = await scopedRead<{ id: string; listDate: string; courtId: string }[]>((tx) => tx.select({ id: causeLists.id, listDate: causeLists.listDate, courtId: causeLists.courtId })
     .from(causeLists)
     .where(and(eq(causeLists.tenantId, tenantId), eq(causeLists.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0];
 }
 
@@ -39,7 +39,7 @@ export async function insertCauseListItem(tx: Writer, row: CauseListItemInsert):
 }
 
 export async function listItems(tenantId: string, causeListId: string): Promise<CauseListItemRow[]> {
-  return db.select().from(causeListItems)
+  return scopedRead((tx) => tx.select().from(causeListItems)
     .where(and(eq(causeListItems.tenantId, tenantId), eq(causeListItems.causeListId, causeListId)))
-    .orderBy(asc(causeListItems.itemNumber));
+    .orderBy(asc(causeListItems.itemNumber)));
 }
