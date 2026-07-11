@@ -147,6 +147,8 @@ export const COMMANDS = {
   voteConclude:               "meeting.vote.conclude",
   /** payload: { resolutionId, memberId, position: "approve" | "reject" | "abstain", comment? } */
   voteCirculationRespond:     "meeting.vote.circulation_respond",
+  /** payload: { meetingId, resolutionId, memberId, reason, registerRef? } — record a conflict-of-interest recusal on a motion */
+  voteRecuse:                 "meeting.vote.recuse",
 
   // ── VC Integration ───────────────────────────────────────────────────────
   /** payload: { meetingId, platform?, recordingEnabled? } — creates VC room via VC_Adapter (with fallback) */
@@ -320,6 +322,8 @@ export const EVENTS = {
   voteInitiated:              "meeting.vote.initiated",
   /** payload: { meetingId, resolutionId, result } */
   voteConcluded:              "meeting.vote.concluded",
+  /** payload: { meetingId, resolutionId, memberId } — a member was recorded as recused on a motion */
+  voteRecusalRecorded:        "meeting.vote.recusal_recorded",
 
   // ── Calendar / Rooms ───────────────────────────────────────────────────────
   /** payload: { roomId, name, capacity } */

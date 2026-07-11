@@ -47,6 +47,8 @@ export const POLICY_DEFAULTS = {
   "action_item.escalation_l1_hours":      24,
   "action_item.escalation_l2_hours":      72,
   "action_item.escalation_l3_hours":      168,
+  "meeting.notice_period_days":           0,
+  "meeting.agenda_circulation_lead_days": 0,
 } as const;
 
 export type PolicyNumberKey = keyof typeof POLICY_DEFAULTS;
@@ -119,4 +121,68 @@ export async function getAllowedCommitteeTypes(
 ): Promise<Set<string>> {
   const keys = await listActiveKeys(tx, tenantId, COMMITTEE_TYPES_NS);
   return effectiveAllowed(keys, DEFAULT_COMMITTEE_TYPES);
+}
+
+
+// ─── Boolean / string policy knobs (governance toggles) ──────────────────────────
+
+/**
+ * Boolean governance toggles, each with its behavior-preserving default. `voting.weighted_enabled`
+ * gates weighted voting (default OFF → 1 member = 1 vote); `quorum.recheck_on_resume` re-verifies
+ * quorum live when a meeting resumes after an adjournment (default ON).
+ */
+export const POLICY_BOOL_DEFAULTS = {
+  "voting.weighted_enabled":   false,
+  "quorum.recheck_on_resume":  true,
+} as const;
+export type PolicyBoolKey = keyof typeof POLICY_BOOL_DEFAULTS;
+
+/** Coerce an arbitrary JSON config value to a boolean, else `undefined`. */
+export function toBool(v: unknown): boolean | undefined {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    if (t === "true" || t === "1" || t === "yes" || t === "on") return true;
+    if (t === "false" || t === "0" || t === "no" || t === "off") return false;
+  }
+  if (v && typeof v === "object" && "value" in (v as Record<string, unknown>)) {
+    return toBool((v as Record<string, unknown>).value);
+  }
+  return undefined;
+}
+
+/** Resolve a boolean policy value on a GUC-scoped tx (default when unconfigured). */
+export async function getPolicyBool(
+  tx: Writer, tenantId: string, key: PolicyBoolKey,
+): Promise<boolean> {
+  const raw = await getConfigValueOnTx(tx, tenantId, POLICY_NS, key);
+  return toBool(raw) ?? POLICY_BOOL_DEFAULTS[key];
+}
+
+/**
+ * String governance knobs. `voting.default_threshold` is the majority rule applied to a vote when
+ * the initiator does not specify one (default `simple_majority`).
+ */
+export const POLICY_STRING_DEFAULTS = {
+  "voting.default_threshold": "simple_majority",
+} as const;
+export type PolicyStringKey = keyof typeof POLICY_STRING_DEFAULTS;
+
+/** Coerce an arbitrary JSON config value to a non-empty string, else `undefined`. */
+export function toStringValue(v: unknown): string | undefined {
+  if (typeof v === "string" && v.trim() !== "") return v.trim();
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (v && typeof v === "object" && "value" in (v as Record<string, unknown>)) {
+    return toStringValue((v as Record<string, unknown>).value);
+  }
+  return undefined;
+}
+
+/** Resolve a string policy value on a GUC-scoped tx (default when unconfigured). */
+export async function getPolicyString(
+  tx: Writer, tenantId: string, key: PolicyStringKey,
+): Promise<string> {
+  const raw = await getConfigValueOnTx(tx, tenantId, POLICY_NS, key);
+  return toStringValue(raw) ?? POLICY_STRING_DEFAULTS[key];
 }

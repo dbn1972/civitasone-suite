@@ -164,6 +164,8 @@ export const transitionMeetingSchema = z.object({
   to: meetingState,
   reason: z.string().trim().max(2_000).optional(),
   nextMeetingDate: isoDateTime.optional(),
+  /** Explicitly waive the minimum-notice requirement on draft→scheduled (short notice, Gap 3). */
+  shortNoticeWaiver: z.boolean().optional(),
 });
 export type TransitionMeetingInput = z.infer<typeof transitionMeetingSchema>;
 

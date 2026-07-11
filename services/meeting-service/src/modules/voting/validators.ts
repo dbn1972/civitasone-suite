@@ -36,7 +36,9 @@ const majorityRule = z.enum(MAJORITY_RULES);
 export const voteInitiateSchema = z.object({
   resolutionText: z.string().trim().min(1).max(20_000),
   voteType,
-  majorityRule: majorityRule.default("simple_majority"),
+  // Optional: when omitted the consumer resolves the tenant's configured
+  // `voting.default_threshold` (default simple_majority) so the threshold is config-driven.
+  majorityRule: majorityRule.optional(),
   agendaItemId: uuid.optional(),
   decisionId: uuid.optional(),
   effectiveDate: isoDate.optional(),
@@ -72,6 +74,22 @@ export const voteConcludeSchema = z.object({
   effectiveDate: isoDate.optional(),
 });
 export type VoteConcludeInput = z.infer<typeof voteConcludeSchema>;
+
+// ─── Recuse (conflict-of-interest) ───────────────────────────────────────────────
+
+/**
+ * Record a conflict-of-interest recusal on a motion (statutory completeness). `memberId` is
+ * optional — when omitted the authenticated actor recuses THEMSELVES; a chair/secretary may
+ * record a recusal for another member by naming them. `reason` is mandatory (it appears in the
+ * vote record / minutes). `registerRef` optionally links the member's register-of-interests entry.
+ */
+export const voteRecuseSchema = z.object({
+  memberId: uuid.optional(),
+  reason: z.string().trim().min(1).max(2_000),
+  registerRef: z.string().trim().max(500).optional(),
+  agendaItemId: uuid.optional(),
+});
+export type VoteRecuseInput = z.infer<typeof voteRecuseSchema>;
 
 // ─── Path params ─────────────────────────────────────────────────────────────
 

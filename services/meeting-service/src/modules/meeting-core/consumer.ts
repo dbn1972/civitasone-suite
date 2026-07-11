@@ -34,14 +34,18 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { meetings, meetingSeries, meetingStateTransitions, meetingTypes } from "./schema.js";
 import { agendaItems } from "../agenda/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
+import { attendanceRecords } from "../attendance/schema.js";
+import { evaluateQuorum, type QuorumRule } from "../committee/domain.js";
 import {
   assertTransition,
   computeFinancialYear,
+  computeNoticeDays,
   generateMeetingNumber,
   isMeetingState,
   nextMeetingSequence,
   type MeetingState,
 } from "./domain.js";
+import { getPolicyNumber, getPolicyBool } from "../config-registry/policy.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "meeting";
@@ -99,6 +103,7 @@ interface MeetingTransitionPayload {
   to: string;
   reason?: string;
   nextMeetingDate?: string;
+  shortNoticeWaiver?: boolean;
 }
 
 interface MeetingCancelPayload {
@@ -409,6 +414,42 @@ async function handleMeetingUpdate(msg: CommandEnvelope<MeetingUpdatePayload>): 
   await invalidate(msg.tenantId, CACHE_RESOURCE, p.meetingId);
 }
 
+/**
+ * Recompute quorum LIVE from the current attendance set (Gap 5: quorum re-check on resumption).
+ * Used when a meeting resumes after an adjournment so the resumed sitting is validated against who
+ * is ACTUALLY present now — not the stale flag captured when the meeting first started. Reuses the
+ * committee quorum evaluator so "what counts" (VC inclusion, role composition) matches establishment
+ * exactly. Returns the meeting's stored flag as a safe fallback when it has no committee.
+ */
+async function computeLiveQuorum(
+  tx: DrizzleTx,
+  meeting: typeof meetings.$inferSelect,
+): Promise<boolean> {
+  if (!meeting.committeeId) return meeting.quorumEstablished;
+  const committeeRows = await tx
+    .select({ quorumRule: committees.quorumRule })
+    .from(committees)
+    .where(and(eq(committees.id, meeting.committeeId), eq(committees.tenantId, meeting.tenantId)))
+    .limit(1);
+  if (!committeeRows[0]) return meeting.quorumEstablished;
+  const rule = committeeRows[0].quorumRule as QuorumRule;
+
+  const roster = await tx
+    .select({ memberId: committeeMembers.memberId })
+    .from(committeeMembers)
+    .where(and(
+      eq(committeeMembers.tenantId, meeting.tenantId),
+      eq(committeeMembers.committeeId, meeting.committeeId),
+      eq(committeeMembers.status, "active"),
+    ));
+  const attendance = await tx
+    .select({ status: attendanceRecords.status, mode: attendanceRecords.mode })
+    .from(attendanceRecords)
+    .where(and(eq(attendanceRecords.meetingId, meeting.id), eq(attendanceRecords.tenantId, meeting.tenantId)));
+
+  return evaluateQuorum(attendance, rule, roster.length).established;
+}
+
 /** Shared state-change writer: validate transition, apply derived fields, log transition, emit event. */
 async function applyTransition(
   tx: DrizzleTx,
@@ -419,17 +460,31 @@ async function applyTransition(
     expectedVersion: number;
     reason: string | null;
     nextMeetingDate: string | null;
+    shortNoticeWaiver?: boolean;
   },
 ): Promise<void> {
-  const { meeting, to, expectedVersion, reason, nextMeetingDate } = args;
+  const { meeting, to, expectedVersion, reason, nextMeetingDate, shortNoticeWaiver } = args;
   const from = requireMeetingState(meeting.status);
   const now = new Date();
 
   // Gather agenda count only when it matters (draft→scheduled prerequisite, Req 1.3).
-  const agendaItemCount =
-    from === "draft" && to === "scheduled"
-      ? await countAgendaItems(tx, meeting.id, meeting.tenantId)
-      : undefined;
+  const scheduling = from === "draft" && to === "scheduled";
+  const agendaItemCount = scheduling
+    ? await countAgendaItems(tx, meeting.id, meeting.tenantId)
+    : undefined;
+
+  // Notice period (Gap 3): resolve the tenant's configured minimum only when scheduling.
+  const noticePeriodDays = scheduling
+    ? await getPolicyNumber(tx, meeting.tenantId, "meeting.notice_period_days")
+    : undefined;
+
+  // Quorum re-check on resumption (Gap 5): when resuming from adjournment, re-evaluate quorum
+  // LIVE (config-gated by `quorum.recheck_on_resume`, default ON) rather than trusting the flag.
+  const resuming = from === "adjourned" && to === "in_progress";
+  let quorumEstablished = meeting.quorumEstablished;
+  if (resuming && (await getPolicyBool(tx, meeting.tenantId, "quorum.recheck_on_resume"))) {
+    quorumEstablished = await computeLiveQuorum(tx, meeting);
+  }
 
   try {
     // Conditional spread keeps this compatible with exactOptionalPropertyTypes
@@ -438,9 +493,11 @@ async function applyTransition(
       now,
       chairpersonId: meeting.chairpersonId,
       scheduledAt: meeting.scheduledAt,
-      quorumEstablished: meeting.quorumEstablished,
+      quorumEstablished,
       adjournmentReason: to === "adjourned" ? reason : meeting.adjournmentReason,
       ...(agendaItemCount !== undefined ? { agendaItemCount } : {}),
+      ...(noticePeriodDays !== undefined ? { noticePeriodDays } : {}),
+      ...(shortNoticeWaiver !== undefined ? { shortNoticeWaiver } : {}),
     });
   } catch (err) {
     asPermanent(err);
@@ -457,6 +514,16 @@ async function applyTransition(
     set.meetingNumber = meetingNumber;
     set.financialYear = financialYear;
   }
+  // Notice-period audit trail (Gap 3): record actual notice days and whether a short-notice
+  // scheduling was waived. Reaching here means the transition passed validateNoticePeriod.
+  if (scheduling && meeting.scheduledAt) {
+    const actualNotice = computeNoticeDays(now, meeting.scheduledAt);
+    set.noticeDays = actualNotice;
+    set.shortNoticeWaived =
+      noticePeriodDays !== undefined && actualNotice < noticePeriodDays && shortNoticeWaiver === true;
+  }
+  // On a re-established resume, refresh the stored quorum flag to the live re-check result.
+  if (resuming) set.quorumEstablished = quorumEstablished;
   if (to === "in_progress" && !meeting.actualStartAt) set.actualStartAt = now;
   if (to === "minutes_pending" && !meeting.actualEndAt) set.actualEndAt = now;
   if (to === "adjourned") {
@@ -571,6 +638,7 @@ async function handleMeetingTransition(msg: CommandEnvelope<MeetingTransitionPay
       expectedVersion: p.version,
       reason: p.reason ?? null,
       nextMeetingDate: p.nextMeetingDate ?? null,
+      ...(p.shortNoticeWaiver !== undefined ? { shortNoticeWaiver: p.shortNoticeWaiver } : {}),
     });
     await audit(tx, msg, `transition:${to}`, "meeting", p.meetingId);
   });

@@ -55,6 +55,7 @@ export const committeeMembers = meetingSchema.table("committee_members", {
   tenureEnd:           date("tenure_end"),
   appointingAuthority: text("appointing_authority"),
   votingRight:         boolean("voting_right").notNull().default(true),
+  voteWeight:          integer("vote_weight").notNull().default(1),
   status:              varchar("status", { length: 16 }).notNull().default("active"),
   createdAt:           timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
