@@ -920,6 +920,88 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  services/court-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/circuit-breaker':
+        specifier: workspace:*
+        version: link:../../packages/circuit-breaker
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/render':
+        specifier: workspace:*
+        version: link:../../packages/render
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/search':
+        specifier: workspace:*
+        version: link:../../packages/search
+      '@civitasone/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: 9.0.1
+        version: 9.0.1
+      drizzle-orm:
+        specifier: 0.30.10
+        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: 4.29.1
+        version: 4.29.1
+      ioredis:
+        specifier: 5.11.1
+        version: 5.11.1
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
+      pino:
+        specifier: 8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 20.19.43
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   services/crm-service:
     dependencies:
       '@civitasone/auth':
@@ -1217,6 +1299,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/gov-adapters':
+        specifier: workspace:*
+        version: link:../../packages/gov-adapters
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -1837,6 +1922,55 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/metadata-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      drizzle-orm:
+        specifier: 0.30.10
+        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1)
+      fastify:
+        specifier: 4.28.1
+        version: 4.28.1
+      postgres:
+        specifier: 3.4.4
+        version: 3.4.4
+      zod:
+        specifier: 3.23.8
+        version: 3.23.8
+    devDependencies:
+      tsx:
+        specifier: 4.7.1
+        version: 4.7.1
+      typescript:
+        specifier: 5.4.5
+        version: 5.4.5
+      vitest:
+        specifier: 2.1.9
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
   services/ml-service:
@@ -5628,6 +5762,9 @@ packages:
   fastify-plugin@4.5.1:
     resolution: {integrity: sha512-stRHYGeuqpEZTL1Ef0Ovr2ltazUT9g844X5z/zEBFLG8RYlpDiOCIG+ATvYEp+/zmc7sN29mcIMp8gvYplYPIQ==}
 
+  fastify@4.28.1:
+    resolution: {integrity: sha512-kFWUtpNr4i7t5vY2EJPCN2KgMVpuqfU4NjnJNCgiNB900oiDeYqaNDRcAfeBbOF5hGixixxcKnOU4KN9z6QncQ==}
+
   fastify@4.29.1:
     resolution: {integrity: sha512-m2kMNHIG92tSNWv+Z3UeTR9AWLLuo7KctC7mlFPtMEVrfjIhmQhkQnT9v15qA/BfVq3vvj134Y0jl9SBje3jXQ==}
 
@@ -6685,6 +6822,10 @@ packages:
     resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postgres@3.4.4:
+    resolution: {integrity: sha512-IbyN+9KslkqcXa8AO9fxpk97PA4pzewvpi2B3Dwy9u4zpV32QicaEdgmF3eSQUzdRk7ttDHQejNgAEr4XoeH4A==}
+    engines: {node: '>=12'}
+
   postgres@3.4.9:
     resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
     engines: {node: '>=12'}
@@ -7238,6 +7379,11 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  tsx@4.7.1:
+    resolution: {integrity: sha512-8d6VuibXHtlN5E3zFkgY8u4DX7Y3Z27zvvPKVmLon/D4AjuKzarkUBTLDBgj9iTQ0hg5xM7c/mYiRVM+HETf0g==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
   turbo@2.9.18:
     resolution: {integrity: sha512-bwabv6PupzeavybzEoArBAkwq5fnzwf8OFnRtpHwnviFWuwJPFxtyH+aVp36TmIqK3aYYgtTJ3J0m2ysxxSzQg==}
     hasBin: true
@@ -7274,6 +7420,11 @@ packages:
 
   typedarray@0.0.6:
     resolution: {integrity: sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==}
+
+  typescript@5.4.5:
+    resolution: {integrity: sha512-vcI4UpRgg81oIRUFwR0WSIHKt11nJ7SAVlYNIu+QpqeyXP+gpQJy/Z4+F0aGxSE4MqwjyXvW/TzgkLAx2AGHwQ==}
+    engines: {node: '>=14.17'}
+    hasBin: true
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -7524,6 +7675,9 @@ packages:
   zip-stream@4.1.1:
     resolution: {integrity: sha512-9qv4rlDiopXg4E69k+vMHjNN63YFMe9sZMrdlvKnCjlCRWeCBswPPMPUfx+ipsAWq1LXHe70RcbaHdJJpS6hyQ==}
     engines: {node: '>= 10'}
+
+  zod@3.23.8:
+    resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
@@ -10029,6 +10183,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  drizzle-orm@0.30.10(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1):
+    optionalDependencies:
+      '@types/react': 18.3.31
+      postgres: 3.4.4
+      react: 18.3.1
+
   drizzle-orm@0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1):
     optionalDependencies:
       '@types/react': 18.3.31
@@ -10641,6 +10801,25 @@ snapshots:
       strnum: 2.4.1
 
   fastify-plugin@4.5.1: {}
+
+  fastify@4.28.1:
+    dependencies:
+      '@fastify/ajv-compiler': 3.6.0
+      '@fastify/error': 3.4.1
+      '@fastify/fast-json-stringify-compiler': 4.3.0
+      abstract-logging: 2.0.1
+      avvio: 8.4.0
+      fast-content-type-parse: 1.1.0
+      fast-json-stringify: 5.16.1
+      find-my-way: 8.2.2
+      light-my-request: 5.14.0
+      pino: 9.14.0
+      process-warning: 3.0.0
+      proxy-addr: 2.0.7
+      rfdc: 1.4.1
+      secure-json-parse: 2.7.0
+      semver: 7.8.5
+      toad-cache: 3.7.1
 
   fastify@4.29.1:
     dependencies:
@@ -11757,6 +11936,8 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
+  postgres@3.4.4: {}
+
   postgres@3.4.9: {}
 
   prelude-ls@1.2.1: {}
@@ -12404,6 +12585,13 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
+  tsx@4.7.1:
+    dependencies:
+      esbuild: 0.19.12
+      get-tsconfig: 4.14.0
+    optionalDependencies:
+      fsevents: 2.3.3
+
   turbo@2.9.18:
     optionalDependencies:
       '@turbo/darwin-64': 2.9.18
@@ -12457,6 +12645,8 @@ snapshots:
       reflect.getprototypeof: 1.0.10
 
   typedarray@0.0.6: {}
+
+  typescript@5.4.5: {}
 
   typescript@5.9.3: {}
 
@@ -12760,6 +12950,8 @@ snapshots:
       archiver-utils: 3.0.4
       compress-commons: 4.1.2
       readable-stream: 3.6.2
+
+  zod@3.23.8: {}
 
   zod@3.25.76: {}
 
