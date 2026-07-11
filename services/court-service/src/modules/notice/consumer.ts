@@ -4,7 +4,8 @@ import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { notices } from "./schema.js";
 import * as repo from "./repo.js";
-import { assertNoticeTransition, type NoticeStatus } from "./domain.js";
+import * as configRepo from "../config-registry/repo.js";
+import { assertNoticeTransition, renderNoticeBody, type NoticeStatus } from "./domain.js";
 
 type IssueNoticePayload = {
   id: string;
@@ -42,12 +43,22 @@ export function registerNoticeConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // §47 notice_template: render the statutory notice body from the tenant
+      // template for this notice type (null when none is configured).
+      const tplCfg = await configRepo.getConfigValueOnTx(tx, p.tenantId, "notice_template", p.noticeType);
+      const renderedBody = renderNoticeBody(tplCfg, {
+        caseId: p.caseId,
+        noticeType: p.noticeType,
+        issuedTo: p.issuedTo ?? "",
+        issueDate: p.issueDate,
+      });
       await repo.insertNotice(tx, {
         id: p.id,
         tenantId: p.tenantId,
         caseId: p.caseId,
         noticeType: p.noticeType,
         issuedTo: p.issuedTo ?? null,
+        renderedBody,
         status: "issued",
         issueDate: p.issueDate,
         createdBy: msg.actorId,

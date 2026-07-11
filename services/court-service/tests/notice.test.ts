@@ -31,6 +31,10 @@ vi.mock("../src/modules/notice/repo.js", () => ({
   getNoticeForUpdate: vi.fn(async () => currentNotice),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  getConfigValueOnTx: vi.fn(async () => undefined),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: {
     issueNotice: "court.notice.issue",
@@ -46,6 +50,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerNoticeConsumers } from "../src/modules/notice/consumer.js";
 import * as repo from "../src/modules/notice/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue, versionedUpdate } from "../src/shared/outbox.js";
 
 function makeHarness() {
@@ -152,5 +157,29 @@ describe("notice consumer", () => {
     currentNotice = { status: "cancelled", version: 2 };
     await deliver("court.notice.update_status", statusMsg("n1", "cancelled", 2));
     expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("notice consumer — notice_template rendering (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("leaves renderedBody null when no notice_template is configured", async () => {
+    const { register, deliver } = makeHarness();
+    registerNoticeConsumers(register);
+    await deliver("court.notice.issue", issueMsg(randomUUID()));
+    expect((repo.insertNotice as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({ renderedBody: null });
+  });
+
+  it("renders the notice body from a configured template, substituting placeholders", async () => {
+    (configRepo.getConfigValueOnTx as ReturnType<typeof vi.fn>).mockResolvedValue({ template: "NOTICE ({{noticeType}}) to {{issuedTo}} on {{issueDate}}." });
+    const { register, deliver } = makeHarness();
+    registerNoticeConsumers(register);
+    await deliver("court.notice.issue", issueMsg(randomUUID()));
+    const inserted = (repo.insertNotice as ReturnType<typeof vi.fn>).mock.calls[0][1] as { renderedBody: string | null };
+    expect(inserted.renderedBody).toBe("NOTICE (summons) to Respondent 1 on 2026-07-10.");
   });
 });

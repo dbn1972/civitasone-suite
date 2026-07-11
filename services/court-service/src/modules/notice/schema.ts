@@ -22,6 +22,7 @@ export const notices = courtSchema.table("notices", {
   caseId:     uuid("case_id").notNull(),
   noticeType: varchar("notice_type", { length: 48 }).notNull(),
   issuedTo:   text("issued_to"),
+  renderedBody: text("rendered_body"),
   status:     varchar("status", { length: 16 }).notNull().default("issued"),
   issueDate:  date("issue_date").notNull(),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -71,3 +71,19 @@ export function deriveServiceId(
     `${tenantId}:notice-service:${noticeId}:${mode}:${seq}`,
   );
 }
+
+/** Substitute {{key}} tokens in a template with vars[key] (missing → ""). No
+ * code evaluation — a plain, safe string replace. */
+export function renderTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, key: string) => vars[key] ?? "");
+}
+
+/** Render a notice body from a notice_template config value (§47), or null when
+ * the tenant has no template for this notice type. Config shape: { template }. */
+export function renderNoticeBody(configValue: unknown, vars: Record<string, string>): string | null {
+  if (configValue && typeof configValue === "object") {
+    const tpl = (configValue as Record<string, unknown>).template;
+    if (typeof tpl === "string" && tpl.length > 0) return renderTemplate(tpl, vars);
+  }
+  return null;
+}
