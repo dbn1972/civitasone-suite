@@ -36,6 +36,8 @@ export const COMMANDS = {
   submitFiling:               "court.filing.submit",
   /** payload: { courtId, forDate, benchId? } — materialize the cause-list for a court/day */
   generateCauseList:          "court.causelist.generate",
+  /** payload: { id, courtId, listDate, benchId?, listType? } — list a case onto a slot */
+  listCaseOnCauseList:        "court.causelist.list_case",
   /** payload: { id, name, courtType, jurisdiction?, establishmentCode?, parentCourtId?, address? } — §7 court master */
   createCourt:                "court.court.create",
   /** payload: { id, courtId, name, presidingJudgeId?, benchType? } — §5.2 bench under a court */
@@ -62,6 +64,8 @@ export const EVENTS = {
   filingSubmitted:            "court.filing.submitted",
   /** payload: { courtId, causeListId, forDate, itemCount } */
   causeListGenerated:         "court.causelist.generated",
+  /** payload: { causeListId, caseId, slot, courtroom } */
+  causeListItemAdded:         "court.causelist.item_added",
   /** payload: { courtId, courtType, name } */
   courtRegistered:            "court.court.registered",
   /** payload: { benchId, courtId, name } */
