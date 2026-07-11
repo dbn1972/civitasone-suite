@@ -177,7 +177,7 @@ function makeRouter(topic: string): Handler {
 // (2) Subscribe to every owned COMMANDS topic + every CONSUMED_EVENTS topic.
 const SUBSCRIBED_TOPICS: readonly string[] = [
   ...Object.values(COMMANDS),
-  ...Object.values(CONSUMED_EVENTS),
+  ...(Object.values(CONSUMED_EVENTS) as readonly string[]),
 ];
 
 for (const topic of SUBSCRIBED_TOPICS) {

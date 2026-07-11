@@ -30,7 +30,7 @@ export async function insertStateTransition(tx: Writer, row: CaseStateTransition
  * beyond the caller's tenant.
  */
 export async function listCases(
-  filters: { tenantId: string; status?: string; courtId?: string },
+  filters: { tenantId: string; status?: string | undefined; courtId?: string | undefined },
   limit: number,
   offset: number,
 ): Promise<CaseRow[]> {

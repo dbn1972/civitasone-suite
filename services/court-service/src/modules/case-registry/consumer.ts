@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import type { CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -26,9 +26,11 @@ type RegisterCasePayload = {
   }>;
 };
 
-export function registerCaseRegistryConsumers(queue: Queue): void {
-  queue.subscribe(COMMANDS.registerCase, async (msg) => {
-    const p = msg.payload as RegisterCasePayload;
+export function registerCaseRegistryConsumers(
+  register: <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>) => void,
+): void {
+  register<RegisterCasePayload>(COMMANDS.registerCase, async (msg) => {
+    const p = msg.payload;
     const cnrNumber = validateCnr(p.cnrNumber);
     const initialStatus = deriveInitialStatus();
 
