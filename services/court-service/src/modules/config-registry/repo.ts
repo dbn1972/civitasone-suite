@@ -1,5 +1,6 @@
 import { eq, and, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { configEntries } from "./schema.js";
 
 /** Narrow write surface accepted for the transactional (GUC-scoped) path. */
@@ -45,14 +46,22 @@ export async function getConfigForUpdate(
 export async function listActiveKeys(
   tx: Writer, tenantId: string, namespace: string,
 ): Promise<string[]> {
-  const rows = await tx.select({ configKey: configEntries.configKey })
-    .from(configEntries)
-    .where(and(
-      eq(configEntries.tenantId, tenantId),
-      eq(configEntries.namespace, namespace),
-      eq(configEntries.active, true),
-    ));
-  return rows.map((r) => r.configKey);
+  // Read-through cache under the config:<namespace> resource the consumer
+  // invalidates on any config.set/deactivate (invalidateResourceAfterCommit).
+  const cached = await cache.getOrLoad<string[]>(
+    cache.makeKey(tenantId, `config:${namespace}`, "__active_keys__"),
+    async () => {
+      const rows = await tx.select({ configKey: configEntries.configKey })
+        .from(configEntries)
+        .where(and(
+          eq(configEntries.tenantId, tenantId),
+          eq(configEntries.namespace, namespace),
+          eq(configEntries.active, true),
+        ));
+      return rows.map((r) => r.configKey);
+    },
+  );
+  return cached ?? [];
 }
 
 /**
@@ -63,16 +72,27 @@ export async function listActiveKeys(
 export async function getConfigValueOnTx(
   tx: Writer, tenantId: string, namespace: string, configKey: string,
 ): Promise<unknown | undefined> {
-  const rows = await tx.select({ value: configEntries.value })
-    .from(configEntries)
-    .where(and(
-      eq(configEntries.tenantId, tenantId),
-      eq(configEntries.namespace, namespace),
-      eq(configEntries.configKey, configKey),
-      eq(configEntries.active, true),
-    ))
-    .limit(1);
-  return rows[0]?.value;
+  // Read-through cache under the same config:<namespace> resource the consumer
+  // invalidates. The value is wrapped so a genuinely-set value is cached while an
+  // unset key returns null (not cached by getOrLoad) — so first-time config adds
+  // are visible immediately.
+  const cached = await cache.getOrLoad<{ v: unknown }>(
+    cache.makeKey(tenantId, `config:${namespace}`, configKey),
+    async () => {
+      const rows = await tx.select({ value: configEntries.value })
+        .from(configEntries)
+        .where(and(
+          eq(configEntries.tenantId, tenantId),
+          eq(configEntries.namespace, namespace),
+          eq(configEntries.configKey, configKey),
+          eq(configEntries.active, true),
+        ))
+        .limit(1);
+      const v = rows[0]?.value;
+      return v === undefined ? null : { v };
+    },
+  );
+  return cached ? cached.v : undefined;
 }
 
 // ─── Reads (used by routes) — via scopedRead so RLS is enforced on the read path ─
