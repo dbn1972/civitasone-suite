@@ -17,7 +17,7 @@ export const PARTY_ROLE_VALUES = [
 /** Add a party (petitioner/respondent/…) or an advocate to a case (§14/§15).
  *  name/address/phone/email are PII — stored ENCRYPTED via the encryptedText columns. */
 export const addPartyBody = z.object({
-  partyRole:     z.enum(PARTY_ROLE_VALUES),
+  partyRole:     z.string().trim().min(1).max(32),
   // Ordinal that distinguishes multiple same-role parties on one case (e.g. a
   // second respondent). The party id is deterministic on (case, role, partyIndex)
   // so re-submitting the SAME ordinal is idempotent, but two distinct respondents

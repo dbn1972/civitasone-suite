@@ -16,6 +16,7 @@
  * Opt-in via COURT_E2E=1. Default `vitest run` skips (DB is mocked there).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -26,9 +27,13 @@ import { sqlClient } from "../src/shared/db.js";
 const RUN = process.env.COURT_E2E === "1";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
-const TENANT = "33333333-3333-3333-3333-333333333333";
-const OTHER = "44444444-4444-4444-4444-444444444444";
-const PRESET_TENANT = "55555555-5555-5555-5555-555555555555";
+// Fresh tenants per run: config.set messageIds are deterministic per (tenant,
+// namespace, key), so a fixed preset tenant would only seed on the FIRST run —
+// re-runs correctly no-op via inbox dedup (idempotency by design) but leave the
+// seeding unobservable. Random tenants make each run a clean onboarding.
+const TENANT = randomUUID();
+const OTHER = randomUUID();
+const PRESET_TENANT = randomUUID();
 const ACTOR = "3333aaaa-3333-4333-8333-333333333333"; // a valid UUID — becomes created_by (uuid column)
 
 function token(tenantId: string, roles: string[] = ["court_admin"]): string {

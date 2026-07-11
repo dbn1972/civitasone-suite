@@ -25,3 +25,15 @@ export function isValidRole(role: string): role is PartyRole {
 export function derivePartyId(tenantId: string, caseId: string, partyRole: string, seq: number): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:party:${caseId}:${partyRole}:${seq}`);
 }
+
+/**
+ * Throw INVALID_PARTY_ROLE unless `role` is in the effective allowed set. The
+ * PARTY_ROLES above are the FALLBACK defaults for the config/metadata engine
+ * (§47) `party_role` namespace; when a tenant configures that namespace its set
+ * is authoritative, so an admin can ADD a bespoke role with no code change.
+ */
+export function assertPartyRoleAllowed(role: string, allowed: ReadonlySet<string>): void {
+  if (!allowed.has(role)) {
+    throw new Error(`INVALID_PARTY_ROLE: ${role} is not an allowed party role for this tenant`);
+  }
+}

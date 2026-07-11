@@ -4,6 +4,9 @@ import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { caseParties } from "./schema.js";
 import * as repo from "./repo.js";
+import * as configRepo from "../config-registry/repo.js";
+import { effectiveAllowed } from "../config-registry/domain.js";
+import { PARTY_ROLES, assertPartyRoleAllowed } from "./domain.js";
 
 type AddPartyPayload = {
   id: string;
@@ -35,6 +38,17 @@ export function registerPartyConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // §47 config/metadata: partyRole must be in the effective allowed set
+      // (tenant `party_role` config when present, else PARTY_ROLES defaults).
+      const allowedRoles = effectiveAllowed(
+        await configRepo.listActiveKeys(tx, p.tenantId, "party_role"),
+        PARTY_ROLES,
+      );
+      try {
+        assertPartyRoleAllowed(p.partyRole, allowedRoles);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
       await repo.insertParty(tx, {
         id: p.id,
         tenantId: p.tenantId,

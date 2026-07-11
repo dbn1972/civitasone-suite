@@ -9,7 +9,7 @@ export const submitEvidenceBody = z.object({
   filingId:      z.string().uuid().optional(),
   exhibitNumber: z.string().trim().max(32).optional(),
   title:         z.string().trim().min(1).max(500),
-  evidenceType:  z.enum(["document", "photo", "video", "audio", "physical", "affidavit", "witness"]).optional(),
+  evidenceType:  z.string().trim().min(1).max(32).optional(),
   storageRef:    z.string().trim().max(512).optional(),
   contentHash:   z.string().trim().regex(/^[0-9a-fA-F]{64}$/, "contentHash must be a 64-char hex SHA-256").optional(),
 });

@@ -30,6 +30,10 @@ vi.mock("../src/modules/evidence/repo.js", () => ({
   getEvidenceForUpdate: vi.fn(async () => currentEvidence),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: { submitEvidence: "court.evidence.submit", ruleOnEvidence: "court.evidence.rule" },
   EVENTS: { evidenceSubmitted: "court.evidence.submitted", evidenceRuled: "court.evidence.ruled" },
@@ -37,6 +41,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerEvidenceConsumers } from "../src/modules/evidence/consumer.js";
 import * as repo from "../src/modules/evidence/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue, versionedUpdate } from "../src/shared/outbox.js";
 
 function makeHarness() {
@@ -126,5 +131,48 @@ describe("evidence consumer", () => {
     currentEvidence = { status: "admitted", version: 2 };
     await deliver("court.evidence.rule", ruleMsg("e1", "admitted", 2));
     expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("evidence consumer — config-driven evidenceType (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  function mk(evidenceType?: string) {
+    const id = randomUUID();
+    return {
+      messageId: id, type: "court.evidence.submit",
+      tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
+      payload: {
+        id, caseId: randomUUID(), tenantId: randomUUID(),
+        title: "Bank statement", ...(evidenceType !== undefined ? { evidenceType } : {}),
+      },
+    };
+  }
+
+  it("rejects a present-but-unknown evidenceType (INVALID_EVIDENCE_TYPE)", async () => {
+    const { register, deliver } = makeHarness();
+    registerEvidenceConsumers(register);
+    await expect(deliver("court.evidence.submit", mk("made_up_type"))).rejects.toThrow(/INVALID_EVIDENCE_TYPE/);
+    expect(repo.insertEvidence).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bespoke evidenceType supplied ONLY by tenant config (nothing hardcoded)", async () => {
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue(["forensic_report"]);
+    const { register, deliver } = makeHarness();
+    registerEvidenceConsumers(register);
+    await deliver("court.evidence.submit", mk("forensic_report"));
+    expect(repo.insertEvidence).toHaveBeenCalledTimes(1);
+  });
+
+  it("submits with evidenceType omitted (DB default applies) and still inserts", async () => {
+    const { register, deliver } = makeHarness();
+    registerEvidenceConsumers(register);
+    await deliver("court.evidence.submit", mk(undefined));
+    expect(repo.insertEvidence).toHaveBeenCalledTimes(1);
   });
 });

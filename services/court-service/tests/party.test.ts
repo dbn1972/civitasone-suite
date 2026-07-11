@@ -32,6 +32,10 @@ vi.mock("../src/modules/party/repo.js", () => ({
   getPartyForUpdate: vi.fn(async () => currentParty),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: { addParty: "court.party.add", updateAdvocate: "court.party.update_advocate" },
   EVENTS: { partyAdded: "court.party.added", advocateUpdated: "court.party.advocate_updated" },
@@ -39,6 +43,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerPartyConsumers } from "../src/modules/party/consumer.js";
 import * as repo from "../src/modules/party/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue, versionedUpdate } from "../src/shared/outbox.js";
 
 function makeHarness() {
@@ -130,5 +135,45 @@ describe("party consumer", () => {
     registerPartyConsumers(register);
     await expect(deliver("court.party.update_advocate", updateMsg("p1", 1))).rejects.toThrow(/VERSION_CONFLICT/);
     expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("party consumer — config-driven partyRole (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  function mk(partyRole: string) {
+    const id = randomUUID();
+    return {
+      messageId: id, type: "court.party.add",
+      tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
+      payload: { id, caseId: randomUUID(), tenantId: randomUUID(), partyRole },
+    };
+  }
+
+  it("rejects a partyRole that is neither a default nor tenant-configured", async () => {
+    const { register, deliver } = makeHarness();
+    registerPartyConsumers(register);
+    await expect(deliver("court.party.add", mk("made_up_role"))).rejects.toThrow(/INVALID_PARTY_ROLE/);
+    expect(repo.insertParty).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bespoke partyRole supplied ONLY by tenant config (nothing hardcoded)", async () => {
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue(["amicus_curiae"]);
+    const { register, deliver } = makeHarness();
+    registerPartyConsumers(register);
+    await deliver("court.party.add", mk("amicus_curiae"));
+    expect(repo.insertParty).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a standard default partyRole with no tenant config", async () => {
+    const { register, deliver } = makeHarness();
+    registerPartyConsumers(register);
+    await deliver("court.party.add", mk("petitioner"));
+    expect(repo.insertParty).toHaveBeenCalledTimes(1);
   });
 });

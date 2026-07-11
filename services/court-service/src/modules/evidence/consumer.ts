@@ -4,7 +4,9 @@ import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { evidence } from "./schema.js";
 import * as repo from "./repo.js";
-import { assertTransition, type EvidenceStatus } from "./domain.js";
+import * as configRepo from "../config-registry/repo.js";
+import { effectiveAllowed } from "../config-registry/domain.js";
+import { assertTransition, DEFAULT_EVIDENCE_TYPES, assertEvidenceTypeAllowed, type EvidenceStatus } from "./domain.js";
 
 type SubmitEvidencePayload = {
   id: string;
@@ -34,6 +36,20 @@ export function registerEvidenceConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // §47 config/metadata: evidenceType is OPTIONAL — validate ONLY when
+      // present against the effective allowed set (tenant `evidence_type` config
+      // when present, else defaults). When absent the DB default 'document' applies.
+      if (p.evidenceType) {
+        const allowedTypes = effectiveAllowed(
+          await configRepo.listActiveKeys(tx, p.tenantId, "evidence_type"),
+          DEFAULT_EVIDENCE_TYPES,
+        );
+        try {
+          assertEvidenceTypeAllowed(p.evidenceType, allowedTypes);
+        } catch (e) {
+          throw new NonRetryableError((e as Error).message);
+        }
+      }
       await repo.insertEvidence(tx, {
         id: p.id,
         tenantId: p.tenantId,

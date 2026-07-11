@@ -57,3 +57,21 @@ export function deriveEvidenceId(
     `${tenantId}:evidence:${caseId}:${exhibitNumberOrTitle}:${seq}`,
   );
 }
+
+/**
+ * Default evidence/exhibit TYPES (§22) used as a FALLBACK when a tenant has not
+ * configured its own `evidence_type` namespace in the config/metadata engine
+ * (§47). The effective allowed set is the tenant config when present, else these
+ * defaults, so an admin can ADD a bespoke evidence type with no code change.
+ * NOTE: this is the TYPE field, distinct from the EVIDENCE_STATUSES state machine.
+ */
+export const DEFAULT_EVIDENCE_TYPES = [
+  "document", "photo", "video", "audio", "physical", "affidavit", "witness",
+] as const;
+
+/** Throw INVALID_EVIDENCE_TYPE unless `t` is in the effective allowed set. */
+export function assertEvidenceTypeAllowed(t: string, allowed: ReadonlySet<string>): void {
+  if (!allowed.has(t)) {
+    throw new Error(`INVALID_EVIDENCE_TYPE: ${t} is not an allowed evidence type for this tenant`);
+  }
+}
