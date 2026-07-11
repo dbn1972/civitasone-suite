@@ -40,6 +40,7 @@ import { registerCourtRegistryConsumers } from "./modules/court-registry/consume
 import { registerCaseLifecycleConsumers } from "./modules/case-lifecycle/consumer.js";
 import { registerHearingConsumers } from "./modules/hearing/consumer.js";
 import { registerFilingConsumers } from "./modules/filing/consumer.js";
+import { registerOrderConsumers } from "./modules/order/consumer.js";
 
 const log = pino({ name: "court-worker" });
 
@@ -90,6 +91,7 @@ const MODULE_REGISTRARS: ModuleRegistrar[] = [
   registerCaseLifecycleConsumers,
   registerHearingConsumers,
   registerFilingConsumers,
+  registerOrderConsumers,
   // registerCauseListConsumers,
   // registerHearingConsumers,
   // registerOrderConsumers,

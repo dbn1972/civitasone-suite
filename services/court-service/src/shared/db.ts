@@ -5,6 +5,7 @@ import { caseRegistrySchema } from "../modules/case-registry/schema.js";
 import { courtRegistrySchema } from "../modules/court-registry/schema.js";
 import { hearingSchema } from "../modules/hearing/schema.js";
 import { filingSchema } from "../modules/filing/schema.js";
+import { orderSchema } from "../modules/order/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 /**
@@ -40,6 +41,7 @@ const schema = {
   ...courtRegistrySchema,
   ...hearingSchema,
   ...filingSchema,
+  ...orderSchema,
   ...outboxSchema,
   // ...courtRegistrySchema, ...causeListSchema, ...hearingSchema, (added per module task)
 };
