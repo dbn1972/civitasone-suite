@@ -32,8 +32,9 @@ import {
   type GateContext,
   type ScreeningResult,
 } from "./domain.js";
-import { verifyPassBody, checkInBody, checkOutBody, gateSyncParam } from "./validators.js";
+import { verifyPassBody, checkInBody, checkOutBody, gateSyncParam, activeCheckInsQuery } from "./validators.js";
 import * as commands from "./commands.js";
+import { listActiveVisitors } from "./repo.js";
 import { getDeviceBoundToGate } from "../device-registry/repo.js";
 import { loadGateSyncSnapshot } from "./gate-sync.js";
 import { getCommandCountForDevice } from "../turnstile-control/repo.js";
@@ -43,6 +44,9 @@ import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 // (which authenticates as `gate_terminal` role) — Requirement 5.6.
 const GATE_ROLES = ["security_admin", "gate_terminal", "employee", "tenant_admin", "super_admin"];
 const WRITE_ROLES = ["security_admin", "gate_terminal", "employee", "tenant_admin", "super_admin"];
+// Guard-console live-occupancy roles. NORMAL guard/security roles — deliberately
+// NOT the emergency IP allowlist that fences the break-glass evacuation roster.
+const ACTIVE_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "employee", "tenant_admin", "super_admin"];
 
 export async function checkInRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -146,6 +150,31 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
       }
       throw err;
     }
+  });
+
+  /**
+   * GET /v1/visitor/check-ins/active
+   *
+   * Guard-console live occupancy: the visitors currently INSIDE (passes in
+   * `checked_in` status), tenant + optional location scoped, RLS-enforced via
+   * scopedRead. Returns just enough for a roster + occupancy count — name,
+   * check-in time, host, location, overstay flag — and NO extra PII (no phone /
+   * email / identity document). This is the everyday read; the break-glass
+   * evacuation roster (IP-allowlisted) stays separate.
+   */
+  app.get("/v1/visitor/check-ins/active", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ACTIVE_ROLES);
+    const query = activeCheckInsQuery.parse(req.query);
+
+    const visitors = await listActiveVisitors(ctx.tenantId, query.locationId);
+    return reply.send({
+      data: {
+        visitors,
+        occupancy: visitors.length,
+        ...(query.locationId ? { locationId: query.locationId } : {}),
+      },
+    });
   });
 
   /**

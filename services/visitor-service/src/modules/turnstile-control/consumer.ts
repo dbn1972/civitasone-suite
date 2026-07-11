@@ -31,8 +31,11 @@ import { enqueueCommand } from "./command-queue.js";
 import {
   resolveOfflineConflict,
   isSyncWindowValid,
+  isTailgating,
+  isPassageAllowed,
   EMERGENCY_COMMAND_TYPE,
 } from "./domain.js";
+import { getPolicyNumber, getPolicyBoolean } from "../config-registry/policy.js";
 import type { CommandEntry } from "./command-queue.js";
 
 const log = pino({ name: "turnstile-control-consumer" });
@@ -151,8 +154,25 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
     const p = msg.payload;
     const now = new Date();
 
+    // Anti-passback needs the pass's last-known direction. Read it (best-effort)
+    // BEFORE the tx — Redis/memory-backed; a read failure just means "no prior".
+    let lastKnownDirection: "in" | "out" | null = null;
+    try {
+      const d = await getAntiPassbackState(msg.tenantId, p.passId);
+      lastKnownDirection = d === "in" || d === "out" ? d : null;
+    } catch {
+      lastKnownDirection = null;
+    }
+
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+
+      // Fix 6: resolve the config-ready domain params from real tenant config
+      // (visitor_policy keys turnstile.tailgating_tolerance / anti_passback_enabled)
+      // on this GUC-scoped tx. Unconfigured tenants get the module defaults
+      // (tolerance 1 / anti-passback ON), so behavior is unchanged by default.
+      const tailgatingTolerance = await getPolicyNumber(tx, msg.tenantId, "turnstile.tailgating_tolerance");
+      const antiPassbackEnabled = await getPolicyBoolean(tx, msg.tenantId, "turnstile.anti_passback_enabled");
 
       // 1. INSERT passage_event
       await tx.insert(passageEvents).values({
@@ -187,6 +207,55 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
           eventTimestamp: p.eventTimestamp,
         },
       });
+
+      // Fix 6: tailgating detection is now config-driven. A passage whose count
+      // exceeds the tenant's tolerance raises a non-blocking tailgatingDetected
+      // event (a wide-lane site can raise the tolerance so paired passage is not
+      // flagged) — the value changes behavior without a code change.
+      if (isTailgating(p.passageCount, tailgatingTolerance)) {
+        await enqueue(tx, {
+          topic: EVENTS.tailgatingDetected,
+          eventType: EVENTS.tailgatingDetected,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            id: p.id,
+            tenantId: msg.tenantId,
+            passId: p.passId,
+            gateId: p.gateId,
+            passageCount: p.passageCount,
+            tolerance: tailgatingTolerance,
+            eventTimestamp: p.eventTimestamp,
+          },
+        });
+      }
+
+      // Fix 6: anti-passback is now config-driven. When enabled, a consecutive
+      // same-direction passage (vs the pass's last-known direction) is a
+      // violation → non-blocking antiPassbackViolation event. A tenant that
+      // disables anti-passback suppresses this entirely.
+      if (!isPassageAllowed(
+        { passId: p.passId, requestedDirection: p.direction, lastKnownDirection },
+        antiPassbackEnabled,
+      )) {
+        await enqueue(tx, {
+          topic: EVENTS.antiPassbackViolation,
+          eventType: EVENTS.antiPassbackViolation,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            id: p.id,
+            tenantId: msg.tenantId,
+            passId: p.passId,
+            gateId: p.gateId,
+            direction: p.direction,
+            lastKnownDirection,
+            eventTimestamp: p.eventTimestamp,
+          },
+        });
+      }
 
       // 3. Publish visitor.check_in.record command (same payload as Gate_Terminal flow)
       if (p.direction === "in") {

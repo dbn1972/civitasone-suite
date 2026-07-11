@@ -68,6 +68,14 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
   removeFromRoster: (...args: unknown[]) => removeFromRosterMock(...args),
 }));
 
+// Auto-print badge toggle read (Fix 2): mock the policy getter so it never
+// touches the fake tx (which would perturb the select-call-order simulation
+// this suite relies on). Default OFF here — auto-print behavior has its own
+// dedicated suite (check-in-vip-badge.test.ts).
+vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getPolicyBoolean: async () => false,
+}));
+
 const { registerCheckInConsumers } = await import("../src/modules/check-in/consumer.js");
 const { COMMANDS } = await import("../src/topics.js");
 

@@ -15,14 +15,71 @@
  * `audit.event.record` via the shared DPDP helper when actor context is
  * provided.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { logPiiAccess } from "../dpdp/consent.js";
+import { normalizeName, FUZZY_NAME_THRESHOLD } from "./domain.js";
 import {
   blacklistEntries, watchlistEntries,
   type BlacklistEntryRow, type WatchlistEntryRow,
 } from "./schema.js";
+
+/** A non-blocking fuzzy/alias screening hit (raises a REVIEW flag, never a deny). */
+export interface FuzzyScreenMatch {
+  id: string;
+  list: "blacklist" | "watchlist";
+  similarity: number;
+}
+
+/**
+ * Fix 3 — non-blocking fuzzy/alias screening layer. Trigram-similarity match of
+ * a candidate visitor name against the tenant's ACTIVE blacklist + watchlist
+ * `name_normalized` keys (migration 0012). Returns the hits at or above
+ * `threshold`, sorted most-similar first. This complements — never replaces —
+ * the exact blind-index (identity_doc_hash) hard-block: a match here raises a
+ * REVIEW flag for the guard, it does NOT auto-deny.
+ *
+ * RLS-scoped: runs under scopedRead (GUC-set tenant tx) AND carries an explicit
+ * tenant_id predicate, so it only ever sees the caller tenant's rows.
+ */
+export async function fuzzyScreenName(
+  tenantId: string, name: string, threshold: number = FUZZY_NAME_THRESHOLD,
+): Promise<FuzzyScreenMatch[]> {
+  const norm = normalizeName(name);
+  if (!norm) return [];
+
+  return scopedRead(async (tx) => {
+    const blRows = (await tx.execute(sql`
+      SELECT id, similarity(name_normalized, ${norm}) AS sim
+      FROM visitor.blacklist_entries
+      WHERE tenant_id = ${tenantId}::uuid
+        AND status = 'active'
+        AND name_normalized IS NOT NULL
+        AND similarity(name_normalized, ${norm}) >= ${threshold}
+      ORDER BY sim DESC
+      LIMIT 20
+    `)) as unknown as Array<{ id: string; sim: number }>;
+
+    const wlRows = (await tx.execute(sql`
+      SELECT id, similarity(name_normalized, ${norm}) AS sim
+      FROM visitor.watchlist_entries
+      WHERE tenant_id = ${tenantId}::uuid
+        AND active = true
+        AND name_normalized IS NOT NULL
+        AND similarity(name_normalized, ${norm}) >= ${threshold}
+      ORDER BY sim DESC
+      LIMIT 20
+    `)) as unknown as Array<{ id: string; sim: number }>;
+
+    const matches: FuzzyScreenMatch[] = [
+      ...blRows.map((r) => ({ id: r.id, list: "blacklist" as const, similarity: Number(r.sim) })),
+      ...wlRows.map((r) => ({ id: r.id, list: "watchlist" as const, similarity: Number(r.sim) })),
+    ];
+    matches.sort((a, b) => b.similarity - a.similarity);
+    return matches;
+  });
+}
 
 const RESOURCE_BLACKLIST = "blacklist";
 

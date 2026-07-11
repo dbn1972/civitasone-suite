@@ -38,6 +38,11 @@ export const visitRequests = visitorSchema.table("visit_requests", {
   // visitor_category: standard | vip | contractor | delegation
   source: varchar("source", { length: 16 }).notNull().default("portal"),
   // source: portal | host_preregister | kiosk | mobile
+  // Fix 3 — non-blocking fuzzy/alias screening review flag (migration 0012). Set
+  // true at submission when a near-miss name matched an active blacklist/watchlist
+  // entry; the guard reviews it (the exact blind-index match still hard-blocks).
+  screeningReview: boolean("screening_review").notNull().default(false),
+  screeningReviewNote: text("screening_review_note"),
   // PII fields (encrypted at rest, AES-256-GCM envelope via encryptedText())
   visitorName: encryptedText("visitor_name").notNull(),
   visitorPhone: encryptedText("visitor_phone").notNull(),

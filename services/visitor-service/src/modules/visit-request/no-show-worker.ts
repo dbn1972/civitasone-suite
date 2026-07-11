@@ -5,18 +5,24 @@
  *
  * 1. **30-minute warning** (Requirement 16.3): finds approved visit requests
  *    whose `scheduledAt` is more than 30 minutes in the past with no
- *    associated check-in, and publishes a NOTIFICATION_SEND warning to the
+ *    associated check-in, and enqueues a NOTIFICATION_SEND warning to the
  *    host employee (push channel).
  *
  * 2. **2-hour auto no-show** (Requirement 16.4): finds approved visit requests
  *    whose `scheduledAt` is more than 2 hours in the past with no associated
  *    check-in, transitions them to 'no_show' status, releases any allocated
- *    parking slot (publishes COMMANDS.parkingSlotRelease if a vehicle pass
- *    exists), and outboxes a noShowDetected event.
+ *    parking slot, and emits a noShowDetected event.
  *
- * Follows the `startVisitRequestAutoReject` pattern: setInterval with an async
- * IIFE, swallows errors to avoid crashing the worker process, logs warnings on
- * failures, and returns the interval handle for graceful shutdown cleanup.
+ * Transactional outbox (Fix 5): the no_show transition, the parking-slot
+ * release, and the noShowDetected event are all written in ONE per-tenant
+ * `db.transaction` via `enqueue` (not raw `queue.publish` outside a tx). This
+ * makes them atomic with the state transition — `versionedUpdate`'s
+ * compare-and-swap means a concurrent check-in that already advanced the row
+ * throws VersionConflictError and rolls the WHOLE unit back, so no duplicate /
+ * orphaned no_show event is ever published. The cross-tenant SCAN still uses the
+ * BYPASSRLS `scannerDb`; every WRITE runs on the primary `db` under the row's
+ * tenant so RLS applies. The relay forwards the stable outbox-row id, so a
+ * crash between commit and publish cannot lose or double-fire the event.
  */
 import { randomUUID } from "node:crypto";
 import { and, eq, lt, isNotNull, inArray } from "drizzle-orm";
@@ -29,9 +35,12 @@ import { digitalPasses } from "../digital-pass/schema.js";
 import { vehiclePasses } from "../vehicle-pass/schema.js";
 import { checkIns } from "../check-in/schema.js";
 import type { Db } from "../../shared/db.js";
-import { versionedUpdate } from "../../shared/outbox.js";
+import { enqueue, versionedUpdate } from "../../shared/outbox.js";
 import { loadNamespaceOverrides } from "../config-registry/repo.js";
 import { POLICY_NS, toNumber, MS_PER_MINUTE, MS_PER_HOUR } from "../config-registry/policy.js";
+
+/** Zero-UUID system actor for worker-originated outbox rows (actor_id is uuid NOT NULL). */
+const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
 
 export interface NoShowWorkerOptions {
   /** Interval between checks in milliseconds. Default: 15 minutes. */
@@ -80,6 +89,10 @@ export function startNoShowDetection(
 
 /**
  * Core logic for a single no-show detection cycle. Exported for testing.
+ *
+ * `queue` is retained in the signature for source/call-site compatibility but is
+ * no longer used to publish — all emissions now go through the transactional
+ * outbox (`enqueue`) so they are durable + idempotent (Fix 5).
  */
 export async function processNoShowCycle(
   db: Db,
@@ -89,6 +102,7 @@ export async function processNoShowCycle(
   logger?: { info: (...args: any[]) => void; warn: (...args: any[]) => void },
   scannerDb: Db = db,
 ): Promise<{ warnings: number; noShows: number }> {
+  void queue;
   const now = new Date();
 
   // Per-tenant thresholds are config-driven (visitor_policy keys
@@ -162,28 +176,8 @@ export async function processNoShowCycle(
     if (!req.scheduledAt || now.getTime() - req.scheduledAt.getTime() <= noShowMsFor(req.tenantId)) continue;
 
     try {
-      // Transition to no_show status inside the row's tenant scope so the
-      // write is RLS-checked. versionedUpdate is a compare-and-swap on version:
-      // a concurrent check-in that already advanced the row throws
-      // VersionConflictError, which the surrounding try/catch treats as "raced,
-      // skip" (no duplicate no_show event).
-      await runWithTenant(req.tenantId, () =>
-        db.transaction((tx) =>
-          versionedUpdate(tx, visitRequests, {
-            id: req.id,
-            tenantId: req.tenantId,
-            expectedVersion: req.version,
-            set: {
-              status: "no_show",
-              updatedAt: now,
-              updatedBy: "00000000-0000-0000-0000-000000000000", // system
-            },
-            entity: "visit_request",
-          }),
-        ),
-      );
-
-      // Release parking slot if vehicle pass exists (cross-tenant-safe read).
+      // Read vehicle-pass rows FIRST (cross-tenant scanner read) so the parking
+      // release can be enqueued transactionally with the no_show transition.
       const vehiclePassRows = await scannerDb
         .select({
           id: vehiclePasses.id,
@@ -198,39 +192,61 @@ export async function processNoShowCycle(
           ),
         );
 
-      for (const vp of vehiclePassRows) {
-        if (vp.parkingSlotId) {
-          await queue.publish(COMMANDS.parkingSlotRelease, {
-            type: COMMANDS.parkingSlotRelease,
+      // Transition to no_show + release parking + emit noShowDetected ATOMICALLY
+      // inside the row's tenant scope (RLS-checked). versionedUpdate is a
+      // compare-and-swap on version: a concurrent check-in that already advanced
+      // the row throws VersionConflictError, rolling back the whole tx — so no
+      // duplicate no_show event or orphaned parking release is ever published.
+      await runWithTenant(req.tenantId, () =>
+        db.transaction(async (tx) => {
+          await versionedUpdate(tx, visitRequests, {
+            id: req.id,
             tenantId: req.tenantId,
-            actorId: "system",
+            expectedVersion: req.version,
+            set: {
+              status: "no_show",
+              updatedAt: now,
+              updatedBy: SYSTEM_ACTOR,
+            },
+            entity: "visit_request",
+          });
+
+          // Release parking slot(s) if a vehicle pass exists — transactional outbox.
+          for (const vp of vehiclePassRows) {
+            if (vp.parkingSlotId) {
+              await enqueue(tx, {
+                topic: COMMANDS.parkingSlotRelease,
+                eventType: COMMANDS.parkingSlotRelease,
+                tenantId: req.tenantId,
+                actorId: SYSTEM_ACTOR,
+                correlationId: randomUUID(),
+                payload: {
+                  vehiclePassId: vp.id,
+                  parkingSlotId: vp.parkingSlotId,
+                  reason: "no_show",
+                },
+              });
+            }
+          }
+
+          // noShowDetected event — transactional outbox (atomic with the transition).
+          await enqueue(tx, {
+            topic: EVENTS.noShowDetected,
+            eventType: EVENTS.noShowDetected,
+            tenantId: req.tenantId,
+            actorId: SYSTEM_ACTOR,
             correlationId: randomUUID(),
-            schemaVersion: "1.0",
             payload: {
-              vehiclePassId: vp.id,
-              parkingSlotId: vp.parkingSlotId,
-              reason: "no_show",
+              id: req.id,
+              tenantId: req.tenantId,
+              hostEmployeeId: req.hostEmployeeId,
+              locationId: req.locationId,
+              scheduledAt: req.scheduledAt?.toISOString() ?? "",
+              detectedAt: now.toISOString(),
             },
           });
-        }
-      }
-
-      // Outbox: noShowDetected event
-      await queue.publish(EVENTS.noShowDetected, {
-        type: EVENTS.noShowDetected,
-        tenantId: req.tenantId,
-        actorId: "system",
-        correlationId: randomUUID(),
-        schemaVersion: "1.0",
-        payload: {
-          id: req.id,
-          tenantId: req.tenantId,
-          hostEmployeeId: req.hostEmployeeId,
-          locationId: req.locationId,
-          scheduledAt: req.scheduledAt?.toISOString() ?? "",
-          detectedAt: now.toISOString(),
-        },
-      });
+        }),
+      );
 
       noShows++;
       noShowIds.add(req.id);
@@ -271,33 +287,38 @@ export async function processNoShowCycle(
     if (!req.scheduledAt || now.getTime() - req.scheduledAt.getTime() <= warningMsFor(req.tenantId)) continue;
 
     try {
-      // Publish no-show warning notification to host (push channel)
-      await queue.publish(NOTIFICATION_SEND, {
-        type: NOTIFICATION_SEND,
-        tenantId: req.tenantId,
-        actorId: "system",
-        correlationId: randomUUID(),
-        schemaVersion: "1.0",
-        payload: buildNotificationPayload({
-          eventType: EVENTS.noShowDetected,
-          recipientId: req.hostEmployeeId,
-          recipient: req.hostEmployeeId,
-          channel: "push",
-          variables: {
-            visitorName: req.visitorName ?? "",
-            purpose: req.purpose ?? "",
-            scheduledAt: req.scheduledAt?.toISOString() ?? "",
-            warningType: "no_show_30m",
-            message: "Your visitor has not arrived 30 minutes after the scheduled time",
-          },
-        }),
-      });
+      // Transactional outbox: enqueue the no-show warning to host (push channel)
+      // inside a per-tenant tx, instead of a raw queue.publish outside any tx.
+      await runWithTenant(req.tenantId, () =>
+        db.transaction((tx) =>
+          enqueue(tx, {
+            topic: NOTIFICATION_SEND,
+            eventType: NOTIFICATION_SEND,
+            tenantId: req.tenantId,
+            actorId: SYSTEM_ACTOR,
+            correlationId: randomUUID(),
+            payload: buildNotificationPayload({
+              eventType: EVENTS.noShowDetected,
+              recipientId: req.hostEmployeeId,
+              recipient: req.hostEmployeeId,
+              channel: "push",
+              variables: {
+                visitorName: req.visitorName ?? "",
+                purpose: req.purpose ?? "",
+                scheduledAt: req.scheduledAt?.toISOString() ?? "",
+                warningType: "no_show_30m",
+                message: "Your visitor has not arrived 30 minutes after the scheduled time",
+              },
+            }),
+          }),
+        ),
+      );
 
       warnings++;
     } catch (err) {
       logger?.warn(
         { err, visitRequestId: req.id, tenantId: req.tenantId, event: "no_show_warning_failed" },
-        "failed to publish no-show warning notification",
+        "failed to enqueue no-show warning notification",
       );
     }
   }

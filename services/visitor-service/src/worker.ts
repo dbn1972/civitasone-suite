@@ -95,12 +95,12 @@ startImageCleanupWorker();
 // Scheduled auto-reject + reminder — checks every 15 minutes for stale pending visit requests.
 // - 4h threshold: sends reminder notification to host (Requirement 3.4)
 // - 24h threshold: auto-rejects and notifies visitor (Requirement 3.5)
-const autoReject = startVisitRequestAutoReject(scannerDb, queue, {
+const autoReject = startVisitRequestAutoReject(db, queue, {
   intervalMs: 15 * 60_000,
   reminderThresholdMs: 4 * 60 * 60_000,
   autoRejectThresholdMs: 24 * 60 * 60_000,
   logger: log,
-});
+}, scannerDb);
 
 // Scheduled overstay detection — checks every 10 minutes for visitors past valid_until.
 // - Standard overstay: publishes overstayDetect command (Requirement 6.3)

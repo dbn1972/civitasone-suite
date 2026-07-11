@@ -85,13 +85,34 @@ export const KNOWN_NAMESPACES = [
 export type KnownNamespace = typeof KNOWN_NAMESPACES[number];
 
 /**
+ * Reserved sentinel key expressing an EXPLICITLY EMPTY configured set.
+ *
+ * `effectiveAllowed` cannot distinguish "the tenant configured nothing" (→ fall
+ * back to the module default) from "the tenant deliberately wants the empty set"
+ * (→ everyone requires approval / nothing is auto-allowed) using key COUNT alone —
+ * both surface as zero *meaningful* keys. To let a tenant configure the empty set
+ * (e.g. auto-approve NOBODY), they add a single active config entry whose key is
+ * this sentinel. It is pattern-valid ({@link KEY_PATTERN}) yet is not a real
+ * domain value, so it can never collide with a legitimate configured member.
+ */
+export const CONFIGURED_EMPTY_SENTINEL = "none";
+
+/**
  * Resolve the EFFECTIVE allowed set for a config-driven enumeration.
  * If the tenant has configured ANY active entries for the namespace, that set
  * is AUTHORITATIVE — it fully REPLACES the module defaults, so a tenant can
  * both ADD bespoke values AND RESTRICT to exactly its policy's set. If the
  * tenant configured nothing, the module's built-in defaults apply. Mirrors
  * court-service's `effectiveAllowed`.
+ *
+ * Three cases, distinguished so a tenant CAN express the empty set:
+ *   - key set is unset (no active entries)      → module `fallback` default.
+ *   - key set is exactly/contains the sentinel  → the EXPLICIT empty set (∅),
+ *     i.e. the tenant auto-allows nobody; the default is NOT re-applied.
+ *   - any other non-empty key set               → that set (authoritative REPLACE).
  */
 export function effectiveAllowed(configuredKeys: string[], fallback: readonly string[]): Set<string> {
-  return configuredKeys.length > 0 ? new Set(configuredKeys) : new Set(fallback);
+  if (configuredKeys.length === 0) return new Set(fallback);
+  if (configuredKeys.includes(CONFIGURED_EMPTY_SENTINEL)) return new Set();
+  return new Set(configuredKeys);
 }

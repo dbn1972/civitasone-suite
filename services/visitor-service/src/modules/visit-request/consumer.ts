@@ -76,6 +76,8 @@ export interface VisitRequestCreatePayload {
   visitorCategory: "standard" | "vip" | "contractor" | "delegation";
   source: "portal" | "host_preregister" | "kiosk" | "mobile";
   permittedAreas: string[];
+  screeningReview?: boolean;
+  screeningReviewNote?: string | null;
   createdBy: string;
 }
 
@@ -211,6 +213,8 @@ export function registerVisitRequestConsumers(queue: Queue): void {
         identityDocRef: p.identityDocRef,
         trackingRef,
         permittedAreas: p.permittedAreas,
+        screeningReview: p.screeningReview ?? false,
+        screeningReviewNote: p.screeningReviewNote ?? null,
         createdBy: p.createdBy,
         updatedBy: p.createdBy,
       });

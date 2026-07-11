@@ -6,6 +6,11 @@
  */
 import { z } from "zod";
 
+/** Query for GET /v1/visitor/check-ins/active (guard-console live occupancy). */
+export const activeCheckInsQuery = z.object({
+  locationId: z.string().uuid("invalid locationId").optional(),
+});
+
 export const verifyPassBody = z.object({
   /** Compact RS256 JWT from the visitor's QR code. */
   qrToken: z.string().min(1, "qrToken is required"),

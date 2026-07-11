@@ -61,6 +61,10 @@ export const POLICY_DEFAULTS = {
 /** Boolean-valued policy keys (kept separate so the number getters stay total). */
 export const POLICY_BOOL_DEFAULTS = {
   "turnstile.anti_passback_enabled":       true,
+  // Check-in → badge auto-handoff (check-in/consumer.ts): auto-enqueue a
+  // printJobCreate for the visitor's badge on a successful check-in. Defaults
+  // ON; a tenant can disable per-site by setting this false.
+  "check_in.auto_print_badge":             true,
 } as const;
 
 export type PolicyNumberKey = keyof typeof POLICY_DEFAULTS;

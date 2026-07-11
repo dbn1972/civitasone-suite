@@ -9,6 +9,7 @@ import {
   deterministicId,
   deriveConfigId,
   effectiveAllowed,
+  CONFIGURED_EMPTY_SENTINEL,
   assertValidNamespace,
   assertValidKey,
   VISITOR_NAMESPACE,
@@ -56,6 +57,22 @@ describe("config-registry domain", () => {
     expect(effectiveAllowed(["delegation"], ["vip"])).toEqual(new Set(["delegation"]));
   });
 
+  it("effectiveAllowed: unset → default {vip}; configured-empty (sentinel) → ∅; explicit set replaces", () => {
+    // Fix 4 — a tenant CAN configure the empty set (auto-approve nobody) via the
+    // reserved sentinel key, distinct from the unset case (→ default).
+    // Unset → module default.
+    expect(effectiveAllowed([], ["vip"])).toEqual(new Set(["vip"]));
+    // Configured-empty via the reserved sentinel → the EXPLICIT empty set (∅):
+    // everyone requires approval; the default {vip} is NOT re-applied.
+    expect(effectiveAllowed([CONFIGURED_EMPTY_SENTINEL], ["vip"])).toEqual(new Set());
+    // Sentinel mixed with other keys still means "explicit empty" (unambiguous intent).
+    expect(effectiveAllowed([CONFIGURED_EMPTY_SENTINEL, "vip"], ["vip"])).toEqual(new Set());
+    // A genuine configured set (no sentinel) replaces the default.
+    expect(effectiveAllowed(["vip", "contractor"], ["vip"])).toEqual(new Set(["vip", "contractor"]));
+    // The sentinel is pattern-valid so it survives assertValidKey (config.set path).
+    expect(() => assertValidKey(CONFIGURED_EMPTY_SENTINEL)).not.toThrow();
+  });
+
   it("namespace/key validators accept valid and reject invalid", () => {
     expect(() => assertValidNamespace("visitor_policy")).not.toThrow();
     expect(() => assertValidNamespace("Visitor")).toThrow(/INVALID_CONFIG_NAMESPACE/);
@@ -65,6 +82,11 @@ describe("config-registry domain", () => {
 });
 
 describe("config-registry policy coercion + resolution", () => {
+  it("POLICY_BOOL_DEFAULTS carries the check-in auto-print-badge toggle (default ON)", () => {
+    expect(POLICY_BOOL_DEFAULTS["check_in.auto_print_badge"]).toBe(true);
+    expect(POLICY_BOOL_DEFAULTS["turnstile.anti_passback_enabled"]).toBe(true);
+  });
+
   it("toNumber coerces number/string/wrapped and rejects junk", () => {
     expect(toNumber(365)).toBe(365);
     expect(toNumber("30")).toBe(30);
