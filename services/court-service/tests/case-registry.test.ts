@@ -34,6 +34,10 @@ vi.mock("../src/modules/case-registry/repo.js", () => ({
   insertStateTransition: vi.fn(async () => {}),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
 // topics.js is a plain constant map; import the real one if present, else stub.
 vi.mock("../src/topics.js", () => ({
   COMMANDS: { registerCase: "court.case.register" },
@@ -42,6 +46,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerCaseRegistryConsumers } from "../src/modules/case-registry/consumer.js";
 import * as repo from "../src/modules/case-registry/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue } from "../src/shared/outbox.js";
 
 /** Test harness: capture the (topic, handler) the module registers, mirroring
@@ -124,5 +129,41 @@ describe("registerCaseRegistry consumer — idempotency", () => {
     const registeredCount = (enqueue as ReturnType<typeof vi.fn>).mock.calls
       .filter((c) => (c[1] as { topic: string }).topic === "court.case.registered").length;
     expect(registeredCount).toBe(1);
+  });
+});
+
+
+describe("case-registry consumer — config-driven caseType (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  it("rejects a caseType that is neither a default nor tenant-configured", async () => {
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
+    const msg = buildMessage(randomUUID(), randomUUID(), randomUUID());
+    (msg.payload as { caseType: string }).caseType = "made_up_type";
+    await expect(deliver("court.case.register", msg)).rejects.toThrow(/INVALID_CASE_TYPE/);
+    expect(repo.insertCase).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bespoke caseType supplied ONLY by tenant config (nothing hardcoded)", async () => {
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue(["special_case"]);
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
+    const msg = buildMessage(randomUUID(), randomUUID(), randomUUID());
+    (msg.payload as { caseType: string }).caseType = "special_case";
+    await deliver("court.case.register", msg);
+    expect(repo.insertCase).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a standard default caseType with no tenant config", async () => {
+    const { register, deliver } = makeHarness();
+    registerCaseRegistryConsumers(register);
+    // buildMessage already uses caseType "civil" (a default).
+    await deliver("court.case.register", buildMessage(randomUUID(), randomUUID(), randomUUID()));
+    expect(repo.insertCase).toHaveBeenCalledTimes(1);
   });
 });

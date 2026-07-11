@@ -16,7 +16,7 @@ export type CasePartyBody = z.infer<typeof casePartyBody>;
 
 export const registerCaseBody = z.object({
   cnrNumber:     z.string().trim().min(1).max(32),
-  caseType:      z.string().trim().min(1).max(48),
+  caseType:      z.string().trim().min(1).max(32),
   filingNumber:  z.string().trim().max(64).optional(),
   // ISO-8601 date (YYYY-MM-DD or full timestamp); coerced to Date in the consumer.
   filingDate:    z.string().trim().min(1).max(40),

@@ -23,3 +23,23 @@ export function deriveOrderId(
 export function isSpeakingOrder(orderType: string): boolean {
   return orderType === "speaking";
 }
+
+/**
+ * Default order-type categories (§23) used as a FALLBACK when a tenant has not
+ * configured its own `order_type` namespace in the config/metadata engine
+ * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
+ * admin can ADD a bespoke order type via config with no code change, while the
+ * standard order categories always remain valid.
+ */
+export const DEFAULT_ORDER_TYPES = [
+  "final_order", "interim", "interim_order", "injunction", "stay_order",
+  "dismissal", "decree", "direction", "cost_order", "interlocutory",
+  "review_order",
+] as const;
+
+/** Throw INVALID_ORDER_TYPE unless `orderType` is in the effective allowed set. */
+export function assertOrderTypeAllowed(orderType: string, allowed: ReadonlySet<string>): void {
+  if (!allowed.has(orderType)) {
+    throw new Error(`INVALID_ORDER_TYPE: ${orderType} is not an allowed order type for this tenant`);
+  }
+}

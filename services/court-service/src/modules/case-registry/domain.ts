@@ -69,3 +69,23 @@ export function assertTransition(from: string, to: CaseStatus): void {
     throw new Error(`INVALID_TRANSITION: cannot move case from '${from}' to '${to}'`);
   }
 }
+
+/**
+ * Default case-type categories (§5) used as a FALLBACK when a tenant has not
+ * configured its own `case_type` namespace in the config/metadata engine
+ * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
+ * admin can ADD a bespoke case type via config with no code change, while the
+ * standard categories always remain valid.
+ */
+export const DEFAULT_CASE_TYPES = [
+  "civil", "revenue_appeal", "mutation", "partition", "land_acquisition",
+  "consumer_complaint", "execution", "revision", "review",
+  "misc_application", "tenancy", "criminal",
+] as const;
+
+/** Throw INVALID_CASE_TYPE unless `caseType` is in the effective allowed set. */
+export function assertCaseTypeAllowed(caseType: string, allowed: ReadonlySet<string>): void {
+  if (!allowed.has(caseType)) {
+    throw new Error(`INVALID_CASE_TYPE: ${caseType} is not an allowed case type for this tenant`);
+  }
+}

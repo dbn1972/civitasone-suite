@@ -4,7 +4,8 @@ import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { hearings } from "./schema.js";
 import * as repo from "./repo.js";
-import { assertTransition } from "./domain.js";
+import * as configRepo from "../config-registry/repo.js";
+import { assertTransition, DEFAULT_HEARING_PURPOSES, assertHearingPurposeAllowed } from "./domain.js";
 
 type ScheduleHearingPayload = {
   id: string;
@@ -31,6 +32,17 @@ export function registerHearingConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // §47 config/metadata: purpose is OPTIONAL — validate ONLY when present
+      // against (defaults ∪ tenant config).
+      if (p.purpose) {
+        const configured = await configRepo.listActiveKeys(tx, p.tenantId, "hearing_purpose");
+        const allowed = new Set<string>([...DEFAULT_HEARING_PURPOSES, ...configured]);
+        try {
+          assertHearingPurposeAllowed(p.purpose, allowed);
+        } catch (e) {
+          throw new NonRetryableError((e as Error).message);
+        }
+      }
       await repo.insertHearing(tx, {
         id: p.id,
         tenantId: p.tenantId,

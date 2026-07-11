@@ -30,6 +30,10 @@ vi.mock("../src/modules/hearing/repo.js", () => ({
   getHearingForUpdate: vi.fn(async () => currentHearing),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: { scheduleHearing: "court.hearing.schedule", adjournHearing: "court.hearing.adjourn" },
   EVENTS: { hearingScheduled: "court.hearing.scheduled", hearingAdjourned: "court.hearing.adjourned" },
@@ -37,6 +41,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerHearingConsumers } from "../src/modules/hearing/consumer.js";
 import * as repo from "../src/modules/hearing/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue, versionedUpdate } from "../src/shared/outbox.js";
 
 function makeHarness() {
@@ -117,5 +122,48 @@ describe("hearing consumer", () => {
     currentHearing = { status: "adjourned", version: 2 };
     await deliver("court.hearing.adjourn", adjournMsg("h1", 2));
     expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("hearing consumer — config-driven purpose (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    currentHearing = undefined;
+    vi.clearAllMocks();
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  function mk(purpose?: string) {
+    const id = randomUUID();
+    const payload: Record<string, unknown> = { id, caseId: randomUUID(), tenantId: randomUUID(), scheduledAt: "2026-07-10T10:30:00.000Z" };
+    if (purpose !== undefined) payload.purpose = purpose;
+    return {
+      messageId: id, type: "court.hearing.schedule",
+      tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
+      payload,
+    };
+  }
+
+  it("rejects a present-but-unknown purpose", async () => {
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await expect(deliver("court.hearing.schedule", mk("made_up_purpose"))).rejects.toThrow(/INVALID_HEARING_PURPOSE/);
+    expect(repo.insertHearing).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bespoke purpose supplied ONLY by tenant config (nothing hardcoded)", async () => {
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue(["case_management"]);
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await deliver("court.hearing.schedule", mk("case_management"));
+    expect(repo.insertHearing).toHaveBeenCalledTimes(1);
+  });
+
+  it("schedules with NO purpose (optional) — still inserts", async () => {
+    const { register, deliver } = makeHarness();
+    registerHearingConsumers(register);
+    await deliver("court.hearing.schedule", mk(undefined));
+    expect(repo.insertHearing).toHaveBeenCalledTimes(1);
   });
 });

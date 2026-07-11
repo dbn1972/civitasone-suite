@@ -1,8 +1,10 @@
-import { type CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as configRepo from "../config-registry/repo.js";
+import { DEFAULT_ORDER_TYPES, assertOrderTypeAllowed } from "./domain.js";
 
 type RecordOrderPayload = {
   id: string;
@@ -27,6 +29,14 @@ export function registerOrderConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // §47 config/metadata: orderType must be in (defaults ∪ tenant config).
+      const configured = await configRepo.listActiveKeys(tx, p.tenantId, "order_type");
+      const allowedTypes = new Set<string>([...DEFAULT_ORDER_TYPES, ...configured]);
+      try {
+        assertOrderTypeAllowed(p.orderType, allowedTypes);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
       await repo.insertOrder(tx, {
         id: p.id,
         tenantId: p.tenantId,

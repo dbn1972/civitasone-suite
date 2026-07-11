@@ -31,3 +31,23 @@ export function assertTransition(from: string, to: HearingStatus): void {
 export function deriveHearingId(tenantId: string, caseId: string, scheduledAtIso: string): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:hearing:${caseId}:${scheduledAtIso}`);
 }
+
+/**
+ * Default hearing purposes (§19) used as a FALLBACK when a tenant has not
+ * configured its own `hearing_purpose` namespace in the config/metadata engine
+ * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
+ * admin can ADD a bespoke purpose via config with no code change. `purpose` is
+ * OPTIONAL on a hearing — it is validated only when present.
+ */
+export const DEFAULT_HEARING_PURPOSES = [
+  "arguments", "evidence", "first_hearing", "final_hearing", "admission",
+  "miscellaneous", "settlement", "framing_of_issues", "pronouncement",
+  "compliance", "mention",
+] as const;
+
+/** Throw INVALID_HEARING_PURPOSE unless `purpose` is in the effective allowed set. */
+export function assertHearingPurposeAllowed(purpose: string, allowed: ReadonlySet<string>): void {
+  if (!allowed.has(purpose)) {
+    throw new Error(`INVALID_HEARING_PURPOSE: ${purpose} is not an allowed hearing purpose for this tenant`);
+  }
+}

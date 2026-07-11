@@ -1,9 +1,10 @@
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { deriveInitialStatus, validateCnr } from "./domain.js";
+import * as configRepo from "../config-registry/repo.js";
+import { deriveInitialStatus, validateCnr, DEFAULT_CASE_TYPES, assertCaseTypeAllowed } from "./domain.js";
 
 type RegisterCasePayload = {
   id: string;
@@ -37,6 +38,15 @@ export function registerCaseRegistryConsumers(
     await db.transaction(async (tx) => {
       // Idempotency: a redelivery (same messageId) is a hard no-op.
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // §47 config/metadata: caseType must be in (defaults ∪ tenant config).
+      const configured = await configRepo.listActiveKeys(tx, p.tenantId, "case_type");
+      const allowedTypes = new Set<string>([...DEFAULT_CASE_TYPES, ...configured]);
+      try {
+        assertCaseTypeAllowed(p.caseType, allowedTypes);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
 
       await repo.insertCase(tx, {
         id: p.id,

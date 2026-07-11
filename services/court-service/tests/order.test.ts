@@ -26,6 +26,10 @@ vi.mock("../src/modules/order/repo.js", () => ({
   insertOrder: vi.fn(async () => {}),
 }));
 
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: { recordOrder: "court.order.record" },
   EVENTS: { orderRecorded: "court.order.recorded" },
@@ -33,6 +37,7 @@ vi.mock("../src/topics.js", () => ({
 
 import { registerOrderConsumers } from "../src/modules/order/consumer.js";
 import * as repo from "../src/modules/order/repo.js";
+import * as configRepo from "../src/modules/config-registry/repo.js";
 import { enqueue } from "../src/shared/outbox.js";
 
 function makeHarness() {
@@ -84,5 +89,48 @@ describe("order consumer", () => {
     };
     expect(row.signedBy).toBe(actor);
     expect(row.dscSignature).toBeNull();
+  });
+});
+
+
+describe("order consumer — config-driven orderType (§47)", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  function mk(orderType: string) {
+    const id = randomUUID();
+    return {
+      messageId: id, type: "court.order.record",
+      tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
+      payload: {
+        id, caseId: randomUUID(), tenantId: randomUUID(),
+        orderType, orderText: "X", orderDate: "2026-07-10",
+      },
+    };
+  }
+
+  it("rejects an orderType that is neither a default nor tenant-configured", async () => {
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await expect(deliver("court.order.record", mk("made_up_type"))).rejects.toThrow(/INVALID_ORDER_TYPE/);
+    expect(repo.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bespoke orderType supplied ONLY by tenant config (nothing hardcoded)", async () => {
+    (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue(["special_order"]);
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await deliver("court.order.record", mk("special_order"));
+    expect(repo.insertOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a standard default orderType with no tenant config", async () => {
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await deliver("court.order.record", mk("interim"));
+    expect(repo.insertOrder).toHaveBeenCalledTimes(1);
   });
 });
