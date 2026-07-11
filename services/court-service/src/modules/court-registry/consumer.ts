@@ -5,6 +5,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
 import { DEFAULT_COURT_TYPES, assertCourtTypeAllowed } from "./domain.js";
+import { effectiveAllowed } from "../config-registry/domain.js";
 
 type CreateCourtPayload = {
   id: string;
@@ -41,7 +42,7 @@ export function registerCourtRegistryConsumers(
       if (!(await markProcessed(tx, msg.messageId))) return;
       // §47 config/metadata: courtType must be in (defaults ∪ tenant config).
       const configured = await configRepo.listActiveKeys(tx, p.tenantId, "court_type");
-      const allowedTypes = new Set<string>([...DEFAULT_COURT_TYPES, ...configured]);
+      const allowedTypes = effectiveAllowed(configured, DEFAULT_COURT_TYPES);
       try {
         assertCourtTypeAllowed(p.courtType, allowedTypes);
       } catch (e) {

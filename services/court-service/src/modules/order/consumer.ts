@@ -5,6 +5,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
 import { DEFAULT_ORDER_TYPES, assertOrderTypeAllowed } from "./domain.js";
+import { effectiveAllowed } from "../config-registry/domain.js";
 
 type RecordOrderPayload = {
   id: string;
@@ -31,7 +32,7 @@ export function registerOrderConsumers(
       if (!(await markProcessed(tx, msg.messageId))) return;
       // §47 config/metadata: orderType must be in (defaults ∪ tenant config).
       const configured = await configRepo.listActiveKeys(tx, p.tenantId, "order_type");
-      const allowedTypes = new Set<string>([...DEFAULT_ORDER_TYPES, ...configured]);
+      const allowedTypes = effectiveAllowed(configured, DEFAULT_ORDER_TYPES);
       try {
         assertOrderTypeAllowed(p.orderType, allowedTypes);
       } catch (e) {

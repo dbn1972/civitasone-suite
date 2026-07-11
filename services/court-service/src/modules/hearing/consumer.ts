@@ -6,6 +6,7 @@ import { hearings } from "./schema.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
 import { assertTransition, DEFAULT_HEARING_PURPOSES, assertHearingPurposeAllowed } from "./domain.js";
+import { effectiveAllowed } from "../config-registry/domain.js";
 
 type ScheduleHearingPayload = {
   id: string;
@@ -36,7 +37,7 @@ export function registerHearingConsumers(
       // against (defaults ∪ tenant config).
       if (p.purpose) {
         const configured = await configRepo.listActiveKeys(tx, p.tenantId, "hearing_purpose");
-        const allowed = new Set<string>([...DEFAULT_HEARING_PURPOSES, ...configured]);
+        const allowed = effectiveAllowed(configured, DEFAULT_HEARING_PURPOSES);
         try {
           assertHearingPurposeAllowed(p.purpose, allowed);
         } catch (e) {

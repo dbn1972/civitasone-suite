@@ -5,6 +5,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
 import { deriveInitialStatus, validateCnr, DEFAULT_CASE_TYPES, assertCaseTypeAllowed } from "./domain.js";
+import { effectiveAllowed } from "../config-registry/domain.js";
 
 type RegisterCasePayload = {
   id: string;
@@ -41,7 +42,7 @@ export function registerCaseRegistryConsumers(
 
       // §47 config/metadata: caseType must be in (defaults ∪ tenant config).
       const configured = await configRepo.listActiveKeys(tx, p.tenantId, "case_type");
-      const allowedTypes = new Set<string>([...DEFAULT_CASE_TYPES, ...configured]);
+      const allowedTypes = effectiveAllowed(configured, DEFAULT_CASE_TYPES);
       try {
         assertCaseTypeAllowed(p.caseType, allowedTypes);
       } catch (e) {

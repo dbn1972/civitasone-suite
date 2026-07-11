@@ -65,3 +65,14 @@ export const KNOWN_NAMESPACES = [
   "notice_template",
 ] as const;
 export type KnownNamespace = typeof KNOWN_NAMESPACES[number];
+
+/**
+ * Resolve the EFFECTIVE allowed set for a config-driven enumeration (§47).
+ * If the tenant has configured ANY active entries for the namespace, that set
+ * is AUTHORITATIVE — it fully REPLACES the module defaults, so a tenant can
+ * both ADD bespoke values AND RESTRICT to exactly its vertical's set. If the
+ * tenant configured nothing, the module's built-in defaults apply.
+ */
+export function effectiveAllowed(configuredKeys: string[], fallback: readonly string[]): Set<string> {
+  return configuredKeys.length > 0 ? new Set(configuredKeys) : new Set(fallback);
+}
