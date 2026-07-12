@@ -19,6 +19,13 @@ export async function findBudgetById(id: string): Promise<BudgetRow | null> {
   return rows[0] ?? null;
 }
 
+/** Tenant-scoped (transaction-local) budget read: runs inside the caller tx so
+ * the app.tenant_id GUC set by that transaction lets RLS return the row. */
+export async function findBudgetByIdTx(tx: Writer, id: string): Promise<BudgetRow | null> {
+  const rows = await tx.select().from(financeBudgets).where(eq(financeBudgets.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
 // ── sanction reads ────────────────────────────────────────────────
 
 export async function findSanctionById(id: string): Promise<SanctionRow | null> {

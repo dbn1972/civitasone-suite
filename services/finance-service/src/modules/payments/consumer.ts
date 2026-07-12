@@ -1,6 +1,7 @@
-import type { Queue } from "@civitasone/queue";
+import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
@@ -33,7 +34,12 @@ async function headIdByCode(tx: unknown, tenantId: string, code: string, label: 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerPaymentsConsumers(queue: Queue): void {
-  queue.subscribe(COMMANDS.billCreate, async (msg) => {
+  // Tenant context: every command carries tenantId in its envelope. Wrap each
+  // handler in runWithTenant so the db.transaction() GUC (app.tenant_id) is set
+  // and FORCE ROW LEVEL SECURITY writes/reads are scoped to the message tenant.
+  const sub = <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>): void =>
+    queue.subscribe<T>(topic, async (msg) => { await runWithTenant(msg.tenantId, () => handler(msg)); });
+  sub(COMMANDS.billCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
       ddoCode?: string; paoCode?: string;
@@ -159,7 +165,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "bill", p.id));
   });
 
-  queue.subscribe(COMMANDS.billApprove, async (msg) => {
+  sub(COMMANDS.billApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; notes?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -223,7 +229,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "bill", p.id));
   });
 
-  queue.subscribe(COMMANDS.paymentInitiate, async (msg) => {
+  sub(COMMANDS.paymentInitiate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
       amountMinor: number | string; currency?: string; eftRef?: string; bankAccountId?: string;
@@ -310,7 +316,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await cache.put(cache.makeKey(msg.tenantId, "payment", p.id), { id: p.id, status: "initiated" });
   });
 
-  queue.subscribe(COMMANDS.gemInvoiceMatch, async (msg) => {
+  sub(COMMANDS.gemInvoiceMatch, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; poRef: string; invoiceRef: string; amountMinor: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -324,7 +330,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     });
   });
 
-  queue.subscribe(COMMANDS.advanceCreate, async (msg) => {
+  sub(COMMANDS.advanceCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string;
       type?: string; amountMinor: number; currency?: string; dueDate?: string;
@@ -348,7 +354,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, "advances");
   });
 
-  queue.subscribe(COMMANDS.ucCreate, async (msg) => {
+  sub(COMMANDS.ucCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string;
       grantRef?: string; amountMinor: number; currency?: string; periodFrom?: string; periodTo?: string;
@@ -373,7 +379,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, "uc");
   });
 
-  queue.subscribe(COMMANDS.advanceAdjust, async (msg) => {
+  sub(COMMANDS.advanceAdjust, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; adjustedMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -392,7 +398,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, "advances");
   });
 
-  queue.subscribe(COMMANDS.paymentSubmitApproval, async (msg) => {
+  sub(COMMANDS.paymentSubmitApproval, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -409,7 +415,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
    * Validates PO amounts match GRN amounts (within 5% tolerance), creates a
    * draft bill, and emits procurement.three_way_match.passed or .failed.
    */
-  queue.subscribe(CONSUMED_EVENTS.grnAccepted, async (msg) => {
+  sub(CONSUMED_EVENTS.grnAccepted, async (msg) => {
     const p = msg.payload as {
       poId: string; grnId: string; vendorId: string;
       lineItems?: Array<{ description?: string; quantity?: number; unitPriceMinor?: number }>;

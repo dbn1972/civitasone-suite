@@ -15,6 +15,7 @@ import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { scoped } from "./_tenant.js";
 import { financeAdvances, financeUC } from "../src/modules/payments/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
@@ -35,13 +36,13 @@ function makeToken(roles: string[] = ["finance_officer"], tid = TENANT) {
 }
 
 async function wipeAdvance() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, ADV_CORR));
-  await db.delete(financeAdvances).where(eq(financeAdvances.id, ADV_ID));
+  await scoped(TENANT, (tx) => tx.delete(outboxMessages).where(eq(outboxMessages.correlationId, ADV_CORR)));
+  await scoped(TENANT, (tx) => tx.delete(financeAdvances).where(eq(financeAdvances.id, ADV_ID)));
   await db.delete(processed).where(eq(processed.messageId, ADV_MSG));
 }
 async function wipeUC() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, UC_CORR));
-  await db.delete(financeUC).where(eq(financeUC.id, UC_ID));
+  await scoped(TENANT, (tx) => tx.delete(outboxMessages).where(eq(outboxMessages.correlationId, UC_CORR)));
+  await scoped(TENANT, (tx) => tx.delete(financeUC).where(eq(financeUC.id, UC_ID)));
   await db.delete(processed).where(eq(processed.messageId, UC_MSG));
 }
 
@@ -131,7 +132,7 @@ describe("advance consumer — CQRS wiring (integration)", () => {
       (await db.select().from(processed).where(eq(processed.messageId, ADV_MSG))).length === 1);
     await q.stop();
 
-    const rows = await db.select().from(financeAdvances).where(eq(financeAdvances.id, ADV_ID));
+    const rows = await scoped(TENANT, (tx) => tx.select().from(financeAdvances).where(eq(financeAdvances.id, ADV_ID)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.advanceNo).toBe("ADV-CONSUMER-1");
     expect(rows[0]?.beneficiary).toBe("Field Office");
@@ -140,7 +141,7 @@ describe("advance consumer — CQRS wiring (integration)", () => {
     expect(rows[0]?.status).toBe("active");
     expect(rows[0]?.tenantId).toBe(TENANT);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, ADV_CORR));
+    const outbox = await scoped(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.correlationId, ADV_CORR)));
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
   });
 });
@@ -210,7 +211,7 @@ describe("utilization-certificate consumer — CQRS wiring (integration)", () =>
       (await db.select().from(processed).where(eq(processed.messageId, UC_MSG))).length === 1);
     await q.stop();
 
-    const rows = await db.select().from(financeUC).where(eq(financeUC.id, UC_ID));
+    const rows = await scoped(TENANT, (tx) => tx.select().from(financeUC).where(eq(financeUC.id, UC_ID)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.ucNo).toBe("UC-CONSUMER-1");
     expect(rows[0]?.grantee).toBe("NHM-2024");
@@ -220,7 +221,7 @@ describe("utilization-certificate consumer — CQRS wiring (integration)", () =>
     expect(rows[0]?.status).toBe("submitted");
     expect(rows[0]?.tenantId).toBe(TENANT);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, UC_CORR));
+    const outbox = await scoped(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.correlationId, UC_CORR)));
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
   });
 });

@@ -15,6 +15,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { financeLedger } from "../src/modules/gl/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
+import { scoped } from "./_tenant.js";
 
 const TENANT = "c1111111-aaaa-4000-8000-000000000002";
 const ACTOR = "00000000-aaaa-4000-8000-0000000000ab";
@@ -26,7 +27,7 @@ const ABOVE_SAFE_INTEGER = 10_000_000_000_000_000n; // 1e16 paise = ₹1,00,000 
 async function seedHead() {
   // We need a head_id to satisfy the FK / logical reference in the ledger.
   // Use onConflictDoNothing for idempotency across reruns.
-  await db.insert(financeHeads).values({
+  await scoped(TENANT, (tx) => tx.insert(financeHeads).values({
     id: HEAD_ID,
     tenantId: TENANT,
     code: "BIGINT-TEST-HEAD",
@@ -34,7 +35,7 @@ async function seedHead() {
     level: 1,
     createdBy: ACTOR,
     updatedBy: ACTOR,
-  }).onConflictDoNothing();
+  }).onConflictDoNothing());
 }
 
 async function clean() {
@@ -59,7 +60,7 @@ describe("Bigint Precision — GL Ledger round-trip", () => {
     const testLedgerId = randomUUID();
 
     // Insert a ledger line with a debitMinor above Number.MAX_SAFE_INTEGER
-    await db.insert(financeLedger).values({
+    await scoped(TENANT, (tx) => tx.insert(financeLedger).values({
       id: testLedgerId,
       tenantId: TENANT,
       headId: HEAD_ID,
@@ -71,14 +72,10 @@ describe("Bigint Precision — GL Ledger round-trip", () => {
       currency: "INR",
       createdBy: ACTOR,
       updatedBy: ACTOR,
-    });
+    }));
 
     // Read it back
-    const rows = await db
-      .select()
-      .from(financeLedger)
-      .where(eq(financeLedger.id, testLedgerId))
-      .limit(1);
+    const rows = await scoped(TENANT, (tx) => tx.select().from(financeLedger).where(eq(financeLedger.id, testLedgerId)).limit(1));
 
     expect(rows.length).toBe(1);
     const row = rows[0]!;
@@ -100,7 +97,7 @@ describe("Bigint Precision — GL Ledger round-trip", () => {
 
     await seedHead();
 
-    await db.insert(financeLedger).values({
+    await scoped(TENANT, (tx) => tx.insert(financeLedger).values({
       id: oddId,
       tenantId: TENANT,
       headId: HEAD_ID,
@@ -112,13 +109,9 @@ describe("Bigint Precision — GL Ledger round-trip", () => {
       currency: "INR",
       createdBy: ACTOR,
       updatedBy: ACTOR,
-    });
+    }));
 
-    const rows = await db
-      .select()
-      .from(financeLedger)
-      .where(eq(financeLedger.id, oddId))
-      .limit(1);
+    const rows = await scoped(TENANT, (tx) => tx.select().from(financeLedger).where(eq(financeLedger.id, oddId)).limit(1));
 
     expect(rows.length).toBe(1);
     const row = rows[0]!;

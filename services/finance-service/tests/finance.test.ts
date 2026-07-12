@@ -19,7 +19,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
+import { scoped } from "./_tenant.js";
 import { financeBills } from "../src/modules/payments/schema.js";
+import { financeHeads } from "../src/modules/budget/schema.js";
+import { financeDdo } from "../src/modules/masters/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { assertJournalBalances } from "../src/modules/gl/domain.js";
@@ -40,8 +43,8 @@ const CORR_1 = "corr-mismatch-1";
 const CORR_2 = "corr-bill-happy-1";
 
 async function wipe(billId: string, msgId: string, correlationId: string) {
-  await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, correlationId));
-  await db.delete(financeBills).where(eq(financeBills.id, billId));
+  await scoped(TENANT, (tx) => tx.delete(outboxMessages).where(eq(outboxMessages.correlationId, correlationId)));
+  await scoped(TENANT, (tx) => tx.delete(financeBills).where(eq(financeBills.id, billId)));
   await db.delete(processed).where(eq(processed.messageId, msgId));
 }
 
@@ -53,6 +56,20 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
     await new Promise((r) => setTimeout(r, 50));
   }
 }
+
+// Provision the master fixtures the bill consumer validates against: a head with
+// a valid 18-digit HoA whose major head (2071) is in the major-head master, and
+// the DDO. Scoped to the tenant so the RLS WITH CHECK passes; idempotent.
+beforeAll(async () => {
+  await scoped(TENANT, (tx) => tx.insert(financeHeads).values({
+    id: HEAD, tenantId: TENANT, code: "BILL-TEST-HEAD", name: "Bill Test Head",
+    level: 1, classification: "expenditure", hoaCode: "207101010101010101",
+    createdBy: ACTOR, updatedBy: ACTOR,
+  }).onConflictDoNothing());
+  await scoped(TENANT, (tx) => tx.insert(financeDdo).values({
+    tenantId: TENANT, ddoCode: DDO, name: "Bill Test DDO", createdBy: ACTOR, updatedBy: ACTOR,
+  }).onConflictDoNothing());
+});
 
 // 1. Journal balance — pure ----------------------------------------------------
 
@@ -136,14 +153,14 @@ describe("Bill consumer — 3-way match (integration)", () => {
     });
 
     await waitFor(async () =>
-      (await db.select().from(financeBills).where(eq(financeBills.id, BILL_1))).length === 1);
+      (await scoped(TENANT, (tx) => tx.select().from(financeBills).where(eq(financeBills.id, BILL_1)))).length === 1);
     await q.stop();
 
-    const rows = await db.select().from(financeBills).where(eq(financeBills.id, BILL_1));
+    const rows = await scoped(TENANT, (tx) => tx.select().from(financeBills).where(eq(financeBills.id, BILL_1)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("on_hold");
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, CORR_1));
+    const outbox = await scoped(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.correlationId, CORR_1)));
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain(EVENTS.billMismatch);
     expect(eventTypes).not.toContain(EVENTS.billPassed);
@@ -188,7 +205,7 @@ describe("Bill consumer — CQRS wiring (integration)", () => {
       (await db.select().from(processed).where(eq(processed.messageId, MSG_2))).length === 1);
     await q.stop();
 
-    const bills = await db.select().from(financeBills).where(eq(financeBills.id, BILL_2));
+    const bills = await scoped(TENANT, (tx) => tx.select().from(financeBills).where(eq(financeBills.id, BILL_2)));
     expect(bills).toHaveLength(1);
     // billNo is reassigned by the gapless allocator (BILL/<fy>/NNNN), not the caller value.
     expect(bills[0]?.billNo).toMatch(/^BILL\//);
@@ -198,7 +215,7 @@ describe("Bill consumer — CQRS wiring (integration)", () => {
     const seen = await db.select().from(processed).where(eq(processed.messageId, MSG_2));
     expect(seen).toHaveLength(1);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, CORR_2));
+    const outbox = await scoped(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.correlationId, CORR_2)));
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain("audit.event.record");
     expect(eventTypes).not.toContain(EVENTS.billMismatch);

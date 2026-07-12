@@ -32,6 +32,9 @@ vi.mock("@civitasone/db", () => ({
   tenantTransaction: async (_db: unknown, _tenantId: string, fn: (tx: unknown) => Promise<void>) => {
     await dbTransactionFn(fn);
   },
+  // Consumers wrap each handler in runWithTenant(msg.tenantId, ...) so db.transaction
+  // sets the app.tenant_id GUC; in this unit test it just runs the handler.
+  runWithTenant: async <T>(_tenantId: string, fn: () => T | Promise<T>) => fn(),
   setTenantGuc: vi.fn(async () => undefined),
 }));
 vi.mock("../src/shared/outbox.js", () => ({
@@ -44,6 +47,7 @@ vi.mock("../src/shared/infra.js", () => ({
 vi.mock("../src/modules/budget/repo.js", () => ({
   insertBudget: (...a: any[]) => insertBudgetMock(...a),
   findBudgetById: (...a: any[]) => findBudgetByIdMock(...a),
+  findBudgetByIdTx: (...a: any[]) => findBudgetByIdMock(...a),
   transferBudgetReMinorGuarded: (...a: any[]) => transferBudgetReMinorGuardedMock(...a),
   insertSanction: (...a: any[]) => insertSanctionMock(...a),
   findSanctionByIdTx: (...a: any[]) => findSanctionByIdTxMock(...a),

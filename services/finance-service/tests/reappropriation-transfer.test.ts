@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
+import { scoped } from "./_tenant.js";
 import { financeBudgets } from "../src/modules/budget/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
@@ -34,12 +35,12 @@ async function seed(srcRe: bigint, srcUtil: bigint, tgtRe: bigint, tgtUtil: bigi
   await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, BAD_CORR));
   await db.delete(processed).where(eq(processed.messageId, OK_MSG));
   await db.delete(processed).where(eq(processed.messageId, BAD_MSG));
-  await db.delete(financeBudgets).where(eq(financeBudgets.id, SRC_ID));
-  await db.delete(financeBudgets).where(eq(financeBudgets.id, TGT_ID));
-  await db.insert(financeBudgets).values([
+  await scoped(TENANT, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.id, SRC_ID)));
+  await scoped(TENANT, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.id, TGT_ID)));
+  await scoped(TENANT, (tx) => tx.insert(financeBudgets).values([
     { id: SRC_ID, tenantId: TENANT, headId: HEAD_A, fy: "2025-26", beMinor: srcRe, reMinor: srcRe, allocatedMinor: 0n, utilisedMinor: srcUtil, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
     { id: TGT_ID, tenantId: TENANT, headId: HEAD_B, fy: "2025-26", beMinor: tgtRe, reMinor: tgtRe, allocatedMinor: 0n, utilisedMinor: tgtUtil, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
-  ]);
+  ]));
 }
 
 async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
@@ -51,8 +52,8 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
 }
 
 afterAll(async () => {
-  await db.delete(financeBudgets).where(eq(financeBudgets.id, SRC_ID));
-  await db.delete(financeBudgets).where(eq(financeBudgets.id, TGT_ID));
+  await scoped(TENANT, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.id, SRC_ID)));
+  await scoped(TENANT, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.id, TGT_ID)));
   await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, OK_CORR));
   await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, BAD_CORR));
   await db.delete(processed).where(eq(processed.messageId, OK_MSG));
@@ -78,8 +79,8 @@ describe("re-appropriation consumer — zero-sum transfer (R4)", () => {
       (await db.select().from(processed).where(eq(processed.messageId, OK_MSG))).length === 1);
     await q.stop();
 
-    const src = (await db.select().from(financeBudgets).where(eq(financeBudgets.id, SRC_ID)))[0];
-    const tgt = (await db.select().from(financeBudgets).where(eq(financeBudgets.id, TGT_ID)))[0];
+    const src = (await scoped(TENANT, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, SRC_ID))))[0];
+    const tgt = (await scoped(TENANT, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, TGT_ID))))[0];
     expect(src?.reMinor).toBe(50_000n);   // 100k - 50k
     expect(tgt?.reMinor).toBe(80_000n);   // 30k + 50k
     // total appropriation conserved
@@ -87,7 +88,7 @@ describe("re-appropriation consumer — zero-sum transfer (R4)", () => {
     // target RE now exceeds its own BE (30k) — that is the purpose of re-appropriation
     expect(tgt!.reMinor).toBeGreaterThan(tgt!.beMinor);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, OK_CORR));
+    const outbox = await scoped(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.correlationId, OK_CORR)));
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
   });
 
@@ -107,8 +108,8 @@ describe("re-appropriation consumer — zero-sum transfer (R4)", () => {
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    const src = (await db.select().from(financeBudgets).where(eq(financeBudgets.id, SRC_ID)))[0];
-    const tgt = (await db.select().from(financeBudgets).where(eq(financeBudgets.id, TGT_ID)))[0];
+    const src = (await scoped(TENANT, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, SRC_ID))))[0];
+    const tgt = (await scoped(TENANT, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, TGT_ID))))[0];
     expect(src?.reMinor).toBe(100_000n); // unchanged
     expect(tgt?.reMinor).toBe(30_000n);  // unchanged
   });
