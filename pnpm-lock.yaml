@@ -2571,6 +2571,9 @@ importers:
       '@civitasone/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events

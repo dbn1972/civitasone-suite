@@ -25,6 +25,7 @@
     "amqplib": "^0.10.4",
     "@civitasone/auth": "workspace:*",
     "@civitasone/types": "workspace:*",
+    "@civitasone/db": "workspace:*",
     "@civitasone/events": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "fastify": "^4.27.0",
