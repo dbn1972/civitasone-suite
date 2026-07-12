@@ -49,6 +49,7 @@ const NAV: NavGroup[] = [
       { icon: "🪪", label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
       { icon: "🛂", label: "Visitor Mgmt", href: "/visitor", moduleKey: "visitor" },
       { icon: "⚖️", label: "Meeting Mgmt", href: "/meeting", moduleKey: "meeting" },
+      { icon: "🏛️", label: "Court Mgmt", href: "/court", moduleKey: "court" },
     ],
   },
   {
