@@ -38,6 +38,10 @@ export const EVENTS = {
 export const CONSUMED_EVENTS = {
   /** ml-service emits task high risk when delay risk score > 0.80. */
   mlTaskHighRisk: "ml.prediction.task_high_risk",
+  // meeting-service board/committee free-text project decision (Req 22.4). Opens a
+  // PENDING_REVIEW triage item — see modules/board-intake/consumer.ts. Payload:
+  // { decisionId, meetingId, text, projectRef?, authority?, effectiveDate?, committeeId? }.
+  boardDecisionProject: "meeting.decision.project",
 } as const;
 
 export const SERVICE = "project";

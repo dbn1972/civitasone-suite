@@ -48,6 +48,7 @@ import { registerSchedulerConsumers }  from "./modules/scheduler/consumer.js";
 import { registerSelfServiceConsumers } from "./modules/self-service/consumer.js";
 import { registerSocialConsumers }     from "./modules/social/consumer.js";
 import { registerVisitingCardConsumers } from "./modules/visiting-cards/consumer.js";
+import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 
 const log = pino({ name: "hrms-worker" });
@@ -96,6 +97,8 @@ registerSchedulerConsumers(queue);
 registerSelfServiceConsumers(queue);
 registerSocialConsumers(queue);
 registerVisitingCardConsumers(queue);
+// Cross-service choreography: board decision → HR intake (for-review).
+registerBoardIntakeConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

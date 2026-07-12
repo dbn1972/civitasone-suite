@@ -16,6 +16,7 @@ import { schema as schedulerModule }   from "../modules/scheduler/schema.js";
 import { schema as disciplinaryModule } from "../modules/disciplinary/schema.js";
 import { schema as reservationModule }  from "../modules/reservation/schema.js";
 import { schema as medicalModule }      from "../modules/medical/schema.js";
+import { schema as boardIntakeModule } from "../modules/board-intake/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -24,7 +25,7 @@ if (!url) throw new Error("DATABASE_URL is required (postgres://hrms_svc:***@hos
 export const sqlClient = createSqlClient(url);
 
 const _rawDb = drizzle(sqlClient, {
-  schema: { ...employeeModule, ...recruitmentModule, ...attendanceModule, ...leaveModule, ...trainingModule, ...lifecycleModule, ...serviceBookModule, ...appraisalModule, ...aparModule, ...gpfModule, ...deputationModule, ...claimsModule, ...schedulerModule, ...disciplinaryModule, ...reservationModule, ...medicalModule, ...outboxSchema },
+  schema: { ...employeeModule, ...recruitmentModule, ...attendanceModule, ...leaveModule, ...trainingModule, ...lifecycleModule, ...serviceBookModule, ...appraisalModule, ...aparModule, ...gpfModule, ...deputationModule, ...claimsModule, ...schedulerModule, ...disciplinaryModule, ...reservationModule, ...medicalModule, ...boardIntakeModule, ...outboxSchema },
 });
 
 export const db = wrapWithTenantGuc(_rawDb);
