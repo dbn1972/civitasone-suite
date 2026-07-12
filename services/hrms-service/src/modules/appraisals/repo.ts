@@ -1,13 +1,13 @@
 import { eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsAppraisals, type AppraisalRow, type AppraisalInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update">;
 
 export async function listByTenant(tenantId: string, limit = 100): Promise<AppraisalRow[]> {
-  return db.select().from(hrmsAppraisals)
+  return scopedRead((tx) => tx.select().from(hrmsAppraisals)
     .where(eq(hrmsAppraisals.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertAppraisal(tx: Writer, row: AppraisalInsert): Promise<void> {
@@ -19,7 +19,7 @@ export async function updateAppraisal(tx: Writer, id: string, patch: Partial<App
 }
 
 export async function findById(id: string, tenantId: string): Promise<AppraisalRow | null> {
-  const rows = await db.select().from(hrmsAppraisals).where(eq(hrmsAppraisals.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsAppraisals).where(eq(hrmsAppraisals.id, id)).limit(1));
   const row = rows[0];
   return row && row.tenantId === tenantId ? row : null;
 }

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsGeoAttendance, hrmsOfficeLocations } from "./schema.js";
 import { hrmsHolidays } from "../holidays/schema.js";
 import { randomUUID } from "node:crypto";
@@ -34,7 +34,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/office-locations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const rows = await db.select().from(hrmsOfficeLocations).where(eq(hrmsOfficeLocations.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsOfficeLocations).where(eq(hrmsOfficeLocations.tenantId, ctx.tenantId)));
     return reply.send({ data: rows.map(r => ({ id: r.id, name: r.name, address: r.address, latitude: r.latitude, longitude: r.longitude, radiusMeters: r.radiusMeters, isActive: r.isActive })) });
   });
 
@@ -55,8 +55,8 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
 
     // 1. Check if today is a holiday
-    const holidays = await db.select().from(hrmsHolidays)
-      .where(and(eq(hrmsHolidays.tenantId, ctx.tenantId), eq(hrmsHolidays.date, today)));
+    const holidays = await scopedRead((tx) => tx.select().from(hrmsHolidays)
+      .where(and(eq(hrmsHolidays.tenantId, ctx.tenantId), eq(hrmsHolidays.date, today))));
     const isGazettedHoliday = holidays.some(h => h.type === "gazetted");
     if (isGazettedHoliday) {
       throw new HttpError(400, "HOLIDAY", `Today (${today}) is a gazetted holiday: ${holidays[0]?.name ?? "holiday"}. Attendance not required.`);
@@ -65,13 +65,13 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     // 2. Get employee's assigned office location (or use provided one)
     let officeLoc: { latitude: number; longitude: number; radiusMeters: number; name: string } | null = null;
     if (body.officeLocationId) {
-      const rows = await db.select().from(hrmsOfficeLocations)
-        .where(and(eq(hrmsOfficeLocations.id, body.officeLocationId), eq(hrmsOfficeLocations.tenantId, ctx.tenantId)));
+      const rows = await scopedRead((tx) => tx.select().from(hrmsOfficeLocations)
+        .where(and(eq(hrmsOfficeLocations.id, body.officeLocationId!), eq(hrmsOfficeLocations.tenantId, ctx.tenantId))));
       if (rows[0]) officeLoc = rows[0];
     } else {
       // Fallback: get first active office
-      const rows = await db.select().from(hrmsOfficeLocations)
-        .where(and(eq(hrmsOfficeLocations.tenantId, ctx.tenantId), eq(hrmsOfficeLocations.isActive, true))).limit(1);
+      const rows = await scopedRead((tx) => tx.select().from(hrmsOfficeLocations)
+        .where(and(eq(hrmsOfficeLocations.tenantId, ctx.tenantId), eq(hrmsOfficeLocations.isActive, true))).limit(1));
       if (rows[0]) officeLoc = rows[0];
     }
 
@@ -116,8 +116,8 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
 
     let officeLoc: any = null;
-    const rows = await db.select().from(hrmsOfficeLocations)
-      .where(and(eq(hrmsOfficeLocations.tenantId, ctx.tenantId), eq(hrmsOfficeLocations.isActive, true))).limit(1);
+    const rows = await scopedRead((tx) => tx.select().from(hrmsOfficeLocations)
+      .where(and(eq(hrmsOfficeLocations.tenantId, ctx.tenantId), eq(hrmsOfficeLocations.isActive, true))).limit(1));
     if (rows[0]) officeLoc = rows[0];
 
     let withinGeofence = false;
@@ -149,8 +149,8 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const empId = q.employeeId ?? ctx.actorId;
-    const rows = await db.select().from(hrmsGeoAttendance)
-      .where(and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), eq(hrmsGeoAttendance.employeeId, empId)));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsGeoAttendance)
+      .where(and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), eq(hrmsGeoAttendance.employeeId, empId))));
     return reply.send({ data: rows.slice(0, 60).map(r => ({ id: r.id, date: r.attendanceDate, checkType: r.checkType, withinGeofence: r.withinGeofence, distanceMeters: r.distanceFromOffice ? Math.round(r.distanceFromOffice) : null, markedAt: r.markedAt, selfieFileKey: r.selfieFileKey })) });
   });
 
@@ -160,8 +160,8 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     // In real system: query employees where reporting_officer_id = ctx.actorId
     // For now return geo attendance for all employees (HR admin view)
-    const rows = await db.select().from(hrmsGeoAttendance)
-      .where(eq(hrmsGeoAttendance.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsGeoAttendance)
+      .where(eq(hrmsGeoAttendance.tenantId, ctx.tenantId)));
     return reply.send({ data: rows.slice(0, 100).map(r => ({ employeeId: r.employeeId, date: r.attendanceDate, checkType: r.checkType, withinGeofence: r.withinGeofence, distanceMeters: r.distanceFromOffice ? Math.round(r.distanceFromOffice) : null })) });
   });
 }

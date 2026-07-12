@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsPromotions, hrmsTransfers } from "./schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -16,9 +16,9 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/lifecycle/promotions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsPromotions)
+    const rows = await scopedRead((tx) => tx.select().from(hrmsPromotions)
       .where(eq(hrmsPromotions.tenantId, ctx.tenantId))
-      .orderBy(desc(hrmsPromotions.effectiveDate));
+      .orderBy(desc(hrmsPromotions.effectiveDate)));
     return reply.send({ data: rows });
   });
 
@@ -60,9 +60,9 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/lifecycle/transfers", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsTransfers)
+    const rows = await scopedRead((tx) => tx.select().from(hrmsTransfers)
       .where(eq(hrmsTransfers.tenantId, ctx.tenantId))
-      .orderBy(desc(hrmsTransfers.effectiveDate));
+      .orderBy(desc(hrmsTransfers.effectiveDate)));
     return reply.send({ data: rows });
   });
 

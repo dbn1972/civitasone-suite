@@ -1,5 +1,5 @@
 import { eq, and, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import {
   roles, permissions, rolePermissions, roleAssignments,
   type RoleRow, type RoleInsert, type PermissionRow, type PermissionInsert,
@@ -33,8 +33,8 @@ export async function findRoleByKey(tx: Writer, tenantId: string, key: string): 
   return rows[0] ? roleToView(rows[0]) : null;
 }
 export async function listRoles(tenantId: string, limit: number, offset: number): Promise<RoleView[]> {
-  const rows = await db.select().from(roles)
-    .where(eq(roles.tenantId, tenantId)).limit(limit).offset(offset);
+  const rows = await scopedRead((tx) => tx.select().from(roles)
+    .where(eq(roles.tenantId, tenantId)).limit(limit).offset(offset));
   return rows.map(roleToView);
 }
 export async function insertRole(tx: Writer, row: RoleInsert): Promise<void> {
@@ -48,8 +48,8 @@ export async function findPermissionById(tx: Writer, tenantId: string, id: strin
   return rows[0] ? permToView(rows[0]) : null;
 }
 export async function listPermissions(tenantId: string, limit: number, offset: number): Promise<PermissionView[]> {
-  const rows = await db.select().from(permissions)
-    .where(eq(permissions.tenantId, tenantId)).limit(limit).offset(offset);
+  const rows = await scopedRead((tx) => tx.select().from(permissions)
+    .where(eq(permissions.tenantId, tenantId)).limit(limit).offset(offset));
   return rows.map(permToView);
 }
 export async function insertPermission(tx: Writer, row: PermissionInsert): Promise<void> {
@@ -107,21 +107,21 @@ export async function setAssignmentStatus(tx: Writer, tenantId: string, id: stri
 
 // ── effective access for a user ────────────────────────────────────────────
 export async function effectiveAccess(tenantId: string, userId: string): Promise<EffectiveAccess> {
-  const roleRows = await db.select({ id: roles.id, key: roles.key, name: roles.name })
+  const roleRows = await scopedRead((tx) => tx.select({ id: roles.id, key: roles.key, name: roles.name })
     .from(roleAssignments)
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
     .where(and(
       eq(roleAssignments.tenantId, tenantId),
       eq(roleAssignments.userId, userId),
       eq(roleAssignments.status, "active"),
-    ));
+    )));
   const roleIds = roleRows.map((r) => r.id);
   let permKeys: string[] = [];
   if (roleIds.length > 0) {
-    const permRows = await db.selectDistinct({ key: permissions.key })
+    const permRows = await scopedRead((tx) => tx.selectDistinct({ key: permissions.key })
       .from(rolePermissions)
       .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
-      .where(and(eq(rolePermissions.tenantId, tenantId), inArray(rolePermissions.roleId, roleIds)));
+      .where(and(eq(rolePermissions.tenantId, tenantId), inArray(rolePermissions.roleId, roleIds))));
     permKeys = permRows.map((r) => r.key);
   }
   return {

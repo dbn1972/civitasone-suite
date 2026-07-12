@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import {
   hrmsBoardDecisionIntake,
@@ -28,22 +28,22 @@ export async function insertIntakeIdempotent(
 }
 
 export async function findById(tenantId: string, id: string): Promise<BoardDecisionIntakeRow | null> {
-  const rows = await db.select().from(hrmsBoardDecisionIntake)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsBoardDecisionIntake)
     .where(and(eq(hrmsBoardDecisionIntake.tenantId, tenantId), eq(hrmsBoardDecisionIntake.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function listByStatus(
   tenantId: string, status = "pending_review", limit = 200,
 ): Promise<BoardDecisionIntakeRow[]> {
-  return db.select().from(hrmsBoardDecisionIntake)
+  return scopedRead((tx) => tx.select().from(hrmsBoardDecisionIntake)
     .where(and(
       eq(hrmsBoardDecisionIntake.tenantId, tenantId),
       eq(hrmsBoardDecisionIntake.status, status),
     ))
     .orderBy(desc(hrmsBoardDecisionIntake.createdAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 /**

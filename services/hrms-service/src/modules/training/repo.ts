@@ -1,22 +1,22 @@
 import { eq, and, inArray, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsTrainings, hrmsNominations, type NominationRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function getNomination(tenantId: string, id: string): Promise<NominationRow | undefined> {
-  const rows = await db.select().from(hrmsNominations).where(and(
+  const rows = await scopedRead((tx) => tx.select().from(hrmsNominations).where(and(
     eq(hrmsNominations.id, id),
     eq(hrmsNominations.tenantId, tenantId),
-  )).limit(1);
+  )).limit(1));
   return rows[0];
 }
 
 export async function getTraining(tenantId: string, id: string) {
-  const rows = await db.select().from(hrmsTrainings).where(and(
+  const rows = await scopedRead((tx) => tx.select().from(hrmsTrainings).where(and(
     eq(hrmsTrainings.id, id),
     eq(hrmsTrainings.tenantId, tenantId),
-  )).limit(1);
+  )).limit(1));
   return rows[0];
 }
 
@@ -58,9 +58,9 @@ export async function insertNomination(tx: Writer, row: typeof hrmsNominations.$
 }
 
 export async function listTrainingsByTenant(tenantId: string, limit = 100) {
-  return db.select().from(hrmsTrainings)
+  return scopedRead((tx) => tx.select().from(hrmsTrainings)
     .where(eq(hrmsTrainings.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function countNominationsByTraining(tenantId: string, trainingIds: string[]): Promise<Map<string, number>> {

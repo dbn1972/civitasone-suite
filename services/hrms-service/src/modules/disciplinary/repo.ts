@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import {
   hrmsDisciplinaryCases, hrmsDisciplinaryEvents, hrmsSuspensions,
@@ -14,8 +14,8 @@ export async function insertCase(tx: Writer, row: DisciplinaryCaseInsert): Promi
 }
 
 export async function findCase(tenantId: string, id: string): Promise<DisciplinaryCaseRow | null> {
-  const rows = await db.select().from(hrmsDisciplinaryCases)
-    .where(and(eq(hrmsDisciplinaryCases.tenantId, tenantId), eq(hrmsDisciplinaryCases.id, id))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsDisciplinaryCases)
+    .where(and(eq(hrmsDisciplinaryCases.tenantId, tenantId), eq(hrmsDisciplinaryCases.id, id))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -27,10 +27,10 @@ export async function findCaseTx(tx: Writer, tenantId: string, id: string): Prom
 }
 
 export async function listCasesByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<DisciplinaryCaseRow[]> {
-  return db.select().from(hrmsDisciplinaryCases)
+  return scopedRead((tx) => tx.select().from(hrmsDisciplinaryCases)
     .where(and(eq(hrmsDisciplinaryCases.tenantId, tenantId), eq(hrmsDisciplinaryCases.employeeId, employeeId)))
     .orderBy(desc(hrmsDisciplinaryCases.createdAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function updateCase(
@@ -85,22 +85,22 @@ export async function appendEvent(
 }
 
 export async function listEvents(tenantId: string, caseId: string, limit = 500) {
-  return db.select().from(hrmsDisciplinaryEvents)
+  return scopedRead((tx) => tx.select().from(hrmsDisciplinaryEvents)
     .where(and(eq(hrmsDisciplinaryEvents.tenantId, tenantId), eq(hrmsDisciplinaryEvents.caseId, caseId)))
     .orderBy(asc(hrmsDisciplinaryEvents.occurredAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 // ---------------- suspensions ----------------
 
 /** True if the employee already has an ACTIVE suspension in this tenant. */
 export async function hasActiveSuspension(tenantId: string, employeeId: string): Promise<boolean> {
-  const rows = await db.select({ id: hrmsSuspensions.id }).from(hrmsSuspensions)
+  const rows = await scopedRead((tx) => tx.select({ id: hrmsSuspensions.id }).from(hrmsSuspensions)
     .where(and(
       eq(hrmsSuspensions.tenantId, tenantId),
       eq(hrmsSuspensions.employeeId, employeeId),
       eq(hrmsSuspensions.status, "active")))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }
 
@@ -127,16 +127,16 @@ export async function insertSuspension(tx: Writer, row: SuspensionInsert): Promi
 }
 
 export async function findSuspension(tenantId: string, id: string): Promise<SuspensionRow | null> {
-  const rows = await db.select().from(hrmsSuspensions)
-    .where(and(eq(hrmsSuspensions.tenantId, tenantId), eq(hrmsSuspensions.id, id))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsSuspensions)
+    .where(and(eq(hrmsSuspensions.tenantId, tenantId), eq(hrmsSuspensions.id, id))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listSuspensionsByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<SuspensionRow[]> {
-  return db.select().from(hrmsSuspensions)
+  return scopedRead((tx) => tx.select().from(hrmsSuspensions)
     .where(and(eq(hrmsSuspensions.tenantId, tenantId), eq(hrmsSuspensions.employeeId, employeeId)))
     .orderBy(desc(hrmsSuspensions.fromDate))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function updateSuspension(
@@ -159,7 +159,7 @@ export async function updateSuspension(
  * pay-suspended employees so payroll can apply subsistence allowance.
  */
 export async function activePaySuspendedEmployeeIds(tenantId: string): Promise<Map<string, { subsistencePct: string }>> {
-  const rows = await db.select({
+  const rows = await scopedRead((tx) => tx.select({
     employeeId: hrmsSuspensions.employeeId,
     subsistencePct: hrmsSuspensions.subsistencePct,
   }).from(hrmsSuspensions)
@@ -171,7 +171,7 @@ export async function activePaySuspendedEmployeeIds(tenantId: string): Promise<M
     // order by employee then most-recent fromDate, then id, so the Map's
     // last-write-wins picks a stable subsistence% even as a defensive backstop.
     .orderBy(asc(hrmsSuspensions.employeeId), asc(hrmsSuspensions.fromDate), asc(hrmsSuspensions.id))
-    .limit(500);
+    .limit(500));
   const m = new Map<string, { subsistencePct: string }>();
   for (const r of rows) m.set(r.employeeId, { subsistencePct: r.subsistencePct });
   return m;

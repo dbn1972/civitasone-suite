@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import {
   encryptMfaSecret,
   decryptMfaSecret,
@@ -39,9 +39,9 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     z.object({ method: z.literal("totp").default("totp") }).parse(req.body ?? {});
 
-    const existing = await db.select().from(mfaConfigs)
+    const existing = await scopedRead((tx) => tx.select().from(mfaConfigs)
       .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     if (existing[0]?.enabled) {
       throw new HttpError(409, "ALREADY_ENABLED", "MFA already enabled");
     }
@@ -84,9 +84,9 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
       method: z.literal("totp").default("totp"),
     }).parse(req.body);
 
-    const rows = await db.select().from(mfaConfigs)
+    const rows = await scopedRead((tx) => tx.select().from(mfaConfigs)
       .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const config = rows[0];
     if (!config || !config.secret) {
       throw new HttpError(404, "NOT_FOUND", "MFA not set up");

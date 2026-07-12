@@ -1,5 +1,5 @@
 import { eq, and, lte, sql, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { grants, type GrantRow, type GrantInsert } from "./schema.js";
 import type { GrantView, GrantStatus } from "./domain.js";
@@ -55,8 +55,8 @@ export async function listByTenant(tenantId: string, status: string | undefined,
   const where = status
     ? and(eq(grants.tenantId, tenantId), eq(grants.status, status))
     : eq(grants.tenantId, tenantId);
-  const rows = await db.select().from(grants)
-    .where(where).orderBy(desc(grants.grantedAt)).limit(limit).offset(offset);
+  const rows = await scopedRead((tx) => tx.select().from(grants)
+    .where(where).orderBy(desc(grants.grantedAt)).limit(limit).offset(offset));
   return rows.map(toView);
 }
 

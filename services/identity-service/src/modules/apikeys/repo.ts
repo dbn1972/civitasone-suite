@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { apiKeys, apiKeyAudit, type ApiKeyRow, type ApiKeyInsert } from "./schema.js";
 import type { ApiKeyView, ApiKeyStatus } from "./domain.js";
@@ -39,9 +39,9 @@ export async function findBySecretHash(tx: Writer, secretHash: string): Promise<
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<ApiKeyView[]> {
-  const rows = await db.select().from(apiKeys)
+  const rows = await scopedRead((tx) => tx.select().from(apiKeys)
     .where(eq(apiKeys.tenantId, tenantId))
-    .orderBy(desc(apiKeys.createdAt)).limit(limit).offset(offset);
+    .orderBy(desc(apiKeys.createdAt)).limit(limit).offset(offset));
   return rows.map(toView);
 }
 

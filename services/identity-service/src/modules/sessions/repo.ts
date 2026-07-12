@@ -1,5 +1,5 @@
 import { eq, and, lte, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { sessions, type SessionRow, type SessionInsert } from "./schema.js";
 import type { SessionView } from "./domain.js";
 
@@ -24,9 +24,9 @@ function toView(r: SessionRow): SessionView {
 }
 
 export async function findById(tenantId: string, id: string): Promise<SessionView | null> {
-  const rows = await db.select().from(sessions)
+  const rows = await scopedRead((tx) => tx.select().from(sessions)
     .where(and(eq(sessions.id, id), eq(sessions.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -49,10 +49,10 @@ export async function findByIdTx(tx: Writer, tenantId: string, id: string): Prom
 }
 
 export async function listByTenant(tenantId: string, limit: number): Promise<SessionView[]> {
-  const rows = await db.select().from(sessions)
+  const rows = await scopedRead((tx) => tx.select().from(sessions)
     .where(eq(sessions.tenantId, tenantId))
     .limit(limit)
-    .orderBy(sessions.startedAt);
+    .orderBy(sessions.startedAt));
   return rows.map(toView);
 }
 

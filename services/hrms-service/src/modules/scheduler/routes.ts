@@ -13,7 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsDueList, hrmsSchedulerRuns } from "./schema.js";
 import { runSchedulerOnce } from "./tick.js";
 
@@ -30,28 +30,28 @@ export async function schedulerRoutes(app: FastifyInstance): Promise<void> {
 
     let runDate = q.runDate;
     if (!runDate) {
-      const latest = await db.select({ runDate: hrmsDueList.runDate })
+      const latest = await scopedRead((tx) => tx.select({ runDate: hrmsDueList.runDate })
         .from(hrmsDueList)
         .where(and(eq(hrmsDueList.tenantId, ctx.tenantId), eq(hrmsDueList.listKind, q.kind)))
-        .orderBy(desc(hrmsDueList.runDate)).limit(1);
+        .orderBy(desc(hrmsDueList.runDate)).limit(1));
       runDate = latest[0]?.runDate;
     }
     if (!runDate) return reply.send({ kind: q.kind, runDate: null, data: [] });
 
-    const rows = await db.select().from(hrmsDueList)
+    const rows = await scopedRead((tx) => tx.select().from(hrmsDueList)
       .where(and(
         eq(hrmsDueList.tenantId, ctx.tenantId),
         eq(hrmsDueList.listKind, q.kind),
         eq(hrmsDueList.runDate, runDate)))
-      .orderBy(sql`${hrmsDueList.daysRemaining} ASC`);
+      .orderBy(sql`${hrmsDueList.daysRemaining} ASC`));
     return reply.send({ kind: q.kind, runDate, count: rows.length, data: rows });
   });
 
   app.get("/v1/hrms/scheduler/runs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsSchedulerRuns)
-      .orderBy(desc(hrmsSchedulerRuns.startedAt)).limit(20);
+    const rows = await scopedRead((tx) => tx.select().from(hrmsSchedulerRuns)
+      .orderBy(desc(hrmsSchedulerRuns.startedAt)).limit(20));
     return reply.send({ data: rows });
   });
 

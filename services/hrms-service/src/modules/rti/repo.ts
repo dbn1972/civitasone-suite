@@ -1,5 +1,5 @@
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsRtiRequests, type RtiRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -9,17 +9,17 @@ export async function insertRti(tx: Writer, row: typeof hrmsRtiRequests.$inferIn
 }
 
 export async function listRti(tenantId: string, limit = 200): Promise<RtiRow[]> {
-  return db.select().from(hrmsRtiRequests)
+  return scopedRead((tx) => tx.select().from(hrmsRtiRequests)
     .where(eq(hrmsRtiRequests.tenantId, tenantId))
     .orderBy(desc(hrmsRtiRequests.receivedDate))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function getRti(tenantId: string, id: string): Promise<RtiRow | undefined> {
-  const rows = await db.select().from(hrmsRtiRequests).where(and(
+  const rows = await scopedRead((tx) => tx.select().from(hrmsRtiRequests).where(and(
     eq(hrmsRtiRequests.id, id),
     eq(hrmsRtiRequests.tenantId, tenantId),
-  )).limit(1);
+  )).limit(1));
   return rows[0];
 }
 

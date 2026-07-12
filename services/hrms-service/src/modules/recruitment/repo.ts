@@ -1,13 +1,13 @@
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, type ApplicationRow, type JobOpeningRow, type InterviewRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findApplicationById(id: string, tenantId: string): Promise<ApplicationRow | null> {
-  const rows = await db.select().from(hrmsApplications)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsApplications)
     .where(and(eq(hrmsApplications.id, id), eq(hrmsApplications.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -28,9 +28,9 @@ export async function insertOffer(tx: Writer, row: typeof hrmsOffers.$inferInser
 }
 
 export async function listJobOpeningsByTenant(tenantId: string, limit = 100): Promise<JobOpeningRow[]> {
-  return db.select().from(hrmsJobOpenings)
+  return scopedRead((tx) => tx.select().from(hrmsJobOpenings)
     .where(eq(hrmsJobOpenings.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function countApplicationsByJob(tenantId: string, jobIds: string[]): Promise<Map<string, number>> {
@@ -55,9 +55,9 @@ export async function insertInterview(tx: Writer, row: typeof hrmsInterviews.$in
 }
 
 export async function findInterviewById(id: string, tenantId: string): Promise<InterviewRow | null> {
-  const rows = await db.select().from(hrmsInterviews)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsInterviews)
     .where(and(eq(hrmsInterviews.id, id), eq(hrmsInterviews.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -69,10 +69,10 @@ export async function listInterviews(
   const conds = [eq(hrmsInterviews.tenantId, tenantId)];
   if (filters.jobOpeningId) conds.push(eq(hrmsInterviews.jobOpeningId, filters.jobOpeningId));
   if (filters.applicationId) conds.push(eq(hrmsInterviews.applicationId, filters.applicationId));
-  return db.select().from(hrmsInterviews)
+  return scopedRead((tx) => tx.select().from(hrmsInterviews)
     .where(and(...conds))
     .orderBy(desc(hrmsInterviews.scheduledDate))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function updateInterviewScorecard(
@@ -90,32 +90,32 @@ export async function updateInterviewScorecard(
 // --- Public careers (published vacancies) ---
 
 export async function listPublishedOpenings(tenantId: string): Promise<JobOpeningRow[]> {
-  return db.select().from(hrmsJobOpenings)
+  return scopedRead((tx) => tx.select().from(hrmsJobOpenings)
     .where(and(
       eq(hrmsJobOpenings.tenantId, tenantId),
       eq(hrmsJobOpenings.isPublished, "true"),
       eq(hrmsJobOpenings.status, "open"),
     ))
     .orderBy(desc(hrmsJobOpenings.createdAt))
-    .limit(100);
+    .limit(100));
 }
 
 export async function findPublishedOpening(id: string, tenantId: string): Promise<JobOpeningRow | null> {
-  const rows = await db.select().from(hrmsJobOpenings)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsJobOpenings)
     .where(and(
       eq(hrmsJobOpenings.id, id),
       eq(hrmsJobOpenings.tenantId, tenantId),
       eq(hrmsJobOpenings.isPublished, "true"),
       eq(hrmsJobOpenings.status, "open"),
     ))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function findJobOpeningById(id: string): Promise<JobOpeningRow | null> {
-  const rows = await db.select().from(hrmsJobOpenings)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsJobOpenings)
     .where(eq(hrmsJobOpenings.id, id))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -141,10 +141,10 @@ export async function searchApplications(
   if (filters.source) conds.push(eq(hrmsApplications.source, filters.source));
   // Skill filter uses array containment (requires GIN index).
   // For simplicity, we filter in JS after fetch (acceptable for <10k rows per tenant).
-  let rows = await db.select().from(hrmsApplications)
+  let rows = await scopedRead((tx) => tx.select().from(hrmsApplications)
     .where(and(...conds))
     .orderBy(desc(hrmsApplications.appliedAt))
-    .limit(limit * 2); // over-fetch to compensate for JS filters
+    .limit(limit * 2)); // over-fetch to compensate for JS filters
 
   if (filters.skill) {
     const s = filters.skill.toLowerCase();
@@ -157,10 +157,10 @@ export async function searchApplications(
 }
 
 export async function countApplicationsBySource(tenantId: string): Promise<{ internal: number; public: number }> {
-  const rows = await db.select({ source: hrmsApplications.source, count: sql<number>`count(*)::int` })
+  const rows = await scopedRead((tx) => tx.select({ source: hrmsApplications.source, count: sql<number>`count(*)::int` })
     .from(hrmsApplications)
     .where(eq(hrmsApplications.tenantId, tenantId))
-    .groupBy(hrmsApplications.source);
+    .groupBy(hrmsApplications.source));
   let internal = 0, pub = 0;
   for (const r of rows) {
     if (r.source === "public_portal") pub = r.count;

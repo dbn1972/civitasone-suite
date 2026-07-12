@@ -1,5 +1,5 @@
 import { eq, and, asc, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { hrmsAppraisals, type AppraisalRow, type AppraisalInsert } from "../appraisals/schema.js";
 import {
@@ -10,8 +10,8 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update">;
 
 export async function findAppraisal(id: string, tenantId: string): Promise<AppraisalRow | null> {
-  const rows = await db.select().from(hrmsAppraisals)
-    .where(and(eq(hrmsAppraisals.id, id), eq(hrmsAppraisals.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsAppraisals)
+    .where(and(eq(hrmsAppraisals.id, id), eq(hrmsAppraisals.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -49,10 +49,10 @@ export async function upsertScore(tx: Writer, row: AparScoreInsert): Promise<voi
 }
 
 export async function listScores(tenantId: string, appraisalId: string, limit = 500): Promise<AparScoreRow[]> {
-  return db.select().from(hrmsAparScores)
+  return scopedRead((tx) => tx.select().from(hrmsAparScores)
     .where(and(eq(hrmsAparScores.tenantId, tenantId), eq(hrmsAparScores.appraisalId, appraisalId)))
     .orderBy(asc(hrmsAparScores.attribute))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function appendHistory(tx: Writer, row: AparStageHistoryInsert): Promise<void> {
@@ -60,8 +60,8 @@ export async function appendHistory(tx: Writer, row: AparStageHistoryInsert): Pr
 }
 
 export async function listHistory(tenantId: string, appraisalId: string, limit = 500) {
-  return db.select().from(hrmsAparStageHistory)
+  return scopedRead((tx) => tx.select().from(hrmsAparStageHistory)
     .where(and(eq(hrmsAparStageHistory.tenantId, tenantId), eq(hrmsAparStageHistory.appraisalId, appraisalId)))
     .orderBy(asc(hrmsAparStageHistory.createdAt))
-    .limit(limit);
+    .limit(limit));
 }

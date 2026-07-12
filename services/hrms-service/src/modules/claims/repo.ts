@@ -1,5 +1,5 @@
 import { eq, and, asc, ne, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import {
   hrmsLtcClaims, hrmsCeaClaims,
@@ -14,16 +14,16 @@ export async function insertLtc(tx: Writer, row: LtcClaimInsert): Promise<void> 
 }
 
 export async function findLtc(tenantId: string, id: string): Promise<LtcClaimRow | null> {
-  const rows = await db.select().from(hrmsLtcClaims)
-    .where(and(eq(hrmsLtcClaims.tenantId, tenantId), eq(hrmsLtcClaims.id, id))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLtcClaims)
+    .where(and(eq(hrmsLtcClaims.tenantId, tenantId), eq(hrmsLtcClaims.id, id))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listLtcByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LtcClaimRow[]> {
-  return db.select().from(hrmsLtcClaims)
+  return scopedRead((tx) => tx.select().from(hrmsLtcClaims)
     .where(and(eq(hrmsLtcClaims.tenantId, tenantId), eq(hrmsLtcClaims.employeeId, employeeId)))
     .orderBy(asc(hrmsLtcClaims.submittedAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function updateLtc(
@@ -43,16 +43,16 @@ export async function insertCea(tx: Writer, row: CeaClaimInsert): Promise<void> 
 }
 
 export async function findCea(tenantId: string, id: string): Promise<CeaClaimRow | null> {
-  const rows = await db.select().from(hrmsCeaClaims)
-    .where(and(eq(hrmsCeaClaims.tenantId, tenantId), eq(hrmsCeaClaims.id, id))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsCeaClaims)
+    .where(and(eq(hrmsCeaClaims.tenantId, tenantId), eq(hrmsCeaClaims.id, id))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listCeaByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<CeaClaimRow[]> {
-  return db.select().from(hrmsCeaClaims)
+  return scopedRead((tx) => tx.select().from(hrmsCeaClaims)
     .where(and(eq(hrmsCeaClaims.tenantId, tenantId), eq(hrmsCeaClaims.employeeId, employeeId)))
     .orderBy(asc(hrmsCeaClaims.submittedAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 /**

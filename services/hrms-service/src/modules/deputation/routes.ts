@@ -18,7 +18,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import * as repo from "./repo.js";
@@ -40,8 +40,8 @@ function jsonSafe(v: unknown): unknown {
 }
 
 async function mustEmployee(tenantId: string, id: string) {
-  const rows = await db.select().from(hrmsEmployees)
-    .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, tenantId))).limit(1));
   const emp = rows[0];
   if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
   return emp;

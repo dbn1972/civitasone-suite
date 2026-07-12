@@ -5,7 +5,7 @@ import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitaso
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody } from "./validators.js";
 import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
@@ -31,7 +31,7 @@ async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof ap
   if (!lt) throw new HttpError(404, "LEAVE_TYPE_NOT_FOUND", "leave type not found");
   const code = (lt.code ?? "").toUpperCase();
   if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return;
-  const [emp] = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, body.employeeId));
+  const [emp] = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, body.employeeId)));
   if (!emp) throw new HttpError(404, "EMP_NOT_FOUND", "employee not found");
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = (allowed as string[]).includes(emp.employeeType ?? "")

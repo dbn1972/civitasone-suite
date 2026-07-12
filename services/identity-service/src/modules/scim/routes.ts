@@ -11,7 +11,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { timingSafeEqual } from "node:crypto";
 import { HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { users } from "../users/schema.js";
 import { eq, and, ilike } from "drizzle-orm";
 
@@ -86,14 +86,14 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     if (query.filter) {
       const match = query.filter.match(/userName\s+eq\s+"([^"]+)"/i);
       if (match?.[1]) {
-        rows = await db.select().from(users)
-          .where(and(eq(users.tenantId, tid), ilike(users.email, match[1])))
-          .limit(count).offset(offset);
+        rows = await scopedRead((tx) => tx.select().from(users)
+          .where(and(eq(users.tenantId, tid), ilike(users.email, match[1]!)))
+          .limit(count).offset(offset));
       } else {
-        rows = await db.select().from(users).where(eq(users.tenantId, tid)).limit(count).offset(offset);
+        rows = await scopedRead((tx) => tx.select().from(users).where(eq(users.tenantId, tid)).limit(count).offset(offset));
       }
     } else {
-      rows = await db.select().from(users).where(eq(users.tenantId, tid)).limit(count).offset(offset);
+      rows = await scopedRead((tx) => tx.select().from(users).where(eq(users.tenantId, tid)).limit(count).offset(offset));
     }
 
     return reply.send({
@@ -110,7 +110,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     requireScimAuth(req);
     const tid = tenantId(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const [row] = await db.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1);
+    const [row] = await scopedRead((tx) => tx.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1));
     if (!row) {
       return reply.code(404).send({
         schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
@@ -142,7 +142,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
       updatedBy: "scim",
     });
 
-    const [created] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const [created] = await scopedRead((tx) => tx.select().from(users).where(eq(users.id, id)).limit(1));
     return reply.code(201).send(toScimUser(created!));
   });
 
@@ -163,7 +163,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     if (status) patch["status"] = status;
 
     await db.update(users).set(patch).where(and(eq(users.id, id), eq(users.tenantId, tid)));
-    const [updated] = await db.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1);
+    const [updated] = await scopedRead((tx) => tx.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1));
     if (!updated) return reply.code(404).send({ schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"], detail: "User not found", status: "404" });
     return reply.send(toScimUser(updated));
   });
@@ -191,7 +191,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     }
 
     await db.update(users).set(patch).where(and(eq(users.id, id), eq(users.tenantId, tid)));
-    const [updated] = await db.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1);
+    const [updated] = await scopedRead((tx) => tx.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1));
     if (!updated) return reply.code(404).send({ schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"], detail: "User not found", status: "404" });
     return reply.send(toScimUser(updated));
   });
@@ -202,7 +202,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     const tid = tenantId(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const [existing] = await db.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1);
+    const [existing] = await scopedRead((tx) => tx.select().from(users).where(and(eq(users.id, id), eq(users.tenantId, tid))).limit(1));
     if (!existing) return reply.code(404).send({ schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"], detail: "User not found", status: "404" });
 
     // Soft-delete: set status to disabled (user can no longer authenticate)
