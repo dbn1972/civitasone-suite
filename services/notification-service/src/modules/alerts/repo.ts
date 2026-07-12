@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { notificationAlertRules, type AlertRuleInsert } from "./schema.js";
 import type { AlertRuleView } from "./domain.js";
 
@@ -14,11 +14,11 @@ function toView(r: typeof notificationAlertRules.$inferSelect): AlertRuleView {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findRulesByTenant(tenantId: string): Promise<AlertRuleView[]> {
-  return (await db.select().from(notificationAlertRules).where(eq(notificationAlertRules.tenantId, tenantId))).map(toView);
+  return (await scopedRead((tx) => tx.select().from(notificationAlertRules).where(eq(notificationAlertRules.tenantId, tenantId)))).map(toView);
 }
 
 export async function findRuleById(id: string): Promise<AlertRuleView | null> {
-  const rows = await db.select().from(notificationAlertRules).where(eq(notificationAlertRules.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(notificationAlertRules).where(eq(notificationAlertRules.id, id)).limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 

@@ -1,5 +1,5 @@
 import { eq, and, lte, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { notificationDeliveries, type DeliveryInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -11,13 +11,13 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export async function findByRecipient(
   tenantId: string, recipientId: string, limit = 50, offset = 0,
 ): Promise<typeof notificationDeliveries.$inferSelect[]> {
-  return db.select().from(notificationDeliveries)
+  return scopedRead((tx) => tx.select().from(notificationDeliveries)
     .where(and(
       eq(notificationDeliveries.tenantId, tenantId),
       eq(notificationDeliveries.recipientId, recipientId),
     ))
     .orderBy(desc(notificationDeliveries.createdAt))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 /**
@@ -28,34 +28,34 @@ export async function findByRecipient(
 export async function findDueRetries(
   now = new Date(), limit = 100,
 ): Promise<typeof notificationDeliveries.$inferSelect[]> {
-  return db.select().from(notificationDeliveries)
+  return scopedRead((tx) => tx.select().from(notificationDeliveries)
     .where(and(
       eq(notificationDeliveries.status, "queued"),
       lte(notificationDeliveries.nextRetryAt, now),
     ))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findByUser(tenantId: string, userId: string, limit = 50): Promise<typeof notificationDeliveries.$inferSelect[]> {
-  return db.select().from(notificationDeliveries)
+  return scopedRead((tx) => tx.select().from(notificationDeliveries)
     .where(and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.createdBy, userId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findByTenant(tenantId: string, limit = 50, offset = 0, actorId?: string): Promise<typeof notificationDeliveries.$inferSelect[]> {
   const conditions = actorId
     ? and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.createdBy, actorId))
     : eq(notificationDeliveries.tenantId, tenantId);
-  return db.select().from(notificationDeliveries)
+  return scopedRead((tx) => tx.select().from(notificationDeliveries)
     .where(conditions)
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 export async function findById(tenantId: string, id: string): Promise<typeof notificationDeliveries.$inferSelect | null> {
   // SEC P0-1: scope the read to the tenant so a delivery id from another tenant 404s
   // instead of leaking another tenant's notification (callers always know the tenant).
-  const rows = await db.select().from(notificationDeliveries)
-    .where(and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.id, id))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(notificationDeliveries)
+    .where(and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.id, id))).limit(1));
   return rows[0] ?? null;
 }
 

@@ -22,6 +22,21 @@ vi.mock("../src/shared/db.js", () => ({
     insert: vi.fn(),
     update: vi.fn(),
   },
+  // scopedRead wraps reads in the tenant tx; the mock passes a tx exposing the
+  // same select chain so RLS-scoped reads exercise the identical assertions.
+  scopedRead: (fn: (tx: unknown) => unknown) =>
+    fn({
+      select: () => ({
+        from: () => ({
+          where: (...args: unknown[]) => {
+            whereCalled = true;
+            capturedArgs = args;
+            return { limit: () => Promise.resolve([]) };
+          },
+          limit: () => Promise.resolve([{ tenantId: "tenant-B", id: "other-tenant-row" }]),
+        }),
+      }),
+    }),
 }));
 
 import { findByUser } from "../src/modules/deliveries/repo.js";

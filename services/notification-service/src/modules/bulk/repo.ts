@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { notificationCampaigns, notificationCampaignRecipients, type CampaignInsert } from "./schema.js";
 import type { CampaignView, CampaignRecipientView } from "./domain.js";
 
@@ -14,9 +14,9 @@ function toCampaignView(r: typeof notificationCampaigns.$inferSelect, stats?: { 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findCampaignById(id: string): Promise<CampaignView | null> {
-  const rows = await db.select().from(notificationCampaigns).where(eq(notificationCampaigns.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(notificationCampaigns).where(eq(notificationCampaigns.id, id)).limit(1));
   if (!rows[0]) return null;
-  const recipients = await db.select().from(notificationCampaignRecipients).where(eq(notificationCampaignRecipients.campaignId, id)).limit(500);
+  const recipients = await scopedRead((tx) => tx.select().from(notificationCampaignRecipients).where(eq(notificationCampaignRecipients.campaignId, id)).limit(500));
   const deliveredCount = recipients.filter((r) => r.status === "delivered" || r.status === "sent").length;
   return toCampaignView(rows[0], { recipientCount: recipients.length, deliveredCount });
 }

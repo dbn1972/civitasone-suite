@@ -1,16 +1,17 @@
 import { eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { billingSubscriptions, billingTrials, type BillingSubscriptionInsert, type BillingTrialInsert } from "./schema.js";
 import type { SubscriptionView } from "./domain.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findByTenant(tenantId: string): Promise<SubscriptionView | null> {
-  const rows = await db.select().from(billingSubscriptions).where(eq(billingSubscriptions.tenantId, tenantId)).limit(1);
-  if (!rows[0]) return null;
-  const trials = await db.select().from(billingTrials).where(eq(billingTrials.subscriptionId, rows[0].id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(billingSubscriptions).where(eq(billingSubscriptions.tenantId, tenantId)).limit(1));
+  const sub = rows[0];
+  if (!sub) return null;
+  const trials = await scopedRead((tx) => tx.select().from(billingTrials).where(eq(billingTrials.subscriptionId, sub.id)).limit(1));
   const view: SubscriptionView = {
-    id: rows[0].id, tenantId: rows[0].tenantId, planId: rows[0].planId, status: rows[0].status,
+    id: sub.id, tenantId: sub.tenantId, planId: sub.planId, status: sub.status,
   };
   if (trials[0]?.expiresAt) view.trialExpiresAt = trials[0].expiresAt.toISOString();
   return view;
