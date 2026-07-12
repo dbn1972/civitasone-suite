@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
   type PayrollRunRow, type PayrollRunInsert, type PayrollSlipRow,
@@ -8,29 +8,29 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findRunById(id: string, tenantId: string): Promise<PayrollRunRow | null> {
-  const rows = await db.select().from(payrollRuns)
+  const rows = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function findSlipById(id: string, tenantId: string): Promise<PayrollSlipRow | null> {
-  const rows = await db.select().from(payrollSlips)
+  const rows = await scopedRead((tx) => tx.select().from(payrollSlips)
     .where(and(eq(payrollSlips.id, id), eq(payrollSlips.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function listRunsByTenant(tenantId: string, limit = 50): Promise<PayrollRunRow[]> {
-  return db.select().from(payrollRuns)
+  return scopedRead((tx) => tx.select().from(payrollRuns)
     .where(eq(payrollRuns.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listStructuresByTenant(tenantId: string, limit = 50) {
-  return db.select().from(payrollStructures)
+  return scopedRead((tx) => tx.select().from(payrollStructures)
     .where(eq(payrollStructures.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertStructure(tx: Writer, row: typeof payrollStructures.$inferInsert): Promise<void> {
@@ -50,9 +50,9 @@ export async function insertSlip(tx: Writer, row: typeof payrollSlips.$inferInse
 }
 
 export async function listSlipsByTenant(tenantId: string, limit = 100): Promise<PayrollSlipRow[]> {
-  return db.select().from(payrollSlips)
+  return scopedRead((tx) => tx.select().from(payrollSlips)
     .where(eq(payrollSlips.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {
@@ -61,13 +61,13 @@ export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunR
 }
 
 export async function listComponentsByStructure(structureId: string, tenantId: string) {
-  return db.select().from(payrollComponents)
-    .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId)));
+  return scopedRead((tx) => tx.select().from(payrollComponents)
+    .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId))));
 }
 
 export async function listSlipsByRun(runId: string, tenantId: string): Promise<PayrollSlipRow[]> {
-  return db.select().from(payrollSlips)
-    .where(and(eq(payrollSlips.runId, runId), eq(payrollSlips.tenantId, tenantId)));
+  return scopedRead((tx) => tx.select().from(payrollSlips)
+    .where(and(eq(payrollSlips.runId, runId), eq(payrollSlips.tenantId, tenantId))));
 }
 
 /** M1: transaction-scoped slip read (for computing authoritative run totals). */
@@ -89,7 +89,7 @@ export async function markSlipsPaidForRun(tx: Writer, runId: string, actorId: st
 // ─── Arrears ──────────────────────────────────────────────────────────────────
 
 export async function listArrears(tenantId: string) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_arrears WHERE tenant_id=${tenantId}::uuid ORDER BY created_at DESC LIMIT 100`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_arrears WHERE tenant_id=${tenantId}::uuid ORDER BY created_at DESC LIMIT 100`));
 }
 
 export type ArrearInsert = {
@@ -109,7 +109,7 @@ export async function insertArrear(p: ArrearInsert) {
 // ─── Bonus ────────────────────────────────────────────────────────────────────
 
 export async function listBonus(tenantId: string, fy: string | null) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_bonus WHERE tenant_id=${tenantId}::uuid AND (${fy}::text IS NULL OR fy=${fy}) ORDER BY created_at DESC`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_bonus WHERE tenant_id=${tenantId}::uuid AND (${fy}::text IS NULL OR fy=${fy}) ORDER BY created_at DESC`));
 }
 
 export type BonusInsert = {
@@ -128,19 +128,19 @@ export async function insertBonus(p: BonusInsert) {
 // ─── Professional Tax ─────────────────────────────────────────────────────────
 
 export async function listProfessionalTax(tenantId: string) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_professional_tax WHERE tenant_id=${tenantId}::uuid AND is_active=true ORDER BY state_code,slab_from_minor`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_professional_tax WHERE tenant_id=${tenantId}::uuid AND is_active=true ORDER BY state_code,slab_from_minor`));
 }
 
 // ─── Labour Welfare Fund ──────────────────────────────────────────────────────
 
 export async function listLwf(tenantId: string) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_lwf WHERE tenant_id=${tenantId}::uuid ORDER BY state_code`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_lwf WHERE tenant_id=${tenantId}::uuid ORDER BY state_code`));
 }
 
 // ─── Reimbursements ───────────────────────────────────────────────────────────
 
 export async function listReimbursements(tenantId: string, employeeId: string | null, status: string | null) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_reimbursements WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) AND (${status}::text IS NULL OR status=${status}) ORDER BY created_at DESC LIMIT 100`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_reimbursements WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) AND (${status}::text IS NULL OR status=${status}) ORDER BY created_at DESC LIMIT 100`));
 }
 
 export type ReimbursementInsert = {
@@ -159,19 +159,19 @@ export async function insertReimbursement(p: ReimbursementInsert) {
 // ─── Salary Revisions ─────────────────────────────────────────────────────────
 
 export async function listSalaryRevisions(tenantId: string, employeeId: string | null) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_salary_revisions WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) ORDER BY effective_date DESC LIMIT 100`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_salary_revisions WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) ORDER BY effective_date DESC LIMIT 100`));
 }
 
 // ─── Payroll Register ─────────────────────────────────────────────────────────
 
 export async function listRegister(tenantId: string, period: string | null, runId: string | null) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND (${period}::text IS NULL OR period=${period}) AND (${runId}::uuid IS NULL OR run_id=${runId}::uuid) ORDER BY department_name`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND (${period}::text IS NULL OR period=${period}) AND (${runId}::uuid IS NULL OR run_id=${runId}::uuid) ORDER BY department_name`));
 }
 
 // ─── CTC Config ───────────────────────────────────────────────────────────────
 
 export async function listCtcConfig(tenantId: string) {
-  return db.execute(sql`SELECT * FROM payroll.payroll_ctc_config WHERE tenant_id=${tenantId}::uuid AND is_active=true ORDER BY component_code`);
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_ctc_config WHERE tenant_id=${tenantId}::uuid AND is_active=true ORDER BY component_code`));
 }
 
 // ─── Payroll Comparison ───────────────────────────────────────────────────────
@@ -179,6 +179,6 @@ export async function listCtcConfig(tenantId: string) {
 export type PeriodSummary = { gross: bigint; net: bigint; headcount: number };
 
 export async function getRegisterSummary(tenantId: string, period: string): Promise<PeriodSummary> {
-  const rows = await db.execute(sql`SELECT COALESCE(SUM(total_gross_minor),0)::bigint as gross,COALESCE(SUM(total_net_minor),0)::bigint as net,COALESCE(SUM(employee_count),0)::int as headcount FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND period=${period}`);
+  const rows = await scopedRead((tx) => tx.execute(sql`SELECT COALESCE(SUM(total_gross_minor),0)::bigint as gross,COALESCE(SUM(total_net_minor),0)::bigint as net,COALESCE(SUM(employee_count),0)::int as headcount FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND period=${period}`));
   return (rows as unknown[])[0] as PeriodSummary;
 }

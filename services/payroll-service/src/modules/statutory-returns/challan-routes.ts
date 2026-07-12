@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { payrollTdsChallan, payrollTds, payrollTdsNonSalary } from "../statutory/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 
@@ -17,11 +17,11 @@ const isPeriod = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\
  * Returns paise.
  */
 async function tdsDeductedMinor(tenantId: string, period: string): Promise<bigint> {
-  const runs = await db.select().from(payrollRuns)
-    .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period)));
+  const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
+    .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period))));
   const valid = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
-  const rows = await db.select().from(payrollTds)
-    .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.period, period)));
+  const rows = await scopedRead((tx) => tx.select().from(payrollTds)
+    .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.period, period))));
   let sum = 0n;
   for (const t of rows) {
     if (valid.size > 0 && !valid.has(t.runId)) continue;
@@ -32,12 +32,12 @@ async function tdsDeductedMinor(tenantId: string, period: string): Promise<bigin
 
 /** Sum of TDS DEPOSITED via challans for a tenant+period+formType. Returns paise. */
 async function tdsDepositedMinor(tenantId: string, period: string, formType: string): Promise<bigint> {
-  const rows = await db.select().from(payrollTdsChallan)
+  const rows = await scopedRead((tx) => tx.select().from(payrollTdsChallan)
     .where(and(
       eq(payrollTdsChallan.tenantId, tenantId),
       eq(payrollTdsChallan.period, period),
       eq(payrollTdsChallan.formType, formType),
-    ));
+    )));
   return rows.reduce((s, c) => s + BigInt(c.tdsAmountMinor), 0n);
 }
 
@@ -48,8 +48,8 @@ async function tdsDepositedMinor(tenantId: string, period: string, formType: str
  * gate must block it (pending_finalisation) rather than green-light it as matched.
  */
 async function hasNonFinalRun(tenantId: string, period: string): Promise<boolean> {
-  const runs = await db.select().from(payrollRuns)
-    .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period)));
+  const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
+    .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period))));
   return runs.some((r) => r.status === "draft" || r.status === "processing" || r.status === "failed");
 }
 
@@ -70,12 +70,12 @@ export async function reconcilePeriod(tenantId: string, period: string, formType
   const deducted = await tdsDeductedMinor(tenantId, period);
   const deposited = await tdsDepositedMinor(tenantId, period, formType);
   const pendingFinalisation = await hasNonFinalRun(tenantId, period);
-  const challans = await db.select().from(payrollTdsChallan)
+  const challans = await scopedRead((tx) => tx.select().from(payrollTdsChallan)
     .where(and(
       eq(payrollTdsChallan.tenantId, tenantId),
       eq(payrollTdsChallan.period, period),
       eq(payrollTdsChallan.formType, formType),
-    ));
+    )));
   const variance = deposited - deducted;
   // H2: a period with a non-finalised run (draft/processing/failed) has
   // deducted==0 only because TDS is not approved yet — that is NOT "no
@@ -111,8 +111,8 @@ export async function reconcilePeriod(tenantId: string, period: string, formType
 
 /** Sum of NON-SALARY TDS deducted (payroll_tds_nonsalary) for a period. Paise. */
 async function nonSalaryDeductedMinor(tenantId: string, period: string): Promise<bigint> {
-  const rows = await db.select().from(payrollTdsNonSalary)
-    .where(and(eq(payrollTdsNonSalary.tenantId, tenantId), eq(payrollTdsNonSalary.period, period)));
+  const rows = await scopedRead((tx) => tx.select().from(payrollTdsNonSalary)
+    .where(and(eq(payrollTdsNonSalary.tenantId, tenantId), eq(payrollTdsNonSalary.period, period))));
   return rows.reduce((s, r) => s + BigInt(r.tdsAmountMinor), 0n);
 }
 
@@ -121,12 +121,12 @@ export async function reconcileNonSalaryPeriod(tenantId: string, period: string)
   const deducted = await nonSalaryDeductedMinor(tenantId, period);
   const deposited = await tdsDepositedMinor(tenantId, period, "26Q");
   const pendingFinalisation = await hasNonFinalRun(tenantId, period);
-  const challans = await db.select().from(payrollTdsChallan)
+  const challans = await scopedRead((tx) => tx.select().from(payrollTdsChallan)
     .where(and(
       eq(payrollTdsChallan.tenantId, tenantId),
       eq(payrollTdsChallan.period, period),
       eq(payrollTdsChallan.formType, "26Q"),
-    ));
+    )));
   const variance = deposited - deducted;
   let status: Reconciliation["status"];
   let matched: boolean;
@@ -223,12 +223,12 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
     const { period, formType } = req.query as { period?: string; formType?: string };
     if (!isPeriod(period)) throw new HttpError(400, "VALIDATION_FAILED", "period required (YYYY-MM)");
     const ft = formType === "26Q" ? "26Q" : "24Q";
-    const rows = await db.select().from(payrollTdsChallan)
+    const rows = await scopedRead((tx) => tx.select().from(payrollTdsChallan)
       .where(and(
         eq(payrollTdsChallan.tenantId, ctx.tenantId),
         eq(payrollTdsChallan.period, period),
         eq(payrollTdsChallan.formType, ft),
-      ));
+      )));
     return reply.send({
       period, formType: ft, count: rows.length,
       challans: rows.map((c) => ({

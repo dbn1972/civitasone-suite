@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { dscConfig, type DscConfigRow, type DscConfigInsert } from "./schema.js";
 
@@ -9,9 +9,9 @@ export async function findByTenantId(tenantId: string): Promise<DscConfigRow | n
   return cache.getOrLoad<DscConfigRow | null>(
     cache.makeKey(tenantId, CACHE_RESOURCE, tenantId),
     async () => {
-      const rows = await db.select().from(dscConfig)
+      const rows = await scopedRead((tx) => tx.select().from(dscConfig)
         .where(eq(dscConfig.tenantId, tenantId))
-        .limit(1);
+        .limit(1));
       return rows[0] ?? null;
     },
   ) as Promise<DscConfigRow | null>;

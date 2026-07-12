@@ -1,20 +1,20 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { payrollLoans, payrollLoanRepayments, type LoanRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findLoanById(id: string, tenantId: string): Promise<LoanRow | null> {
-  const rows = await db.select().from(payrollLoans)
+  const rows = await scopedRead((tx) => tx.select().from(payrollLoans)
     .where(and(eq(payrollLoans.id, id), eq(payrollLoans.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function findLoansByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LoanRow[]> {
-  return db.select().from(payrollLoans)
+  return scopedRead((tx) => tx.select().from(payrollLoans)
     .where(and(eq(payrollLoans.tenantId, tenantId), eq(payrollLoans.employeeId, employeeId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertLoan(tx: Writer, row: typeof payrollLoans.$inferInsert): Promise<void> {

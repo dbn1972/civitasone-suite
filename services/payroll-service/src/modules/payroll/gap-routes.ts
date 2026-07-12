@@ -7,7 +7,7 @@ import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -21,19 +21,19 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     // Verify run exists
-    const runs = (await db.execute(sql`
+    const runs = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, month, status FROM payroll.payroll_runs
       WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid LIMIT 1
-    `)) as unknown as Array<{ id: string; month: string; status: string }>;
+    `))) as unknown as Array<{ id: string; month: string; status: string }>;
     if (!runs[0]) throw new HttpError(404, "NOT_FOUND", "payroll run not found");
     const run = runs[0];
 
     // Pull existing slips for this run as simulated data
-    const slips = (await db.execute(sql`
+    const slips = (await scopedRead((tx) => tx.execute(sql`
       SELECT employee_id, employee_no, gross_minor, total_deductions_minor, net_pay_minor, tds_minor
       FROM payroll.payroll_slips
       WHERE run_id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
-    `)) as unknown as Array<{
+    `))) as unknown as Array<{
       employee_id: string; employee_no: string; gross_minor: string;
       total_deductions_minor: string; net_pay_minor: string; tds_minor: string;
     }>;
@@ -41,12 +41,12 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // Pull previous month slips for variance comparison
     const [yr, mo] = run.month.split("-").map(Number) as [number, number];
     const prevMonth = mo === 1 ? `${yr - 1}-12` : `${yr}-${String(mo - 1).padStart(2, "0")}`;
-    const prevSlips = (await db.execute(sql`
+    const prevSlips = (await scopedRead((tx) => tx.execute(sql`
       SELECT s.employee_id, s.net_pay_minor
       FROM payroll.payroll_slips s
       JOIN payroll.payroll_runs r ON r.id = s.run_id
       WHERE r.month = ${prevMonth} AND s.tenant_id = ${ctx.tenantId}::uuid
-    `)) as unknown as Array<{ employee_id: string; net_pay_minor: string }>;
+    `))) as unknown as Array<{ employee_id: string; net_pay_minor: string }>;
     const prevMap = new Map(prevSlips.map((s) => [s.employee_id, BigInt(s.net_pay_minor)]));
 
     const threshold = 20; // % variance flag threshold
@@ -124,14 +124,14 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, employee_id, component, effective_from::text AS effective_from,
         old_value_minor, new_value_minor, arrears_minor, affected_periods, reason, status, created_at
       FROM payroll.salary_corrections
       WHERE tenant_id = ${ctx.tenantId}::uuid
         ${q.employeeId ? sql`AND employee_id = ${q.employeeId}::uuid` : sql``}
       ORDER BY created_at DESC LIMIT 100
-    `)) as unknown as Array<Record<string, unknown>>;
+    `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });
 
@@ -157,11 +157,11 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/pay-groups", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, name, frequency, pay_day_of_month, timezone, status, created_at
       FROM payroll.pay_groups WHERE tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
       ORDER BY name LIMIT 100
-    `)) as unknown as Array<Record<string, unknown>>;
+    `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });
 
@@ -170,10 +170,10 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.query);
     const startYear = parseInt(q.fy.slice(0, 4), 10);
-    const groups = (await db.execute(sql`
+    const groups = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, name, frequency, pay_day_of_month FROM payroll.pay_groups
       WHERE tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
-    `)) as unknown as Array<{ id: string; name: string; frequency: string; pay_day_of_month: number }>;
+    `))) as unknown as Array<{ id: string; name: string; frequency: string; pay_day_of_month: number }>;
 
     // Generate pay calendar: Apr startYear to Mar startYear+1
     const calendar: Array<{ group: string; month: string; payDate: string }> = [];
@@ -235,13 +235,13 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/flex-benefits/my-elections", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT e.id, e.plan_id, e.fy, e.elections, e.total_elected_minor, e.status, p.name AS plan_name
       FROM payroll.flex_benefit_elections e
       JOIN payroll.flex_benefit_plans p ON p.id = e.plan_id
       WHERE e.tenant_id = ${ctx.tenantId}::uuid AND e.employee_id = ${ctx.actorId}::uuid
       ORDER BY e.fy DESC LIMIT 10
-    `)) as unknown as Array<Record<string, unknown>>;
+    `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });
 
@@ -268,7 +268,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.query);
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT cr.employee_group, cr.cost_center_id, cr.split_pct,
         COALESCE(SUM(s.gross_minor * cr.split_pct / 100), 0)::bigint AS allocated_minor
       FROM payroll.costing_rules cr
@@ -277,7 +277,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       WHERE cr.tenant_id = ${ctx.tenantId}::uuid AND cr.status = 'active'
       GROUP BY cr.employee_group, cr.cost_center_id, cr.split_pct
       ORDER BY cr.employee_group
-    `)) as unknown as Array<Record<string, unknown>>;
+    `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ period: q.period, data: rows });
   });
 
@@ -292,12 +292,12 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
     const fy = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
 
-    const decRows = (await db.execute(sql`
+    const decRows = (await scopedRead((tx) => tx.execute(sql`
       SELECT section_80c, section_80d, other_deductions, rent_paid_minor, regime
       FROM payroll.payroll_tax_declarations
       WHERE tenant_id = ${ctx.tenantId}::uuid AND employee_id = ${q.employeeId}::uuid AND fy = ${fy}
       ORDER BY created_at DESC LIMIT 1
-    `)) as unknown as Array<{ section_80c: string; section_80d: string; other_deductions: string; rent_paid_minor: string; regime: string }>;
+    `))) as unknown as Array<{ section_80c: string; section_80d: string; other_deductions: string; rent_paid_minor: string; regime: string }>;
     const dec = decRows[0];
 
     const cap80c = 15000000n; // ₹1.5L in paise
@@ -370,11 +370,11 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/off-cycle", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, run_type, period, description, total_amount_minor, total_tax_minor, total_net_minor, status, created_at
       FROM payroll.off_cycle_runs WHERE tenant_id = ${ctx.tenantId}::uuid
       ORDER BY created_at DESC LIMIT 50
-    `)) as unknown as Array<Record<string, unknown>>;
+    `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });
 
@@ -384,10 +384,10 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     // Compute flat 30% tax on off-cycle amounts (simplified; production uses projected annual)
-    const items = (await db.execute(sql`
+    const items = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, employee_id, amount_minor FROM payroll.off_cycle_items
       WHERE off_cycle_run_id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
-    `)) as unknown as Array<{ id: string; employee_id: string; amount_minor: string }>;
+    `))) as unknown as Array<{ id: string; employee_id: string; amount_minor: string }>;
     if (items.length === 0) throw new HttpError(404, "NOT_FOUND", "off-cycle run not found or has no items");
 
     let totalTax = 0n; let totalNet = 0n;
@@ -442,16 +442,16 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/statutory/state-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const pt = (await db.execute(sql`
+    const pt = (await scopedRead((tx) => tx.execute(sql`
       SELECT state_code, slab_from_minor, slab_to_minor, pt_amount_minor
       FROM payroll.payroll_professional_tax WHERE tenant_id = ${ctx.tenantId}::uuid AND is_active = true
       ORDER BY state_code, slab_from_minor
-    `)) as unknown as Array<Record<string, unknown>>;
-    const lwf = (await db.execute(sql`
+    `))) as unknown as Array<Record<string, unknown>>;
+    const lwf = (await scopedRead((tx) => tx.execute(sql`
       SELECT state_code, employee_contrib_minor, employer_contrib_minor, frequency
       FROM payroll.payroll_lwf WHERE tenant_id = ${ctx.tenantId}::uuid
       ORDER BY state_code
-    `)) as unknown as Array<Record<string, unknown>>;
+    `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ ptSlabs: pt, lwfConfig: lwf });
   });
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { payrollPf } from "./schema.js";
 import { payrollSlips } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
@@ -29,8 +29,8 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Fetch PF records for the given period
-    const pfRecords = await db.select().from(payrollPf)
-      .where(and(eq(payrollPf.tenantId, ctx.tenantId), eq(payrollPf.period, month)));
+    const pfRecords = await scopedRead((tx) => tx.select().from(payrollPf)
+      .where(and(eq(payrollPf.tenantId, ctx.tenantId), eq(payrollPf.period, month))));
 
     if (pfRecords.length === 0) {
       throw new HttpError(404, "NOT_FOUND", `No PF records found for period ${month}`);
@@ -42,9 +42,9 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
 
     const lines: string[] = [];
     for (const pf of pfRecords) {
-      const slipRows = await db.select().from(payrollSlips)
+      const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
         .where(and(eq(payrollSlips.id, pf.slipId), eq(payrollSlips.tenantId, ctx.tenantId)))
-        .limit(1);
+        .limit(1));
       const slip = slipRows[0];
       const emp = master.get(pf.employeeId);
 

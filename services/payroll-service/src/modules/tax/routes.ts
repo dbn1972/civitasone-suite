@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
@@ -77,16 +77,16 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     for (const month of months) {
       // Find runs for this month
-      const runs = await db.select().from(payrollRuns)
-        .where(and(eq(payrollRuns.tenantId, ctx.tenantId), eq(payrollRuns.month, month)));
+      const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
+        .where(and(eq(payrollRuns.tenantId, ctx.tenantId), eq(payrollRuns.month, month))));
 
       for (const run of runs) {
-        const slips = await db.select().from(payrollSlips)
+        const slips = await scopedRead((tx) => tx.select().from(payrollSlips)
           .where(and(
             eq(payrollSlips.runId, run.id),
             eq(payrollSlips.employeeId, employeeId),
             eq(payrollSlips.tenantId, ctx.tenantId),
-          ));
+          )));
         for (const slip of slips) {
           annualGross += Number(slip.grossMinor) / 100;
           annualBasic += Number(slip.basicMinor) / 100;
@@ -98,13 +98,13 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     // Fetch declarations for exemptions under old regime
     let exemptions = 0;
     if (selectedRegime === "old") {
-      const decRows = await db.select().from(taxDeclarations)
+      const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
         .where(and(
           eq(taxDeclarations.tenantId, ctx.tenantId),
           eq(taxDeclarations.employeeId, employeeId),
           eq(taxDeclarations.fy, fy),
         ))
-        .limit(1);
+        .limit(1));
       const dec = decRows[0] ?? null;
       if (dec) {
         const s80c = Math.min(Number(dec.section80c) / 100, 150000); // 80C cap ₹1.5L
@@ -226,13 +226,13 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required");
     parseFy(fy);
 
-    const rows = await db.select().from(taxDeclarations)
+    const rows = await scopedRead((tx) => tx.select().from(taxDeclarations)
       .where(and(
         eq(taxDeclarations.tenantId, ctx.tenantId),
         eq(taxDeclarations.employeeId, employeeId),
         eq(taxDeclarations.fy, fy),
       ))
-      .limit(1);
+      .limit(1));
 
     const dec = rows[0] ?? null;
     if (!dec) return reply.send(null);
@@ -263,7 +263,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CEILING_ROLES);
 
-    const rows = await db.select().from(exemptionCeilings);
+    const rows = await scopedRead((tx) => tx.select().from(exemptionCeilings));
 
     const data = rows.map((row) => ({
       id: row.id,
