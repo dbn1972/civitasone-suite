@@ -1,5 +1,5 @@
 import { eq, desc, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { instances, type InstanceRow, type InstanceInsert, type InstanceView } from "./schema.js";
 
 export function toView(r: InstanceRow): InstanceView {
@@ -17,7 +17,7 @@ export function toView(r: InstanceRow): InstanceView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<InstanceView | null> {
-  const rows = await db.select().from(instances).where(eq(instances.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(instances).where(eq(instances.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
@@ -44,17 +44,17 @@ export async function lockByIdTx(tx: Writer, id: string): Promise<InstanceRow | 
 
 /** Returns the full row including createdBy for segregation-of-duties checks. */
 export async function findByIdFull(id: string, tenantId: string): Promise<InstanceRow | null> {
-  const rows = await db.select().from(instances).where(eq(instances.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(instances).where(eq(instances.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return row;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<InstanceView[]> {
-  const rows = await db.select().from(instances)
+  const rows = await scopedRead((tx) => tx.select().from(instances)
     .where(eq(instances.tenantId, tenantId))
     .orderBy(desc(instances.updatedAt))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
   return rows.map(toView);
 }
 

@@ -1,5 +1,5 @@
 import { and, eq, sql, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { delegations, type DelegationRow, type DelegationView } from "./schema.js";
 
 export function toView(r: DelegationRow): DelegationView {
@@ -37,20 +37,20 @@ export async function create(input: {
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<{ rows: DelegationView[]; total: number }> {
-  const rows = await db.select().from(delegations)
+  const rows = await scopedRead((tx) => tx.select().from(delegations)
     .where(eq(delegations.tenantId, tenantId))
     .orderBy(desc(delegations.createdAt))
     .limit(limit)
-    .offset(offset);
-  const totalRes = await db.select({ n: sql<number>`count(*)::int` }).from(delegations)
-    .where(eq(delegations.tenantId, tenantId));
+    .offset(offset));
+  const totalRes = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(delegations)
+    .where(eq(delegations.tenantId, tenantId)));
   return { rows: rows.map(toView), total: totalRes[0]?.n ?? 0 };
 }
 
 export async function findById(id: string, tenantId: string): Promise<DelegationView | null> {
-  const rows = await db.select().from(delegations)
+  const rows = await scopedRead((tx) => tx.select().from(delegations)
     .where(and(eq(delegations.id, id), eq(delegations.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -73,13 +73,13 @@ export async function activeForDelegate(
   delegateId: string,
   onDate: string,
 ): Promise<DelegationView[]> {
-  const rows = await db.select().from(delegations)
+  const rows = await scopedRead((tx) => tx.select().from(delegations)
     .where(and(
       eq(delegations.tenantId, tenantId),
       eq(delegations.delegateId, delegateId),
       eq(delegations.isActive, true),
       sql`${delegations.fromDate} <= ${onDate}`,
       sql`(${delegations.toDate} IS NULL OR ${delegations.toDate} >= ${onDate})`,
-    ));
+    )));
   return rows.map(toView);
 }

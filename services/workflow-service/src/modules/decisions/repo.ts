@@ -1,5 +1,5 @@
 import { eq, and, ne, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { decisionTables, type DecisionTableInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "select" | "insert" | "update">;
@@ -10,13 +10,13 @@ export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 
 /** Active version of a decision table by code. */
 export async function findByCode(tenantId: string, code: string) {
-  const rows = await db.select().from(decisionTables)
+  const rows = await scopedRead((tx) => tx.select().from(decisionTables)
     .where(and(
       eq(decisionTables.tenantId, tenantId),
       eq(decisionTables.code, code),
       eq(decisionTables.status, "active"),
     ))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -34,19 +34,19 @@ export async function findByCodeTx(tx: Writer, tenantId: string, code: string) {
 
 /** Find a decision table by id + tenant. */
 export async function findById(id: string, tenantId: string) {
-  const rows = await db.select().from(decisionTables)
+  const rows = await scopedRead((tx) => tx.select().from(decisionTables)
     .where(and(eq(decisionTables.id, id), eq(decisionTables.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 /** List decision tables for a tenant (paginated). */
 export async function listByTenant(tenantId: string, limit = 50, offset = 0) {
-  return db.select().from(decisionTables)
+  return scopedRead((tx) => tx.select().from(decisionTables)
     .where(eq(decisionTables.tenantId, tenantId))
     .orderBy(desc(decisionTables.createdAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ import { ZodError, z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { roleMembers } from "../assignment/resolver.js";
 import { and, eq } from "drizzle-orm";
 import * as dlq from "../dlq/repo.js";
@@ -129,11 +129,11 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const q = z.object({ roleRef: z.string().max(128).optional() }).parse(req.query);
-    const rows = await db.select().from(roleMembers)
+    const rows = await scopedRead((tx) => tx.select().from(roleMembers)
       .where(and(
         eq(roleMembers.tenantId, ctx.tenantId),
         ...(q.roleRef ? [eq(roleMembers.roleRef, q.roleRef)] : []),
-      ));
+      )));
     return reply.send({ data: rows });
   });
 

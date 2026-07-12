@@ -1,5 +1,5 @@
 import { eq, and, lte, isNull, or, gte, asc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { evaluateCondition } from "../../shared/condition.js";
 import { responsibilityMatrix, substitutionRules } from "./schema.js";
 
@@ -42,12 +42,12 @@ export async function listMatrixRules(
   if (roleRef) {
     conditions.push(eq(responsibilityMatrix.roleRef, roleRef));
   }
-  return (db as typeof db)
+  return scopedRead((tx) => (tx as typeof db)
     .select()
     .from(responsibilityMatrix)
     .where(and(...conditions))
     .orderBy(asc(responsibilityMatrix.priority))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function deactivateMatrixRule(
@@ -121,11 +121,11 @@ export async function insertSubstitution(
 }
 
 export async function listSubstitutions(tenantId: string, limit = 200) {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(substitutionRules)
     .where(and(eq(substitutionRules.tenantId, tenantId), eq(substitutionRules.active, true)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function deactivateSubstitution(

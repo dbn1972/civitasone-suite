@@ -1,5 +1,5 @@
 import { eq, and, lte, isNotNull } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   messageSubscriptions,
   signalSubscriptions,
@@ -24,14 +24,14 @@ export async function findActiveMessageSubscription(
   messageName: string,
   correlationKey: string,
 ): Promise<MessageSubscriptionRow | null> {
-  const rows = await db.select().from(messageSubscriptions)
+  const rows = await scopedRead((tx) => tx.select().from(messageSubscriptions)
     .where(and(
       eq(messageSubscriptions.tenantId, tenantId),
       eq(messageSubscriptions.messageName, messageName),
       eq(messageSubscriptions.correlationKey, correlationKey),
       eq(messageSubscriptions.status, "active"),
     ))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -50,12 +50,12 @@ export async function findActiveSignalSubscriptions(
   tenantId: string,
   signalName: string,
 ): Promise<SignalSubscriptionRow[]> {
-  return db.select().from(signalSubscriptions)
+  return scopedRead((tx) => tx.select().from(signalSubscriptions)
     .where(and(
       eq(signalSubscriptions.tenantId, tenantId),
       eq(signalSubscriptions.signalName, signalName),
       eq(signalSubscriptions.status, "active"),
-    ));
+    )));
 }
 
 /** Transactional read of a signal subscription by id (for idempotency check in consumer). */
@@ -105,10 +105,10 @@ export async function findSubscriptionsByInstance(instanceId: string): Promise<{
   messages: MessageSubscriptionRow[];
   signals: SignalSubscriptionRow[];
 }> {
-  const messages = await db.select().from(messageSubscriptions)
-    .where(eq(messageSubscriptions.instanceId, instanceId));
-  const signals = await db.select().from(signalSubscriptions)
-    .where(eq(signalSubscriptions.instanceId, instanceId));
+  const messages = await scopedRead((tx) => tx.select().from(messageSubscriptions)
+    .where(eq(messageSubscriptions.instanceId, instanceId)));
+  const signals = await scopedRead((tx) => tx.select().from(signalSubscriptions)
+    .where(eq(signalSubscriptions.instanceId, instanceId)));
   return { messages, signals };
 }
 
@@ -130,8 +130,8 @@ export async function listSubscriptions(
 ): Promise<MessageSubscriptionRow[]> {
   const conds = [eq(messageSubscriptions.tenantId, tenantId)];
   if (status) conds.push(eq(messageSubscriptions.status, status));
-  return db.select().from(messageSubscriptions)
+  return scopedRead((tx) => tx.select().from(messageSubscriptions)
     .where(and(...conds))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
