@@ -1,3 +1,8 @@
+// Shared structured-log/report redaction sanitizer (Req 15.4, 3.5, 4.4, 13.1, 13.4) —
+// used by the Provisioning_Actuator, Read_Router, connection-budget verification
+// check, and Drill_Scheduler before emitting logs/persisting Drill_Report artifacts.
+export { redactLogPayload, redactReportPayload, type RedactionMode } from "./redaction.js";
+
 type AppLike = {
   get: (path: string, handler: (...args: unknown[]) => unknown) => void;
   addHook: (name: string, handler: (...args: unknown[]) => unknown) => void;

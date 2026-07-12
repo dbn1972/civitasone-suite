@@ -14,10 +14,13 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.4.0"
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.9"
   }
 }

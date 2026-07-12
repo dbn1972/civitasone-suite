@@ -32,6 +32,19 @@ module "sqs" {
   alarm_sns_topic_arn = var.alarm_sns_topic_arn
 }
 
+# G9 / SC-H2: single RDS read replica, streaming from the primary, so read
+# traffic no longer depends entirely on the primary instance. The endpoint
+# is exported for population into DATABASE_REPLICA_URL (see
+# docs/architecture/CONNECTION-BUDGET.md); packages/db's dbForRead() falls
+# back to the primary connection whenever DATABASE_REPLICA_URL is unset, so
+# environments that haven't set var.primary_db_identifier yet are unaffected.
+module "rds_replica" {
+  source                = "../../modules/rds-replica"
+  environment           = var.environment
+  primary_db_identifier = var.primary_db_identifier
+  instance_class        = var.replica_instance_class
+}
+
 locals {
   # Service command topics — one queue per topic. Names are already in the
   # dash form the module expects (it also converts any dots to dashes).
@@ -79,6 +92,20 @@ locals {
 
 variable "aws_region" { default = "ap-south-1" }
 variable "environment" { default = "production" }
+
+# G9 / SC-H2: identifier of the existing primary RDS instance to replicate
+# from. No default — the primary RDS module is not yet defined in this
+# environment (see the commented-out `module "rds"` placeholder above), so
+# this must be supplied via tfvars once the primary exists.
+variable "primary_db_identifier" {
+  type    = string
+  default = ""
+}
+
+variable "replica_instance_class" {
+  type    = string
+  default = "db.t3.medium"
+}
 
 # No SNS topic module is wired into this env yet, so this defaults to "" which
 # the sqs module treats as "create alarms with no notification actions".
