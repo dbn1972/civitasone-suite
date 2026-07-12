@@ -31,9 +31,21 @@ export const EVENTS = {
  * without ever reading another service's database.
  */
 export const INBOUND = {
+  // finance / grants / procurement (money facts)
   financePaymentReleased: "finance.payment.released",
   grantReleaseProcessed: "grants.release.processed",
   procurementPoApproved: "procurement.po.approved",
+  // governance (meeting-service) — attendance / voting / completion facts
+  meetingAttendanceMarked: "meeting.attendance.marked",
+  meetingVoteConcluded: "meeting.vote.concluded",
+  meetingCompleted: "meeting.meeting.completed",
+  // judiciary (court-service) — case lifecycle + hearing facts
+  courtCaseRegistered: "court.case.registered",
+  courtCaseStatusChanged: "court.case.status_changed",
+  courtHearingScheduled: "court.hearing.scheduled",
+  // premises (visitor-service) — footfall + overstay facts
+  visitorCheckedIn: "visitor.checked_in",
+  visitorOverstayAlerted: "visitor.overstay.alerted",
 } as const;
 
 /** Audit sink consumed by audit-service. */

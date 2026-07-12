@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
+import { runWithTenant } from "@civitasone/db";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerDashboardsConsumers } from "./modules/dashboards/consumer.js";
@@ -12,6 +13,22 @@ import { registerExportConsumer } from "./modules/exports/consumer.js";
 import { startScheduledExportCron } from "./modules/exports/scheduled-cron.js";
 import { startScheduledQuerySweeper } from "./modules/queries/sweeper.js";
 const log = pino({ name: "analytics-worker" });
+// RLS write-path enforcement: analytics.* tables (incl. fact_events) are
+// FORCE ROW LEVEL SECURITY, so under the NOBYPASSRLS analytics_svc role a
+// consumer can only read/write its tenant's rows when app.tenant_id is set.
+// Wrap every consumer handler so the message's tenant context is active for
+// its duration - getCurrentTenantId() then returns msg.tenantId and
+// wrapWithTenantGuc sets the GUC on the handler's db.transaction().
+// Single-point wrap mirrors visitor-/meeting-service workers.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 registerDashboardsConsumers(queue);
 registerQueriesConsumers(queue);
 registerMetricsConsumers(queue);
