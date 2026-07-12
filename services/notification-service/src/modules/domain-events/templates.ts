@@ -171,6 +171,61 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
       body: "A financial transaction has been flagged as anomalous based on historical spending patterns. Please review the transaction for potential errors or irregularities.\n\nRegards,\nML Intelligence System",
     },
   },
+  {
+    eventType: "visitor.security_incident.created",
+    push: {
+      title: "Security Incident Raised",
+      body: "A {{severity}} security incident ({{incidentType}}) has been raised at location {{locationId}}. Please respond.",
+    },
+    email: {
+      title: "Security Incident \u2014 {{incidentType}} ({{severity}})",
+      body: "A {{severity}} priority security incident of type {{incidentType}} has been raised at location {{locationId}}.\n\nReference: {{reference}}\n\nPlease investigate and take appropriate action.\n\nRegards,\nVisitor Management Security",
+    },
+  },
+  {
+    eventType: "visitor.scan.blacklist_match",
+    push: {
+      title: "Blacklist Match at Scan",
+      body: "A scanned identity document ({{idDocumentType}}) matched the blacklist. Session {{sessionId}}. Verify at the gate.",
+    },
+    email: {
+      title: "Blacklist Match on Document Scan",
+      body: "A scanned identity document of type {{idDocumentType}} matched the security blacklist during check-in.\n\nScan session: {{sessionId}}\n\nPlease verify the visitor at the gate before granting entry.\n\nRegards,\nVisitor Management Security",
+    },
+  },
+  {
+    eventType: "visitor.tailgating.detected",
+    push: {
+      title: "Tailgating Detected",
+      body: "Tailgating at gate {{gateId}} (pass {{passId}}): {{passageCount}} passages, tolerance {{tolerance}}. Please check.",
+    },
+    email: {
+      title: "Tailgating Detected \u2014 Gate {{gateId}}",
+      body: "A tailgating event was detected at gate {{gateId}} for pass {{passId}}.\n\nPassage count: {{passageCount}} (tolerance {{tolerance}})\n\nPlease review the gate and confirm no unauthorised entry occurred.\n\nRegards,\nVisitor Management Security",
+    },
+  },
+  {
+    eventType: "visitor.anti_passback.violation",
+    push: {
+      title: "Anti-Passback Violation",
+      body: "Anti-passback violation at gate {{gateId}} (pass {{passId}}): direction {{direction}}, last {{lastKnownDirection}}.",
+    },
+    email: {
+      title: "Anti-Passback Violation \u2014 Gate {{gateId}}",
+      body: "An anti-passback violation was detected at gate {{gateId}} for pass {{passId}}.\n\nRequested direction: {{direction}}\nLast known direction: {{lastKnownDirection}}\n\nPlease verify the pass holder's movement.\n\nRegards,\nVisitor Management Security",
+    },
+  },
+  {
+    eventType: "visitor.emergency.unlock.triggered",
+    push: {
+      title: "Emergency Unlock Triggered",
+      body: "Emergency unlock triggered at location {{locationId}} ({{reason}}). {{deviceCount}} devices released.",
+    },
+    email: {
+      title: "Emergency Unlock Triggered \u2014 Location {{locationId}}",
+      body: "An emergency unlock was triggered at location {{locationId}}.\n\nReason: {{reason}}\nDevices released: {{deviceCount}}\nTriggered at: {{triggeredAt}}\n\nPlease confirm the situation and secure the location once safe.\n\nRegards,\nVisitor Management Security",
+    },
+  },
 ];
 
 const templateMap = new Map<string, NotificationTemplate>();

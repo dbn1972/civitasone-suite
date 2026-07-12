@@ -120,6 +120,55 @@ type AuditParaIssuedPayload = {
   dueDate?: string;
 };
 
+// ─── Visitor security/safety event payloads (role-recipient) ──────────────
+
+/**
+ * Desk/role recipient for visitor security alerts. The delivery pipeline resolves
+ * this against the tenant taken from the message envelope (see enqueue below), so
+ * the alert reaches the tenant's security control room rather than any per-person
+ * id. This mirrors the recipient convention used by visitor-service's already-
+ * notifying watchlist/capacity alerts (recipient: "security_control_room").
+ */
+const SECURITY_DESK = "security_control_room";
+
+type VisitorSecurityIncidentPayload = {
+  incidentType?: string;
+  type?: string;
+  severity?: string;
+  locationId?: string;
+  passId?: string;
+  visitRequestId?: string;
+};
+
+type VisitorScanBlacklistPayload = {
+  sessionId?: string;
+  ocrResultId?: string;
+  idDocumentType?: string;
+};
+
+type VisitorTailgatingPayload = {
+  passId?: string;
+  gateId?: string;
+  passageCount?: number;
+  tolerance?: number;
+  eventTimestamp?: string;
+};
+
+type VisitorAntiPassbackPayload = {
+  passId?: string;
+  gateId?: string;
+  direction?: string;
+  lastKnownDirection?: string;
+  eventTimestamp?: string;
+};
+
+type VisitorEmergencyUnlockPayload = {
+  locationId?: string;
+  reason?: string;
+  deviceCount?: number;
+  triggeredAt?: string;
+};
+
 // ─── Recipient resolution ────────────────────────────────────────────────────
 
 type ResolvedNotification = {
@@ -273,6 +322,74 @@ function resolveRecipients(eventType: string, payload: Record<string, unknown>):
           departmentName: p.departmentName ?? "",
           departmentHeadName: p.departmentHeadName ?? "",
           dueDate: p.dueDate ?? "",
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.visitorSecurityIncidentCreated: {
+      const p = payload as VisitorSecurityIncidentPayload;
+      return [{
+        recipientId: SECURITY_DESK,
+        recipient: SECURITY_DESK,
+        variables: {
+          incidentType: p.incidentType ?? p.type ?? "security_incident",
+          severity: p.severity ?? "high",
+          locationId: p.locationId ?? "",
+          reference: p.visitRequestId ?? p.passId ?? "",
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.visitorScanBlacklistMatch: {
+      const p = payload as VisitorScanBlacklistPayload;
+      return [{
+        recipientId: SECURITY_DESK,
+        recipient: SECURITY_DESK,
+        variables: {
+          idDocumentType: p.idDocumentType ?? "identity document",
+          sessionId: p.sessionId ?? "",
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.visitorTailgatingDetected: {
+      const p = payload as VisitorTailgatingPayload;
+      return [{
+        recipientId: SECURITY_DESK,
+        recipient: SECURITY_DESK,
+        variables: {
+          gateId: p.gateId ?? "",
+          passId: p.passId ?? "",
+          passageCount: String(p.passageCount ?? ""),
+          tolerance: String(p.tolerance ?? ""),
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.visitorAntiPassbackViolation: {
+      const p = payload as VisitorAntiPassbackPayload;
+      return [{
+        recipientId: SECURITY_DESK,
+        recipient: SECURITY_DESK,
+        variables: {
+          gateId: p.gateId ?? "",
+          passId: p.passId ?? "",
+          direction: p.direction ?? "",
+          lastKnownDirection: p.lastKnownDirection ?? "",
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.visitorEmergencyUnlockTriggered: {
+      const p = payload as VisitorEmergencyUnlockPayload;
+      return [{
+        recipientId: SECURITY_DESK,
+        recipient: SECURITY_DESK,
+        variables: {
+          locationId: p.locationId ?? "",
+          reason: p.reason ?? "emergency",
+          deviceCount: String(p.deviceCount ?? ""),
+          triggeredAt: p.triggeredAt ?? "",
         },
       }];
     }
