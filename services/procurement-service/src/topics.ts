@@ -71,6 +71,12 @@ export const CONSUMED_EVENTS = {
   // eOffice decision callback for a procurement award eFile
   // (source_ref_type "procurement_award"). See modules/tender/eoffice-consumer.ts.
   awardFileDecided:     "procurement.award.file_decided",
+  /**
+   * Owner: meeting-service. Fires when a board/committee records a procurement
+   * decision (Req 22.1). payload: { decisionId, meetingId, text, authority?, effectiveDate? }.
+   * Action: open a PENDING REVIEW indent-intake item (no auto-indent; GFR maker-checker).
+   */
+  meetingDecisionProcurement: "meeting.decision.procurement",
 } as const;
 
 export const SERVICE = "procurement";

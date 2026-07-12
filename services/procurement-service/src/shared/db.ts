@@ -11,6 +11,7 @@ import { schema as paymentsModule } from "../modules/payments/schema.js";
 import { schema as blacklistModule } from "../modules/vendor-blacklist/schema.js";
 import { schema as threeWayModule }  from "../modules/three-way-match/schema.js";
 import { schema as securityModule }  from "../modules/security/schema.js";
+import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { docCountersSchema }         from "./numbering.js";
 import { outboxSchema }             from "./outbox.js";
 
@@ -32,6 +33,7 @@ const _rawDb = drizzle(sqlClient, {
     ...blacklistModule,
     ...threeWayModule,
     ...securityModule,
+    ...resolutionIntakeModule,
     ...docCountersSchema,
     ...outboxSchema,
   },

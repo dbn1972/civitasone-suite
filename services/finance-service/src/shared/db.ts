@@ -13,6 +13,7 @@ import { schema as bankReconModule } from "../modules/bank-recon/schema.js";
 import { schema as simplifiedModule } from "../modules/simplified/schema.js";
 import { schema as anomalyModule }    from "../modules/anomaly/schema.js";
 import { allocationSchema } from "../modules/budget/allocation-schema.js";
+import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -23,7 +24,7 @@ export const sqlClient = createSqlClient(url);
 const TENANT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const baseDb = drizzle(sqlClient, {
-  schema: { ...budgetModule, ...glModule, ...treasuryModule, ...paymentsModule, ...auditModule, ...periodCloseModule, ...hoaModule, ...mastersModule, ...bankReconModule, ...simplifiedModule, ...anomalyModule, ...allocationSchema, ...outboxSchema },
+  schema: { ...budgetModule, ...glModule, ...treasuryModule, ...paymentsModule, ...auditModule, ...periodCloseModule, ...hoaModule, ...mastersModule, ...bankReconModule, ...simplifiedModule, ...anomalyModule, ...allocationSchema, ...resolutionIntakeModule, ...outboxSchema },
 });
 
 // C1 FIX: Wrap db.transaction() to auto-inject app.tenant_id GUC from

@@ -52,6 +52,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(threeWayMatchRoutes);
   await app.register(vendorBlacklistRoutes);
   await app.register(securityRoutes);
+  const { resolutionIntakeRoutes } = await import("./modules/resolution-intake/routes.js");
+  await app.register(resolutionIntakeRoutes);
   await app.register((await import("./modules/po-print/routes.js")).poPrintRoutes);
   const { gemRoutes } = await import("./modules/gem/routes.js");
   await app.register(gemRoutes);
