@@ -8,7 +8,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
 const FINANCE_ROLES = ["finance_admin", "super_admin"];
@@ -66,7 +66,7 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/fiscal-years", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const rows = await db.select().from(fiscalYears).where(eq(fiscalYears.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(fiscalYears).where(eq(fiscalYears.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -105,8 +105,8 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const fyCode = (req.params as { fyCode: string }).fyCode;
-    const rows = await db.select().from(openingBalances)
-      .where(and(eq(openingBalances.tenantId, ctx.tenantId), eq(openingBalances.fyCode, fyCode)));
+    const rows = await scopedRead((tx) => tx.select().from(openingBalances)
+      .where(and(eq(openingBalances.tenantId, ctx.tenantId), eq(openingBalances.fyCode, fyCode))));
     return reply.send({ data: rows });
   });
 

@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { financeBills, financePayments, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -35,14 +35,14 @@ export async function findGrnMatch(tx: Writer, tenantId: string, grnRef: string)
 }
 
 export async function findBillById(id: string): Promise<BillRow | null> {
-  const rows = await db.select().from(financeBills).where(eq(financeBills.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeBills).where(eq(financeBills.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
 /** R15: tenant-scoped bill read — no row from another tenant can be returned. */
 export async function findBillByIdAndTenant(id: string, tenantId: string): Promise<BillRow | null> {
-  const rows = await db.select().from(financeBills)
-    .where(and(eq(financeBills.id, id), eq(financeBills.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeBills)
+    .where(and(eq(financeBills.id, id), eq(financeBills.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -52,14 +52,14 @@ export async function findBillByIdTx(tx: Writer, id: string): Promise<BillRow | 
 }
 
 export async function findPaymentById(id: string): Promise<PaymentRow | null> {
-  const rows = await db.select().from(financePayments).where(eq(financePayments.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financePayments).where(eq(financePayments.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
 /** R15: tenant-scoped payment read — no row from another tenant can be returned. */
 export async function findPaymentByIdAndTenant(id: string, tenantId: string): Promise<PaymentRow | null> {
-  const rows = await db.select().from(financePayments)
-    .where(and(eq(financePayments.id, id), eq(financePayments.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financePayments)
+    .where(and(eq(financePayments.id, id), eq(financePayments.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -81,16 +81,16 @@ export async function updateBill(tx: Writer, id: string, patch: Partial<BillInse
 }
 
 export async function listPaymentsByTenant(tenantId: string, limit: number, offset: number): Promise<PaymentRow[]> {
-  return db.select().from(financePayments)
+  return scopedRead((tx) => tx.select().from(financePayments)
     .where(eq(financePayments.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 export async function listBillsByTenant(tenantId: string, limit: number): Promise<BillRow[]> {
-  return db.select().from(financeBills)
+  return scopedRead((tx) => tx.select().from(financeBills)
     .where(eq(financeBills.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<void> {
@@ -106,8 +106,8 @@ const SAMPLE_BILLS: Array<{ billNo: string; grossMinor: bigint; status: string; 
 ];
 
 export async function countSampleBills(tenantId: string): Promise<number> {
-  const rows = await db.select({ id: financeBills.id }).from(financeBills)
-    .where(and(eq(financeBills.tenantId, tenantId), eq(financeBills.isSample, true)));
+  const rows = await scopedRead((tx) => tx.select({ id: financeBills.id }).from(financeBills)
+    .where(and(eq(financeBills.tenantId, tenantId), eq(financeBills.isSample, true))));
   return rows.length;
 }
 
@@ -145,9 +145,9 @@ export async function clearSampleBills(tenantId: string): Promise<number> {
 }
 
 export async function listAdvancesByTenant(tenantId: string, limit: number): Promise<AdvanceRow[]> {
-  return db.select().from(financeAdvances)
+  return scopedRead((tx) => tx.select().from(financeAdvances)
     .where(eq(financeAdvances.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertAdvance(tx: Writer, row: AdvanceInsert): Promise<void> {
@@ -164,9 +164,9 @@ export async function updateAdvance(tx: Writer, id: string, patch: Partial<Advan
 }
 
 export async function listUCsByTenant(tenantId: string, limit: number): Promise<UCRow[]> {
-  return db.select().from(financeUC)
+  return scopedRead((tx) => tx.select().from(financeUC)
     .where(eq(financeUC.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertUC(tx: Writer, row: UCInsert): Promise<void> {

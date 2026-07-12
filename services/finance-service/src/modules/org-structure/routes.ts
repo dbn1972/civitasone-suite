@@ -7,7 +7,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { legalEntities, operatingUnits, costCenters, profitCenters } from "./schema.js";
 
 const ADMIN_ROLES = ["finance_admin", "super_admin", "admin"];
@@ -66,7 +66,7 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/legal-entities", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = await db.select().from(legalEntities).where(eq(legalEntities.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(legalEntities).where(eq(legalEntities.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -98,7 +98,7 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/operating-units", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = await db.select().from(operatingUnits).where(eq(operatingUnits.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(operatingUnits).where(eq(operatingUnits.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -120,7 +120,7 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/cost-centers", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = await db.select().from(costCenters).where(eq(costCenters.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(costCenters).where(eq(costCenters.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -144,7 +144,7 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/profit-centers", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = await db.select().from(profitCenters).where(eq(profitCenters.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(profitCenters).where(eq(profitCenters.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 

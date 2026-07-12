@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
@@ -24,7 +24,7 @@ export async function cashBookRoutes(app: FastifyInstance): Promise<void> {
     const toDate = q.to ?? "2099-12-31";
     const bankOrCash = q.type ?? null;
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT id, entry_date, voucher_type, voucher_no, particulars,
              receipt_minor, payment_minor, balance_minor, bank_or_cash, reference, created_at
       FROM gl.finance_cash_book
@@ -34,7 +34,7 @@ export async function cashBookRoutes(app: FastifyInstance): Promise<void> {
         AND (${bankOrCash}::text IS NULL OR bank_or_cash = ${bankOrCash})
       ORDER BY entry_date DESC, created_at DESC
       LIMIT ${q.limit} OFFSET ${q.offset}
-    `);
+    `));
 
     return reply.send({ data: rows });
   });
@@ -44,7 +44,7 @@ export async function cashBookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT bank_or_cash,
              COALESCE(SUM(receipt_minor), 0)::bigint AS total_receipts,
              COALESCE(SUM(payment_minor), 0)::bigint AS total_payments,
@@ -52,7 +52,7 @@ export async function cashBookRoutes(app: FastifyInstance): Promise<void> {
       FROM gl.finance_cash_book
       WHERE tenant_id = ${ctx.tenantId}::uuid
       GROUP BY bank_or_cash
-    `);
+    `));
 
     return reply.send({ data: rows });
   });
@@ -62,12 +62,12 @@ export async function cashBookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT id, code, name, nature, auto_number_prefix, is_active, created_at
       FROM gl.finance_voucher_types
       WHERE tenant_id = ${ctx.tenantId}::uuid
       ORDER BY code
-    `);
+    `));
 
     return reply.send({ data: rows });
   });

@@ -45,3 +45,19 @@ export const db: typeof baseDb = Object.assign(Object.create(baseDb), {
 }) as typeof baseDb;
 
 export type Db = typeof db;
+
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain db.select()/db.execute() runs on a pooled connection
+ * with no app.tenant_id GUC set, so under the NOBYPASSRLS finance_svc role the
+ * fail-closed policy returns ZERO rows. Wrapping the read in db.transaction lets
+ * the wrapper above set the GUC from AsyncLocalStorage, so reads are tenant-scoped
+ * by RLS, not merely by an app-layer WHERE.
+ */
+export function scopedRead<T>(fn: (tx: Db) => PromiseLike<T>): Promise<T> {
+  // tx is typed as the full db surface so drizzle row types are preserved at
+  // call sites (no per-call type args needed); the runtime tx is the pg
+  // transaction, which exposes the same select/execute methods.
+  return db.transaction(fn as unknown as (tx: any) => Promise<T>);
+}

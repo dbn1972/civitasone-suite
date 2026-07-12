@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import * as periodRepo from "../period-close/repo.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
@@ -28,7 +28,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     const { fiscalYear } = z.object({ fiscalYear: z.string().optional() }).parse(req.query);
     const fy = fiscalYear ?? deriveFYFromDate();
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT fh.code, fh.name,
         COALESCE(hu.expended_minor, 0)::bigint AS expenditure_minor
       FROM budget.finance_heads fh
@@ -36,7 +36,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         ON hu.tenant_id = fh.tenant_id AND hu.head_id = fh.id AND hu.fy = ${fy}::bpchar
       WHERE fh.tenant_id = ${ctx.tenantId}::uuid
       ORDER BY fh.code
-    `);
+    `));
 
     const result = rows as unknown as Array<{ code: string; name: string; expenditure_minor: string }>;
     return reply.send({
@@ -56,7 +56,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     const { fiscalYear } = z.object({ fiscalYear: z.string().optional() }).parse(req.query);
     const fy = fiscalYear ?? deriveFYFromDate();
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT fh.code, fh.name,
         COALESCE(hu.allocated_minor, 0) AS sanctioned_amount_minor,
         COALESCE(hu.committed_minor, 0) AS released_amount_minor,
@@ -68,7 +68,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         ON hu.tenant_id = fh.tenant_id AND hu.head_id = fh.id AND hu.fy = ${fy}::bpchar
       WHERE fh.tenant_id = ${ctx.tenantId}::uuid
       ORDER BY fh.code
-    `);
+    `));
 
     return reply.send({ fiscalYear: fy, rows: rows as unknown[] });
   });

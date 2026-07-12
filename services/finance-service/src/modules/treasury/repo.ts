@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   financeBanks, financeChallans, financeDeposits, financeDepositEvents,
   type BankRow, type ChallanInsert, type DepositInsert, type DepositRow, type DepositEventInsert,
@@ -10,7 +10,7 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type Executor = { execute: (query: ReturnType<typeof sql>) => Promise<unknown> };
 
 export async function findBankById(id: string): Promise<BankRow | null> {
-  const rows = await db.select().from(financeBanks).where(eq(financeBanks.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeBanks).where(eq(financeBanks.id, id)).limit(1));
   return rows[0] ?? null;
 }
 

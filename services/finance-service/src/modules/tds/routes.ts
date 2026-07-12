@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
@@ -20,7 +20,7 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT id, vendor_id, vendor_name, pan, bill_id, payment_id, section,
              gross_amount_minor, tds_rate_pct, tds_amount_minor, surcharge_minor,
              cess_minor, net_payment_minor, deduction_date, deposit_date,
@@ -32,7 +32,7 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
         AND (${q.status ?? null}::text IS NULL OR status = ${q.status ?? null})
       ORDER BY deduction_date DESC
       LIMIT ${q.limit} OFFSET ${q.offset}
-    `);
+    `));
 
     return reply.send({ data: rows });
   });
@@ -88,7 +88,7 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
     }).parse(req.query);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT vendor_name, pan, section,
              SUM(gross_amount_minor)::bigint AS total_gross,
              SUM(tds_amount_minor)::bigint AS total_tds,
@@ -100,7 +100,7 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
         AND fy = ${q.fy} AND quarter = ${q.quarter}
       GROUP BY vendor_name, pan, section
       ORDER BY vendor_name
-    `);
+    `));
 
     return reply.send({
       form: "26Q",

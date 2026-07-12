@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   financeBudgetAllocation, financeReappropriationLog,
   type BudgetAllocationRow, type BudgetAllocationInsert,
@@ -8,12 +8,12 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findAllocation(tenantId: string, headId: string, fy: string): Promise<BudgetAllocationRow | null> {
-  const rows = await db.select().from(financeBudgetAllocation)
+  const rows = await scopedRead((tx) => tx.select().from(financeBudgetAllocation)
     .where(and(
       eq(financeBudgetAllocation.tenantId, tenantId),
       eq(financeBudgetAllocation.headId, headId),
       eq(financeBudgetAllocation.fy, fy),
-    )).limit(1);
+    )).limit(1));
   return rows[0] ?? null;
 }
 
@@ -65,7 +65,7 @@ export async function logReappropriation(tx: Writer, row: typeof financeReapprop
 export async function listAllocations(tenantId: string, fy: string | undefined, limit: number) {
   const conditions = [eq(financeBudgetAllocation.tenantId, tenantId)];
   if (fy) conditions.push(eq(financeBudgetAllocation.fy, fy));
-  return db.select().from(financeBudgetAllocation).where(and(...conditions)).limit(limit);
+  return scopedRead((tx) => tx.select().from(financeBudgetAllocation).where(and(...conditions)).limit(limit));
 }
 
 /** Executor that can run raw SQL (drizzle db or tx). */

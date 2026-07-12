@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 
@@ -37,7 +37,7 @@ export async function fixedAssetRoutes(app: FastifyInstance): Promise<void> {
     const { start, end } = fyBounds(fy);
 
     // Lifetime balances on the asset / accumulated-dep heads.
-    const balances = (await db.execute(sql`
+    const balances = (await scopedRead((tx) => tx.execute(sql`
       SELECT fh.code, fh.name,
              COALESCE(SUM(fl.debit_minor), 0)::bigint  AS dr,
              COALESCE(SUM(fl.credit_minor), 0)::bigint AS cr
@@ -47,7 +47,7 @@ export async function fixedAssetRoutes(app: FastifyInstance): Promise<void> {
       WHERE fh.tenant_id = ${ctx.tenantId}::uuid
         AND fh.code IN (${FIXED_ASSET}, ${ACCUM_DEP})
       GROUP BY fh.code, fh.name
-    `)) as unknown as GlRow[];
+    `))) as unknown as GlRow[];
 
     const fa = balances.find((r) => r.code === FIXED_ASSET);
     const ad = balances.find((r) => r.code === ACCUM_DEP);
@@ -57,7 +57,7 @@ export async function fixedAssetRoutes(app: FastifyInstance): Promise<void> {
     const netBlockMinor   = grossBlockMinor - accumDepMinor;
 
     // Period charges (this FY) on the expense heads that feed the register.
-    const charges = (await db.execute(sql`
+    const charges = (await scopedRead((tx) => tx.execute(sql`
       SELECT fh.code, fh.name,
              COALESCE(SUM(fl.debit_minor), 0)::bigint  AS dr,
              COALESCE(SUM(fl.credit_minor), 0)::bigint AS cr
@@ -68,7 +68,7 @@ export async function fixedAssetRoutes(app: FastifyInstance): Promise<void> {
       WHERE fh.tenant_id = ${ctx.tenantId}::uuid
         AND fh.code IN (${DEP_EXPENSE}, ${DEP_EXPENSE_STAT}, ${IMPAIRMENT})
       GROUP BY fh.code, fh.name
-    `)) as unknown as GlRow[];
+    `))) as unknown as GlRow[];
 
     const periodDepMinor = charges
       .filter((c) => c.code === DEP_EXPENSE || c.code === DEP_EXPENSE_STAT)
@@ -78,7 +78,7 @@ export async function fixedAssetRoutes(app: FastifyInstance): Promise<void> {
       .reduce((s, c) => s + (bi(c.dr) - bi(c.cr)), 0n);
 
     // Per-asset movement breakdown straight from the asset/accum-dep journals.
-    const movements = (await db.execute(sql`
+    const movements = (await scopedRead((tx) => tx.execute(sql`
       SELECT j.type,
              COALESCE(SUM((line->>'debitMinor')::bigint), 0)::bigint AS dr,
              COALESCE(SUM((line->>'creditMinor')::bigint), 0)::bigint AS cr,
@@ -98,7 +98,7 @@ export async function fixedAssetRoutes(app: FastifyInstance): Promise<void> {
         AND j.type IN ('asset_acquisition','depreciation','asset_disposal','asset_impairment','asset_revaluation','asset_maintenance')
       GROUP BY j.type
       ORDER BY j.type
-    `)) as unknown as { type: string; dr: string; cr: string; journals: number }[];
+    `))) as unknown as { type: string; dr: string; cr: string; journals: number }[];
 
     // Reconciliation: register NBV must equal (GL gross - GL accum dep). Since
     // both sides are read from the same ledger this holds by construction; we

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
 
 const FINANCE_ROLES = ["finance_admin", "super_admin"];
@@ -41,7 +41,7 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/bank-accounts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const rows = await db.select().from(bankAccounts).where(eq(bankAccounts.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(bankAccounts).where(eq(bankAccounts.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 

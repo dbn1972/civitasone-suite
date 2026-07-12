@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
@@ -18,7 +18,7 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT id, name, voucher_type, frequency, debit_account_id, credit_account_id,
              amount_minor, narration, next_run_date, last_run_date, end_date,
              is_active, created_at, created_by
@@ -27,7 +27,7 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
         AND (${q.active ?? null}::boolean IS NULL OR is_active = ${q.active ?? null})
       ORDER BY next_run_date ASC
       LIMIT ${q.limit} OFFSET ${q.offset}
-    `);
+    `));
 
     return reply.send({ data: rows });
   });

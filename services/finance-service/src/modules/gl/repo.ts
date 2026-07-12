@@ -1,5 +1,5 @@
 import { eq, and, gte, lte, sql, asc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
 import { financeHeads } from "../budget/schema.js";
 
@@ -18,7 +18,7 @@ export async function insertJournalLine(tx: Writer, row: JournalLineInsert): Pro
 }
 
 export async function findJournalById(id: string): Promise<JournalRow | null> {
-  const rows = await db.select().from(financeJournals).where(eq(financeJournals.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -39,10 +39,10 @@ export async function markJournalReversed(tx: Writer, id: string, reversedByUpda
 export async function resolveHeadId(tenantId: string, headIdOrCode: string): Promise<string | null> {
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(headIdOrCode);
   if (isUUID) return headIdOrCode;
-  const rows = await db.select({ id: financeHeads.id })
+  const rows = await scopedRead((tx) => tx.select({ id: financeHeads.id })
     .from(financeHeads)
     .where(and(eq(financeHeads.tenantId, tenantId), eq(financeHeads.code, headIdOrCode)))
-    .limit(1);
+    .limit(1));
   return rows[0]?.id ?? null;
 }
 
@@ -51,11 +51,11 @@ export async function getLedgerLines(tenantId: string, headId: string | undefine
   if (headId) conditions.push(eq(financeLedger.headId, headId));
   if (from) conditions.push(gte(financeLedger.postingDate, from));
   if (to)   conditions.push(lte(financeLedger.postingDate, to));
-  return db.select().from(financeLedger).where(and(...conditions)).orderBy(asc(financeLedger.postingDate)).limit(limit);
+  return scopedRead((tx) => tx.select().from(financeLedger).where(and(...conditions)).orderBy(asc(financeLedger.postingDate)).limit(limit));
 }
 
 export async function getTrialBalance(tenantId: string) {
-  return db
+  return scopedRead((tx) => tx
     .select({
       headId:      financeLedger.headId,
       totalDebit:  sql<bigint>`sum(${financeLedger.debitMinor})`.mapWith(BigInt),
@@ -63,13 +63,13 @@ export async function getTrialBalance(tenantId: string) {
     })
     .from(financeLedger)
     .where(eq(financeLedger.tenantId, tenantId))
-    .groupBy(financeLedger.headId);
+    .groupBy(financeLedger.headId));
 }
 
 export async function listJournalsByTenant(tenantId: string, limit: number): Promise<JournalRow[]> {
-  return db.select().from(financeJournals)
+  return scopedRead((tx) => tx.select().from(financeJournals)
     .where(eq(financeJournals.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 /**
@@ -79,7 +79,7 @@ export async function listJournalsByTenant(tenantId: string, limit: number): Pro
 export async function getTrialBalanceByPeriod(tenantId: string, period?: string) {
   const conditions = [eq(financeLedger.tenantId, tenantId)];
   if (period) conditions.push(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM') = ${period}`);
-  return db
+  return scopedRead((tx) => tx
     .select({
       period:      sql<string>`to_char(${financeLedger.postingDate}, 'YYYY-MM')`,
       totalDebit:  sql<bigint>`sum(${financeLedger.debitMinor})`.mapWith(BigInt),
@@ -88,5 +88,5 @@ export async function getTrialBalanceByPeriod(tenantId: string, period?: string)
     .from(financeLedger)
     .where(and(...conditions))
     .groupBy(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM')`)
-    .orderBy(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM')`);
+    .orderBy(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM')`));
 }

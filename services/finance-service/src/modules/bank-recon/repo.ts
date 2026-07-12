@@ -1,5 +1,5 @@
 import { eq, and, or, isNull, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   bankStatement, bankStatementLines,
   type BankStatementRow, type BankStatementInsert, type BankStatementLineRow,
@@ -18,8 +18,8 @@ export async function insertLine(tx: Writer, row: typeof bankStatementLines.$inf
 }
 
 export async function findStatement(id: string, tenantId: string): Promise<BankStatementRow | null> {
-  const rows = await db.select().from(bankStatement)
-    .where(and(eq(bankStatement.id, id), eq(bankStatement.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(bankStatement)
+    .where(and(eq(bankStatement.id, id), eq(bankStatement.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -30,8 +30,8 @@ export async function linesForStatement(tx: Writer, statementId: string, limit =
 }
 
 export async function listStatements(tenantId: string, limit: number) {
-  return db.select().from(bankStatement)
-    .where(eq(bankStatement.tenantId, tenantId)).limit(limit);
+  return scopedRead((tx) => tx.select().from(bankStatement)
+    .where(eq(bankStatement.tenantId, tenantId)).limit(limit));
 }
 
 /**
@@ -42,7 +42,7 @@ export async function listStatements(tenantId: string, limit: number) {
  * eligible (legacy/untagged), preserving prior behaviour.
  */
 export async function unreconciledPayments(tenantId: string, bankAccountId?: string, limit = 500) {
-  return db.select({
+  return scopedRead((tx) => tx.select({
     id: financePayments.id,
     amountMinor: financePayments.amountMinor,
     date: sql<string>`to_char(${financePayments.createdAt}, 'YYYY-MM-DD')`,
@@ -55,7 +55,7 @@ export async function unreconciledPayments(tenantId: string, bankAccountId?: str
         ? [or(isNull(financePayments.bankAccountId), eq(financePayments.bankAccountId, bankAccountId))!]
         : []),
     ))
-    .limit(limit);
+    .limit(limit));
 }
 
 /**
@@ -64,7 +64,7 @@ export async function unreconciledPayments(tenantId: string, bankAccountId?: str
  * (NULL) challans remain eligible.
  */
 export async function unreconciledChallans(tenantId: string, bankAccountId?: string, limit = 500) {
-  return db.select({
+  return scopedRead((tx) => tx.select({
     id: financeChallans.id,
     amountMinor: financeChallans.amountMinor,
     date: sql<string>`to_char(${financeChallans.createdAt}, 'YYYY-MM-DD')`,
@@ -77,7 +77,7 @@ export async function unreconciledChallans(tenantId: string, bankAccountId?: str
         ? [or(isNull(financeChallans.bankAccountId), eq(financeChallans.bankAccountId, bankAccountId))!]
         : []),
     ))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function markLineMatched(tx: Writer, lineId: string, matchType: string, matchId: string): Promise<void> {
@@ -117,5 +117,5 @@ export async function markChallanReconciled(tx: Exec, id: string, lineId: string
 
 /** All lines for a statement (no tx). */
 export async function allLines(statementId: string, limit = 500): Promise<BankStatementLineRow[]> {
-  return db.select().from(bankStatementLines).where(eq(bankStatementLines.statementId, statementId)).limit(limit);
+  return scopedRead((tx) => tx.select().from(bankStatementLines).where(eq(bankStatementLines.statementId, statementId)).limit(limit));
 }

@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { financePfms } from "../payments/schema.js";
 import { financePfmsConfig } from "./schema.js";
 
@@ -19,23 +19,23 @@ export async function insertPfmsBatch(tx: Writer, row: typeof financePfms.$infer
 }
 
 export async function findPfmsById(id: string, tenantId: string) {
-  const rows = await db.select().from(financePfms)
+  const rows = await scopedRead((tx) => tx.select().from(financePfms)
     .where(eq(financePfms.id, id))
-    .limit(1);
+    .limit(1));
   const row = rows[0];
   return row && row.tenantId === tenantId ? row : null;
 }
 
 export async function listPfmsByTenant(tenantId: string, limit = 50) {
-  return db.select().from(financePfms)
+  return scopedRead((tx) => tx.select().from(financePfms)
     .where(eq(financePfms.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function getTenantConfig(tenantId: string) {
-  const rows = await db.select().from(financePfmsConfig)
+  const rows = await scopedRead((tx) => tx.select().from(financePfmsConfig)
     .where(eq(financePfmsConfig.tenantId, tenantId))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -55,7 +55,7 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
   // H1: scope strictly to the batch's own payment set (p.pfms_id = the batch's
   // pfms_id) instead of every tenant payment. Also tenant-scope the bank/bill
   // joins so a payment can never resolve another tenant's bank/bill row.
-  const rows = await db.execute<{
+  const rows = await scopedRead((tx) => tx.execute<{
     beneficiary: string | null; account: string | null; amount_minor: string;
     ref: string; ddo_code: string | null;
   }>(sql`
@@ -71,7 +71,7 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
       AND p.status IN ('initiated','released','completed')
     ORDER BY p.created_at DESC
     LIMIT ${limit}
-  `);
+  `));
   const arr = rows as unknown as Array<{
     beneficiary: string | null; account: string | null; amount_minor: string;
     ref: string; ddo_code: string | null;
