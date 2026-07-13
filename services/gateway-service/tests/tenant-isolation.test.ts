@@ -144,4 +144,26 @@ describe("Gateway — Cross-Tenant Isolation", () => {
     expect(seenByCorrelation["corr-a"]).toBe(TENANT_A);
     expect(seenByCorrelation["corr-b"]).toBe(TENANT_B);
   });
+
+  it("SEC-P0: a forged x-tenant-id header is overwritten by the verified token tid (no cross-tenant bypass)", async () => {
+    let forwarded: string | undefined;
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const headers = (init?.headers as Record<string, string>) ?? {};
+      forwarded = headers["x-tenant-id"];
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const app = await buildApp();
+    // Attacker: authenticated as TENANT_A but forges TENANT_B in the header.
+    await app.inject({
+      method: "GET",
+      url: "/api/v1/queue/status",
+      headers: {
+        authorization: `Bearer ${tokenFor(TENANT_A, "actor-a")}`,
+        "x-tenant-id": TENANT_B,
+      },
+    });
+    // The gateway must forward the TOKEN's tenant, never the forged header.
+    expect(forwarded).toBe(TENANT_A);
+    expect(forwarded).not.toBe(TENANT_B);
+  });
 });
