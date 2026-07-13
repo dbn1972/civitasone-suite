@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createTenantDb } from "./create-tenant-db.js";
 import { createTenantDb as createTenantDbFromBarrel, createDb } from "./index.js";
+import { TenantRouter } from "./tenant-router.js";
 
 const T_POOL = "11111111-1111-1111-1111-111111111111";
 const T_SILO = "22222222-2222-2222-2222-222222222222";
@@ -84,6 +85,109 @@ describe("@civitasone/db barrel export (index.ts)", () => {
   it("createDb() builds a drizzle db bound to a fresh sqlClient", () => {
     const db = createDb(SCHEMA, "postgres://user:pw@host/db");
     expect(db).toBeDefined();
+  });
+});
+
+describe("createTenantDb — db/sqlClient binding identity is stable and unchanged", () => {
+  it("t.db and t.sqlClient are the exact same references on every access (no re-creation)", () => {
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+
+    // Repeated property reads must return the identical binding, not a fresh
+    // instance — these are the same references route/consumer/repo call sites
+    // import once and hold onto.
+    expect(t.db).toBe(t.db);
+    expect(t.sqlClient).toBe(t.sqlClient);
+    expect(t.router).toBe(t.router);
+    expect(t.router).toBeInstanceOf(TenantRouter);
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+  });
+
+  it("two independent createTenantDb() calls never share sqlClient/db bindings", () => {
+    const a = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db-a" });
+    const b = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db-b" });
+
+    expect(a.sqlClient).not.toBe(b.sqlClient);
+    expect(a.db).not.toBe(b.db);
+    expect(a.router).not.toBe(b.router);
+
+    void a.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+    void b.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+  });
+
+  it("t.sqlClientFor(pool tenant) returns the same sqlClient identity across repeated calls", async () => {
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+
+    const first = await t.sqlClientFor(T_POOL);
+    const second = await t.sqlClientFor(T_POOL);
+    expect(first).toBe(t.sqlClient);
+    expect(second).toBe(t.sqlClient);
+    expect(first).toBe(second);
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+  });
+});
+
+describe("createTenantDb — dbFor/tierOf/dbForRead shape assertions", () => {
+  it("dbFor(tenantId) resolves to a Drizzle-shaped db (select/insert/transaction/execute functions)", async () => {
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+    const db = await t.dbFor(T_POOL);
+
+    expect(typeof db.select).toBe("function");
+    expect(typeof db.insert).toBe("function");
+    expect(typeof db.update).toBe("function");
+    expect(typeof db.delete).toBe("function");
+    expect(typeof db.transaction).toBe("function");
+    expect(typeof db.execute).toBe("function");
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+  });
+
+  it("t.db (module-level pool binding) has the same Drizzle shape as dbFor(pool tenant)", async () => {
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+    const dbForPool = await t.dbFor(T_POOL);
+
+    for (const key of ["select", "insert", "update", "delete", "transaction", "execute"] as const) {
+      expect(typeof t.db[key]).toBe(typeof dbForPool[key]);
+      expect(typeof t.db[key]).toBe("function");
+    }
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+  });
+
+  it("tierOf(tenantId) resolves to one of the three known TenantTier string literals", async () => {
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+    const tier = await t.tierOf(T_POOL);
+
+    expect(typeof tier).toBe("string");
+    expect(["pool", "silo", "shard"]).toContain(tier);
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+  });
+
+  it("dbForRead(tenantId) falls back to dbFor's exact db instance when no replica is configured", async () => {
+    const prevReplica = process.env.DATABASE_REPLICA_URL;
+    delete process.env.DATABASE_REPLICA_URL;
+
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+    const dbForResult = await t.dbFor(T_POOL);
+    const dbForReadResult = await t.dbForRead(T_POOL);
+
+    // Req 8.2: no replica configured behaves identically to dbFor — same cached
+    // Drizzle instance for the pool tenant, not merely shape-equal.
+    expect(dbForReadResult).toBe(dbForResult);
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+    if (prevReplica === undefined) delete process.env.DATABASE_REPLICA_URL;
+    else process.env.DATABASE_REPLICA_URL = prevReplica;
+  });
+
+  it("dbForRead(tenantId) rejects a non-UUID tenantId with a descriptive error (same shape as dbFor)", async () => {
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+    await expect(t.dbForRead("not-a-uuid")).rejects.toThrow(
+      /createTenantDb.dbForRead: invalid tenantId/,
+    );
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
   });
 });
 

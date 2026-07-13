@@ -33,6 +33,7 @@
     "drizzle-kit": "^0.20.0",
     "fastify": "^4.27.0",
     "vitest": "^2.0.0",
-    "@vitest/coverage-v8": "^2.0.0"
+    "@vitest/coverage-v8": "^2.0.0",
+    "fast-check": "4.8.0"
   }
 }
