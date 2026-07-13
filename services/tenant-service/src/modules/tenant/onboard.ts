@@ -20,6 +20,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { TenantView } from "./domain.js";
+import { tierFor, loadPlacementPolicyConfig } from "./placement-policy.js";
 
 export type OnboardTenantBody = {
   name: string;
@@ -50,6 +51,9 @@ export async function createTenantPipeline(
   const tenantId = randomUUID();
   const correlationId = ctx.correlationId;
 
+  // ── Tenant_Placement_Policy: resolve the initial Isolation_Tier from edition ─
+  const decision = tierFor(body.edition, loadPlacementPolicyConfig());
+
   // ── Step 1: prime the read-your-writes cache so GET is consistent ──────────
   const projected: TenantView = {
     id: tenantId,
@@ -60,7 +64,9 @@ export async function createTenantPipeline(
     status: "draft",
     region: body.region,
     residency: body.residency,
-    isolationTier: "pool",
+    isolationTier: decision.tier,
+    policyVersion: decision.policyVersion,
+    policyReason: decision.reason,
     settings: {},
     version: 1,
   };
@@ -83,6 +89,9 @@ export async function createTenantPipeline(
       status: "draft",
       region: body.region,
       residency: body.residency,
+      isolationTier: decision.tier,
+      policyVersion: decision.policyVersion,
+      policyReason: decision.reason,
       settings: {},
       version: 1,
     },

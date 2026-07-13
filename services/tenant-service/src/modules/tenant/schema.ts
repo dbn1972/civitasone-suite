@@ -20,6 +20,12 @@ export const tenants = tenantSchema.table("tenants", {
   isolationTier: varchar("isolation_tier", { length: 8 }).notNull().default("pool"),
   dbDsnRef: text("db_dsn_ref"),   // secret-manager reference (silo), never plaintext
   kmsKeyRef: text("kms_key_ref"), // per-tenant encryption key reference (silo BYOK)
+  // Tenant_Placement_Policy provenance (migration 0015_placement_policy.sql):
+  // which policy version/reason produced isolationTier — NULL for tenants
+  // onboarded before this feature or whose tier was set purely by manual
+  // PATCH .../isolation.
+  policyVersion: text("policy_version"),
+  policyReason: varchar("policy_reason", { length: 24 }),
   orgCategory: text("org_category"), // richer classification (central_govt, state_psu, society, etc.)
   settings: jsonb("settings").$type<Record<string, unknown>>().default({}).notNull(),
   // audit columns (CLAUDE.md §3.6)

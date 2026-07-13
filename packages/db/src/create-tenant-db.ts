@@ -14,6 +14,7 @@
  * `db`/`sqlClient` remain the same bindings existing route handlers/consumers/repos import.
  */
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { redactLogPayload } from "@civitasone/observability";
 import { createSqlClient, type SqlClientOptions } from "./pool.js";
 import {
   TenantRouter,
@@ -26,6 +27,27 @@ import { wrapWithTenantGuc } from "./wrap-tenant-db.js";
 
 const TENANT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+type SqlClient = ReturnType<typeof createSqlClient>;
+type ClientFactory = (dsn: string, opts?: SqlClientOptions) => SqlClient;
+
+/**
+ * Structured WARN-level logger accepted by `dbForRead()` for its replica-fallback
+ * path (Req 8.5). Matches the pino `logger.warn(mergingObject, msg)` call shape so
+ * a real pino instance can be passed directly as `opts.logger` — this package does
+ * not itself depend on pino. When omitted, a minimal JSON-to-stderr default is used
+ * (mirrors `captureError`'s default sink in `@civitasone/observability`).
+ */
+export interface ReadRouterLogger {
+  warn(payload: Record<string, unknown>, msg?: string): void;
+}
+
+const defaultLogger: ReadRouterLogger = {
+  warn(payload, msg) {
+    // eslint-disable-next-line no-console
+    console.warn(JSON.stringify({ level: "warn", msg: msg ?? "warn", ...payload }));
+  },
+};
+
 export interface TenantDbOptions<TSchema extends Record<string, unknown>> {
   /** This service's Drizzle schema (merged module schemas + outbox schema). */
   schema: TSchema;
@@ -37,6 +59,12 @@ export interface TenantDbOptions<TSchema extends Record<string, unknown>> {
   clientOptions?: SqlClientOptions;
   /** Max cached SILO/SHARD clients (LRU). Defaults to TenantRouter's own default. */
   maxSiloClients?: number;
+  /** Read-replica DSN for `dbForRead()` (Req 8). Defaults to process.env.DATABASE_REPLICA_URL. */
+  replicaDsn?: string;
+  /** Injectable replica client factory for tests; defaults to createSqlClient. */
+  replicaClientFactory?: ClientFactory;
+  /** Structured WARN logger for `dbForRead()`'s replica-unreachable fallback (Req 8.5). */
+  logger?: ReadRouterLogger;
 }
 
 export interface TenantDb<TSchema extends Record<string, unknown>> {
@@ -52,6 +80,13 @@ export interface TenantDb<TSchema extends Record<string, unknown>> {
   dbFor(tenantId: string): Promise<PostgresJsDatabase<TSchema>>;
   /** Tenant isolation tier (for observability / routing decisions). */
   tierOf(tenantId: string): Promise<TenantTier>;
+  /**
+   * Read-only accessor (Req 8): pool-tier reads go to the configured read
+   * replica when reachable, falling back to the primary on any failure or
+   * absent configuration; silo/shard tenants always read the primary. An
+   * unresolvable tier rejects rather than returning any connection.
+   */
+  dbForRead(tenantId: string): Promise<PostgresJsDatabase<TSchema>>;
 }
 
 function assertUuid(tenantId: string, fnName: string): void {
@@ -110,5 +145,50 @@ export function createTenantDb<TSchema extends Record<string, unknown>>(
     return router.tierOf(tenantId);
   }
 
-  return { sqlClient, db, router, sqlClientFor, dbFor, tierOf };
+  // ── Read_Router (Req 8): opt-in dbForRead(), additive to dbFor/db/sqlClient ──
+  const replicaDsn = opts.replicaDsn ?? process.env.DATABASE_REPLICA_URL;
+  const replicaFactory = opts.replicaClientFactory ?? createSqlClient;
+  const logger = opts.logger ?? defaultLogger;
+  let replicaClient: SqlClient | undefined;
+
+  function getOrCreateReplicaClient(): SqlClient {
+    if (!replicaClient) {
+      replicaClient = replicaFactory(replicaDsn as string, opts.clientOptions);
+    }
+    return replicaClient;
+  }
+
+  async function dbForRead(tenantId: string): Promise<PostgresJsDatabase<TSchema>> {
+    assertUuid(tenantId, "dbForRead");
+    // Req 8.6: an unresolvable tier rejects rather than returning any connection.
+    const tier = await router.tierOf(tenantId);
+
+    // Req 8.2 + 8.4: no replica configured, or a silo/shard tenant (which always
+    // reads its own dedicated primary) — behave identically to dbFor.
+    if (!replicaDsn || tier !== "pool") {
+      return dbFor(tenantId);
+    }
+
+    // Req 8.5: probe replica reachability; on failure, log exactly one WARN
+    // (redacted) and fall back to the primary — dbForRead() never throws for a
+    // missing/unreachable replica.
+    try {
+      const client = getOrCreateReplicaClient();
+      await client`SELECT 1`;
+      let d = drizzleByClient.get(client);
+      if (!d) {
+        d = drizzle(client, { schema });
+        drizzleByClient.set(client, d);
+      }
+      return d;
+    } catch (err) {
+      logger.warn(
+        redactLogPayload({ tenantId, err: err instanceof Error ? err.message : String(err) }),
+        "read_replica_unreachable_fallback_to_primary",
+      );
+      return dbFor(tenantId);
+    }
+  }
+
+  return { sqlClient, db, router, sqlClientFor, dbFor, tierOf, dbForRead };
 }

@@ -9,11 +9,13 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { CreateTenantBody, UpdateTenantBody, SuspendTenantBody, SetIsolationBody } from "./validators.js";
 import type { TenantView } from "./domain.js";
+import { tierFor, loadPlacementPolicyConfig } from "./placement-policy.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createTenant(ctx: RequestContext, body: CreateTenantBody): Promise<Accepted> {
   const id = randomUUID();
+  const decision = tierFor(body.edition, loadPlacementPolicyConfig());
   const projected: TenantView = {
     id,
     tenantId: id,
@@ -23,7 +25,9 @@ export async function createTenant(ctx: RequestContext, body: CreateTenantBody):
     status: "draft",
     region: body.region,
     residency: body.residency,
-    isolationTier: "pool",
+    isolationTier: decision.tier,
+    policyVersion: decision.policyVersion,
+    policyReason: decision.reason,
     settings: {},
     version: 1,
   };

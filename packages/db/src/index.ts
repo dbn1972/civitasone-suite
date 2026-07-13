@@ -44,6 +44,7 @@ export {
   createTenantDb,
   type TenantDb,
   type TenantDbOptions,
+  type ReadRouterLogger,
 } from "./create-tenant-db.js";
 // SAST-003e: Consumer handler wrapper for tenant context propagation.
 export { withTenantConsumer } from "./tenant-consumer.js";

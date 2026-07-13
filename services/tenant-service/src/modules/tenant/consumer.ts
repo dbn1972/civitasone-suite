@@ -21,12 +21,44 @@ export function registerTenantConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return; // already handled
       const p = msg.payload;
+      // Tenant_Placement_Policy: fall back to pool/null if an older-shaped
+      // payload (pre-adoption redelivery) doesn't carry these fields.
+      const isolationTier = p.isolationTier ?? "pool";
+      const policyVersion = p.policyVersion ?? null;
+      const policyReason = p.policyReason ?? null;
       await repo.insert(tx, {
         id: p.id, tenantId: p.id, name: p.name, domain: p.domain, edition: p.edition,
-        status: "draft", region: p.region, residency: p.residency, settings: {},
+        status: "draft", region: p.region, residency: p.residency,
+        isolationTier, policyVersion, policyReason, settings: {},
         createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
       await emit(tx, msg, EVENTS.tenantCreated, { tenantId: p.id, plan: p.edition }, "create", p.id);
+
+      // Audit the onboarding-time Tenant_Placement_Policy tier assignment,
+      // including the fallback reason when applicable (Req 2.5, 2.6, 15.3).
+      const t = tx as Parameters<typeof enqueue>[0];
+      await enqueue(t, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "tenant", action: "placement_policy_assign", resourceType: "tenant",
+          resourceId: p.id, outcome: "success", isolationTier, policyVersion, policyReason,
+        },
+      });
+
+      // When the policy-derived tier is silo, publish the same Isolation_Changed_Event
+      // used by the manual PATCH .../isolation path — exactly once, from this
+      // transaction, so install-service's Provisioning_Actuator is triggered
+      // through one consistent event path (Req 2.3). Not routed through the
+      // generic `emit()` helper to avoid a second, redundant audit event for
+      // the same tier assignment already audited above.
+      if (isolationTier === "silo") {
+        await enqueue(t, {
+          topic: EVENTS.tenantIsolationChanged, eventType: EVENTS.tenantIsolationChanged,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { tenantId: p.id, tier: "silo" },
+        });
+      }
     });
     await cache.put(keyFor(msg.payload.id), msg.payload); // refresh
   });

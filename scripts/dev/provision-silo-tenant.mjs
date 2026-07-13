@@ -7,32 +7,43 @@
  * services' migrations into it, so every service can connect there and use its
  * own schema. Idempotent (migrations are CREATE … IF NOT EXISTS).
  *
+ * This CLI script is now a thin wrapper around `provisionSiloDatabase`
+ * (`services/install-service/src/modules/provisioning/actuator.ts`) — the
+ * exact `CREATE DATABASE IF NOT EXISTS` + per-service migration-directory-walk
+ * + `IF NOT EXISTS`-tolerant apply loop lives ONLY in that shared function now,
+ * so this script and the install-service Provisioning_Actuator (task 7.7) can
+ * never drift (task 7.5).
+ *
  * Usage:
  *   node scripts/dev/provision-silo-tenant.mjs <tenantUuid> [dbName]
  *
- * Connection: uses the dev Postgres container (docker exec civitasone-postgres
- * psql -U civitas_admin). In production this runs as a privileged ops/CI job
- * with the cluster admin DSN — a microservice never holds CREATE DATABASE creds.
+ * Requires `services/install-service` to be built (`pnpm --filter
+ * @civitasone/install-service build`) so `dist/modules/provisioning/
+ * actuator.js` exists — this script imports the compiled actuator directly,
+ * the same way `scripts/ops/publish-drill-report.mjs` imports other
+ * workspace packages' `dist/` output.
+ *
+ * Connection: builds its own privileged `runnerConn` (postgres-js client, via
+ * `@civitasone/db`'s `createSqlClient`) pointed at the dev Postgres container
+ * (localhost:5435, civitas_admin) — never sourced from a service's
+ * `DATABASE_URL`. In production this runs as a privileged ops/CI job with the
+ * cluster admin DSN (or `PROVISIONING_RUNNER_DSN` once task 7.7 wires the
+ * actuator into the worker) — a microservice never holds CREATE DATABASE
+ * creds.
+ *
+ * No new npm dependency is introduced: `postgres` is imported transitively
+ * via `@civitasone/db`'s compiled `dist/` output — the same relative-import
+ * pattern already used by other bare-`scripts/` tooling (e.g.
+ * `scripts/ops/publish-drill-report.mjs` → `packages/queue/dist/index.js`) —
+ * rather than adding a `postgres` dependency directly to a `scripts/` tree
+ * that has no `package.json`.
  */
-import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createSqlClient } from "../../packages/db/dist/index.js";
+import { provisionSiloDatabase } from "../../services/install-service/dist/modules/provisioning/actuator.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const PG = "docker exec -i civitasone-postgres psql -U civitas_admin";
-
-// Service migration set (the order is irrelevant — each owns a distinct schema).
-const SERVICES = [
-  "admin-service", "analytics-service", "asset-service", "audit-service",
-  "billing-service", "citizen-service", "contract-service", "crm-service",
-  "estab-service", "finance-service", "grant-service", "helpdesk-service",
-  "hrms-service", "identity-service", "install-service", "inventory-service",
-  "knowledge-service", "legal-service", "location-service", "notification-service",
-  "payroll-service", "plugin-service", "policy-service", "procurement-service",
-  "project-service", "report-service", "stock-service", "telephony-service",
-  "tenant-service", "theme-service", "workflow-service",
-];
 
 const tenantId = process.argv[2];
 if (!tenantId || !/^[0-9a-f-]{36}$/i.test(tenantId)) {
@@ -42,45 +53,49 @@ if (!tenantId || !/^[0-9a-f-]{36}$/i.test(tenantId)) {
 const shortId = tenantId.replace(/-/g, "").slice(0, 16);
 const dbName = process.argv[3] ?? `civitas_tenant_${shortId}`;
 
-function psql(db, sql) {
-  return execSync(`${PG}${db ? ` -d ${db}` : ""}`, { input: sql, stdio: ["pipe", "pipe", "pipe"] }).toString();
+/**
+ * Privileged runner connection (Req 3.7): a scoped ops/CI credential capable
+ * of CREATE DATABASE, distinct from and never derived from any service's own
+ * `DATABASE_URL`. Dev default matches the local Postgres container
+ * (localhost:5435, civitas_admin — see infra/docker-compose.yml); override via
+ * `PROVISIONING_RUNNER_DSN`/`PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD` for other
+ * environments.
+ */
+function createRunnerConn() {
+  const dsn = process.env.PROVISIONING_RUNNER_DSN ?? buildDevDsn();
+  return createSqlClient(dsn, { max: 1 });
+}
+
+function buildDevDsn() {
+  const host = process.env.PGHOST ?? "localhost";
+  const port = process.env.PGPORT ?? "5435";
+  const user = process.env.PGUSER ?? "civitas_admin";
+  const password = process.env.PGPASSWORD ?? process.env.POSTGRES_ADMIN_PASSWORD ?? "";
+  return `postgres://${user}:${encodeURIComponent(password)}@${host}:${port}/postgres`;
 }
 
 console.log(`\n── Provisioning silo tenant ${tenantId} → DB ${dbName} ──\n`);
 
-// 1) Create the database if it does not already exist.
-const exists = psql("postgres", `SELECT 1 FROM pg_database WHERE datname = '${dbName}';`).includes("1");
-if (exists) {
-  console.log(`[idem] database ${dbName} already exists`);
-} else {
-  psql("postgres", `CREATE DATABASE ${dbName};`);
-  console.log(`[ok]   created database ${dbName}`);
+const runnerConn = createRunnerConn();
+let result;
+try {
+  result = await provisionSiloDatabase(tenantId, dbName, [], runnerConn, { reposRoot: ROOT });
+} finally {
+  await runnerConn.end({ timeout: 5 }).catch(() => undefined);
 }
 
-// 2) Apply every service's migrations into the tenant DB (all schemas, one DB).
-let applied = 0, idem = 0, errors = 0;
-for (const svc of SERVICES) {
-  const dir = join(ROOT, "services", svc, "migrations");
-  if (!existsSync(dir)) continue;
-  const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
-  for (const file of files) {
-    const sql = readFileSync(join(dir, file));
-    try {
-      psql(dbName, sql.toString());
-      applied++;
-    } catch (err) {
-      const out = (err.stderr?.toString() ?? "") + (err.stdout?.toString() ?? "");
-      if (out.includes("already exists") && !out.includes("ERROR:")) { idem++; }
-      else { console.error(`[ERR] ${svc}/${file}: ${out.trim().slice(0, 200)}`); errors++; }
-    }
-  }
-}
+const applied = result.steps.filter((s) => s.ok && !s.detail?.includes("idempotent")).length;
+const idem = result.steps.filter((s) => s.ok && s.detail?.includes("idempotent")).length;
+const errors = result.steps.filter((s) => !s.ok).length;
 
 console.log(`\n── Summary ──`);
 console.log(`DB        : ${dbName}`);
 console.log(`Applied   : ${applied}`);
 console.log(`Idempotent: ${idem}`);
 console.log(`Errors    : ${errors}`);
-if (errors > 0) process.exit(1);
+if (result.status === "failed") {
+  console.error(`\n[ERR] failed at step ${result.failingStep}: ${result.error}`);
+  process.exit(1);
+}
 console.log(`\n✓ Silo tenant ${tenantId} provisioned. Set TENANT_SILO_IDS += ${tenantId} and`);
 console.log(`  TENANT_SILO_DSN_TEMPLATE so services route it to ${dbName}.`);
