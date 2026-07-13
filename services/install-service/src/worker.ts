@@ -5,6 +5,7 @@ import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerStageConsumers } from "./modules/stages/consumer.js";
 import { registerProvisioningConsumers } from "./modules/provisioning/consumer.js";
+import { startProvisioningPollLoop } from "./modules/provisioning/scheduler.js";
 import { registerOrchestratorConsumers } from "./modules/orchestrator/consumer.js";
 
 const log = pino({ name: "install-worker" });
@@ -20,10 +21,15 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
   batchSize: 1000,
   logger: log,
 });
-log.info("install-service worker: consumers + outbox relay running");
+// Task 7.7: Provisioning_Actuator poll loop — picks up requested/failed/stale-
+// provisioning Silo_Provisioning_Records and drives them through actual
+// database creation + migration (never a queue consumer; see scheduler.ts).
+const provisioningPoll = startProvisioningPollLoop({ logger: log });
+log.info("install-service worker: consumers + outbox relay + provisioning poll loop running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
+  clearInterval(provisioningPoll);
   clearInterval(purge);
   clearInterval(relay);
   await queue.stop();

@@ -77,7 +77,10 @@ export interface ProvisionSiloDatabaseOptions {
 // This file lives at services/install-service/{src,dist}/modules/provisioning/
 // in both its TS source and compiled locations, so the same relative depth
 // (5 levels up) reaches the monorepo root either way — no build-time constant.
-const DEFAULT_ROOT = join(new URL(".", import.meta.url).pathname, "../../../../..");
+// Exported so the worker poll loop (scheduler.ts, task 7.7) can compute the
+// same `requiredMigrations` list the CLI script/actuator use, without
+// duplicating this path-resolution logic.
+export const DEFAULT_ROOT = join(new URL(".", import.meta.url).pathname, "../../../../..");
 
 /** `"<service>/<file>"` identifiers for every migration file across every DB_Backed_Service, in a stable order. */
 export function listAllMigrations(reposRoot: string): MigrationStep[] {
@@ -93,6 +96,19 @@ export function listAllMigrations(reposRoot: string): MigrationStep[] {
 
 function migrationId(step: MigrationStep): string {
   return `${step.service}/${step.file}`;
+}
+
+/**
+ * `"<service>/<file>"` identifiers for every migration file across every
+ * DB_Backed_Service (Req 3.8, 4.5) — the `requiredMigrations` list the worker
+ * poll loop (scheduler.ts, task 7.7) diffs a completed run's `appliedMigrations`
+ * against via `domain.ts`'s `migrationsConfirmed`/`canTransitionToReady` before
+ * persisting a `ready` transition, so `ready` is only ever reached once every
+ * required migration is actually confirmed applied — never inferred solely from
+ * `provisionSiloDatabase`'s own `status` field.
+ */
+export function listAllMigrationIds(reposRoot: string): string[] {
+  return listAllMigrations(reposRoot).map(migrationId);
 }
 
 /**

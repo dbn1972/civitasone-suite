@@ -1,7 +1,7 @@
 {{- $root := . -}}
-{{- if .Values.autoscaling.enabled }}
 {{- range $name, $cfg := .Values.services }}
-{{- if ne $cfg.http false }}
+{{- $auto := default $root.Values.autoscaling $cfg.autoscaling }}
+{{- if and $auto.enabled (ne $cfg.http false) }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -15,15 +15,41 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ $root.Release.Name }}-{{ $name }}
-  minReplicas: {{ $root.Values.autoscaling.minReplicas }}
-  maxReplicas: {{ $root.Values.autoscaling.maxReplicas }}
+  minReplicas: {{ $auto.minReplicas }}
+  maxReplicas: {{ $auto.maxReplicas }}
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: {{ $root.Values.autoscaling.targetCPUUtilizationPercentage }}
+          averageUtilization: {{ $auto.targetCPUUtilizationPercentage }}
 {{- end }}
+{{- end }}
+{{- if $root.Values.gateway.enabled }}
+{{- $gwAuto := default $root.Values.autoscaling $root.Values.gateway.autoscaling }}
+{{- if $gwAuto.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $root.Release.Name }}-gateway
+  labels:
+    {{- include "civitasone.labels" $root | nindent 4 }}
+    app.kubernetes.io/name: gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $root.Release.Name }}-gateway
+  minReplicas: {{ $gwAuto.minReplicas }}
+  maxReplicas: {{ $gwAuto.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $gwAuto.targetCPUUtilizationPercentage }}
 {{- end }}
 {{- end }}

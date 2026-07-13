@@ -39,3 +39,29 @@ rather than an individual file in this directory. When a Tier-2 service is promo
 or otherwise needs its own runbook, copy that §5 template — the same structure used
 by the 9 files above — into a new `docs/runbooks/<service>.md`, fill in the
 service-specific dependencies/dashboards/failure modes, and link it from this index.
+
+## DR restore drill reports (Drill_Report retrieval)
+
+The `Drill_Scheduler` GitHub Actions workflow ([`.github/workflows/dr-drill.yml`](../../.github/workflows/dr-drill.yml))
+runs weekly (Sunday 03:00 UTC, plus on-demand via `workflow_dispatch`) to prove backups are
+actually restorable within the RPO/RTO targets in [SLO-SLI-RUNBOOKS.md §1](../operations/SLO-SLI-RUNBOOKS.md#1-platform-wide-slo-targets-charter-28).
+It backs up all 33 service databases (`scripts/ops/backup-databases.sh`), restores each
+Tier-0/Tier-1 backup into a scratch database and verifies table counts + a sample-row check
+(`scripts/ops/restore-drill.sh --all-tier01`), and produces a `Drill_Report` JSON (run
+timestamp, per-service pass/fail outcome, table counts, sample-row results).
+
+For audit review, that `Drill_Report` history is retrievable from two locations:
+
+1. **GitHub Actions artifacts** — every workflow run uploads `drill-report.json` as an
+   artifact named `dr-drill-report-<run-id>`, retained for **400 days**. Browse
+   [Actions → DR Restore Drill](../../.github/workflows/dr-drill.yml) in the repository, open
+   the run in question, and download the artifact from its summary page.
+2. **Durable object storage** — `scripts/ops/publish-drill-report.mjs` persists the same
+   (credential-redacted) report to the `civitasone` S3/MinIO bucket's `dr-drills/` prefix
+   (key: `dr-drills/<compact-run-timestamp>.json`), and emits an Audit_Event recording the
+   drill outcome via the audit-service's outbox-fed ingestion path. This is the
+   longer-lived, non-expiring copy — use it when a drill run is older than the 400-day
+   artifact retention window, or when correlating against the audit trail.
+
+On any Tier-0/Tier-1 drill failure, `scripts/ops/notify-alert-channel.mjs` pages the platform's
+existing alerting channel (Slack webhook or Alertmanager, per `infra/observability/alertmanager.yml`).
