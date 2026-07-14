@@ -8,6 +8,24 @@
 ---
 
 ## §0 — ALREADY FIXED / COVERED this session (do NOT redo)
+
+### RESOLVED 2026-07-14 (Claude, verified + tested + on `main`) — do NOT redo
+| Ticket | Commit | Proof |
+|---|---|---|
+| **PAY-DEF01** ECR pensionable wage = `min(basic+DA, 15000)` | `88978a2` | `ecr-pensionable-wage.test.ts` 5/5 (oracle); ecr-domain.ts 100% cov |
+| **BL-03** finance GL consumes `payroll.run.disbursed` → salary settlement journal posts | `88978a2` | `payroll-settlement.test.ts` 4/4, stash-proven (3/4 fail on old code) |
+| **SEC-P1-06** pensioner PAN/bank via Drizzle `encryptedText` (was plaintext raw-SQL) | `88978a2` | insert path routed through encrypted columns |
+| **SEC-P1-01** payslip PDF enforces employee ownership (was IDOR) | `88978a2` + `6885184` | `payslip-ownership.test.ts` 6/6 |
+| **SEC-P0-03** plugin `new Function()` RCE → `node:vm` null-proto sandbox (no require/process/fs/eval) | `0152f12` | `plugin-sandbox.test.ts` 12/12; runtime.ts 100% line. NOTE: the ticket's `sandbox/runtime.ts` did not exist — it was created. |
+| **NOTIF-CRASH** added missing `email/smtp-sender.ts` | `27dd130` | smtp-sender tests 2/2 (dry-run + dispatch) |
+| **SEC-P1-09** removed hardcoded BYPASSRLS passwords (secrets-GUC-or-random) | `27dd130` | live-validated: role BYPASSRLS+LOGIN, pw_length=64, no pgcrypto dep |
+| **INV-MIGRATIONS** migration `0011` creates `cost_layers` + `cycle_counts` (RLS+FORCE) | `27dd130` | applied+verified live; costing suite 15/15; no missing-relation errors |
+| **ANALYTICS-BIGINT** | — | **NOT-A-BUG**: `facts/normalize.ts:15` already coerces decimal→bigint paise (fixed in `061d6a16`) |
+
+**Still open for Kiro (unchanged below):** GR-FAIL, ID-FAIL, ESTAB-FAIL, SEC-P1-07/08 (SSRF), ASSET-CONSUMER, METADATA-STUB, DQ data-hygiene, and all of §3. Full changelog: `erp-assessment/FIXES-APPLIED-2026-07-14.md`.
+
+---
+
 - **SEC-P0-01 (gateway cross-tenant bypass) — FIXED & PROVEN, commit `2ba2911`.** `gateway/jwt-edge.ts` now unconditionally overwrites `x-tenant-id` with the verified token `tid`; a forged header can no longer win. Regression test added (fails without fix). **This also neutralises the *exploit path* of SEC-P0-02** — since the header reaching services now always equals the verified token, a client can no longer forge it. SEC-P0-02's per-service hardening (below) is now defense-in-depth, not an acute hole.
 - **Consumer WRITES under RLS — FIXED centrally, commit `6d64df7`.** `queue-service createQueue` wraps every consumer in `withTenantConsumer→runWithTenant(msg.tenantId)`. So in the real (queue) path, all consumer writes now set the tenant GUC. **IMPORTANT for GR-FAIL/ID-FAIL/ESTAB-FAIL/ASSET-CONSUMER/PROC-GRN below:** many of those "consumer fails under RLS" TEST failures are likely test-harness gaps (the test seeds/invokes the consumer directly, bypassing the wrapped queue.subscribe) rather than production defects — verify by driving the real queue path or wrapping the test's seed/invoke in `runWithTenant` before concluding it's a code bug.
 - **Read path + JWT tenant-source — FIXED for 8 services** (`5a76029` finance, `4fe84a2` billing+notification, `23f222d` workflow, `f0bffdd` hrms+identity, `3f3b149` payroll) plus court/visitor/meeting/analytics earlier. Each: `scopedRead` + a JWT-sourced onRequest hook, live-proven (bare read=0 → scoped=1 → cross-tenant=0).
