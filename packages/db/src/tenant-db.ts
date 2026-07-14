@@ -7,6 +7,10 @@
  *
  * This ensures RLS policies are enforced even when code uses bare
  * `db.transaction()` — eliminating the 902 bare db.* call site problem.
+ *
+ * NOTE: re-exported from `./index.js` as `createTenantDbWithGuc` to avoid a
+ * name collision with the fleet-wide TenantRouter-adoption factory in
+ * `./create-tenant-db.js` (also named `createTenantDb`).
  */
 import { drizzle } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";

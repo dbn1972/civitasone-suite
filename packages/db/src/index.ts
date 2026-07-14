@@ -37,7 +37,15 @@ export { tenantTransaction, createTenantTxHook } from "./tenant-tx.js";
 // SAST-003c: AsyncLocalStorage tenant context for automatic GUC propagation.
 export { tenantStorage, getCurrentTenantId, runWithTenant, setTenantContext } from "./tenant-context.js";
 // SAST-003d: Tenant-aware DB wrapper — auto-sets GUC on every transaction.
-export { createTenantDb } from "./tenant-db.js";
+export { createTenantDb as createTenantDbWithGuc } from "./tenant-db.js";
+// Fleet-wide TenantRouter-adoption factory (Req 1.1–1.6) — generalizes the
+// estab-service pattern: { sqlClient, db, router, sqlClientFor, dbFor, tierOf }.
+export {
+  createTenantDb,
+  type TenantDb,
+  type TenantDbOptions,
+  type ReadRouterLogger,
+} from "./create-tenant-db.js";
 // SAST-003e: Consumer handler wrapper for tenant context propagation.
 export { withTenantConsumer } from "./tenant-consumer.js";
 // SAST-003f: One-line db wrapper for tenant GUC injection.

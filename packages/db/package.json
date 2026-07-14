@@ -25,12 +25,15 @@
     "drizzle-orm": "^0.30.0",
     "fastify-plugin": "^4.5.0",
     "postgres": "^3.4.0",
-    "@civitasone/types": "workspace:*"
+    "@civitasone/types": "workspace:*",
+    "@civitasone/observability": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
     "drizzle-kit": "^0.20.0",
     "fastify": "^4.27.0",
-    "vitest": "^2.0.0"
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "fast-check": "4.8.0"
   }
 }

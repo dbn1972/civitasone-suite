@@ -5,13 +5,13 @@
  * app.tenant_id GUC. RLS policies are therefore inert at runtime.
  *
  * SOLUTION: Store the current tenantId in AsyncLocalStorage. The enhanced
- * `createTenantDb()` wraps Drizzle's db.transaction() to automatically call
+ * `createTenantDbWithGuc()` wraps Drizzle's db.transaction() to automatically call
  * `SET LOCAL app.tenant_id` at the start of every transaction when a tenant
  * context is active.
  *
  * USAGE (service shared/db.ts):
- *   import { createTenantDb, setTenantContext } from "@civitasone/db";
- *   export const db = createTenantDb(schema);
+ *   import { createTenantDbWithGuc, setTenantContext } from "@civitasone/db";
+ *   export const db = createTenantDbWithGuc(schema);
  *
  * The onRequest hook (createTenantTxHook) now also stores the tenantId in
  * AsyncLocalStorage, so ANY db.transaction() within that request automatically

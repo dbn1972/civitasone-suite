@@ -216,6 +216,8 @@ jobs:
             exit 1
           fi
           echo "✅ No raw any types"
+      - name: Tenant router adoption guard (Req 1.7)
+        run: node scripts/ci/tenant-router-guard.mjs
 
   # ─────────────────────────────────────────────
   # Job 4: Web build check

@@ -43,9 +43,12 @@ config:
   KEYCLOAK_URL: "http://civitasone-keycloak:8080"
   KEYCLOAK_REALM: "civitasone"
   LOG_LEVEL: "info"
-  DATABASE_HOST: "civitasone-postgresql"
-  DATABASE_PORT: "5432"
+  # Every service connects through the Connection_Proxy (pgbouncer), never
+  # directly to Postgres port 5432 — see templates/pgbouncer.yaml.
+  DATABASE_HOST: "civitasone-pgbouncer"
+  DATABASE_PORT: "6432"
   DATABASE_USER: "civitasone"
+  DB_VIA_PGBOUNCER: "true"
 
 # Secret keys to inject from `existingSecret` into every pod as env vars.
 secretEnv:
@@ -78,19 +81,19 @@ autoscaling:
 #   http      — false => no Service / probes (pure worker-style); default true
 # ─────────────────────────────────────────────────────────────────────────────
 services:
-  identity:     { port: 3001, db: civitas_identity,     replicas: 2, worker: true, secretEnv: [MFA_ENC_KEY] }
+  identity:     { port: 3001, db: civitas_identity,     replicas: 2, worker: true, secretEnv: [MFA_ENC_KEY], autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 8, targetCPUUtilizationPercentage: 65 } }
   tenant:       { port: 3002, db: civitas_tenant,       replicas: 2, worker: true }
   policy:       { port: 3003, db: civitas_policy,       replicas: 2, worker: true }
-  audit:        { port: 3004, db: civitas_audit,        replicas: 2, worker: true }
+  audit:        { port: 3004, db: civitas_audit,        replicas: 2, worker: true, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 } }
   install:      { port: 3005, db: civitas_install,      replicas: 1, worker: true }
   notification: { port: 3006, db: civitas_notification, replicas: 2, worker: true }
-  finance:      { port: 3007, db: civitas_finance,      replicas: 2, worker: true }
+  finance:      { port: 3007, db: civitas_finance,      replicas: 2, worker: true, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 } }
   procurement:  { port: 3008, db: civitas_procurement,  replicas: 2, worker: true }
   contract:     { port: 3009, db: civitas_contract,     replicas: 1, worker: true }
-  estab:        { port: 3010, db: civitas_estab,        replicas: 1, worker: true }
+  estab:        { port: 3010, db: civitas_estab,        replicas: 1, worker: true, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 } }
   stock:        { port: 3011, db: civitas_stock,        replicas: 1, worker: true }
-  hrms:         { port: 3012, db: civitas_hrms,         replicas: 2, worker: true, secretEnv: [PII_ENC_KEY] }
-  payroll:      { port: 3013, db: civitas_payroll,      replicas: 1, worker: true }
+  hrms:         { port: 3012, db: civitas_hrms,         replicas: 2, worker: true, secretEnv: [PII_ENC_KEY], autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 } }
+  payroll:      { port: 3013, db: civitas_payroll,      replicas: 1, worker: true, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 } }
   project:      { port: 3014, db: civitas_project,      replicas: 1, worker: true }
   asset:        { port: 3015, db: civitas_asset,        replicas: 1, worker: true }
   report:       { port: 3016, db: civitas_report,       replicas: 2, worker: true }
@@ -106,16 +109,22 @@ services:
   telephony:    { port: 3026, db: civitas_telephony,    replicas: 1, worker: true }
   helpdesk:     { port: 3027, db: civitas_helpdesk,     replicas: 2, worker: true }
   knowledge:    { port: 3028, db: civitas_knowledge,    replicas: 1, worker: true }
-  workflow:     { port: 3029, db: civitas_workflow,     replicas: 2, worker: true }
+  workflow:     { port: 3029, db: civitas_workflow,     replicas: 2, worker: true, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 } }
   analytics:    { port: 3031, db: civitas_analytics,    replicas: 1, worker: true }
   location:     { port: 4012, db: civitas_location,     replicas: 1, worker: true }
-  queue:        { port: 3030, replicas: 2, entry: dist/server.js }
+  queue:        { port: 3030, replicas: 2, entry: dist/server.js, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 8, targetCPUUtilizationPercentage: 65 } }
 
 # Gateway (public entrypoint to the service mesh).
+# Tier 0 (edge) per docs/operations/SLO-SLI-RUNBOOKS.md §3 — default autoscaling enabled (Req 9.1, 9.2).
 gateway:
   enabled: true
   port: 8080
   replicas: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 65
   extraEnv:
     HOST: "0.0.0.0"
     CORS_ORIGIN: "http://localhost:3000"
@@ -138,6 +147,20 @@ ingress:
   tls:
     enabled: false
     secretName: ""
+
+# Connection_Proxy (PgBouncer) — every service's DATABASE_HOST/PORT above
+# points here. Sizing mirrors docs/architecture/CONNECTION-BUDGET.md.
+pgbouncer:
+  enabled: true
+  poolMode: transaction
+  maxClientConn: 500
+  defaultPoolSize: 20
+  # Upstream Postgres this pgbouncer instance connects to. Defaults to the
+  # bundled `postgresql` sub-chart's generated service name/port below via
+  # release-name templating (see templates/pgbouncer.yaml) — override only
+  # if pointing at an external/unbundled Postgres instance.
+  databaseHost: ""
+  databasePort: "5432"
 
 postgresql:
   enabled: true

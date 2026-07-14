@@ -18,6 +18,9 @@ export default defineConfig({
         "src/worker.ts",
         "src/modules/stages/consumer.ts",
         "src/modules/provisioning/consumer.ts",
+        // Worker poll-loop wiring (task 7.7) — dedicated unit tests are task 7.8,
+        // same convention as excluding consumer.ts (queue-driven wiring).
+        "src/modules/provisioning/scheduler.ts",
         "src/modules/orchestrator/consumer.ts",
         "src/modules/orchestrator/repo.ts",
         "src/modules/stages/repo.ts",

@@ -1,0 +1,92 @@
+name: DR Restore Drill
+
+# Drill_Scheduler (G10 / Req 12.1, 12.2, 12.4, 13.2, 13.3) — weekly proof that CivitasOne's
+# backups are actually restorable within the documented RPO/RTO (docs/operations/SLO-SLI-RUNBOOKS.md
+# §1). Runs the full Backup_Job (scripts/ops/backup-databases.sh) against a fresh Postgres, then
+# a Restore_Drill (scripts/ops/restore-drill.sh --all-tier01) against every Tier-0/Tier-1 service's
+# backup, uploads the resulting Drill_Report as a long-retention workflow artifact, publishes it to
+# durable object storage + an Audit_Event (scripts/ops/publish-drill-report.mjs), and pages the
+# platform's alert channel on any Tier-0/Tier-1 failure (scripts/ops/notify-alert-channel.mjs).
+#
+# See docs/runbooks/README.md and docs/operations/SLO-SLI-RUNBOOKS.md for where to retrieve
+# Drill_Report history for audit review (task 16.6).
+
+on:
+  schedule:
+    - cron: '0 3 * * 0' # weekly, Sunday 03:00 UTC
+  workflow_dispatch: {}
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  drill:
+    name: Backup + Restore Drill
+    runs-on: ubuntu-latest
+    # Ephemeral Postgres to back up and drill against — mirrors ci.yml's `test` job service
+    # container so backup-databases.sh / restore-drill.sh have a live target to operate on.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: civitas
+          POSTGRES_PASSWORD: civitas_test
+          POSTGRES_DB: civitas_test
+        ports: ['5435:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: '5435'
+      PGUSER: civitas
+      PGPASSWORD: civitas_test
+      QUEUE_DRIVER: memory
+      NODE_ENV: production
+      BACKUP_DIR: ${{ github.workspace }}/.dr-drill-backups
+      # Object storage (dr-drills/ prefix) — see packages/storage/src/index.ts for the full
+      # env-var contract. Left unset (falls back to package defaults) unless configured as repo
+      # secrets; never hardcode real credentials here.
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      S3_FORCE_PATH_STYLE: ${{ secrets.S3_FORCE_PATH_STYLE }}
+      # Alerting channel (scripts/ops/notify-alert-channel.mjs — see
+      # infra/observability/alertmanager.yml). First configured one wins.
+      ALERTMANAGER_SLACK_WEBHOOK: ${{ secrets.ALERTMANAGER_SLACK_WEBHOOK }}
+      ALERTMANAGER_URL: ${{ secrets.ALERTMANAGER_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - name: Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - name: Build packages (observability/storage/queue, used by drill-report scripts)
+        run: pnpm turbo build --filter='./packages/*'
+      - name: Bootstrap Postgres (per-service DBs + migrations)
+        run: bash scripts/ci/bootstrap-postgres.sh
+      - name: Backup all 33 databases
+        run: bash scripts/ops/backup-databases.sh "${{ env.BACKUP_DIR }}"
+      - name: Restore drill — all Tier-0/Tier-1 services
+        run: bash scripts/ops/restore-drill.sh --all-tier01 --report-json drill-report.json
+      - name: Upload Drill_Report artifact (Req 13.2 — 400-day retention)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-drill-report-${{ github.run_id }}
+          path: drill-report.json
+          retention-days: 400
+      - name: Publish Drill_Report to object storage + Audit_Event
+        if: always()
+        run: node scripts/ops/publish-drill-report.mjs drill-report.json
+      - name: Alert on Tier-0/Tier-1 drill failure
+        if: failure()
+        run: node scripts/ops/notify-alert-channel.mjs "DR drill failed — see run ${{ github.run_id }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"

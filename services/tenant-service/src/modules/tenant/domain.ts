@@ -11,6 +11,10 @@ export type TenantView = {
   region: string;
   residency: string;
   isolationTier: "pool" | "silo";
+  /** Tenant_Placement_Policy version in effect when isolationTier was assigned; null if unset. */
+  policyVersion?: string | null;
+  /** One of policy_mapped | fallback_default | manual_override; null if unset. */
+  policyReason?: "policy_mapped" | "fallback_default" | "manual_override" | null;
   settings: Record<string, unknown>;
   version: number;
 };
