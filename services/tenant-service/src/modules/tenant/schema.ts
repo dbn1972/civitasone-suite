@@ -27,6 +27,15 @@ export const tenants = tenantSchema.table("tenants", {
   policyVersion: text("policy_version"),
   policyReason: varchar("policy_reason", { length: 24 }),
   orgCategory: text("org_category"), // richer classification (central_govt, state_psu, society, etc.)
+  // District federation topology (migration 0016_tenant_federation.sql):
+  // Ministry -> State -> Division -> District -> Department. Resolved via the
+  // control-plane SECURITY DEFINER functions tenant.tenant_ancestry/_descendants.
+  parentTenantId: uuid("parent_tenant_id"),
+  govLevel: varchar("gov_level", { length: 24 }),   // nation|state|division|district|department|office
+  lgdCode: varchar("lgd_code", { length: 32 }),
+  cellId: varchar("cell_id", { length: 64 }),
+  officeType: varchar("office_type", { length: 48 }),
+  deptCode: varchar("dept_code", { length: 48 }),
   settings: jsonb("settings").$type<Record<string, unknown>>().default({}).notNull(),
   // audit columns (CLAUDE.md §3.6)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
