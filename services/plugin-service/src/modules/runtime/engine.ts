@@ -21,6 +21,7 @@
  */
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
+import { runInSandbox, SANDBOX_TIMEOUT, type SandboxApi } from "./sandbox/runtime.js";
 
 const log = pino({ name: "plugin-runtime" });
 
@@ -122,30 +123,18 @@ async function executeInSandbox(
     },
   };
 
-  // Execute with timeout
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-  try {
-    // Simplified execution — in production use worker_threads
-    // The handler is expected to be a simple expression or function body
-    const fn = new Function("ctx", `"use strict"; return (async () => { ${handler} })()`);
-    const result = await Promise.race([
-      fn(sandboxApi),
-      new Promise((_, reject) => {
-        controller.signal.addEventListener("abort", () => reject(new Error("TIMEOUT")));
-      }),
-    ]);
-    return { output: result ?? { emittedEvents } };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message === "TIMEOUT") {
+  // SEC-P0-03: run the untrusted handler in an isolated vm context with no
+  // access to require/process/module/fs (see sandbox/runtime.ts). The previous
+  // `new Function(handler)` executed plugin code in the host module scope —
+  // arbitrary RCE. `emittedEvents` is captured via the sandbox `emit` closure.
+  const { output, error } = await runInSandbox(handler, sandboxApi as SandboxApi, TIMEOUT_MS);
+  if (error) {
+    if (error === SANDBOX_TIMEOUT) {
       return { output: null, error: `Hook execution timed out (${TIMEOUT_MS}ms)` };
     }
-    return { output: null, error: message };
-  } finally {
-    clearTimeout(timeout);
+    return { output: null, error };
   }
+  return { output: output ?? { emittedEvents } };
 }
 
 // ── Public API ────────────────────────────────────────────────────
