@@ -8,6 +8,15 @@
  * runner, per the design's error-handling table) — and drives each one through
  * the actual database-creation + migration work.
  *
+ * `install.silo_provisions` is RLS-enforced per tenant, but the initial scan
+ * (`repo.findPollable`) is genuinely cross-tenant — no single tenant's GUC
+ * applies before a candidate's `tenantId` is even known — so it runs against
+ * the privileged `PROVISIONING_RUNNER_DSN` connection. Once a candidate's
+ * tenantId is known, every subsequent claim/finalize write runs through the
+ * ordinary tenant-scoped `db.transaction()` wrapped in `runWithTenant(record.
+ * tenantId, …)` — the same GUC-injection pattern `withTenantConsumer` applies
+ * to every other consumer's real queue message delivery.
+ *
  * Ordering guarantees (Req 3.2, 3.7):
  *   1. Claim: optimistic-locked transition to `provisioning` BEFORE any I/O
  *      (`repo.claimProvisioning`), so two overlapping ticks or worker instances
@@ -39,7 +48,7 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { pino, type Logger } from "pino";
-import { createSqlClient } from "@civitasone/db";
+import { createSqlClient, runWithTenant } from "@civitasone/db";
 import { redactLogPayload } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -120,18 +129,39 @@ export async function runProvisioningPollCycle(
   const reposRoot = opts.reposRoot ?? DEFAULT_ROOT;
   const now = opts.now ?? (() => new Date());
 
-  const staleBefore = new Date(now().getTime() - staleMs);
-  const candidates = await repo.findPollable(staleBefore, batchSize);
+  const runnerConn = createSqlClient(runnerDsn, { max: 1 });
+  let candidates: SiloProvisionRow[];
+  try {
+    const staleBefore = new Date(now().getTime() - staleMs);
+    // Req 3.2/3.7: the initial scan is genuinely cross-tenant (no single
+    // tenant's app.tenant_id GUC applies before a candidate's tenantId is
+    // even known), so it runs against the privileged runner connection
+    // rather than the tenant-scoped `db` (repo.ts's `privilegedDb`).
+    candidates = await repo.findPollable(runnerConn, staleBefore, batchSize);
+  } catch (err) {
+    await runnerConn.end({ timeout: 5 }).catch(() => undefined);
+    throw err;
+  }
   result.scanned = candidates.length;
-  if (candidates.length === 0) return result;
+  if (candidates.length === 0) {
+    await runnerConn.end({ timeout: 5 }).catch(() => undefined);
+    return result;
+  }
 
   const requiredMigrations = listAllMigrationIds(reposRoot);
-  const runnerConn = createSqlClient(runnerDsn, { max: 1 });
   const resolved: ResolvedOptions = { log, reposRoot };
   try {
     for (const record of candidates) {
       try {
-        const outcome = await processRecord(record, requiredMigrations, runnerConn, resolved);
+        // Once findPollable's cross-tenant scan has identified this record,
+        // its tenantId is known — claim/finalize run through the ordinary
+        // tenant-scoped `db.transaction()` (which auto-injects the app.tenant_id
+        // GUC via wrapWithTenantGuc), exactly like every other consumer's
+        // writes, so `runWithTenant` here is the same pattern used by
+        // `withTenantConsumer` for real queue message delivery.
+        const outcome = await runWithTenant(record.tenantId, () =>
+          processRecord(record, requiredMigrations, runnerConn, resolved),
+        );
         result[outcome] += 1;
       } catch (err) {
         result.skipped += 1;

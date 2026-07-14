@@ -62,7 +62,7 @@ function makeFakeReplicaFactory(mode: "reachable" | "unreachable") {
 
 /** Fake structured logger that records every WARN call. */
 function makeFakeLogger() {
-  const calls: Array<{ payload: Record<string, unknown>; msg?: string }> = [];
+  const calls: Array<{ payload: Record<string, unknown>; msg: string | undefined }> = [];
   const logger: ReadRouterLogger = {
     warn(payload, msg) {
       calls.push({ payload, msg });
@@ -272,7 +272,8 @@ describe("Property 7: Read/write routing composes with tenant-tier resolution an
         fc.uniqueArray(arbUuid, { minLength: 2, maxLength: 2 }),
         arbSiloOrShardTier,
         arbReplicaState,
-        async ([tenantA, tenantB], tier, replicaState) => {
+        async (tenantPair, tier, replicaState) => {
+          const [tenantA, tenantB] = tenantPair as [string, string];
           const baseOpts = {
             schema: SCHEMA,
             poolDsn: "postgres://shared/db",

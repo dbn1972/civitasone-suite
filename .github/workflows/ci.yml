@@ -475,6 +475,22 @@ jobs:
         run: node scripts/contract/verify-screens.mjs --gateway http://localhost:8080
       - name: Contract score must be 10/10
         run: node scripts/contract/score.mjs
+      # Task 17.3 (tenant-platform-hardening, Req 6.1, 6.4): smoke-run the
+      # Connection_Proxy compliance verifier against this job's live docker
+      # Postgres — the compose-based CI runner here has no pgbouncer sidecar,
+      # so every service connects directly. This asserts the *tool itself*
+      # still runs end-to-end (queries pg_stat_activity, renders a report,
+      # exits non-zero) against a real fleet — the actual compliance
+      # assertion (a fully-`pgbouncer`-fronted stack reporting compliant) is
+      # exercised by `tests/infra/helm-pgbouncer.test.ts` (task 9.3) and the
+      # on-prem/AWS pgbouncer deployments (tasks 9.1, 9.2) directly.
+      - name: Smoke-run Connection_Proxy compliance verifier
+        env:
+          OPS_DSN: postgresql://civitas:civitas_test@localhost:5435/civitas_test
+        run: |
+          node scripts/ops/verify-pgbouncer-routing.mjs --json > /tmp/pgbouncer-report.json || true
+          cat /tmp/pgbouncer-report.json
+          node scripts/ci/assert-pgbouncer-report-shape.mjs /tmp/pgbouncer-report.json
 
 
   # ─────────────────────────────────────────────

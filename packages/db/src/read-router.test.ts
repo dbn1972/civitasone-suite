@@ -55,7 +55,7 @@ function makeFakeReplicaFactory(mode: "reachable" | "unreachable") {
 
 /** Fake structured logger that records every WARN call. */
 function makeFakeLogger() {
-  const calls: Array<{ payload: Record<string, unknown>; msg?: string }> = [];
+  const calls: Array<{ payload: Record<string, unknown>; msg: string | undefined }> = [];
   const logger: ReadRouterLogger = {
     warn(payload, msg) {
       calls.push({ payload, msg });

@@ -12,11 +12,21 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { tenants } from "../src/modules/tenant/schema.js";
 import { processed, outboxMessages } from "../src/shared/outbox.js";
 import { registerTenantConsumers } from "../src/modules/tenant/consumer.js";
+
+// RLS on tenant.tenants/tenant.tenant_quotas/_outbox.messages/_inbox.processed enforces
+// `tenant_id = current_tenant_id()`. Bare db.select()/db.delete() outside a tenant-scoped
+// transaction see zero rows (fail-closed), so every read/write in this suite runs inside
+// runWithTenant() + db.transaction(), matching the consumer's own GUC-injection pattern
+// (packages/db/src/wrap-tenant-db.ts).
+async function tenantSelect<T>(tenantId: string, fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction(async (tx) => fn(tx as typeof db)));
+}
 
 // Fixed UUIDs scoped to this suite — cleaned up in beforeAll / afterAll.
 const ACTOR   = "00000000-aaaa-4000-8000-000000000001";
@@ -41,9 +51,11 @@ function payload(tenantId: string, domain: string) {
 }
 
 async function wipe(tenantId: string, messageId: string) {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
-  await db.delete(tenants).where(eq(tenants.id, tenantId));
-  await db.delete(processed).where(eq(processed.messageId, messageId));
+  await tenantSelect(tenantId, async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
+    await tx.delete(tenants).where(eq(tenants.id, tenantId));
+    await tx.delete(processed).where(eq(processed.messageId, messageId));
+  });
 }
 
 describe("tenant consumer — integration (real Postgres)", () => {
@@ -77,7 +89,7 @@ describe("tenant consumer — integration (real Postgres)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await queue.stop();
 
-    const rows = await db.select().from(tenants).where(eq(tenants.id, T1_ID));
+    const rows = await tenantSelect(T1_ID, (tx) => tx.select().from(tenants).where(eq(tenants.id, T1_ID)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe("Integration Test Tenant");
     expect(rows[0]?.status).toBe("draft");
@@ -85,11 +97,12 @@ describe("tenant consumer — integration (real Postgres)", () => {
     expect(rows[0]?.createdBy).toBe(ACTOR);
 
     // _inbox.processed must record the messageId so future duplicates are skipped.
+    // (No RLS on _inbox.processed — bare read is fine.)
     const seen = await db.select().from(processed).where(eq(processed.messageId, MSG_1));
     expect(seen).toHaveLength(1);
 
     // Outbox must have the domain event + the mandatory audit event (CLAUDE.md §3.8).
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+    const outbox = await tenantSelect(T1_ID, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID)));
     expect(outbox.length).toBeGreaterThanOrEqual(2);
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain("tenant.tenant.created");
@@ -115,7 +128,7 @@ describe("tenant consumer — integration (real Postgres)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q1.stop();
 
-    const after1 = await db.select().from(tenants).where(eq(tenants.id, T2_ID));
+    const after1 = await tenantSelect(T2_ID, (tx) => tx.select().from(tenants).where(eq(tenants.id, T2_ID)));
     expect(after1).toHaveLength(1);
 
     // Second delivery via a FRESH MemoryQueue — bypasses queue-level dedup (its `seen` set
@@ -139,11 +152,12 @@ describe("tenant consumer — integration (real Postgres)", () => {
     await q2.stop();
 
     // Still exactly one row — INSERT was not repeated.
-    const after2 = await db.select().from(tenants).where(eq(tenants.id, T2_ID));
+    const after2 = await tenantSelect(T2_ID, (tx) => tx.select().from(tenants).where(eq(tenants.id, T2_ID)));
     expect(after2).toHaveLength(1);
 
     // Exactly one _inbox.processed entry (primary-key conflict would be the guard,
     // but markProcessed does a SELECT-then-INSERT so we prove it stayed at one).
+    // (No RLS on _inbox.processed — bare read is fine.)
     const inboxRows = await db.select().from(processed).where(eq(processed.messageId, MSG_2));
     expect(inboxRows).toHaveLength(1);
   });
