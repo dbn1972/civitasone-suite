@@ -35,6 +35,15 @@ export interface CivitasJwtPayload {
   iat: number;
   exp: number;
   iss?: string;
+  /** District org-model claims (EPIC-2) — Keycloak-style snake_case custom
+   * claims minted from the caller's active posting. All optional / backward
+   * compatible: a token without them yields a context with the fields undefined. */
+  office_id?: string;
+  position_id?: string;
+  dept_code?: string;
+  hierarchy_domain?: string;
+  jurisdiction_unit_ids?: string[];
+  clearance_level?: string;
 }
 
 export type { RequestContext };
@@ -181,6 +190,13 @@ export function toRequestContext(
     roles: payload.roles ?? [],
     correlationId,
     sessionId: payload.sid ?? payload.sessionId ?? "",
+    // District org-model claims (EPIC-2) — only set when the token carries them.
+    ...(payload.office_id ? { officeId: payload.office_id } : {}),
+    ...(payload.position_id ? { positionId: payload.position_id } : {}),
+    ...(payload.dept_code ? { deptCode: payload.dept_code } : {}),
+    ...(payload.hierarchy_domain ? { hierarchyDomain: payload.hierarchy_domain } : {}),
+    ...(payload.jurisdiction_unit_ids ? { jurisdictionUnitIds: payload.jurisdiction_unit_ids } : {}),
+    ...(payload.clearance_level ? { clearanceLevel: payload.clearance_level } : {}),
   };
 }
 

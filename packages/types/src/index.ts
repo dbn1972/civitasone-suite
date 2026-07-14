@@ -75,6 +75,16 @@ export interface RequestContext {
   roles: string[];
   correlationId: string;
   sessionId?: string;
+  /** District org-model claims (EPIC-2). Populated from the caller's active
+   * posting when present in the token; absent for non-office principals. These
+   * let RLS/ABAC fence access by office, position and jurisdiction rather than
+   * by tenant + role alone. */
+  officeId?: string;
+  positionId?: string;
+  deptCode?: string;
+  hierarchyDomain?: string;
+  jurisdictionUnitIds?: string[];
+  clearanceLevel?: string;
   /** EVT-4 (04-T4): client-supplied idempotency key (x-idempotency-key header).
    * Sensitive write commands derive a deterministic messageId from it so a
    * double-submit dedupes at the consumer instead of creating two events. */

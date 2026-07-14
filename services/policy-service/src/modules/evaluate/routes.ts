@@ -5,7 +5,9 @@ import { resolveContext, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
-import { evaluateDecision } from "./domain.js";
+import { loadCompiledRules } from "../abac/repo.js";
+import { evaluateWithAbac } from "./domain.js";
+import type { AttrBag } from "../abac/domain.js";
 
 const AUDIT = "policy.decision";
 
@@ -17,6 +19,9 @@ const evaluateBody = z.object({
     roles: z.array(z.string()).default([]),
   }).optional(),
   resource: z.record(z.unknown()).optional(),
+  /** Trusted internal callers may pass the subject's org attributes explicitly
+   * (office/jurisdiction) when evaluating on behalf of another principal. */
+  subjectAttrs: z.record(z.unknown()).optional(),
 });
 
 export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
@@ -49,7 +54,36 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
     // Resolve the granted permissions for the subject from the binding store
     // (scoped to actor.tenantId), never from client-asserted permissions.
     const granted = await repo.findGrantedPermissions(actor.tenantId, actor.userId, actor.roles);
-    const result = evaluateDecision(body.permissionKey, actor.roles, granted);
+
+    // EPIC-2 (G-09/G-10): run RBAC then ABAC. Subject org attributes come from
+    // the authenticated context (office/position/jurisdiction claims); ABAC deny
+    // rules fence by jurisdiction even when the role grants the action. For a
+    // trusted internal caller supplying an explicit actor, subject attrs may be
+    // passed alongside; otherwise they derive from ctx.
+    const [roleIds, compiledRules] = await Promise.all([
+      repo.resolveRoleIds(actor.tenantId, actor.userId, actor.roles),
+      loadCompiledRules(actor.tenantId),
+    ]);
+    const subjectAttrs: AttrBag = {
+      ...(ctx.officeId ? { officeId: ctx.officeId } : {}),
+      ...(ctx.positionId ? { positionId: ctx.positionId } : {}),
+      ...(ctx.deptCode ? { deptCode: ctx.deptCode } : {}),
+      ...(ctx.hierarchyDomain ? { hierarchyDomain: ctx.hierarchyDomain } : {}),
+      ...(ctx.jurisdictionUnitIds ? { jurisdictionUnitIds: ctx.jurisdictionUnitIds } : {}),
+      ...(ctx.clearanceLevel ? { clearanceLevel: ctx.clearanceLevel } : {}),
+      ...(isInternalCaller && body.subjectAttrs ? body.subjectAttrs : {}),
+    };
+    const result = evaluateWithAbac({
+      permissionKey: body.permissionKey,
+      userId: actor.userId,
+      tenantId: actor.tenantId,
+      roles: actor.roles,
+      roleIds,
+      subjectAttrs,
+      resource: (body.resource ?? {}) as AttrBag,
+      granted,
+      compiledRules,
+    });
 
     await db.transaction(async (tx) => {
       await enqueue(tx as Parameters<typeof enqueue>[0], {
