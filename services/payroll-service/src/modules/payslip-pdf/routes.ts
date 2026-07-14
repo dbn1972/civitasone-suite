@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
@@ -87,6 +87,11 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       .limit(1));
     const slip = slipRows[0];
     if (!slip) throw new HttpError(404, "NOT_FOUND", "salary slip not found");
+
+    // SEC-P1-01: a self-service `employee` caller may only download their OWN
+    // payslip — without this, any employee could fetch any co-worker's slip
+    // (gross/net/PAN/IFSC/UAN) by iterating slip ids.
+    enforceEmployeeOwnership(ctx, slip.employeeId);
 
     // Fetch the run for month info
     const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)

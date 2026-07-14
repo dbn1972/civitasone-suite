@@ -5,6 +5,7 @@ import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSumma
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody } from "./validators.js";
+import { payrollPensioners } from "./schema.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { db, scopedRead } from "../../shared/db.js";
@@ -153,21 +154,27 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PAYROLL_ROLES);
     const b = createPensionerBody.parse(req.body);
     const id = randomUUID();
-    await db.execute(sql`
-      INSERT INTO payroll.payroll_pensioners
-        (id, tenant_id, ppo_no, full_name, date_of_birth, basic_pension_minor,
-         commuted_pension_minor, commutation_date, medical_allowance_minor, ddo_code,
-         bank_account_no, bank_ifsc, pan, tax_regime, created_by, updated_by)
-      VALUES
-        (${id}::uuid, ${ctx.tenantId}::uuid, ${b.ppoNo}, ${b.fullName}, ${b.dateOfBirth}::date,
-         ${b.basicPensionMinor.toString()}::bigint,
-         ${(b.commutedPensionMinor ?? 0n).toString()}::bigint,
-         ${b.commutationDate ?? null}::date,
-         ${(b.medicalAllowanceMinor ?? 0n).toString()}::bigint,
-         ${b.ddoCode ?? null}, ${b.bankAccountNo ?? null}, ${b.bankIfsc ?? null}, ${b.pan ?? null},
-         ${b.taxRegime}, ${ctx.actorId}::uuid, ${ctx.actorId}::uuid)
-      ON CONFLICT (tenant_id, ppo_no) DO NOTHING
-    `);
+    // SEC-P1-06: insert via the Drizzle table so the encryptedText transform on
+    // bank_account_no / bank_ifsc / pan applies — the previous raw-SQL INSERT
+    // bypassed it and stored the PII in plaintext (DPDP violation).
+    await db.insert(payrollPensioners).values({
+      id,
+      tenantId: ctx.tenantId,
+      ppoNo: b.ppoNo,
+      fullName: b.fullName,
+      dateOfBirth: b.dateOfBirth,
+      basicPensionMinor: b.basicPensionMinor,
+      commutedPensionMinor: b.commutedPensionMinor ?? 0n,
+      commutationDate: b.commutationDate ?? null,
+      medicalAllowanceMinor: b.medicalAllowanceMinor ?? 0n,
+      ddoCode: b.ddoCode ?? null,
+      bankAccountNo: b.bankAccountNo ?? null,
+      bankIfsc: b.bankIfsc ?? null,
+      pan: b.pan ?? null,
+      taxRegime: b.taxRegime,
+      createdBy: ctx.actorId,
+      updatedBy: ctx.actorId,
+    }).onConflictDoNothing();
     return reply.code(201).send({ id, ppoNo: b.ppoNo });
   });
 

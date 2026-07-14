@@ -47,7 +47,10 @@ export const CONSUMED_EVENTS = {
   eftInitiate:              "finance.payment.eft.initiate",
   auditParaPendingRecovery: "audit.para.pending_recovery",
   payrollRunApproved:       "payroll.run.approved",
-  payrollRunFinalized:      "payroll.run.finalized",
+  /** BL-03: payroll emits run.disbursed; the previous "payroll.run.finalized"
+   * subscription was dead — no service ever emitted that topic, so the salary
+   * settlement never posted to the GL. */
+  payrollRunDisbursed:      "payroll.run.disbursed",
   grnAccepted:              "procurement.grn.accepted",
   grantUcSubmitted:         "grant.uc.submitted",
   sanctionFileDecided:      "finance.sanction.file_decided",

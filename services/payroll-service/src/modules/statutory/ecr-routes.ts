@@ -6,6 +6,8 @@ import { payrollPf } from "./schema.js";
 import { payrollSlips } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
+import { computePensionableWage } from "./ecr-domain.js";
+
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 /**
@@ -50,10 +52,15 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
 
       const grossWages = slip ? Math.round(Number(slip.grossMinor) / 100) : 0;
       const basicWages = slip ? Math.round(Number(slip.basicMinor) / 100) : 0;
-      // EPF/EPS/EDLI wages are pensionable wages capped at the Rs 15,000 ceiling.
-      const epfWages = Math.min(basicWages, 15000);
-      const epsWages = Math.min(basicWages, 15000);
-      const edliWages = Math.min(basicWages, 15000);
+      // DA lives in the slip components (no dedicated column on the slip row).
+      const components = (slip?.components ?? []) as Array<{ code: string; amountMinor: number }>;
+      const daWages = Math.round(components
+        .filter((c) => c.code === "DA")
+        .reduce((s, c) => s + c.amountMinor, 0) / 100);
+      const pensionableWages = computePensionableWage(basicWages, daWages);
+      const epfWages = pensionableWages;
+      const epsWages = pensionableWages;
+      const edliWages = pensionableWages;
 
       const epfEE = Math.round(Number(pf.empContribMinor) / 100);          // Employee 12%
       // Employer split from the persisted record (EPS capped at Rs 1,250).

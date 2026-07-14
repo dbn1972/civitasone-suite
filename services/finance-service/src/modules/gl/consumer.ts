@@ -235,29 +235,47 @@ export function registerGlConsumers(queue: Queue): void {
   });
 
   /**
-   * payroll.run.finalized → GL journal entries for payroll salary posting.
-   * Validates all headCodes exist in the Chart of Accounts, inserts balanced
-   * journal entries, and emits finance.gl.posted or finance.gl.rejected.
+   * BL-03: payroll.run.disbursed → salary SETTLEMENT journal.
+   * The accrual (Dr salary expense / Cr net payable / Cr statutory) posts on
+   * payroll.run.approved via the integrations consumer; this handler clears the
+   * net-payable liability against the bank when the run is actually disbursed:
+   * Dr <net payable> / Cr <bank>. The previous subscription here consumed
+   * "payroll.run.finalized" — a topic no service ever emitted — so this leg
+   * never posted. Head codes are env-configurable and must exist in the
+   * per-tenant Chart of Accounts (unknown codes emit finance.gl.rejected).
    */
-  queue.subscribe(CONSUMED_EVENTS.payrollRunFinalized, async (msg) => {
+  queue.subscribe(CONSUMED_EVENTS.payrollRunDisbursed, async (msg) => {
     const p = msg.payload as {
       runId: string;
-      tenantId: string;
-      fy: string;
-      entries: Array<{ headCode: string; debitMinor: string | number; creditMinor: string | number }>;
+      month: string;
+      totalNetMinor: string;
       messageId?: string;
     };
 
-    const journalId = deterministicId(`payroll_run:${p.runId}`);
+    const PAYABLE_HEAD = process.env["PAYROLL_GL_NET_PAYABLE_HEAD"] ?? "2101";
+    const BANK_HEAD = process.env["PAYROLL_GL_BANK_HEAD"] ?? "1101";
+
+    // Deterministic id keyed off the run so an outbox redelivery hits the
+    // journal PK and no-ops (mirrors the GL spine).
+    const journalId = deterministicId(`payroll_settlement:${p.runId}`);
     const today = new Date().toISOString().slice(0, 10);
+    // H3: paise as bigint — no Number() on aggregate paise.
+    const net = BigInt(p.totalNetMinor);
 
     try {
+      // A zero-net run has nothing to settle (all-exception slips); posting an
+      // all-zero journal would be rejected downstream as unbalanced noise.
+      if (net <= 0n) return;
+
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        // Validate all headCodes exist in COA for this tenant
+        // Validate both head codes exist in COA for this tenant
         const resolvedLines: JournalLine[] = [];
-        for (const entry of p.entries) {
+        for (const entry of [
+          { headCode: PAYABLE_HEAD, debitMinor: net.toString(), creditMinor: "0" },
+          { headCode: BANK_HEAD, debitMinor: "0", creditMinor: net.toString() },
+        ]) {
           const head = await budgetRepo.findHeadByCodeTx(
             tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0],
             msg.tenantId,
@@ -268,8 +286,8 @@ export function registerGlConsumers(queue: Queue): void {
           }
           resolvedLines.push({
             accountCode: head.id,
-            debitMinor: BigInt(entry.debitMinor).toString(),
-            creditMinor: BigInt(entry.creditMinor).toString(),
+            debitMinor: entry.debitMinor,
+            creditMinor: entry.creditMinor,
           });
         }
 
@@ -280,8 +298,8 @@ export function registerGlConsumers(queue: Queue): void {
         await postJournal(tx, msg, {
           id: journalId,
           tenantId: msg.tenantId,
-          voucherNo: `PAY/${p.fy}/${p.runId.slice(0, 8).toUpperCase()}`,
-          type: "payroll",
+          voucherNo: `PAYSTL/${p.month}/${p.runId.slice(0, 8).toUpperCase()}`,
+          type: "payroll_settlement",
           postingDate: today,
           lines: resolvedLines,
         });
