@@ -18,16 +18,34 @@
 -- src/shared/scanner-db.ts); when unset it falls back to DATABASE_URL (safe in dev
 -- where the service connects as the RLS-inert superuser).
 --
--- PROD: rotate the password out-of-band from your secrets manager, e.g.
---   ALTER ROLE meeting_scanner PASSWORD '<from-secrets>';
--- The dev password below mirrors the meeting_dev_pw convention for local/test.
+-- SECURITY (SEC-P1-09): no password literal ships in this migration. The
+-- password is taken from the `civitas.meeting_scanner_password` GUC — set it
+-- from your secrets manager BEFORE running migrations, e.g.
+--   PGOPTIONS="-c civitas.meeting_scanner_password=$(vault kv get -field=pw ...)" \
+--     <run migrations>
+-- When the GUC is absent (local/dev), a RANDOM one-time password is generated so
+-- no known credential exists for this BYPASSRLS role (dev connects as the
+-- superuser, so the scanner login password is not used there anyway). PROD may
+-- still rotate later: ALTER ROLE meeting_scanner PASSWORD '<from-secrets>';
 
 DO $$
+DECLARE
+  scanner_pw text := coalesce(
+    nullif(current_setting('civitas.meeting_scanner_password', true), ''),
+    -- No pgcrypto dependency: 64 hex chars of non-deterministic entropy.
+    md5(random()::text || clock_timestamp()::text) || md5(random()::text || clock_timestamp()::text)
+  );
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'meeting_scanner') THEN
-    CREATE ROLE meeting_scanner LOGIN PASSWORD 'meeting_scanner_dev_pw'
-      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT BYPASSRLS;
+    EXECUTE format(
+      'CREATE ROLE meeting_scanner LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT BYPASSRLS',
+      scanner_pw);
   ELSE
+    -- Only rotate the password when one was explicitly provided via the GUC;
+    -- otherwise leave the existing password untouched (idempotent re-runs).
+    IF nullif(current_setting('civitas.meeting_scanner_password', true), '') IS NOT NULL THEN
+      EXECUTE format('ALTER ROLE meeting_scanner PASSWORD %L', scanner_pw);
+    END IF;
     ALTER ROLE meeting_scanner BYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE;
   END IF;
 END
