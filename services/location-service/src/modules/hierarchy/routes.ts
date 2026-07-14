@@ -1,14 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createUnitBody, updateUnitBody, bulkSyncBody, idParam, hierarchyTreeSchema, unitViewSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { resolveActivePosting, toOrgClaims } from "./posting-resolver.js";
 import { cache } from "../../shared/infra.js";
 import { RESOURCES } from "../../topics.js";
 
 const HIERARCHY_ROLES = ["location_admin", "super_admin", "admin"];
+// The token issuer (identity-service / dev-login) resolves org claims at login.
+const POSTING_READER_ROLES = [...HIERARCHY_ROLES, "identity_admin", "identity_service"];
 
 export async function hierarchyRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hierarchy", async (req, reply) => {
@@ -104,5 +108,21 @@ export async function hierarchyRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const descendants = await repo.findDescendants(id, ctx.tenantId);
     return reply.send({ data: descendants });
+  });
+
+  // EPIC-2 T2.2: resolve an employee's active posting -> office/position/
+  // jurisdiction, shaped as the JWT org-claim fragment. The token issuer calls
+  // this at login and embeds `claims` so downstream RLS/ABAC can fence by office
+  // and jurisdiction. A static path — not shadowed by /v1/hierarchy/:id.
+  app.get("/v1/hierarchy/postings/active/:employeeId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, POSTING_READER_ROLES);
+    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
+    const posting = await resolveActivePosting(ctx.tenantId, employeeId);
+    if (!posting) {
+      // Non-office principal — no org claims to embed (not an error).
+      return reply.send({ posting: null, claims: null });
+    }
+    return reply.send({ posting, claims: toOrgClaims(posting) });
   });
 }
