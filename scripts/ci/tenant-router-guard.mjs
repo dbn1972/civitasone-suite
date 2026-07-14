@@ -118,7 +118,7 @@ const NEW_TENANT_ROUTER_RE = /\bnew\s+TenantRouter\s*\(/;
 // comment or string elsewhere.
 const IMPORT_RE = /import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
 
-function checkFile(source) {
+export function checkFile(source) {
   const lines = stripComments(source);
   const stripped = lines.join("\n");
 
@@ -211,4 +211,8 @@ function main() {
   process.exit(1);
 }
 
-main();
+// Only run when executed directly (not when imported by callers/tests) —
+// mirrors scripts/ops/lib/outcome-aggregation.mjs.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
