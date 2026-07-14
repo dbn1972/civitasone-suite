@@ -1,4 +1,6 @@
 import { eq, and, desc, inArray, lt, or } from "drizzle-orm";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import type postgres from "postgres";
 import { db } from "../../shared/db.js";
 import { siloProvisions } from "./schema.js";
 import type { SiloProvisionRow, SiloProvisionInsert } from "./schema.js";
@@ -36,16 +38,42 @@ export async function findByIdTenantTx(tx: Writer, id: string, tenantId: string)
 }
 
 /**
+ * A privileged (BYPASSRLS-capable) Drizzle instance bound to the poll loop's
+ * `PROVISIONING_RUNNER_DSN` connection.
+ *
+ * `install.silo_provisions` is RLS-enforced (`tenant_id = install.
+ * current_tenant_id()`, `FORCE ROW LEVEL SECURITY`, and `install_svc` is
+ * `NOBYPASSRLS`). The poll loop's initial scan must find `requested`/
+ * `failed`/stale-`provisioning` records ACROSS EVERY TENANT before it even
+ * knows which tenant(s) own them — there is no single tenant's `app.tenant_id`
+ * GUC to set for that scan, so the ordinary tenant-scoped `db` can never see
+ * any row here regardless of tenant context.
+ *
+ * `findPollable` therefore runs against the same privileged `runnerConn` the
+ * actuator already uses for database creation/migration (Req 3.7's
+ * `PROVISIONING_RUNNER_DSN`, not any service's `DATABASE_URL`) — the ONE
+ * genuinely cross-tenant query in this file. Once a candidate record's
+ * `tenantId` is known (after the scan), the claim/update steps use the
+ * ordinary tenant-scoped `db` wrapped in `runWithTenant(record.tenantId, …)`
+ * (scheduler.ts), exactly like every other consumer/route in the fleet.
+ */
+function privilegedDb(runnerConn: postgres.Sql): PostgresJsDatabase<{ siloProvisions: typeof siloProvisions }> {
+  return drizzle(runnerConn, { schema: { siloProvisions } });
+}
+
+/**
  * Silo_Provisioning_Record candidates for the worker poll loop (task 7.7,
  * Req 3.2, error-handling table "Actuator crashes/restarts mid-migration"):
  * every `requested`/`failed` record, plus any `provisioning` record whose
  * `updatedAt` is older than `staleBeforeMs` — treated as an interrupted/
  * crashed runner attempt safely resumable via Property 5's idempotency.
- * Read outside a transaction (the scheduler claims one record at a time inside
- * its own tx via `findByIdTx` + an optimistic `version` check before acting).
+ *
+ * Genuinely cross-tenant by design — runs against the privileged
+ * `runnerConn` (see `privilegedDb` above), never the tenant-scoped `db`,
+ * since no single tenant's GUC applies to this scan.
  */
-export async function findPollable(staleBefore: Date, limit: number): Promise<SiloProvisionRow[]> {
-  return db.select().from(siloProvisions)
+export async function findPollable(runnerConn: postgres.Sql, staleBefore: Date, limit: number): Promise<SiloProvisionRow[]> {
+  return privilegedDb(runnerConn).select().from(siloProvisions)
     .where(or(
       inArray(siloProvisions.status, ["requested", "failed"]),
       and(eq(siloProvisions.status, "provisioning"), lt(siloProvisions.updatedAt, staleBefore)),
@@ -68,6 +96,12 @@ export async function findByIdTx(tx: Writer, id: string): Promise<SiloProvisionR
  * call — the caller skips the record rather than double-processing it, so
  * concurrent worker instances never race on the same tenant's provisioning
  * attempt.
+ *
+ * Once `findPollable`'s cross-tenant scan has identified a record, its
+ * `tenantId` is known — the caller (scheduler.ts) wraps this in
+ * `runWithTenant(record.tenantId, …)` around a normal `db.transaction()`, so
+ * `tx` here is tenant-scoped exactly like every other consumer's writes; no
+ * privileged connection is needed for a single already-identified tenant's row.
  */
 export async function claimProvisioning(
   tx: Writer,

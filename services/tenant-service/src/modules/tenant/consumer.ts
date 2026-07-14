@@ -5,6 +5,7 @@
  * the events after commit.
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -18,7 +19,7 @@ function keyFor(id: string) { return cache.makeKey(id, RESOURCE, id); }
 
 export function registerTenantConsumers(queue: Queue): void {
   queue.subscribe<TenantView>(COMMANDS.createTenant, async (msg) => {
-    await db.transaction(async (tx) => {
+    await runWithTenant(msg.tenantId, async () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return; // already handled
       const p = msg.payload;
       // Tenant_Placement_Policy: fall back to pool/null if an older-shaped
@@ -59,14 +60,14 @@ export function registerTenantConsumers(queue: Queue): void {
           payload: { tenantId: p.id, tier: "silo" },
         });
       }
-    });
+    }));
     await cache.put(keyFor(msg.payload.id), msg.payload); // refresh
   });
 
   queue.subscribe<{ id: string; name?: string; settings?: Record<string, unknown> }>(
     COMMANDS.updateTenant,
     async (msg) => {
-      await db.transaction(async (tx) => {
+      await runWithTenant(msg.tenantId, async () => db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const cur = await repo.findByIdTx(tx, msg.payload.id);
         if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
@@ -75,20 +76,20 @@ export function registerTenantConsumers(queue: Queue): void {
         if (msg.payload.settings !== undefined) patch.settings = msg.payload.settings;
         await repo.update(tx, msg.payload.id, patch);
         await emit(tx, msg, EVENTS.tenantUpdated, { tenantId: msg.payload.id }, "update", msg.payload.id);
-      });
+      }));
       await cache.invalidate(keyFor(msg.payload.id));
     }
   );
 
   queue.subscribe<{ id: string; reason: string }>(COMMANDS.suspendTenant, async (msg) => {
-    await db.transaction(async (tx) => {
+    await runWithTenant(msg.tenantId, async () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findByIdTx(tx, msg.payload.id);
       if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
       assertTransition(cur.status, "suspended"); // domain rule
       await repo.update(tx, msg.payload.id, { status: "suspended", updatedBy: msg.actorId, version: cur.version + 1 });
       await emit(tx, msg, EVENTS.tenantSuspended, { tenantId: msg.payload.id, reason: msg.payload.reason }, "suspend", msg.payload.id);
-    });
+    }));
     await cache.invalidate(keyFor(msg.payload.id));
   });
 
@@ -109,7 +110,7 @@ export function registerTenantConsumers(queue: Queue): void {
     adminName: string;
     edition: string;
   }>(COMMANDS.onboardTenant, async (msg) => {
-    await db.transaction(async (tx) => {
+    await runWithTenant(msg.tenantId, async () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
       const cur = await repo.findByIdTx(tx, p.tenantId);
@@ -130,14 +131,14 @@ export function registerTenantConsumers(queue: Queue): void {
         adminName: p.adminName,
         edition: p.edition,
       }, "onboard", p.tenantId);
-    });
+    }));
     await cache.invalidate(keyFor(msg.payload.tenantId));
   });
 
   queue.subscribe<{ id: string; tier: "pool" | "silo"; dbDsnRef: string | null; kmsKeyRef: string | null }>(
     COMMANDS.setIsolation,
     async (msg) => {
-      await db.transaction(async (tx) => {
+      await runWithTenant(msg.tenantId, async () => db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const cur = await repo.findByIdTx(tx, msg.payload.id);
         if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
@@ -151,7 +152,7 @@ export function registerTenantConsumers(queue: Queue): void {
         // install-service consumes this to provision/migrate (silo) the tenant DB.
         await emit(tx, msg, EVENTS.tenantIsolationChanged,
           { tenantId: msg.payload.id, tier: msg.payload.tier }, "set_isolation", msg.payload.id);
-      });
+      }));
       await cache.invalidate(keyFor(msg.payload.id));
     },
   );

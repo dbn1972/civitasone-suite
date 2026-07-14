@@ -4,6 +4,7 @@
  * WRITES are used ONLY by the consumer, inside the outbox transaction.
  */
 import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { tenants, tenantQuotas, type TenantRow, type TenantInsert, type TenantQuotaRow } from "./schema.js";
 import type { TenantView } from "./domain.js";
@@ -91,8 +92,20 @@ const DEFAULT_QUOTAS: Omit<TenantQuotaView, "tenantId" | "createdAt" | "updatedA
   maxUsers: 100,
 };
 
+/**
+ * Run fn inside a tenant-scoped transaction. RLS on tenant.tenant_quotas
+ * requires the app.tenant_id GUC to be set (via wrapWithTenantGuc, which only
+ * intercepts db.transaction() calls — bare db.select()/insert()/update() are
+ * never GUC-scoped), so every quotas read/write goes through this helper.
+ */
+async function tenantScoped<T>(tenantId: string, fn: (tx: Writer) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction((tx) => fn(tx as unknown as Writer)));
+}
+
 export async function findQuotas(tenantId: string): Promise<TenantQuotaView> {
-  const rows = await db.select().from(tenantQuotas).where(eq(tenantQuotas.tenantId, tenantId)).limit(1);
+  const rows = await tenantScoped(tenantId, (tx) =>
+    tx.select().from(tenantQuotas).where(eq(tenantQuotas.tenantId, tenantId)).limit(1),
+  );
   if (rows[0]) return quotaToView(rows[0]);
   // Return defaults when no explicit quotas exist
   const now = new Date();
@@ -109,22 +122,24 @@ export async function upsertQuotas(tenantId: string, patch: Partial<{ maxEmploye
   if (patch.maxStorageGb !== undefined) cleanPatch.maxStorageGb = patch.maxStorageGb;
   if (patch.maxUsers !== undefined) cleanPatch.maxUsers = patch.maxUsers;
 
-  const existing = await db.select().from(tenantQuotas).where(eq(tenantQuotas.tenantId, tenantId)).limit(1);
-  if (existing[0]) {
-    await db.update(tenantQuotas)
-      .set({ ...cleanPatch, updatedAt: now })
-      .where(eq(tenantQuotas.tenantId, tenantId));
-  } else {
-    await db.insert(tenantQuotas).values({
-      tenantId,
-      maxEmployees: cleanPatch.maxEmployees ?? DEFAULT_QUOTAS.maxEmployees,
-      maxFiles: cleanPatch.maxFiles ?? DEFAULT_QUOTAS.maxFiles,
-      maxApiCallsPerMin: cleanPatch.maxApiCallsPerMin ?? DEFAULT_QUOTAS.maxApiCallsPerMin,
-      maxStorageGb: cleanPatch.maxStorageGb ?? DEFAULT_QUOTAS.maxStorageGb,
-      maxUsers: cleanPatch.maxUsers ?? DEFAULT_QUOTAS.maxUsers,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
+  await tenantScoped(tenantId, async (tx) => {
+    const existing = await tx.select().from(tenantQuotas).where(eq(tenantQuotas.tenantId, tenantId)).limit(1);
+    if (existing[0]) {
+      await tx.update(tenantQuotas)
+        .set({ ...cleanPatch, updatedAt: now })
+        .where(eq(tenantQuotas.tenantId, tenantId));
+    } else {
+      await tx.insert(tenantQuotas).values({
+        tenantId,
+        maxEmployees: cleanPatch.maxEmployees ?? DEFAULT_QUOTAS.maxEmployees,
+        maxFiles: cleanPatch.maxFiles ?? DEFAULT_QUOTAS.maxFiles,
+        maxApiCallsPerMin: cleanPatch.maxApiCallsPerMin ?? DEFAULT_QUOTAS.maxApiCallsPerMin,
+        maxStorageGb: cleanPatch.maxStorageGb ?? DEFAULT_QUOTAS.maxStorageGb,
+        maxUsers: cleanPatch.maxUsers ?? DEFAULT_QUOTAS.maxUsers,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  });
   return findQuotas(tenantId);
 }
