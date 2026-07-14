@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { paginatedSchema } from "@civitasone/schemas/common";
 
-export const UNIT_TYPES = ["state", "district", "block", "gp", "ward", "zone"] as const;
+// Canonical district-governance level taxonomy (mirrors hierarchy.unit_types in
+// migration 0012). Adding a novel state-specific level = INSERT into
+// hierarchy.unit_types (+ optionally extend this list); the DB FK is the
+// integrity backstop.
+export const UNIT_TYPES = [
+  "nation", "state", "division", "range", "district", "police_district",
+  "zone", "subdivision", "police_subdivision", "ulb", "circle", "tehsil",
+  "block", "police_station", "ward", "gp", "beat", "village",
+] as const;
 
 export const createUnitBody = z.object({
   code: z.string().min(1, "Code is required").max(32, "Code must be 32 characters or fewer"),

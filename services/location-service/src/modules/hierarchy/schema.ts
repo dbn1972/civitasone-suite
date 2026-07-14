@@ -1,22 +1,16 @@
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export const hierarchySchema = pgSchema("hierarchy");
 
-export const unitTypeEnum = hierarchySchema.enum("unit_type", [
-  "state",
-  "district",
-  "block",
-  "gp",
-  "ward",
-  "zone",
-]);
-
+// `type` is a varchar validated against hierarchy.unit_types (migration 0012) —
+// an INSERT-only lookup — rather than a rigid PG enum, so state-specific levels
+// can be added without a DDL deploy.
 export const administrativeUnits = hierarchySchema.table("administrative_units", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
   code: varchar("code", { length: 32 }).notNull(),
   name: varchar("name", { length: 200 }).notNull(),
-  type: unitTypeEnum("type").notNull(),
+  type: varchar("type", { length: 32 }).notNull(),
   parentId: uuid("parent_id"),
   population: integer("population"),
   areaKm2: integer("area_km2"),
