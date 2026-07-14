@@ -82,4 +82,32 @@ describe("plugin sandbox isolation (SEC-P0-03)", () => {
     expect(r.output).toBe("done");
     expect(emitted).toEqual([{ type: "did.thing", payload: { ok: true } }]);
   });
+
+  it("reports a compile error for a syntactically invalid handler (no crash)", async () => {
+    // Covers the vm.Script construction failure path — a malformed handler must
+    // return a clean error, never throw out of the sandbox.
+    const r = await runInSandbox("return ) syntax( {{", api(), 2000);
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+    expect(r.error).not.toBe("TIMEOUT");
+  });
+
+  it("surfaces a thrown error from the handler as a sandbox error", async () => {
+    const r = await runInSandbox('throw new Error("boom");', api(), 2000);
+    expect(r.output).toBeUndefined();
+    expect(r.error).toMatch(/boom/);
+  });
+
+  it("propagates the handler's async return value", async () => {
+    const r = await runInSandbox("return await Promise.resolve(ctx.payload.a * 2);", api({ payload: { a: 21 } }), 2000);
+    expect(r.error).toBeUndefined();
+    expect(r.output).toBe(42);
+  });
+
+  it("stringifies a non-Error thrown value (defensive fallback)", async () => {
+    // Exercises the `instanceof Error ? … : String(err)` fallback branch.
+    const r = await runInSandbox('throw "raw string failure";', api(), 2000);
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBe("raw string failure");
+  });
 });
