@@ -1,5 +1,5 @@
 import { eq, and, isNull } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { notificationTemplates, notificationPrefs, type TemplateInsert, type PrefInsert } from "./schema.js";
 import type { TemplateView, PrefView } from "./domain.js";
 
@@ -14,14 +14,14 @@ function toPrefView(r: typeof notificationPrefs.$inferSelect): PrefView {
 }
 
 export async function findTemplateById(id: string): Promise<TemplateView | null> {
-  const rows = await db.select().from(notificationTemplates).where(eq(notificationTemplates.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(notificationTemplates).where(eq(notificationTemplates.id, id)).limit(1));
   return rows[0] ? toTemplateView(rows[0]) : null;
 }
 
 export async function findTemplatesByTenant(tenantId: string, limit = 500): Promise<TemplateView[]> {
-  return (await db.select().from(notificationTemplates).where(
+  return (await scopedRead((tx) => tx.select().from(notificationTemplates).where(
     and(eq(notificationTemplates.tenantId, tenantId), isNull(notificationTemplates.supersededBy)),
-  ).limit(limit)).map(toTemplateView);
+  ).limit(limit))).map(toTemplateView);
 }
 
 export async function findTemplateVersions(id: string): Promise<TemplateView[]> {
@@ -38,7 +38,7 @@ export async function findTemplateVersions(id: string): Promise<TemplateView[]> 
   const versions: TemplateView[] = [latest];
   let current = latest;
   for (;;) {
-    const preds = await db.select().from(notificationTemplates).where(eq(notificationTemplates.supersededBy, current.id)).limit(1);
+    const preds = await scopedRead((tx) => tx.select().from(notificationTemplates).where(eq(notificationTemplates.supersededBy, current.id)).limit(1));
     if (!preds[0]) break;
     const pred = toTemplateView(preds[0]);
     versions.unshift(pred);
@@ -48,21 +48,21 @@ export async function findTemplateVersions(id: string): Promise<TemplateView[]> 
 }
 
 export async function findPrefsByUser(userId: string, limit = 200): Promise<PrefView[]> {
-  return (await db.select().from(notificationPrefs).where(eq(notificationPrefs.userId, userId)).limit(limit)).map(toPrefView);
+  return (await scopedRead((tx) => tx.select().from(notificationPrefs).where(eq(notificationPrefs.userId, userId)).limit(limit))).map(toPrefView);
 }
 
 export async function findPrefsByTenant(tenantId: string, limit: number): Promise<PrefView[]> {
-  return (await db.select().from(notificationPrefs)
+  return (await scopedRead((tx) => tx.select().from(notificationPrefs)
     .where(eq(notificationPrefs.tenantId, tenantId))
-    .limit(limit)).map(toPrefView);
+    .limit(limit))).map(toPrefView);
 }
 
 // Tenant-scoped single-pref read by row id (used to authorize an update — a
 // wrong-tenant or unknown id resolves to null → 404, never another tenant's row).
 export async function findPrefById(tenantId: string, id: string): Promise<PrefView | null> {
-  const rows = await db.select().from(notificationPrefs)
+  const rows = await scopedRead((tx) => tx.select().from(notificationPrefs)
     .where(and(eq(notificationPrefs.id, id), eq(notificationPrefs.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toPrefView(rows[0]) : null;
 }
 

@@ -40,7 +40,9 @@ export function registerCaseRegistryConsumers(
       // Idempotency: a redelivery (same messageId) is a hard no-op.
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // §47 config/metadata: caseType must be in (defaults ∪ tenant config).
+      // §47 config/metadata: caseType must be in the effective allowed set — the
+      // tenant’s configured `case_type` values when any exist (AUTHORITATIVE —
+      // REPLACES the defaults), else DEFAULT_CASE_TYPES.
       const configured = await configRepo.listActiveKeys(tx, p.tenantId, "case_type");
       const allowedTypes = effectiveAllowed(configured, DEFAULT_CASE_TYPES);
       try {

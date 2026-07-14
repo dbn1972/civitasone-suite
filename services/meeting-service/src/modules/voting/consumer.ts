@@ -34,23 +34,26 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
 import { httpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
-import { votes } from "./schema.js";
+import { votes, recusals } from "./schema.js";
 import { resolutions } from "../decision/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
 import { meetings } from "../meeting-core/schema.js";
 import { attendanceRecords } from "../attendance/schema.js";
 import {
   computeTally,
+  computeWeightedTally,
   computeVoteResult,
   assertQuorumAtVoteTime,
   assertNoDuplicateVote,
+  assertNotRecused,
   isMajorityRule,
 } from "./domain.js";
+import { getPolicyBool, getPolicyString } from "../config-registry/policy.js";
 import { countQuorumEligible, requiredQuorumCount, type QuorumRule } from "../committee/domain.js";
 import {
   computeCirculationResult,
@@ -86,7 +89,8 @@ interface VoteInitiatePayload {
   tenantId: string;
   resolutionText: string;
   voteType: string;
-  majorityRule: string;
+  /** Optional — falls back to the tenant's configured `voting.default_threshold`. */
+  majorityRule?: string;
   agendaItemId?: string;
   decisionId?: string;
   effectiveDate?: string;
@@ -106,6 +110,16 @@ interface VoteConcludePayload {
   resolutionId: string;
   tenantId: string;
   effectiveDate?: string;
+}
+
+interface VoteRecusePayload {
+  meetingId: string;
+  resolutionId: string;
+  memberId: string;
+  reason: string;
+  tenantId: string;
+  registerRef?: string;
+  agendaItemId?: string;
 }
 
 interface CirculationRespondPayload {
@@ -207,6 +221,34 @@ async function getResolution(tx: DrizzleTx, resolutionId: string, tenantId: stri
     .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * The member's per-seat vote weight from the committee roster (weighted voting). Defaults to 1
+ * when the member is not on the roster or the meeting has no committee — so an unconfigured
+ * weight is exactly headcount (1 member = 1 vote).
+ */
+async function getMemberVoteWeight(
+  tx: DrizzleTx,
+  tenantId: string,
+  committeeId: string | null,
+  memberId: string,
+): Promise<number> {
+  if (!committeeId) return 1;
+  const rows = await tx
+    .select({ voteWeight: committeeMembers.voteWeight })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, memberId),
+        eq(committeeMembers.status, "active"),
+      ),
+    )
+    .limit(1);
+  const w = rows[0]?.voteWeight;
+  return typeof w === "number" && Number.isFinite(w) && w > 0 ? w : 1;
 }
 
 /** Active committee member ids (Req 12.1 notification fan-out; roster size for quorum). */
@@ -352,7 +394,7 @@ function resolutionContentHash(input: {
 
 /** Recompute the live tally from the recorded ballots and prime the 30s TTL cache (Req 11.3). */
 async function refreshTallyCache(tenantId: string, resolutionId: string, isCirculation: boolean): Promise<void> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ position: votes.position })
     .from(votes)
     .where(
@@ -361,7 +403,7 @@ async function refreshTallyCache(tenantId: string, resolutionId: string, isCircu
         eq(votes.tenantId, tenantId),
         eq(votes.isCirculation, isCirculation),
       ),
-    );
+    ));
   const positions = isCirculation ? rows.map((r) => normalizeCirculationPosition(r.position)) : rows.map((r) => r.position);
   const tally = computeTally(positions);
   await cache.put(cache.makeKey(tenantId, TALLY_RESOURCE, resolutionId), tally, TALLY_TTL_SECONDS);
@@ -410,6 +452,12 @@ async function handleVoteInitiate(msg: CommandEnvelope<VoteInitiatePayload>): Pr
       throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
     }
 
+    // Config-driven threshold (Gap 4): when the initiator did not name a majority rule, fall
+    // back to the tenant's configured `voting.default_threshold` (default simple_majority).
+    const requestedRule = p.majorityRule && p.majorityRule.trim().length > 0 ? p.majorityRule : undefined;
+    const configuredDefault = requestedRule ?? (await getPolicyString(tx, msg.tenantId, "voting.default_threshold"));
+    const majorityRule = isMajorityRule(configuredDefault) ? configuredDefault : "simple_majority";
+
     await tx.insert(resolutions).values({
       id: p.resolutionId,
       tenantId: p.tenantId,
@@ -419,7 +467,7 @@ async function handleVoteInitiate(msg: CommandEnvelope<VoteInitiatePayload>): Pr
       resolutionNumber: `PENDING-${p.resolutionId}`,
       text: p.resolutionText,
       voteType: p.voteType,
-      majorityRule: p.majorityRule,
+      majorityRule,
       result: RESULT_PENDING,
       status: STATUS_VOTING_OPEN,
       isCirculation: false,
@@ -483,6 +531,23 @@ async function handleVoteCast(msg: CommandEnvelope<VoteCastPayload>): Promise<vo
       throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
     }
 
+    // Recusal enforcement (Gap 1): a member recused on this motion cannot cast a vote — the
+    // ballot is rejected and the member never enters the tally. Permanent → DLQ.
+    const recusedRows = await tx
+      .select({ memberId: recusals.memberId })
+      .from(recusals)
+      .where(and(eq(recusals.resolutionId, p.resolutionId), eq(recusals.tenantId, msg.tenantId)));
+    try {
+      assertNotRecused(recusedRows.map((r) => r.memberId), p.memberId);
+    } catch (err) {
+      throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+    }
+
+    // Weighted voting (Gap 2): capture the member's per-seat weight onto the ballot so the
+    // weighted tally sums without re-joining the roster. Defaults to 1 (headcount) when unset.
+    const meetingForWeight = await getMeeting(tx, p.meetingId, msg.tenantId);
+    const weight = await getMemberVoteWeight(tx, msg.tenantId, meetingForWeight?.committeeId ?? null, p.memberId);
+
     await tx.insert(votes).values({
       id: randomUUID(),
       tenantId: p.tenantId,
@@ -490,6 +555,7 @@ async function handleVoteCast(msg: CommandEnvelope<VoteCastPayload>): Promise<vo
       memberId: p.memberId,
       position: p.position,
       reason: p.reason ?? null,
+      weight,
       isCirculation: false,
     });
 
@@ -534,7 +600,7 @@ async function handleVoteConclude(msg: CommandEnvelope<VoteConcludePayload>): Pr
     const meeting = await getMeeting(tx, resolution.meetingId, msg.tenantId);
 
     const voteRows = await tx
-      .select({ position: votes.position })
+      .select({ position: votes.position, weight: votes.weight })
       .from(votes)
       .where(
         and(
@@ -543,10 +609,19 @@ async function handleVoteConclude(msg: CommandEnvelope<VoteConcludePayload>): Pr
           eq(votes.isCirculation, false),
         ),
       );
+    // Headcount tally is ALWAYS the authoritative votes_for/_against/_abstain (P14 invariant).
     const tally = computeTally(voteRows.map((v) => v.position));
 
+    // Weighted voting (Gap 2): when the tenant enables `voting.weighted_enabled`, the RESULT is
+    // decided on summed WEIGHT, not headcount. Otherwise the headcount tally decides (unchanged).
+    const weightedEnabled = await getPolicyBool(tx, msg.tenantId, "voting.weighted_enabled");
+    const weightedTally = weightedEnabled
+      ? computeWeightedTally(voteRows.map((v) => ({ position: v.position, weight: v.weight })))
+      : null;
+    const resultTally = weightedTally ?? tally;
+
     const rule = isMajorityRule(resolution.majorityRule) ? resolution.majorityRule : "simple_majority";
-    const result = computeVoteResult(tally, rule);
+    const result = computeVoteResult(resultTally, rule);
     const passed = result === "passed";
 
     const when = p.effectiveDate ? new Date(p.effectiveDate) : new Date();
@@ -580,6 +655,13 @@ async function handleVoteConclude(msg: CommandEnvelope<VoteConcludePayload>): Pr
       updatedBy: msg.actorId,
       updatedAt: new Date(),
       ...(hashCurrent ? { hashCurrent } : {}),
+      ...(weightedTally
+        ? {
+            weightFor: weightedTally.votesFor,
+            weightAgainst: weightedTally.votesAgainst,
+            weightAbstain: weightedTally.votesAbstain,
+          }
+        : {}),
     };
     await versionedUpdate(tx, resolutions, {
       id: resolution.id,
@@ -771,6 +853,63 @@ async function handleCirculationRespond(msg: CommandEnvelope<CirculationRespondP
   await invalidateVoteCaches(msg.tenantId, meetingIdForCache, p.resolutionId);
 }
 
+/**
+ * meeting.vote.recuse — record a member's conflict-of-interest recusal on a motion (Gap 1).
+ * Only valid while the motion is open; a member who has already voted cannot recuse. The recusal
+ * is stored (idempotently, one per resolution+member) so it appears in the vote record / minutes,
+ * emits `vote.recusal_recorded`, and thereafter bars the member's ballot on this motion and
+ * excludes them from its quorum-for-that-item denominator.
+ */
+async function handleVoteRecuse(msg: CommandEnvelope<VoteRecusePayload>): Promise<void> {
+  const p = msg.payload;
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const resolution = await getResolution(tx, p.resolutionId, msg.tenantId);
+    if (!resolution) throw new NonRetryableError(`resolution ${p.resolutionId} not found`);
+    if (resolution.status !== STATUS_VOTING_OPEN && resolution.status !== STATUS_CIRCULATING) {
+      throw new NonRetryableError(`resolution ${p.resolutionId} is not open for recusal (status=${resolution.status})`);
+    }
+
+    // A member who already cast a ballot on this motion cannot then recuse from it.
+    const already = await tx
+      .select({ memberId: votes.memberId })
+      .from(votes)
+      .where(and(eq(votes.resolutionId, p.resolutionId), eq(votes.tenantId, msg.tenantId), eq(votes.memberId, p.memberId)))
+      .limit(1);
+    if (already.length > 0) {
+      throw new NonRetryableError(`member ${p.memberId} has already voted on ${p.resolutionId}; cannot recuse`);
+    }
+
+    await tx
+      .insert(recusals)
+      .values({
+        id: randomUUID(),
+        tenantId: p.tenantId,
+        resolutionId: p.resolutionId,
+        meetingId: p.meetingId,
+        memberId: p.memberId,
+        agendaItemId: p.agendaItemId ?? null,
+        reason: p.reason,
+        registerRef: p.registerRef ?? null,
+        recordedBy: msg.actorId,
+      })
+      .onConflictDoNothing();
+
+    await enqueue(tx, {
+      topic: EVENTS.voteRecusalRecorded,
+      eventType: EVENTS.voteRecusalRecorded,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: { meetingId: p.meetingId, resolutionId: p.resolutionId, memberId: p.memberId },
+    });
+    await audit(tx, msg, "vote_recuse", p.resolutionId, { memberId: p.memberId });
+  });
+
+  await invalidateVoteCaches(msg.tenantId, p.meetingId, p.resolutionId);
+}
+
 // ─── Circulation reminders (Req 12.6) ────────────────────────────────────────────
 
 /**
@@ -805,4 +944,5 @@ export function registerVotingConsumers(register: RegisterConsumer): void {
   register(COMMANDS.voteCast, handleVoteCast);
   register(COMMANDS.voteConclude, handleVoteConclude);
   register(COMMANDS.voteCirculationRespond, handleCirculationRespond);
+  register(COMMANDS.voteRecuse, handleVoteRecuse);
 }

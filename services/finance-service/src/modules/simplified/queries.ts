@@ -5,7 +5,7 @@
  * All reads go through the existing finance_journal_lines denormalized table
  * and the simplified.transactions record, filtered by tenant.
  */
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { paiseToRupees } from "./auto-journal.js";
 
@@ -26,7 +26,7 @@ export async function getSummary(tenantId: string, period?: string) {
   const endDate = getLastDayOfMonth(Number(year), Number(month));
 
   // Aggregate from GL journal lines for the period
-  const result = await db.execute(sql`
+  const result = await scopedRead((tx) => tx.execute(sql`
     SELECT
       COALESCE(SUM(CASE WHEN head_code LIKE '4%' THEN credit_minor - debit_minor ELSE 0 END), 0)::bigint AS total_income,
       COALESCE(SUM(CASE WHEN head_code LIKE '5%' THEN debit_minor - credit_minor ELSE 0 END), 0)::bigint AS total_expense
@@ -34,10 +34,10 @@ export async function getSummary(tenantId: string, period?: string) {
     WHERE tenant_id = ${tenantId}::uuid
       AND posting_date >= ${startDate}::date
       AND posting_date <= ${endDate}::date
-  `);
+  `));
 
   // Balance queries (cumulative, not period-scoped)
-  const balances = await db.execute(sql`
+  const balances = await scopedRead((tx) => tx.execute(sql`
     SELECT
       COALESCE(SUM(CASE WHEN head_code = '1001' THEN debit_minor - credit_minor ELSE 0 END), 0)::bigint AS cash_balance,
       COALESCE(SUM(CASE WHEN head_code = '1002' THEN debit_minor - credit_minor ELSE 0 END), 0)::bigint AS receivables,
@@ -45,7 +45,7 @@ export async function getSummary(tenantId: string, period?: string) {
       COALESCE(SUM(CASE WHEN head_code = '2002' THEN credit_minor - debit_minor ELSE 0 END), 0)::bigint AS gst_liability
     FROM gl.finance_journal_lines
     WHERE tenant_id = ${tenantId}::uuid
-  `);
+  `));
 
   const row = result[0] as Record<string, string | null> | undefined;
   const bal = balances[0] as Record<string, string | null> | undefined;
@@ -79,14 +79,14 @@ export async function getIncomeList(tenantId: string, opts: { from?: string | un
 
   const where = sql.join(conditions, sql` AND `);
 
-  const rows = await db.execute(sql`
+  const rows = await scopedRead((tx) => tx.execute(sql`
     SELECT id, posting_date, counter_party AS customer, amount_minor, gst_minor,
            total_minor, invoice_no, description, created_at
     FROM simplified.transactions
     WHERE ${where}
     ORDER BY posting_date DESC, created_at DESC
     LIMIT ${opts.limit}
-  `);
+  `));
 
   return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
     id: r.id,
@@ -110,14 +110,14 @@ export async function getExpenseList(tenantId: string, opts: { from?: string | u
 
   const where = sql.join(conditions, sql` AND `);
 
-  const rows = await db.execute(sql`
+  const rows = await scopedRead((tx) => tx.execute(sql`
     SELECT id, posting_date, account_code AS category_code, counter_party AS vendor,
            amount_minor, gst_minor, total_minor, description, created_at
     FROM simplified.transactions
     WHERE ${where}
     ORDER BY posting_date DESC, created_at DESC
     LIMIT ${opts.limit}
-  `);
+  `));
 
   return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
     id: r.id,
@@ -138,7 +138,7 @@ export async function getCashflow(tenantId: string, opts: { from?: string | unde
   const from = opts.from ?? getFirstDayOfMonth();
   const to = opts.to ?? new Date().toISOString().slice(0, 10);
 
-  const rows = await db.execute(sql`
+  const rows = await scopedRead((tx) => tx.execute(sql`
     SELECT
       date_trunc('week', posting_date::timestamp)::date AS week_start,
       COALESCE(SUM(CASE WHEN head_code = '1001' AND debit_minor > 0 THEN debit_minor ELSE 0 END), 0)::bigint AS money_in,
@@ -150,7 +150,7 @@ export async function getCashflow(tenantId: string, opts: { from?: string | unde
       AND head_code = '1001'
     GROUP BY week_start
     ORDER BY week_start
-  `);
+  `));
 
   return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
     weekStart: r.week_start,

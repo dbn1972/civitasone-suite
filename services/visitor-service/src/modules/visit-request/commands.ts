@@ -31,6 +31,9 @@ export interface VisitRequestCreateInput {
   visitorCategory?: "standard" | "vip" | "contractor" | "delegation";
   source?: "portal" | "host_preregister" | "kiosk" | "mobile";
   permittedAreas?: string[];
+  /** Fix 3 — fuzzy/alias screening REVIEW flag resolved by the route before publish. */
+  screeningReview?: boolean;
+  screeningReviewNote?: string | null;
 }
 
 /**
@@ -63,6 +66,8 @@ export async function visitRequestCreate(ctx: RequestContext, input: VisitReques
       visitorCategory: input.visitorCategory ?? "standard",
       source: input.source ?? "portal",
       permittedAreas: input.permittedAreas ?? [],
+      screeningReview: input.screeningReview ?? false,
+      screeningReviewNote: input.screeningReviewNote ?? null,
       createdBy: ctx.actorId,
     },
   });

@@ -42,6 +42,7 @@ import { digitalPasses } from "./schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import { generatePass, revokePass, replacePass, computeValidityWindow, type PassType } from "./domain.js";
 import { addToRevokedSet } from "./revocation-store.js";
+import { getPolicyNumber, MS_PER_DAY } from "../config-registry/policy.js";
 
 const log = pino({ name: "digital-pass-consumer" });
 
@@ -85,11 +86,16 @@ export function registerDigitalPassConsumers(queue: Queue): void {
     const generated = await db.transaction(async (tx): Promise<{ passId: string; visitorEmail: string; visitorPhone: string } | null> => {
       if (!(await markProcessed(tx, msg.messageId))) return null; // idempotent replay
 
-      // Compute validity window (respects multi_day 7-day cap, etc.)
+      // Compute validity window with tenant-configured caps (default 7d multi-
+      // day / 90d recurring). Resolved on the GUC-scoped tx so RLS-scoped config
+      // applies; unconfigured tenants get the module defaults unchanged.
+      const multiDayMaxMs = (await getPolicyNumber(tx, msg.tenantId, "digital_pass.multi_day_max_days")) * MS_PER_DAY;
+      const recurringMaxMs = (await getPolicyNumber(tx, msg.tenantId, "digital_pass.recurring_max_days")) * MS_PER_DAY;
       const { validFrom, validUntil } = computeValidityWindow(
         p.passType,
         new Date(p.validFrom),
         new Date(p.validUntil),
+        { multiDayMaxMs, recurringMaxMs },
       );
 
       // Generate pass: pass number + signed QR JWT

@@ -8,7 +8,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { verifyFace, type FaceConfig } from "./engine.js";
 import { hrmsProfilePhotos, hrmsFaceVerificationLog, hrmsFaceConfig } from "./schema.js";
 import { randomUUID } from "node:crypto";
@@ -28,8 +28,8 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     }).parse(req.body);
 
     // Upsert profile photo
-    const existing = await db.select().from(hrmsProfilePhotos)
-      .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, id))).limit(1);
+    const existing = await scopedRead((tx) => tx.select().from(hrmsProfilePhotos)
+      .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, id))).limit(1));
 
     if (existing[0]) {
       // One-time update allowed — deactivate old, insert new
@@ -54,8 +54,8 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     requireRole(ctx, ALL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const rows = await db.select().from(hrmsProfilePhotos)
-      .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, id), eq(hrmsProfilePhotos.isActive, true))).limit(1);
+    const rows = await scopedRead((tx) => tx.select().from(hrmsProfilePhotos)
+      .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, id), eq(hrmsProfilePhotos.isActive, true))).limit(1));
 
     if (!rows[0]) throw new HttpError(404, "NOT_FOUND", "No profile photo uploaded for this employee");
     return reply.send({ id: rows[0].id, photoKey: rows[0].photoKey, uploadedAt: rows[0].uploadedAt, verified: !!rows[0].verifiedAt });
@@ -72,8 +72,8 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     }).parse(req.body);
 
     // Load profile photo
-    const profileRows = await db.select().from(hrmsProfilePhotos)
-      .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, body.employeeId), eq(hrmsProfilePhotos.isActive, true))).limit(1);
+    const profileRows = await scopedRead((tx) => tx.select().from(hrmsProfilePhotos)
+      .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, body.employeeId), eq(hrmsProfilePhotos.isActive, true))).limit(1));
 
     if (!profileRows[0]) {
       throw new HttpError(400, "NO_PROFILE_PHOTO", "Employee must upload a profile photo before face verification can be used");
@@ -82,8 +82,8 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     const profile = profileRows[0];
 
     // Load face config
-    const configRows = await db.select().from(hrmsFaceConfig)
-      .where(eq(hrmsFaceConfig.tenantId, ctx.tenantId)).limit(1);
+    const configRows = await scopedRead((tx) => tx.select().from(hrmsFaceConfig)
+      .where(eq(hrmsFaceConfig.tenantId, ctx.tenantId)).limit(1));
     const cfg = configRows[0];
     const faceConfig: FaceConfig = {
       onnxEnabled: cfg?.onnxEnabled ?? true,
@@ -128,7 +128,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
   app.get("/v1/hrms/admin/face-config", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsFaceConfig).where(eq(hrmsFaceConfig.tenantId, ctx.tenantId)).limit(1);
+    const rows = await scopedRead((tx) => tx.select().from(hrmsFaceConfig).where(eq(hrmsFaceConfig.tenantId, ctx.tenantId)).limit(1));
     if (!rows[0]) return reply.send({ configured: false });
     return reply.send(rows[0]);
   });
@@ -155,8 +155,8 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
-    const rows = await db.select().from(hrmsFaceVerificationLog)
-      .where(and(eq(hrmsFaceVerificationLog.tenantId, ctx.tenantId), eq(hrmsFaceVerificationLog.employeeId, q.employeeId)));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsFaceVerificationLog)
+      .where(and(eq(hrmsFaceVerificationLog.tenantId, ctx.tenantId), eq(hrmsFaceVerificationLog.employeeId, q.employeeId))));
     return reply.send({ data: rows.slice(0, 50).map(r => ({ id: r.id, method: r.verificationMethod, score: r.similarityScore, isMatch: r.isMatch, verifiedAt: r.verifiedAt, processingMs: r.processingMs })) });
   });
 }

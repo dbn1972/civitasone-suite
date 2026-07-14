@@ -1,5 +1,5 @@
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   billingInvoices,
   billingInvoiceItems,
@@ -32,21 +32,21 @@ export async function findByIdTx(tx: Writer, id: string): Promise<BillingInvoice
 }
 
 export async function findById(id: string): Promise<BillingInvoiceRow | undefined> {
-  const rows = await db.select().from(billingInvoices).where(eq(billingInvoices.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(billingInvoices).where(eq(billingInvoices.id, id)).limit(1));
   return rows[0];
 }
 
 export async function itemsByInvoice(invoiceId: string, limit = 200): Promise<BillingInvoiceItemRow[]> {
-  return db.select().from(billingInvoiceItems).where(eq(billingInvoiceItems.invoiceId, invoiceId)).limit(limit);
+  return scopedRead((tx) => tx.select().from(billingInvoiceItems).where(eq(billingInvoiceItems.invoiceId, invoiceId)).limit(limit));
 }
 
 export async function listByTenant(tenantId: string, limit = 100): Promise<BillingInvoiceRow[]> {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(billingInvoices)
     .where(eq(billingInvoices.tenantId, tenantId))
     .orderBy(desc(billingInvoices.createdAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 /**
@@ -109,16 +109,16 @@ export async function decideApproval(
 }
 
 export async function approvalsByInvoice(invoiceId: string): Promise<BillingInvoiceApprovalRow[]> {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(billingInvoiceApprovals)
     .where(eq(billingInvoiceApprovals.invoiceId, invoiceId))
-    .orderBy(desc(billingInvoiceApprovals.createdAt));
+    .orderBy(desc(billingInvoiceApprovals.createdAt)));
 }
 
 /** Sum outstanding (total - paid) across all live (issued/partially_paid/overdue) bills for a tenant. */
 export async function outstandingByTenant(tenantId: string): Promise<{ outstandingMinor: bigint; billedMinor: bigint; paidMinor: bigint; openCount: number }> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       billed: sql<string>`COALESCE(SUM(${billingInvoices.totalMinor}), 0)`,
       paid: sql<string>`COALESCE(SUM(${billingInvoices.paidMinor}), 0)`,
@@ -131,7 +131,7 @@ export async function outstandingByTenant(tenantId: string): Promise<{ outstandi
         eq(billingInvoices.tenantId, tenantId),
         sql`${billingInvoices.status} IN ('issued','partially_paid','overdue')`,
       ),
-    );
+    ));
   const r = rows[0]!;
   return {
     billedMinor: BigInt(r.billed),

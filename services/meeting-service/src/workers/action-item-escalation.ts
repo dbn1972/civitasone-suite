@@ -54,6 +54,7 @@ import { and, eq, inArray, isNotNull, lt, notInArray } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db as defaultDb } from "../shared/db.js";
+import { scannerDb } from "../shared/scanner-db.js";
 import { cache } from "../shared/infra.js";
 import { enqueue, versionedUpdate, type DrizzleTx } from "../shared/outbox.js";
 import { EVENTS, SERVICE } from "../topics.js";
@@ -374,7 +375,8 @@ export async function runActionItemEscalation(
  * scan stays N+1-free.
  */
 async function defaultLoadCandidates(now: Date): Promise<EscalationCandidate[]> {
-  const itemRows = await defaultDb
+  // Cross-tenant scan via BYPASSRLS scanner pool (migration 0007) — see scanner-db.ts.
+  const itemRows = await scannerDb
     .select({
       actionItemId: actionItems.id,
       tenantId: actionItems.tenantId,
@@ -399,7 +401,7 @@ async function defaultLoadCandidates(now: Date): Promise<EscalationCandidate[]> 
   if (itemRows.length === 0) return [];
 
   const meetingIds = [...new Set(itemRows.map((r) => r.meetingId))];
-  const meetingRows = await defaultDb
+  const meetingRows = await scannerDb
     .select({
       id: meetings.id,
       chairpersonId: meetings.chairpersonId,

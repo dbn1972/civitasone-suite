@@ -35,7 +35,7 @@ import { and, eq } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { recurringPasses } from "./schema.js";
 import { validateValidityWindow, suspend, revoke, type RecurringPassStatus } from "./domain.js";
@@ -147,17 +147,19 @@ export function registerRecurringPassConsumers(queue: Queue): void {
       // Domain state transition — throws DomainError if invalid
       suspend(entry.status as RecurringPassStatus);
 
-      await tx
-        .update(recurringPasses)
-        .set({
+      await versionedUpdate(tx, recurringPasses, {
+        id: p.id,
+        tenantId: msg.tenantId,
+        expectedVersion: entry.version,
+        set: {
           status: "suspended",
           suspendedAt: new Date(),
           suspendReason: p.reason,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: entry.version + 1,
-        })
-        .where(and(eq(recurringPasses.id, p.id), eq(recurringPasses.tenantId, msg.tenantId)));
+        },
+        entity: "recurring_pass",
+      });
 
       // Notify pass holder (Requirement 12.5)
       await enqueue(tx, {
@@ -228,15 +230,17 @@ export function registerRecurringPassConsumers(queue: Queue): void {
       // Domain state transition — throws DomainError if invalid
       revoke(entry.status as RecurringPassStatus);
 
-      await tx
-        .update(recurringPasses)
-        .set({
+      await versionedUpdate(tx, recurringPasses, {
+        id: p.id,
+        tenantId: msg.tenantId,
+        expectedVersion: entry.version,
+        set: {
           status: "revoked",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: entry.version + 1,
-        })
-        .where(and(eq(recurringPasses.id, p.id), eq(recurringPasses.tenantId, msg.tenantId)));
+        },
+        entity: "recurring_pass",
+      });
 
       // Notify pass holder (Requirement 12.5)
       await enqueue(tx, {

@@ -13,18 +13,39 @@ import { schema as locationModule } from "../modules/location/schema.js";
 import { schema as dpdpModule } from "../modules/dpdp/schema.js";
 import { blacklistEntries, watchlistEntries } from "../modules/blacklist/schema.js";
 import { schema as analyticsModule } from "../modules/analytics/schema.js";
+import { schema as configRegistryModule } from "../modules/config-registry/schema.js";
 
-const SCHEMA = {
+// Exported so the cross-tenant scanner pool (shared/scanner-db.ts) registers the
+// exact same tables without duplicating the module list.
+export const visitorSchemaMap = {
   ...checkInModule,
   ...digitalPassModule,
   ...visitRequestModule,
   ...locationModule,
   ...dpdpModule,
   ...analyticsModule,
+  ...configRegistryModule,
+  blacklistEntries,
+  watchlistEntries,
   ...outboxSchema,
 };
 
-const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb({ schema: SCHEMA });
+const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb({ schema: visitorSchemaMap });
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain db.select() runs on a pooled connection with no
+ * app.tenant_id GUC set, so under a NOBYPASSRLS role (e.g. visitor_svc) the
+ * fail-closed policy returns ZERO rows. Wrapping the read in db.transaction
+ * makes createTenantDb's `wrapWithTenantGuc`-wrapped `db` set the GUC from
+ * AsyncLocalStorage - reads are then correctly tenant-scoped by RLS, not
+ * merely by an app-layer WHERE. Mirrors court-service / meeting-service
+ * (commit 904c302).
+ */
+type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
+}

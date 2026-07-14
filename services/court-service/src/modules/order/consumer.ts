@@ -30,7 +30,9 @@ export function registerOrderConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // §47 config/metadata: orderType must be in (defaults ∪ tenant config).
+      // §47 config/metadata: orderType must be in the effective allowed set — the
+      // tenant’s configured `order_type` values when any exist (AUTHORITATIVE —
+      // REPLACES the defaults), else DEFAULT_ORDER_TYPES.
       const configured = await configRepo.listActiveKeys(tx, p.tenantId, "order_type");
       const allowedTypes = effectiveAllowed(configured, DEFAULT_ORDER_TYPES);
       try {

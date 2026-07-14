@@ -10,7 +10,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
@@ -45,15 +45,15 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
     requireRole(ctx, READER_ROLES);
     const { id } = req.params as { id: string };
 
-    const slipRows = await db.select().from(payrollSlips)
+    const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
       .where(and(eq(payrollSlips.id, id), eq(payrollSlips.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const slip = slipRows[0];
     if (!slip) throw new HttpError(404, "NOT_FOUND", "salary slip not found");
 
-    const runRows = await db.select().from(payrollRuns)
+    const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)
       .where(and(eq(payrollRuns.id, slip.runId), eq(payrollRuns.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const run = runRows[0];
     const month = run?.month ?? "unknown";
 

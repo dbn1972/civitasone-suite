@@ -46,15 +46,29 @@ beforeAll(async () => {
   app = await buildApp();
 
   // Clean any prior fixtures, then seed a meeting + a signed minutes + one prior version.
-  await sqlClient`DELETE FROM meeting.minutes_versions WHERE minutes_id = ${MINUTES}`;
-  await sqlClient`DELETE FROM meeting.minutes WHERE id = ${MINUTES}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE id = ${MEETING}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.minutes_versions WHERE minutes_id = ${MINUTES}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.minutes WHERE id = ${MINUTES}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE id = ${MEETING}`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meetings (id, tenant_id, type, title, status, duration_minutes, created_by, updated_by)
     VALUES (${MEETING}, ${TENANT}, 'committee', 'Board Meeting', 'minutes_pending', 60, ${ACTOR}, ${ACTOR})
   `;
-  await sqlClient`
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.minutes
       (id, tenant_id, meeting_id, template_type, content, status, current_version,
        dsc_signature, dsc_signer_name, dsc_signed_at, hash_current, created_by, updated_by, version)
@@ -62,16 +76,29 @@ beforeAll(async () => {
       (${MINUTES}, ${TENANT}, ${MEETING}, 'resolution_only', ${CONTENT}, 'signed', 2,
        ${"pkcs7-detached:sha256:" + CONTENT_HASH}, ${SIGNER}, now(), ${CONTENT_HASH}, ${ACTOR}, ${ACTOR}, 1)
   `;
-  await sqlClient`
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.minutes_versions (tenant_id, minutes_id, version_num, content, changed_by)
     VALUES (${TENANT}, ${MINUTES}, 1, ${"draft v1 content"}, ${ACTOR})
   `;
+  });
 });
 
 afterAll(async () => {
-  await sqlClient`DELETE FROM meeting.minutes_versions WHERE minutes_id = ${MINUTES}`;
-  await sqlClient`DELETE FROM meeting.minutes WHERE id = ${MINUTES}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE id = ${MEETING}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.minutes_versions WHERE minutes_id = ${MINUTES}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.minutes WHERE id = ${MINUTES}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE id = ${MEETING}`;
+  });
   await app.close();
   await sqlClient.end();
 });

@@ -5,6 +5,7 @@
  */
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { legalEntities, operatingUnits, costCenters, profitCenters } from "./schema.js";
 
 export class OrgValidationError extends Error {
@@ -13,12 +14,12 @@ export class OrgValidationError extends Error {
 
 /** Verify a legal entity exists and is active for the tenant. */
 export async function assertLegalEntityExists(tenantId: string, legalEntityId: string): Promise<void> {
-  const rows = await db.select({ id: legalEntities.id }).from(legalEntities)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select({ id: legalEntities.id }).from(legalEntities)
     .where(and(
       eq(legalEntities.tenantId, tenantId),
       eq(legalEntities.id, legalEntityId),
       eq(legalEntities.isActive, true),
-    )).limit(1);
+    )).limit(1)));
   if (rows.length === 0) {
     throw new OrgValidationError("LEGAL_ENTITY_NOT_FOUND", `Legal entity ${legalEntityId} not found or inactive for tenant`);
   }
@@ -26,12 +27,12 @@ export async function assertLegalEntityExists(tenantId: string, legalEntityId: s
 
 /** Verify a cost center belongs to the specified legal entity. */
 export async function assertCostCenterBelongsToLE(tenantId: string, costCenterId: string, legalEntityId: string): Promise<void> {
-  const rows = await db.select({ id: costCenters.id, legalEntityId: costCenters.legalEntityId }).from(costCenters)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select({ id: costCenters.id, legalEntityId: costCenters.legalEntityId }).from(costCenters)
     .where(and(
       eq(costCenters.tenantId, tenantId),
       eq(costCenters.id, costCenterId),
       eq(costCenters.isActive, true),
-    )).limit(1);
+    )).limit(1)));
   if (rows.length === 0) {
     throw new OrgValidationError("COST_CENTER_NOT_FOUND", `Cost center ${costCenterId} not found or inactive`);
   }
@@ -42,12 +43,12 @@ export async function assertCostCenterBelongsToLE(tenantId: string, costCenterId
 
 /** Verify a profit center belongs to the specified legal entity. */
 export async function assertProfitCenterBelongsToLE(tenantId: string, profitCenterId: string, legalEntityId: string): Promise<void> {
-  const rows = await db.select({ id: profitCenters.id, legalEntityId: profitCenters.legalEntityId }).from(profitCenters)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select({ id: profitCenters.id, legalEntityId: profitCenters.legalEntityId }).from(profitCenters)
     .where(and(
       eq(profitCenters.tenantId, tenantId),
       eq(profitCenters.id, profitCenterId),
       eq(profitCenters.isActive, true),
-    )).limit(1);
+    )).limit(1)));
   if (rows.length === 0) {
     throw new OrgValidationError("PROFIT_CENTER_NOT_FOUND", `Profit center ${profitCenterId} not found or inactive`);
   }
@@ -58,12 +59,12 @@ export async function assertProfitCenterBelongsToLE(tenantId: string, profitCent
 
 /** Verify an operating unit belongs to the specified legal entity. */
 export async function assertOperatingUnitBelongsToLE(tenantId: string, operatingUnitId: string, legalEntityId: string): Promise<void> {
-  const rows = await db.select({ id: operatingUnits.id, legalEntityId: operatingUnits.legalEntityId }).from(operatingUnits)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select({ id: operatingUnits.id, legalEntityId: operatingUnits.legalEntityId }).from(operatingUnits)
     .where(and(
       eq(operatingUnits.tenantId, tenantId),
       eq(operatingUnits.id, operatingUnitId),
       eq(operatingUnits.isActive, true),
-    )).limit(1);
+    )).limit(1)));
   if (rows.length === 0) {
     throw new OrgValidationError("OPERATING_UNIT_NOT_FOUND", `Operating unit ${operatingUnitId} not found or inactive`);
   }

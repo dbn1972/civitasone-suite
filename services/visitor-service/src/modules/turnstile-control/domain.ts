@@ -46,7 +46,12 @@ export interface AntiPassbackCheck {
  *
  * @returns true if the passage is allowed, false if it violates anti-passback
  */
-export function isPassageAllowed(check: AntiPassbackCheck): boolean {
+export function isPassageAllowed(check: AntiPassbackCheck, antiPassbackEnabled = true): boolean {
+  // Anti-passback disabled by tenant config → every passage is allowed.
+  if (!antiPassbackEnabled) {
+    return true;
+  }
+
   // First passage for this pass — always allowed
   if (check.lastKnownDirection === null) {
     return true;
@@ -62,13 +67,20 @@ export function isPassageAllowed(check: AntiPassbackCheck): boolean {
 
 /**
  * Detect tailgating based on the passage count for a single open cycle.
- * A normal passage has passageCount = 1. Any value > 1 indicates tailgating.
+ * A normal passage has passageCount = 1. Any value strictly greater than the
+ * `tolerance` (default 1) indicates tailgating.
+ *
+ * `tolerance` is config-driven (tenant `visitor_policy` key
+ * turnstile.tailgating_tolerance) and DEFAULTS to 1, so behavior is unchanged
+ * for an unconfigured tenant. A site with wide turnstiles / two-person entry
+ * lanes can raise the tolerance so legitimate paired passage isn't flagged.
  *
  * @param passageCount - Number of people detected during a single open cycle
- * @returns true if tailgating is detected (count > 1)
+ * @param tolerance - Max people allowed per open cycle before flagging (default 1)
+ * @returns true if tailgating is detected (count > tolerance)
  */
-export function isTailgating(passageCount: number): boolean {
-  return passageCount > 1;
+export function isTailgating(passageCount: number, tolerance = 1): boolean {
+  return passageCount > tolerance;
 }
 
 // ---------------------------------------------------------------------------

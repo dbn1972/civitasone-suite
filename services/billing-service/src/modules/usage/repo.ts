@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { billingUsageEvents, billingUsageAggregates } from "./schema.js";
 import { periodMonthFromDate } from "./domain.js";
 
@@ -27,7 +27,7 @@ export async function upsertAggregate(tx: Writer, tenantId: string, metricKey: s
 
 export async function getMonthlySummary(tenantId: string, month?: string) {
   const periodMonth = month ?? periodMonthFromDate(new Date());
-  const rows = await db.select().from(billingUsageAggregates)
-    .where(and(eq(billingUsageAggregates.tenantId, tenantId), eq(billingUsageAggregates.periodMonth, periodMonth)));
+  const rows = await scopedRead((tx) => tx.select().from(billingUsageAggregates)
+    .where(and(eq(billingUsageAggregates.tenantId, tenantId), eq(billingUsageAggregates.periodMonth, periodMonth))));
   return { tenantId, periodMonth, metrics: rows.map((r) => ({ metricKey: r.metricKey, total: r.totalQuantity.toString() })) };
 }

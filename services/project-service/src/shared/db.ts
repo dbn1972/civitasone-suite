@@ -12,6 +12,7 @@ import { schema as utilisationModule } from "../modules/utilisation/schema.js";
 import { schema as geoModule }         from "../modules/geo/schema.js";
 import { schema as schedulingModule }  from "../modules/scheduling/schema.js";
 import { baselinesSchema }             from "../modules/scheduling/baselines.js";
+import { schema as boardIntakeModule } from "../modules/board-intake/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -22,6 +23,7 @@ const SCHEMA = {
   ...geoModule,
   ...schedulingModule,
   ...baselinesSchema,
+  ...boardIntakeModule,
   ...outboxSchema,
 };
 

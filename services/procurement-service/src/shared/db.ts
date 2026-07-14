@@ -16,6 +16,7 @@ import { schema as paymentsModule } from "../modules/payments/schema.js";
 import { schema as blacklistModule } from "../modules/vendor-blacklist/schema.js";
 import { schema as threeWayModule }  from "../modules/three-way-match/schema.js";
 import { schema as securityModule }  from "../modules/security/schema.js";
+import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { outboxSchema }             from "./outbox.js";
 import { docCountersSchema }         from "./numbering.js";
 
@@ -31,6 +32,7 @@ const SCHEMA = {
   ...blacklistModule,
   ...threeWayModule,
   ...securityModule,
+  ...resolutionIntakeModule,
   ...docCountersSchema,
   ...outboxSchema,
 };

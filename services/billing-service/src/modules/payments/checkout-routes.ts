@@ -27,14 +27,14 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
     // Look up plan price — for the MVP we pass it from the frontend via the
     // plan lookup. The plan lookup happens here server-side for security.
     const { eq } = await import("drizzle-orm");
-    const { db } = await import("../../shared/db.js");
+    const { scopedRead } = await import("../../shared/db.js");
     const { billingPlans } = await import("../plans/schema.js");
 
-    const [plan] = await db
+    const [plan] = await scopedRead((tx) => tx
       .select({ priceMinor: billingPlans.priceMinor, currency: billingPlans.currency })
       .from(billingPlans)
       .where(eq(billingPlans.id, body.planId))
-      .limit(1);
+      .limit(1));
 
     if (!plan) {
       throw new HttpError(404, "PLAN_NOT_FOUND", `plan ${body.planId} not found`);

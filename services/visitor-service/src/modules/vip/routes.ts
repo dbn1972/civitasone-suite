@@ -11,19 +11,22 @@
  *     handled in `modules/visit-request/domain.ts` via `resolveInitialStatus`
  *     (Property 27 / Requirement 21.2). No additional hook needed here.
  *   - Check-in consumer: immediate alert to host + protocol officer +
- *     reception on VIP arrival is documented as a TODO below and will be
- *     wired into `modules/check-in/consumer.ts` when Task 9.10 is
- *     executed (Requirement 21.3).
+ *     reception on VIP arrival is implemented by `notifyVipArrival` below and
+ *     wired into `modules/check-in/consumer.ts`'s check-in transaction
+ *     (Requirement 21.3).
  *
  * Follows the route pattern from `modules/blacklist/routes.ts`:
  *   resolveContext → role gate → zod validate query → repo read → reply.
  */
 import type { FastifyInstance } from "fastify";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import type { DrizzleTx } from "@civitasone/outbox";
 import { resolveContext, HttpError } from "../../shared/context.js";
+import { enqueue } from "../../shared/outbox.js";
 import { assertCanViewVipLog } from "./domain.js";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { visitRequests } from "../visit-request/schema.js";
 
 // ---------------------------------------------------------------------------
@@ -38,30 +41,90 @@ const listVipLogQuery = z.object({
 // VIP wiring hooks (lightweight callables for other modules)
 // ---------------------------------------------------------------------------
 
-/**
- * TODO (Task 9.10 / Requirement 21.3): call this function from
- * `modules/check-in/consumer.ts` after a VIP check-in is committed.
- * It should publish NOTIFICATION_SEND payloads to:
- *   1. The host employee (push + in-app)
- *   2. The protocol officer on duty
- *   3. Reception desk
- *
- * Signature is intentionally minimal — expand once the check-in consumer
- * is fully wired (Task 9.10).
- */
-export async function notifyVipArrival(_params: {
+/** Event type carried on the VIP-arrival NOTIFICATION_SEND payloads. */
+export const VIP_ARRIVED_EVENT = "visitor.vip.arrived";
+/** Role-addressed recipient for the on-duty protocol officer (Requirement 21.3). */
+export const VIP_PROTOCOL_OFFICER_RECIPIENT = "protocol_officer";
+/** Role-addressed recipient for the reception desk (Requirement 21.3). */
+export const VIP_RECEPTION_RECIPIENT = "reception_desk";
+
+export interface VipArrivalParams {
   tenantId: string;
+  actorId: string;
+  correlationId: string;
   visitorName: string;
   hostEmployeeId: string;
   locationId: string;
   passId: string;
   gateId: string;
-}): Promise<void> {
-  // TODO: Implement VIP arrival notification (Requirement 21.3)
-  // 1. Build NOTIFICATION_SEND payload for host (immediate push + in-app)
-  // 2. Build NOTIFICATION_SEND payload for protocol_officer on duty
-  // 3. Build NOTIFICATION_SEND payload for reception desk
-  // 4. Publish all three via outbox or direct queue.publish
+  checkInTime: string;
+}
+
+/**
+ * Requirement 21.3: on a VIP visitor's arrival, immediately alert (a) the host
+ * employee, (b) the on-duty protocol officer, and (c) the reception desk.
+ *
+ * This is called from `modules/check-in/consumer.ts` INSIDE the same
+ * `db.transaction` that records the check-in and is guarded by
+ * `markProcessed(tx, msg.messageId)` — so the three NOTIFICATION_SEND messages
+ * are enqueued to the transactional outbox atomically with the check-in and are
+ * idempotent on redelivery (never a raw fire-and-forget `queue.publish`). The
+ * outbox relay publishes them after commit; a rolled-back check-in emits nothing.
+ */
+export async function notifyVipArrival(tx: DrizzleTx, params: VipArrivalParams): Promise<void> {
+  const variables: Record<string, string> = {
+    visitorName: params.visitorName,
+    passId: params.passId,
+    gateId: params.gateId,
+    locationId: params.locationId,
+    checkInTime: params.checkInTime,
+  };
+
+  // 1. Host — immediate push (they are meeting the VIP).
+  await enqueue(tx, {
+    topic: NOTIFICATION_SEND,
+    eventType: NOTIFICATION_SEND,
+    tenantId: params.tenantId,
+    actorId: params.actorId,
+    correlationId: params.correlationId,
+    payload: buildNotificationPayload({
+      eventType: VIP_ARRIVED_EVENT,
+      recipientId: params.hostEmployeeId,
+      recipient: params.hostEmployeeId,
+      channel: "push",
+      variables,
+    }),
+  });
+
+  // 2. On-duty protocol officer — push (protocol/escort handling).
+  await enqueue(tx, {
+    topic: NOTIFICATION_SEND,
+    eventType: NOTIFICATION_SEND,
+    tenantId: params.tenantId,
+    actorId: params.actorId,
+    correlationId: params.correlationId,
+    payload: buildNotificationPayload({
+      eventType: VIP_ARRIVED_EVENT,
+      recipient: VIP_PROTOCOL_OFFICER_RECIPIENT,
+      channel: "push",
+      variables,
+    }),
+  });
+
+  // 3. Reception desk — in-app (front-desk awareness).
+  await enqueue(tx, {
+    topic: NOTIFICATION_SEND,
+    eventType: NOTIFICATION_SEND,
+    tenantId: params.tenantId,
+    actorId: params.actorId,
+    correlationId: params.correlationId,
+    payload: buildNotificationPayload({
+      eventType: VIP_ARRIVED_EVENT,
+      recipient: VIP_RECEPTION_RECIPIENT,
+      channel: "in_app",
+      variables,
+    }),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -97,10 +160,10 @@ export async function vipRoutes(app: FastifyInstance): Promise<void> {
       conditions.push(eq(visitRequests.locationId, query.locationId));
     }
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(visitRequests)
-      .where(and(...conditions));
+      .where(and(...conditions)));
 
     return reply.send({ data: rows });
   });

@@ -37,7 +37,7 @@ import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { blacklistEntries, watchlistEntries } from "./schema.js";
-import { assertBlacklistTransition, assertDistinctMakerChecker } from "./domain.js";
+import { assertBlacklistTransition, assertDistinctMakerChecker, normalizeName } from "./domain.js";
 import { addToBlacklistHashSet, addToWatchlistHashSet } from "./screening-store.js";
 
 const log = pino({ name: "blacklist-consumer" });
@@ -86,6 +86,7 @@ export function registerBlacklistConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         locationId: p.locationId ?? null,
         personName: p.personName,
+        nameNormalized: normalizeName(p.personName),
         identityDocType: p.identityDocType ?? null,
         identityDocHash: p.identityDocHash ?? null,
         reason: p.reason,
@@ -163,6 +164,7 @@ export function registerBlacklistConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         locationId: p.locationId ?? null,
         personName: p.personName,
+        nameNormalized: normalizeName(p.personName),
         identityDocType: p.identityDocType ?? null,
         identityDocHash: p.identityDocHash ?? null,
         riskLevel: p.riskLevel ?? "medium",

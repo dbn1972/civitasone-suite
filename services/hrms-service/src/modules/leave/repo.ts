@@ -1,5 +1,5 @@
 import { eq, and, gte, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps,
   type LeaveAppRow, type LeaveAllocRow,
@@ -8,56 +8,56 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findAllocById(id: string): Promise<LeaveAllocRow | null> {
-  const rows = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findAllocByEmpAndType(
   tenantId: string, employeeId: string, leaveTypeId: string, fy: string
 ): Promise<LeaveAllocRow | null> {
-  const rows = await db.select().from(hrmsLeaveAllocs)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
     .where(and(
       eq(hrmsLeaveAllocs.tenantId, tenantId),
       eq(hrmsLeaveAllocs.employeeId, employeeId),
       eq(hrmsLeaveAllocs.leaveTypeId, leaveTypeId),
       eq(hrmsLeaveAllocs.fy, fy),
-    )).limit(1);
+    )).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findLeaveAppById(id: string, tenantId: string): Promise<LeaveAppRow | null> {
-  const rows = await db.select().from(hrmsLeaveApps)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(and(eq(hrmsLeaveApps.id, id), eq(hrmsLeaveApps.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function findLeaveAppsByEmp(tenantId: string, employeeId: string, limit = 100): Promise<LeaveAppRow[]> {
-  return db.select().from(hrmsLeaveApps)
+  return scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.employeeId, employeeId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findLeaveAppsByTenant(tenantId: string, limit = 100): Promise<LeaveAppRow[]> {
-  return db.select().from(hrmsLeaveApps)
+  return scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(eq(hrmsLeaveApps.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listLeaveTypesByTenant(tenantId: string, limit = 100): Promise<Array<typeof hrmsLeaveTypes.$inferSelect>> {
-  return db.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, tenantId)).limit(limit);
+  return scopedRead((tx) => tx.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, tenantId)).limit(limit));
 }
 
 export async function listAllocsForEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LeaveAllocRow[]> {
-  return db.select().from(hrmsLeaveAllocs)
+  return scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
     .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findApprovedLeaveInMonth(tenantId: string, month: string): Promise<LeaveAppRow[]> {
-  const rows = await db.select().from(hrmsLeaveApps)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.status, "approved")))
-    .limit(500);
+    .limit(500));
   return rows.filter((r) => (r.fromDate ?? "").startsWith(month) || (r.toDate ?? "").startsWith(month));
 }
 

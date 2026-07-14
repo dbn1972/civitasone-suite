@@ -8,7 +8,7 @@
  * Requirement 13.5: searchable log of Material_Pass records for audit.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { materialPasses, type MaterialPassRow } from "./schema.js";
 
@@ -20,8 +20,8 @@ const RESOURCE = "material_pass";
  */
 export async function getMaterialPassesByPassId(tenantId: string, passId: string): Promise<MaterialPassRow[]> {
   const result = await cache.getOrLoad<MaterialPassRow[]>(cache.makeKey(tenantId, RESOURCE, passId), async () => {
-    return db.select().from(materialPasses)
-      .where(and(eq(materialPasses.passId, passId), eq(materialPasses.tenantId, tenantId)));
+    return scopedRead((tx) => tx.select().from(materialPasses)
+      .where(and(eq(materialPasses.passId, passId), eq(materialPasses.tenantId, tenantId))));
   });
   return result ?? [];
 }

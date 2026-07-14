@@ -42,6 +42,12 @@ export const CONSUMED_EVENTS = {
   mlTaskHighRisk:           "ml.prediction.task_high_risk",
   mlChurnRiskHigh:          "ml.prediction.churn_risk_high",
   mlAnomalyDetected:        "ml.prediction.anomaly_detected",
+  /** Visitor security/safety events — alert the tenant security control room */
+  visitorSecurityIncidentCreated: "visitor.security_incident.created",
+  visitorScanBlacklistMatch:      "visitor.scan.blacklist_match",
+  visitorTailgatingDetected:      "visitor.tailgating.detected",
+  visitorAntiPassbackViolation:   "visitor.anti_passback.violation",
+  visitorEmergencyUnlockTriggered: "visitor.emergency.unlock.triggered",
 } as const;
 
 export const SERVICE = "notification";

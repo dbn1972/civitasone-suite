@@ -19,3 +19,23 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+
+/**
+ * The Drizzle transaction handle passed to {@link scopedRead}. Derived from the
+ * underlying (pre-wrap) transaction so `tx.select()` keeps full column typing —
+ * the public `db.transaction` is re-typed with `tx: any`, which would erase it.
+ */
+type ScopedTx = Parameters<Parameters<typeof baseDb.transaction>[0]>[0];
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain `db.select()` runs on a pooled connection with no
+ * `app.tenant_id` GUC set, so under a NOBYPASSRLS role the fail-closed policy
+ * returns ZERO rows. Wrapping the read in `db.transaction` makes the wrapper
+ * (above) set the GUC from AsyncLocalStorage — reads are then correctly
+ * tenant-scoped by RLS, not merely by an app-layer WHERE.
+ */
+export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(fn);
+}

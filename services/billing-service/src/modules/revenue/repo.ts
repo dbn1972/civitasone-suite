@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { revenueLedger, revenueAccruals } from "./schema.js";
 import type { RevenueLedgerView, RevenueAccrualView } from "./domain.js";
@@ -35,10 +35,10 @@ export async function getLedgerById(tenantId: string, id: string): Promise<Reven
   return cache.getOrLoad(
     cache.makeKey(tenantId, "revenue-ledger", id),
     async () => {
-      const rows = await db
+      const rows = await scopedRead((tx) => tx
         .select()
         .from(revenueLedger)
-        .where(and(eq(revenueLedger.id, id), eq(revenueLedger.tenantId, tenantId)));
+        .where(and(eq(revenueLedger.id, id), eq(revenueLedger.tenantId, tenantId))));
       return rows[0] ? toLedgerView(rows[0]) : null;
     },
   );
@@ -50,19 +50,19 @@ export async function listLedgers(
   pageSize: number,
 ): Promise<{ data: RevenueLedgerView[]; meta: { page: number; pageSize: number; total: number } }> {
   const offset = (page - 1) * pageSize;
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(revenueLedger)
     .where(eq(revenueLedger.tenantId, tenantId))
     .orderBy(desc(revenueLedger.createdAt))
     .limit(pageSize)
-    .offset(offset);
+    .offset(offset));
 
   // Count total for pagination meta
-  const countRows = await db
+  const countRows = await scopedRead((tx) => tx
     .select()
     .from(revenueLedger)
-    .where(eq(revenueLedger.tenantId, tenantId));
+    .where(eq(revenueLedger.tenantId, tenantId)));
 
   return {
     data: rows.map(toLedgerView),
@@ -74,10 +74,10 @@ export async function getAccrualsForLedger(
   tenantId: string,
   ledgerId: string,
 ): Promise<RevenueAccrualView[]> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(revenueAccruals)
     .where(and(eq(revenueAccruals.ledgerId, ledgerId), eq(revenueAccruals.tenantId, tenantId)))
-    .orderBy(revenueAccruals.accrualDate);
+    .orderBy(revenueAccruals.accrualDate));
   return rows.map(toAccrualView);
 }

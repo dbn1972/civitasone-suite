@@ -21,7 +21,7 @@
  * _Requirements: 4.1, 15.1, 15.2, 15.4, 15.5, 19.3, 19.7_
  */
 import { and, desc, eq, isNull, lte } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache, storage } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import { meetingDocuments, type MeetingDocumentRow } from "./schema.js";
@@ -43,11 +43,11 @@ export interface MeetingStatus {
 
 /** Direct (uncached) meeting existence + status lookup, tenant-scoped (route 404 guard). */
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, status: meetings.status })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -63,7 +63,7 @@ export async function getDocument(tenantId: string, documentId: string): Promise
   return cache.getOrLoad<MeetingDocumentRow>(
     cache.makeKey(tenantId, RESOURCE_DOCUMENT, documentId),
     async () => {
-      const rows = await db
+      const rows = await scopedRead((tx) => tx
         .select()
         .from(meetingDocuments)
         .where(
@@ -73,7 +73,7 @@ export async function getDocument(tenantId: string, documentId: string): Promise
             isNull(meetingDocuments.deletedAt),
           ),
         )
-        .limit(1);
+        .limit(1));
       return rows[0] ?? null;
     },
     DOCUMENT_TTL,
@@ -108,11 +108,11 @@ export async function getDocuments(
   if (filter.agendaItemId !== undefined) conditions.push(eq(meetingDocuments.agendaItemId, filter.agendaItemId));
   if (filter.documentType !== undefined) conditions.push(eq(meetingDocuments.documentType, filter.documentType));
 
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(meetingDocuments)
     .where(and(...conditions))
-    .orderBy(desc(meetingDocuments.createdAt));
+    .orderBy(desc(meetingDocuments.createdAt)));
 
   // Defence-in-depth clearance filter (SQL rank comparison would require a CASE; a small
   // in-memory filter over an already tenant/meeting-scoped set is clearer and safe).
@@ -168,17 +168,17 @@ export async function getVersionHistory(tenantId: string, documentId: string): P
 
 /** Load a single LIVE document by id (used by the version-lineage walk). */
 async function loadById(tenantId: string, id: string): Promise<MeetingDocumentRow | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(meetingDocuments)
     .where(and(eq(meetingDocuments.id, id), eq(meetingDocuments.tenantId, tenantId), isNull(meetingDocuments.deletedAt)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 /** Load the LIVE document that supersedes `previousVersionId` (its immediate successor). */
 async function loadByPreviousVersionId(tenantId: string, previousVersionId: string): Promise<MeetingDocumentRow | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(meetingDocuments)
     .where(
@@ -189,7 +189,7 @@ async function loadByPreviousVersionId(tenantId: string, previousVersionId: stri
       ),
     )
     .orderBy(desc(meetingDocuments.versionNum))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 

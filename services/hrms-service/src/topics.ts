@@ -118,6 +118,10 @@ export const CONSUMED_EVENTS = {
   // eOffice decision callback for an HR recruitment eFile
   // (source_ref_type "hr_recruitment"). See modules/recruitment/eoffice-consumer.ts.
   recruitmentFileDecided: "hrms.recruitment.file_decided",
+  // meeting-service board/committee free-text HR decision (Req 22.3). Opens a
+  // PENDING_REVIEW triage item — see modules/board-intake/consumer.ts. Payload:
+  // { decisionId, meetingId, text, authority?, effectiveDate?, committeeId? }.
+  boardDecisionHr: "meeting.decision.hr",
 } as const;
 
 export const SERVICE = "hrms";

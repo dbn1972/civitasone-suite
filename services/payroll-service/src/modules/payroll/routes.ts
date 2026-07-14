@@ -7,7 +7,7 @@ import { resolveContext, requireRole, requirePermissionKey, HttpError } from "..
 import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
@@ -94,7 +94,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/ddos", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT d.ddo_code, d.name,
              COALESCE(array_agg(m.department_id) FILTER (WHERE m.department_id IS NOT NULL), '{}') AS department_ids
       FROM payroll.payroll_ddos d
@@ -103,7 +103,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
       WHERE d.tenant_id = ${ctx.tenantId}::uuid
       GROUP BY d.ddo_code, d.name
       ORDER BY d.ddo_code
-    `)) as unknown as Array<{ ddo_code: string; name: string; department_ids: string[] }>;
+    `))) as unknown as Array<{ ddo_code: string; name: string; department_ids: string[] }>;
     return reply.send(rows.map((r) => ({ ddoCode: r.ddo_code, name: r.name, departmentIds: r.department_ids })));
   });
 
@@ -132,14 +132,14 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/pensioners", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
              basic_pension_minor, commuted_pension_minor, commutation_date::text AS commutation_date,
              medical_allowance_minor, ddo_code, tax_regime, status
       FROM payroll.payroll_pensioners
       WHERE tenant_id = ${ctx.tenantId}::uuid
       ORDER BY ppo_no
-    `)) as unknown as Array<Record<string, unknown>>;
+    `))) as unknown as Array<Record<string, unknown>>;
     return reply.send(rows.map((r) => ({
       id: r.id, ppoNo: r.ppo_no, fullName: r.full_name, dateOfBirth: r.date_of_birth,
       basicPensionMinor: Number(r.basic_pension_minor), commutedPensionMinor: Number(r.commuted_pension_minor),

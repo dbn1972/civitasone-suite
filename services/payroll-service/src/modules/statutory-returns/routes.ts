@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { payrollTds, payrollNps, payrollTdsNonSalary } from "../statutory/schema.js";
 import { perquisiteComponents } from "../tax/schema.js";
@@ -55,12 +55,12 @@ const pipeSafe = (v: unknown): string => String(v ?? "").replace(/[|\r\n]/g, " "
 /** Deductee-wise TDS aggregate for a set of months (one row per employee). */
 async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<string, { tds: number; periods: Set<string> }>> {
   // Restrict to disbursed/approved runs so we only report deposited TDS.
-  const runs = await db.select().from(payrollRuns)
-    .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months)));
+  const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
+    .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months))));
   const validRunIds = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
 
-  const tdsRows = await db.select().from(payrollTds)
-    .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months)));
+  const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
+    .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months))));
 
   const byEmp = new Map<string, { tds: number; periods: Set<string> }>();
   for (const t of tdsRows) {
@@ -164,11 +164,11 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
 
     // Challan summary: one challan per month (TDS deposited for that month),
     // restricted to approved/disbursed runs.
-    const challanRuns = await db.select().from(payrollRuns)
-      .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months)));
+    const challanRuns = await scopedRead((tx) => tx.select().from(payrollRuns)
+      .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
     const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
-    const challanTdsRows = await db.select().from(payrollTds)
-      .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months)));
+    const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
+      .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months))));
     const challans = months.map((month) => ({
       month,
       tdsDeposited: Math.round(challanTdsRows
@@ -267,9 +267,9 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
     const { startYear, endYear } = parseFyOr400(fy);
 
-    const decRows = await db.select().from(taxDeclarations)
+    const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
       .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
-      .limit(1);
+      .limit(1));
     const dec = decRows[0] ?? null;
     const perqMinor = dec ? Number(dec.perquisitesMinor) : 0;
 
@@ -289,12 +289,12 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     void startYear;
 
     // P3: itemised perquisite components (Sec 17(2)) rendered per statutory 12BA line.
-    const comps = await db.select().from(perquisiteComponents)
+    const comps = await scopedRead((tx) => tx.select().from(perquisiteComponents)
       .where(and(
         eq(perquisiteComponents.tenantId, ctx.tenantId),
         eq(perquisiteComponents.employeeId, employeeId),
         eq(perquisiteComponents.fy, fy),
-      ));
+      )));
 
     let perquisites: Array<Record<string, unknown>>;
     let totalPerqMinor: number;
@@ -349,8 +349,8 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       throw new HttpError(400, "VALIDATION_FAILED", "month query param required in YYYY-MM format");
     }
 
-    const npsRows = await db.select().from(payrollNps)
-      .where(and(eq(payrollNps.tenantId, ctx.tenantId), eq(payrollNps.period, month)));
+    const npsRows = await scopedRead((tx) => tx.select().from(payrollNps)
+      .where(and(eq(payrollNps.tenantId, ctx.tenantId), eq(payrollNps.period, month))));
     if (npsRows.length === 0) {
       throw new HttpError(404, "NOT_FOUND", `No NPS records found for period ${month}`);
     }
@@ -498,8 +498,8 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const { startYear, endYear } = parseFyOr400(fy);
     const months = quarterMonths(startYear, q);
 
-    const rows = await db.select().from(payrollTdsNonSalary)
-      .where(and(eq(payrollTdsNonSalary.tenantId, ctx.tenantId), inArray(payrollTdsNonSalary.period, months)));
+    const rows = await scopedRead((tx) => tx.select().from(payrollTdsNonSalary)
+      .where(and(eq(payrollTdsNonSalary.tenantId, ctx.tenantId), inArray(payrollTdsNonSalary.period, months))));
 
     // Deductee-wise aggregation (one row per deductee+section).
     const byKey = new Map<string, { ref: string; name: string; pan: string; section: string; paid: bigint; tds: bigint; periods: Set<string> }>();

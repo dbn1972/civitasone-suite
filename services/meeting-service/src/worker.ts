@@ -30,6 +30,7 @@ import type { CommandEnvelope, Handler } from "@civitasone/queue";
 import { isNonRetryable } from "@civitasone/queue";
 import { captureError, incrementDlqMessage } from "@civitasone/observability";
 import { startOutboxPurge } from "@civitasone/outbox";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -52,6 +53,7 @@ import { registerAiAssistConsumers } from "./modules/ai-assist/consumer.js";
 // Cross-service consumed-event registrar — maps CONSUMED_EVENTS topics to handlers
 // (tenant.created, workflow.task.completed/assigned, hrms.employee.updated/separated).
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
+import { registerConfigRegistryConsumers } from "./modules/config-registry/consumer.js";
 // Graceful-shutdown-aware scheduled workers (return NodeJS.Timeout interval handles).
 import { startActionItemEscalationScheduler } from "./workers/action-item-escalation.js";
 import { startStatutoryFrequencyScheduler } from "./workers/statutory-frequency-check.js";
@@ -119,6 +121,8 @@ const MODULE_REGISTRARS: ModuleRegistrar[] = [
   registerAiAssistConsumers,
   // CONSUMED_EVENTS (tenant.created, workflow.task.*, hrms.employee.*) — cross-service stitching.
   registerIntegrationConsumers,
+  // Tenant config engine (config.set / config.deactivate).
+  registerConfigRegistryConsumers,
 ];
 
 for (const register of MODULE_REGISTRARS) register(registerConsumer);
@@ -191,7 +195,11 @@ function makeRouter(topic: string): Handler {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        await handler(msg);
+        // Establish the tenant context from the message so the consumer's
+        // db.transaction() sets the app.tenant_id GUC — RLS is enforced on the
+        // write path too (not merely on a BYPASSRLS role). REQUIRED now that
+        // meeting.* tables are FORCE ROW LEVEL SECURITY (migration 0005).
+        await runWithTenant(msg.tenantId, () => handler(msg));
         return;
       } catch (err) {
         lastErr = err;

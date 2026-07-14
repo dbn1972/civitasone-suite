@@ -42,7 +42,9 @@ export function registerHearingConsumers(
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // §47 config/metadata: purpose is OPTIONAL — validate ONLY when present
-      // against (defaults ∪ tenant config).
+      // against the effective allowed set: the tenant’s configured `hearing_purpose`
+      // values when any exist (AUTHORITATIVE — REPLACES the defaults), else
+      // DEFAULT_HEARING_PURPOSES.
       if (p.purpose) {
         const configured = await configRepo.listActiveKeys(tx, p.tenantId, "hearing_purpose");
         const allowed = effectiveAllowed(configured, DEFAULT_HEARING_PURPOSES);

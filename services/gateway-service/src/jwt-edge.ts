@@ -58,9 +58,10 @@ export async function jwtEdgeVerify(
     // Attach the verified tenant/actor to the request for downstream guards
     // (module-guard, policy-check) that need tenant context without re-verifying.
     (req as FastifyRequest & { jwtPayload?: CivitasJwtPayload }).jwtPayload = payload;
-    // Also populate x-tenant-id if it wasn't sent by the client but is in the token.
-    // SEC-2: the token's tid claim is authoritative in production.
-    if (payload.tid && !req.headers["x-tenant-id"]) {
+    // SEC-P0: the verified token's tid claim is AUTHORITATIVE. Always overwrite any
+    // client-supplied x-tenant-id so a logged-in user cannot forge a victim tenant id
+    // in the header (downstream services source the RLS GUC from x-tenant-id).
+    if (payload.tid) {
       (req.headers as Record<string, string>)["x-tenant-id"] = payload.tid;
     }
   } catch (err) {

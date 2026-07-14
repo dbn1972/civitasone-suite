@@ -26,6 +26,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import type { Db } from "../../shared/db.js";
+import { loadNamespaceOverrides } from "../config-registry/repo.js";
+import { POLICY_NS, toNumber, MS_PER_MINUTE, MS_PER_HOUR } from "../config-registry/policy.js";
 
 export interface OvrstayWorkerOptions {
   /** Interval between checks in milliseconds. Default: 10 minutes. */
@@ -78,7 +80,21 @@ export async function processOvstayDetectionCycle(
   logger?: { info: (...args: any[]) => void; warn: (...args: any[]) => void },
 ): Promise<{ detected: number; escalated: number }> {
   const now = new Date();
-  const escalationCutoff = new Date(now.getTime() - escalationThresholdMs);
+
+  // Config-driven per tenant (visitor_policy keys check_in.overstay_grace_minutes
+  // / check_in.overstay_escalation_hours). Grace DEFAULTS to 0 (so the base scan
+  // `validUntil < now` is already the widest), and escalation defaults to the
+  // passed threshold. A tenant that grants a grace period won't have its visitors
+  // flagged as overstayed until grace elapses; unchanged when unconfigured.
+  const overrides = await loadNamespaceOverrides(db, POLICY_NS);
+  const graceMsFor = (t: string) => {
+    const m = toNumber(overrides.get(t)?.get("check_in.overstay_grace_minutes"));
+    return m !== undefined ? m * MS_PER_MINUTE : 0;
+  };
+  const escalationMsFor = (t: string) => {
+    const h = toNumber(overrides.get(t)?.get("check_in.overstay_escalation_hours"));
+    return h !== undefined ? h * MS_PER_HOUR : escalationThresholdMs;
+  };
 
   // ── Step 1: Find all checked-in passes past valid_until ──────────────
   const overstayedPasses = await db
@@ -101,6 +117,9 @@ export async function processOvstayDetectionCycle(
   let escalated = 0;
 
   for (const pass of overstayedPasses) {
+    // Apply this tenant's overstay grace: not yet overstayed until grace elapses.
+    if (now.getTime() - pass.validUntil.getTime() <= graceMsFor(pass.tenantId)) continue;
+
     // ── Step 1a: Publish overstayDetect command for standard handling ───
     try {
       await queue.publish(COMMANDS.overstayDetect, {
@@ -122,9 +141,9 @@ export async function processOvstayDetectionCycle(
       );
     }
 
-    // ── Step 2: Escalate to supervisor if > 2h past valid_until ────────
+    // ── Step 2: Escalate to supervisor if past the tenant's escalation window ──
     // Requirement 6.4: end-of-business-day escalation
-    if (pass.validUntil < escalationCutoff) {
+    if (now.getTime() - pass.validUntil.getTime() > escalationMsFor(pass.tenantId)) {
       try {
         // Look up visitor info for the notification payload
         const visitRows = await db

@@ -129,6 +129,9 @@ vi.mock("../src/shared/db.js", () => {
   const mockTransaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
   return {
     db: { select: mockSelect, transaction: mockTransaction },
+    // scopedRead wraps a read in db.transaction in prod; here run the callback
+    // with a tx that exposes the same mocked select chain.
+    scopedRead: (fn: (tx: unknown) => unknown) => fn({ select: mockSelect }),
     sqlClient: { end: vi.fn() },
   };
 });

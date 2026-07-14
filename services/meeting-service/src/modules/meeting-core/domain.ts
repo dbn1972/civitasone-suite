@@ -258,6 +258,10 @@ export interface TransitionContext {
   quorumEstablished?: boolean;
   /** Adjournment reason; required for in_progress→adjourned (Req 1.5). */
   adjournmentReason?: string | null;
+  /** Minimum notice period (days) required before a meeting may be scheduled (config-driven, Gap 3). */
+  noticePeriodDays?: number | null;
+  /** When true, a short-notice scheduling is explicitly waived (recorded on the meeting, Gap 3). */
+  shortNoticeWaiver?: boolean;
 }
 
 /**
@@ -277,6 +281,36 @@ export function validateDraftToScheduled(ctx: TransitionContext): void {
       "MEETING_INVALID_TRANSITION",
       "cannot schedule meeting: prerequisites not met (chairperson, >=1 agenda item, future date)",
       { from: "draft", to: "scheduled", unmet },
+    );
+  }
+}
+
+/**
+ * Whole days of notice between `now` and the scheduled start (floored, never negative). Used to
+ * enforce the statutory minimum notice period and to record `notice_days` on the meeting (Gap 3).
+ */
+export function computeNoticeDays(now: Date, scheduledAt: Date): number {
+  const MS_PER_DAY = 86_400_000;
+  return Math.max(0, Math.floor((scheduledAt.getTime() - now.getTime()) / MS_PER_DAY));
+}
+
+/**
+ * Enforce the minimum notice period on `draft → scheduled` (Gap 3). When the tenant has configured
+ * a `noticePeriodDays` and the actual notice falls short, scheduling is REJECTED with
+ * `MEETING_SHORT_NOTICE` (422) UNLESS an explicit `shortNoticeWaiver` is supplied — in which case
+ * the meeting is scheduled and the waiver is recorded on the row (the consumer sets
+ * `short_notice_waived`). A tenant that configures no notice period sees identical behavior.
+ */
+export function validateNoticePeriod(ctx: TransitionContext): void {
+  const required = ctx.noticePeriodDays;
+  if (required === undefined || required === null || required <= 0) return;
+  if (!ctx.scheduledAt) return; // absence of a scheduled date is caught by validateDraftToScheduled
+  const actual = computeNoticeDays(ctx.now, ctx.scheduledAt);
+  if (actual < required && !ctx.shortNoticeWaiver) {
+    throw httpError(
+      "MEETING_SHORT_NOTICE",
+      `meeting notice of ${actual} day(s) is less than the required ${required} day(s); a waiver is required`,
+      { requiredNoticeDays: required, actualNoticeDays: actual, waiver: false },
     );
   }
 }
@@ -350,7 +384,9 @@ export function assertTransition(
 
   // Per-transition data guards.
   if (from === "draft" && to === "scheduled") {
-    validateDraftToScheduled(requireCtx(ctx, from, to));
+    const c = requireCtx(ctx, from, to);
+    validateDraftToScheduled(c);
+    validateNoticePeriod(c);
   }
   if (to === "in_progress") {
     validateQuorumForStart(requireCtx(ctx, from, to));

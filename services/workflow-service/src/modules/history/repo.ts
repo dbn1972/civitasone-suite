@@ -1,5 +1,5 @@
 import { eq, asc, and, gte, lte, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { transitionHistory, type TransitionInsert, type TransitionRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "select">;
@@ -10,9 +10,9 @@ export async function record(tx: Writer, row: Omit<TransitionInsert, "id" | "cre
 }
 
 export async function listForInstance(instanceId: string, tenantId: string): Promise<TransitionRow[]> {
-  return db.select().from(transitionHistory)
+  return scopedRead((tx) => tx.select().from(transitionHistory)
     .where(and(eq(transitionHistory.instanceId, instanceId), eq(transitionHistory.tenantId, tenantId)))
-    .orderBy(asc(transitionHistory.createdAt));
+    .orderBy(asc(transitionHistory.createdAt)));
 }
 
 /**
@@ -42,8 +42,8 @@ export async function exportForTenant(
       sql`(date_trunc('milliseconds', ${transitionHistory.createdAt}), ${transitionHistory.id}) > (date_trunc('milliseconds', ${afterCreatedAt.toISOString()}::timestamptz), ${afterId})`,
     );
   }
-  return db.select().from(transitionHistory)
+  return scopedRead((tx) => tx.select().from(transitionHistory)
     .where(and(...conds))
     .orderBy(sql`date_trunc('milliseconds', ${transitionHistory.createdAt})`, asc(transitionHistory.id))
-    .limit(limit);
+    .limit(limit));
 }

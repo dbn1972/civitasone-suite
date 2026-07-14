@@ -1,21 +1,21 @@
 import { and, asc, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { financePao, financeDdo, type PaoRow, type DdoRow } from "./schema.js";
 
 export type Reader = Pick<typeof db, "select">;
 
 export async function listPao(tenantId: string, limit = 500): Promise<PaoRow[]> {
-  return db.select().from(financePao)
+  return scopedRead((tx) => tx.select().from(financePao)
     .where(eq(financePao.tenantId, tenantId))
     .orderBy(asc(financePao.paoCode))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listDdo(tenantId: string, limit = 500): Promise<DdoRow[]> {
-  return db.select().from(financeDdo)
+  return scopedRead((tx) => tx.select().from(financeDdo)
     .where(eq(financeDdo.tenantId, tenantId))
     .orderBy(asc(financeDdo.ddoCode))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function paoExists(tenantId: string, code: string, reader: Reader = db): Promise<boolean> {

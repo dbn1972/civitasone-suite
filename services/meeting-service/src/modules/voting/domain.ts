@@ -178,6 +178,84 @@ export function approvalPercentage(tally: VoteTally): number {
   return tally.total > 0 ? (tally.votesFor / tally.total) * 100 : 0;
 }
 
+// ─── Weighted voting (config-gated: voting.weighted_enabled) ─────────────────────
+
+/** A single ballot carrying the member's vote weight (default 1 = headcount). */
+export interface WeightedBallot {
+  position: string;
+  /** The member/seat vote weight applied to this ballot (board shareholding / ex-officio). */
+  weight: number;
+}
+
+/**
+ * Weighted tally: sum each position by the ballot's WEIGHT rather than by headcount, so a
+ * board's shareholding or ex-officio weighting decides the outcome (config toggle
+ * `voting.weighted_enabled`). The returned shape is the same `VoteTally` — `votesFor` etc.
+ * hold the summed WEIGHTS and `total` is the summed weight of all ballots — so
+ * `computeVoteResult` scores it by exact integer cross-multiplication with NO change: a
+ * threshold is measured against summed weight, not summed heads. A non-positive or non-finite
+ * weight is coerced to 0 (a zero-weight seat casts a recorded-but-non-counting ballot). Any
+ * unrecognised position is rejected as `VALIDATION_FAILED` (400), mirroring `computeTally`.
+ *
+ * When weighting is DISABLED every weight is 1, so `computeWeightedTally` reduces exactly to
+ * `computeTally` (1 member = 1 vote) — behavior is unchanged.
+ */
+export function computeWeightedTally(ballots: readonly WeightedBallot[]): VoteTally {
+  let votesFor = 0;
+  let votesAgainst = 0;
+  let votesAbstain = 0;
+  for (const b of ballots) {
+    const w = Number.isFinite(b.weight) && b.weight > 0 ? Math.trunc(b.weight) : 0;
+    switch (b.position) {
+      case "for":
+        votesFor += w;
+        break;
+      case "against":
+        votesAgainst += w;
+        break;
+      case "abstain":
+        votesAbstain += w;
+        break;
+      default:
+        throw httpError("VALIDATION_FAILED", `unknown vote position: ${String(b.position)}`, { position: b.position });
+    }
+  }
+  return { votesFor, votesAgainst, votesAbstain, total: votesFor + votesAgainst + votesAbstain };
+}
+
+// ─── Recusal / conflict-of-interest (statutory completeness) ─────────────────────
+
+/** True if `memberId` is among the members recused on the motion. */
+export function isMemberRecused(recusedMemberIds: Iterable<string>, memberId: string): boolean {
+  if (recusedMemberIds instanceof Set) return recusedMemberIds.has(memberId);
+  for (const id of recusedMemberIds) {
+    if (id === memberId) return true;
+  }
+  return false;
+}
+
+/**
+ * Enforce that a recused member cannot cast a vote on the motion they are recused from
+ * (statutory conflict-of-interest rule). Throws `MEETING_MEMBER_RECUSED` (422). A recused
+ * member never enters the tally (they cannot cast) and is excluded from the quorum-for-that-
+ * item denominator (see `itemQuorumDenominator`).
+ */
+export function assertNotRecused(recusedMemberIds: Iterable<string>, memberId: string): void {
+  if (isMemberRecused(recusedMemberIds, memberId)) {
+    throw httpError("MEETING_MEMBER_RECUSED", "member is recused from this motion and cannot vote", { memberId });
+  }
+}
+
+/**
+ * The quorum denominator for a specific motion after recusals: the active roster size minus the
+ * count of recused members who belong to that roster. Recused members are excluded from BOTH the
+ * present-count numerator and this denominator so a motion's quorum is assessed on the members
+ * actually eligible to decide it. Never returns below 0.
+ */
+export function itemQuorumDenominator(activeRosterSize: number, recusedRosterCount: number): number {
+  return Math.max(0, activeRosterSize - Math.max(0, recusedRosterCount));
+}
+
 // ─── Quorum-at-vote-time (Req 11.2) ─────────────────────────────────────────────
 
 /** Inputs for verifying quorum still holds at the moment a vote is initiated. */

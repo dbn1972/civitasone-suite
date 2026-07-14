@@ -27,7 +27,7 @@
  */
 import { and, asc, eq } from "drizzle-orm";
 import { renderPdf } from "@civitasone/render";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { attendanceRecords, type AttendanceRecordRow } from "./schema.js";
 import { participants } from "../participant/schema.js";
@@ -68,7 +68,7 @@ export interface MeetingSnapshot {
  * the meeting is unknown / belongs to another tenant.
  */
 export async function getMeetingSnapshot(tenantId: string, meetingId: string): Promise<MeetingSnapshot | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       id: meetings.id,
       title: meetings.title,
@@ -84,7 +84,7 @@ export async function getMeetingSnapshot(tenantId: string, meetingId: string): P
     })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -112,11 +112,11 @@ export async function getAttendance(
     (await cache.getOrLoad<AttendanceRecordRow[]>(
       cache.makeKey(tenantId, RESOURCE_ATTENDANCE, meetingId),
       async () =>
-        db
+        scopedRead((tx) => tx
           .select()
           .from(attendanceRecords)
           .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.meetingId, meetingId)))
-          .orderBy(asc(attendanceRecords.checkInAt)),
+          .orderBy(asc(attendanceRecords.checkInAt))),
     )) ?? [];
 
   if (!filter || (filter.status === undefined && filter.mode === undefined)) return rows;
@@ -201,7 +201,7 @@ export async function getLiveAttendance(tenantId: string, meetingId: string): Pr
   const dashboard = await cache.getOrLoad<LiveAttendanceDashboard>(
     cache.makeKey(tenantId, RESOURCE_ATTENDANCE, `${meetingId}:live`),
     async () => {
-      const rows: LiveJoinRow[] = await db
+      const rows: LiveJoinRow[] = await scopedRead((tx) => tx
         .select({
           participantId: participants.id,
           employeeId: participants.employeeId,
@@ -222,7 +222,7 @@ export async function getLiveAttendance(tenantId: string, meetingId: string): Pr
           ),
         )
         .where(and(eq(participants.tenantId, tenantId), eq(participants.meetingId, meetingId)))
-        .orderBy(asc(participants.role));
+        .orderBy(asc(participants.role)));
 
       const counts = { present: 0, absent: 0, joinedLate: 0, leftEarly: 0, attendingViaVc: 0, total: rows.length };
       const entries: LiveAttendanceEntry[] = rows.map((r) => {
@@ -288,15 +288,15 @@ export async function getAttendanceCount(tenantId: string, meetingId: string): P
   return cache.getOrLoad<AttendanceCountSummary>(
     cache.makeKey(tenantId, RESOURCE_ATTENDANCE, `${meetingId}:count`),
     async () => {
-      const meetingRows = await db
+      const meetingRows = await scopedRead((tx) => tx
         .select({ committeeId: meetings.committeeId, quorumEstablished: meetings.quorumEstablished })
         .from(meetings)
         .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       const meeting = meetingRows[0];
       if (!meeting) return null;
 
-      const attendees = await db
+      const attendees = await scopedRead((tx) => tx
         .select({
           status: attendanceRecords.status,
           mode: attendanceRecords.mode,
@@ -310,7 +310,7 @@ export async function getAttendanceCount(tenantId: string, meetingId: string): P
             eq(participants.tenantId, attendanceRecords.tenantId),
           ),
         )
-        .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.meetingId, meetingId)));
+        .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.meetingId, meetingId))));
 
       const summary: AttendanceCountSummary = {
         meetingId,
@@ -344,23 +344,23 @@ export async function getAttendanceCount(tenantId: string, meetingId: string): P
       }
 
       if (meeting.committeeId) {
-        const committeeRows = await db
+        const committeeRows = await scopedRead((tx) => tx
           .select({ quorumRule: committees.quorumRule })
           .from(committees)
-          .where(and(eq(committees.id, meeting.committeeId), eq(committees.tenantId, tenantId)))
-          .limit(1);
+          .where(and(eq(committees.id, meeting.committeeId!), eq(committees.tenantId, tenantId)))
+          .limit(1));
         const rule = committeeRows[0]?.quorumRule as QuorumRule | undefined;
         if (rule) {
-          const activeRows = await db
+          const activeRows = await scopedRead((tx) => tx
             .select({ id: committeeMembers.id })
             .from(committeeMembers)
             .where(
               and(
                 eq(committeeMembers.tenantId, tenantId),
-                eq(committeeMembers.committeeId, meeting.committeeId),
+                eq(committeeMembers.committeeId, meeting.committeeId!),
                 eq(committeeMembers.status, "active"),
               ),
-            );
+            ));
           const evaluation = evaluateQuorum(attendees as QuorumAttendee[], rule, activeRows.length);
           summary.quorumRequired = evaluation.requiredMembers;
           summary.countedForQuorum = evaluation.countedAttendees;

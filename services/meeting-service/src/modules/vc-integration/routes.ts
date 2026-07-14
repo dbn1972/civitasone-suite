@@ -36,6 +36,8 @@
 import type { FastifyInstance } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError, httpError } from "../../shared/context.js";
+import { hasAnyRole } from "@civitasone/auth";
+import { toPublicVcSession } from "./presenter.js";
 import {
   vcCreateSessionSchema,
   vcSessionActionSchema,
@@ -117,7 +119,10 @@ export async function vcRoutes(app: FastifyInstance): Promise<void> {
     await assertMeetingExists(ctx.tenantId, meetingId);
     const session = await repo.getVcSession(ctx.tenantId, meetingId);
     if (!session) throw new HttpError(404, "VC_SESSION_NOT_FOUND", "no vc session for this meeting");
-    return reply.send({ data: session });
+    // Strip internal identifiers (externalId, recordingStorageKey) for all clients and
+    // gate the dial-in PIN to session hosts (VC write roles) — see presenter.ts.
+    const includeHostSecrets = hasAnyRole(ctx, VC_WRITE_ROLES);
+    return reply.send({ data: toPublicVcSession(session, { includeHostSecrets }) });
   });
 
   // ── Start recording (Req 13.8) ──────────────────────────────────────────────

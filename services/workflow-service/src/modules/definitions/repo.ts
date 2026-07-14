@@ -1,5 +1,5 @@
 import { eq, and, asc, desc, ne } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { definitions, definitionNodes, definitionEdges, type DefinitionEdgeRow } from "./schema.js";
 import { evaluateCondition } from "../../shared/condition.js";
 
@@ -9,37 +9,37 @@ export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 // Reads
 // ---------------------------------------------------------------------------
 export async function findByTenant(tenantId: string, limit = 50, offset = 0) {
-  return db.select().from(definitions)
+  return scopedRead((tx) => tx.select().from(definitions)
     .where(eq(definitions.tenantId, tenantId))
     .orderBy(desc(definitions.createdAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 export async function findById(id: string, tenantId: string) {
-  const rows = await db.select().from(definitions)
+  const rows = await scopedRead((tx) => tx.select().from(definitions)
     .where(and(eq(definitions.id, id), eq(definitions.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function listNodes(definitionId: string) {
-  return db.select().from(definitionNodes)
+  return scopedRead((tx) => tx.select().from(definitionNodes)
     .where(eq(definitionNodes.definitionId, definitionId))
-    .orderBy(asc(definitionNodes.sortOrder));
+    .orderBy(asc(definitionNodes.sortOrder)));
 }
 
 export async function listEdges(definitionId: string) {
-  return db.select().from(definitionEdges)
+  return scopedRead((tx) => tx.select().from(definitionEdges)
     .where(eq(definitionEdges.definitionId, definitionId))
-    .orderBy(asc(definitionEdges.sortOrder));
+    .orderBy(asc(definitionEdges.sortOrder)));
 }
 
 /** Active definition for a code (the deployed, non-archived version). */
 export async function findByCode(tenantId: string, code: string) {
-  const rows = await db.select().from(definitions)
+  const rows = await scopedRead((tx) => tx.select().from(definitions)
     .where(and(eq(definitions.tenantId, tenantId), eq(definitions.code, code), eq(definitions.status, "active")))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 

@@ -10,7 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsFraudAlerts, hrmsEmployeeRiskScores, hrmsRecommendations } from "./schema.js";
 import * as engine from "./detection-engine.js";
 import { randomUUID } from "node:crypto";
@@ -23,10 +23,10 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const q = z.object({ status: z.string().optional(), severity: z.string().optional() }).parse(req.query);
-    let rows = await db.select().from(hrmsFraudAlerts)
+    let rows = await scopedRead((tx) => tx.select().from(hrmsFraudAlerts)
       .where(eq(hrmsFraudAlerts.tenantId, ctx.tenantId))
       .orderBy(desc(hrmsFraudAlerts.createdAt))
-      .limit(100);
+      .limit(100));
     if (q.status) rows = rows.filter(r => r.status === q.status);
     if (q.severity) rows = rows.filter(r => r.severity === q.severity);
     return reply.send({ data: rows, total: rows.length });
@@ -41,7 +41,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
 
     // Run ghost employee detection
     const { hrmsEmployees } = await import("../employee/schema.js");
-    const employees = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, ctx.tenantId));
+    const employees = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, ctx.tenantId)));
 
     // Check duplicate bank accounts
     const bankData = employees.filter(e => e.bankAccountNo).map(e => ({
@@ -52,8 +52,8 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
     // Check ghost employees (simplified: employees with no recent geo-attendance)
     const { hrmsGeoAttendance } = await import("../geo-attendance/schema.js");
     for (const emp of employees.slice(0, 50)) { // limit for performance
-      const attCount = await db.select().from(hrmsGeoAttendance)
-        .where(and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), eq(hrmsGeoAttendance.employeeId, emp.id)));
+      const attCount = await scopedRead((tx) => tx.select().from(hrmsGeoAttendance)
+        .where(and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), eq(hrmsGeoAttendance.employeeId, emp.id))));
       const ghost = engine.detectGhostEmployee(emp.id, attCount.length, true, emp.status);
       if (ghost) {
         alerts.push({ alertType: "ghost_employee", severity: "critical", employeeId: ghost.employeeId, description: ghost.reason, evidence: { attendanceDays: attCount.length }, riskScore: ghost.score, mlModel: "ghost_detector_v1" });
@@ -80,7 +80,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/ai/risk-scores", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const rows = await db.select().from(hrmsEmployeeRiskScores).where(eq(hrmsEmployeeRiskScores.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsEmployeeRiskScores).where(eq(hrmsEmployeeRiskScores.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -88,9 +88,9 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/ai/recommendations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const rows = await db.select().from(hrmsRecommendations)
+    const rows = await scopedRead((tx) => tx.select().from(hrmsRecommendations)
       .where(and(eq(hrmsRecommendations.tenantId, ctx.tenantId), eq(hrmsRecommendations.isActioned, false)))
-      .orderBy(desc(hrmsRecommendations.createdAt)).limit(50);
+      .orderBy(desc(hrmsRecommendations.createdAt)).limit(50));
 
     // If no stored recs, generate fresh ones
     if (rows.length === 0) {
@@ -107,7 +107,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
           category: rec.category, title: rec.title, description: rec.description, priority: rec.priority,
         } as any);
       }
-      const fresh = await db.select().from(hrmsRecommendations).where(eq(hrmsRecommendations.tenantId, ctx.tenantId)).limit(50);
+      const fresh = await scopedRead((tx) => tx.select().from(hrmsRecommendations).where(eq(hrmsRecommendations.tenantId, ctx.tenantId)).limit(50));
       return reply.send({ data: fresh });
     }
     return reply.send({ data: rows });

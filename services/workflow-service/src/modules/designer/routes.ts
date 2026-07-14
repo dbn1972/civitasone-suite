@@ -19,7 +19,7 @@ import { z, ZodError } from "zod";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { designerDefinitions, type DesignerNode, type DesignerEdge } from "./schema.js";
 import { validateGraph } from "./domain.js";
@@ -133,7 +133,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     const { page, pageSize } = paginationSchema.parse(req.query);
     const offset = (page - 1) * pageSize;
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(designerDefinitions)
       .where(
@@ -144,10 +144,10 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
       )
       .orderBy(desc(designerDefinitions.updatedAt))
       .limit(pageSize)
-      .offset(offset);
+      .offset(offset));
 
     // For total count, use a simpler approach
-    const allRows = await db
+    const allRows = await scopedRead((tx) => tx
       .select({ id: designerDefinitions.id })
       .from(designerDefinitions)
       .where(
@@ -155,7 +155,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
           eq(designerDefinitions.tenantId, ctx.tenantId),
           eq(designerDefinitions.status, "draft"),
         ),
-      );
+      ));
 
     return reply.send({
       data: rows.map((r) => ({
@@ -181,7 +181,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(designerDefinitions)
       .where(
@@ -190,7 +190,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
           eq(designerDefinitions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     const row = rows[0];
     if (!row || row.status === "deleted") {
@@ -294,7 +294,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(designerDefinitions)
       .where(
@@ -303,7 +303,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
           eq(designerDefinitions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     const existing = rows[0];
     if (!existing || existing.status === "deleted") {
@@ -324,7 +324,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(designerDefinitions)
       .where(
@@ -333,7 +333,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
           eq(designerDefinitions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     const existing = rows[0];
     if (!existing || existing.status === "deleted") {
@@ -359,7 +359,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
 
     // Look up existing definition
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(designerDefinitions)
       .where(
@@ -368,7 +368,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
           eq(designerDefinitions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     const existing = rows[0];
     if (!existing || existing.status === "deleted") {
@@ -417,7 +417,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(designerDefinitions)
       .where(
@@ -426,7 +426,7 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
           eq(designerDefinitions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     const existing = rows[0];
     if (!existing || existing.status === "deleted") {

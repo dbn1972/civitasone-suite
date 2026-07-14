@@ -35,7 +35,7 @@
 import type { FastifyInstance } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { voteInitiateSchema, voteCastSchema, voteConcludeSchema, meetingIdParam, resolutionPathParams } from "./validators.js";
+import { voteInitiateSchema, voteCastSchema, voteConcludeSchema, voteRecuseSchema, meetingIdParam, resolutionPathParams } from "./validators.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 
@@ -46,6 +46,8 @@ import * as commands from "./commands.js";
 const INITIATE_ROLES = ["meeting_admin", "committee_chairperson", "committee_secretary", "tenant_admin", "super_admin"];
 const CAST_ROLES = ["meeting_admin", "committee_chairperson", "committee_member", "tenant_admin", "super_admin"];
 const CONCLUDE_ROLES = ["meeting_admin", "committee_chairperson", "committee_secretary", "tenant_admin", "super_admin"];
+// Recusal: a member may recuse themselves; a chair/secretary/admin may record one for a member.
+const RECUSE_ROLES = ["meeting_admin", "committee_chairperson", "committee_secretary", "committee_member", "tenant_admin", "super_admin"];
 const READ_ROLES = [
   "meeting_admin",
   "committee_secretary",
@@ -145,6 +147,18 @@ export async function votingRoutes(app: FastifyInstance): Promise<void> {
     const body = voteConcludeSchema.parse(req.body ?? {});
     await assertResolutionInMeeting(ctx.tenantId, meetingId, resolutionId);
     const accepted = await commands.voteConclude(ctx, meetingId, resolutionId, body);
+    return reply.code(202).send({ data: accepted });
+  });
+
+  // ── Recuse — record a conflict-of-interest recusal on a motion (statutory) ──
+  app.post("/v1/meetings/:meetingId/votes/:resolutionId/recuse", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, RECUSE_ROLES);
+    requireIdempotencyKey(ctx);
+    const { meetingId, resolutionId } = resolutionPathParams.parse(req.params);
+    const body = voteRecuseSchema.parse(req.body ?? {});
+    await assertResolutionInMeeting(ctx.tenantId, meetingId, resolutionId);
+    const accepted = await commands.voteRecuse(ctx, meetingId, resolutionId, body);
     return reply.code(202).send({ data: accepted });
   });
 

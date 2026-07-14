@@ -1,5 +1,5 @@
 import { eq, desc, and, or, isNull, isNotNull, lte, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 import { instances } from "../instances/schema.js";
 import { definitionNodes } from "../definitions/schema.js";
@@ -23,18 +23,18 @@ export function toView(r: TaskRow): TaskView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<TaskView | null> {
-  const rows = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(tasks).where(eq(tasks.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TaskView[]> {
-  const rows = await db.select().from(tasks)
+  const rows = await scopedRead((tx) => tx.select().from(tasks)
     .where(eq(tasks.tenantId, tenantId))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 
@@ -54,7 +54,7 @@ export async function listPendingForRoles(
       ? or(isNull(tasks.roleRef), inArray(tasks.roleRef, roles))
       : isNull(tasks.roleRef);
 
-  const rows = await db.select().from(tasks)
+  const rows = await scopedRead((tx) => tx.select().from(tasks)
     .where(and(
       eq(tasks.tenantId, tenantId),
       eq(tasks.status, "pending"),
@@ -63,7 +63,7 @@ export async function listPendingForRoles(
     ))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 
   return rows.map(toView);
 }

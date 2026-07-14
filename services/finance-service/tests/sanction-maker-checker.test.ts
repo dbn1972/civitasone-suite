@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
+import { scoped } from "./_tenant.js";
 import { assertSanctionApproverDistinct, DomainError } from "../src/modules/budget/domain.js";
 import { financeSanctions } from "../src/modules/budget/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -30,11 +31,11 @@ const APPROVE_MSG = "66666666-dddd-4000-8000-000000000002";
 const SELF_MSG = "66666666-dddd-4000-8000-000000000003";
 
 async function clean() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.correlationId, "corr-mc"));
+  await scoped(TENANT, (tx) => tx.delete(outboxMessages).where(eq(outboxMessages.correlationId, "corr-mc")));
   for (const m of [CREATE_MSG, APPROVE_MSG, SELF_MSG]) {
     await db.delete(processed).where(eq(processed.messageId, m));
   }
-  await db.delete(financeSanctions).where(eq(financeSanctions.id, SANC));
+  await scoped(TENANT, (tx) => tx.delete(financeSanctions).where(eq(financeSanctions.id, SANC)));
 }
 
 async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
@@ -74,7 +75,7 @@ describe("sanction maker-checker flow (R11) — consumer", () => {
     await waitFor(async () =>
       (await db.select().from(processed).where(eq(processed.messageId, CREATE_MSG))).length === 1);
 
-    let sanc = (await db.select().from(financeSanctions).where(eq(financeSanctions.id, SANC)))[0];
+    let sanc = (await scoped(TENANT, (tx) => tx.select().from(financeSanctions).where(eq(financeSanctions.id, SANC))))[0];
     expect(sanc?.status).toBe("pending_approval");
     // No approval event on create
     let approvedEvents = await db.select().from(outboxMessages)
@@ -91,19 +92,19 @@ describe("sanction maker-checker flow (R11) — consumer", () => {
       (await db.select().from(processed).where(eq(processed.messageId, APPROVE_MSG))).length === 1);
     await q.stop();
 
-    sanc = (await db.select().from(financeSanctions).where(eq(financeSanctions.id, SANC)))[0];
+    sanc = (await scoped(TENANT, (tx) => tx.select().from(financeSanctions).where(eq(financeSanctions.id, SANC))))[0];
     expect(sanc?.status).toBe("approved");
-    approvedEvents = await db.select().from(outboxMessages).where(eq(outboxMessages.correlationId, "corr-mc"));
+    approvedEvents = await scoped(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.correlationId, "corr-mc")));
     expect(approvedEvents.map((e) => e.eventType)).toContain(EVENTS.sanctionApproved);
   });
 
   it("rejects self-approval by the maker (SoD) — sanction stays pending", async () => {
     // seed a pending sanction created by MAKER
-    await db.insert(financeSanctions).values({
+    await scoped(TENANT, (tx) => tx.insert(financeSanctions).values({
       id: SANC, tenantId: TENANT, sanctionNo: "SN-MC-2", purpose: "Self approve attempt",
       headId: HEAD, amountMinor: 500000n, currency: "INR", status: "pending_approval",
       createdBy: MAKER, updatedBy: MAKER,
-    });
+    }));
     const q = new MemoryQueue({ maxAttempts: 1 });
     registerBudgetConsumers(q);
     await q.start();
@@ -116,7 +117,7 @@ describe("sanction maker-checker flow (R11) — consumer", () => {
     await waitFor(async () => q.dlq.length === 1);
     await q.stop();
 
-    const sanc = (await db.select().from(financeSanctions).where(eq(financeSanctions.id, SANC)))[0];
+    const sanc = (await scoped(TENANT, (tx) => tx.select().from(financeSanctions).where(eq(financeSanctions.id, SANC))))[0];
     expect(sanc?.status).toBe("pending_approval"); // unchanged
     expect(q.dlq[0]?.error).toMatch(/MAKER_CHECKER_VIOLATION/);
   });

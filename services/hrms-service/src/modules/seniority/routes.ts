@@ -16,7 +16,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsAppraisals } from "../appraisals/schema.js";
 
@@ -46,10 +46,10 @@ async function buildSeniority(
   filter: { departmentId?: string; designationId?: string },
   asOf: string,
 ): Promise<Ranked[]> {
-  const rows = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, tenantId));
+  const rows = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, tenantId)));
 
   // latest overall APAR grade per employee = merit signal
-  const appraisals = await db.select().from(hrmsAppraisals).where(eq(hrmsAppraisals.tenantId, tenantId));
+  const appraisals = await scopedRead((tx) => tx.select().from(hrmsAppraisals).where(eq(hrmsAppraisals.tenantId, tenantId)));
   const meritByEmp = new Map<string, number>();
   for (const a of appraisals) {
     if (a.overallGrade == null) continue;

@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { notificationChannels, notificationChannelConfigs, type ChannelInsert } from "./schema.js";
 import type { ChannelView } from "./domain.js";
 
@@ -10,13 +10,13 @@ function toView(r: typeof notificationChannels.$inferSelect): ChannelView {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findChannelsByTenant(tenantId: string, limit = 100): Promise<ChannelView[]> {
-  return (await db.select().from(notificationChannels).where(eq(notificationChannels.tenantId, tenantId)).limit(limit)).map(toView);
+  return (await scopedRead((tx) => tx.select().from(notificationChannels).where(eq(notificationChannels.tenantId, tenantId)).limit(limit))).map(toView);
 }
 
 export async function findDefaultChannel(tenantId: string, type?: string): Promise<ChannelView | null> {
-  const rows = await db.select().from(notificationChannels).where(
+  const rows = await scopedRead((tx) => tx.select().from(notificationChannels).where(
     and(eq(notificationChannels.tenantId, tenantId), eq(notificationChannels.isDefault, true), eq(notificationChannels.enabled, true))
-  );
+  ));
   const match = type ? rows.find((r) => r.type === type) : rows[0];
   return match ? toView(match) : null;
 }
@@ -30,7 +30,7 @@ export async function insertChannelConfig(tx: Writer, row: typeof notificationCh
 }
 
 export async function findChannelById(id: string, tenantId: string): Promise<ChannelView | null> {
-  const rows = await db.select().from(notificationChannels)
-    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(notificationChannels)
+    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.tenantId, tenantId))).limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }

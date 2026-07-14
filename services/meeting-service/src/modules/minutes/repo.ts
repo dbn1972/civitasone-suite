@@ -26,7 +26,7 @@
  * _Requirements: 7.1, 7.3, 7.5, 7.8, 8.1, 8.4_
  */
 import { and, asc, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { minutes, minutesVersions, type MinutesRow, type MinutesVersionRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -47,11 +47,11 @@ const RESOURCE_MINUTES_VERIFY_HASH = "minutes_verify_hash";
  */
 export async function getMinutes(tenantId: string, minutesId: string): Promise<MinutesRow | null> {
   return cache.getOrLoad<MinutesRow>(cache.makeKey(tenantId, RESOURCE_MINUTES, minutesId), async () => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(minutes)
       .where(and(eq(minutes.id, minutesId), eq(minutes.tenantId, tenantId)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   });
 }
@@ -64,11 +64,11 @@ export async function getMinutes(tenantId: string, minutesId: string): Promise<M
  * minutes yet / belongs to another tenant.
  */
 export async function getMinutesByMeeting(tenantId: string, meetingId: string): Promise<MinutesRow | null> {
-  const idRows = await db
+  const idRows = await scopedRead((tx) => tx
     .select({ id: minutes.id })
     .from(minutes)
     .where(and(eq(minutes.meetingId, meetingId), eq(minutes.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   const id = idRows[0]?.id;
   if (!id) return null;
   return getMinutes(tenantId, id);
@@ -84,11 +84,11 @@ export async function getVersionHistory(tenantId: string, minutesId: string): Pr
   const rows = await cache.getOrLoad<MinutesVersionRow[]>(
     cache.makeKey(tenantId, RESOURCE_MINUTES_VERSIONS, minutesId),
     async () =>
-      db
+      scopedRead((tx) => tx
         .select()
         .from(minutesVersions)
         .where(and(eq(minutesVersions.minutesId, minutesId), eq(minutesVersions.tenantId, tenantId)))
-        .orderBy(asc(minutesVersions.versionNum)),
+        .orderBy(asc(minutesVersions.versionNum))),
   );
   return rows ?? [];
 }
@@ -104,7 +104,7 @@ export async function getVersion(
   minutesId: string,
   versionNum: number,
 ): Promise<MinutesVersionRow | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(minutesVersions)
     .where(
@@ -114,7 +114,7 @@ export async function getVersion(
         eq(minutesVersions.versionNum, versionNum),
       ),
     )
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -130,11 +130,11 @@ export interface MeetingStatus {
  * guard.
  */
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, status: meetings.status })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -214,17 +214,17 @@ export async function verifySignature(
   const load = async (): Promise<MinutesVerificationResult | null> => {
     let rows: MinutesRow[] = [];
     if (lookup.minutesId) {
-      rows = await db
+      rows = await scopedRead((tx) => tx
         .select()
         .from(minutes)
-        .where(and(eq(minutes.id, lookup.minutesId), eq(minutes.tenantId, tenantId)))
-        .limit(1);
+        .where(and(eq(minutes.id, lookup.minutesId!), eq(minutes.tenantId, tenantId)))
+        .limit(1));
     } else if (lookup.hashCurrent) {
-      rows = await db
+      rows = await scopedRead((tx) => tx
         .select()
         .from(minutes)
-        .where(and(eq(minutes.hashCurrent, lookup.hashCurrent), eq(minutes.tenantId, tenantId)))
-        .limit(1);
+        .where(and(eq(minutes.hashCurrent, lookup.hashCurrent!), eq(minutes.tenantId, tenantId)))
+        .limit(1));
     }
     const row = rows[0];
     return row ? classifyIntegrity(row) : null;

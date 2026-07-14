@@ -21,6 +21,7 @@
  * message for a roster-only failure would be a needless DLQ risk for
  * state that already committed.
  */
+import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { and, eq, lt } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
@@ -28,6 +29,8 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { notifyVipArrival } from "../vip/routes.js";
+import { getPolicyBoolean } from "../config-registry/policy.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
@@ -167,6 +170,59 @@ export function registerCheckInConsumers(queue: Queue): void {
               checkInTime: timestamp.toISOString(),
             },
           }),
+        });
+      }
+
+      // Requirement 21.3: VIP arrival alert. When the checked-in visitor is a
+      // VIP, immediately alert host + on-duty protocol officer + reception. The
+      // three NOTIFICATION_SEND messages are enqueued to the transactional
+      // outbox INSIDE this markProcessed-guarded tx (idempotent, atomic with the
+      // check-in) — never a raw fire-and-forget publish. A non-VIP check-in
+      // enqueues none of these.
+      if (visit?.visitorCategory === "vip") {
+        await notifyVipArrival(tx, {
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          visitorName: visit.visitorName ?? "",
+          hostEmployeeId: visit.hostEmployeeId ?? "",
+          locationId: pass.locationId,
+          passId: p.passId,
+          gateId: p.gateId,
+          checkInTime: timestamp.toISOString(),
+        });
+      }
+
+      // Check-in → badge auto-handoff. On a successful check-in, auto-enqueue a
+      // printJobCreate for the visitor's badge so the gate printer produces it
+      // without a manual step. Config-gated per tenant via the Wave-3 config
+      // engine (visitor_policy key `check_in.auto_print_badge`, default true) so
+      // a site that prints badges out-of-band can turn it off. Enqueued through
+      // the transactional outbox (COMMANDS.printJobCreate) in the same tx, so it
+      // is atomic + idempotent with the check-in (not a raw queue.publish).
+      const autoPrintBadge = await getPolicyBoolean(tx, msg.tenantId, "check_in.auto_print_badge");
+      if (autoPrintBadge) {
+        // Templates key off a badge visitor_category ("default" | "vip" | ...);
+        // map the visit's "standard" category to the "default" template bucket.
+        const badgeCategory =
+          visit?.visitorCategory && visit.visitorCategory !== "standard"
+            ? visit.visitorCategory
+            : "default";
+        await enqueue(tx, {
+          topic: COMMANDS.printJobCreate,
+          eventType: COMMANDS.printJobCreate,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            id: randomUUID(),
+            tenantId: msg.tenantId,
+            passId: p.passId,
+            deviceId: p.gateTerminalId ?? "",
+            priority: "standard",
+            printerLanguage: "zpl",
+            visitorCategory: badgeCategory,
+          },
         });
       }
 

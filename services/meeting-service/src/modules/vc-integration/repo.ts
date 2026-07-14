@@ -19,7 +19,7 @@
  * _Requirements: 13.2, 13.3, 13.7_
  */
 import { and, desc, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { vcSessions } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -44,11 +44,11 @@ export interface MeetingRef {
  * Owned by meeting-core; read here as a boundary guard.
  */
 export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, status: meetings.status, vcEnabled: meetings.vcEnabled })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -82,12 +82,12 @@ function toIso(value: Date | string | null): string | null {
  */
 export async function getVcSession(tenantId: string, meetingId: string): Promise<VcSessionView | null> {
   return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE, meetingId), async () => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(vcSessions)
       .where(and(eq(vcSessions.meetingId, meetingId), eq(vcSessions.tenantId, tenantId)))
       .orderBy(desc(vcSessions.createdAt))
-      .limit(1);
+      .limit(1));
     const row = rows[0];
     if (!row) return null;
     return {
@@ -118,7 +118,7 @@ export interface VcSessionRef {
 }
 
 export async function getVcSessionRef(tenantId: string, vcSessionId: string): Promise<VcSessionRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       id: vcSessions.id,
       meetingId: vcSessions.meetingId,
@@ -128,7 +128,7 @@ export async function getVcSessionRef(tenantId: string, vcSessionId: string): Pr
     })
     .from(vcSessions)
     .where(and(eq(vcSessions.id, vcSessionId), eq(vcSessions.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -150,7 +150,7 @@ export interface VcParticipantView {
  */
 export async function getVcParticipants(tenantId: string, meetingId: string): Promise<VcParticipantView[]> {
   const loaded = await cache.getOrLoad(cache.makeKey(tenantId, RESOURCE, `${meetingId}:participants`), async () => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select({
         participantId: attendanceRecords.participantId,
         status: attendanceRecords.status,
@@ -173,7 +173,7 @@ export async function getVcParticipants(tenantId: string, meetingId: string): Pr
           eq(attendanceRecords.mode, "vc"),
         ),
       )
-      .orderBy(desc(attendanceRecords.checkInAt));
+      .orderBy(desc(attendanceRecords.checkInAt)));
     return rows.map((r) => ({
       participantId: r.participantId,
       employeeId: r.employeeId ?? null,

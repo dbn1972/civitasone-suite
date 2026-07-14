@@ -98,7 +98,16 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
       actorId: "public-otp",
       correlationId: ctx0(req),
       schemaVersion: "1.0",
-      payload: { channel: "sms", to: body.mobile, template: "court_otp", otp },
+      // Canonical notification.send contract (see notification-service
+      // deliveries/consumer.ts + validators.ts): the consumer reads `recipient`
+      // (destination — the phone) and `variables` (template vars — the OTP code).
+      // The previous `{ to, template, otp }` shape was silently misdelivered: `to`
+      // and top-level `otp` are ignored, and `recipient` fell back to actorId.
+      // templateId is intentionally OMITTED — no `court_otp` template exists yet, so
+      // the consumer uses its default fallback template (SYSTEM_TEMPLATE_IDS.default).
+      // TODO(notification): register a `court_otp` SMS template in notification-service
+      // and pass its templateId here so the OTP is templated correctly.
+      payload: { channel: "sms", recipient: body.mobile, variables: { otp } },
     });
 
     const resBody: { challengeId: string; expiresInSec: number; devOtp?: string } = {

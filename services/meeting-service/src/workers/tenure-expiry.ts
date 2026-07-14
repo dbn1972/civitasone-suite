@@ -36,6 +36,7 @@ import { pino, type Logger } from "pino";
 import { and, eq, isNotNull, lte } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../shared/db.js";
+import { scannerDb } from "../shared/scanner-db.js";
 import { cache } from "../shared/infra.js";
 import { enqueue, versionedUpdate } from "../shared/outbox.js";
 import { EVENTS, SERVICE } from "../topics.js";
@@ -178,7 +179,11 @@ export interface TenureExpiryDeps {
  * the worker needs, including `version` for the optimistic-locked expiry write.
  */
 async function defaultScan(cutoffIso: string): Promise<MembershipRow[]> {
-  return db
+  // Cross-tenant discovery via the BYPASSRLS scanner pool (migration 0007). Under
+  // FORCE RLS as meeting_svc (NOBYPASSRLS) a bare db.select() with no tenant GUC
+  // returns ZERO rows — so this SELECT MUST use scannerDb. Writes below stay on the
+  // primary db inside runWithTenant(row.tenantId, …).
+  return scannerDb
     .select({
       id: committeeMembers.id,
       tenantId: committeeMembers.tenantId,

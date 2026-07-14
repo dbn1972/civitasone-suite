@@ -4,7 +4,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsHolidays } from "./schema.js";
 import { randomUUID } from "node:crypto";
 import { queue } from "../../shared/infra.js";
@@ -24,12 +24,12 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = z.object({ year: z.string().regex(/^\d{4}$/).default(String(new Date().getFullYear())) }).parse(req.query);
-    const rows = await db.select().from(hrmsHolidays)
+    const rows = await scopedRead((tx) => tx.select().from(hrmsHolidays)
       .where(and(
         eq(hrmsHolidays.tenantId, ctx.tenantId),
         sql`${hrmsHolidays.date} >= ${q.year + '-01-01'}`,
         sql`${hrmsHolidays.date} <= ${q.year + '-12-31'}`
-      ));
+      )));
     return reply.send({ data: rows.map(r => ({ id: r.id, name: r.name, date: r.date, type: r.type, applicableTo: r.applicableTo })) });
   });
 

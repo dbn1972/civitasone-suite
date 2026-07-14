@@ -24,6 +24,10 @@ export const blacklistEntries = visitorSchema.table("blacklist_entries", {
   tenantId: uuid("tenant_id").notNull(),
   locationId: uuid("location_id"), // null = all locations
   personName: encryptedText("person_name").notNull(), // encrypted (enc:v2:... envelope)
+  // Plaintext normalized name (lowercased, punctuation-stripped) maintained by
+  // the app purely for pg_trgm fuzzy/alias screening (migration 0012). Holds no
+  // more than the name already visible to the same security staff.
+  nameNormalized: text("name_normalized"),
   identityDocType: varchar("identity_doc_type", { length: 24 }),
   identityDocHash: text("identity_doc_hash"), // HMAC blind index, plain hex (not encrypted)
   reason: text("reason").notNull(),
@@ -45,6 +49,8 @@ export const watchlistEntries = visitorSchema.table("watchlist_entries", {
   tenantId: uuid("tenant_id").notNull(),
   locationId: uuid("location_id"), // null = all locations
   personName: encryptedText("person_name").notNull(), // encrypted (enc:v2:... envelope)
+  // See blacklistEntries.nameNormalized — pg_trgm fuzzy screening key (0012).
+  nameNormalized: text("name_normalized"),
   identityDocType: varchar("identity_doc_type", { length: 24 }),
   identityDocHash: text("identity_doc_hash"), // HMAC blind index, plain hex (not encrypted)
   riskLevel: varchar("risk_level", { length: 8 }).notNull().default("medium"),

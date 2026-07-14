@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import cors from "@fastify/cors";
@@ -32,6 +32,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
+
+  // Source the RLS tenant from the AUTHENTICATED token (req.ctx, populated by
+  // authPlugin earlier onRequest hook), not the client-supplied x-tenant-id
+  // header. createTenantTxHook only enters AsyncLocalStorage when x-tenant-id is
+  // present; token-based requests omit it, so without this the app.tenant_id GUC
+  // stays unset and -- under a NOBYPASSRLS role + FORCE ROW LEVEL SECURITY -- the
+  // fail-closed policy returns zero rows on reads. Sourcing tenantId from the
+  // verified token makes scopedRead transaction set the GUC so RLS enforces
+  // isolation on reads AND writes. Mirrors meeting-service.
+  app.addHook("onRequest", async (req) => {
+    const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+    if (tid) tenantStorage.enterWith({ tenantId: tid });
+  });
 
   registerOpsRoutes(app, { service: "identity-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 

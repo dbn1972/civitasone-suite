@@ -1,14 +1,14 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { financePeriodClose, financePeriodReopenLog } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findPeriodClose(tenantId: string, period: string) {
-  const rows = await db.select().from(financePeriodClose).where(and(
+  const rows = await scopedRead((tx) => tx.select().from(financePeriodClose).where(and(
     eq(financePeriodClose.tenantId, tenantId),
     eq(financePeriodClose.period, period),
-  )).limit(1);
+  )).limit(1));
   return rows[0] ?? null;
 }
 
@@ -27,8 +27,8 @@ export async function upsertPeriodClose(tx: Writer, row: typeof financePeriodClo
 }
 
 export async function listPeriodClose(tenantId: string, limit = 50) {
-  return db.select().from(financePeriodClose)
-    .where(eq(financePeriodClose.tenantId, tenantId)).limit(limit);
+  return scopedRead((tx) => tx.select().from(financePeriodClose)
+    .where(eq(financePeriodClose.tenantId, tenantId)).limit(limit));
 }
 
 export async function isPeriodHardClosedDb(tenantId: string, period: string): Promise<boolean> {

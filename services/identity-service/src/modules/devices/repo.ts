@@ -1,6 +1,6 @@
 import { randomBytes, createHmac } from "node:crypto";
 import { eq, and, gt, asc, desc, or, isNull } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { registeredDevices, mailboxCursors, entityChangelog, processedMutations } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -16,12 +16,12 @@ export function mintTrustToken(deviceId: string, userId: string): string {
 }
 
 export async function upsertDevice(row: typeof registeredDevices.$inferInsert): Promise<void> {
-  const existing = await db.select().from(registeredDevices)
+  const existing = await scopedRead((tx) => tx.select().from(registeredDevices)
     .where(and(
       eq(registeredDevices.tenantId, row.tenantId),
       eq(registeredDevices.userId, row.userId),
       eq(registeredDevices.fingerprint, row.fingerprint),
-    )).limit(1);
+    )).limit(1));
   if (existing[0]) {
     await db.update(registeredDevices).set({
       label: row.label,
@@ -37,20 +37,20 @@ export async function upsertDevice(row: typeof registeredDevices.$inferInsert): 
 }
 
 export async function findDevice(tenantId: string, deviceId: string, userId: string) {
-  const rows = await db.select().from(registeredDevices)
+  const rows = await scopedRead((tx) => tx.select().from(registeredDevices)
     .where(and(eq(registeredDevices.id, deviceId), eq(registeredDevices.tenantId, tenantId), eq(registeredDevices.userId, userId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function getOrCreateCursor(tenantId: string, userId: string, deviceId: string, mailbox: string): Promise<string> {
-  const rows = await db.select().from(mailboxCursors)
+  const rows = await scopedRead((tx) => tx.select().from(mailboxCursors)
     .where(and(
       eq(mailboxCursors.tenantId, tenantId),
       eq(mailboxCursors.userId, userId),
       eq(mailboxCursors.deviceId, deviceId),
       eq(mailboxCursors.mailbox, mailbox),
-    )).limit(1);
+    )).limit(1));
   if (rows[0]) return rows[0].cursorValue;
   await db.insert(mailboxCursors).values({ tenantId, userId, deviceId, mailbox, cursorValue: "0" });
   return "0";
@@ -125,10 +125,10 @@ export async function pullSince(
       or(eq(entityChangelog.ownerUserId, opts.userId), isNull(entityChangelog.ownerUserId))!,
     );
   }
-  return db.select().from(entityChangelog)
+  return scopedRead((tx) => tx.select().from(entityChangelog)
     .where(and(...conditions))
     .orderBy(asc(entityChangelog.seq))
-    .limit(limit);
+    .limit(limit));
 }
 
 // ── SYN-1 (03): idempotency, conflict detection, per-mutation apply ──────────

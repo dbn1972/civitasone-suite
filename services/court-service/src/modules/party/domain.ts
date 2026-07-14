@@ -30,7 +30,9 @@ export function derivePartyId(tenantId: string, caseId: string, partyRole: strin
  * Throw INVALID_PARTY_ROLE unless `role` is in the effective allowed set. The
  * PARTY_ROLES above are the FALLBACK defaults for the config/metadata engine
  * (§47) `party_role` namespace; when a tenant configures that namespace its set
- * is authoritative, so an admin can ADD a bespoke role with no code change.
+ * is AUTHORITATIVE and REPLACES these defaults (they are NOT implicitly retained),
+ * so the tenant’s list fully overrides the fallback and may add bespoke roles
+ * with no code change.
  */
 export function assertPartyRoleAllowed(role: string, allowed: ReadonlySet<string>): void {
   if (!allowed.has(role)) {

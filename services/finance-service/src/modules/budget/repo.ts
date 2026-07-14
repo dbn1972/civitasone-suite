@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { DomainError } from "./domain.js";
 import { financeBudgets, financeSanctions, financeHeads, financeReappropriations, type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow, type ReappropriationRow, type ReappropriationInsert } from "./schema.js";
 
@@ -8,28 +8,35 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 // ── budget reads ──────────────────────────────────────────────────
 
 export async function findBudget(headId: string, fy: string, tenantId: string): Promise<BudgetRow | null> {
-  const rows = await db.select().from(financeBudgets)
+  const rows = await scopedRead((tx) => tx.select().from(financeBudgets)
     .where(and(eq(financeBudgets.tenantId, tenantId), eq(financeBudgets.headId, headId), eq(financeBudgets.fy, fy)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function findBudgetById(id: string): Promise<BudgetRow | null> {
-  const rows = await db.select().from(financeBudgets).where(eq(financeBudgets.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, id)).limit(1));
+  return rows[0] ?? null;
+}
+
+/** Tenant-scoped (transaction-local) budget read: runs inside the caller tx so
+ * the app.tenant_id GUC set by that transaction lets RLS return the row. */
+export async function findBudgetByIdTx(tx: Writer, id: string): Promise<BudgetRow | null> {
+  const rows = await tx.select().from(financeBudgets).where(eq(financeBudgets.id, id)).limit(1);
   return rows[0] ?? null;
 }
 
 // ── sanction reads ────────────────────────────────────────────────
 
 export async function findSanctionById(id: string): Promise<SanctionRow | null> {
-  const rows = await db.select().from(financeSanctions).where(eq(financeSanctions.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeSanctions).where(eq(financeSanctions.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
 /** R15: tenant-scoped sanction read — no row from another tenant can be returned. */
 export async function findSanctionByIdAndTenant(id: string, tenantId: string): Promise<SanctionRow | null> {
-  const rows = await db.select().from(financeSanctions)
-    .where(and(eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeSanctions)
+    .where(and(eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -83,30 +90,30 @@ export async function findReappropriationByIdTx(tx: Writer, id: string): Promise
 }
 
 export async function findReappropriationById(id: string): Promise<ReappropriationRow | null> {
-  const rows = await db.select().from(financeReappropriations).where(eq(financeReappropriations.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeReappropriations).where(eq(financeReappropriations.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listHeads(tenantId: string, limit: number): Promise<HeadRow[]> {
-  return db.select().from(financeHeads)
+  return scopedRead((tx) => tx.select().from(financeHeads)
     .where(eq(financeHeads.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listSanctionsByTenant(tenantId: string, limit: number): Promise<SanctionRow[]> {
-  return db.select().from(financeSanctions)
+  return scopedRead((tx) => tx.select().from(financeSanctions)
     .where(eq(financeSanctions.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listBudgetsByTenant(tenantId: string, limit: number): Promise<BudgetRow[]> {
-  return db.select().from(financeBudgets)
+  return scopedRead((tx) => tx.select().from(financeBudgets)
     .where(eq(financeBudgets.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findHeadById(id: string): Promise<HeadRow | null> {
-  const rows = await db.select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1));
   return rows[0] ?? null;
 }
 

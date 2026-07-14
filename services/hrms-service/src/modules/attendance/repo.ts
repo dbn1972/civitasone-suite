@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsAttendance, hrmsAttendanceRegularisations,
   type AttendanceRow, type AttendanceInsert, type RegularisationRow,
@@ -8,18 +8,18 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function listByTenant(tenantId: string, limit = 200): Promise<AttendanceRow[]> {
-  return db.select().from(hrmsAttendance)
+  return scopedRead((tx) => tx.select().from(hrmsAttendance)
     .where(eq(hrmsAttendance.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findByEmpAndMonth(tenantId: string, employeeId: string, month: string): Promise<AttendanceRow[]> {
-  const rows = await db.select().from(hrmsAttendance)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsAttendance)
     .where(and(
       eq(hrmsAttendance.tenantId, tenantId),
       eq(hrmsAttendance.employeeId, employeeId),
     ))
-    .limit(500);
+    .limit(500));
   return rows.filter((r) => (r.attendanceDate ?? "").startsWith(month));
 }
 
@@ -42,9 +42,9 @@ export async function upsertAttendance(tx: Writer, row: AttendanceInsert): Promi
 }
 
 export async function listRegularisationsByTenant(tenantId: string, limit = 100): Promise<RegularisationRow[]> {
-  return db.select().from(hrmsAttendanceRegularisations)
+  return scopedRead((tx) => tx.select().from(hrmsAttendanceRegularisations)
     .where(eq(hrmsAttendanceRegularisations.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanceRegularisations.$inferInsert): Promise<void> {

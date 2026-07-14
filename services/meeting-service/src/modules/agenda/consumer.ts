@@ -27,6 +27,7 @@ import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../s
 import { httpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { agendaItems } from "./schema.js";
+import { getPolicyNumber } from "../config-registry/policy.js";
 import { meetings, meetingStateTransitions } from "../meeting-core/schema.js";
 import {
   orderAgendaItems,
@@ -267,7 +268,11 @@ async function handleAgendaSubmit(msg: CommandEnvelope): Promise<void> {
     const meeting = await getMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
     assertAgendaNotLocked(meeting.status);
-    assertSubmissionAllowed({ scheduledAt: meeting.scheduledAt, now: new Date() });
+    // Tenant-configurable knobs (config-registry, meeting_policy) — default to the
+    // former hardcoded literals (7 days / 15 min) when the tenant has configured nothing.
+    const submissionDeadlineDays = await getPolicyNumber(tx, msg.tenantId, "agenda.submission_deadline_days");
+    const defaultItemDuration = await getPolicyNumber(tx, msg.tenantId, "agenda.default_item_duration_minutes");
+    assertSubmissionAllowed({ scheduledAt: meeting.scheduledAt, now: new Date(), config: { submissionDeadlineDays } });
 
     await insertOrderedAgendaItem(tx, {
       id: p.agendaItemId,
@@ -278,7 +283,7 @@ async function handleAgendaSubmit(msg: CommandEnvelope): Promise<void> {
         title: p.title,
         description: p.description ?? null,
         outcomeType: p.outcomeType,
-        durationMinutes: p.durationMinutes ?? 15,
+        durationMinutes: p.durationMinutes ?? defaultItemDuration,
         presenterId: p.presenterId ?? null,
         status: "proposed",
         confidentialityLevel: p.confidentialityLevel ?? "internal",

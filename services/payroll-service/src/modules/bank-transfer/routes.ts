@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
@@ -38,9 +38,9 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
     const { format } = querySchema.parse(req.query);
 
     // Verify the run exists and belongs to this tenant
-    const runRows = await db.select().from(payrollRuns)
+    const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)
       .where(and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const run = runRows[0];
     if (!run) throw new HttpError(404, "NOT_FOUND", "payroll run not found");
 
@@ -62,8 +62,8 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // Fetch all slips for this run
-      const slips = await db.select().from(payrollSlips)
-        .where(and(eq(payrollSlips.runId, id), eq(payrollSlips.tenantId, ctx.tenantId)));
+      const slips = await scopedRead((tx) => tx.select().from(payrollSlips)
+        .where(and(eq(payrollSlips.runId, id), eq(payrollSlips.tenantId, ctx.tenantId))));
 
       if (slips.length === 0) {
         throw new HttpError(404, "NOT_FOUND", "no salary slips found for this run");
@@ -73,11 +73,11 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       type Beneficiary = { fullName: string; bankAccountNo: string | null; bankIfsc: string | null };
       const master = new Map<string, Beneficiary>();
       if (run.runType === "pensioner") {
-        const pens = (await db.execute(sql`
+        const pens = (await scopedRead((tx) => tx.execute(sql`
           SELECT id, full_name, bank_account_no, bank_ifsc
           FROM payroll.payroll_pensioners
           WHERE tenant_id = ${ctx.tenantId}::uuid
-        `)) as unknown as Array<{ id: string; full_name: string; bank_account_no: string | null; bank_ifsc: string | null }>;
+        `))) as unknown as Array<{ id: string; full_name: string; bank_account_no: string | null; bank_ifsc: string | null }>;
         for (const p of pens) master.set(p.id, { fullName: p.full_name, bankAccountNo: p.bank_account_no, bankIfsc: p.bank_ifsc });
       } else {
         const input = await fetchPayrollInput(ctx.tenantId, run.month);
@@ -168,8 +168,8 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
 
     // ─── CSV path (existing, unchanged) ──────────────────────────────────
     // Fetch all slips for this run
-    const slips = await db.select().from(payrollSlips)
-      .where(and(eq(payrollSlips.runId, id), eq(payrollSlips.tenantId, ctx.tenantId)));
+    const slips = await scopedRead((tx) => tx.select().from(payrollSlips)
+      .where(and(eq(payrollSlips.runId, id), eq(payrollSlips.tenantId, ctx.tenantId))));
 
     if (slips.length === 0) {
       throw new HttpError(404, "NOT_FOUND", "no salary slips found for this run");
@@ -181,11 +181,11 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
     type Beneficiary = { fullName: string; bankAccountNo: string | null; bankIfsc: string | null };
     const master = new Map<string, Beneficiary>();
     if (run.runType === "pensioner") {
-      const pens = (await db.execute(sql`
+      const pens = (await scopedRead((tx) => tx.execute(sql`
         SELECT id, full_name, bank_account_no, bank_ifsc
         FROM payroll.payroll_pensioners
         WHERE tenant_id = ${ctx.tenantId}::uuid
-      `)) as unknown as Array<{ id: string; full_name: string; bank_account_no: string | null; bank_ifsc: string | null }>;
+      `))) as unknown as Array<{ id: string; full_name: string; bank_account_no: string | null; bank_ifsc: string | null }>;
       for (const p of pens) master.set(p.id, { fullName: p.full_name, bankAccountNo: p.bank_account_no, bankIfsc: p.bank_ifsc });
     } else {
       const input = await fetchPayrollInput(ctx.tenantId, run.month);

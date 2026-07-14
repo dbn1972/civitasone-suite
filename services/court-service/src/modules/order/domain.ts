@@ -27,9 +27,12 @@ export function isSpeakingOrder(orderType: string): boolean {
 /**
  * Default order-type categories (§23) used as a FALLBACK when a tenant has not
  * configured its own `order_type` namespace in the config/metadata engine
- * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
- * admin can ADD a bespoke order type via config with no code change, while the
- * standard order categories always remain valid.
+ * (§47). The effective allowed set is the tenant’s configured `order_type`
+ * values when any exist (AUTHORITATIVE — it REPLACES these defaults), else
+ * these module defaults. Configuring the namespace fully overrides the
+ * fallback: the tenant’s list must include every type it still wants (these
+ * standard categories are NOT implicitly retained) and may add bespoke types
+ * with no code change.
  */
 export const DEFAULT_ORDER_TYPES = [
   "final_order", "interim", "interim_order", "injunction", "stay_order",

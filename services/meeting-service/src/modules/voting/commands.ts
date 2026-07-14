@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { VoteInitiateInput, VoteCastInput, VoteConcludeInput } from "./validators.js";
+import type { VoteInitiateInput, VoteCastInput, VoteConcludeInput, VoteRecuseInput } from "./validators.js";
 
 /** Standard 202-accepted result returned by every command helper. */
 export interface VoteCommandAccepted {
@@ -142,6 +142,37 @@ export async function voteCirculationRespond(
       position: body.position,
       tenantId: ctx.tenantId,
       ...(body.comment !== undefined ? { comment: body.comment } : {}),
+    },
+  });
+  return { id: resolutionId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+
+// ─── Recuse (conflict-of-interest) ───────────────────────────────────────────────
+
+/**
+ * Publish `meeting.vote.recuse` — record a member's conflict-of-interest recusal on a motion.
+ * The recused member defaults to the authenticated actor (self-recusal); a chair/secretary may
+ * name another member. The consumer verifies the motion is open and the member has not already
+ * voted, records the recusal (so it appears in the vote record/minutes), and thereafter rejects
+ * any ballot from that member on the motion and excludes them from its quorum denominator.
+ */
+export async function voteRecuse(
+  ctx: RequestContext,
+  meetingId: string,
+  resolutionId: string,
+  body: VoteRecuseInput,
+): Promise<VoteCommandAccepted> {
+  await queue.publish(COMMANDS.voteRecuse, {
+    ...envelopeBase(ctx, randomUUID(), COMMANDS.voteRecuse),
+    payload: {
+      meetingId,
+      resolutionId,
+      memberId: body.memberId ?? ctx.actorId,
+      reason: body.reason,
+      tenantId: ctx.tenantId,
+      ...(body.registerRef !== undefined ? { registerRef: body.registerRef } : {}),
+      ...(body.agendaItemId !== undefined ? { agendaItemId: body.agendaItemId } : {}),
     },
   });
   return { id: resolutionId, status: "accepted", correlationId: ctx.correlationId };

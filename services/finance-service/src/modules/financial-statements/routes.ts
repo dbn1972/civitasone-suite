@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 
@@ -55,7 +55,7 @@ function natureOf(code: string, classification: string | null): "asset" | "liabi
 }
 
 async function loadTrialBalance(tenantId: string, end: string): Promise<TbRow[]> {
-  return (await db.execute(sql`
+  return (await scopedRead((tx) => tx.execute(sql`
     SELECT fh.code, fh.name, fh.classification,
            COALESCE(SUM(fl.debit_minor), 0)::bigint  AS dr,
            COALESCE(SUM(fl.credit_minor), 0)::bigint AS cr
@@ -67,7 +67,7 @@ async function loadTrialBalance(tenantId: string, end: string): Promise<TbRow[]>
     GROUP BY fh.code, fh.name, fh.classification
     HAVING COALESCE(SUM(fl.debit_minor), 0) <> 0 OR COALESCE(SUM(fl.credit_minor), 0) <> 0
     ORDER BY fh.code
-  `)) as unknown as TbRow[];
+  `))) as unknown as TbRow[];
 }
 
 export async function financialStatementsRoutes(app: FastifyInstance): Promise<void> {
@@ -161,7 +161,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
     const { start, end } = fyBounds(fy);
 
     // P&L is a flow statement — only this FY's movements.
-    const rows = (await db.execute(sql`
+    const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT fh.code, fh.name, fh.classification,
              COALESCE(SUM(fl.debit_minor), 0)::bigint  AS dr,
              COALESCE(SUM(fl.credit_minor), 0)::bigint AS cr
@@ -173,7 +173,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
       GROUP BY fh.code, fh.name, fh.classification
       HAVING COALESCE(SUM(fl.debit_minor), 0) <> 0 OR COALESCE(SUM(fl.credit_minor), 0) <> 0
       ORDER BY fh.code
-    `)) as unknown as TbRow[];
+    `))) as unknown as TbRow[];
 
     const income: any[] = [], expenditure: any[] = [];
     let totalIncome = 0n, totalExpenditure = 0n;
@@ -208,7 +208,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
     const fy = q.fy ?? deriveFYFromDate();
     const { start, end } = fyBounds(fy);
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT bank_or_cash,
              COALESCE(SUM(receipt_minor), 0)::bigint AS total_receipts,
              COALESCE(SUM(payment_minor), 0)::bigint AS total_payments,
@@ -217,7 +217,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
       WHERE tenant_id = ${ctx.tenantId}::uuid
         AND entry_date >= ${start}::date AND entry_date <= ${end}::date
       GROUP BY bank_or_cash
-    `);
+    `));
     return reply.send({ fiscalYear: fy, data: rows });
   });
 
@@ -228,7 +228,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
     const fy = q.fy ?? deriveFYFromDate();
     const { start, end } = fyBounds(fy);
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT EXTRACT(MONTH FROM entry_date)::int AS month,
              COALESCE(SUM(receipt_minor), 0)::bigint AS inflows,
              COALESCE(SUM(payment_minor), 0)::bigint AS outflows,
@@ -238,7 +238,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
         AND entry_date >= ${start}::date AND entry_date <= ${end}::date
       GROUP BY EXTRACT(MONTH FROM entry_date)
       ORDER BY month
-    `);
+    `));
     return reply.send({ fiscalYear: fy, monthlyFlows: rows });
   });
 }

@@ -18,7 +18,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { verifyPassQr, type PassQrPayload } from "../../shared/qr-crypto.js";
 import { gates, locations } from "../location/schema.js";
@@ -32,9 +32,11 @@ import {
   type GateContext,
   type ScreeningResult,
 } from "./domain.js";
-import { verifyPassBody, checkInBody, checkOutBody, gateSyncParam } from "./validators.js";
+import { verifyPassBody, checkInBody, checkOutBody, gateSyncParam, activeCheckInsQuery } from "./validators.js";
 import * as commands from "./commands.js";
+import { listActiveVisitors } from "./repo.js";
 import { getDeviceBoundToGate } from "../device-registry/repo.js";
+import { loadGateSyncSnapshot } from "./gate-sync.js";
 import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 
 // Gate-terminal roles: security personnel operating gates + admin staff.
@@ -42,6 +44,9 @@ import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 // (which authenticates as `gate_terminal` role) — Requirement 5.6.
 const GATE_ROLES = ["security_admin", "gate_terminal", "employee", "tenant_admin", "super_admin"];
 const WRITE_ROLES = ["security_admin", "gate_terminal", "employee", "tenant_admin", "super_admin"];
+// Guard-console live-occupancy roles. NORMAL guard/security roles — deliberately
+// NOT the emergency IP allowlist that fences the break-glass evacuation roster.
+const ACTIVE_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "employee", "tenant_admin", "super_admin"];
 
 export async function checkInRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -57,20 +62,20 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const body = verifyPassBody.parse(req.body);
 
     // 1. Resolve the gate to determine location_id and area_id for scope checks.
-    const gateRows = await db
+    const gateRows = await scopedRead((tx) => tx
       .select()
       .from(gates)
       .where(and(eq(gates.id, body.gateId), eq(gates.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const gate = gateRows[0];
     if (!gate) throw new HttpError(404, "GATE_NOT_FOUND", "gate not found");
 
     // 2. Resolve the location's RSA public key for QR signature verification.
-    const locationRows = await db
+    const locationRows = await scopedRead((tx) => tx
       .select({ rsaPublicKey: locations.rsaPublicKey })
       .from(locations)
       .where(and(eq(locations.id, gate.locationId), eq(locations.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const location = locationRows[0];
     if (!location?.rsaPublicKey) {
       throw new HttpError(500, "LOCATION_KEY_MISSING", "location RSA public key not configured");
@@ -148,6 +153,31 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * GET /v1/visitor/check-ins/active
+   *
+   * Guard-console live occupancy: the visitors currently INSIDE (passes in
+   * `checked_in` status), tenant + optional location scoped, RLS-enforced via
+   * scopedRead. Returns just enough for a roster + occupancy count — name,
+   * check-in time, host, location, overstay flag — and NO extra PII (no phone /
+   * email / identity document). This is the everyday read; the break-glass
+   * evacuation roster (IP-allowlisted) stays separate.
+   */
+  app.get("/v1/visitor/check-ins/active", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ACTIVE_ROLES);
+    const query = activeCheckInsQuery.parse(req.query);
+
+    const visitors = await listActiveVisitors(ctx.tenantId, query.locationId);
+    return reply.send({
+      data: {
+        visitors,
+        occupancy: visitors.length,
+        ...(query.locationId ? { locationId: query.locationId } : {}),
+      },
+    });
+  });
+
+  /**
    * POST /v1/visitor/check-ins
    *
    * Records a visitor check-in. Route → zod → publish → 202 (CQRS).
@@ -209,11 +239,11 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const { gateId } = gateSyncParam.parse(req.params);
 
     // Validate the gate exists and belongs to the tenant.
-    const gateRows = await db
+    const gateRows = await scopedRead((tx) => tx
       .select()
       .from(gates)
       .where(and(eq(gates.id, gateId), eq(gates.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const gate = gateRows[0];
     if (!gate) throw new HttpError(404, "GATE_NOT_FOUND", "gate not found");
 
@@ -224,17 +254,7 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
       revokedPassIds: string[];
       blacklistHashes: string[];
       watchlistHashes: string[];
-    }>(cacheKey, async () => {
-      // Fallback: return empty sets when no data is cached yet.
-      // The revocation and screening stores populate these sets as passes
-      // are revoked and blacklist/watchlist entries are created. A full sync
-      // can be triggered by the operational runbook if needed.
-      return {
-        revokedPassIds: [],
-        blacklistHashes: [],
-        watchlistHashes: [],
-      };
-    });
+    }>(cacheKey, () => loadGateSyncSnapshot(ctx.tenantId, gate.locationId));
 
     return reply.send({
       data: {

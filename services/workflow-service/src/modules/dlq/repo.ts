@@ -1,6 +1,6 @@
 import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text } from "drizzle-orm/pg-core";
 import { and, eq, sql, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 
 const domainSchema = pgSchema("workflow");
 
@@ -77,19 +77,19 @@ export async function clearAttempts(topic: string, messageId: string): Promise<v
 
 /** Admin list of dead letters, tenant-scoped. */
 export async function listDeadLetters(tenantId: string, status: string | undefined, limit: number, offset: number): Promise<DeadLetterRow[]> {
-  return db.select().from(deadLetters)
+  return scopedRead((tx) => tx.select().from(deadLetters)
     .where(and(
       eq(deadLetters.tenantId, tenantId),
       ...(status ? [eq(deadLetters.status, status)] : []),
     ))
     .orderBy(desc(deadLetters.createdAt))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 export async function findDeadLetter(id: string, tenantId: string): Promise<DeadLetterRow | null> {
-  const rows = await db.select().from(deadLetters)
+  const rows = await scopedRead((tx) => tx.select().from(deadLetters)
     .where(and(eq(deadLetters.id, id), eq(deadLetters.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 

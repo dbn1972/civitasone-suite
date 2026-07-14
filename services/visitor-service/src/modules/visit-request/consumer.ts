@@ -39,7 +39,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { queue as queueSingleton } from "../../shared/infra.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { visitRequests } from "./schema.js";
@@ -51,6 +51,7 @@ import {
   type VisitRequestSource,
   type VisitorCategory,
 } from "./domain.js";
+import { getAutoApproveCategories } from "../config-registry/policy.js";
 
 const log = pino({ name: "visit-request-consumer" });
 
@@ -75,6 +76,8 @@ export interface VisitRequestCreatePayload {
   visitorCategory: "standard" | "vip" | "contractor" | "delegation";
   source: "portal" | "host_preregister" | "kiosk" | "mobile";
   permittedAreas: string[];
+  screeningReview?: boolean;
+  screeningReviewNote?: string | null;
   createdBy: string;
 }
 
@@ -172,14 +175,25 @@ export function registerVisitRequestConsumers(queue: Queue): void {
   queue.subscribe<VisitRequestCreatePayload>(COMMANDS.visitRequestCreate, async (msg) => {
     const p = msg.payload;
 
-    const initialStatus = resolveInitialStatus(
-      p.source as VisitRequestSource,
-      p.visitorCategory as VisitorCategory,
-    );
     const trackingRef = generateTrackingRef();
+    // Hoisted so the post-commit auto-approve pass-generation can act on the
+    // config-driven decision resolved inside the tx below.
+    let autoApproved = false;
 
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+
+      // Approval policy is config-driven: resolve the tenant's effective
+      // auto-approve visitor-category set (defaults to {vip}) on the same
+      // GUC-scoped tx, so a tenant can auto-approve e.g. contractors without a
+      // code change. Unconfigured tenants get identical behavior.
+      const autoApproveCategories = await getAutoApproveCategories(tx, msg.tenantId);
+      const initialStatus = resolveInitialStatus(
+        p.source as VisitRequestSource,
+        p.visitorCategory as VisitorCategory,
+        autoApproveCategories,
+      );
+      autoApproved = initialStatus === "approved";
 
       await tx.insert(visitRequests).values({
         id: p.id,
@@ -199,6 +213,8 @@ export function registerVisitRequestConsumers(queue: Queue): void {
         identityDocRef: p.identityDocRef,
         trackingRef,
         permittedAreas: p.permittedAreas,
+        screeningReview: p.screeningReview ?? false,
+        screeningReviewNote: p.screeningReviewNote ?? null,
         createdBy: p.createdBy,
         updatedBy: p.createdBy,
       });
@@ -265,8 +281,9 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       });
     });
 
-    // If VIP was auto-approved, trigger pass generation immediately
-    if (initialStatus === "approved") {
+    // If the visitor's category was auto-approved (config-driven), trigger pass
+    // generation immediately.
+    if (autoApproved) {
       try {
         await queueSingleton.publish(COMMANDS.passGenerate, {
           messageId: `${p.id}:pass-gen`,
@@ -370,15 +387,17 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       }
 
       // Direct approval — transition to approved
-      await tx
-        .update(visitRequests)
-        .set({
+      await versionedUpdate(tx, visitRequests, {
+        id: p.id,
+        tenantId: msg.tenantId,
+        expectedVersion: request.version,
+        set: {
           status: "approved",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: request.version + 1,
-        })
-        .where(and(eq(visitRequests.id, p.id), eq(visitRequests.tenantId, msg.tenantId)));
+        },
+        entity: "visit_request",
+      });
 
       // Outbox: visitRequestApproved event
       await enqueue(tx, {
@@ -508,16 +527,18 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       // Domain state transition — throws DomainError if invalid
       assertTransitionAllowed(request.status, "rejected");
 
-      await tx
-        .update(visitRequests)
-        .set({
+      await versionedUpdate(tx, visitRequests, {
+        id: p.id,
+        tenantId: msg.tenantId,
+        expectedVersion: request.version,
+        set: {
           status: "rejected",
           rejectionReason: p.reason,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: request.version + 1,
-        })
-        .where(and(eq(visitRequests.id, p.id), eq(visitRequests.tenantId, msg.tenantId)));
+        },
+        entity: "visit_request",
+      });
 
       // Outbox: visitRequestRejected event
       await enqueue(tx, {
@@ -597,15 +618,17 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       // Domain state transition — throws DomainError if invalid
       assertTransitionAllowed(request.status, "cancelled");
 
-      await tx
-        .update(visitRequests)
-        .set({
+      await versionedUpdate(tx, visitRequests, {
+        id: p.id,
+        tenantId: msg.tenantId,
+        expectedVersion: request.version,
+        set: {
           status: "cancelled",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: request.version + 1,
-        })
-        .where(and(eq(visitRequests.id, p.id), eq(visitRequests.tenantId, msg.tenantId)));
+        },
+        entity: "visit_request",
+      });
 
       // Outbox: visitRequestCancelled event
       await enqueue(tx, {
@@ -645,16 +668,18 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       // Domain state transition — throws DomainError if invalid
       assertTransitionAllowed(request.status, "auto_rejected");
 
-      await tx
-        .update(visitRequests)
-        .set({
+      await versionedUpdate(tx, visitRequests, {
+        id: p.id,
+        tenantId: msg.tenantId,
+        expectedVersion: request.version,
+        set: {
           status: "auto_rejected",
           rejectionReason: "Host did not respond within 24 hours",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: request.version + 1,
-        })
-        .where(and(eq(visitRequests.id, p.id), eq(visitRequests.tenantId, msg.tenantId)));
+        },
+        entity: "visit_request",
+      });
 
       // Outbox: visitRequestAutoRejected event
       await enqueue(tx, {
@@ -766,15 +791,17 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       }
 
       // Transition to approved
-      await tx
-        .update(visitRequests)
-        .set({
+      await versionedUpdate(tx, visitRequests, {
+        id: visitRequestId,
+        tenantId: msg.tenantId,
+        expectedVersion: request.version,
+        set: {
           status: "approved",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: request.version + 1,
-        })
-        .where(and(eq(visitRequests.id, visitRequestId), eq(visitRequests.tenantId, msg.tenantId)));
+        },
+        entity: "visit_request",
+      });
 
       // Outbox: visitRequestApproved event
       await enqueue(tx, {
@@ -925,16 +952,18 @@ export function registerVisitRequestConsumers(queue: Queue): void {
       const rejectionReason = p.reason ?? "Approval workflow rejected";
 
       // Transition to rejected
-      await tx
-        .update(visitRequests)
-        .set({
+      await versionedUpdate(tx, visitRequests, {
+        id: visitRequestId,
+        tenantId: msg.tenantId,
+        expectedVersion: request.version,
+        set: {
           status: "rejected",
           rejectionReason,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: request.version + 1,
-        })
-        .where(and(eq(visitRequests.id, visitRequestId), eq(visitRequests.tenantId, msg.tenantId)));
+        },
+        entity: "visit_request",
+      });
 
       // Outbox: visitRequestRejected event
       await enqueue(tx, {

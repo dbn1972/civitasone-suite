@@ -27,7 +27,7 @@
  * _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
  */
 import { and, asc, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { participants } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -94,11 +94,11 @@ export interface MeetingRef {
  * serving a listing. Owned by meeting-core; read here purely as a boundary guard.
  */
 export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, committeeId: meetings.committeeId })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -116,7 +116,7 @@ export async function getParticipant(
   meetingId: string,
   participantId: string,
 ): Promise<ParticipantView | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select(participantColumns)
     .from(participants)
     .where(
@@ -126,7 +126,7 @@ export async function getParticipant(
         eq(participants.meetingId, meetingId),
       ),
     )
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -146,11 +146,11 @@ export interface ParticipantListResult {
 
 /** Load the meeting's full participant roster (PII-free), ordered by creation (append order). */
 async function loadRoster(tenantId: string, meetingId: string): Promise<ParticipantView[]> {
-  return db
+  return scopedRead((tx) => tx
     .select(participantColumns)
     .from(participants)
     .where(and(eq(participants.tenantId, tenantId), eq(participants.meetingId, meetingId)))
-    .orderBy(asc(participants.createdAt));
+    .orderBy(asc(participants.createdAt)));
 }
 
 /**
@@ -197,15 +197,15 @@ export interface QuorumStatusView extends QuorumConfirmation {
  */
 async function resolveThreshold(tenantId: string, committeeId: string | null): Promise<number | null> {
   if (!committeeId) return null;
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ quorumRule: committees.quorumRule })
     .from(committees)
     .where(and(eq(committees.id, committeeId), eq(committees.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   const committee = rows[0];
   if (!committee) return null;
 
-  const activeMembers = await db
+  const activeMembers = await scopedRead((tx) => tx
     .select({ memberId: committeeMembers.memberId })
     .from(committeeMembers)
     .where(
@@ -214,7 +214,7 @@ async function resolveThreshold(tenantId: string, committeeId: string | null): P
         eq(committeeMembers.committeeId, committeeId),
         eq(committeeMembers.status, "active"),
       ),
-    );
+    ));
   return requiredQuorumCount(committee.quorumRule as QuorumRule, activeMembers.length);
 }
 
@@ -234,10 +234,10 @@ export async function getQuorumStatus(tenantId: string, meetingId: string): Prom
       if (!meeting) return null;
 
       const threshold = (await resolveThreshold(tenantId, meeting.committeeId)) ?? 0;
-      const roster = await db
+      const roster = await scopedRead((tx) => tx
         .select({ role: participants.role, invitationStatus: participants.invitationStatus })
         .from(participants)
-        .where(and(eq(participants.tenantId, tenantId), eq(participants.meetingId, meetingId)));
+        .where(and(eq(participants.tenantId, tenantId), eq(participants.meetingId, meetingId))));
 
       const confirmation = computeQuorumConfirmation(roster, threshold);
       return { meetingId, ...confirmation };

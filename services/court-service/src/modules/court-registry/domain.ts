@@ -45,9 +45,12 @@ export function deriveBenchId(tenantId: string, courtId: string, name: string): 
 /**
  * Default court/authority types (§5.1) used as a FALLBACK when a tenant has
  * not configured its own `court_type` namespace in the config/metadata engine
- * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
- * admin can ADD a bespoke court type via config with no code change, while the
- * standard quasi-judicial authorities always remain valid.
+ * (§47). The effective allowed set is the tenant’s configured `court_type`
+ * values when any exist (AUTHORITATIVE — it REPLACES these defaults), else
+ * these module defaults. Configuring the namespace fully overrides the
+ * fallback: the tenant’s list must include every type it still wants (these
+ * standard authorities are NOT implicitly retained) and may add bespoke types
+ * with no code change.
  */
 export const DEFAULT_COURT_TYPES = [
   "revenue_court", "collector_court", "sub_divisional_magistrate", "tehsildar",

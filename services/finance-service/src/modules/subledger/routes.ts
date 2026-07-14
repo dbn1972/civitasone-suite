@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
@@ -18,7 +18,7 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT vendor_id, vendor_name, aging_bucket,
              COUNT(*)::int AS bill_count,
              COALESCE(SUM(balance_minor), 0)::bigint AS total_outstanding
@@ -29,7 +29,7 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
       GROUP BY vendor_id, vendor_name, aging_bucket
       ORDER BY aging_bucket, vendor_name
       LIMIT ${q.limit} OFFSET ${q.offset}
-    `);
+    `));
 
     return reply.send({ data: rows });
   });
@@ -45,7 +45,7 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT debtor_id, debtor_name, aging_bucket,
              COUNT(*)::int AS invoice_count,
              COALESCE(SUM(balance_minor), 0)::bigint AS total_outstanding
@@ -56,7 +56,7 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
       GROUP BY debtor_id, debtor_name, aging_bucket
       ORDER BY aging_bucket, debtor_name
       LIMIT ${q.limit} OFFSET ${q.offset}
-    `);
+    `));
 
     return reply.send({ data: rows });
   });
@@ -72,46 +72,46 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
     const controlCode = q.side === "ap" ? apControl : arControl;
 
     // Resolve the control account code to its head UUID (gl.finance_ledger.head_id is uuid).
-    const headRows = await db.execute(sql`
+    const headRows = await scopedRead((tx) => tx.execute(sql`
       SELECT id FROM budget.finance_heads
       WHERE tenant_id = ${ctx.tenantId}::uuid AND code = ${controlCode}
       LIMIT 1
-    `);
+    `));
     const controlHeadId = (headRows[0] as { id?: string } | undefined)?.id ?? null;
 
     let subledgerMinor: bigint;
     let controlMinor = 0n;
 
     if (q.side === "ap") {
-      const sub = await db.execute(sql`
+      const sub = await scopedRead((tx) => tx.execute(sql`
         SELECT COALESCE(SUM(balance_minor), 0)::bigint AS total
         FROM gl.finance_ap_ledger
         WHERE tenant_id = ${ctx.tenantId}::uuid AND status <> 'paid'
-      `);
+      `));
       subledgerMinor = BigInt((sub[0] as { total?: string } | undefined)?.total ?? "0");
       if (controlHeadId) {
         // AP is a liability: control balance = credits - debits
-        const ctrl = await db.execute(sql`
+        const ctrl = await scopedRead((tx) => tx.execute(sql`
           SELECT COALESCE(SUM(credit_minor) - SUM(debit_minor), 0)::bigint AS total
           FROM gl.finance_ledger
           WHERE tenant_id = ${ctx.tenantId}::uuid AND head_id = ${controlHeadId}::uuid
-        `);
+        `));
         controlMinor = BigInt((ctrl[0] as { total?: string } | undefined)?.total ?? "0");
       }
     } else {
-      const sub = await db.execute(sql`
+      const sub = await scopedRead((tx) => tx.execute(sql`
         SELECT COALESCE(SUM(balance_minor), 0)::bigint AS total
         FROM gl.finance_ar_ledger
         WHERE tenant_id = ${ctx.tenantId}::uuid AND status <> 'paid'
-      `);
+      `));
       subledgerMinor = BigInt((sub[0] as { total?: string } | undefined)?.total ?? "0");
       if (controlHeadId) {
         // AR is an asset: control balance = debits - credits
-        const ctrl = await db.execute(sql`
+        const ctrl = await scopedRead((tx) => tx.execute(sql`
           SELECT COALESCE(SUM(debit_minor) - SUM(credit_minor), 0)::bigint AS total
           FROM gl.finance_ledger
           WHERE tenant_id = ${ctx.tenantId}::uuid AND head_id = ${controlHeadId}::uuid
-        `);
+        `));
         controlMinor = BigInt((ctrl[0] as { total?: string } | undefined)?.total ?? "0");
       }
     }
@@ -142,7 +142,7 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
-    const rows = await db.execute(sql`
+    const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT id, budget_head_id, reference_type, reference_id, reference_no,
              committed_minor, released_minor, balance_minor, fy, status, committed_at
       FROM budget.finance_commitments
@@ -151,7 +151,7 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
         AND (${q.status ?? null}::text IS NULL OR status = ${q.status ?? null})
       ORDER BY committed_at DESC
       LIMIT ${q.limit} OFFSET ${q.offset}
-    `);
+    `));
 
     return reply.send({ data: rows });
   });

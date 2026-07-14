@@ -43,6 +43,7 @@ import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { renderPdf, signPdfWithDsc } from "@civitasone/render";
 import { db } from "../../shared/db.js";
+import { getPolicyNumber } from "../config-registry/policy.js";
 import { cache, storage } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
 import { HttpError } from "../../shared/context.js";
@@ -440,7 +441,10 @@ async function handleMinutesCreate(msg: CommandEnvelope<MinutesCreatePayload>): 
     });
 
     const meetingDate = meeting.actualEndAt ?? meeting.scheduledAt ?? new Date();
-    const submissionDeadline = computeMinutesSubmissionDeadline(meetingDate);
+    // Tenant-configurable minutes submission window (config-registry, meeting_policy);
+    // default 7 days when unconfigured (identical to the former hardcoded literal).
+    const minutesDeadlineDays = await getPolicyNumber(tx, msg.tenantId, "minutes.submission_deadline_days");
+    const submissionDeadline = computeMinutesSubmissionDeadline(meetingDate, { submissionDeadlineDays: minutesDeadlineDays });
 
     await tx.insert(minutes).values({
       id: p.minutesId,

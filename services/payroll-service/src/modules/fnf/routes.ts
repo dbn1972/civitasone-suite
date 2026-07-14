@@ -9,7 +9,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { fnfSettlements } from "./schema.js";
@@ -140,11 +140,11 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
 
     const { id } = idParamSchema.parse(req.params);
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(fnfSettlements)
       .where(and(eq(fnfSettlements.id, id), eq(fnfSettlements.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
 
     if (rows.length === 0) {
       throw new HttpError(404, "NOT_FOUND", "settlement not found");
@@ -168,12 +168,12 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
       conditions.push(eq(fnfSettlements.employeeId, q.employeeId));
     }
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(fnfSettlements)
       .where(and(...conditions))
       .limit(q.limit)
-      .offset(q.offset);
+      .offset(q.offset));
 
     return reply.send({ data: rows.map(serializeSettlement), meta: { limit: q.limit, offset: q.offset } });
   });
@@ -190,10 +190,10 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     const params = internalBreakdownQuery.parse(req.query);
 
     // Load ceilings for the FY
-    const ceilings = await db
+    const ceilings = await scopedRead((tx) => tx
       .select()
       .from(exemptionCeilings)
-      .where(eq(exemptionCeilings.fyStartYear, params.fyStartYear));
+      .where(eq(exemptionCeilings.fyStartYear, params.fyStartYear)));
 
     const ceilingMap = new Map(ceilings.map((c) => [c.section, c.ceilingMinor]));
 

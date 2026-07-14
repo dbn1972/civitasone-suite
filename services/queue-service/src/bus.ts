@@ -19,6 +19,7 @@ import {
 } from "@aws-sdk/client-sqs";
 import { incrementConsumerError, incrementDlqMessage, captureError, recordConsumerHeartbeat } from "@civitasone/observability";
 import { parseEnvelope } from "@civitasone/events";
+import { withTenantConsumer } from "@civitasone/db";
 
 export type CommandEnvelope<T = unknown> = {
   messageId: string;
@@ -571,10 +572,22 @@ export function createQueue(): Queue {
       "FATAL: QUEUE_DRIVER=memory is forbidden in production. Set QUEUE_DRIVER=sqs or QUEUE_DRIVER=rabbitmq.",
     );
   }
+  let q: Queue;
   switch (driver) {
-    case "memory": return new MemoryQueue();
-    case "sqs":    return new SqsQueue();
-    case "rabbitmq": return new RabbitMqQueue();
+    case "memory": q = new MemoryQueue(); break;
+    case "sqs":    q = new SqsQueue(); break;
+    case "rabbitmq": q = new RabbitMqQueue(); break;
     default:       throw new Error(`Unknown QUEUE_DRIVER: "${driver}"`);
   }
+  // RLS-CONSUMER: decorate subscribe so every handler runs inside a tenant
+  // context. FORCE-RLS services connect in prod as NOBYPASSRLS roles; a queue
+  // consumer that never sets the app.tenant_id GUC has all its writes rejected
+  // (fails closed). withTenantConsumer runs the handler through runWithTenant
+  // when msg.tenantId is present (tenant-less messages are unaffected), so the
+  // tenant-aware db wrapper sets the GUC on the consumer write path. Services
+  // that also wrap in runWithTenant just re-set the same tenantId (harmless).
+  const raw = q.subscribe.bind(q);
+  q.subscribe = ((topic, handler) =>
+    raw(topic, withTenantConsumer(handler as Handler) as typeof handler)) as typeof q.subscribe;
+  return q;
 }

@@ -1,14 +1,14 @@
 import { eq, and, asc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsServiceBookEntries, type ServiceBookRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "select">;
 
 export async function listServiceBookEntries(tenantId: string, employeeId: string, limit = 500) {
-  return db.select().from(hrmsServiceBookEntries).where(and(
+  return scopedRead((tx) => tx.select().from(hrmsServiceBookEntries).where(and(
     eq(hrmsServiceBookEntries.employeeId, employeeId),
     eq(hrmsServiceBookEntries.tenantId, tenantId),
-  )).orderBy(asc(hrmsServiceBookEntries.effectiveDate)).limit(limit);
+  )).orderBy(asc(hrmsServiceBookEntries.effectiveDate)).limit(limit));
 }
 
 export async function insertServiceBookEntry(tx: Writer, row: typeof hrmsServiceBookEntries.$inferInsert): Promise<void> {
@@ -16,10 +16,10 @@ export async function insertServiceBookEntry(tx: Writer, row: typeof hrmsService
 }
 
 export async function getEntry(tenantId: string, entryId: string): Promise<ServiceBookRow | undefined> {
-  const rows = await db.select().from(hrmsServiceBookEntries).where(and(
+  const rows = await scopedRead((tx) => tx.select().from(hrmsServiceBookEntries).where(and(
     eq(hrmsServiceBookEntries.id, entryId),
     eq(hrmsServiceBookEntries.tenantId, tenantId),
-  )).limit(1);
+  )).limit(1));
   return rows[0];
 }
 

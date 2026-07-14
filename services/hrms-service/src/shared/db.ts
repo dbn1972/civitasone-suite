@@ -21,6 +21,7 @@ import { schema as schedulerModule }   from "../modules/scheduler/schema.js";
 import { schema as disciplinaryModule } from "../modules/disciplinary/schema.js";
 import { schema as reservationModule }  from "../modules/reservation/schema.js";
 import { schema as medicalModule }      from "../modules/medical/schema.js";
+import { schema as boardIntakeModule } from "../modules/board-intake/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -40,6 +41,7 @@ const SCHEMA = {
   ...disciplinaryModule,
   ...reservationModule,
   ...medicalModule,
+  ...boardIntakeModule,
   ...outboxSchema,
 };
 
@@ -71,3 +73,17 @@ export const sqlPool = {
     return { rows, rowCount };
   },
 };
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain db.select() runs on a pooled connection with no
+ * app.tenant_id GUC set, so under a NOBYPASSRLS role (hrms_svc / identity_svc)
+ * the fail-closed policy returns ZERO rows. Wrapping the read in db.transaction
+ * makes wrapWithTenantGuc set the GUC from AsyncLocalStorage - reads are then
+ * correctly tenant-scoped by RLS, not merely by an app-layer WHERE. Mirrors
+ * court-service / visitor-service / meeting-service.
+ */
+type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
+}

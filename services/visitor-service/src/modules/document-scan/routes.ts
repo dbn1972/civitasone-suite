@@ -16,6 +16,7 @@
  * Requirements validated: 6.1, 6.4, 6.6
  */
 import { randomUUID } from "node:crypto";
+import { runWithTenant } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { deviceAuth } from "../device-registry/device-auth.js";
@@ -102,7 +103,7 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
 
-    await db.insert(scanSessions).values({
+    await runWithTenant(deviceCtx.tenantId, () => db.transaction((tx) => tx.insert(scanSessions).values({
       id: sessionId,
       tenantId: deviceCtx.tenantId,
       deviceId: deviceCtx.deviceId,
@@ -111,7 +112,7 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
       imageDeleted: false,
       imageExpiresAt: expiresAt,
       createdAt: now,
-    });
+    })));
 
     // Publish scanProcess command → consumer handles OCR
     const ctx = {

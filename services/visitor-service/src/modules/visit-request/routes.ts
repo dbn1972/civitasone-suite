@@ -19,6 +19,9 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { identityDocHash } from "../blacklist/blind-index.js";
 import { isBlacklisted } from "../blacklist/screening-store.js";
+import { fuzzyScreenName } from "../blacklist/repo.js";
+import { assertValidScheduledDate } from "./domain.js";
+import { getPolicyNumber, MS_PER_HOUR, MS_PER_DAY } from "../config-registry/policy.js";
 import { logConsent } from "../dpdp/consent.js";
 import {
   createVisitRequestBody,
@@ -46,6 +49,21 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const body = createVisitRequestBody.parse(req.body);
 
+    // Fix 6: config-driven schedule-window validation. The lead-time bounds are
+    // read from the tenant's `visitor_policy` config (visit_request.min_lead_hours
+    // / max_lead_days) on a GUC-scoped tx; unconfigured tenants get the module
+    // defaults (1h / 30d), so behavior is unchanged unless a tenant tunes them.
+    const scheduledAt = new Date(body.scheduledAt);
+    const scheduleBounds = await db.transaction(async (tx) => ({
+      minLeadMs: (await getPolicyNumber(tx, ctx.tenantId, "visit_request.min_lead_hours")) * MS_PER_HOUR,
+      maxLeadMs: (await getPolicyNumber(tx, ctx.tenantId, "visit_request.max_lead_days")) * MS_PER_DAY,
+    }));
+    try {
+      assertValidScheduledDate(scheduledAt, new Date(), scheduleBounds);
+    } catch {
+      throw new HttpError(422, "INVALID_SCHEDULED_DATE", "scheduledAt is outside the allowed lead-time window");
+    }
+
     // Requirement 1.5: synchronous blacklist screen BEFORE publish. Only an
     // identity document actually submitted can be screened — no doc ref
     // means nothing to screen against, so it falls through to normal
@@ -60,11 +78,24 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Fix 3: SECOND, non-blocking fuzzy/alias screening layer alongside the exact
+    // hard-block above. A near-miss name/alias against an active blacklist/watchlist
+    // entry raises a REVIEW flag (never an auto-deny) surfaced to the guard — an
+    // exact identity-document match already hard-blocked above. RLS-scoped read.
+    let screeningReview = false;
+    let screeningReviewNote: string | null = null;
+    const fuzzyMatches = await fuzzyScreenName(ctx.tenantId, body.visitorName);
+    if (fuzzyMatches.length > 0) {
+      const top = fuzzyMatches[0]!;
+      screeningReview = true;
+      screeningReviewNote = `possible ${top.list} alias match (similarity ${top.similarity.toFixed(2)})`;
+    }
+
     // Requirement 18.1: capture explicit consent before any PII write.
     // The visitor implicitly consents by submitting the form; we log which
     // data fields are collected and the stated purposes.
-    await logConsent(
-      db,
+    await db.transaction((tx) => logConsent(
+      tx,
       ctx.tenantId,
       body.visitorPhone, // non-PII visitor reference (phone used as identifier before visit ID exists)
       "visit_management,security,emergency_contact",
@@ -73,7 +104,7 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
         if (f === "identity_doc") return body.identityDocRef !== undefined;
         return true;
       }),
-    );
+    ));
 
     // zod's `.nullable().optional()` fields carry an explicit `| undefined`
     // arm (exactOptionalPropertyTypes-incompatible with commands.ts's plain
@@ -93,8 +124,11 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
       ...(body.visitorCategory !== undefined ? { visitorCategory: body.visitorCategory } : {}),
       ...(body.source !== undefined ? { source: body.source } : {}),
       ...(body.permittedAreas !== undefined ? { permittedAreas: body.permittedAreas } : {}),
+      screeningReview,
+      ...(screeningReviewNote !== null ? { screeningReviewNote } : {}),
     });
-    return reply.code(202).send({ data: accepted });
+    // Surface the REVIEW flag to the caller/guard console alongside the ack.
+    return reply.code(202).send({ data: { ...accepted, screeningReview, screeningReviewNote } });
   });
 
   app.get("/v1/visitor/visit-requests", async (req, reply) => {

@@ -1,6 +1,7 @@
-import type { Queue } from "@civitasone/queue";
+import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -11,7 +12,12 @@ import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistin
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerBudgetConsumers(queue: Queue): void {
-  queue.subscribe(COMMANDS.budgetCreate, async (msg) => {
+  // Tenant context: every command carries tenantId in its envelope. Wrap each
+  // handler in runWithTenant so the db.transaction() GUC (app.tenant_id) is set
+  // and FORCE ROW LEVEL SECURITY writes/reads are scoped to the message tenant.
+  const sub = <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>): void =>
+    queue.subscribe<T>(topic, async (msg) => { await runWithTenant(msg.tenantId, () => handler(msg)); });
+  sub(COMMANDS.budgetCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; headId: string; fy: string; beMinor: number };
     await tenantTransaction(db, p.tenantId, async (tx) => {
       if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
@@ -27,13 +33,13 @@ export function registerBudgetConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", `${(msg.payload as any).headId}:${(msg.payload as any).fy}`));
   });
 
-  queue.subscribe(COMMANDS.budgetReappropriate, async (msg) => {
+  sub(COMMANDS.budgetReappropriate, async (msg) => {
     // Zero-sum re-appropriation (GFR Rule 10): move `amountMinor` paise from the
     // source budget's savings (p.fromBudgetId) to the target budget (p.id).
     const p = msg.payload as { id: string; tenantId: string; fromBudgetId: string; amountMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const source = await repo.findBudgetById(p.fromBudgetId);
+      const source = await repo.findBudgetByIdTx(tx, p.fromBudgetId);
       if (!source || source.tenantId !== p.tenantId) {
         throw new DomainError("SOURCE_NOT_FOUND", `re-appropriation source budget ${p.fromBudgetId} not found`);
       }
@@ -50,7 +56,7 @@ export function registerBudgetConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", p.fromBudgetId));
   });
 
-  queue.subscribe(COMMANDS.sanctionCreate, async (msg) => {
+  sub(COMMANDS.sanctionCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; sanctionNo: string; purpose: string; headId: string; amountMinor: number; currency?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -70,7 +76,7 @@ export function registerBudgetConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
 
-  queue.subscribe(COMMANDS.sanctionApprove, async (msg) => {
+  sub(COMMANDS.sanctionApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -92,7 +98,7 @@ export function registerBudgetConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
 
-  queue.subscribe(COMMANDS.sanctionReject, async (msg) => {
+  sub(COMMANDS.sanctionReject, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -102,7 +108,7 @@ export function registerBudgetConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
 
-  queue.subscribe(COMMANDS.sanctionSubmitApproval, async (msg) => {
+  sub(COMMANDS.sanctionSubmitApproval, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -114,7 +120,7 @@ export function registerBudgetConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
 
-  queue.subscribe(COMMANDS.reappropriationSubmitApproval, async (msg) => {
+  sub(COMMANDS.reappropriationSubmitApproval, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; fromBudgetId: string; toBudgetId: string; headId?: string; amountMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

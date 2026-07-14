@@ -47,6 +47,8 @@ export const meetings = meetingSchema.table("meetings", {
   seriesId:             uuid("series_id"),
   quorumEstablished:    boolean("quorum_established").notNull().default(false),
   quorumEstablishedAt:  timestamp("quorum_established_at", { withTimezone: true }),
+  shortNoticeWaived:    boolean("short_notice_waived").notNull().default(false),
+  noticeDays:           integer("notice_days"),
   adjournmentReason:    text("adjournment_reason"),
   nextMeetingDate:      timestamp("next_meeting_date", { withTimezone: true }),
   fileReference:        text("file_reference"),

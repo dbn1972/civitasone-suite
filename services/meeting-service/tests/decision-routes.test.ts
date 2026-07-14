@@ -43,57 +43,96 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   // Idempotent seed: clear then insert the fixture graph for the test tenant.
-  await sqlClient`DELETE FROM meeting.votes WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.resolutions WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.decisions WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committee_members WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.votes WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.resolutions WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.decisions WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committee_members WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.committees
       (id, tenant_id, name, code, type, constitution_date, quorum_rule, created_by, updated_by)
     VALUES (${COMMITTEE_ID}, ${TENANT}, 'Finance Committee', 'FC', 'finance', '2025-01-01',
             ${'{"minMembers":2}'}::jsonb, ${ACTOR}, ${ACTOR})`;
+  });
 
   for (const m of [MEMBER_A, MEMBER_B, MEMBER_C]) {
-    await sqlClient`
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      await sql`
       INSERT INTO meeting.committee_members
         (tenant_id, committee_id, member_id, role, appointment_date, status, created_by, updated_by)
       VALUES (${TENANT}, ${COMMITTEE_ID}, ${m}, 'member', '2025-01-01', 'active', ${ACTOR}, ${ACTOR})`;
+    });
   }
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meetings
       (id, tenant_id, type, title, status, committee_id, financial_year, scheduled_at,
        quorum_established, created_by, updated_by)
     VALUES (${MEETING_ID}, ${TENANT}, 'board', 'Q1 Board Meeting', 'in_progress', ${COMMITTEE_ID},
             '2025-26', '2025-06-01T09:00:00Z', true, ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.decisions
       (id, tenant_id, meeting_id, text, type, status, financial_implication, currency, created_by, updated_by)
     VALUES (${DECISION_ID}, ${TENANT}, ${MEETING_ID}, 'Approve vendor payment', 'financial', 'effective',
             250000000, 'INR', ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.resolutions
       (id, tenant_id, meeting_id, resolution_number, text, vote_type, votes_for, votes_against,
        votes_abstain, majority_rule, result, status, is_circulation, created_by, updated_by)
     VALUES (${RESOLUTION_ID}, ${TENANT}, ${MEETING_ID}, 'FC/RES/2025-26/001', 'Resolved to approve budget',
             'electronic_poll', 5, 1, 0, 'simple_majority', 'passed', 'effective', false, ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.resolutions
       (id, tenant_id, meeting_id, resolution_number, text, vote_type, majority_rule, result, status,
        is_circulation, circulation_deadline, created_by, updated_by)
     VALUES (${CIRC_RES_ID}, ${TENANT}, ${MEETING_ID}, 'FC/RES/2025-26/002', 'Circulation: emergency spend',
             'electronic_poll', 'simple_majority', 'invalid', 'effective', true,
             ${new Date(Date.now() + 86400000).toISOString()}, ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.votes (tenant_id, resolution_id, member_id, position, is_circulation)
     VALUES (${TENANT}, ${CIRC_RES_ID}, ${MEMBER_A}, 'approve', true)`;
+  });
 
   app = await buildApp();
 });

@@ -43,44 +43,71 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   // Idempotent seed: clear then insert the fixture graph for the test tenant.
-  await sqlClient`DELETE FROM meeting.action_progress WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.action_items WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.action_progress WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.action_items WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.committees WHERE tenant_id = ${TENANT}`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.committees
       (id, tenant_id, name, code, type, constitution_date, quorum_rule, created_by, updated_by)
     VALUES (${COMMITTEE_ID}, ${TENANT}, 'Finance Committee', 'FC', 'finance', '2025-01-01',
             ${'{"minMembers":2}'}::jsonb, ${ACTOR}, ${ACTOR})`;
+  });
 
   // In-progress meeting with a past actual_start_at so assigned deadlines fall after the start (P19).
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meetings
       (id, tenant_id, type, title, status, committee_id, chairperson_id, secretary_id, financial_year,
        scheduled_at, actual_start_at, quorum_established, created_by, updated_by)
     VALUES (${MEETING_ID}, ${TENANT}, 'committee', 'Q1 Review', 'in_progress', ${COMMITTEE_ID}, ${ACTOR}, ${ACTOR},
             '2025-26', '2025-06-01T09:00:00Z', '2025-06-01T09:05:00Z', true, ${ACTOR}, ${ACTOR})`;
+  });
 
   // Action item assigned to the acting user — backs my / list / patch / acknowledge / progress /
   // evidence / verify / history.
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.action_items
       (id, tenant_id, meeting_id, description, assignee_id, deadline, priority, status, created_by, updated_by)
     VALUES (${ACTION_MINE}, ${TENANT}, ${MEETING_ID}, 'Prepare vendor payment file', ${ACTOR},
             ${new Date(Date.now() + 7 * 86400000).toISOString()}, 'high', 'assigned', ${ACTOR}, ${ACTOR})`;
+  });
 
   // Overdue action item — deadline in the past, not settled.
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.action_items
       (id, tenant_id, meeting_id, description, assignee_id, deadline, priority, status, created_by, updated_by)
     VALUES (${ACTION_OVERDUE}, ${TENANT}, ${MEETING_ID}, 'Submit compliance report', ${MEMBER_B},
             ${new Date(Date.now() - 3 * 86400000).toISOString()}, 'critical', 'in_progress', ${ACTOR}, ${ACTOR})`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.action_progress
       (tenant_id, action_item_id, update_text, percentage, updated_by)
     VALUES (${TENANT}, ${ACTION_MINE}, 'Started drafting the payment file', 40, ${ACTOR})`;
+  });
 
   app = await buildApp();
 });

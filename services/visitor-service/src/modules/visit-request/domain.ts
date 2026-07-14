@@ -43,21 +43,40 @@ export const MIN_SCHEDULE_LEAD_MS = 60 * 60 * 1000;
 export const MAX_SCHEDULE_LEAD_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
- * Property 1: accepts scheduledAt values at least 1 hour and at most 30
- * days ahead of `now`; rejects all others (including past dates). `now`
- * defaults to the current time but is injectable for deterministic tests.
+ * Config-driven override of the lead-time window. Callers on the HTTP/consumer
+ * path resolve these from the tenant's `visitor_policy` config
+ * (visit_request.min_lead_hours / max_lead_days) and pass them in; when omitted
+ * the module DEFAULTS (MIN_SCHEDULE_LEAD_MS / MAX_SCHEDULE_LEAD_MS) apply, so
+ * behavior is unchanged for a tenant that has configured nothing.
  */
-export function isValidScheduledDate(scheduledAt: Date, now: Date = new Date()): boolean {
+export interface ScheduleWindowBounds {
+  minLeadMs?: number;
+  maxLeadMs?: number;
+}
+
+/**
+ * Property 1: accepts scheduledAt values at least `minLeadMs` and at most
+ * `maxLeadMs` ahead of `now` (defaults: 1 hour / 30 days); rejects all others
+ * (including past dates). `now` defaults to the current time but is injectable
+ * for deterministic tests.
+ */
+export function isValidScheduledDate(
+  scheduledAt: Date, now: Date = new Date(), bounds: ScheduleWindowBounds = {},
+): boolean {
+  const minLeadMs = bounds.minLeadMs ?? MIN_SCHEDULE_LEAD_MS;
+  const maxLeadMs = bounds.maxLeadMs ?? MAX_SCHEDULE_LEAD_MS;
   const leadMs = scheduledAt.getTime() - now.getTime();
-  return leadMs >= MIN_SCHEDULE_LEAD_MS && leadMs <= MAX_SCHEDULE_LEAD_MS;
+  return leadMs >= minLeadMs && leadMs <= maxLeadMs;
 }
 
 /** Throwing variant of {@link isValidScheduledDate}. Maps to a 422 at the route layer. */
-export function assertValidScheduledDate(scheduledAt: Date, now: Date = new Date()): void {
-  if (!isValidScheduledDate(scheduledAt, now)) {
+export function assertValidScheduledDate(
+  scheduledAt: Date, now: Date = new Date(), bounds: ScheduleWindowBounds = {},
+): void {
+  if (!isValidScheduledDate(scheduledAt, now, bounds)) {
     throw new DomainError(
       "INVALID_SCHEDULED_DATE",
-      `scheduledAt must be between 1 hour and 30 days from now, got ${scheduledAt.toISOString()}`,
+      `scheduledAt is outside the allowed lead-time window, got ${scheduledAt.toISOString()}`,
     );
   }
 }
@@ -183,16 +202,28 @@ export type VisitorCategory = "standard" | "vip" | "contractor" | "delegation";
 /**
  * Resolves the initial status for a newly-submitted visit request.
  *
- * - Property 27: visitor_category = "vip" always bypasses the approval
- *   queue entirely, going straight to `approved` so a Digital_Pass can be
- *   issued immediately upon host confirmation (Requirement 21.2). VIP takes
- *   priority over source.
+ * - Property 27: a visitor whose category is in the tenant's AUTO-APPROVE set
+ *   bypasses the approval queue entirely, going straight to `approved` so a
+ *   Digital_Pass can be issued immediately upon host confirmation
+ *   (Requirement 21.2). The auto-approve set is config-driven: it defaults to
+ *   {vip} but a tenant can REPLACE it via the `visitor_approval` namespace
+ *   (effectiveAllowed) — e.g. also auto-approve contractors — with no code
+ *   change. Auto-approve takes priority over source.
  * - Property 4: source = "host_preregister" always yields `pre_approved`,
  *   never `pending_approval` (Requirement 2.1).
  * - All other combinations enter the standard `pending_approval` queue.
+ *
+ * `autoApproveCategories` defaults to {vip} so behavior is IDENTICAL when a
+ * tenant has configured nothing.
  */
-export function resolveInitialStatus(source: VisitRequestSource, visitorCategory: VisitorCategory): VisitRequestStatus {
-  if (visitorCategory === "vip") {
+export const DEFAULT_AUTO_APPROVE_CATEGORIES: ReadonlySet<string> = new Set(["vip"]);
+
+export function resolveInitialStatus(
+  source: VisitRequestSource,
+  visitorCategory: VisitorCategory,
+  autoApproveCategories: ReadonlySet<string> = DEFAULT_AUTO_APPROVE_CATEGORIES,
+): VisitRequestStatus {
+  if (autoApproveCategories.has(visitorCategory)) {
     return "approved";
   }
   if (source === "host_preregister") {

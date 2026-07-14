@@ -22,6 +22,28 @@ export class DomainError extends Error {
 }
 
 /**
+ * Normalize a person name to a stable fuzzy-matching key: strip diacritics,
+ * lower-case, replace any run of non-alphanumerics with a single space, and
+ * trim. Pure + deterministic so the same normalized form is produced when a
+ * blacklist/watchlist entry is written (blacklist/consumer.ts) and when a
+ * visitor's name is screened (visit-request/routes.ts). This is what the
+ * pg_trgm similarity() layer (migration 0012) compares — an alias/spelling
+ * variant of a listed name still lands close in trigram space.
+ */
+export function normalizeName(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/** Default trigram similarity cutoff for the non-blocking fuzzy review layer. */
+export const FUZZY_NAME_THRESHOLD = 0.45;
+
+/**
  * Screen an identity document hash against pre-loaded blacklist/watchlist
  * hash sets.
  *

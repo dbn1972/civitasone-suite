@@ -32,7 +32,7 @@
  * _Requirements: 11.1, 11.4, 11.5, 11.6, 11.8, 12.1, 12.3, 12.7_
  */
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
@@ -92,11 +92,11 @@ async function withDbFallback<T>(cacheRead: () => Promise<T>, loader: () => Prom
 export async function getDecisions(tenantId: string, meetingId: string): Promise<DecisionDto[]> {
   const key = cache.makeKey(tenantId, RESOURCE_DECISION, meetingId);
   const load = async (): Promise<DecisionDto[]> => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(decisions)
       .where(and(eq(decisions.tenantId, tenantId), eq(decisions.meetingId, meetingId)))
-      .orderBy(asc(decisions.createdAt));
+      .orderBy(asc(decisions.createdAt)));
     return rows.map(toDecisionDto);
   };
   const rows = await withDbFallback(() => cache.getOrLoad<DecisionDto[]>(key, load), load);
@@ -113,11 +113,11 @@ export async function getDecisions(tenantId: string, meetingId: string): Promise
 export async function getResolutions(tenantId: string, meetingId: string): Promise<ResolutionDto[]> {
   const key = cache.makeKey(tenantId, RESOURCE_RESOLUTION, meetingId);
   const load = (): Promise<ResolutionDto[]> =>
-    db
+    scopedRead((tx) => tx
       .select()
       .from(resolutions)
       .where(and(eq(resolutions.tenantId, tenantId), eq(resolutions.meetingId, meetingId)))
-      .orderBy(asc(resolutions.createdAt));
+      .orderBy(asc(resolutions.createdAt)));
   const rows = await withDbFallback(() => cache.getOrLoad<ResolutionDto[]>(key, load), load);
   return rows ?? [];
 }
@@ -181,7 +181,7 @@ export async function getResolutionRegister(
 }
 
 async function loadRegister(tenantId: string, committeeId: string): Promise<ResolutionRegisterEntry[]> {
-  return db
+  return scopedRead((tx) => tx
     .select({
       id: resolutions.id,
       meetingId: resolutions.meetingId,
@@ -206,7 +206,7 @@ async function loadRegister(tenantId: string, committeeId: string): Promise<Reso
     .from(resolutions)
     .innerJoin(meetings, eq(resolutions.meetingId, meetings.id))
     .where(and(eq(resolutions.tenantId, tenantId), eq(meetings.committeeId, committeeId)))
-    .orderBy(desc(resolutions.resolutionNumber), desc(resolutions.createdAt));
+    .orderBy(desc(resolutions.resolutionNumber), desc(resolutions.createdAt)));
 }
 
 /** Apply the register search predicates to the cached committee list (pure, in-memory). */
@@ -267,7 +267,7 @@ export async function searchDecisions(
     conditions.push(sql`(${decisions.text} ILIKE ${like} OR coalesce(${decisions.authority}, '') ILIKE ${like})`);
   }
 
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       row: decisions,
       committeeId: meetings.committeeId,
@@ -277,7 +277,7 @@ export async function searchDecisions(
     .innerJoin(meetings, eq(decisions.meetingId, meetings.id))
     .where(and(...conditions))
     .orderBy(desc(decisions.createdAt))
-    .limit(query.limit);
+    .limit(query.limit));
 
   return rows.map((r) => ({ ...toDecisionDto(r.row), committeeId: r.committeeId, financialYear: r.financialYear }));
 }
@@ -329,7 +329,7 @@ export async function getCirculationStatus(
 }
 
 async function loadCirculationStatus(tenantId: string, resolutionId: string): Promise<CirculationStatus | null> {
-  const resRows = await db
+  const resRows = await scopedRead((tx) => tx
     .select({
       id: resolutions.id,
       meetingId: resolutions.meetingId,
@@ -345,16 +345,16 @@ async function loadCirculationStatus(tenantId: string, resolutionId: string): Pr
     .from(resolutions)
     .innerJoin(meetings, eq(resolutions.meetingId, meetings.id))
     .where(and(eq(resolutions.tenantId, tenantId), eq(resolutions.id, resolutionId)))
-    .limit(1);
+    .limit(1));
   const res = resRows[0];
   if (!res || !res.isCirculation) return null;
 
   // Tally responses by position from the votes table (circulation votes for this resolution).
-  const tally = await db
+  const tally = await scopedRead((tx) => tx
     .select({ position: votes.position, n: sql<number>`count(*)::int` })
     .from(votes)
     .where(and(eq(votes.tenantId, tenantId), eq(votes.resolutionId, resolutionId)))
-    .groupBy(votes.position);
+    .groupBy(votes.position));
   let approveCount = 0;
   let rejectCount = 0;
   let abstainCount = 0;
@@ -391,7 +391,7 @@ async function loadCirculationStatus(tenantId: string, resolutionId: string): Pr
 }
 
 async function countActiveMembers(tenantId: string, committeeId: string): Promise<number> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ n: sql<number>`count(*)::int` })
     .from(committeeMembers)
     .where(
@@ -400,7 +400,7 @@ async function countActiveMembers(tenantId: string, committeeId: string): Promis
         eq(committeeMembers.committeeId, committeeId),
         eq(committeeMembers.status, "active"),
       ),
-    );
+    ));
   return rows[0]?.n ?? 0;
 }
 
@@ -414,40 +414,40 @@ export interface MeetingStatus {
 }
 
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, status: meetings.status, quorumEstablished: meetings.quorumEstablished })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 /** Live single-decision lookup (uncached), tenant-scoped. Used by PATCH for a 404 + meeting match. */
 export async function getDecision(tenantId: string, decisionId: string): Promise<DecisionDto | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(decisions)
     .where(and(eq(decisions.id, decisionId), eq(decisions.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toDecisionDto(rows[0]) : null;
 }
 
 /** Live single-resolution lookup (uncached), tenant-scoped. Used by sign/dissent/vote for 404. */
 export async function getResolution(tenantId: string, resolutionId: string): Promise<ResolutionRow | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select()
     .from(resolutions)
     .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 /** Live committee existence check (uncached), tenant-scoped. Used by the register route for 404. */
 export async function committeeExists(tenantId: string, committeeId: string): Promise<boolean> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: committees.id })
     .from(committees)
     .where(and(eq(committees.id, committeeId), eq(committees.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }

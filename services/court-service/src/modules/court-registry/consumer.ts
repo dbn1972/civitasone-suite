@@ -40,7 +40,9 @@ export function registerCourtRegistryConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // §47 config/metadata: courtType must be in (defaults ∪ tenant config).
+      // §47 config/metadata: courtType must be in the effective allowed set — the
+      // tenant’s configured `court_type` values when any exist (AUTHORITATIVE —
+      // REPLACES the defaults), else DEFAULT_COURT_TYPES.
       const configured = await configRepo.listActiveKeys(tx, p.tenantId, "court_type");
       const allowedTypes = effectiveAllowed(configured, DEFAULT_COURT_TYPES);
       try {

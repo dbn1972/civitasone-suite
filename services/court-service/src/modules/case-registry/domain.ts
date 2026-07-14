@@ -73,9 +73,12 @@ export function assertTransition(from: string, to: CaseStatus): void {
 /**
  * Default case-type categories (§5) used as a FALLBACK when a tenant has not
  * configured its own `case_type` namespace in the config/metadata engine
- * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
- * admin can ADD a bespoke case type via config with no code change, while the
- * standard categories always remain valid.
+ * (§47). The effective allowed set is the tenant’s configured `case_type`
+ * values when any exist (AUTHORITATIVE — it REPLACES these defaults), else
+ * these module defaults. Configuring the namespace fully overrides the
+ * fallback: the tenant’s list must include every category it still wants
+ * (these standards are NOT implicitly retained) and may add bespoke types
+ * with no code change.
  */
 export const DEFAULT_CASE_TYPES = [
   "civil", "revenue_appeal", "mutation", "partition", "land_acquisition",

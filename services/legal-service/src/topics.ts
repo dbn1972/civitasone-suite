@@ -38,6 +38,10 @@ export const EVENTS = {
 export const CONSUMED_EVENTS = {
   // eOffice decision callback for legal opinions raised into the approval backbone.
   opinionFileDecided: "legal.opinion.file_decided",
+  // meeting-service board/committee free-text legal decision (Req 22.5). Opens a
+  // PENDING_REVIEW triage item — see modules/board-intake/consumer.ts. Payload:
+  // { decisionId, meetingId, text, authority?, effectiveDate?, committeeId? }.
+  boardDecisionLegal: "meeting.decision.legal",
 } as const;
 
 export const SERVICE = "legal";

@@ -29,11 +29,14 @@
  * _Requirements: 11.1, 11.3, 11.4_
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { votes } from "./schema.js";
+import { votes, recusals } from "./schema.js";
 import { resolutions } from "../decision/schema.js";
 import { meetings } from "../meeting-core/schema.js";
+import { committees, committeeMembers } from "../committee/schema.js";
+import { requiredQuorumCount, type QuorumRule } from "../committee/domain.js";
+import { itemQuorumDenominator } from "./domain.js";
 import {
   computeTally,
   computeVoteResult,
@@ -92,11 +95,11 @@ export interface MeetingRef {
  * or serving an active-votes listing. Owned by meeting-core; read here as a boundary guard.
  */
 export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, committeeId: meetings.committeeId, status: meetings.status })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -114,7 +117,7 @@ export interface ResolutionRef {
  * resolution belongs to the path meeting) before publishing a command.
  */
 export async function getResolutionRef(tenantId: string, resolutionId: string): Promise<ResolutionRef | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       id: resolutions.id,
       meetingId: resolutions.meetingId,
@@ -123,7 +126,7 @@ export async function getResolutionRef(tenantId: string, resolutionId: string): 
     })
     .from(resolutions)
     .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -153,6 +156,22 @@ export interface VoteResultsView {
   concluded: boolean;
   dscSignerName: string | null;
   hashCurrent: string | null;
+  /** Member ids recused from this motion (Gap 1): excluded from the tally + quorum denominator. */
+  recusedMemberIds: string[];
+  /** Quorum-for-this-item after recusals — the denominator shrinks by recused roster members. */
+  itemQuorum: ItemQuorumView | null;
+}
+
+/** Motion-scoped quorum after conflict-of-interest recusals (statutory completeness). */
+export interface ItemQuorumView {
+  /** Active committee roster size. */
+  activeRoster: number;
+  /** Recused members who belong to the active roster (excluded from the denominator). */
+  recusedCount: number;
+  /** Roster minus recused — the effective quorum denominator for THIS motion. */
+  effectiveDenominator: number;
+  /** Minimum members required for quorum on THIS motion, computed on the shrunk denominator. */
+  requiredQuorum: number;
 }
 
 /**
@@ -168,15 +187,15 @@ export async function getVoteResults(tenantId: string, resolutionId: string): Pr
   return cache.getOrLoad<VoteResultsView>(
     cache.makeKey(tenantId, RESOURCE, resolutionId),
     async () => {
-      const resRows = await db
+      const resRows = await scopedRead((tx) => tx
         .select()
         .from(resolutions)
         .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       const resolution = resRows[0];
       if (!resolution) return null;
 
-      const ballotRows = await db
+      const ballotRows = await scopedRead((tx) => tx
         .select({ position: votes.position })
         .from(votes)
         .where(
@@ -185,10 +204,18 @@ export async function getVoteResults(tenantId: string, resolutionId: string): Pr
             eq(votes.tenantId, tenantId),
             eq(votes.isCirculation, resolution.isCirculation),
           ),
-        );
+        ));
       const tally = tallyOf(ballotRows.map((r) => r.position));
 
       const rule = isMajorityRule(resolution.majorityRule) ? resolution.majorityRule : "simple_majority";
+
+      // Recusals on this motion (Gap 1): members excluded from the tally + quorum denominator.
+      const recusalRows = await scopedRead((tx) => tx
+        .select({ memberId: recusals.memberId })
+        .from(recusals)
+        .where(and(eq(recusals.resolutionId, resolutionId), eq(recusals.tenantId, tenantId))));
+      const recusedMemberIds = recusalRows.map((r) => r.memberId);
+      const itemQuorum = await computeItemQuorum(tenantId, resolution.meetingId, recusedMemberIds);
 
       return {
         resolutionId: resolution.id,
@@ -207,10 +234,56 @@ export async function getVoteResults(tenantId: string, resolutionId: string): Pr
         concluded: !ACTIVE_STATUSES.includes(resolution.status as (typeof ACTIVE_STATUSES)[number]),
         dscSignerName: resolution.dscSignerName ?? null,
         hashCurrent: resolution.hashCurrent ?? null,
+        recusedMemberIds,
+        itemQuorum,
       };
     },
     TALLY_TTL_SECONDS,
   );
+}
+
+/**
+ * Compute the motion-scoped quorum after recusals (Gap 1). The active committee roster is the
+ * base; recused members who belong to that roster are removed from the denominator, and the
+ * required quorum is recomputed on the shrunk denominator via the committee quorum rule. Returns
+ * null for a meeting with no committee (no formal quorum rule to apply).
+ */
+async function computeItemQuorum(
+  tenantId: string,
+  meetingId: string,
+  recusedMemberIds: readonly string[],
+): Promise<ItemQuorumView | null> {
+  const meetingRows = await scopedRead((tx) => tx
+    .select({ committeeId: meetings.committeeId })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
+    .limit(1));
+  const committeeId = meetingRows[0]?.committeeId ?? null;
+  if (!committeeId) return null;
+
+  const committeeRows = await scopedRead((tx) => tx
+    .select({ quorumRule: committees.quorumRule })
+    .from(committees)
+    .where(and(eq(committees.id, committeeId), eq(committees.tenantId, tenantId)))
+    .limit(1));
+  if (!committeeRows[0]) return null;
+  const rule = committeeRows[0].quorumRule as QuorumRule;
+
+  const roster = await scopedRead((tx) => tx
+    .select({ memberId: committeeMembers.memberId })
+    .from(committeeMembers)
+    .where(and(
+      eq(committeeMembers.tenantId, tenantId),
+      eq(committeeMembers.committeeId, committeeId),
+      eq(committeeMembers.status, "active"),
+    )));
+  const rosterIds = new Set(roster.map((r) => r.memberId));
+  const activeRoster = rosterIds.size;
+  const recusedCount = recusedMemberIds.filter((id) => rosterIds.has(id)).length;
+  const effectiveDenominator = itemQuorumDenominator(activeRoster, recusedCount);
+  const requiredQuorum = requiredQuorumCount(rule, effectiveDenominator);
+
+  return { activeRoster, recusedCount, effectiveDenominator, requiredQuorum };
 }
 
 // ─── getActiveVotes (Req 11.3) ───────────────────────────────────────────────
@@ -239,7 +312,7 @@ export async function getActiveVotes(tenantId: string, meetingId: string): Promi
   const rows = await cache.getOrLoad<ActiveVoteView[]>(
     cache.makeKey(tenantId, RESOURCE, `${meetingId}:active`),
     async () => {
-      const openResolutions = await db
+      const openResolutions = await scopedRead((tx) => tx
         .select()
         .from(resolutions)
         .where(
@@ -249,15 +322,15 @@ export async function getActiveVotes(tenantId: string, meetingId: string): Promi
             inArray(resolutions.status, [...ACTIVE_STATUSES]),
           ),
         )
-        .orderBy(desc(resolutions.createdAt));
+        .orderBy(desc(resolutions.createdAt)));
       if (openResolutions.length === 0) return [];
 
       // Batch-fetch every ballot for the open resolutions in a single query (no N+1).
       const ids = openResolutions.map((r) => r.id);
-      const ballots = await db
+      const ballots = await scopedRead((tx) => tx
         .select({ resolutionId: votes.resolutionId, position: votes.position })
         .from(votes)
-        .where(and(eq(votes.tenantId, tenantId), inArray(votes.resolutionId, ids)));
+        .where(and(eq(votes.tenantId, tenantId), inArray(votes.resolutionId, ids))));
 
       const positionsByResolution = new Map<string, string[]>();
       for (const b of ballots) {
@@ -318,15 +391,15 @@ export async function getVoterPositions(tenantId: string, resolutionId: string):
   return cache.getOrLoad<VoterPositionsView>(
     cache.makeKey(tenantId, RESOURCE, `${resolutionId}:positions`),
     async () => {
-      const resRows = await db
+      const resRows = await scopedRead((tx) => tx
         .select({ id: resolutions.id, voteType: resolutions.voteType, isCirculation: resolutions.isCirculation })
         .from(resolutions)
         .where(and(eq(resolutions.id, resolutionId), eq(resolutions.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       const resolution = resRows[0];
       if (!resolution) return null;
 
-      const ballotRows = await db
+      const ballotRows = await scopedRead((tx) => tx
         .select({
           memberId: votes.memberId,
           position: votes.position,
@@ -341,7 +414,7 @@ export async function getVoterPositions(tenantId: string, resolutionId: string):
             eq(votes.isCirculation, resolution.isCirculation),
           ),
         )
-        .orderBy(asc(votes.votedAt));
+        .orderBy(asc(votes.votedAt)));
 
       const tally = tallyOf(ballotRows.map((r) => r.position));
       const secret = resolution.voteType === SECRET_BALLOT;

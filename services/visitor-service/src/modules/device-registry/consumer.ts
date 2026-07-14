@@ -14,7 +14,7 @@ import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { devices, deviceAuditLog, deviceConfigs } from "./schema.js";
@@ -178,15 +178,17 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         throw new Error(`invalid transition from '${device.status}' to 'active' for device '${p.deviceId}'`);
       }
 
-      await tx
-        .update(devices)
-        .set({
+      await versionedUpdate(tx, devices, {
+        id: p.deviceId,
+        tenantId: msg.tenantId,
+        expectedVersion: device.version,
+        set: {
           status: "active",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: device.version + 1,
-        })
-        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+        },
+        entity: "device",
+      });
 
       // Audit log
       await tx.insert(deviceAuditLog).values({
@@ -246,15 +248,17 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
 
       tokenHashToRevoke = device.deviceTokenHash;
 
-      await tx
-        .update(devices)
-        .set({
+      await versionedUpdate(tx, devices, {
+        id: p.deviceId,
+        tenantId: msg.tenantId,
+        expectedVersion: device.version,
+        set: {
           status: "suspended",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: device.version + 1,
-        })
-        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+        },
+        entity: "device",
+      });
 
       // Audit log
       await tx.insert(deviceAuditLog).values({
@@ -321,17 +325,19 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
       tokenHashToRevoke = device.deviceTokenHash;
       certFingerprint = device.certificateFingerprint;
 
-      await tx
-        .update(devices)
-        .set({
+      await versionedUpdate(tx, devices, {
+        id: p.deviceId,
+        tenantId: msg.tenantId,
+        expectedVersion: device.version,
+        set: {
           status: "deregistered",
           deviceTokenHash: null,
           certificateFingerprint: null,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: device.version + 1,
-        })
-        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+        },
+        entity: "device",
+      });
 
       // Audit log
       await tx.insert(deviceAuditLog).values({
@@ -394,17 +400,19 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
       // Generate new token
       const { token: newToken, hash: newHash } = generateDeviceToken();
 
-      await tx
-        .update(devices)
-        .set({
+      await versionedUpdate(tx, devices, {
+        id: p.deviceId,
+        tenantId: msg.tenantId,
+        expectedVersion: device.version,
+        set: {
           oldTokenHash: device.deviceTokenHash,
           deviceTokenHash: newHash,
           tokenRotatedAt: new Date(),
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: device.version + 1,
-        })
-        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+        },
+        entity: "device",
+      });
 
       // Audit log
       await tx.insert(deviceAuditLog).values({
@@ -471,16 +479,18 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
       });
 
       // Update device with pending_config and increment config_version
-      await tx
-        .update(devices)
-        .set({
+      await versionedUpdate(tx, devices, {
+        id: p.deviceId,
+        tenantId: msg.tenantId,
+        expectedVersion: device.version,
+        set: {
           pendingConfig: p.config,
           configVersion: newConfigVersion,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: device.version + 1,
-        })
-        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+        },
+        entity: "device",
+      });
 
       // Audit log
       await tx.insert(deviceAuditLog).values({
@@ -555,16 +565,18 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           createdBy: msg.actorId,
         });
 
-        await tx
-          .update(devices)
-          .set({
+        await versionedUpdate(tx, devices, {
+          id: device.id,
+          tenantId: msg.tenantId,
+          expectedVersion: device.version,
+          set: {
             pendingConfig: p.config,
             configVersion: newConfigVersion,
             updatedAt: new Date(),
             updatedBy: msg.actorId,
-            version: device.version + 1,
-          })
-          .where(and(eq(devices.id, device.id), eq(devices.tenantId, msg.tenantId)));
+          },
+          entity: "device",
+        });
       }
     });
 
@@ -615,15 +627,17 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         firmwareChecksum: p.firmwareChecksum,
       };
 
-      await tx
-        .update(devices)
-        .set({
+      await versionedUpdate(tx, devices, {
+        id: p.deviceId,
+        tenantId: msg.tenantId,
+        expectedVersion: device.version,
+        set: {
           pendingConfig: updatedConfig,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
-          version: device.version + 1,
-        })
-        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+        },
+        entity: "device",
+      });
 
       // Audit log
       await tx.insert(deviceAuditLog).values({

@@ -17,6 +17,7 @@ import { schema as bankReconModule } from "../modules/bank-recon/schema.js";
 import { schema as simplifiedModule } from "../modules/simplified/schema.js";
 import { schema as anomalyModule }    from "../modules/anomaly/schema.js";
 import { allocationSchema } from "../modules/budget/allocation-schema.js";
+import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
 const SCHEMA = {
@@ -32,6 +33,7 @@ const SCHEMA = {
   ...simplifiedModule,
   ...anomalyModule,
   ...allocationSchema,
+  ...resolutionIntakeModule,
   ...outboxSchema,
 };
 
@@ -39,3 +41,20 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain db.select()/db.execute() runs on a pooled connection
+ * with no app.tenant_id GUC set, so under the NOBYPASSRLS finance_svc role the
+ * fail-closed policy returns ZERO rows. Wrapping the read in db.transaction lets
+ * createTenantDb's `wrapWithTenantGuc`-wrapped `db` set the GUC from
+ * AsyncLocalStorage, so reads are tenant-scoped by RLS, not merely by an
+ * app-layer WHERE. Preserved across the TenantRouter-adoption codemod so
+ * existing call sites keep importing this helper unchanged.
+ */
+export function scopedRead<T>(fn: (tx: Db) => PromiseLike<T>): Promise<T> {
+  // tx is typed as the full db surface so drizzle row types are preserved at
+  // call sites (no per-call type args needed); the runtime tx is the pg
+  // transaction, which exposes the same select/execute methods.
+  return db.transaction(fn as unknown as (tx: any) => Promise<T>);
+}

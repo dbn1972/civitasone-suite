@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { billingPayments, billingGatewayTxns, type BillingPaymentRow, type BillingPaymentInsert, type BillingGatewayTxnInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -13,18 +13,18 @@ export async function insertGatewayTxn(tx: Writer, row: BillingGatewayTxnInsert)
 }
 
 export async function listByInvoice(invoiceId: string, tenantId: string): Promise<BillingPaymentRow[]> {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(billingPayments)
     .where(and(eq(billingPayments.invoiceId, invoiceId), eq(billingPayments.tenantId, tenantId)))
-    .orderBy(desc(billingPayments.receivedAt));
+    .orderBy(desc(billingPayments.receivedAt)));
 }
 
 export async function listByTenant(tenantId: string, limit = 100): Promise<BillingPaymentRow[]> {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(billingPayments)
     .where(eq(billingPayments.tenantId, tenantId))
     .orderBy(desc(billingPayments.receivedAt))
-    .limit(limit);
+    .limit(limit));
 }

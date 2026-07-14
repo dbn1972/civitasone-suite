@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { hrmsDesignations, hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { eq, and } from "drizzle-orm";
@@ -46,8 +46,8 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = z.object({ level: z.coerce.number().int().min(1).max(18).optional() }).parse(req.query);
 
-    const designations = await db.select().from(hrmsDesignations)
-      .where(eq(hrmsDesignations.tenantId, ctx.tenantId));
+    const designations = await scopedRead((tx) => tx.select().from(hrmsDesignations)
+      .where(eq(hrmsDesignations.tenantId, ctx.tenantId)));
 
     const levels = q.level
       ? [q.level]
@@ -94,22 +94,22 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
     const effectiveDate = body.effectiveDate ?? `${new Date().getFullYear()}-07-01`;
     const sortedLevels = Object.keys(ENTRY_PAY_PAISE).map(Number).sort((a, b) => a - b);
 
-    const emps = await db.select().from(hrmsEmployees).where(and(
+    const emps = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(and(
       eq(hrmsEmployees.tenantId, ctx.tenantId),
       eq(hrmsEmployees.status, "confirmed"),
-    ));
+    )));
 
     // Idempotency guard: an increment run is keyed on effectiveDate. Employees
     // who already carry an `increment` service-book entry for this date were
     // processed by a prior run and MUST be skipped so a re-fire cannot
     // double-advance pay. Makes the run idempotent per effectiveDate.
-    const priorRows = await db.select({ employeeId: hrmsServiceBookEntries.employeeId })
+    const priorRows = await scopedRead((tx) => tx.select({ employeeId: hrmsServiceBookEntries.employeeId })
       .from(hrmsServiceBookEntries)
       .where(and(
         eq(hrmsServiceBookEntries.tenantId, ctx.tenantId),
         eq(hrmsServiceBookEntries.entryType, "increment"),
         eq(hrmsServiceBookEntries.effectiveDate, effectiveDate),
-      ));
+      )));
     const alreadyIncremented = new Set(priorRows.map((r) => r.employeeId));
 
     const results: Array<Record<string, unknown>> = [];

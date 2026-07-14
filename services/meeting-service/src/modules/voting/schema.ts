@@ -19,7 +19,7 @@
  *
  * _Requirements: 11.1, 11.2, 11.3, 11.4_
  */
-import { pgSchema, uuid, text, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, boolean, integer, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /** The `meeting` PostgreSQL schema (RLS-enabled, tenant-isolated per migration). */
 export const meetingSchema = pgSchema("meeting");
@@ -45,14 +45,42 @@ export const votes = meetingSchema.table("votes", {
   resolutionId:  uuid("resolution_id").notNull(),
   memberId:      uuid("member_id").notNull(),
   position:      varchar("position", { length: 8 }).notNull(),
+  weight:        integer("weight").notNull().default(1),
   reason:        text("reason"),
   votedAt:       timestamp("voted_at", { withTimezone: true }).notNull().defaultNow(),
   isCirculation: boolean("is_circulation").notNull().default(false),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * `meeting.recusals` — a member's recorded conflict-of-interest recusal on a single
+ * motion (resolution). A recused member CANNOT cast a vote on that motion (rejected),
+ * is EXCLUDED from the motion's tally (they never cast) and from the quorum-for-that-
+ * item denominator, and the recusal is recorded here for the vote record / minutes.
+ * `registerRef` optionally links the declaration to the member's register-of-interests
+ * entry. One recusal per (resolution, member) — enforced by the migration's UNIQUE index.
+ *
+ * _Requirements: statutory conflict-of-interest (recusal) completeness._
+ */
+export const recusals = meetingSchema.table("recusals", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  resolutionId: uuid("resolution_id").notNull(),
+  meetingId:    uuid("meeting_id").notNull(),
+  memberId:     uuid("member_id").notNull(),
+  agendaItemId: uuid("agenda_item_id"),
+  reason:       text("reason").notNull(),
+  registerRef:  text("register_ref"),
+  recordedBy:   uuid("recorded_by").notNull(),
+  recordedAt:   timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type RecusalRow = typeof recusals.$inferSelect;
+export type RecusalInsert = typeof recusals.$inferInsert;
+
 /** Drizzle schema map fragment — merged into shared/db.ts `schema` as this module lands. */
-export const votingModule = { votes };
+export const votingModule = { votes, recusals };
 
 /** Row types inferred from the table for repo/consumer/query layers. */
 export type VoteRow = typeof votes.$inferSelect;

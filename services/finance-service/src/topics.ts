@@ -55,6 +55,13 @@ export const CONSUMED_EVENTS = {
   reappropriationFileDecided: "finance.reappropriation.file_decided",
   /** ml-service emits anomaly detected when transaction Z-score > 3. */
   mlAnomalyDetected:        "ml.prediction.anomaly_detected",
+  /**
+   * Owner: meeting-service. Fires when a board/committee records a decision with a
+   * financial implication (Req 22.2). payload: { decisionId, meetingId, text,
+   * financialImplication?: string (paise bigint), currency?, authority?, effectiveDate? }.
+   * Action: open a PENDING REVIEW sanction-intake item (no auto-sanction; GFR maker-checker).
+   */
+  meetingDecisionFinancial: "meeting.decision.financial",
 } as const;
 
 export const SERVICE  = "finance";

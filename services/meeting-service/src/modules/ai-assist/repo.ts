@@ -13,7 +13,7 @@
  * _Requirements: 17.1, 17.4_
  */
 import { and, desc, eq, ne } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache, storage } from "../../shared/infra.js";
 import { meetingDocuments, AI_DOC_TYPE_TRANSCRIPT } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -30,11 +30,11 @@ export interface MeetingStatus {
 
 /** Direct (uncached) meeting existence + status lookup, tenant-scoped. */
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, status: meetings.status, committeeId: meetings.committeeId })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -60,7 +60,7 @@ export async function getTranscript(tenantId: string, meetingId: string): Promis
   const meta = await cache.getOrLoad<Omit<TranscriptView, "text"> | null>(
     cache.makeKey(tenantId, RESOURCE_TRANSCRIPT, meetingId),
     async () => {
-      const rows = await db
+      const rows = await scopedRead((tx) => tx
         .select({
           documentId: meetingDocuments.id,
           meetingId: meetingDocuments.meetingId,
@@ -78,7 +78,7 @@ export async function getTranscript(tenantId: string, meetingId: string): Promis
           ),
         )
         .orderBy(desc(meetingDocuments.createdAt))
-        .limit(1);
+        .limit(1));
       const row = rows[0];
       if (!row) return null;
       return {
@@ -116,7 +116,7 @@ export async function getPreviousAgendaTitles(
   excludeMeetingId: string,
   limit = 20,
 ): Promise<string[]> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ title: agendaItems.title, createdAt: agendaItems.createdAt })
     .from(agendaItems)
     .innerJoin(meetings, and(eq(meetings.id, agendaItems.meetingId), eq(meetings.tenantId, agendaItems.tenantId)))
@@ -129,7 +129,7 @@ export async function getPreviousAgendaTitles(
       ),
     )
     .orderBy(desc(agendaItems.createdAt))
-    .limit(100);
+    .limit(100));
 
   const seen = new Set<string>();
   const titles: string[] = [];

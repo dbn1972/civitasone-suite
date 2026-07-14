@@ -22,7 +22,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsRosters, hrmsRosterPoints, hrmsSanctionedPosts,
   type RosterRow, type SanctionedPostRow,
@@ -46,13 +46,13 @@ function rosterToDef(r: RosterRow) {
 /** Live filled strength for a cadre = count of active employees whose
  * designation name matches the cadre (case-insensitive). */
 async function filledStrengthForCadre(tenantId: string, cadre: string): Promise<number> {
-  const rows = await db.execute<{ n: string }>(sql`
+  const rows = await scopedRead((tx) => tx.execute<{ n: string }>(sql`
     SELECT COUNT(*)::text AS n
     FROM employee.hrms_employees e
     JOIN employee.hrms_designations d ON d.id = e.designation_id AND d.tenant_id = e.tenant_id
     WHERE e.tenant_id = ${tenantId}
       AND e.status <> 'separated'
-      AND lower(d.name) = lower(${cadre})`);
+      AND lower(d.name) = lower(${cadre})`));
   const arr = rows as unknown as Array<{ n: string }>;
   return Number(arr[0]?.n ?? "0");
 }
@@ -93,8 +93,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/reservation/rosters", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsRosters)
-      .where(eq(hrmsRosters.tenantId, ctx.tenantId)).orderBy(asc(hrmsRosters.cadre));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsRosters)
+      .where(eq(hrmsRosters.tenantId, ctx.tenantId)).orderBy(asc(hrmsRosters.cadre)));
     return reply.send({ data: rows });
   });
 
@@ -125,9 +125,9 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     if (body.filled) {
       filled = body.filled;
     } else {
-      const pts = await db.select({ category: hrmsRosterPoints.category, filled: hrmsRosterPoints.filled })
+      const pts = await scopedRead((tx) => tx.select({ category: hrmsRosterPoints.category, filled: hrmsRosterPoints.filled })
         .from(hrmsRosterPoints)
-        .where(and(eq(hrmsRosterPoints.tenantId, ctx.tenantId), eq(hrmsRosterPoints.rosterId, rid)));
+        .where(and(eq(hrmsRosterPoints.tenantId, ctx.tenantId), eq(hrmsRosterPoints.rosterId, rid))));
       const f: FilledByCategory = { SC: 0, ST: 0, OBC: 0, EWS: 0, UR: 0 };
       for (const p of pts) if (p.filled && p.category in f) f[p.category as keyof FilledByCategory] += 1;
       filled = f;
@@ -162,9 +162,9 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { rid } = ridParam.parse(req.params);
     await mustRoster(ctx.tenantId, rid);
-    const rows = await db.select().from(hrmsRosterPoints)
+    const rows = await scopedRead((tx) => tx.select().from(hrmsRosterPoints)
       .where(and(eq(hrmsRosterPoints.tenantId, ctx.tenantId), eq(hrmsRosterPoints.rosterId, rid)))
-      .orderBy(asc(hrmsRosterPoints.pointNo));
+      .orderBy(asc(hrmsRosterPoints.pointNo)));
     return reply.send({ rosterId: rid, count: rows.length, data: rows });
   });
 
@@ -194,8 +194,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/sanctioned-posts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsSanctionedPosts)
-      .where(eq(hrmsSanctionedPosts.tenantId, ctx.tenantId)).orderBy(asc(hrmsSanctionedPosts.cadre));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsSanctionedPosts)
+      .where(eq(hrmsSanctionedPosts.tenantId, ctx.tenantId)).orderBy(asc(hrmsSanctionedPosts.cadre)));
     const out = [];
     for (const r of rows) {
       const filled = await filledStrengthForCadre(ctx.tenantId, r.cadre);
@@ -208,8 +208,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { pid } = pidParam.parse(req.params);
-    const rows = await db.select().from(hrmsSanctionedPosts)
-      .where(and(eq(hrmsSanctionedPosts.tenantId, ctx.tenantId), eq(hrmsSanctionedPosts.id, pid))).limit(1);
+    const rows = await scopedRead((tx) => tx.select().from(hrmsSanctionedPosts)
+      .where(and(eq(hrmsSanctionedPosts.tenantId, ctx.tenantId), eq(hrmsSanctionedPosts.id, pid))).limit(1));
     const r = rows[0];
     if (!r) throw new HttpError(404, "NOT_FOUND", "sanctioned post not found");
     const filled = await filledStrengthForCadre(ctx.tenantId, r.cadre);
@@ -230,8 +230,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   async function mustRoster(tenantId: string, rid: string): Promise<RosterRow> {
-    const rows = await db.select().from(hrmsRosters)
-      .where(and(eq(hrmsRosters.tenantId, tenantId), eq(hrmsRosters.id, rid))).limit(1);
+    const rows = await scopedRead((tx) => tx.select().from(hrmsRosters)
+      .where(and(eq(hrmsRosters.tenantId, tenantId), eq(hrmsRosters.id, rid))).limit(1));
     const r = rows[0];
     if (!r) throw new HttpError(404, "NOT_FOUND", "roster not found");
     return r;

@@ -59,28 +59,46 @@ beforeAll(async () => {
   await app.ready();
 
   // ── Seed fixture (owner connection bypasses RLS in dev) ──────────────────
-  await sqlClient`delete from meeting.votes where tenant_id = ${TENANT}`;
-  await sqlClient`delete from meeting.resolutions where tenant_id = ${TENANT}`;
-  await sqlClient`delete from meeting.meetings where tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`delete from meeting.votes where tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`delete from meeting.resolutions where tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     insert into meeting.meetings (id, tenant_id, type, title, status, created_by, updated_by)
     values (${MEETING}, ${TENANT}, 'committee', 'Voting fixture meeting', 'in_progress', ${ACTOR}, ${ACTOR})
   `;
+  });
 
-  const insertResolution = (id: string, num: string, voteType: string, status: string, result: string) => sqlClient`
+  const insertResolution = (id: string, num: string, voteType: string, status: string, result: string) => sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    return sql`
     insert into meeting.resolutions
       (id, tenant_id, meeting_id, resolution_number, text, vote_type, majority_rule, result, status, is_circulation, created_by, updated_by)
     values (${id}, ${TENANT}, ${MEETING}, ${num}, ${"Res " + num}, ${voteType}, 'simple_majority', ${result}, ${status}, false, ${ACTOR}, ${ACTOR})
   `;
+  });
   await insertResolution(R_OPEN, "OPEN/1", "roll_call", "voting_open", "pending");
   await insertResolution(R_DONE, "DONE/1", "roll_call", "effective", "passed");
   await insertResolution(R_SECRET, "SECR/1", "secret_ballot", "voting_open", "pending");
 
-  const insertVote = (resolutionId: string, memberId: string, position: string) => sqlClient`
+  const insertVote = (resolutionId: string, memberId: string, position: string) => sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    return sql`
     insert into meeting.votes (tenant_id, resolution_id, member_id, position, is_circulation)
     values (${TENANT}, ${resolutionId}, ${memberId}, ${position}, false)
   `;
+  });
   // R_DONE: 2 for, 1 against → total 3, simple majority → passed.
   await insertVote(R_DONE, MEMBER_A, "for");
   await insertVote(R_DONE, MEMBER_B, "for");
@@ -91,9 +109,18 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await sqlClient`delete from meeting.votes where tenant_id = ${TENANT}`;
-  await sqlClient`delete from meeting.resolutions where tenant_id = ${TENANT}`;
-  await sqlClient`delete from meeting.meetings where tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`delete from meeting.votes where tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`delete from meeting.resolutions where tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+  });
   await app.close();
   await sqlClient.end();
 });

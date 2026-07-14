@@ -13,7 +13,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { dailyMetrics } from "./schema.js";
 import { computeTrends, type DailyMetric } from "./domain.js";
 import { dailyQuery, trendsQuery, exportQuery } from "./validators.js";
@@ -47,7 +47,7 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       conditions.push(eq(dailyMetrics.locationId, query.locationId));
     }
 
-    const rows = await db.select().from(dailyMetrics).where(and(...conditions));
+    const rows = await scopedRead((tx) => tx.select().from(dailyMetrics).where(and(...conditions)));
     return reply.send({ data: rows });
   });
 
@@ -74,7 +74,7 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       conditions.push(eq(dailyMetrics.locationId, query.locationId));
     }
 
-    const rows = await db.select().from(dailyMetrics).where(and(...conditions));
+    const rows = await scopedRead((tx) => tx.select().from(dailyMetrics).where(and(...conditions)));
 
     // Map DB rows to the DailyMetric shape expected by computeTrends
     const metrics: DailyMetric[] = rows.map((r) => ({
@@ -114,7 +114,7 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       conditions.push(eq(dailyMetrics.locationId, query.locationId));
     }
 
-    const rows = await db.select().from(dailyMetrics).where(and(...conditions));
+    const rows = await scopedRead((tx) => tx.select().from(dailyMetrics).where(and(...conditions)));
 
     // Build CSV content
     const header = "date,location_id,total_visits,unique_visitors,avg_approval_time_ms,avg_visit_duration_ms,peak_hour,no_show_count,rejected_count";

@@ -1,5 +1,5 @@
 import { eq, and, asc, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import {
   hrmsDeputations, type DeputationRow, type DeputationInsert,
@@ -12,26 +12,26 @@ export async function insertDeputation(tx: Writer, row: DeputationInsert): Promi
 }
 
 export async function findById(tenantId: string, id: string): Promise<DeputationRow | null> {
-  const rows = await db.select().from(hrmsDeputations)
-    .where(and(eq(hrmsDeputations.tenantId, tenantId), eq(hrmsDeputations.id, id))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(hrmsDeputations)
+    .where(and(eq(hrmsDeputations.tenantId, tenantId), eq(hrmsDeputations.id, id))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findActiveByEmployee(tenantId: string, employeeId: string): Promise<DeputationRow | null> {
-  const rows = await db.select().from(hrmsDeputations)
+  const rows = await scopedRead((tx) => tx.select().from(hrmsDeputations)
     .where(and(
       eq(hrmsDeputations.tenantId, tenantId),
       eq(hrmsDeputations.employeeId, employeeId),
       eq(hrmsDeputations.status, "active"),
-    )).limit(1);
+    )).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listByEmployee(tenantId: string, employeeId: string, limit = 200): Promise<DeputationRow[]> {
-  return db.select().from(hrmsDeputations)
+  return scopedRead((tx) => tx.select().from(hrmsDeputations)
     .where(and(eq(hrmsDeputations.tenantId, tenantId), eq(hrmsDeputations.employeeId, employeeId)))
     .orderBy(asc(hrmsDeputations.tenureFrom))
-    .limit(limit);
+    .limit(limit));
 }
 
 /**

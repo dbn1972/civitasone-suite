@@ -21,7 +21,7 @@
  * _Requirements: 3.1, 3.2, 3.3, 3.5, 4.5_
  */
 import { and, asc, eq, ne } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { agendaItems, type AgendaItemRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -43,11 +43,11 @@ export async function getAgendaByMeeting(tenantId: string, meetingId: string): P
   const rows = await cache.getOrLoad<AgendaItemRow[]>(
     cache.makeKey(tenantId, RESOURCE_AGENDA, meetingId),
     async () =>
-      db
+      scopedRead((tx) => tx
         .select()
         .from(agendaItems)
         .where(and(eq(agendaItems.tenantId, tenantId), eq(agendaItems.meetingId, meetingId)))
-        .orderBy(asc(agendaItems.sequence)),
+        .orderBy(asc(agendaItems.sequence))),
   );
   return rows ?? [];
 }
@@ -59,11 +59,11 @@ export async function getAgendaByMeeting(tenantId: string, meetingId: string): P
  */
 export async function getAgendaItem(tenantId: string, itemId: string): Promise<AgendaItemRow | null> {
   return cache.getOrLoad<AgendaItemRow>(cache.makeKey(tenantId, RESOURCE_AGENDA_ITEM, itemId), async () => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(agendaItems)
       .where(and(eq(agendaItems.id, itemId), eq(agendaItems.tenantId, tenantId)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   });
 }
@@ -81,11 +81,11 @@ export interface MeetingStatus {
  * immediately. Owned by meeting-core; read here only as a boundary guard.
  */
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ id: meetings.id, status: meetings.status, scheduledAt: meetings.scheduledAt })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -118,15 +118,15 @@ export async function checkDeadline(
   return cache.getOrLoad<AgendaDeadlineStatus>(
     cache.makeKey(tenantId, RESOURCE_AGENDA_DEADLINE, meetingId),
     async () => {
-      const meetingRows = await db
+      const meetingRows = await scopedRead((tx) => tx
         .select({ scheduledAt: meetings.scheduledAt })
         .from(meetings)
         .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-        .limit(1);
+        .limit(1));
       const meeting = meetingRows[0];
       if (!meeting) return null;
 
-      const items = await db
+      const items = await scopedRead((tx) => tx
         .select({ status: agendaItems.status })
         .from(agendaItems)
         .where(
@@ -135,7 +135,7 @@ export async function checkDeadline(
             eq(agendaItems.meetingId, meetingId),
             ne(agendaItems.status, "withdrawn"),
           ),
-        );
+        ));
 
       const scheduledAt = meeting.scheduledAt ?? null;
       const deadline = scheduledAt ? computeSubmissionDeadline(scheduledAt, config) : null;

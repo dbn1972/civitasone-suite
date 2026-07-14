@@ -59,7 +59,9 @@ function writeHeaders(roles: string[], tid: string = TENANT) {
 }
 
 async function seedDoc(id: string, classification: string, extra: Partial<{ previousVersionId: string; versionNum: number; documentType: string }> = {}) {
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meeting_documents
       (id, tenant_id, meeting_id, file_name, mime_type, file_size_bytes, storage_key, hash,
        classification, document_type, version_num, previous_version_id, created_by, updated_by)
@@ -67,17 +69,27 @@ async function seedDoc(id: string, classification: string, extra: Partial<{ prev
             ${`meeting/${TENANT}/documents/${id}`}, ${"a".repeat(64)}, ${classification},
             ${extra.documentType ?? "supporting_document"}, ${extra.versionNum ?? 1},
             ${extra.previousVersionId ?? null}, ${ACTOR}, ${ACTOR})`;
+  });
 }
 
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  await sqlClient`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
 
-  await sqlClient`
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
     INSERT INTO meeting.meetings (id, tenant_id, type, title, status, duration_minutes, created_by, updated_by)
     VALUES (${MEETING}, ${TENANT}, 'committee', 'Doc Meeting', 'scheduled', 60, ${ACTOR}, ${ACTOR})`;
+  });
 
   await seedDoc(DOC_INTERNAL, "internal");
   await seedDoc(DOC_CONFIDENTIAL, "confidential");
@@ -91,8 +103,14 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
-  await sqlClient`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
-  await sqlClient`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meeting_documents WHERE tenant_id = ${TENANT}`;
+  });
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
+  });
   await sqlClient.end();
 });
 

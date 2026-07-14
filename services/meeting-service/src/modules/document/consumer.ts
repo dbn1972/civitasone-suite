@@ -37,7 +37,7 @@ import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { renderPdf } from "@civitasone/render";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache, storage } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
@@ -262,7 +262,7 @@ interface AgendaBookData {
 
 /** Load everything needed to compile a meeting's agenda book (meeting + accepted items + docs). */
 async function loadAgendaBookData(tenantId: string, meetingId: string): Promise<AgendaBookData | null> {
-  const meetingRows = await db
+  const meetingRows = await scopedRead((tx) => tx
     .select({
       id: meetings.id,
       title: meetings.title,
@@ -273,11 +273,11 @@ async function loadAgendaBookData(tenantId: string, meetingId: string): Promise<
     })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   const meeting = meetingRows[0];
   if (!meeting) return null;
 
-  const items = await db
+  const items = await scopedRead((tx) => tx
     .select({
       sequence: agendaItems.sequence,
       title: agendaItems.title,
@@ -286,9 +286,9 @@ async function loadAgendaBookData(tenantId: string, meetingId: string): Promise<
     })
     .from(agendaItems)
     .where(and(eq(agendaItems.meetingId, meetingId), eq(agendaItems.tenantId, tenantId), eq(agendaItems.status, "accepted")))
-    .orderBy(asc(agendaItems.sequence));
+    .orderBy(asc(agendaItems.sequence)));
 
-  const docs = await db
+  const docs = await scopedRead((tx) => tx
     .select({
       fileName: meetingDocuments.fileName,
       documentType: meetingDocuments.documentType,
@@ -296,7 +296,7 @@ async function loadAgendaBookData(tenantId: string, meetingId: string): Promise<
     })
     .from(meetingDocuments)
     .where(and(eq(meetingDocuments.meetingId, meetingId), eq(meetingDocuments.tenantId, tenantId), isNull(meetingDocuments.deletedAt)))
-    .orderBy(asc(meetingDocuments.createdAt));
+    .orderBy(asc(meetingDocuments.createdAt)));
 
   return { meeting, items, docs };
 }
@@ -433,7 +433,7 @@ async function handleAgendaBookCirculate(msg: CommandEnvelope<AgendaBookCirculat
   const recipientIds = p.recipientIds ?? [];
 
   // The book must have been generated first (its metadata row anchors the circulation).
-  const bookRows = await db
+  const bookRows = await scopedRead((tx) => tx
     .select({ id: meetingDocuments.id, classification: meetingDocuments.classification })
     .from(meetingDocuments)
     .where(
@@ -443,7 +443,7 @@ async function handleAgendaBookCirculate(msg: CommandEnvelope<AgendaBookCirculat
         isNull(meetingDocuments.deletedAt),
       ),
     )
-    .limit(1);
+    .limit(1));
   const book = bookRows[0];
   if (!book) throw new NonRetryableError(`agenda book circulate: book ${p.agendaBookId} not generated`);
 

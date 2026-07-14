@@ -8,7 +8,7 @@ import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { renderPdf } from "@civitasone/render";
 import { signPdfWithDsc, DscValidationError } from "@civitasone/render";
 import { loadDsc } from "../dsc-config/loader.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { queue } from "../../shared/infra.js";
 import { payrollSlips } from "../payroll/schema.js";
@@ -106,10 +106,10 @@ function addUnsignedWatermark(html: string): string {
  * Falls back to a short prefix of the employeeId if no slip is found.
  */
 async function resolveEmployeeNo(tenantId: string, employeeId: string): Promise<string> {
-  const [slip] = await db.select({ employeeNo: payrollSlips.employeeNo })
+  const [slip] = await scopedRead((tx) => tx.select({ employeeNo: payrollSlips.employeeNo })
     .from(payrollSlips)
     .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId)))
-    .limit(1);
+    .limit(1));
   return slip?.employeeNo ?? employeeId.slice(0, 8);
 }
 
@@ -258,7 +258,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
     catch { throw new HttpError(400, "VALIDATION_FAILED", "fy must be in format YYYY-YY e.g. 2025-26"); }
 
     // Check for duplicate running job for same tenant + FY
-    const [existingJob] = await db
+    const [existingJob] = await scopedRead((tx) => tx
       .select({ id: form16BulkJobs.id, status: form16BulkJobs.status })
       .from(form16BulkJobs)
       .where(
@@ -267,7 +267,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
           eq(form16BulkJobs.fy, body.fy),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     if (existingJob && (existingJob.status === "pending" || existingJob.status === "processing")) {
       throw new HttpError(409, "BULK_JOB_IN_PROGRESS", `A bulk Form 16 generation job is already running for FY ${body.fy}`);
@@ -315,7 +315,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       fy: z.string().regex(/^\d{4}-\d{2}$/),
     }).parse(req.query);
 
-    const [job] = await db
+    const [job] = await scopedRead((tx) => tx
       .select()
       .from(form16BulkJobs)
       .where(
@@ -324,7 +324,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
           eq(form16BulkJobs.fy, q.fy),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     if (!job) {
       throw new HttpError(404, "NOT_FOUND", `No bulk Form 16 job found for FY ${q.fy}`);
@@ -359,7 +359,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
 
     // Find the completed job
-    const [job] = await db
+    const [job] = await scopedRead((tx) => tx
       .select()
       .from(form16BulkJobs)
       .where(
@@ -368,7 +368,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
           eq(form16BulkJobs.fy, q.fy),
         ),
       )
-      .limit(1);
+      .limit(1));
 
     if (!job) {
       throw new HttpError(404, "NOT_FOUND", `No bulk Form 16 job found for FY ${q.fy}`);

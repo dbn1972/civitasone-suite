@@ -35,9 +35,11 @@ export function deriveHearingId(tenantId: string, caseId: string, scheduledAtIso
 /**
  * Default hearing purposes (§19) used as a FALLBACK when a tenant has not
  * configured its own `hearing_purpose` namespace in the config/metadata engine
- * (§47). The effective allowed set is (defaults ∪ tenant config keys), so an
- * admin can ADD a bespoke purpose via config with no code change. `purpose` is
- * OPTIONAL on a hearing — it is validated only when present.
+ * (§47). The effective allowed set is the tenant’s configured `hearing_purpose`
+ * values when any exist (AUTHORITATIVE — it REPLACES these defaults), else
+ * these module defaults; the tenant’s list fully overrides the fallback and may
+ * add bespoke purposes with no code change. `purpose` is OPTIONAL on a hearing —
+ * it is validated only when present.
  */
 export const DEFAULT_HEARING_PURPOSES = [
   "arguments", "evidence", "first_hearing", "final_hearing", "admission",

@@ -275,9 +275,15 @@ export function computeVisitDuration(checkInAt: Date, checkOutAt: Date): number 
 
 /**
  * Property 13: Overstay Detection — true once `now` strictly exceeds
- * `validUntil`. A visitor whose current time is within `validUntil`
- * (i.e. `now <= validUntil`) is NOT overstayed.
+ * `validUntil` plus an optional grace period. A visitor whose current time is
+ * within `validUntil + graceMs` is NOT overstayed.
+ *
+ * `graceMs` is config-driven (tenant `visitor_policy` key
+ * check_in.overstay_grace_minutes) and DEFAULTS to 0, so behavior is unchanged
+ * for a tenant that has configured no grace. A tenant that grants, say, a
+ * 15-minute grace won't flag a visitor as overstayed until 15 minutes past
+ * their pass's validUntil.
  */
-export function isOverstayed(now: Date, validUntil: Date): boolean {
-  return now.getTime() > validUntil.getTime();
+export function isOverstayed(now: Date, validUntil: Date, graceMs = 0): boolean {
+  return now.getTime() > validUntil.getTime() + graceMs;
 }
