@@ -8,7 +8,9 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findApplicationById(id: string): Promise<ApplicationRow | null> {
-  const rows = await db.select().from(citizenApplications).where(eq(citizenApplications.id, id)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(citizenApplications).where(eq(citizenApplications.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -20,17 +22,23 @@ export async function findApplicationByIdTx(tx: Writer, id: string, tenantId: st
 }
 
 export async function listApplicationsByCitizen(tenantId: string, citizenId: string, limit = 200): Promise<ApplicationRow[]> {
-  return db.select().from(citizenApplications)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenApplications)
     .where(and(eq(citizenApplications.tenantId, tenantId), eq(citizenApplications.citizenId, citizenId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listStatusHistory(applicationId: string) {
-  return db.select().from(citizenStatusHistory).where(eq(citizenStatusHistory.applicationId, applicationId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenStatusHistory).where(eq(citizenStatusHistory.applicationId, applicationId)));
 }
 
 export async function listDocuments(applicationId: string) {
-  return db.select().from(citizenAppDocuments).where(eq(citizenAppDocuments.applicationId, applicationId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenAppDocuments).where(eq(citizenAppDocuments.applicationId, applicationId)));
 }
 
 export async function insertApplication(tx: Writer, row: ApplicationInsert): Promise<void> {
@@ -52,9 +60,13 @@ export async function insertStatusHistory(tx: Writer, row: StatusHistoryInsert):
 }
 
 export async function listOverdueApplications(tenantId: string, limit = 500): Promise<ApplicationRow[]> {
-  return db.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId)).limit(limit));
 }
 
 export async function listApplicationsByTenant(tenantId: string, limit: number): Promise<ApplicationRow[]> {
-  return db.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenApplications).where(eq(citizenApplications.tenantId, tenantId)).limit(limit));
 }

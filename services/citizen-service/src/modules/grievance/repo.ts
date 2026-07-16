@@ -8,7 +8,9 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findGrievanceById(id: string): Promise<GrievanceRow | null> {
-  const rows = await db.select().from(citizenGrievances).where(eq(citizenGrievances.id, id)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(citizenGrievances).where(eq(citizenGrievances.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -20,20 +22,26 @@ export async function findGrievanceByIdTx(tx: Writer, id: string, tenantId: stri
 }
 
 export async function listGrievancesByCitizen(tenantId: string, citizenId: string, limit = 200): Promise<GrievanceRow[]> {
-  return db.select().from(citizenGrievances)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenGrievances)
     .where(and(eq(citizenGrievances.tenantId, tenantId), eq(citizenGrievances.citizenId, citizenId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listGrievancesByTenant(tenantId: string, limit: number, offset: number): Promise<GrievanceRow[]> {
-  return db.select().from(citizenGrievances)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenGrievances)
     .where(eq(citizenGrievances.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 export async function listActions(grievanceId: string) {
-  return db.select().from(citizenGrievanceActions).where(eq(citizenGrievanceActions.grievanceId, grievanceId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenGrievanceActions).where(eq(citizenGrievanceActions.grievanceId, grievanceId)));
 }
 
 export async function insertGrievance(tx: Writer, row: GrievanceInsert): Promise<void> {

@@ -33,15 +33,19 @@ export async function anonymiseProfile(tx: Writer, id: string, tenantId: string,
 export async function findProfileById(id: string, tenantId: string): Promise<ProfileRow | null> {
   // P1-6: scope by (id AND tenantId) so an officer summary cannot leak a
   // cross-tenant profile via a citizenId that exists under another tenant.
-  const rows = await db.select().from(citizenProfiles)
-    .where(and(eq(citizenProfiles.id, id), eq(citizenProfiles.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(citizenProfiles)
+    .where(and(eq(citizenProfiles.id, id), eq(citizenProfiles.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findServiceById(id: string, tenantId: string): Promise<ServiceRow | null> {
-  const rows = await db.select().from(citizenServices)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(citizenServices)
     .where(and(eq(citizenServices.id, id), eq(citizenServices.tenantId, tenantId), eq(citizenServices.active, true)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -53,7 +57,9 @@ export async function findServiceByIdTx(tx: Writer, id: string, tenantId: string
 }
 
 export async function listServices(tenantId: string, limit = 100): Promise<ServiceRow[]> {
-  return db.select().from(citizenServices)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenServices)
     .where(and(eq(citizenServices.tenantId, tenantId), eq(citizenServices.active, true)))
-    .limit(limit);
+    .limit(limit));
 }

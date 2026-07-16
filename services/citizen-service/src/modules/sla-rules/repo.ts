@@ -4,7 +4,9 @@ import { slaRules, type SlaRuleRow, type SlaRuleInsert } from "./schema.js";
 
 /** Upsert by (tenant_id, priority) so re-posting a priority updates in place. */
 export async function upsertRule(row: SlaRuleInsert): Promise<SlaRuleRow> {
-  const [out] = await db.insert(slaRules).values(row)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this write — a bare db.insert() runs with no RLS GUC set.
+  const [out] = await db.transaction((tx) => tx.insert(slaRules).values(row)
     .onConflictDoUpdate({
       target: [slaRules.tenantId, slaRules.priority],
       set: {
@@ -13,19 +15,23 @@ export async function upsertRule(row: SlaRuleInsert): Promise<SlaRuleRow> {
         isActive: row.isActive ?? true,
       },
     })
-    .returning();
+    .returning());
   return out!;
 }
 
 export async function listActiveRules(tenantId: string, limit: number, offset: number): Promise<SlaRuleRow[]> {
-  return db.select().from(slaRules)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(slaRules)
     .where(and(eq(slaRules.tenantId, tenantId), eq(slaRules.isActive, true)))
     .orderBy(desc(slaRules.createdAt))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 export async function countActiveRules(tenantId: string): Promise<number> {
-  const rows = await db.select({ id: slaRules.id }).from(slaRules)
-    .where(and(eq(slaRules.tenantId, tenantId), eq(slaRules.isActive, true)));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select({ id: slaRules.id }).from(slaRules)
+    .where(and(eq(slaRules.tenantId, tenantId), eq(slaRules.isActive, true))));
   return rows.length;
 }

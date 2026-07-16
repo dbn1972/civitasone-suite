@@ -8,7 +8,9 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findRtiById(id: string): Promise<RtiRow | null> {
-  const rows = await db.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.id, id)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -38,20 +40,28 @@ export async function insertAppeal(tx: Writer, row: RtiAppealInsert): Promise<vo
 }
 
 export async function listResponses(rtiId: string) {
-  return db.select().from(citizenRtiResponses).where(eq(citizenRtiResponses.rtiId, rtiId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenRtiResponses).where(eq(citizenRtiResponses.rtiId, rtiId)));
 }
 
 export async function listAppeals(rtiId: string) {
-  return db.select().from(citizenRtiAppeals).where(eq(citizenRtiAppeals.rtiId, rtiId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenRtiAppeals).where(eq(citizenRtiAppeals.rtiId, rtiId)));
 }
 
 export async function listRtiByTenant(tenantId: string, limit: number): Promise<RtiRow[]> {
-  return db.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.tenantId, tenantId)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.tenantId, tenantId)).limit(limit));
 }
 
 /** P0-1: citizen-scoped RTI list so a citizen only sees their own requests. */
 export async function listRtiByCitizen(tenantId: string, citizenId: string, limit: number): Promise<RtiRow[]> {
-  return db.select().from(citizenRtiRequests)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenRtiRequests)
     .where(and(eq(citizenRtiRequests.tenantId, tenantId), eq(citizenRtiRequests.citizenId, citizenId)))
-    .limit(limit);
+    .limit(limit));
 }

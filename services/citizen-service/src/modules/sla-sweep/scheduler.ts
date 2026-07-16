@@ -64,6 +64,14 @@ async function publishSlaCheck(
   });
 }
 
+// NOTE (RLS bare-call scan): the four sweep* queries below intentionally scan
+// ACROSS ALL TENANTS (no tenant_id filter) — this is a background sweeper, not
+// a per-tenant request handler. Wrapping in db.transaction() would only inject
+// app.tenant_id for a SINGLE tenant, which would silently make the sweep only
+// ever see one tenant's rows under FORCE RLS. A correct fix requires a
+// dedicated bypass-RLS DB role (or per-tenant looping) — a deliberate design
+// decision out of scope for this mechanical fix pass. Left as-is; tracked as
+// a known gap.
 async function sweepApplications(queue: Queue, now: Date): Promise<number> {
   const rows = await db.select({
     id: citizenApplications.id, tenantId: citizenApplications.tenantId,

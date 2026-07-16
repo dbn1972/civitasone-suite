@@ -9,7 +9,9 @@ import { computeSlaDueAt } from "./sla.js";
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findTicketById(id: string): Promise<TicketRow | null> {
-  const rows = await db.select().from(citizenTickets).where(eq(citizenTickets.id, id)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(citizenTickets).where(eq(citizenTickets.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -21,7 +23,9 @@ export async function findTicketByIdTx(tx: Writer, id: string, tenantId: string)
 }
 
 export async function listNotes(ticketId: string) {
-  return db.select().from(citizenTicketNotes).where(eq(citizenTicketNotes.ticketId, ticketId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenTicketNotes).where(eq(citizenTicketNotes.ticketId, ticketId)));
 }
 
 export async function listTicketsByTenant(
@@ -46,12 +50,16 @@ export async function listTicketsByTenant(
   } else if (slaStatus === "within_sla") {
     conditions.push(or(eq(citizenTickets.status, "closed"), eq(citizenTickets.status, "resolved"), sql`${citizenTickets.slaDueAt} IS NULL OR ${citizenTickets.slaDueAt} > ${new Date(now.getTime() + 4 * 60 * 60 * 1000)}`)!);
   }
-  return db.select().from(citizenTickets).where(and(...conditions)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(citizenTickets).where(and(...conditions)).limit(limit));
 }
 
 export async function countBreachedTickets(tenantId: string): Promise<number> {
   const now = new Date();
-  const [row] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(citizenTickets)
     .where(
@@ -60,23 +68,27 @@ export async function countBreachedTickets(tenantId: string): Promise<number> {
         or(eq(citizenTickets.status, "open"), eq(citizenTickets.status, "in_progress")),
         or(lt(citizenTickets.slaDueAt, now), and(isNull(citizenTickets.slaDueAt), lt(citizenTickets.createdAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)))),
       ),
-    );
+    ));
   return row?.count ?? 0;
 }
 
 export async function countTicketsByStatus(tenantId: string): Promise<Array<{ status: string; count: number }>> {
-  const rows = await db.select({
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select({
     status: citizenTickets.status,
     count: sql<number>`count(*)::int`,
-  }).from(citizenTickets).where(eq(citizenTickets.tenantId, tenantId)).groupBy(citizenTickets.status);
+  }).from(citizenTickets).where(eq(citizenTickets.tenantId, tenantId)).groupBy(citizenTickets.status));
   return rows;
 }
 
 export async function countEscalationsByTenant(tenantId: string): Promise<number> {
-  const [row] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(ticketEscalations)
-    .where(eq(ticketEscalations.tenantId, tenantId));
+    .where(eq(ticketEscalations.tenantId, tenantId)));
   return row?.count ?? 0;
 }
 
@@ -100,9 +112,11 @@ export async function insertEscalation(tx: Writer, row: EscalationInsert): Promi
 }
 
 export async function countEscalationsForTicket(tenantId: string, ticketId: string): Promise<number> {
-  const [row] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(ticketEscalations)
-    .where(and(eq(ticketEscalations.tenantId, tenantId), eq(ticketEscalations.ticketId, ticketId)));
+    .where(and(eq(ticketEscalations.tenantId, tenantId), eq(ticketEscalations.ticketId, ticketId))));
   return row?.count ?? 0;
 }
