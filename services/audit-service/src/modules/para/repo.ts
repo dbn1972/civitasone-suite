@@ -5,7 +5,9 @@ import { auditParas, auditDeptResponses, auditParaStatusHistory, type ParaRow, t
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findParaById(id: string, tenantId: string): Promise<ParaRow | null> {
-  const rows = await db.select().from(auditParas).where(and(eq(auditParas.id, id), eq(auditParas.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditParas).where(and(eq(auditParas.id, id), eq(auditParas.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -39,13 +41,17 @@ export async function listParas(tenantId: string, status?: string, deptRef?: str
   const conditions = [eq(auditParas.tenantId, tenantId)];
   if (status) conditions.push(eq(auditParas.status, status));
   if (deptRef) conditions.push(eq(auditParas.deptRef, deptRef));
-  return db.select().from(auditParas).where(and(...conditions)).limit(limit).offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(auditParas).where(and(...conditions)).limit(limit).offset(offset));
 }
 
 export async function listParasCount(tenantId: string, status?: string, deptRef?: string): Promise<number> {
   const conditions = [eq(auditParas.tenantId, tenantId)];
   if (status) conditions.push(eq(auditParas.status, status));
   if (deptRef) conditions.push(eq(auditParas.deptRef, deptRef));
-  const rows = await db.select({ count: sql<number>`count(*)::int` }).from(auditParas).where(and(...conditions));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(auditParas).where(and(...conditions)));
   return rows[0]?.count ?? 0;
 }

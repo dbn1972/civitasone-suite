@@ -5,7 +5,9 @@ import { auditRisks, auditPlanRisks, type RiskRow, type RiskInsert, type PlanRis
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findById(id: string, tenantId: string): Promise<RiskRow | null> {
-  const rows = await db.select().from(auditRisks).where(and(eq(auditRisks.id, id), eq(auditRisks.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditRisks).where(and(eq(auditRisks.id, id), eq(auditRisks.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -15,22 +17,26 @@ export async function findByIdTx(tx: Writer, id: string, tenantId: string): Prom
 }
 
 export async function listByTenant(tenantId: string, limit: number): Promise<RiskRow[]> {
-  return db.select().from(auditRisks)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(auditRisks)
     .where(eq(auditRisks.tenantId, tenantId))
     .orderBy(desc(auditRisks.riskScore), desc(auditRisks.createdAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 /** P1-7: audit-universe — open risks at or above a score threshold, highest first. */
 export async function listHighRisk(tenantId: string, threshold: number, limit: number): Promise<RiskRow[]> {
-  return db.select().from(auditRisks)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(auditRisks)
     .where(and(
       eq(auditRisks.tenantId, tenantId),
       eq(auditRisks.status, "open"),
       gte(auditRisks.riskScore, threshold),
     ))
     .orderBy(desc(auditRisks.riskScore), desc(auditRisks.createdAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertRisk(tx: Writer, row: RiskInsert): Promise<void> {
@@ -67,7 +73,9 @@ export async function linkRisksToPlan(tx: Writer, tenantId: string, planId: stri
 }
 
 export async function listRisksForPlan(tenantId: string, planId: string, limit = 500): Promise<RiskRow[]> {
-  return db.select({
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select({
       id: auditRisks.id, tenantId: auditRisks.tenantId, riskCode: auditRisks.riskCode,
       title: auditRisks.title, category: auditRisks.category, likelihood: auditRisks.likelihood,
       impact: auditRisks.impact, riskScore: auditRisks.riskScore, ownerRef: auditRisks.ownerRef,
@@ -79,12 +87,14 @@ export async function listRisksForPlan(tenantId: string, planId: string, limit =
     .innerJoin(auditRisks, eq(auditRisks.id, auditPlanRisks.riskId))
     .where(and(eq(auditPlanRisks.tenantId, tenantId), eq(auditPlanRisks.planId, planId)))
     .orderBy(desc(auditRisks.riskScore))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function countLinksForPlan(tenantId: string, planId: string): Promise<number> {
-  const rows = await db.select({ count: sql<number>`count(*)::int` }).from(auditPlanRisks)
-    .where(and(eq(auditPlanRisks.tenantId, tenantId), eq(auditPlanRisks.planId, planId)));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(auditPlanRisks)
+    .where(and(eq(auditPlanRisks.tenantId, tenantId), eq(auditPlanRisks.planId, planId))));
   return rows[0]?.count ?? 0;
 }
 

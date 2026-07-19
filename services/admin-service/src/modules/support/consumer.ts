@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -70,31 +71,47 @@ export function registerSupportConsumers(queue: Queue): void {
 const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000099";
 
 /**
- * P1-2: close every break-glass grant whose TTL has lapsed. Each grant is closed
- * under its own tenant and emits a breakGlassClosed event labelled auto_expired
- * plus an audit record. Returns the number of grants swept.
+ * P1-2: close every break-glass grant whose TTL has lapsed, across ALL
+ * tenants. Runs as a per-tenant loop rather than one cross-tenant
+ * transaction:
+ *   1. `findExpiredOpenTenantIds` finds which tenants have a candidate row
+ *      (the one genuinely cross-tenant read this job needs — see that
+ *      function's comment on why it uses the platform-bypass RLS policy).
+ *   2. For each tenant id found, the actual read-and-close work runs inside
+ *      `runWithTenant(tenantId, ...)`, so every SELECT/UPDATE in that inner
+ *      transaction is scoped by the NORMAL strict per-tenant RLS policy —
+ *      this sweeper never has write-side access wider than a single tenant
+ *      at a time, even though it started from a cross-tenant listing.
+ * Each grant is closed under its own tenant and emits a breakGlassClosed
+ * event labelled auto_expired plus an audit record. Returns the number of
+ * grants swept across all tenants.
  */
 export async function sweepExpiredBreakGlass(now = new Date()): Promise<number> {
-  return db.transaction(async (tx) => {
-    const expired = await repo.findExpiredOpen(tx, now);
-    let swept = 0;
-    for (const grant of expired) {
-      const closed = await repo.closeBreakGlass(tx, grant.id, SYSTEM_ACTOR, "auto_expired");
-      if (!closed) continue;
-      swept += 1;
-      await enqueue(tx, {
-        topic: EVENTS.breakGlassClosed, eventType: EVENTS.breakGlassClosed,
-        tenantId: closed.tenantId, actorId: SYSTEM_ACTOR, correlationId: closed.correlationId,
-        payload: { breakGlassId: closed.id, tenantId: closed.tenantId, ticketId: closed.ticketId, reason: "auto_expired" },
-      });
-      await enqueue(tx, {
-        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-        tenantId: closed.tenantId, actorId: SYSTEM_ACTOR, correlationId: closed.correlationId,
-        payload: { service: "admin", action: "breakglass_auto_expire", resourceType: "break_glass", resourceId: closed.id, outcome: "success" },
-      });
-    }
-    return swept;
-  });
+  const tenantIds = await repo.findExpiredOpenTenantIds(now);
+  let swept = 0;
+  for (const tenantId of tenantIds) {
+    swept += await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+      const expired = await repo.findExpiredOpen(tx, now);
+      let sweptForTenant = 0;
+      for (const grant of expired) {
+        const closed = await repo.closeBreakGlass(tx, grant.id, SYSTEM_ACTOR, "auto_expired");
+        if (!closed) continue;
+        sweptForTenant += 1;
+        await enqueue(tx, {
+          topic: EVENTS.breakGlassClosed, eventType: EVENTS.breakGlassClosed,
+          tenantId: closed.tenantId, actorId: SYSTEM_ACTOR, correlationId: closed.correlationId,
+          payload: { breakGlassId: closed.id, tenantId: closed.tenantId, ticketId: closed.ticketId, reason: "auto_expired" },
+        });
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: closed.tenantId, actorId: SYSTEM_ACTOR, correlationId: closed.correlationId,
+          payload: { service: "admin", action: "breakglass_auto_expire", resourceType: "break_glass", resourceId: closed.id, outcome: "success" },
+        });
+      }
+      return sweptForTenant;
+    }));
+  }
+  return swept;
 }
 
 /** P1-2: start the periodic TTL sweeper. Returns the interval handle. */

@@ -2,9 +2,29 @@ import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly (not the `createQueue()`
+ * factory) does NOT auto-wrap subscribed handlers with `withTenantConsumer`,
+ * AND its in-memory delivery uses `setTimeout(...)` which breaks out of the
+ * calling async context entirely — so even an ambient AsyncLocalStorage
+ * tenant scope from the test body would never reach the consumer handler.
+ * Without this wrapping, every `db.transaction()` inside the consumer runs
+ * with NO RLS GUC set, and the same is true for any bare `db.select()` /
+ * `db.execute()` call made directly from the test body itself (wrap those in
+ * `runWithTenant(tenantId, () => db.transaction(...))` too). Mirrors the
+ * pattern already applied in tests/para.test.ts and admin-service's suite.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 import { computeHash } from "../src/modules/events/domain.js";
 import {
   contentDigest, signManifest, verifyArtifact, canonicalManifest, signingKeyId, SIGNATURE_ALG,
@@ -280,14 +300,14 @@ describe("DB-backed audit ledger", () => {
   afterAll(async () => {
     // Best-effort cleanup of the throwaway export rows (exports are mutable);
     // events rows are append-only and intentionally left in place.
-    try { await db.delete(auditExports).where(eq(auditExports.tenantId, TENANT_A)); } catch { /* noop */ }
+    try { await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.delete(auditExports).where(eq(auditExports.tenantId, TENANT_A)))); } catch { /* noop */ }
     await rm(path.join(EXPORT_DIR, TENANT_A), { recursive: true, force: true }).catch(() => {});
     await sqlClient.end();
   });
 
   it("APPEND-ONLY: a direct UPDATE on events.events is rejected by the trigger", async () => {
     // Seed one row through the (allowed) INSERT path.
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerAuditConsumers(q);
     await q.start();
     const mid = randomUUID();
@@ -299,27 +319,29 @@ describe("DB-backed audit ledger", () => {
     await new Promise((r) => setTimeout(r, 400));
     await q.stop();
 
-    const rows = await db.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A));
+    const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A))));
     expect(rows.length).toBeGreaterThanOrEqual(1);
 
-    // UPDATE must be rejected by the BEFORE UPDATE trigger.
-    await expect(
-      db.execute(sql`update events.events set severity = 'tampered' where tenant_id = ${TENANT_A}`),
-    ).rejects.toThrow(/append-only|not permitted|immutable/i);
+    await runWithTenant(TENANT_A, async () => {
+      // UPDATE must be rejected by the BEFORE UPDATE trigger.
+      await expect(
+        db.transaction((tx) => tx.execute(sql`update events.events set severity = 'tampered' where tenant_id = ${TENANT_A}`)),
+      ).rejects.toThrow(/append-only|not permitted|immutable/i);
 
-    // DELETE must be rejected by the BEFORE DELETE trigger.
-    await expect(
-      db.execute(sql`delete from events.events where tenant_id = ${TENANT_A}`),
-    ).rejects.toThrow(/append-only|not permitted|immutable/i);
+      // DELETE must be rejected by the BEFORE DELETE trigger.
+      await expect(
+        db.transaction((tx) => tx.execute(sql`delete from events.events where tenant_id = ${TENANT_A}`)),
+      ).rejects.toThrow(/append-only|not permitted|immutable/i);
+    });
 
     // Row is untouched.
-    const after = await db.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A));
+    const after = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A))));
     expect(after.every((r) => r.severity !== "tampered")).toBe(true);
   });
 
   it("INGESTION idempotency: a redelivered messageId inserts exactly one row", async () => {
     const tenant = randomUUID();
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerAuditConsumers(q);
     await q.start();
     const mid = randomUUID();
@@ -334,13 +356,13 @@ describe("DB-backed audit ledger", () => {
     await new Promise((r) => setTimeout(r, 300));
     await q.stop();
 
-    const rows = await db.select().from(auditEvents).where(eq(auditEvents.tenantId, tenant));
+    const rows = await runWithTenant(tenant, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, tenant))));
     expect(rows).toHaveLength(1);
-    await db.delete(processed).where(eq(processed.messageId, mid)).catch(() => {});
+    await runWithTenant(tenant, () => db.transaction((tx) => tx.delete(processed).where(eq(processed.messageId, mid)))).catch(() => {});
   });
 
   it("TENANT ISOLATION: tenant A's ledger never returns tenant B's rows", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerAuditConsumers(q);
     await q.start();
     await q.publish("audit.event.record", {
@@ -351,15 +373,15 @@ describe("DB-backed audit ledger", () => {
     await new Promise((r) => setTimeout(r, 400));
     await q.stop();
 
-    const aRows = await db.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A));
+    const aRows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A))));
     expect(aRows.every((r) => r.tenantId === TENANT_A)).toBe(true);
-    const bRows = await db.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_B));
+    const bRows = await runWithTenant(TENANT_B, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_B))));
     expect(bRows.length).toBeGreaterThanOrEqual(1);
   });
 
   it("SIGNED EXPORT: produces a real artifact whose persisted signature verifies, and a tampered file fails", async () => {
     const exportId = randomUUID();
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerAuditConsumers(q); // for the audit-trail event the export emits
     registerExportConsumers(q);
     await q.start();
@@ -376,7 +398,7 @@ describe("DB-backed audit ledger", () => {
     await new Promise((r) => setTimeout(r, 1200));
     await q.stop();
 
-    const rows = await db.select().from(auditExports).where(eq(auditExports.id, exportId));
+    const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditExports).where(eq(auditExports.id, exportId))));
     const row = rows[0];
     expect(row?.status).toBe("completed");
     expect(row?.contentSha256).toBeTruthy();

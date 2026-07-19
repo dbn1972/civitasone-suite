@@ -34,6 +34,19 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.startPlan(ctx, id));
   });
 
+  // LIST top-level audit plans (auditPlans) for the caller's tenant. Distinct
+  // from GET /v1/audit/plan (singular, below) which lists the per-department
+  // plan-ITEMS sub-resource — that route existed already; this one (the
+  // plans themselves) was missing entirely, which surfaced as a 404 rather
+  // than a genuine RLS-isolation failure in tests/rls-isolation.test.ts.
+  app.get("/v1/audit/plans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const plans = await queries.listPlans(ctx.tenantId, q.limit);
+    return reply.send({ data: plans });
+  });
+
   app.get("/v1/audit/plans/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

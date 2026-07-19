@@ -2,7 +2,7 @@
 import { z } from "zod";
 
 /** Validate cron expression (5 or 6 parts). */
-const cronRegex = /^(\*(?:\/\d+)?|[0-9,\-\/\*]+)\s+(\*(?:\/\d+)?|[0-9,\-\/\*]+)\s+(\*(?:\/\d+)?|[0-9,\-\/\*]+)\s+(\*(?:\/\d+)?|[0-9,\-\/\*]+)\s+(\*(?:\/\d+)?|[0-9,\-\/\*]+)(\s+(\*(?:\/\d+)?|[0-9,\-\/\*]+))?$/;
+const cronRegex = /^(\*(?:\/\d+)?|[0-9,\-/*]+)\s+(\*(?:\/\d+)?|[0-9,\-/*]+)\s+(\*(?:\/\d+)?|[0-9,\-/*]+)\s+(\*(?:\/\d+)?|[0-9,\-/*]+)\s+(\*(?:\/\d+)?|[0-9,\-/*]+)(\s+(\*(?:\/\d+)?|[0-9,\-/*]+))?$/;
 
 export const cronExpressionSchema = z.string().min(5).max(100).regex(cronRegex, "Invalid cron expression");
 

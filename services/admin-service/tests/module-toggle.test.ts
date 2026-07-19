@@ -8,12 +8,26 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { adminModuleConfigs } from "../src/modules/config/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerConfigConsumers } from "../src/modules/config/consumer.js";
+
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly (not the `createQueue()`
+ * factory) does NOT auto-wrap subscribed handlers with `withTenantConsumer`,
+ * so consumer writes/reads run with no RLS GUC set. Mirror production's
+ * `createQueue()` decoration here (see admin.test.ts / estab-service tests).
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 const SECRET = process.env.JWT_SECRET as string;
 const ACTOR = "e0000000-0000-4000-8000-0000000000aa";
@@ -27,11 +41,15 @@ function token(roles: string[], tid: string): string {
 }
 const bearer = (roles: string[], tid: string) => ({ authorization: `Bearer ${token(roles, tid)}` });
 
+// Test-harness fix: bare db.delete() outside db.transaction() runs with no RLS
+// GUC set (wrapWithTenantGuc only injects app.tenant_id inside transactions).
 async function cleanup() {
-  await db.delete(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, MODULE_KEY)));
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
-  await db.delete(processed).where(eq(processed.messageId, MSG_1));
-  await db.delete(processed).where(eq(processed.messageId, MSG_2));
+  await runWithTenant(T1, () => db.transaction(async (tx) => {
+    await tx.delete(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, MODULE_KEY)));
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
+    await tx.delete(processed).where(eq(processed.messageId, MSG_1));
+    await tx.delete(processed).where(eq(processed.messageId, MSG_2));
+  }));
 }
 
 beforeAll(cleanup);
@@ -73,7 +91,7 @@ describe("POST /v1/admin/tenant/modules/:key/toggle — route authz (inject)", (
 
 describe("config consumer — module toggle (integration)", () => {
   it("upserts the module config + emits audit, and a second toggle flips it", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerConfigConsumers(q);
     await q.start();
     await q.publish("admin.module.toggle", {
@@ -83,11 +101,14 @@ describe("config consumer — module toggle (integration)", () => {
     });
     await new Promise((r) => setTimeout(r, 500));
 
-    let rows = await db.select().from(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, MODULE_KEY)));
+    let [rows, audit] = await runWithTenant(T1, () =>
+      db.transaction((tx) => Promise.all([
+        tx.select().from(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, MODULE_KEY))),
+        tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record"))),
+      ])),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.enabled).toBe(false);
-
-    const audit = await db.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record")));
     expect(audit.map((r) => (r.payload as { action?: string }).action)).toContain("module_toggle");
 
     await q.publish("admin.module.toggle", {
@@ -98,7 +119,8 @@ describe("config consumer — module toggle (integration)", () => {
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    rows = await db.select().from(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, MODULE_KEY)));
+    rows = await runWithTenant(T1, () =>
+      db.transaction((tx) => tx.select().from(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, MODULE_KEY)))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.enabled).toBe(true);
   });

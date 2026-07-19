@@ -1,5 +1,5 @@
 import { eq, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { adminBackupSchedules, adminBackupRuns, type AdminBackupRunInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -22,6 +22,6 @@ export async function insertRun(tx: Writer, row: AdminBackupRunInsert): Promise<
 }
 
 export async function listRuns(tenantId: string) {
-  return db.select().from(adminBackupRuns).where(eq(adminBackupRuns.tenantId, tenantId))
-    .orderBy(desc(adminBackupRuns.startedAt)).limit(50);
+  return scopedRead((tx) => tx.select().from(adminBackupRuns).where(eq(adminBackupRuns.tenantId, tenantId))
+    .orderBy(desc(adminBackupRuns.startedAt)).limit(50));
 }

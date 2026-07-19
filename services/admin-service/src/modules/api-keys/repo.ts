@@ -1,13 +1,13 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { adminApiKeys, type ApiKeyRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function listByTenant(tenantId: string, limit: number): Promise<ApiKeyRow[]> {
-  return db.select().from(adminApiKeys)
+  return scopedRead((tx) => tx.select().from(adminApiKeys)
     .where(eq(adminApiKeys.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertKey(tx: Writer, row: typeof adminApiKeys.$inferInsert): Promise<void> {
@@ -15,16 +15,16 @@ export async function insertKey(tx: Writer, row: typeof adminApiKeys.$inferInser
 }
 
 export async function findById(id: string, tenantId: string): Promise<ApiKeyRow | null> {
-  const rows = await db.select().from(adminApiKeys)
+  const rows = await scopedRead((tx) => tx.select().from(adminApiKeys)
     .where(and(eq(adminApiKeys.id, id), eq(adminApiKeys.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function revokeKey(id: string, tenantId: string, actorId: string): Promise<void> {
-  await db.update(adminApiKeys)
+  await db.transaction((tx) => tx.update(adminApiKeys)
     .set({ status: "revoked", updatedAt: new Date(), updatedBy: actorId })
-    .where(and(eq(adminApiKeys.id, id), eq(adminApiKeys.tenantId, tenantId)));
+    .where(and(eq(adminApiKeys.id, id), eq(adminApiKeys.tenantId, tenantId))));
 }
 
 // P1-5: rotate replaces the stored hash/prefix in place. The old secret stops

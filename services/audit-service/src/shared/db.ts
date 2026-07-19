@@ -4,6 +4,7 @@
  * Reviewed for correctness (schema wiring), not style, per this service's PR.
  * See packages/db/src/create-tenant-db.ts for the createTenantDb() contract.
  */
+import { sql } from "drizzle-orm";
 import { createTenantDb } from "@civitasone/db";
 import { eventsModuleSchema } from "../modules/events/schema.js";
 import { exportsModuleSchema } from "../modules/exports/schema.js";
@@ -29,3 +30,34 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * Run a genuinely cross-tenant SELECT (e.g. the compliance ageing sweep,
+ * which must find overdue pending-register rows across ALL tenants, not
+ * one) with the `app.platform_bypass` GUC set for the transaction, per the
+ * additional permissive SELECT-only RLS policy in migration
+ * 0021_platform_bypass_read_policy.sql.
+ *
+ * SECURITY: this must ONLY be called from trusted server-side code with no
+ * user-supplied input — never derived from a request header/param/JWT
+ * claim. It is SELECT-only by policy design: INSERT/UPDATE/DELETE on the
+ * underlying tables remain governed solely by the strict tenant-match
+ * policy, so this can never let a write skip tenant scoping.
+ *
+ * Root cause this exists for: the ageing sweep (compliance/jobs.ts) is a
+ * system-scheduled job with no per-request tenant context at all — a bare
+ * db.transaction() sets no GUC, so `tenant_id = current_tenant_id()` never
+ * matches (current_tenant_id() is NULL), and the sweep silently found zero
+ * candidate rows in every environment since it was introduced. Mirrors
+ * admin-service's scopedPlatformRead / migration 0011.
+ */
+export function scopedPlatformRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(
+      sql`SELECT set_config('app.platform_bypass', 'true', true)`,
+    );
+    return fn(tx);
+  }) as Promise<T>;
+}

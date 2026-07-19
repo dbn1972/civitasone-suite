@@ -15,8 +15,10 @@ export async function findByIdTx(tx: Writer, id: string, tenantId: string): Prom
 }
 
 export async function findByToken(tenantId: string, token: string): Promise<ExportRow | null> {
-  const rows = await db.select().from(auditExports)
-    .where(and(eq(auditExports.tenantId, tenantId), eq(auditExports.downloadToken, token))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditExports)
+    .where(and(eq(auditExports.tenantId, tenantId), eq(auditExports.downloadToken, token))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -48,8 +50,10 @@ export async function failExportVersioned(
 }
 
 export async function listExportsByTenant(tenantId: string, limit: number): Promise<ExportRow[]> {
-  return db.select().from(auditExports)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(auditExports)
     .where(eq(auditExports.tenantId, tenantId))
     .orderBy(desc(auditExports.createdAt))
-    .limit(limit);
+    .limit(limit));
 }

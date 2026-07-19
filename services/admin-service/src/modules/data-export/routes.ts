@@ -5,13 +5,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { cache } from "../../shared/infra.js";
 import * as commands from "./commands.js";
 import { exportRequests } from "./schema.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { eq, and, desc } from "drizzle-orm";
-
-const RESOURCE = "data_export";
 
 const createBody = z.object({
   type: z.enum(["full", "module", "entity"]),
@@ -39,7 +36,14 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
     if (body.type === "module" && !body.moduleFilter) {
       throw new HttpError(400, "MODULE_REQUIRED", "moduleFilter is required when type is 'module'");
     }
-    const result = await commands.exportRequest(ctx, body);
+    // exactOptionalPropertyTypes: only spread moduleFilter into the payload
+    // when it's actually provided, so we never assign `undefined` to a
+    // property typed as optional-string (never optional-string-or-undefined).
+    const result = await commands.exportRequest(ctx, {
+      type: body.type,
+      format: body.format,
+      ...(body.moduleFilter !== undefined ? { moduleFilter: body.moduleFilter } : {}),
+    });
     return reply.code(202).send(result);
   });
 
@@ -47,10 +51,13 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/data-export", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
-    const rows = await db.select().from(exportRequests)
+    // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
+    // app.tenant_id before this read — a bare db.select() under FORCE RLS
+    // returns zero rows with no GUC set.
+    const rows = await scopedRead((tx) => tx.select().from(exportRequests)
       .where(eq(exportRequests.tenantId, ctx.tenantId))
       .orderBy(desc(exportRequests.createdAt))
-      .limit(50);
+      .limit(50));
     return reply.send({ data: rows });
   });
 
@@ -59,9 +66,12 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
     const { id } = safeParse(idParam, req.params);
-    const rows = await db.select().from(exportRequests)
+    // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
+    // app.tenant_id before this read — a bare db.select() under FORCE RLS
+    // returns zero rows with no GUC set.
+    const rows = await scopedRead((tx) => tx.select().from(exportRequests)
       .where(and(eq(exportRequests.id, id), eq(exportRequests.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const row = rows[0];
     if (!row) throw new HttpError(404, "NOT_FOUND", "export request not found");
     if (row.status !== "ready") {

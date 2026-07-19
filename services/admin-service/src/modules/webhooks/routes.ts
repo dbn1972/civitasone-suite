@@ -8,7 +8,7 @@ import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../.
 import { cache } from "../../shared/infra.js";
 import * as commands from "./commands.js";
 import { webhooks, webhookDeliveries } from "./schema.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { eq, and, desc } from "drizzle-orm";
 
 const RESOURCE = "webhook";
@@ -42,6 +42,16 @@ function isPrivateIp(ip: string): boolean {
 function isBlockedUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
+    // Block every non-http(s) scheme unconditionally (file://, gopher://,
+    // ftp://, javascript:, data:, etc.). This was previously gated behind
+    // `NODE_ENV === "production"` only — zod's `.url()` accepts any scheme,
+    // so in dev/test/staging a webhook URL like `file:///etc/passwd` or
+    // `gopher://internal-host` passed validation untouched (its hostname is
+    // empty or arbitrary, so it never matched the private-IP checks below
+    // either). There is no legitimate use case for a non-http(s) webhook
+    // target in any environment, so this check no longer depends on
+    // NODE_ENV.
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true;
     const host = parsed.hostname.toLowerCase();
     // Block explicit loopback
     if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]") return true;
@@ -51,7 +61,7 @@ function isBlockedUrl(url: string): boolean {
     if (host === "169.254.169.254" || host === "metadata.google.internal") return true;
     // Block private IPv4 ranges (string-based first check)
     if (isPrivateIp(host)) return true;
-    // Block non-https in production (optional hardening)
+    // Additionally require https specifically (not just http) in production.
     if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") return true;
     return false;
   } catch {
@@ -106,7 +116,10 @@ const updateBody = z.object({
 
 const idParam = z.object({ id: z.string().uuid() });
 
-function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
+// See custom-domains/routes.ts safeParse for why Input is widened to `any`
+// instead of using z.ZodSchema<T> (Input=T): schemas with `.default(...)`
+// fields need T inferred from the parsed *output*, not the optional *input*.
+function safeParse<T>(schema: z.ZodType<T, z.ZodTypeDef, any>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {
     const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -120,10 +133,13 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/webhooks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
-    const rows = await cache.getOrLoad(
+    const rows = (await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, "list"),
-      async () => db.select().from(webhooks).where(eq(webhooks.tenantId, ctx.tenantId)),
-    );
+      // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
+      // app.tenant_id before this read — a bare db.select() under FORCE RLS
+      // returns zero rows with no GUC set.
+      async () => scopedRead((tx) => tx.select().from(webhooks).where(eq(webhooks.tenantId, ctx.tenantId))),
+    )) ?? [];
     // Strip secret from list response
     const sanitized = rows.map(({ secret, ...rest }) => ({ ...rest, secretMasked: `${secret.slice(0, 10)}...` }));
     return reply.send({ data: sanitized });
@@ -138,7 +154,12 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     if (await isBlockedAfterResolve(body.url)) {
       throw new HttpError(422, "SSRF_BLOCKED", "URL resolves to a private/loopback/link-local address");
     }
-    const result = await commands.webhookCreate(ctx, body);
+    // exactOptionalPropertyTypes: only include description when provided.
+    const result = await commands.webhookCreate(ctx, {
+      url: body.url,
+      events: body.events,
+      ...(body.description !== undefined ? { description: body.description } : {}),
+    });
     // Return secret only on creation (one-time)
     return reply.code(202).send(result);
   });
@@ -152,7 +173,25 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     if (Object.keys(body).length === 0) {
       throw new HttpError(400, "EMPTY_BODY", "at least one field must be provided");
     }
-    const result = await commands.webhookUpdate(ctx, id, body);
+    // SSRF FIX: the create route re-checks the URL with DNS resolution
+    // (isBlockedAfterResolve, which defeats rebinding — a hostname that
+    // resolves to a public IP at registration time but a private/metadata
+    // IP later) via `isBlockedAfterResolve`. This update route previously
+    // only ran the synchronous, string-based `isBlockedUrl` (via the zod
+    // `.refine()` on `updateBody`), never the DNS-resolution check — so an
+    // attacker could register a webhook with a benign public URL, then
+    // PUT-update it to a hostname whose DNS resolves to
+    // 169.254.169.254/private ranges, bypassing rebinding protection
+    // entirely on the update path. Re-check here whenever `url` changes.
+    if (body.url !== undefined && (await isBlockedAfterResolve(body.url))) {
+      throw new HttpError(422, "SSRF_BLOCKED", "URL resolves to a private/loopback/link-local address");
+    }
+    // exactOptionalPropertyTypes: strip undefined keys so the payload only
+    // ever carries defined values for WebhookUpdatePayload's optional fields.
+    const patch = Object.fromEntries(
+      Object.entries(body).filter(([, v]) => v !== undefined),
+    ) as commands.WebhookUpdatePayload;
+    const result = await commands.webhookUpdate(ctx, id, patch);
     return reply.code(202).send(result);
   });
 
@@ -170,15 +209,17 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
     const { id } = safeParse(idParam, req.params);
-    // Verify ownership
-    const wh = await db.select().from(webhooks)
+    // Verify ownership. Wrapped in scopedRead() (db.transaction) so
+    // wrapWithTenantGuc injects app.tenant_id before these reads — a bare
+    // db.select() under FORCE RLS returns zero rows with no GUC set.
+    const wh = await scopedRead((tx) => tx.select().from(webhooks)
       .where(and(eq(webhooks.id, id), eq(webhooks.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     if (!wh[0]) throw new HttpError(404, "NOT_FOUND", "webhook not found");
-    const deliveries = await db.select().from(webhookDeliveries)
+    const deliveries = await scopedRead((tx) => tx.select().from(webhookDeliveries)
       .where(eq(webhookDeliveries.webhookId, id))
       .orderBy(desc(webhookDeliveries.createdAt))
-      .limit(100);
+      .limit(100));
     return reply.send({ data: deliveries });
   });
 

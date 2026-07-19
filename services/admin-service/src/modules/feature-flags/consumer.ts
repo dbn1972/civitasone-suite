@@ -21,7 +21,7 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
   queue.subscribe<{
     id: string; tenantId: string; key: string; name: string;
     description: string; enabled: boolean; rolloutPercent: number; targetSegments: string[];
-  }>(COMMANDS.featureFlagCreate, async (msg) => {
+  }>(COMMANDS.featureFlagManageCreate, async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;

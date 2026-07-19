@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import { registerDomainBody, domainIdParam } from "./validators.js";
 import { customDomains } from "./schema.js";
@@ -15,7 +15,14 @@ import { eq, and } from "drizzle-orm";
 const ADMIN_ROLES = ["platform_admin", "super_admin"];
 const RESOURCE = "custom_domain";
 
-function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
+// `z.ZodType<T, z.ZodTypeDef, any>` (Input=any) instead of `z.ZodSchema<T>`
+// (Input defaults to Output=T): for a schema with `.default(...)` fields the
+// *input* type has that field optional while the *output* type has it
+// required. Constraining T via ZodSchema<T> forces TS to satisfy both the
+// input and output positions, so it infers T as the (wrong, still-optional)
+// input shape. Setting Input=any drops that constraint so T is inferred from
+// the parsed *output* type only — which is what safeParse actually returns.
+function safeParse<T>(schema: z.ZodType<T, z.ZodTypeDef, any>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {
     const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -31,9 +38,12 @@ export async function customDomainRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const rows = await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, "list"),
-      async () => db.select().from(customDomains).where(eq(customDomains.tenantId, ctx.tenantId)),
+      // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
+      // app.tenant_id before this read — a bare db.select() under FORCE RLS
+      // returns zero rows with no GUC set.
+      async () => scopedRead((tx) => tx.select().from(customDomains).where(eq(customDomains.tenantId, ctx.tenantId))),
     );
-    return reply.send({ data: rows });
+    return reply.send({ data: rows ?? [] });
   });
 
   // REGISTER domain
@@ -68,9 +78,12 @@ export async function customDomainRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(domainIdParam, req.params);
-    const row = await db.select().from(customDomains)
+    // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
+    // app.tenant_id before this read — a bare db.select() under FORCE RLS
+    // returns zero rows with no GUC set.
+    const row = await scopedRead((tx) => tx.select().from(customDomains)
       .where(and(eq(customDomains.id, id), eq(customDomains.tenantId, ctx.tenantId)))
-      .then((rows) => rows[0]);
+      .then((rows) => rows[0]));
     if (!row) throw new HttpError(404, "NOT_FOUND", "domain not found");
 
     const instructions = row.verificationMethod === "dns_txt"

@@ -9,6 +9,14 @@ export async function getPlan(id: string, tenantId: string): Promise<PlanRow | n
   );
 }
 
+export async function listPlans(tenantId: string, limit: number): Promise<PlanRow[]> {
+  const rows = await cache.getOrLoad<PlanRow[]>(
+    cache.makeKey(tenantId, "plan", `list:${limit}`),
+    () => repo.listPlansByTenant(tenantId, limit),
+  );
+  return rows ?? [];
+}
+
 export async function listPlanItems(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "audit_plan", `list:${limit}`),

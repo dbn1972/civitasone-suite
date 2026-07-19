@@ -5,7 +5,9 @@ import { auditPlans, auditPlanItems, type PlanRow, type PlanInsert } from "./sch
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findPlanById(id: string, tenantId: string): Promise<PlanRow | null> {
-  const rows = await db.select().from(auditPlans).where(and(eq(auditPlans.id, id), eq(auditPlans.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditPlans).where(and(eq(auditPlans.id, id), eq(auditPlans.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -32,5 +34,19 @@ export async function insertPlanItem(tx: Writer, row: typeof auditPlanItems.$inf
 }
 
 export async function listPlanItemsByTenant(tenantId: string, limit: number) {
-  return db.select().from(auditPlanItems).where(eq(auditPlanItems.tenantId, tenantId)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(auditPlanItems).where(eq(auditPlanItems.tenantId, tenantId)).limit(limit));
+}
+
+/**
+ * List top-level audit plans (auditPlans, NOT the per-department auditPlanItems
+ * sub-resource returned by listPlanItemsByTenant). Added alongside GET
+ * /v1/audit/plans — previously only "get one plan by id" (findPlanById) and
+ * the plan-ITEMS list existed; there was no list route for plans themselves.
+ */
+export async function listPlansByTenant(tenantId: string, limit: number): Promise<PlanRow[]> {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(auditPlans).where(eq(auditPlans.tenantId, tenantId)).limit(limit));
 }

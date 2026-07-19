@@ -28,9 +28,9 @@ export interface FlagUpdatePayload {
 
 export async function flagCreate(ctx: RequestContext, payload: FlagCreatePayload): Promise<Accepted> {
   const id = randomUUID();
-  await queue.publish(COMMANDS.featureFlagCreate, {
+  await queue.publish(COMMANDS.featureFlagManageCreate, {
     messageId: id,
-    type: COMMANDS.featureFlagCreate,
+    type: COMMANDS.featureFlagManageCreate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,

@@ -4,6 +4,7 @@
  * Reviewed for correctness (schema wiring), not style, per this service's PR.
  * See packages/db/src/create-tenant-db.ts for the createTenantDb() contract.
  */
+import { sql } from "drizzle-orm";
 import { createTenantDb } from "@civitasone/db";
 import { schema as tenantsModule } from "../modules/tenants/schema.js";
 import { schema as configModule } from "../modules/config/schema.js";
@@ -11,8 +12,19 @@ import { schema as healthModule } from "../modules/health/schema.js";
 import { schema as backupModule } from "../modules/backup/schema.js";
 import { schema as supportModule } from "../modules/support/schema.js";
 import { schema as apiKeysModule } from "../modules/api-keys/schema.js";
+import { schema as customDomainsModule } from "../modules/custom-domains/schema.js";
+import { schema as webhooksModule } from "../modules/webhooks/schema.js";
+import { schema as dataExportModule } from "../modules/data-export/schema.js";
+import { schema as scheduledJobsModule } from "../modules/scheduled-jobs/schema.js";
+import { schema as featureFlagsModule } from "../modules/feature-flags/schema.js";
 import { outboxSchema } from "./outbox.js";
 
+// NOTE (Phase 4 coverage-gap closure): custom-domains, webhooks, data-export,
+// scheduled-jobs, and feature-flags were previously missing from this SCHEMA
+// map entirely — their tables were never created by any migration either
+// (see migration 0012), so every read/write in those five modules threw
+// `relation "X.Y" does not exist` against a real database. Registering the
+// Drizzle schema here does not itself create tables; migration 0012 does.
 const SCHEMA = {
   ...tenantsModule,
   ...configModule,
@@ -20,6 +32,11 @@ const SCHEMA = {
   ...backupModule,
   ...supportModule,
   ...apiKeysModule,
+  ...customDomainsModule,
+  ...webhooksModule,
+  ...dataExportModule,
+  ...scheduledJobsModule,
+  ...featureFlagsModule,
   ...outboxSchema,
 };
 
@@ -27,3 +44,48 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain `db.select()` runs on a pooled connection with no
+ * `app.tenant_id` GUC set, so under a NOBYPASSRLS role the fail-closed policy
+ * returns ZERO rows. Wrapping the read in `db.transaction` makes createTenantDb's
+ * `wrapWithTenantGuc`-wrapped `db` set the GUC from AsyncLocalStorage — reads
+ * are then correctly tenant-scoped by RLS, not merely by an app-layer WHERE.
+ * Mirrors hrms-service / payroll-service / workflow-service.
+ */
+type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
+}
+
+/**
+ * Run a genuinely cross-tenant READ (e.g. super_admin "list every tenant",
+ * platform-wide break-glass review, or the break-glass TTL sweeper) with the
+ * `app.platform_bypass` GUC set for the transaction, per the additional
+ * permissive SELECT-only RLS policy added in migration 0011.
+ *
+ * SECURITY: this must ONLY ever be called from server-side code that has
+ * ALREADY authorized the caller at the application layer (requireSuperAdmin(),
+ * or a trusted internal job with no user-supplied input at all) — the bypass
+ * flag is never derived from a request header, query param, or JWT claim, so
+ * a client can never set it. It is SELECT-only by policy design (see the
+ * migration's comment): the underlying tables' INSERT/UPDATE/DELETE policies
+ * are unaffected, so setting this GUC can never let a write skip tenant
+ * scoping even if a caller forgets to also pass an explicit tenantId to a
+ * write path.
+ *
+ * Root cause this exists for: a per-request RLS GUC is always set from the
+ * CALLER's own JWT tenant (see app.ts's onRequest hook), which is correct for
+ * every tenant-scoped route but silently wrong for the small number of routes
+ * that are deliberately platform-wide — those need this explicit escape
+ * hatch instead of `scopedRead`/`runWithTenant`.
+ */
+export function scopedPlatformRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(
+      sql`SELECT set_config('app.platform_bypass', 'true', true)`,
+    );
+    return fn(tx);
+  }) as Promise<T>;
+}

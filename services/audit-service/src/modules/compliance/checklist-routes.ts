@@ -54,7 +54,13 @@ export async function checklistRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    const created = await repo.findChecklistByIdTx(db, id, ctx.tenantId);
+    // Bug found via test coverage work: findChecklistByIdTx was called with
+    // the bare `db` export (not a transaction), so wrapWithTenantGuc never
+    // injected app.tenant_id before this read — under FORCE RLS it silently
+    // returned zero rows (null) right after a successful insert, so every
+    // POST response body had `data: null` despite the row existing. Wrap in
+    // db.transaction() so the RLS GUC is set for this read too.
+    const created = await db.transaction((tx) => repo.findChecklistByIdTx(tx, id, ctx.tenantId));
     return reply.code(201).send({ data: created ? toDto(created) : null });
   });
 

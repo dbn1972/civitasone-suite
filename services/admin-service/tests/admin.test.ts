@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { adminTenants } from "../src/modules/tenants/schema.js";
 import { adminBreakGlassLog } from "../src/modules/support/schema.js";
@@ -13,6 +14,23 @@ import { resolveFeatureFlag } from "../src/modules/config/domain.js";
 import { aggregateHealth } from "../src/modules/health/domain.js";
 import { redactLogLine } from "../src/modules/health/operations.js";
 import { breakGlassExpiresAt, BREAK_GLASS_TTL_MS } from "../src/modules/support/domain.js";
+
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly here (not the
+ * `createQueue()` factory) does NOT auto-wrap subscribed handlers with
+ * `withTenantConsumer`. Production wiring (queue-service's `createQueue()`)
+ * decorates `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`, which is what lets `db.transaction()`
+ * pick up the tenant GUC. Without this wrapping, consumer writes/reads in
+ * these tests run with no RLS GUC set. Mirror that decoration here (same
+ * pattern as estab-service's test suite).
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 const ACTOR = "00000000-aaaa-4000-8000-000000000001";
 const T1_ID = "11111111-aaaa-4000-8000-000000000001";
@@ -28,10 +46,17 @@ function token(roles: string[], tid: string): string {
 }
 const bearer = (roles: string[], tid: string) => ({ authorization: `Bearer ${token(roles, tid)}` });
 
+// Test-harness fix: bare db.delete() outside db.transaction() runs with no RLS
+// GUC set (wrapWithTenantGuc only injects app.tenant_id inside transactions).
+// Wrap cleanup in runWithTenant(T1_ID, () => db.transaction(...)).
 async function wipeTenant() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
-  await db.delete(adminTenants).where(eq(adminTenants.id, T1_ID));
-  await db.delete(processed).where(eq(processed.messageId, MSG_1));
+  await runWithTenant(T1_ID, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+      await tx.delete(adminTenants).where(eq(adminTenants.id, T1_ID));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_1));
+    }),
+  );
 }
 
 describe("config domain — feature flag resolution (pure)", () => {
@@ -78,7 +103,7 @@ describe("tenant consumer — CQRS (integration)", () => {
   afterAll(async () => { await wipeTenant(); });
 
   it("admin.tenant.create writes admin_tenants + outbox", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenantConsumers(q);
     await q.start();
     await q.publish("admin.tenant.create", {
@@ -92,11 +117,14 @@ describe("tenant consumer — CQRS (integration)", () => {
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(adminTenants).where(eq(adminTenants.id, T1_ID));
+    const [rows, outbox] = await runWithTenant(T1_ID, () =>
+      db.transaction((tx) => Promise.all([
+        tx.select().from(adminTenants).where(eq(adminTenants.id, T1_ID)),
+        tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID)),
+      ])),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.edition).toBe("psu");
-
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
     expect(outbox.map((r) => r.eventType)).toContain("admin.tenant.created");
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
   });
@@ -188,10 +216,13 @@ describe("admin-service authz wall — super_admin happy-path per route (inject)
 
   afterAll(async () => {
     // clean up tenants / break-glass / outbox created by the happy-path POSTs
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, someTenant));
+    await runWithTenant(someTenant, () =>
+      db.transaction((tx) => tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, someTenant))));
     for (const id of createdTenantIds) {
-      await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, id));
-      await db.delete(adminTenants).where(eq(adminTenants.id, id));
+      await runWithTenant(id, () => db.transaction(async (tx) => {
+        await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, id));
+        await tx.delete(adminTenants).where(eq(adminTenants.id, id));
+      }));
     }
   });
 });
@@ -203,16 +234,21 @@ describe("admin-service cross-tenant isolation — api-keys read (inject)", () =
   const K2 = "55555555-aaaa-4000-8000-000000000052";
 
   beforeAll(async () => {
-    await db.delete(adminApiKeys).where(eq(adminApiKeys.id, K1));
-    await db.delete(adminApiKeys).where(eq(adminApiKeys.id, K2));
-    await db.insert(adminApiKeys).values([
+    // Seed rows for two different tenants — each insert/delete must run under
+    // its own tenant's GUC, since FORCE RLS's WITH CHECK would reject a row
+    // whose tenant_id doesn't match the active app.tenant_id.
+    await runWithTenant(T1_ID, () => db.transaction((tx) => tx.delete(adminApiKeys).where(eq(adminApiKeys.id, K1))));
+    await runWithTenant(T2_ID, () => db.transaction((tx) => tx.delete(adminApiKeys).where(eq(adminApiKeys.id, K2))));
+    await runWithTenant(T1_ID, () => db.transaction((tx) => tx.insert(adminApiKeys).values(
       { id: K1, tenantId: T1_ID, keyName: "t1 key", keyPrefix: "civ_t1aaaa", keyHash: "h1", scopes: [], createdBy: ACTOR, updatedBy: ACTOR },
+    )));
+    await runWithTenant(T2_ID, () => db.transaction((tx) => tx.insert(adminApiKeys).values(
       { id: K2, tenantId: T2_ID, keyName: "t2 key", keyPrefix: "civ_t2aaaa", keyHash: "h2", scopes: [], createdBy: ACTOR, updatedBy: ACTOR },
-    ]);
+    )));
   });
   afterAll(async () => {
-    await db.delete(adminApiKeys).where(eq(adminApiKeys.id, K1));
-    await db.delete(adminApiKeys).where(eq(adminApiKeys.id, K2));
+    await runWithTenant(T1_ID, () => db.transaction((tx) => tx.delete(adminApiKeys).where(eq(adminApiKeys.id, K1))));
+    await runWithTenant(T2_ID, () => db.transaction((tx) => tx.delete(adminApiKeys).where(eq(adminApiKeys.id, K2))));
   });
 
   it("tenant_admin@T1 lists only T1 keys (never T2, never the hash)", async () => {
@@ -245,8 +281,10 @@ describe("admin-service cross-tenant isolation — api-keys read (inject)", () =
 // P1-5: scope-escalation guard.
 describe("admin-service api-keys — scope escalation rejected (inject)", () => {
   afterAll(async () => {
-    await db.delete(adminApiKeys).where(eq(adminApiKeys.tenantId, T1_ID));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+    await runWithTenant(T1_ID, () => db.transaction(async (tx) => {
+      await tx.delete(adminApiKeys).where(eq(adminApiKeys.tenantId, T1_ID));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+    }));
   });
 
   it("tenant_admin requesting a platform scope → 403", async () => {
@@ -279,16 +317,20 @@ describe("admin-service api-keys — scope escalation rejected (inject)", () => 
 
 describe("break-glass consumer — audit emission (integration)", () => {
   beforeAll(async () => {
-    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_ID));
-    await db.delete(processed).where(eq(processed.messageId, BG_ID));
+    await runWithTenant(T1_ID, () => db.transaction(async (tx) => {
+      await tx.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_ID));
+      await tx.delete(processed).where(eq(processed.messageId, BG_ID));
+    }));
   });
   afterAll(async () => {
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
-    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_ID));
+    await runWithTenant(T1_ID, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+      await tx.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_ID));
+    }));
   });
 
   it("open emits audit.event.record + opened (with expiresAt)", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerSupportConsumers(q);
     await q.start();
     await q.publish("admin.breakglass.open", {
@@ -299,11 +341,14 @@ describe("break-glass consumer — audit emission (integration)", () => {
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_ID));
+    const [rows, outbox] = await runWithTenant(T1_ID, () =>
+      db.transaction((tx) => Promise.all([
+        tx.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_ID)),
+        tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID)),
+      ])),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.ticketId).toBe(TICKET);
-
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
     const opened = outbox.find((r) => r.eventType === "admin.breakglass.opened");
     expect(opened).toBeDefined();
@@ -314,37 +359,49 @@ describe("break-glass consumer — audit emission (integration)", () => {
 // P1-2: TTL sweeper auto-closes an expired, still-open grant.
 describe("break-glass TTL sweeper (integration)", () => {
   beforeAll(async () => {
-    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T2_ID));
     const opened = new Date(Date.now() - 3 * 60 * 60 * 1000); // 3h ago
     const expires = breakGlassExpiresAt(opened);                // -> 1h ago
-    await db.insert(adminBreakGlassLog).values({
-      id: BG_EXP, tenantId: T2_ID, ticketId: TICKET, actorId: ACTOR,
-      reason: "expired grant for sweep test", openedAt: opened, expiresAt: expires,
-      correlationId: "corr-bg-exp", createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(T2_ID, () => db.transaction(async (tx) => {
+      await tx.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T2_ID));
+      await tx.insert(adminBreakGlassLog).values({
+        id: BG_EXP, tenantId: T2_ID, ticketId: TICKET, actorId: ACTOR,
+        reason: "expired grant for sweep test", openedAt: opened, expiresAt: expires,
+        correlationId: "corr-bg-exp", createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
   afterAll(async () => {
-    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T2_ID));
+    await runWithTenant(T2_ID, () => db.transaction(async (tx) => {
+      await tx.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T2_ID));
+    }));
   });
 
   it("sweep closes the expired grant and emits breakGlassClosed", async () => {
-    const before = await db.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
+    const before = await runWithTenant(T2_ID, () =>
+      db.transaction((tx) => tx.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP))));
     expect(before[0]?.closedAt).toBeNull();
 
+    // sweepExpiredBreakGlass is a genuinely cross-tenant sweeper (it must find
+    // expired grants across ALL tenants, not just one) — it is expected to run
+    // its own internal tenant-scoping, not be wrapped in a single runWithTenant
+    // here. See support/consumer.ts for how it scopes its own DB access.
     const swept = await sweepExpiredBreakGlass(new Date());
     expect(swept).toBeGreaterThanOrEqual(1);
 
-    const after = await db.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
+    const after = await runWithTenant(T2_ID, () =>
+      db.transaction((tx) => tx.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP))));
     expect(after[0]?.closedAt).not.toBeNull();
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T2_ID));
+    const outbox = await runWithTenant(T2_ID, () =>
+      db.transaction((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T2_ID))));
     expect(outbox.map((r) => r.eventType)).toContain("admin.breakglass.closed");
 
     // re-running the sweep is a no-op (grant already closed)
     const sweptAgain = await sweepExpiredBreakGlass(new Date());
-    const stillThere = await db.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP));
+    const stillThere = await runWithTenant(T2_ID, () =>
+      db.transaction((tx) => tx.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_EXP))));
     expect(stillThere[0]?.closedAt).not.toBeNull();
     expect(sweptAgain).toBe(0);
   });
@@ -372,19 +429,23 @@ function tenantSeed(id: string, status: string) {
 describe("tenant edition change — consumer apply + idempotency (integration)", () => {
   const MSG = "eeee0001-1111-4000-8000-000000000001";
   beforeAll(async () => {
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
-    await db.delete(adminTenants).where(eq(adminTenants.id, T_ED));
-    await db.delete(processed).where(eq(processed.messageId, MSG));
-    await db.insert(adminTenants).values(tenantSeed(T_ED, "active"));
+    await runWithTenant(T_ED, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
+      await tx.delete(adminTenants).where(eq(adminTenants.id, T_ED));
+      await tx.delete(processed).where(eq(processed.messageId, MSG));
+      await tx.insert(adminTenants).values(tenantSeed(T_ED, "active"));
+    }));
   });
   afterAll(async () => {
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
-    await db.delete(adminTenants).where(eq(adminTenants.id, T_ED));
-    await db.delete(processed).where(eq(processed.messageId, MSG));
+    await runWithTenant(T_ED, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
+      await tx.delete(adminTenants).where(eq(adminTenants.id, T_ED));
+      await tx.delete(processed).where(eq(processed.messageId, MSG));
+    }));
   });
 
   it("edition_change applies, bumps version, and a re-delivery (same messageId) is a no-op", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenantConsumers(q);
     await q.start();
     const env = {
@@ -397,11 +458,14 @@ describe("tenant edition change — consumer apply + idempotency (integration)",
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(adminTenants).where(eq(adminTenants.id, T_ED));
+    const [rows, audits] = await runWithTenant(T_ED, () =>
+      db.transaction((tx) => Promise.all([
+        tx.select().from(adminTenants).where(eq(adminTenants.id, T_ED)),
+        tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T_ED)),
+      ])),
+    );
     expect(rows[0]?.edition).toBe("govt_dept");
     expect(rows[0]?.version).toBe(2); // bumped exactly once despite two deliveries
-
-    const audits = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
     expect(audits.filter((r) => r.eventType === "audit.event.record")).toHaveLength(1);
   });
 });
@@ -411,21 +475,25 @@ describe("tenant suspend/reactivate — state guard + idempotency (integration)"
   const MSG_SUS = "eeee0002-1111-4000-8000-000000000002";
   const MSG_REACT = "eeee0003-1111-4000-8000-000000000003";
   beforeAll(async () => {
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
-    await db.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
-    await db.delete(processed).where(eq(processed.messageId, MSG_SUS));
-    await db.delete(processed).where(eq(processed.messageId, MSG_REACT));
-    await db.insert(adminTenants).values(tenantSeed(T_SUS, "active"));
+    await runWithTenant(T_SUS, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
+      await tx.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_SUS));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_REACT));
+      await tx.insert(adminTenants).values(tenantSeed(T_SUS, "active"));
+    }));
   });
   afterAll(async () => {
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
-    await db.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
-    await db.delete(processed).where(eq(processed.messageId, MSG_SUS));
-    await db.delete(processed).where(eq(processed.messageId, MSG_REACT));
+    await runWithTenant(T_SUS, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
+      await tx.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_SUS));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_REACT));
+    }));
   });
 
   it("active → suspended → active; duplicate suspend is a no-op", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenantConsumers(q);
     await q.start();
 
@@ -438,7 +506,8 @@ describe("tenant suspend/reactivate — state guard + idempotency (integration)"
     await q.publish(COMMANDS.tenantSuspend, susEnv); // duplicate
     await new Promise((r) => setTimeout(r, 400));
 
-    let rows = await db.select().from(adminTenants).where(eq(adminTenants.id, T_SUS));
+    let rows = await runWithTenant(T_SUS, () =>
+      db.transaction((tx) => tx.select().from(adminTenants).where(eq(adminTenants.id, T_SUS))));
     expect(rows[0]?.status).toBe("suspended");
     expect(rows[0]?.version).toBe(2);
 
@@ -450,7 +519,8 @@ describe("tenant suspend/reactivate — state guard + idempotency (integration)"
     await new Promise((r) => setTimeout(r, 400));
     await q.stop();
 
-    rows = await db.select().from(adminTenants).where(eq(adminTenants.id, T_SUS));
+    rows = await runWithTenant(T_SUS, () =>
+      db.transaction((tx) => tx.select().from(adminTenants).where(eq(adminTenants.id, T_SUS))));
     expect(rows[0]?.status).toBe("active");
     expect(rows[0]?.version).toBe(3);
   });
@@ -463,20 +533,24 @@ describe("config feature-flag create — idempotent insert (integration)", () =>
   const MSG_A = "ffff0001-1111-4000-8000-000000000001";
   const MSG_B = "ffff0002-1111-4000-8000-000000000002";
   beforeAll(async () => {
-    await db.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
-    await db.delete(processed).where(eq(processed.messageId, MSG_A));
-    await db.delete(processed).where(eq(processed.messageId, MSG_B));
+    await runWithTenant(PLATFORM, () => db.transaction(async (tx) => {
+      await tx.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_A));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_B));
+    }));
   });
   afterAll(async () => {
-    await db.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
-    await db.delete(processed).where(eq(processed.messageId, MSG_A));
-    await db.delete(processed).where(eq(processed.messageId, MSG_B));
+    await runWithTenant(PLATFORM, () => db.transaction(async (tx) => {
+      await tx.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_A));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_B));
+    }));
   });
 
   it("re-creating an existing flag (distinct messageId) is a clean no-op, not a poison message", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerConfigConsumers(q);
     await q.start();
     const mk = (mid: string) => ({
@@ -491,11 +565,15 @@ describe("config feature-flag create — idempotent insert (integration)", () =>
     await new Promise((r) => setTimeout(r, 300));
     await q.stop();
 
-    const rows = await db.select().from(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
+    const [rows, seenA, seenB] = await runWithTenant(PLATFORM, () =>
+      db.transaction((tx) => Promise.all([
+        tx.select().from(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG)),
+        tx.select().from(processed).where(eq(processed.messageId, MSG_A)),
+        tx.select().from(processed).where(eq(processed.messageId, MSG_B)),
+      ])),
+    );
     expect(rows).toHaveLength(1); // exactly one flag, no duplicate, no crash
     // both commands were processed (neither dead-lettered)
-    const seenA = await db.select().from(processed).where(eq(processed.messageId, MSG_A));
-    const seenB = await db.select().from(processed).where(eq(processed.messageId, MSG_B));
     expect(seenA).toHaveLength(1);
     expect(seenB).toHaveLength(1);
   });
@@ -508,20 +586,24 @@ describe("break-glass — one open grant per tenant (integration)", () => {
   const TICKET_A = "abcd0003-3333-4000-8000-000000000003";
   const TICKET_B = "abcd0004-3333-4000-8000-000000000004";
   beforeAll(async () => {
-    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_BG));
-    await db.delete(processed).where(eq(processed.messageId, BG_A));
-    await db.delete(processed).where(eq(processed.messageId, BG_B));
+    await runWithTenant(T_BG, () => db.transaction(async (tx) => {
+      await tx.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_BG));
+      await tx.delete(processed).where(eq(processed.messageId, BG_A));
+      await tx.delete(processed).where(eq(processed.messageId, BG_B));
+    }));
   });
   afterAll(async () => {
-    await db.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_BG));
-    await db.delete(processed).where(eq(processed.messageId, BG_A));
-    await db.delete(processed).where(eq(processed.messageId, BG_B));
+    await runWithTenant(T_BG, () => db.transaction(async (tx) => {
+      await tx.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_BG));
+      await tx.delete(processed).where(eq(processed.messageId, BG_A));
+      await tx.delete(processed).where(eq(processed.messageId, BG_B));
+    }));
   });
 
   it("a second open (distinct ticket) does not create a second concurrent grant", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerSupportConsumers(q);
     await q.start();
     await q.publish(COMMANDS.breakGlassOpen, {
@@ -538,7 +620,8 @@ describe("break-glass — one open grant per tenant (integration)", () => {
     await new Promise((r) => setTimeout(r, 300));
     await q.stop();
 
-    const open = await db.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG));
+    const open = await runWithTenant(T_BG, () =>
+      db.transaction((tx) => tx.select().from(adminBreakGlassLog).where(eq(adminBreakGlassLog.tenantId, T_BG))));
     const stillOpen = open.filter((r) => r.closedAt === null);
     expect(stillOpen).toHaveLength(1); // exactly one open grant
     expect(stillOpen[0]?.id).toBe(BG_A); // the first one won
@@ -548,8 +631,10 @@ describe("break-glass — one open grant per tenant (integration)", () => {
 // api-key rotate / revoke lifecycle via HTTP.
 describe("admin-service api-keys — rotate/revoke lifecycle (inject)", () => {
   afterAll(async () => {
-    await db.delete(adminApiKeys).where(eq(adminApiKeys.tenantId, T1_ID));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+    await runWithTenant(T1_ID, () => db.transaction(async (tx) => {
+      await tx.delete(adminApiKeys).where(eq(adminApiKeys.tenantId, T1_ID));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1_ID));
+    }));
   });
 
   it("issue → rotate (new prefix, old secret void) → revoke → rotate-after-revoke 409", async () => {

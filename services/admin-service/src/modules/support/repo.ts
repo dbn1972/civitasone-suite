@@ -1,5 +1,5 @@
 import { and, eq, isNull, lte } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead, scopedPlatformRead } from "../../shared/db.js";
 import { adminBreakGlassLog, type AdminBreakGlassLogInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -40,20 +40,51 @@ export async function closeBreakGlass(
   return rows[0];
 }
 
-// P1-2: TTL sweeper -- grants whose expiresAt has passed and that are still open.
+// P1-2: TTL sweeper -- grants whose expiresAt has passed and that are still
+// open, scoped to ONE tenant. Used by the per-tenant sweeper loop (see
+// findExpiredOpenTenantIds + consumer.ts's sweepExpiredBreakGlass): the caller
+// must already be running inside runWithTenant(tenantId, ...) for this to see
+// that tenant's rows under strict RLS.
 export async function findExpiredOpen(tx: Writer, now: Date, limit = 100): Promise<BreakGlassRow[]> {
   return tx.select().from(adminBreakGlassLog)
     .where(and(isNull(adminBreakGlassLog.closedAt), lte(adminBreakGlassLog.expiresAt, now)))
     .limit(limit);
 }
 
+// P1-2: sweeper step 1 — find the DISTINCT tenant ids that have at least one
+// still-open, expired grant, across ALL tenants. This is the one genuinely
+// cross-tenant read the sweeper needs (it has no single tenant of its own —
+// it's a bare setInterval job, not tied to a request or a queue message), so
+// it uses scopedPlatformRead() (migration 0011's app.platform_bypass SELECT
+// policy). It returns only tenant ids, never row content, keeping the
+// bypassed read's blast radius minimal; step 2 (closing each grant) then runs
+// per-tenant under that tenant's own strict-RLS GUC via runWithTenant.
+export async function findExpiredOpenTenantIds(now: Date, limit = 500): Promise<string[]> {
+  const rows = await scopedPlatformRead((tx) => tx
+    .selectDistinct({ tenantId: adminBreakGlassLog.tenantId })
+    .from(adminBreakGlassLog)
+    .where(and(isNull(adminBreakGlassLog.closedAt), lte(adminBreakGlassLog.expiresAt, now)))
+    .limit(limit));
+  return rows.map((r) => r.tenantId);
+}
+
 // P1-3: break-glass review is a platform tool. When a target tenantId is given
 // (super_admin only) the listing is scoped to that tenant; when omitted it is
 // platform-wide, instead of being silently pinned to the caller's own ctx.tenantId.
+// Platform-wide review tool (super_admin only, see routes.ts) when tenantId is
+// omitted; scoped to a specific tenant when given. The caller's per-request
+// RLS GUC is always the CALLER's own JWT tenant (see app.ts's onRequest
+// hook), which is fine for the scoped case but would silently filter the
+// platform-wide case down to just the caller's tenant — so the unscoped
+// listing uses scopedPlatformRead() (migration 0011's app.platform_bypass
+// SELECT policy) instead of scopedRead(). The tenantId-scoped case keeps
+// using the normal strict-RLS scopedRead() path (no bypass needed or wanted).
 export async function listBreakGlass(limit: number, tenantId?: string) {
-  const base = db.select().from(adminBreakGlassLog);
-  const filtered = tenantId
-    ? base.where(eq(adminBreakGlassLog.tenantId, tenantId))
-    : base;
-  return filtered.limit(limit).orderBy(adminBreakGlassLog.openedAt);
+  if (tenantId) {
+    return scopedRead((tx) => tx.select().from(adminBreakGlassLog)
+      .where(eq(adminBreakGlassLog.tenantId, tenantId))
+      .limit(limit).orderBy(adminBreakGlassLog.openedAt));
+  }
+  return scopedPlatformRead((tx) => tx.select().from(adminBreakGlassLog)
+    .limit(limit).orderBy(adminBreakGlassLog.openedAt));
 }

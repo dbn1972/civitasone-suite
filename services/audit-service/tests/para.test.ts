@@ -2,8 +2,9 @@
  * audit-service para state machine tests
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { auditParas, auditParaStatusHistory } from "../src/modules/para/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -21,21 +22,44 @@ const MSG_2  = "44444444-dddd-4000-8000-000000000011";
 const MSG_3  = "44444444-dddd-4000-8000-000000000012";
 const MSG_4  = "44444444-dddd-4000-8000-000000000013";
 
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly (not the `createQueue()`
+ * factory) does NOT auto-wrap subscribed handlers with `withTenantConsumer`.
+ * Production wiring (queue-service's `createQueue()`) decorates `subscribe()`
+ * so every consumer handler runs inside `runWithTenant(msg.tenantId, ...)`,
+ * which is what lets `db.transaction()` pick up the tenant GUC. Without this
+ * wrapping, consumer writes/reads here run with no RLS GUC set and every
+ * insert/update fails its `WITH CHECK` under FORCE RLS. Mirrors the pattern
+ * in admin-service/estab-service test suites.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
+// Test-harness fix: bare db.delete()/db.select()/db.insert() outside
+// db.transaction() (or without an active runWithTenant scope) run with no
+// RLS GUC set. Wrap all direct DB access in runWithTenant(TENANT, () =>
+// db.transaction(...)).
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(auditParaStatusHistory).where(eq(auditParaStatusHistory.tenantId, TENANT));
-  await db.delete(auditParas).where(eq(auditParas.tenantId, TENANT));
-  for (const id of [MSG_1, MSG_2, MSG_3, MSG_4]) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(auditParaStatusHistory).where(eq(auditParaStatusHistory.tenantId, TENANT));
+    await tx.delete(auditParas).where(eq(auditParas.tenantId, TENANT));
+    for (const id of [MSG_1, MSG_2, MSG_3, MSG_4]) {
+      await tx.delete(processed).where(eq(processed.messageId, id));
+    }
+  }));
 }
 
 async function seedDraftPara(): Promise<void> {
-  await db.insert(auditParas).values({
+  await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(auditParas).values({
     id: PARA_1, tenantId: TENANT, paraNo: "PARA-2026-001", deptRef: "dept:finance",
     body: "Irregular payment detected", category: "financial", amountInvolvedMinor: 500000n,
     status: "draft", createdBy: ACTOR, updatedBy: ACTOR,
-  });
+  })));
 }
 
 describe("Para domain — state machine (pure)", () => {
@@ -72,7 +96,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
   afterAll(async () => { await wipe(); await sqlClient.end(); });
 
   it("draft → issued → replied → settled via queue consumers", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerParaConsumers(q);
     registerComplianceConsumers(q);
     await q.start();
@@ -84,7 +108,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
     });
     await new Promise<void>((r) => setTimeout(r, 300));
 
-    let rows = await db.select().from(auditParas).where(eq(auditParas.id, PARA_1));
+    let rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
     expect(rows[0]?.status).toBe("issued");
 
     await q.publish(COMMANDS.paraDeptResponse, {
@@ -97,7 +121,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
     });
     await new Promise<void>((r) => setTimeout(r, 300));
 
-    rows = await db.select().from(auditParas).where(eq(auditParas.id, PARA_1));
+    rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
     expect(rows[0]?.status).toBe("replied");
 
     await q.publish(COMMANDS.paraSettle, {
@@ -108,28 +132,31 @@ describe("Para consumer — CQRS state machine (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
-    rows = await db.select().from(auditParas).where(eq(auditParas.id, PARA_1));
+    rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
     expect(rows[0]?.status).toBe("settled");
 
-    const history = await db.select().from(auditParaStatusHistory).where(eq(auditParaStatusHistory.paraId, PARA_1));
+    const [history, outbox] = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => Promise.all([
+        tx.select().from(auditParaStatusHistory).where(eq(auditParaStatusHistory.paraId, PARA_1)),
+        tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)),
+      ])),
+    );
     const transitions = history.map((h) => `${h.fromStatus}→${h.toStatus}`);
     expect(transitions).toContain("draft→issued");
     expect(transitions).toContain("issued→replied");
     expect(transitions).toContain("replied→settled");
-
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     expect(outbox.map((r) => r.eventType)).toContain(EVENTS.paraIssued);
   });
 
   it("consumer rejects body update when status is issued", async () => {
     await wipe();
-    await db.insert(auditParas).values({
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(auditParas).values({
       id: PARA_1, tenantId: TENANT, paraNo: "PARA-2026-002", deptRef: "dept:hr",
       body: "Original para body", category: "compliance", amountInvolvedMinor: 0n,
       status: "issued", issuedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    })));
 
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerParaConsumers(q);
     await q.start();
 
@@ -144,7 +171,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 600));
     await q.stop();
 
-    const rows = await db.select().from(auditParas).where(eq(auditParas.id, PARA_1));
+    const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
     expect(rows[0]?.body).toBe("Original para body");
     expect(rows[0]?.status).toBe("issued");
   });

@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -34,6 +34,22 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
+
+  // Source the RLS tenant from the AUTHENTICATED token (req.ctx, populated by
+  // authPlugin's earlier onRequest hook), not just the client-supplied
+  // x-tenant-id header. createTenantTxHook only enters AsyncLocalStorage when
+  // x-tenant-id is present; JWT-authenticated requests without that header
+  // otherwise get NO GUC at all — and events.events's RLS policy calls
+  // current_setting('app.tenant_id') without missing_ok, so an unset GUC
+  // throws "unrecognized configuration parameter" (500) instead of merely
+  // returning zero rows. Header remains the fallback; the verified JWT
+  // tenant wins when present. Mirrors admin-service / hrms-service /
+  // payroll-service / workflow-service / identity-service, etc. — this was
+  // the one service in the fleet missing this hook.
+  app.addHook("onRequest", async (req) => {
+    const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+    if (tid) tenantStorage.enterWith({ tenantId: tid });
+  });
 
   registerOpsRoutes(app, { service: "audit-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 

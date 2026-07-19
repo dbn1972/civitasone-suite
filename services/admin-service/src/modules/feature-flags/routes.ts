@@ -8,8 +8,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { cache } from "../../shared/infra.js";
 import * as commands from "./commands.js";
 import { featureFlags } from "./schema.js";
-import { db } from "../../shared/db.js";
-import { eq, and } from "drizzle-orm";
+import { scopedRead } from "../../shared/db.js";
+import { eq } from "drizzle-orm";
 
 const ADMIN_ROLES = ["platform_admin", "super_admin"];
 const RESOURCE = "feature_flag";
@@ -33,7 +33,10 @@ const updateBody = z.object({
 
 const idParam = z.object({ id: z.string().uuid() });
 
-function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
+// See custom-domains/routes.ts safeParse for why Input is widened to `any`
+// instead of using z.ZodSchema<T> (Input=T): schemas with `.default(...)`
+// fields need T inferred from the parsed *output*, not the optional *input*.
+function safeParse<T>(schema: z.ZodType<T, z.ZodTypeDef, any>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {
     const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -49,7 +52,7 @@ export async function featureFlagRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const rows = await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, "list"),
-      async () => db.select().from(featureFlags).where(eq(featureFlags.tenantId, ctx.tenantId)),
+      async () => scopedRead((tx) => tx.select().from(featureFlags).where(eq(featureFlags.tenantId, ctx.tenantId))),
     );
     return reply.send({ data: rows });
   });
@@ -72,7 +75,13 @@ export async function featureFlagRoutes(app: FastifyInstance): Promise<void> {
     if (Object.keys(body).length === 0) {
       throw new HttpError(400, "EMPTY_BODY", "at least one field must be provided");
     }
-    const result = await commands.flagUpdate(ctx, id, body);
+    // exactOptionalPropertyTypes: strip keys whose value is undefined so the
+    // payload only ever carries `key: string` (never `key: string | undefined`)
+    // for the optional fields FlagUpdatePayload declares.
+    const patch = Object.fromEntries(
+      Object.entries(body).filter(([, v]) => v !== undefined),
+    ) as commands.FlagUpdatePayload;
+    const result = await commands.flagUpdate(ctx, id, patch);
     return reply.code(202).send(result);
   });
 

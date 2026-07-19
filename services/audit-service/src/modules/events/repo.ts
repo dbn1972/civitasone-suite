@@ -21,15 +21,19 @@ function toView(r: AuditEventRow): AuditEventView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<AuditEventView | null> {
-  const rows = await db.select().from(auditEvents).where(and(eq(auditEvents.id, id), eq(auditEvents.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditEvents).where(and(eq(auditEvents.id, id), eq(auditEvents.tenantId, tenantId))).limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function findLatestForTenant(tenantId: string): Promise<AuditEventView | null> {
-  const rows = await db.select().from(auditEvents)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditEvents)
     .where(eq(auditEvents.tenantId, tenantId))
     .orderBy(desc(auditEvents.occurredAt))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -40,10 +44,12 @@ export async function listEvents(tenantId: string, from: Date, to: Date, type?: 
     lte(auditEvents.occurredAt, to),
   ];
   if (type) conditions.push(eq(auditEvents.type, type));
-  const rows = await db.select().from(auditEvents)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditEvents)
     .where(and(...conditions))
     .orderBy(desc(auditEvents.occurredAt))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
   return rows.map(toView);
 }
 

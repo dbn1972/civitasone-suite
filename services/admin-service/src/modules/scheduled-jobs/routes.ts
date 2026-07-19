@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import { createJobBody, updateJobBody, jobIdParam } from "./validators.js";
 import { scheduledJobs, jobExecutionHistory } from "./schema.js";
@@ -15,7 +15,10 @@ import { eq, and, desc } from "drizzle-orm";
 const ADMIN_ROLES = ["platform_admin", "super_admin"];
 const RESOURCE = "scheduled_job";
 
-function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
+// See custom-domains/routes.ts safeParse for why Input is widened to `any`
+// instead of using z.ZodSchema<T> (Input=T): schemas with `.default(...)`
+// fields need T inferred from the parsed *output*, not the optional *input*.
+function safeParse<T>(schema: z.ZodType<T, z.ZodTypeDef, any>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {
     const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -31,9 +34,12 @@ export async function scheduledJobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const rows = await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, "list"),
-      async () => db.select().from(scheduledJobs).where(eq(scheduledJobs.tenantId, ctx.tenantId)),
+      // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
+      // app.tenant_id before this read — a bare db.select() under FORCE RLS
+      // returns zero rows with no GUC set.
+      async () => scopedRead((tx) => tx.select().from(scheduledJobs).where(eq(scheduledJobs.tenantId, ctx.tenantId))),
     );
-    return reply.send({ data: rows });
+    return reply.send({ data: rows ?? [] });
   });
 
   // CREATE job
@@ -96,10 +102,13 @@ export async function scheduledJobRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(jobIdParam, req.params);
-    const rows = await db.select().from(jobExecutionHistory)
+    // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
+    // app.tenant_id before this read — a bare db.select() under FORCE RLS
+    // returns zero rows with no GUC set.
+    const rows = await scopedRead((tx) => tx.select().from(jobExecutionHistory)
       .where(and(eq(jobExecutionHistory.jobId, id), eq(jobExecutionHistory.tenantId, ctx.tenantId)))
       .orderBy(desc(jobExecutionHistory.startedAt))
-      .limit(50);
+      .limit(50));
     return reply.send({ data: rows });
   });
 }

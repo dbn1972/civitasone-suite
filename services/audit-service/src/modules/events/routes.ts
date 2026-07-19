@@ -29,7 +29,11 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const q = listQuerySchema.extend({
       tenantId: z.string().uuid().optional(),
-      tenantScoped: z.coerce.boolean().optional(),
+      // Bugfix: z.coerce.boolean() coerces via JS Boolean(str), so the
+      // querystring "false" (a non-empty string) coerced to `true` — the
+      // tenantScoped=false cross-tenant gate below could never activate.
+      // Parse the literal "true"/"false" strings instead.
+      tenantScoped: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
       from: z.string().datetime().optional(),
       to: z.string().datetime().optional(),
       type: z.string().optional(),

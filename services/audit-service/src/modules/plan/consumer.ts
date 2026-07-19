@@ -60,8 +60,15 @@ export function registerPlanConsumers(queue: Queue): void {
       const plan = await repo.findPlanByIdTx(tx, p.planId, p.tenantId);
       if (!plan) throw new Error(`plan ${p.planId} not found`);
       assertCanStart(plan.status ?? "draft");
+      // Bug found via test coverage work: this previously wrote status
+      // "active", which the audit_plans_status_check CHECK constraint
+      // (migration 0016) rejects outright (valid values: draft,
+      // in_progress, completed, deferred) — every planStart command has
+      // been failing and dead-lettering since the constraint was added.
+      // "in_progress" is also the vocabulary queries.ts's read-model
+      // mapping and the CHECK constraint both already use.
       const startedRows = await repo.updatePlanVersioned(tx, p.planId, p.tenantId, plan.version ?? 1, {
-        status: "active", updatedBy: msg.actorId, version: (plan.version ?? 1) + 1,
+        status: "in_progress", updatedBy: msg.actorId, version: (plan.version ?? 1) + 1,
       });
       if (startedRows !== 1) throw new StaleWriteError("plan", p.planId);
       await audit(tx, msg, "start", "plan", p.planId);

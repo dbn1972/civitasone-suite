@@ -64,7 +64,10 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const found = await repo.findByIdTx(db, id, ctx.tenantId);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set (mirrors
+    // repo.findByToken / repo.listExportsByTenant).
+    const found = await db.transaction((tx) => repo.findByIdTx(tx, id, ctx.tenantId));
     if (!found) throw new HttpError(404, "NOT_FOUND", "export not found");
     return reply.send({ data: statusDto(ctx, found) });
   });
@@ -75,7 +78,9 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { token } = z.object({ token: z.string().min(1) }).parse(req.query);
-    const row = await repo.findByIdTx(db, id, ctx.tenantId);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const row = await db.transaction((tx) => repo.findByIdTx(tx, id, ctx.tenantId));
     if (!row || row.status !== "completed" || !row.downloadToken) {
       throw new HttpError(404, "NOT_FOUND", "export not available");
     }
@@ -109,7 +114,9 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const row = await repo.findByIdTx(db, id, ctx.tenantId);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const row = await db.transaction((tx) => repo.findByIdTx(tx, id, ctx.tenantId));
     if (!row || row.status !== "completed") throw new HttpError(404, "NOT_FOUND", "export not available");
     if (!row.contentSha256 || !row.signature) {
       throw new HttpError(409, "NOT_SIGNED", "export has no integrity signature");

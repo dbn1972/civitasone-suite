@@ -5,7 +5,9 @@ import { auditObservations, type ObservationRow, type ObservationInsert } from "
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findObservationById(id: string, tenantId: string): Promise<ObservationRow | null> {
-  const rows = await db.select().from(auditObservations).where(and(eq(auditObservations.id, id), eq(auditObservations.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(auditObservations).where(and(eq(auditObservations.id, id), eq(auditObservations.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -28,9 +30,11 @@ export async function updateObservationVersioned(tx: Writer, id: string, tenantI
 }
 
 export async function listObservationsByTenant(tenantId: string, limit: number): Promise<ObservationRow[]> {
-  return db.select().from(auditObservations)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(auditObservations)
     .where(eq(auditObservations.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }
 
 // C1/M1: a "closed" transition is only allowed when the observation has no

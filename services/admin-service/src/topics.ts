@@ -6,8 +6,22 @@ export const COMMANDS = {
   tenantReactivate:   "admin.tenant.reactivate",
   tenantSync:         "admin.tenant.sync",
   moduleToggle:       "admin.module.toggle",
+  // Platform-wide flag registry (config module — config.admin_feature_flags,
+  // global + per-tenant `overrides` jsonb).
   featureFlagCreate:  "admin.feature_flag.create",
   featureFlagOverride:"admin.feature_flag.override",
+  // Tenant-scoped flag "manage" screen (feature-flags module —
+  // feature_flags.feature_flags, one row per tenant per key). Deliberately a
+  // DISTINCT topic from featureFlagCreate above: both worker.ts consumers
+  // (registerConfigConsumers + registerFeatureFlagConsumers) are subscribed
+  // on the same queue, and MemoryQueue.subscribe fans out to every handler
+  // registered for a topic — reusing featureFlagCreate here previously made
+  // every /v1/admin/feature-flags/manage POST also fire the config
+  // consumer's handler with a payload shape it doesn't understand (`key` vs
+  // `flagKey`), throwing a NOT NULL violation on `flag_key` inside that
+  // consumer's own try/catch (silently logged, no bad row written, but pure
+  // noise on every real feature-flag creation).
+  featureFlagManageCreate: "admin.feature_flag_manage.create",
   featureFlagUpdate:  "admin.feature_flag.update",
   featureFlagKill:    "admin.feature_flag.kill",
   featureFlagDelete:  "admin.feature_flag.delete",

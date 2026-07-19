@@ -3,21 +3,27 @@ import { db } from "../../shared/db.js";
 import { investigations, type InvestigationRow } from "./schema.js";
 
 export async function listInvestigations(tenantId: string, limit = 50, offset = 0): Promise<InvestigationRow[]> {
-  return db.select().from(investigations)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(investigations)
     .where(eq(investigations.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 export async function listInvestigationsCount(tenantId: string): Promise<number> {
-  const rows = await db.select({ count: sql<number>`count(*)::int` }).from(investigations)
-    .where(eq(investigations.tenantId, tenantId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(investigations)
+    .where(eq(investigations.tenantId, tenantId)));
   return rows[0]?.count ?? 0;
 }
 
 export async function findInvestigationById(id: string, tenantId: string): Promise<InvestigationRow | null> {
-  const rows = await db.select().from(investigations)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(investigations)
     .where(and(eq(investigations.id, id), eq(investigations.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }

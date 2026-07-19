@@ -78,7 +78,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     const q = req.query as { limit?: string; offset?: string };
     const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
     const offset = Math.max(0, Number(q.offset) || 0);
-    const all = await queries.listFeatureFlags();
+    const all = (await queries.listFeatureFlags()) ?? [];
     return reply.send(all.slice(offset, offset + limit));
   });
 
