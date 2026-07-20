@@ -6,7 +6,7 @@
  * Requirements: 11.6
  */
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { financeAnomalies } from "./schema.js";
 import type { AnomalyStatus } from "./domain.js";
 
@@ -47,23 +47,25 @@ export async function listAnomalies(
 
   const whereClause = and(...conditions);
 
-  const [rows, countResult] = await Promise.all([
-    db
-      .select()
-      .from(financeAnomalies)
-      .where(whereClause)
-      .orderBy(desc(financeAnomalies.createdAt))
-      .limit(pageSize)
-      .offset(offset),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(financeAnomalies)
-      .where(whereClause),
-  ]);
+  return scopedRead(async (tx) => {
+    const [rows, countResult] = await Promise.all([
+      tx
+        .select()
+        .from(financeAnomalies)
+        .where(whereClause)
+        .orderBy(desc(financeAnomalies.createdAt))
+        .limit(pageSize)
+        .offset(offset),
+      tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(financeAnomalies)
+        .where(whereClause),
+    ]);
 
-  const total = countResult[0]?.count ?? 0;
+    const total = countResult[0]?.count ?? 0;
 
-  return { data: rows as unknown as AnomalyRecord[], total };
+    return { data: rows as unknown as AnomalyRecord[], total };
+  });
 }
 
 /**
@@ -73,16 +75,18 @@ export async function getAnomalyById(
   tenantId: string,
   anomalyId: string
 ): Promise<AnomalyRecord | null> {
-  const rows = await db
-    .select()
-    .from(financeAnomalies)
-    .where(
-      and(
-        eq(financeAnomalies.id, anomalyId),
-        eq(financeAnomalies.tenantId, tenantId)
+  const rows = await scopedRead((tx) =>
+    tx
+      .select()
+      .from(financeAnomalies)
+      .where(
+        and(
+          eq(financeAnomalies.id, anomalyId),
+          eq(financeAnomalies.tenantId, tenantId)
+        )
       )
-    )
-    .limit(1);
+      .limit(1)
+  );
 
   return (rows[0] as unknown as AnomalyRecord) ?? null;
 }
@@ -96,17 +100,19 @@ export async function isTransactionDismissed(
   tenantId: string,
   transactionId: string
 ): Promise<boolean> {
-  const rows = await db
-    .select({ id: financeAnomalies.id })
-    .from(financeAnomalies)
-    .where(
-      and(
-        eq(financeAnomalies.tenantId, tenantId),
-        eq(financeAnomalies.transactionId, transactionId),
-        eq(financeAnomalies.status, "dismissed")
+  const rows = await scopedRead((tx) =>
+    tx
+      .select({ id: financeAnomalies.id })
+      .from(financeAnomalies)
+      .where(
+        and(
+          eq(financeAnomalies.tenantId, tenantId),
+          eq(financeAnomalies.transactionId, transactionId),
+          eq(financeAnomalies.status, "dismissed")
+        )
       )
-    )
-    .limit(1);
+      .limit(1)
+  );
 
   return rows.length > 0;
 }

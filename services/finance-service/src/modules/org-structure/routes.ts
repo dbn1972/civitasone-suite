@@ -75,21 +75,23 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createLegalEntityBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(legalEntities).values({
-      id, tenantId: ctx.tenantId, code: body.code, name: body.name,
-      entityType: body.entityType,
-      ...(body.parentEntityId ? { parentEntityId: body.parentEntityId } : {}),
-      ...(body.gstin ? { gstin: body.gstin } : {}),
-      ...(body.pan ? { pan: body.pan } : {}),
-      ...(body.tan ? { tan: body.tan } : {}),
-      ...(body.cin ? { cin: body.cin } : {}),
-      currency: body.currency, fiscalYearStart: body.fiscalYearStart,
-      ...(body.ddoCode ? { ddoCode: body.ddoCode } : {}),
-      ...(body.paoCode ? { paoCode: body.paoCode } : {}),
-      ...(body.treasuryCode ? { treasuryCode: body.treasuryCode } : {}),
-      ...(body.locationId ? { locationId: body.locationId } : {}),
-      ...(body.registeredAddress ? { registeredAddress: body.registeredAddress } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(legalEntities).values({
+        id, tenantId: ctx.tenantId, code: body.code, name: body.name,
+        entityType: body.entityType,
+        ...(body.parentEntityId ? { parentEntityId: body.parentEntityId } : {}),
+        ...(body.gstin ? { gstin: body.gstin } : {}),
+        ...(body.pan ? { pan: body.pan } : {}),
+        ...(body.tan ? { tan: body.tan } : {}),
+        ...(body.cin ? { cin: body.cin } : {}),
+        currency: body.currency, fiscalYearStart: body.fiscalYearStart,
+        ...(body.ddoCode ? { ddoCode: body.ddoCode } : {}),
+        ...(body.paoCode ? { paoCode: body.paoCode } : {}),
+        ...(body.treasuryCode ? { treasuryCode: body.treasuryCode } : {}),
+        ...(body.locationId ? { locationId: body.locationId } : {}),
+        ...(body.registeredAddress ? { registeredAddress: body.registeredAddress } : {}),
+        createdBy: ctx.actorId, updatedBy: ctx.actorId,
+      });
     });
     return reply.code(201).send({ id, status: "created" });
   });
@@ -107,11 +109,13 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createOperatingUnitBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(operatingUnits).values({
-      id, tenantId: ctx.tenantId, legalEntityId: body.legalEntityId,
-      code: body.code, name: body.name, unitType: body.unitType,
-      ...(body.locationId ? { locationId: body.locationId } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(operatingUnits).values({
+        id, tenantId: ctx.tenantId, legalEntityId: body.legalEntityId,
+        code: body.code, name: body.name, unitType: body.unitType,
+        ...(body.locationId ? { locationId: body.locationId } : {}),
+        createdBy: ctx.actorId, updatedBy: ctx.actorId,
+      });
     });
     return reply.code(201).send({ id, status: "created" });
   });
@@ -129,13 +133,15 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createCostCenterBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(costCenters).values({
-      id, tenantId: ctx.tenantId, legalEntityId: body.legalEntityId,
-      code: body.code, name: body.name,
-      ...(body.parentId ? { parentId: body.parentId } : {}),
-      ...(body.departmentId ? { departmentId: body.departmentId } : {}),
-      ...(body.managerId ? { managerId: body.managerId } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(costCenters).values({
+        id, tenantId: ctx.tenantId, legalEntityId: body.legalEntityId,
+        code: body.code, name: body.name,
+        ...(body.parentId ? { parentId: body.parentId } : {}),
+        ...(body.departmentId ? { departmentId: body.departmentId } : {}),
+        ...(body.managerId ? { managerId: body.managerId } : {}),
+        createdBy: ctx.actorId, updatedBy: ctx.actorId,
+      });
     });
     return reply.code(201).send({ id, status: "created" });
   });
@@ -153,13 +159,15 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createProfitCenterBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(profitCenters).values({
-      id, tenantId: ctx.tenantId, legalEntityId: body.legalEntityId,
-      code: body.code, name: body.name,
-      ...(body.parentId ? { parentId: body.parentId } : {}),
-      ...(body.segment ? { segment: body.segment } : {}),
-      ...(body.managerId ? { managerId: body.managerId } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(profitCenters).values({
+        id, tenantId: ctx.tenantId, legalEntityId: body.legalEntityId,
+        code: body.code, name: body.name,
+        ...(body.parentId ? { parentId: body.parentId } : {}),
+        ...(body.segment ? { segment: body.segment } : {}),
+        ...(body.managerId ? { managerId: body.managerId } : {}),
+        createdBy: ctx.actorId, updatedBy: ctx.actorId,
+      });
     });
     return reply.code(201).send({ id, status: "created" });
   });

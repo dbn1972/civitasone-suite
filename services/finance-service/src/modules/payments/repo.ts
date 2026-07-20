@@ -132,16 +132,20 @@ export async function seedSampleBills(tenantId: string, actorId: string): Promis
     updatedBy: actorId,
     version: 1,
   }));
-  await db.insert(financeBills).values(rows);
+  await db.transaction(async (tx) => {
+    await tx.insert(financeBills).values(rows);
+  });
   return rows.length;
 }
 
 /** Remove ONLY this tenant's sample bills. Real bills are never touched. */
 export async function clearSampleBills(tenantId: string): Promise<number> {
-  const removed = await db.delete(financeBills)
-    .where(and(eq(financeBills.tenantId, tenantId), eq(financeBills.isSample, true)))
-    .returning({ id: financeBills.id });
-  return removed.length;
+  return db.transaction(async (tx) => {
+    const removed = await tx.delete(financeBills)
+      .where(and(eq(financeBills.tenantId, tenantId), eq(financeBills.isSample, true)))
+      .returning({ id: financeBills.id });
+    return removed.length;
+  });
 }
 
 export async function listAdvancesByTenant(tenantId: string, limit: number): Promise<AdvanceRow[]> {

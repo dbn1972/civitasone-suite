@@ -18,12 +18,15 @@
  * All assertions use the numbers the live service returns, so a regression in
  * any derivation breaks the build.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { randomUUID } from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { sql } from "drizzle-orm";
+import { scoped } from "./_tenant.js";
+import { financeHeads } from "../src/modules/budget/schema.js";
+import { financeLedger, financeJournals } from "../src/modules/gl/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const SEED_TENANT = "00000000-0000-0000-0000-000000000001";
@@ -47,7 +50,99 @@ async function get(url: string, tok = token()) {
   return res;
 }
 
-afterAll(async () => { await sqlClient.end(); });
+// ─── Seed balanced GL data for the SEED_TENANT ─────────────────────────────────
+// These IDs are deterministic so cleanup is reliable across reruns.
+const ACTOR = "00000000-aaaa-4000-8000-0000000000ab";
+// Use existing head IDs already in the dev DB for codes 1200, 1250, 5100:
+const HEAD_ASSET_ID    = "dddddddd-0001-0000-0000-000000000021"; // 1200 Fixed Assets
+const HEAD_ACCUM_ID    = "dddddddd-0001-0000-0000-000000000022"; // 1250 Accumulated Dep
+const HEAD_EXPENSE_ID  = "dddddddd-0001-0000-0000-000000000023"; // 5100 Depreciation Expense
+// These are test-only heads seeded by this file:
+const HEAD_INCOME_ID   = "00000000-0000-4000-a000-000000004100";
+const HEAD_LIABILITY_ID = "00000000-0000-4000-a000-000000002100";
+const HEAD_EQUITY_ID   = "00000000-0000-4000-a000-000000003100";
+
+const LEDGER_IDS = [
+  "a0000000-0001-4000-8000-000000000001",
+  "a0000000-0001-4000-8000-000000000002",
+  "a0000000-0001-4000-8000-000000000003",
+  "a0000000-0001-4000-8000-000000000004",
+  "a0000000-0001-4000-8000-000000000005",
+  "a0000000-0001-4000-8000-000000000006",
+  "a0000000-0001-4000-8000-000000000007",
+  "a0000000-0001-4000-8000-000000000008",
+];
+
+const JOURNAL_IDS = [
+  "b0000000-0001-4000-8000-000000000001",
+  "b0000000-0001-4000-8000-000000000002",
+];
+
+const FY_START = (() => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const start = d.getMonth() + 1 >= 4 ? y : y - 1;
+  return `${start}-04-01`;
+})();
+
+beforeAll(async () => {
+  await scoped(SEED_TENANT, async (tx) => {
+    // Seed only the heads that don't already exist in the dev DB (2100, 3100, 4100).
+    // Heads 1200, 1250, 5100 already exist with the dddddddd-... UUIDs above.
+    await tx.insert(financeHeads).values([
+      { id: HEAD_INCOME_ID, tenantId: SEED_TENANT, code: "4100", name: "Revenue Income", level: 1, classification: "revenue", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: HEAD_LIABILITY_ID, tenantId: SEED_TENANT, code: "2100", name: "Current Liabilities", level: 1, classification: "liability", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: HEAD_EQUITY_ID, tenantId: SEED_TENANT, code: "3100", name: "General Fund", level: 1, classification: "equity", createdBy: ACTOR, updatedBy: ACTOR },
+    ]).onConflictDoNothing();
+
+    // Balanced GL entries:
+    //   Asset acquisition:  Dr 1200 500000, Cr 2100 500000 (buy asset with liability)
+    //   Depreciation:       Dr 5100 50000,  Cr 1250 50000 (period depreciation)
+    //   Income:             Dr 2100 200000, Cr 4100 200000 (earn revenue, reduce liability)
+    //   Equity:             Dr 2100 100000, Cr 3100 100000 (contribute to fund)
+    // Total Dr = 500000 + 50000 + 200000 + 100000 = 850000
+    // Total Cr = 500000 + 50000 + 200000 + 100000 = 850000 ✓
+    await tx.insert(financeLedger).values([
+      { id: LEDGER_IDS[0], tenantId: SEED_TENANT, headId: HEAD_ASSET_ID, debitMinor: 500000n, creditMinor: 0n, balanceMinor: 500000n, voucherNo: "SEED-V001", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: LEDGER_IDS[1], tenantId: SEED_TENANT, headId: HEAD_LIABILITY_ID, debitMinor: 0n, creditMinor: 500000n, balanceMinor: -500000n, voucherNo: "SEED-V001", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: LEDGER_IDS[2], tenantId: SEED_TENANT, headId: HEAD_EXPENSE_ID, debitMinor: 50000n, creditMinor: 0n, balanceMinor: 50000n, voucherNo: "SEED-V002", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: LEDGER_IDS[3], tenantId: SEED_TENANT, headId: HEAD_ACCUM_ID, debitMinor: 0n, creditMinor: 50000n, balanceMinor: -50000n, voucherNo: "SEED-V002", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: LEDGER_IDS[4], tenantId: SEED_TENANT, headId: HEAD_LIABILITY_ID, debitMinor: 200000n, creditMinor: 0n, balanceMinor: -300000n, voucherNo: "SEED-V003", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: LEDGER_IDS[5], tenantId: SEED_TENANT, headId: HEAD_INCOME_ID, debitMinor: 0n, creditMinor: 200000n, balanceMinor: -200000n, voucherNo: "SEED-V003", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: LEDGER_IDS[6], tenantId: SEED_TENANT, headId: HEAD_LIABILITY_ID, debitMinor: 100000n, creditMinor: 0n, balanceMinor: -200000n, voucherNo: "SEED-V004", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: LEDGER_IDS[7], tenantId: SEED_TENANT, headId: HEAD_EQUITY_ID, debitMinor: 0n, creditMinor: 100000n, balanceMinor: -100000n, voucherNo: "SEED-V004", postingDate: FY_START, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
+    ]).onConflictDoNothing();
+
+    // Journal entries for fixed-asset movements (required by the register endpoint).
+    await tx.insert(financeJournals).values([
+      {
+        id: JOURNAL_IDS[0], tenantId: SEED_TENANT, voucherNo: "SEED-V001",
+        type: "asset_acquisition", postingDate: FY_START, status: "posted",
+        lines: [
+          { accountCode: "1200", debitMinor: 500000, creditMinor: 0, narration: "Acquisition" },
+          { accountCode: "2100", debitMinor: 0, creditMinor: 500000, narration: "Acquisition" },
+        ],
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: JOURNAL_IDS[1], tenantId: SEED_TENANT, voucherNo: "SEED-V002",
+        type: "depreciation", postingDate: FY_START, status: "posted",
+        lines: [
+          { accountCode: "5100", debitMinor: 50000, creditMinor: 0, narration: "Depreciation" },
+          { accountCode: "1250", debitMinor: 0, creditMinor: 50000, narration: "Depreciation" },
+        ],
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+    ]).onConflictDoNothing();
+  });
+});
+
+afterAll(async () => {
+  // Ledger + journal rows are append-only (DB triggers block DELETE), and the
+  // heads they reference must persist for the JOIN. Seed is idempotent via
+  // onConflictDoNothing, so all test data is left in place across runs.
+  await sqlClient.end();
+});
 
 // 1. Trial-balance invariant ---------------------------------------------------
 
@@ -68,11 +163,11 @@ describe("Trial balance invariant — sum(Dr) === sum(Cr)", () => {
   });
 
   it("cross-checks the route total against a direct GL aggregate", async () => {
-    const rows = (await db.execute(sql`
+    const rows = (await scoped(SEED_TENANT, (tx) => tx.execute(sql`
       SELECT COALESCE(SUM(debit_minor),0)::bigint AS dr,
              COALESCE(SUM(credit_minor),0)::bigint AS cr
       FROM gl.finance_ledger WHERE tenant_id = ${SEED_TENANT}::uuid
-    `)) as unknown as { dr: string; cr: string }[];
+    `))) as unknown as { dr: string; cr: string }[];
     const dr = BigInt(rows[0]!.dr), cr = BigInt(rows[0]!.cr);
     expect(dr).toBe(cr);               // GL itself is balanced
     expect(dr > 0n).toBe(true);

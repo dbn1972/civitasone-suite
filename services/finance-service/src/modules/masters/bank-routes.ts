@@ -50,10 +50,12 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = createBankBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(bankAccounts).values({
-      id, tenantId: ctx.tenantId, ...body,
-      branchName: body.branchName ?? null, purpose: body.purpose ?? null,
-      createdBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(bankAccounts).values({
+        id, tenantId: ctx.tenantId, ...body,
+        branchName: body.branchName ?? null, purpose: body.purpose ?? null,
+        createdBy: ctx.actorId,
+      });
     });
     return reply.code(201).send({ id, status: "created" });
   });

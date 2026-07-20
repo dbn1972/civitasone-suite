@@ -76,11 +76,13 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = createFYBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(fiscalYears).values({
-      id, tenantId: ctx.tenantId, code: body.code, label: body.label,
-      startDate: body.startDate, endDate: body.endDate, status: "active",
-      createdBy: ctx.actorId,
-    }).onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx.insert(fiscalYears).values({
+        id, tenantId: ctx.tenantId, code: body.code, label: body.label,
+        startDate: body.startDate, endDate: body.endDate, status: "active",
+        createdBy: ctx.actorId,
+      }).onConflictDoNothing();
+    });
     return reply.code(201).send({ id, status: "created" });
   });
 
@@ -90,13 +92,15 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const code = (req.params as { code: string }).code;
     // Deactivate all others
-    await db.update(fiscalYears)
-      .set({ status: "closed" })
-      .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.status, "active")));
-    // Activate the target
-    await db.update(fiscalYears)
-      .set({ status: "active" })
-      .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.code, code)));
+    await db.transaction(async (tx) => {
+      await tx.update(fiscalYears)
+        .set({ status: "closed" })
+        .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.status, "active")));
+      // Activate the target
+      await tx.update(fiscalYears)
+        .set({ status: "active" })
+        .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.code, code)));
+    });
     return reply.send({ status: "activated", code });
   });
 
@@ -117,19 +121,21 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     const body = openingBalanceBody.parse(req.body);
 
     let inserted = 0;
-    for (const entry of body.entries) {
-      await db.insert(openingBalances).values({
-        id: randomUUID(),
-        tenantId: ctx.tenantId,
-        fyCode: body.fyCode,
-        accountCode: entry.accountCode,
-        debitMinor: BigInt(entry.debitMinor),
-        creditMinor: BigInt(entry.creditMinor),
-        narration: entry.narration ?? null,
-        enteredBy: ctx.actorId,
-      }).onConflictDoNothing();
-      inserted++;
-    }
+    await db.transaction(async (tx) => {
+      for (const entry of body.entries) {
+        await tx.insert(openingBalances).values({
+          id: randomUUID(),
+          tenantId: ctx.tenantId,
+          fyCode: body.fyCode,
+          accountCode: entry.accountCode,
+          debitMinor: BigInt(entry.debitMinor),
+          creditMinor: BigInt(entry.creditMinor),
+          narration: entry.narration ?? null,
+          enteredBy: ctx.actorId,
+        }).onConflictDoNothing();
+        inserted++;
+      }
+    });
     return reply.code(201).send({ status: "entered", count: inserted });
   });
 }

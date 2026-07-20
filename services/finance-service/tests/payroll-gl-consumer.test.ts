@@ -1,7 +1,7 @@
 /**
- * Unit tests for the payroll.run.finalized → GL journal consumer.
+ * Unit tests for the payroll.run.disbursed → GL journal consumer.
  *
- * Verifies: payroll.run.finalized → journal entries created → finance.gl.posted/rejected emitted
+ * Verifies: payroll.run.disbursed → salary settlement journal created → finance.gl.posted/rejected emitted
  *
  * Covers:
  * - Happy path: valid headCodes → balanced journal created → gl.posted emitted
@@ -9,7 +9,7 @@
  * - Idempotency: duplicate messageId is skipped (markProcessed returns false)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Lightweight in-process MemoryQueue
@@ -73,11 +73,10 @@ const {
   const _enqueueMock = vi.fn(async () => undefined);
   const _markProcessedMock = vi.fn(async () => true);
   const _findHeadByCodeTxMock = vi.fn(async (_tx: unknown, _tenantId: string, code: string) => {
-    // Default: all head codes resolve to UUIDs
     return { id: `head-${code}`, code, name: `Head ${code}`, tenantId: "10000000-aaaa-4000-8000-000000000001" };
   });
   const _findHeadByIdTxMock = vi.fn(async (_tx: unknown, id: string) => {
-    return { id, code: "4100", name: "Salary Expense", classification: "expense" };
+    return { id, code: "2101", name: "Net Payable", classification: "liability" };
   });
   const _insertJournalMock = vi.fn(async () => undefined);
   const _insertLedgerLineMock = vi.fn(async () => undefined);
@@ -139,11 +138,22 @@ vi.mock("../src/modules/period-close/routes.js", () => ({
 
 vi.mock("../src/modules/hoa/voucher.js", () => ({
   fyFromDate: vi.fn(() => "2025-26"),
-  nextVoucherNo: vi.fn(async () => ({ voucherNo: "PAY/001" })),
+  nextVoucherNo: vi.fn(async () => ({ voucherNo: "PAYSTL/001" })),
 }));
 
 vi.mock("../src/modules/org-structure/domain.js", () => ({
   validateOrgAssignment: vi.fn(async () => undefined),
+}));
+
+vi.mock("../src/modules/gl/spine.js", () => ({
+  deterministicId: (key: string) => {
+    const h = createHash("sha256").update(key).digest("hex");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+  },
+}));
+
+vi.mock("../src/modules/gl/domain.js", () => ({
+  assertJournalBalances: vi.fn(() => undefined),
 }));
 
 // ---------------------------------------------------------------------------
@@ -158,6 +168,10 @@ import { CONSUMED_EVENTS, EVENTS } from "../src/topics.js";
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";
 
+/** Default head codes the consumer uses (env-configurable, defaults: 2101 / 1101) */
+const NET_PAYABLE_HEAD = "2101";
+const BANK_HEAD = "1101";
+
 function makeMsg(type: string, payload: Record<string, unknown>) {
   return {
     messageId: randomUUID(),
@@ -170,6 +184,11 @@ function makeMsg(type: string, payload: Record<string, unknown>) {
   };
 }
 
+function expectedJournalId(runId: string): string {
+  const h = createHash("sha256").update(`payroll_settlement:${runId}`).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
 async function buildQueue(): Promise<TestMemoryQueue> {
   const q = new TestMemoryQueue();
   registerGlConsumers(q as any);
@@ -178,17 +197,20 @@ async function buildQueue(): Promise<TestMemoryQueue> {
 }
 
 // ---------------------------------------------------------------------------
+/** Generate a fake UUID from a head code (ensures resolveHeadIdTx passes through) */
+function fakeHeadUuid(code: string): string {
+  return `00000000-0000-4000-8000-${code.padStart(12, "0")}`;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   markProcessedMock.mockResolvedValue(true);
   findJournalByIdTxMock.mockResolvedValue(null);
   findHeadByCodeTxMock.mockImplementation(async (_tx: unknown, _tenantId: string, code: string) => {
-    // Return UUIDs so resolveHeadIdTx passes through without re-resolving
-    const fakeUuid = `00000000-0000-4000-8000-${code.padStart(12, "0")}`;
-    return { id: fakeUuid, code, name: `Head ${code}`, tenantId: TENANT };
+    return { id: fakeHeadUuid(code), code, name: `Head ${code}`, tenantId: TENANT };
   });
   findHeadByIdTxMock.mockImplementation(async (_tx: unknown, id: string) => {
-    return { id, code: "4100", name: "Salary Expense", classification: "expense" };
+    return { id, code: "2101", name: "Net Payable", classification: "liability" };
   });
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
     await cb(mockTx);
@@ -198,15 +220,11 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 // Payroll→GL Consumer Tests
 // ---------------------------------------------------------------------------
-describe("payroll.run.finalized → GL journal posting", () => {
+describe("payroll.run.disbursed → GL journal posting", () => {
   const BASE_PAYLOAD = {
     runId: "run-001",
-    tenantId: TENANT,
-    fy: "2025-26",
-    entries: [
-      { headCode: "4100", debitMinor: "5000000", creditMinor: "0" },
-      { headCode: "2100", debitMinor: "0", creditMinor: "5000000" },
-    ],
+    month: "2025-06",
+    totalNetMinor: "5000000",
   };
 
   describe("happy path: journal created with balanced entries, gl.posted emitted", () => {
@@ -214,25 +232,25 @@ describe("payroll.run.finalized → GL journal posting", () => {
       const q = await buildQueue();
 
       await q.publish(
-        CONSUMED_EVENTS.payrollRunFinalized,
-        makeMsg(CONSUMED_EVENTS.payrollRunFinalized, BASE_PAYLOAD),
+        CONSUMED_EVENTS.payrollRunDisbursed,
+        makeMsg(CONSUMED_EVENTS.payrollRunDisbursed, BASE_PAYLOAD),
       );
 
       // markProcessed should have been called
       expect(markProcessedMock).toHaveBeenCalledTimes(1);
 
-      // headCode validation: findHeadByCodeTx should be called for each entry
+      // headCode validation: findHeadByCodeTx should be called for each line (net payable + bank)
       expect(findHeadByCodeTxMock).toHaveBeenCalledTimes(2);
-      expect(findHeadByCodeTxMock).toHaveBeenCalledWith(expect.anything(), TENANT, "4100");
-      expect(findHeadByCodeTxMock).toHaveBeenCalledWith(expect.anything(), TENANT, "2100");
+      expect(findHeadByCodeTxMock).toHaveBeenCalledWith(expect.anything(), TENANT, NET_PAYABLE_HEAD);
+      expect(findHeadByCodeTxMock).toHaveBeenCalledWith(expect.anything(), TENANT, BANK_HEAD);
 
       // Journal should be inserted (via postJournal → repo.insertJournal)
       expect(insertJournalMock).toHaveBeenCalled();
       const journalArgs = insertJournalMock.mock.calls[0][1];
       expect(journalArgs.tenantId).toBe(TENANT);
-      expect(journalArgs.type).toBe("payroll");
+      expect(journalArgs.type).toBe("payroll_settlement");
       expect(journalArgs.status).toBe("posted");
-      expect(journalArgs.voucherNo).toContain("PAY/");
+      expect(journalArgs.voucherNo).toContain("PAYSTL/");
 
       // Ledger lines should be inserted for each entry
       expect(insertLedgerLineMock).toHaveBeenCalledTimes(2);
@@ -253,15 +271,15 @@ describe("payroll.run.finalized → GL journal posting", () => {
       const q = await buildQueue();
 
       await q.publish(
-        CONSUMED_EVENTS.payrollRunFinalized,
-        makeMsg(CONSUMED_EVENTS.payrollRunFinalized, BASE_PAYLOAD),
+        CONSUMED_EVENTS.payrollRunDisbursed,
+        makeMsg(CONSUMED_EVENTS.payrollRunDisbursed, BASE_PAYLOAD),
       );
 
       // The journal lines should use resolved head UUIDs as accountCode
       const journalArgs = insertJournalMock.mock.calls[0][1];
       const lines = journalArgs.lines as Array<{ accountCode: string }>;
-      expect(lines[0].accountCode).toBe("00000000-0000-4000-8000-000000004100");
-      expect(lines[1].accountCode).toBe("00000000-0000-4000-8000-000000002100");
+      expect(lines[0].accountCode).toBe(fakeHeadUuid(NET_PAYABLE_HEAD));
+      expect(lines[1].accountCode).toBe(fakeHeadUuid(BANK_HEAD));
 
       await q.stop();
     });
@@ -270,12 +288,13 @@ describe("payroll.run.finalized → GL journal posting", () => {
       const q = await buildQueue();
 
       await q.publish(
-        CONSUMED_EVENTS.payrollRunFinalized,
-        makeMsg(CONSUMED_EVENTS.payrollRunFinalized, BASE_PAYLOAD),
+        CONSUMED_EVENTS.payrollRunDisbursed,
+        makeMsg(CONSUMED_EVENTS.payrollRunDisbursed, BASE_PAYLOAD),
       );
 
       const journalArgs = insertJournalMock.mock.calls[0][1];
-      // Journal ID should be deterministic (SHA-256 based)
+      // Journal ID should be deterministic (SHA-256 based on payroll_settlement:run-001)
+      expect(journalArgs.id).toBe(expectedJournalId("run-001"));
       expect(journalArgs.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 
       await q.stop();
@@ -284,41 +303,37 @@ describe("payroll.run.finalized → GL journal posting", () => {
 
   describe("invalid headCode: gl.rejected emitted with reason", () => {
     it("emits finance.gl.rejected when a headCode does not exist in COA", async () => {
-      // Make one headCode fail resolution
+      // Make the bank head code fail resolution
       findHeadByCodeTxMock.mockImplementation(async (_tx: unknown, _tenantId: string, code: string) => {
-        if (code === "9999") return null; // Unknown head code
-        return { id: `head-${code}`, code, name: `Head ${code}`, tenantId: TENANT };
+        if (code === BANK_HEAD) return null; // Unknown head code
+        return { id: fakeHeadUuid(code), code, name: `Head ${code}`, tenantId: TENANT };
       });
 
       const q = await buildQueue();
 
-      const invalidPayload = {
+      const payload = {
         runId: "run-bad-head",
-        tenantId: TENANT,
-        fy: "2025-26",
-        entries: [
-          { headCode: "4100", debitMinor: "3000000", creditMinor: "0" },
-          { headCode: "9999", debitMinor: "0", creditMinor: "3000000" }, // invalid
-        ],
+        month: "2025-06",
+        totalNetMinor: "3000000",
       };
 
       await q.publish(
-        CONSUMED_EVENTS.payrollRunFinalized,
-        makeMsg(CONSUMED_EVENTS.payrollRunFinalized, invalidPayload),
+        CONSUMED_EVENTS.payrollRunDisbursed,
+        makeMsg(CONSUMED_EVENTS.payrollRunDisbursed, payload),
       );
 
-      // No journal should be inserted
+      // No journal should be inserted (the main transaction rolls back on error)
       expect(insertJournalMock).not.toHaveBeenCalled();
 
-      // finance.gl.rejected event should be emitted
+      // finance.gl.rejected event should be emitted (in a separate transaction)
       const rejectedCall = enqueueMock.mock.calls.find(
         ([_tx, msg]: [unknown, { topic: string }]) => msg.topic === EVENTS.glRejected,
       );
       expect(rejectedCall).toBeDefined();
-      const payload = rejectedCall![1].payload;
-      expect(payload.runId).toBe("run-bad-head");
-      expect(payload.reason).toContain("INVALID_HEAD_CODE");
-      expect(payload.reason).toContain("9999");
+      const rejPayload = rejectedCall![1].payload;
+      expect(rejPayload.runId).toBe("run-bad-head");
+      expect(rejPayload.reason).toContain("INVALID_HEAD_CODE");
+      expect(rejPayload.reason).toContain(BANK_HEAD);
 
       // gl.posted should NOT have been emitted
       const postedCall = enqueueMock.mock.calls.find(
@@ -330,23 +345,20 @@ describe("payroll.run.finalized → GL journal posting", () => {
     });
 
     it("includes the specific invalid headCode in the rejection reason", async () => {
+      // Override the net payable head env default — simulate unknown net payable code
       findHeadByCodeTxMock.mockImplementation(async (_tx: unknown, _tenantId: string, code: string) => {
-        if (code === "BADCODE") return null;
-        return { id: `head-${code}`, code, name: `Head ${code}`, tenantId: TENANT };
+        if (code === NET_PAYABLE_HEAD) return null;
+        return { id: fakeHeadUuid(code), code, name: `Head ${code}`, tenantId: TENANT };
       });
 
       const q = await buildQueue();
 
       await q.publish(
-        CONSUMED_EVENTS.payrollRunFinalized,
-        makeMsg(CONSUMED_EVENTS.payrollRunFinalized, {
+        CONSUMED_EVENTS.payrollRunDisbursed,
+        makeMsg(CONSUMED_EVENTS.payrollRunDisbursed, {
           runId: "run-specific-bad",
-          tenantId: TENANT,
-          fy: "2025-26",
-          entries: [
-            { headCode: "BADCODE", debitMinor: "1000000", creditMinor: "0" },
-            { headCode: "2100", debitMinor: "0", creditMinor: "1000000" },
-          ],
+          month: "2025-06",
+          totalNetMinor: "1000000",
         }),
       );
 
@@ -354,7 +366,7 @@ describe("payroll.run.finalized → GL journal posting", () => {
         ([_tx, msg]: [unknown, { topic: string }]) => msg.topic === EVENTS.glRejected,
       );
       expect(rejectedCall).toBeDefined();
-      expect(rejectedCall![1].payload.reason).toContain("BADCODE");
+      expect(rejectedCall![1].payload.reason).toContain(NET_PAYABLE_HEAD);
 
       await q.stop();
     });
@@ -366,8 +378,8 @@ describe("payroll.run.finalized → GL journal posting", () => {
       const q = await buildQueue();
 
       await q.publish(
-        CONSUMED_EVENTS.payrollRunFinalized,
-        makeMsg(CONSUMED_EVENTS.payrollRunFinalized, BASE_PAYLOAD),
+        CONSUMED_EVENTS.payrollRunDisbursed,
+        makeMsg(CONSUMED_EVENTS.payrollRunDisbursed, BASE_PAYLOAD),
       );
 
       // No headCode resolution should happen
@@ -396,8 +408,8 @@ describe("payroll.run.finalized → GL journal posting", () => {
       const q = await buildQueue();
 
       await q.publish(
-        CONSUMED_EVENTS.payrollRunFinalized,
-        makeMsg(CONSUMED_EVENTS.payrollRunFinalized, BASE_PAYLOAD),
+        CONSUMED_EVENTS.payrollRunDisbursed,
+        makeMsg(CONSUMED_EVENTS.payrollRunDisbursed, BASE_PAYLOAD),
       );
 
       expect(cache.invalidateResource).toHaveBeenCalledWith(TENANT, "journals");

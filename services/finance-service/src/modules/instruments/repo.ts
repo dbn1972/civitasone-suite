@@ -1,5 +1,5 @@
 import { and, eq, desc, inArray, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   financeInstruments,
   type InstrumentRow,
@@ -12,55 +12,71 @@ import {
  * than creating a duplicate or erroring.
  */
 export async function insertInstrument(row: InstrumentInsert): Promise<{ row: InstrumentRow; created: boolean }> {
-  const inserted = await db
-    .insert(financeInstruments)
-    .values(row)
-    .onConflictDoNothing({
-      target: [financeInstruments.tenantId, financeInstruments.instrumentType, financeInstruments.instrumentNo],
-    })
-    .returning();
-  if (inserted[0]) return { row: inserted[0], created: true };
-  // Conflict — the instrument already exists; return the canonical row.
-  const existing = await findByNumber(row.tenantId, row.instrumentType, row.instrumentNo);
-  if (!existing) throw new Error("INSTRUMENT_INSERT_RACE: conflict but no existing row found");
-  return { row: existing, created: false };
+  return db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(financeInstruments)
+      .values(row)
+      .onConflictDoNothing({
+        target: [financeInstruments.tenantId, financeInstruments.instrumentType, financeInstruments.instrumentNo],
+      })
+      .returning();
+    if (inserted[0]) return { row: inserted[0], created: true };
+    // Conflict — the instrument already exists; return the canonical row.
+    const existing = await tx
+      .select()
+      .from(financeInstruments)
+      .where(and(
+        eq(financeInstruments.tenantId, row.tenantId),
+        eq(financeInstruments.instrumentType, row.instrumentType),
+        eq(financeInstruments.instrumentNo, row.instrumentNo),
+      ))
+      .limit(1);
+    if (!existing[0]) throw new Error("INSTRUMENT_INSERT_RACE: conflict but no existing row found");
+    return { row: existing[0], created: false };
+  });
 }
 
 export async function findById(tenantId: string, id: string): Promise<InstrumentRow | null> {
-  const rows = await db
-    .select()
-    .from(financeInstruments)
-    .where(and(eq(financeInstruments.tenantId, tenantId), eq(financeInstruments.id, id)))
-    .limit(1);
-  return rows[0] ?? null;
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(financeInstruments)
+      .where(and(eq(financeInstruments.tenantId, tenantId), eq(financeInstruments.id, id)))
+      .limit(1);
+    return rows[0] ?? null;
+  });
 }
 
 export async function findByNumber(tenantId: string, type: string, no: string): Promise<InstrumentRow | null> {
-  const rows = await db
-    .select()
-    .from(financeInstruments)
-    .where(and(
-      eq(financeInstruments.tenantId, tenantId),
-      eq(financeInstruments.instrumentType, type),
-      eq(financeInstruments.instrumentNo, no),
-    ))
-    .limit(1);
-  return rows[0] ?? null;
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(financeInstruments)
+      .where(and(
+        eq(financeInstruments.tenantId, tenantId),
+        eq(financeInstruments.instrumentType, type),
+        eq(financeInstruments.instrumentNo, no),
+      ))
+      .limit(1);
+    return rows[0] ?? null;
+  });
 }
 
 export async function listInstruments(
   tenantId: string,
   filters: { status?: string; type?: string; limit: number },
 ): Promise<InstrumentRow[]> {
-  const conds = [eq(financeInstruments.tenantId, tenantId)];
-  if (filters.status) conds.push(eq(financeInstruments.status, filters.status));
-  if (filters.type)   conds.push(eq(financeInstruments.instrumentType, filters.type));
-  return db
-    .select()
-    .from(financeInstruments)
-    .where(and(...conds))
-    .orderBy(desc(financeInstruments.issueDate), desc(financeInstruments.createdAt))
-    .limit(filters.limit);
+  return scopedRead(async (tx) => {
+    const conds = [eq(financeInstruments.tenantId, tenantId)];
+    if (filters.status) conds.push(eq(financeInstruments.status, filters.status));
+    if (filters.type)   conds.push(eq(financeInstruments.instrumentType, filters.type));
+    return tx
+      .select()
+      .from(financeInstruments)
+      .where(and(...conds))
+      .orderBy(desc(financeInstruments.issueDate), desc(financeInstruments.createdAt))
+      .limit(filters.limit);
+  });
 }
 
 /**
@@ -79,21 +95,23 @@ export async function transition(
   tsColumn: "presentedAt" | "clearedAt" | "bouncedAt" | "cancelledAt",
   updatedBy: string,
 ): Promise<InstrumentRow | null> {
-  const updated = await db
-    .update(financeInstruments)
-    .set({
-      status: toStatus,
-      [tsColumn]: new Date(),
-      updatedBy,
-      updatedAt: new Date(),
-      version: sql`${financeInstruments.version} + 1`,
-      ...(patch.bounceReason !== undefined ? { bounceReason: patch.bounceReason } : {}),
-    })
-    .where(and(
-      eq(financeInstruments.tenantId, tenantId),
-      eq(financeInstruments.id, id),
-      inArray(financeInstruments.status, fromStatuses),
-    ))
-    .returning();
-  return updated[0] ?? null;
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(financeInstruments)
+      .set({
+        status: toStatus,
+        [tsColumn]: new Date(),
+        updatedBy,
+        updatedAt: new Date(),
+        version: sql`${financeInstruments.version} + 1`,
+        ...(patch.bounceReason !== undefined ? { bounceReason: patch.bounceReason } : {}),
+      })
+      .where(and(
+        eq(financeInstruments.tenantId, tenantId),
+        eq(financeInstruments.id, id),
+        inArray(financeInstruments.status, fromStatuses),
+      ))
+      .returning();
+    return updated[0] ?? null;
+  });
 }
