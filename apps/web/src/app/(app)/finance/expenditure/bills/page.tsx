@@ -4,6 +4,7 @@ import { getFinanceBills } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { BillCreateAction } from "../../_components/FinanceActions";
 import { BillsTable } from "./BillsTable";
+import Link from "next/link";
 
 export default async function BillsPage() {
   const { data: bills, source } = await getFinanceBills();
@@ -20,7 +21,7 @@ export default async function BillsPage() {
         subtitle="Receive, pre-audit, pass and pay bills against sanctions."
         actions={
           <>
-            <button className="btn ghost">Pre-audit rules</button>
+            <Link href="/finance/config" className="btn ghost">Pre-audit rules</Link>
             <BillCreateAction />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
