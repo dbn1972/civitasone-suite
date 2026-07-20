@@ -91,6 +91,7 @@ export function registerEsignConsumers(queue: Queue): void {
         fileId, docHash, method: p.method, provider: provider.name, pkcs7,
         certSerial, certSubject, certIssuer, signerId: p.signerId,
         signedAt, revocationCheckedAt: new Date(), valid, txnRef,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "esign_signed", p.id, { subjectType: p.subjectType, subjectId: p.subjectId, method: p.method, provider: provider.name, valid });
     });

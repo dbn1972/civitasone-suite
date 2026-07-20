@@ -5,18 +5,24 @@ import type { CommitteeInsert, MeetingInsert, MeetingRow, ResolutionInsert, Reso
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findMeetingsByCommittee(committeeId: string, tenantId: string): Promise<MeetingRow[]> {
-  return db.select().from(estabMeetings)
-    .where(and(eq(estabMeetings.committeeId, committeeId), eq(estabMeetings.tenantId, tenantId)));
+  return db.transaction((tx) => tx.select().from(estabMeetings)
+    .where(and(eq(estabMeetings.committeeId, committeeId), eq(estabMeetings.tenantId, tenantId))));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listMeetingsByTenant(tenantId: string, limit: number): Promise<MeetingRow[]> {
-  return db.select().from(estabMeetings).where(eq(estabMeetings.tenantId, tenantId)).limit(limit);
+  return db.transaction((tx) => tx.select().from(estabMeetings).where(eq(estabMeetings.tenantId, tenantId)).limit(limit));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findMeetingById(id: string, tenantId: string): Promise<MeetingRow | null> {
-  const rows = await db.select().from(estabMeetings)
-    .where(and(eq(estabMeetings.id, id), eq(estabMeetings.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabMeetings)
+    .where(and(eq(estabMeetings.id, id), eq(estabMeetings.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -25,9 +31,11 @@ export async function countResolutions(tx: Writer, meetingId: string): Promise<n
   return rows.length;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findResolutionsByMeeting(meetingId: string, tenantId: string): Promise<ResolutionRow[]> {
-  return db.select().from(estabResolutions)
-    .where(and(eq(estabResolutions.meetingId, meetingId), eq(estabResolutions.tenantId, tenantId)));
+  return db.transaction((tx) => tx.select().from(estabResolutions)
+    .where(and(eq(estabResolutions.meetingId, meetingId), eq(estabResolutions.tenantId, tenantId))));
 }
 
 export async function insertCommittee(tx: Writer, row: CommitteeInsert): Promise<void> {
@@ -46,8 +54,10 @@ export async function updateMeeting(tx: Writer, id: string, patch: Partial<Meeti
   await tx.update(estabMeetings).set({ ...patch, updatedAt: new Date() }).where(eq(estabMeetings.id, id));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listComplianceItems(tenantId: string, limit: number): Promise<ComplianceRow[]> {
-  return db.select().from(estabCompliance)
+  return db.transaction((tx) => tx.select().from(estabCompliance)
     .where(eq(estabCompliance.tenantId, tenantId))
-    .limit(limit);
+    .limit(limit));
 }

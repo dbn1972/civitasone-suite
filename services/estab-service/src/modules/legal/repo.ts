@@ -5,13 +5,17 @@ import type { CourtCaseInsert, CaseDateInsert, RtiInsert, RtiRow, CourtCaseRow }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findRtiById(id: string): Promise<RtiRow | null> {
-  const rows = await db.select().from(estabRtiRequests).where(eq(estabRtiRequests.id, id)).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabRtiRequests).where(eq(estabRtiRequests.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findCourtCaseById(id: string): Promise<CourtCaseRow | null> {
-  const rows = await db.select().from(estabCourtCases).where(eq(estabCourtCases.id, id)).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabCourtCases).where(eq(estabCourtCases.id, id)).limit(1));
   return rows[0] ?? null;
 }
 

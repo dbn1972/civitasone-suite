@@ -8,15 +8,32 @@
  * 5. assertWeedable pure guard: Category A throws; before review-due throws; on/after passes.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabFileRecord, estabWeedout } from "../src/modules/records/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRecordsConsumers } from "../src/modules/records/consumer.js";
 import { COMMANDS } from "../src/modules/records/commands.js";
 import { assertWeedable, computeReviewDueDate, DomainError } from "../src/modules/records/domain.js";
+
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly here (not the
+ * `createQueue()` factory) does NOT auto-wrap subscribed handlers with
+ * `withTenantConsumer`. Production wiring (queue-service's `createQueue()`)
+ * decorates `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`, which is what lets `db.transaction()`
+ * pick up the tenant GUC. Without this wrapping, consumer writes/reads in
+ * these tests run with no RLS GUC set. Mirror that decoration here.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 const TENANT  = randomUUID();
 const ACTOR   = "00000000-aaaa-4000-8000-000000000001";
@@ -45,13 +62,19 @@ const ALL_MSG_IDS = [
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+// Test-harness fix: bare db.delete() outside db.transaction() runs with no RLS
+// GUC set — wrap in runWithTenant(TENANT, () => db.transaction(...)).
 async function wipe(): Promise<void> {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(estabWeedout).where(eq(estabWeedout.tenantId, TENANT));
-  await db.delete(estabFileRecord).where(eq(estabFileRecord.tenantId, TENANT));
-  for (const id of ALL_MSG_IDS) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.delete(estabWeedout).where(eq(estabWeedout.tenantId, TENANT));
+      await tx.delete(estabFileRecord).where(eq(estabFileRecord.tenantId, TENANT));
+      for (const id of ALL_MSG_IDS) {
+        await tx.delete(processed).where(eq(processed.messageId, id));
+      }
+    }),
+  );
 }
 
 function envelope(messageId: string, type: string, actorId: string, payload: unknown) {
@@ -72,7 +95,7 @@ afterAll(async () => {
 
 describe("Record category — retention derivation", () => {
   it("assigning category B yields retention_years=10 and review_due_date ≈ now + 10y", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerRecordsConsumers(q);
     await q.start();
 
@@ -83,7 +106,9 @@ describe("Record category — retention derivation", () => {
     await delay(500);
     await q.stop();
 
-    const rows = await db.select().from(estabFileRecord).where(eq(estabFileRecord.fileId, FILE_B));
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabFileRecord).where(eq(estabFileRecord.fileId, FILE_B))),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.recordCategory).toBe("B");
     expect(rows[0]?.retentionYears).toBe(10);
@@ -96,7 +121,7 @@ describe("Record category — retention derivation", () => {
   });
 
   it("assigning category A is permanent: retention_years and review_due_date are NULL", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerRecordsConsumers(q);
     await q.start();
 
@@ -106,7 +131,9 @@ describe("Record category — retention derivation", () => {
     await delay(500);
     await q.stop();
 
-    const rows = await db.select().from(estabFileRecord).where(eq(estabFileRecord.fileId, FILE_A));
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabFileRecord).where(eq(estabFileRecord.fileId, FILE_A))),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.recordCategory).toBe("A");
     expect(rows[0]?.retentionYears).toBeNull();
@@ -119,12 +146,16 @@ describe("Record category — retention derivation", () => {
 describe("Weed-out workflow — propose → approve → destroy", () => {
   it("transitions proposed → approved (by a different actor) → destroyed with a cert", async () => {
     // Seed a record already past its review-due date so it is weedable.
-    await db.insert(estabFileRecord).values({
-      tenantId: TENANT, fileId: FILE_W, recordCategory: "E", retentionYears: 1,
-      reviewDueDate: "2000-01-01", createdBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () =>
+      db.transaction((tx) =>
+        tx.insert(estabFileRecord).values({
+          tenantId: TENANT, fileId: FILE_W, recordCategory: "E", retentionYears: 1,
+          reviewDueDate: "2000-01-01", createdBy: ACTOR,
+        }),
+      ),
+    );
 
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerRecordsConsumers(q);
     await q.start();
 
@@ -132,7 +163,9 @@ describe("Weed-out workflow — propose → approve → destroy", () => {
       id: WEEDOUT_1, fileId: FILE_W, tenantId: TENANT, reason: "retention elapsed",
     }));
     await delay(400);
-    let rows = await db.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_1));
+    let rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_1))),
+    );
     expect(rows[0]?.status).toBe("proposed");
     expect(rows[0]?.proposedBy).toBe(PROPOSER);
 
@@ -140,7 +173,9 @@ describe("Weed-out workflow — propose → approve → destroy", () => {
       id: WEEDOUT_1, tenantId: TENANT,
     }));
     await delay(400);
-    rows = await db.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_1));
+    rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_1))),
+    );
     expect(rows[0]?.status).toBe("approved");
     expect(rows[0]?.reviewedBy).toBe(CHECKER);
 
@@ -150,7 +185,9 @@ describe("Weed-out workflow — propose → approve → destroy", () => {
     await delay(400);
     await q.stop();
 
-    rows = await db.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_1));
+    rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_1))),
+    );
     expect(rows[0]?.status).toBe("destroyed");
     expect(rows[0]?.destructionCertRef).toBe("CERT/2030/001");
     expect(rows[0]?.destroyedAt).not.toBeNull();
@@ -163,7 +200,7 @@ describe("Weed-out workflow — propose → approve → destroy", () => {
 
 describe("Weed-out workflow — maker ≠ checker", () => {
   it("approval by the proposer is rejected with MAKER_CHECKER_VIOLATION and status stays 'proposed'", async () => {
-    const q = new MemoryQueue({ maxAttempts: 1 });
+    const q = wireTenantAwareQueue(new MemoryQueue({ maxAttempts: 1 }));
     registerRecordsConsumers(q);
     await q.start();
 
@@ -179,7 +216,9 @@ describe("Weed-out workflow — maker ≠ checker", () => {
     await delay(500);
     await q.stop();
 
-    const rows = await db.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_2));
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabWeedout).where(eq(estabWeedout.id, WEEDOUT_2))),
+    );
     expect(rows[0]?.status).toBe("proposed");
     expect(rows[0]?.reviewedBy).toBeNull();
 

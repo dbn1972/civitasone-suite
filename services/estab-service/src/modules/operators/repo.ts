@@ -5,33 +5,41 @@ import type { OperatorRow, OperatorInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findOperatorById(id: string, tenantId: string): Promise<OperatorRow | null> {
-  const rows = await db.select().from(estabFileOperator)
-    .where(and(eq(estabFileOperator.id, id), eq(estabFileOperator.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabFileOperator)
+    .where(and(eq(estabFileOperator.id, id), eq(estabFileOperator.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listOperators(tenantId: string, limit: number): Promise<OperatorRow[]> {
-  return db.select().from(estabFileOperator)
+  return db.transaction((tx) => tx.select().from(estabFileOperator)
     .where(eq(estabFileOperator.tenantId, tenantId))
     .orderBy(asc(estabFileOperator.division), asc(estabFileOperator.deskRole))
-    .limit(limit);
+    .limit(limit));
 }
 
 /** Active desks for a given employee (an employee may hold desks in >1 division). */
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findActiveOperatorsForEmployee(tenantId: string, employeeId: string): Promise<OperatorRow[]> {
-  return db.select().from(estabFileOperator).where(and(
+  return db.transaction((tx) => tx.select().from(estabFileOperator).where(and(
     eq(estabFileOperator.tenantId, tenantId),
     eq(estabFileOperator.employeeId, employeeId),
     eq(estabFileOperator.active, true),
-  ));
+  )));
 }
 
 /** Has this tenant enrolled ANY active operator? Drives adoption-aware gating. */
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function hasActiveOperators(tenantId: string): Promise<boolean> {
-  const rows = await db.select({ id: estabFileOperator.id }).from(estabFileOperator)
+  const rows = await db.transaction((tx) => tx.select({ id: estabFileOperator.id }).from(estabFileOperator)
     .where(and(eq(estabFileOperator.tenantId, tenantId), eq(estabFileOperator.active, true)))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }
 

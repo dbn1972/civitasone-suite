@@ -14,20 +14,26 @@ export async function deleteReference(tx: Writer, id: string, tenantId: string):
     .where(and(eq(estabReference.id, id), eq(estabReference.tenantId, tenantId)));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listReferencesByFile(tenantId: string, fileId: string): Promise<ReferenceRow[]> {
-  return db.select().from(estabReference)
+  return db.transaction((tx) => tx.select().from(estabReference)
     .where(and(eq(estabReference.tenantId, tenantId), eq(estabReference.fileId, fileId)))
-    .orderBy(asc(estabReference.createdAt));
+    .orderBy(asc(estabReference.createdAt)));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listReferencesByNote(tenantId: string, noteId: string): Promise<ReferenceRow[]> {
-  return db.select().from(estabReference)
+  return db.transaction((tx) => tx.select().from(estabReference)
     .where(and(eq(estabReference.tenantId, tenantId), eq(estabReference.noteId, noteId)))
-    .orderBy(asc(estabReference.createdAt));
+    .orderBy(asc(estabReference.createdAt)));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findReferenceById(id: string, tenantId: string): Promise<ReferenceRow | null> {
-  const rows = await db.select().from(estabReference)
-    .where(and(eq(estabReference.id, id), eq(estabReference.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabReference)
+    .where(and(eq(estabReference.id, id), eq(estabReference.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }

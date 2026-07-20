@@ -9,38 +9,44 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select" | "execute">
 
 // ── Correspondence reads (tenant-scoped) ──────────────────────────────────
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listCorrespondenceByFile(
   fileId: string,
   tenantId: string,
 ): Promise<CorrespondenceRow[]> {
-  return db.select().from(estabCorrespondence).where(and(
+  return db.transaction((tx) => tx.select().from(estabCorrespondence).where(and(
     eq(estabCorrespondence.fileId, fileId),
     eq(estabCorrespondence.tenantId, tenantId),
-  )).orderBy(asc(estabCorrespondence.pageFrom));
+  )).orderBy(asc(estabCorrespondence.pageFrom)));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findCorrespondenceById(
   id: string,
   tenantId: string,
 ): Promise<CorrespondenceRow | null> {
-  const rows = await db.select().from(estabCorrespondence).where(and(
+  const rows = await db.transaction((tx) => tx.select().from(estabCorrespondence).where(and(
     eq(estabCorrespondence.id, id),
     eq(estabCorrespondence.tenantId, tenantId),
-  )).limit(1);
+  )).limit(1));
   return rows[0] ?? null;
 }
 
 // ── PUC reads (tenant-scoped) ─────────────────────────────────────────────
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listActivePucByFile(
   fileId: string,
   tenantId: string,
 ): Promise<FilePucRow[]> {
-  return db.select().from(estabFilePuc).where(and(
+  return db.transaction((tx) => tx.select().from(estabFilePuc).where(and(
     eq(estabFilePuc.fileId, fileId),
     eq(estabFilePuc.tenantId, tenantId),
     eq(estabFilePuc.active, true),
-  )).orderBy(asc(estabFilePuc.markedAt));
+  )).orderBy(asc(estabFilePuc.markedAt)));
 }
 
 // ── Writes (inside the consumer's transaction) ────────────────────────────

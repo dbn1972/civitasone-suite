@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabDfa, estabDfaVersion } from "../src/modules/dfa/schema.js";
 import { insertDfa, updateDfa, findDfaById } from "../src/modules/dfa/repo.js";
@@ -19,8 +20,12 @@ const APPROVER = "00000000-eeee-4000-8000-0000000000c2";
 
 async function clean() {
   for (const t of [TENANT_A, TENANT_B]) {
-    await db.delete(estabDfaVersion).where(eq(estabDfaVersion.tenantId, t));
-    await db.delete(estabDfa).where(eq(estabDfa.tenantId, t));
+    await runWithTenant(t, () =>
+      db.transaction(async (tx) => {
+        await tx.delete(estabDfaVersion).where(eq(estabDfaVersion.tenantId, t));
+        await tx.delete(estabDfa).where(eq(estabDfa.tenantId, t));
+      }),
+    );
   }
 }
 
@@ -39,20 +44,26 @@ describe("R10 approval modality vocabulary", () => {
 
 describe("R10 conditional approval persistence", () => {
   async function seedPending(tenantId: string, id: string) {
-    await insertDfa(db, {
-      id, tenantId, dfaNo: formatDfaNo("order", 2026, 1),
-      fileId: null, communicationType: "order", templateCode: null,
-      subject: "Sanction proposal", body: "Proposed sanction of expenditure",
-      recipientEmployeeId: null, recipientName: null, recipientAddress: null,
-      status: "pending_approval", createdBy: DRAFTER, updatedBy: DRAFTER,
-    });
+    await runWithTenant(tenantId, () =>
+      db.transaction((tx) =>
+        insertDfa(tx, {
+          id, tenantId, dfaNo: formatDfaNo("order", 2026, 1),
+          fileId: null, communicationType: "order", templateCode: null,
+          subject: "Sanction proposal", body: "Proposed sanction of expenditure",
+          recipientEmployeeId: null, recipientName: null, recipientAddress: null,
+          status: "pending_approval", createdBy: DRAFTER, updatedBy: DRAFTER,
+        }),
+      ),
+    );
   }
 
   it("defaults to plain 'approved' modality with no conditions", async () => {
     const id = randomUUID();
     await seedPending(TENANT_A, id);
-    await updateDfa(db, id, { status: "approved", approvedBy: APPROVER, decisionModality: "approved" });
-    const row = await findDfaById(id, TENANT_A);
+    await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) => updateDfa(tx, id, { status: "approved", approvedBy: APPROVER, decisionModality: "approved" })),
+    );
+    const row = await runWithTenant(TENANT_A, () => findDfaById(id, TENANT_A));
     expect(row?.decisionModality).toBe("approved");
     expect(row?.decisionConditions).toBeNull();
   });
@@ -60,12 +71,14 @@ describe("R10 conditional approval persistence", () => {
   it("records 'approved_with_conditions' and the condition text", async () => {
     const id = randomUUID();
     await seedPending(TENANT_A, id);
-    await updateDfa(db, id, {
-      status: "approved", approvedBy: APPROVER,
-      decisionModality: "approved_with_conditions",
-      decisionConditions: "Subject to availability of budget under HoA 2052",
-    });
-    const row = await findDfaById(id, TENANT_A);
+    await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) => updateDfa(tx, id, {
+        status: "approved", approvedBy: APPROVER,
+        decisionModality: "approved_with_conditions",
+        decisionConditions: "Subject to availability of budget under HoA 2052",
+      })),
+    );
+    const row = await runWithTenant(TENANT_A, () => findDfaById(id, TENANT_A));
     expect(row?.status).toBe("approved");
     expect(row?.decisionModality).toBe("approved_with_conditions");
     expect(row?.decisionConditions).toContain("HoA 2052");
@@ -74,12 +87,14 @@ describe("R10 conditional approval persistence", () => {
   it("records a 'partially_approved' disposal", async () => {
     const id = randomUUID();
     await seedPending(TENANT_A, id);
-    await updateDfa(db, id, {
-      status: "approved", approvedBy: APPROVER,
-      decisionModality: "partially_approved",
-      decisionConditions: "Approved for 3 of 5 items",
-    });
-    const row = await findDfaById(id, TENANT_A);
+    await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) => updateDfa(tx, id, {
+        status: "approved", approvedBy: APPROVER,
+        decisionModality: "partially_approved",
+        decisionConditions: "Approved for 3 of 5 items",
+      })),
+    );
+    const row = await runWithTenant(TENANT_A, () => findDfaById(id, TENANT_A));
     expect(row?.decisionModality).toBe("partially_approved");
   });
 });

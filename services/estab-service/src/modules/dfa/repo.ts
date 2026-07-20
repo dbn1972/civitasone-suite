@@ -23,21 +23,25 @@ export async function allocateDfaSeq(tx: Exec, tenantId: string, communicationTy
   return Number((rows as unknown as Array<{ last_seq: number }>)[0]?.last_seq ?? 1);
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findDfaById(id: string, tenantId: string): Promise<DfaRow | null> {
-  const rows = await db.select().from(estabDfa)
-    .where(and(eq(estabDfa.id, id), eq(estabDfa.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabDfa)
+    .where(and(eq(estabDfa.id, id), eq(estabDfa.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listDfa(
   tenantId: string,
   filter: { status?: string | undefined; fileId?: string | undefined },
   limit: number,
 ): Promise<DfaRow[]> {
-  const rows = await db.select().from(estabDfa)
+  const rows = await db.transaction((tx) => tx.select().from(estabDfa)
     .where(eq(estabDfa.tenantId, tenantId))
     .orderBy(desc(estabDfa.createdAt))
-    .limit(limit);
+    .limit(limit));
   return rows
     .filter((r) => (filter.status ? r.status === filter.status : true))
     .filter((r) => (filter.fileId ? r.fileId === filter.fileId : true));
@@ -63,10 +67,12 @@ export async function nextDfaRevNo(tx: Writer, dfaId: string): Promise<number> {
 }
 
 /** List all revisions of a DFA, oldest first. */
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listDfaVersions(dfaId: string, tenantId: string): Promise<DfaVersionRow[]> {
-  return db.select().from(estabDfaVersion)
+  return db.transaction((tx) => tx.select().from(estabDfaVersion)
     .where(and(eq(estabDfaVersion.dfaId, dfaId), eq(estabDfaVersion.tenantId, tenantId)))
-    .orderBy(asc(estabDfaVersion.revNo));
+    .orderBy(asc(estabDfaVersion.revNo)));
 }
 
 
@@ -79,15 +85,19 @@ export async function insertDfaTemplate(tx: Writer, row: DfaTemplateInsert): Pro
   await tx.insert(estabDfaTemplate).values(row);
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listDfaTemplates(tenantId: string): Promise<DfaTemplateRow[]> {
-  return db.select().from(estabDfaTemplate)
+  return db.transaction((tx) => tx.select().from(estabDfaTemplate)
     .where(and(eq(estabDfaTemplate.tenantId, tenantId), eq(estabDfaTemplate.isActive, true)))
-    .orderBy(asc(estabDfaTemplate.code));
+    .orderBy(asc(estabDfaTemplate.code)));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findDfaTemplateByCode(tenantId: string, code: string): Promise<DfaTemplateRow | null> {
-  const rows = await db.select().from(estabDfaTemplate)
+  const rows = await db.transaction((tx) => tx.select().from(estabDfaTemplate)
     .where(and(eq(estabDfaTemplate.tenantId, tenantId), eq(estabDfaTemplate.code, code), eq(estabDfaTemplate.isActive, true)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }

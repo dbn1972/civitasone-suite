@@ -58,5 +58,5 @@ export async function dbFor(tenantId: string): Promise<Db> {
 
 /** Tenant isolation tier (for observability / routing decisions). */
 export async function tierOf(tenantId: string): Promise<"pool" | "silo"> {
-  return router.tierOf(tenantId);
+  return router.tierOf(tenantId) as Promise<"pool" | "silo">;
 }

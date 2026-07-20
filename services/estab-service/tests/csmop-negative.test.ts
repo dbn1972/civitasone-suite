@@ -25,6 +25,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID, createHmac } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabFiles } from "../src/modules/files/schema.js";
@@ -47,6 +48,19 @@ function mint(sub: string, roles: string[], tid: string): string {
 const CT = { "content-type": "application/json" };
 const OFFICER_ROLES = ["estab_officer"];
 
+/**
+ * Test-harness fix: `createTenantTxHook` (registered in app.ts) sets the
+ * AsyncLocalStorage tenant context from the `x-tenant-id` REQUEST HEADER, not
+ * from the JWT `tid` claim — that header is normally injected by the gateway
+ * from the verified JWT before the request reaches this service. Route tests
+ * that call `app.inject()` directly (bypassing the gateway) must supply the
+ * same header themselves, or every db.transaction() during the request runs
+ * with no RLS GUC set and reads/writes silently see zero rows.
+ */
+function authHeaders(actor: string, roles: string[], tid: string): Record<string, string> {
+  return { authorization: `Bearer ${mint(actor, roles, tid)}`, "x-tenant-id": tid };
+}
+
 // Track every tenant we touch so afterAll can clean only our rows.
 const tenants: string[] = [];
 function freshTenant(): string {
@@ -55,27 +69,38 @@ function freshTenant(): string {
   return t;
 }
 
-/** Enrol an active eOffice operator (direct insert, pre-request). */
+/**
+ * Enrol an active eOffice operator (direct insert, pre-request).
+ * Test-harness fix: bare db.insert() outside db.transaction() runs with no
+ * RLS GUC set (wrapWithTenantGuc only injects app.tenant_id inside
+ * transactions) — wrap in runWithTenant + db.transaction() like production code.
+ */
 async function enrolOperator(
   tenantId: string,
   employeeId: string,
   clearanceLevel: number,
   active = true,
 ): Promise<void> {
-  await db.insert(estabFileOperator).values({
-    tenantId,
-    employeeId,
-    division: "ADMIN",
-    deskRole: "dealing_hand",
-    clearanceLevel,
-    active,
-    assignedBy: employeeId,
-    createdBy: employeeId,
-    updatedBy: employeeId,
-  });
+  await runWithTenant(tenantId, () =>
+    db.transaction((tx) => tx.insert(estabFileOperator).values({
+      tenantId,
+      employeeId,
+      division: "ADMIN",
+      deskRole: "dealing_hand",
+      clearanceLevel,
+      active,
+      assignedBy: employeeId,
+      createdBy: employeeId,
+      updatedBy: employeeId,
+    })),
+  );
 }
 
-/** Insert a file row directly with a given classification / status. */
+/**
+ * Insert a file row directly with a given classification / status.
+ * Test-harness fix: bare db.insert() outside db.transaction() runs with no
+ * RLS GUC set — wrap in runWithTenant + db.transaction().
+ */
 async function insertFile(
   tenantId: string,
   id: string,
@@ -83,18 +108,20 @@ async function insertFile(
   classification: string,
   status = "active",
 ): Promise<void> {
-  await db.insert(estabFiles).values({
-    id,
-    tenantId,
-    fileNo: `F/${id.slice(0, 8)}`,
-    subject: "Test subject",
-    dept: "ADMIN",
-    classification,
-    currentWith: actor,
-    status,
-    createdBy: actor,
-    updatedBy: actor,
-  });
+  await runWithTenant(tenantId, () =>
+    db.transaction((tx) => tx.insert(estabFiles).values({
+      id,
+      tenantId,
+      fileNo: `F/${id.slice(0, 8)}`,
+      subject: "Test subject",
+      dept: "ADMIN",
+      classification,
+      currentWith: actor,
+      status,
+      createdBy: actor,
+      updatedBy: actor,
+    })),
+  );
 }
 
 let app: FastifyInstance;
@@ -104,9 +131,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (tenants.length > 0) {
-    await db.delete(estabFiles).where(inArray(estabFiles.tenantId, tenants));
-    await db.delete(estabFileOperator).where(inArray(estabFileOperator.tenantId, tenants));
+  // Test-harness fix: bare db.delete() outside db.transaction() runs with no
+  // RLS GUC set. Each tenant needs its own GUC scope, so clean up per-tenant.
+  for (const tenantId of tenants) {
+    await runWithTenant(tenantId, () =>
+      db.transaction(async (tx) => {
+        await tx.delete(estabFiles).where(inArray(estabFiles.tenantId, [tenantId]));
+        await tx.delete(estabFileOperator).where(inArray(estabFileOperator.tenantId, [tenantId]));
+      }),
+    );
   }
   await app.close();
   await sqlClient.end();
@@ -132,7 +165,7 @@ describe("CSMOP — classification view gate (isAccessAllowed)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/estab/files/${fileId}`,
-      headers: { authorization: `Bearer ${mint(actor, OFFICER_ROLES, T)}` },
+      headers: authHeaders(actor, OFFICER_ROLES, T),
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("FORBIDDEN");
@@ -148,7 +181,7 @@ describe("CSMOP — classification view gate (isAccessAllowed)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/estab/files/${fileId}`,
-      headers: { authorization: `Bearer ${mint(actor, OFFICER_ROLES, T)}` },
+      headers: authHeaders(actor, OFFICER_ROLES, T),
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().classification).toBe("secret");
@@ -164,7 +197,7 @@ describe("CSMOP — classification view gate (isAccessAllowed)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/estab/files/${fileId}`,
-      headers: { authorization: `Bearer ${mint(actor, OFFICER_ROLES, T)}` },
+      headers: authHeaders(actor, OFFICER_ROLES, T),
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().classification).toBe("public");
@@ -184,7 +217,7 @@ describe("CSMOP — move gate (isMoveAllowed / clearance)", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/estab/files/${fileId}/move`,
-      headers: { authorization: `Bearer ${mint(actor, OFFICER_ROLES, T)}`, ...CT },
+      headers: { ...authHeaders(actor, OFFICER_ROLES, T), ...CT },
       payload: { toOfficer: randomUUID() /* NOT enrolled */ },
     });
     expect(res.statusCode).toBe(422);
@@ -203,7 +236,7 @@ describe("CSMOP — move gate (isMoveAllowed / clearance)", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/estab/files/${fileId}/move`,
-      headers: { authorization: `Bearer ${mint(actor, OFFICER_ROLES, T)}`, ...CT },
+      headers: { ...authHeaders(actor, OFFICER_ROLES, T), ...CT },
       payload: { toOfficer: target },
     });
     expect(res.statusCode).toBe(422);
@@ -219,7 +252,7 @@ describe("CSMOP — input validation gate (zod)", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/estab/inward/detach",
-      headers: { authorization: `Bearer ${mint(actor, OFFICER_ROLES, T)}`, ...CT },
+      headers: { ...authHeaders(actor, OFFICER_ROLES, T), ...CT },
       payload: { inwardId: randomUUID() /* reason missing */ },
     });
     expect(res.statusCode).toBe(400);
@@ -232,7 +265,7 @@ describe("CSMOP — input validation gate (zod)", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/estab/files/${randomUUID()}/reopen`,
-      headers: { authorization: `Bearer ${mint(actor, OFFICER_ROLES, T)}`, ...CT },
+      headers: { ...authHeaders(actor, OFFICER_ROLES, T), ...CT },
       payload: {} /* reason missing */,
     });
     expect(res.statusCode).toBe(400);

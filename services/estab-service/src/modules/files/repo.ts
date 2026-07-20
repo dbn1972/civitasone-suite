@@ -67,7 +67,7 @@ export async function allocateDakNo(tx: Exec, tenantId: string, year: number): P
  * (CSMOP one-subject-one-file). Used to warn before opening a duplicate file.
  */
 export async function findSimilarOpenFiles(tenantId: string, subject: string, limit: number): Promise<Array<{ id: string; fileNo: string; subject: string; status: string }>> {
-  const rows = await db.execute(sql`
+  const rows = await db.transaction((tx) => tx.execute(sql`
     SELECT id, file_no, subject, status
       FROM files.estab_files
      WHERE tenant_id = ${tenantId}::uuid
@@ -75,7 +75,7 @@ export async function findSimilarOpenFiles(tenantId: string, subject: string, li
        AND lower(btrim(subject)) = lower(btrim(${subject}))
      ORDER BY created_at DESC
      LIMIT ${limit}
-  `);
+  `));
   return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id), fileNo: String(r.file_no), subject: String(r.subject), status: String(r.status),
   }));
@@ -86,36 +86,48 @@ export async function insertInwardMovement(tx: Writer, row: { tenantId: string; 
   await tx.insert(estabInwardMovements).values(row);
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listInwardMovements(inwardId: string, tenantId: string) {
-  return db.select().from(estabInwardMovements)
+  return db.transaction((tx) => tx.select().from(estabInwardMovements)
     .where(and(eq(estabInwardMovements.tenantId, tenantId), eq(estabInwardMovements.inwardId, inwardId)))
-    .orderBy(asc(estabInwardMovements.movedAt));
+    .orderBy(asc(estabInwardMovements.movedAt)));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findFileById(id: string, tenantId: string): Promise<FileRow | null> {
-  const rows = await db.select().from(estabFiles)
-    .where(and(eq(estabFiles.id, id), eq(estabFiles.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabFiles)
+    .where(and(eq(estabFiles.id, id), eq(estabFiles.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findInwardById(id: string, tenantId: string) {
-  const rows = await db.select().from(estabInward)
-    .where(and(eq(estabInward.id, id), eq(estabInward.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabInward)
+    .where(and(eq(estabInward.id, id), eq(estabInward.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findNotingsByFile(fileId: string): Promise<NotingRow[]> {
-  return db.select().from(estabNotings).where(eq(estabNotings.fileId, fileId)).orderBy(asc(estabNotings.seq));
+  return db.transaction((tx) => tx.select().from(estabNotings).where(eq(estabNotings.fileId, fileId)).orderBy(asc(estabNotings.seq)));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findNotingById(id: string, tenantId: string): Promise<NotingRow | null> {
-  const rows = await db.select().from(estabNotings)
-    .where(and(eq(estabNotings.id, id), eq(estabNotings.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabNotings)
+    .where(and(eq(estabNotings.id, id), eq(estabNotings.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listFilesByTenant(tenantId: string, limit: number): Promise<FileRow[]> {
-  return db.select().from(estabFiles).where(eq(estabFiles.tenantId, tenantId)).limit(limit);
+  return db.transaction((tx) => tx.select().from(estabFiles).where(eq(estabFiles.tenantId, tenantId)).limit(limit));
 }
 
 export type FileSearchHit = {
@@ -130,7 +142,7 @@ export type FileSearchHit = {
  * ("pay revision" -draft "2025").
  */
 export async function searchFiles(tenantId: string, q: string, limit: number): Promise<FileSearchHit[]> {
-  const rows = await db.execute(sql`
+  const rows = await db.transaction((tx) => tx.execute(sql`
     WITH query AS (SELECT websearch_to_tsquery('english', ${q}) AS tsq)
     SELECT f.id, f.file_no, f.subject, f.dept, f.classification, f.status,
            ts_rank(f.search_tsv, query.tsq) AS rank,
@@ -144,7 +156,7 @@ export async function searchFiles(tenantId: string, q: string, limit: number): P
                   AND to_tsvector('english', coalesce(n.body, '')) @@ query.tsq) )
      ORDER BY rank DESC NULLS LAST, f.created_at DESC
      LIMIT ${limit}
-  `);
+  `));
   return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id), fileNo: String(r.file_no), subject: String(r.subject),
     dept: String(r.dept), classification: String(r.classification), status: String(r.status),
@@ -152,28 +164,36 @@ export async function searchFiles(tenantId: string, q: string, limit: number): P
   }));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listInwardByTenant(tenantId: string, limit: number) {
-  return db.select().from(estabInward).where(eq(estabInward.tenantId, tenantId))
-    .orderBy(desc(estabInward.receivedAt)).limit(limit);
+  return db.transaction((tx) => tx.select().from(estabInward).where(eq(estabInward.tenantId, tenantId))
+    .orderBy(desc(estabInward.receivedAt)).limit(limit));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listDispatchByTenant(tenantId: string, limit: number) {
-  return db.select().from(estabDispatch).where(eq(estabDispatch.tenantId, tenantId))
-    .orderBy(desc(estabDispatch.dispatchedAt)).limit(limit);
+  return db.transaction((tx) => tx.select().from(estabDispatch).where(eq(estabDispatch.tenantId, tenantId))
+    .orderBy(desc(estabDispatch.dispatchedAt)).limit(limit));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listAttachmentsByFile(fileId: string, tenantId: string): Promise<AttachmentRow[]> {
-  return db.select().from(estabFileAttachments).where(and(
+  return db.transaction((tx) => tx.select().from(estabFileAttachments).where(and(
     eq(estabFileAttachments.fileId, fileId),
     eq(estabFileAttachments.tenantId, tenantId),
-  ));
+  )));
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listDispatchByFile(fileId: string, tenantId: string) {
-  return db.select().from(estabDispatch).where(and(
+  return db.transaction((tx) => tx.select().from(estabDispatch).where(and(
     eq(estabDispatch.fileId, fileId),
     eq(estabDispatch.tenantId, tenantId),
-  ));
+  )));
 }
 
 export async function insertFile(tx: Writer, row: FileInsert): Promise<void> {
@@ -241,9 +261,11 @@ export async function insertAttachment(tx: Writer, row: typeof estabFileAttachme
   await tx.insert(estabFileAttachments).values(row);
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listFileMovements(fileId: string, tenantId: string) {
-  return db.select().from(estabFileMovements).where(and(
+  return db.transaction((tx) => tx.select().from(estabFileMovements).where(and(
     eq(estabFileMovements.fileId, fileId),
     eq(estabFileMovements.tenantId, tenantId),
-  )).orderBy(desc(estabFileMovements.movedAt));
+  )).orderBy(desc(estabFileMovements.movedAt)));
 }

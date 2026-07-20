@@ -12,8 +12,10 @@ function toConfig(row: SignConfigRow | undefined): SignConfig {
   return { mode: row.mode as SignMode, allowedMethods: (row.allowedMethods ?? []) as SignMethod[] };
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function getSignConfig(tenantId: string): Promise<SignConfig> {
-  const rows = await db.select().from(estabSignConfig).where(eq(estabSignConfig.tenantId, tenantId)).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabSignConfig).where(eq(estabSignConfig.tenantId, tenantId)).limit(1));
   return toConfig(rows[0]);
 }
 
@@ -36,12 +38,14 @@ export async function insertSignature(tx: Writer, row: SignatureInsert): Promise
   await tx.insert(estabSignature).values(row);
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listSignatures(tenantId: string, subjectType: string, subjectId: string): Promise<SignatureRow[]> {
-  return db.select().from(estabSignature).where(and(
+  return db.transaction((tx) => tx.select().from(estabSignature).where(and(
     eq(estabSignature.tenantId, tenantId),
     eq(estabSignature.subjectType, subjectType),
     eq(estabSignature.subjectId, subjectId),
-  ));
+  )));
 }
 
 /** True when the subject has at least one VALID signature (tenant-scoped, in-tx). */

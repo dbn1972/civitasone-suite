@@ -6,8 +6,9 @@
  */
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq, and } from "drizzle-orm";
-import { MemoryQueue } from "@civitasone/queue";
+import { eq } from "drizzle-orm";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabFiles, estabNotings, estabDispatch, estabInward } from "../src/modules/files/schema.js";
 import { estabDfa } from "../src/modules/dfa/schema.js";
@@ -17,41 +18,71 @@ import { registerRecordsConsumers } from "../src/modules/records/consumer.js";
 import { registerDfaConsumers } from "../src/modules/dfa/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly here (not the
+ * `createQueue()` factory) does NOT auto-wrap subscribed handlers with
+ * `withTenantConsumer`. Production wiring (queue-service's `createQueue()`)
+ * decorates `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`, which is what lets `db.transaction()`
+ * pick up the tenant GUC. Without this wrapping, consumer writes/reads in
+ * these tests run with no RLS GUC set. Mirror that decoration here.
+ */
+function wireTenantAwareQueue<Q extends Queue>(q: Q): Q {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 const TENANT = "11111111-aaaa-4000-8000-0000000000f5";
 const ACTOR  = "00000000-aaaa-4000-8000-0000000000f5";
 const ACTOR2 = "00000000-aaaa-4000-8000-0000000000f6";
 const OFFICER = "00000000-bbbb-4000-8000-0000000000f5";
 
+// Test-harness fix: bare db.delete()/db.execute() outside db.transaction()
+// runs with no RLS GUC set (wrapWithTenantGuc only injects app.tenant_id
+// inside transactions). Wrap cleanup in runWithTenant + db.transaction().
 async function clean() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.execute(
-    // downgrade frozen notes so they can be deleted, then clear
-    // eslint-disable-next-line
-    (await import("drizzle-orm")).sql`UPDATE files.estab_notings SET note_status='draft' WHERE tenant_id=${TENANT}`,
+  const { sql } = await import("drizzle-orm");
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.execute(
+        // downgrade frozen notes so they can be deleted, then clear
+        sql`UPDATE files.estab_notings SET note_status='draft' WHERE tenant_id=${TENANT}`,
+      );
+      await tx.delete(estabNotings).where(eq(estabNotings.tenantId, TENANT));
+      await tx.delete(estabDispatch).where(eq(estabDispatch.tenantId, TENANT));
+      await tx.delete(estabInward).where(eq(estabInward.tenantId, TENANT));
+      await tx.delete(estabDfa).where(eq(estabDfa.tenantId, TENANT));
+      await tx.execute(sql`DELETE FROM files.estab_file_record WHERE tenant_id=${TENANT}`);
+      await tx.execute(sql`DELETE FROM files.estab_doc_seq WHERE tenant_id=${TENANT}`);
+      await tx.delete(estabFiles).where(eq(estabFiles.tenantId, TENANT));
+    }),
   );
-  await db.delete(estabNotings).where(eq(estabNotings.tenantId, TENANT));
-  await db.delete(estabDispatch).where(eq(estabDispatch.tenantId, TENANT));
-  await db.delete(estabInward).where(eq(estabInward.tenantId, TENANT));
-  await db.delete(estabDfa).where(eq(estabDfa.tenantId, TENANT));
-  await db.execute((await import("drizzle-orm")).sql`DELETE FROM files.estab_file_record WHERE tenant_id=${TENANT}`);
-  await db.execute((await import("drizzle-orm")).sql`DELETE FROM files.estab_doc_seq WHERE tenant_id=${TENANT}`);
-  await db.delete(estabFiles).where(eq(estabFiles.tenantId, TENANT));
 }
 
 const env = (type: string, payload: Record<string, unknown>, actor = ACTOR) => {
   const messageId = randomUUID();
   return { messageId, type, tenantId: TENANT, actorId: actor, correlationId: `c-${messageId.slice(0, 8)}`, schemaVersion: "1.0", payload };
 };
+// Test-harness fix: bare db.select() outside db.transaction() runs with no
+// RLS GUC set — wrap in runWithTenant + db.transaction() (applies to reads too).
 async function waitProcessed(messageId: string, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
-    if ((await db.select().from(processed).where(eq(processed.messageId, messageId))).length === 1) return;
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(processed).where(eq(processed.messageId, messageId))),
+    );
+    if (rows.length === 1) return;
     await new Promise((r) => setTimeout(r, 40));
   }
 }
-async function settle(ms = 400) { await new Promise((r) => setTimeout(r, ms)); }
 async function fileById(id: string) {
-  return (await db.select().from(estabFiles).where(eq(estabFiles.id, id)))[0];
+  const rows = await runWithTenant(TENANT, () =>
+    db.transaction((tx) => tx.select().from(estabFiles).where(eq(estabFiles.id, id))),
+  );
+  return rows[0];
 }
 
 beforeEach(clean);
@@ -59,7 +90,7 @@ afterAll(async () => { await clean(); await sqlClient.end(); });
 
 describe("CSMOP hardening", () => {
   it("allocates GAPLESS file numbers per section+year", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); await q.start();
     const f1 = randomUUID(), f2 = randomUUID();
     const m1 = env(COMMANDS.fileCreate, { id: f1, tenantId: TENANT, section: "ESTAB-A", subject: "Pay revision", dept: "ESTAB", priority: "normal", classification: "public", currentWith: OFFICER });
     const m2 = env(COMMANDS.fileCreate, { id: f2, tenantId: TENANT, section: "ESTAB-A", subject: "Promotion", dept: "ESTAB", priority: "normal", classification: "public", currentWith: OFFICER });
@@ -72,7 +103,7 @@ describe("CSMOP hardening", () => {
   });
 
   it("captures officer designation/section on a note", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); await q.start();
     const fid = randomUUID();
     const mc = env(COMMANDS.fileCreate, { id: fid, tenantId: TENANT, section: "ESTAB-B", subject: "Note test", dept: "ESTAB", priority: "normal", classification: "public", currentWith: OFFICER });
     await q.publish(COMMANDS.fileCreate, mc); await waitProcessed(mc.messageId);
@@ -80,13 +111,15 @@ describe("CSMOP hardening", () => {
     const mn = env(COMMANDS.notingAdd, { id: nid, fileId: fid, tenantId: TENANT, body: "Recommended.", officerId: OFFICER, officerName: "R. Rao", officerDesignation: "Under Secretary", officerSection: "Estab-II" });
     await q.publish(COMMANDS.notingAdd, mn); await waitProcessed(mn.messageId);
     await q.stop();
-    const note = (await db.select().from(estabNotings).where(eq(estabNotings.id, nid)))[0];
+    const note = (await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabNotings).where(eq(estabNotings.id, nid))),
+    ))[0];
     expect(note?.officerDesignation).toBe("Under Secretary");
     expect(note?.officerSection).toBe("Estab-II");
   });
 
   it("blocks closure without a record category, then allows it after assignment", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); registerRecordsConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); registerRecordsConsumers(q); await q.start();
     const fid = randomUUID();
     const mc = env(COMMANDS.fileCreate, { id: fid, tenantId: TENANT, section: "ESTAB-C", subject: "Closure test", dept: "ESTAB", priority: "normal", classification: "public", currentWith: OFFICER });
     await q.publish(COMMANDS.fileCreate, mc); await waitProcessed(mc.messageId);
@@ -95,7 +128,9 @@ describe("CSMOP hardening", () => {
     const mClose1 = env(COMMANDS.fileClose, { fileId: fid, tenantId: TENANT });
     await q.publish(COMMANDS.fileClose, mClose1); await waitProcessed(mClose1.messageId);
     expect((await fileById(fid))?.status).not.toBe("closed");
-    const rejected = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const rejected = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))),
+    );
     expect(rejected.some((r) => (r.payload as { action?: string }).action === "close_rejected_no_record_category")).toBe(true);
 
     // assign category B, then close → closed
@@ -108,7 +143,7 @@ describe("CSMOP hardening", () => {
   });
 
   it("supports recall and reopen movement verbs", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); registerRecordsConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); registerRecordsConsumers(q); await q.start();
     const fid = randomUUID();
     const mc = env(COMMANDS.fileCreate, { id: fid, tenantId: TENANT, section: "ESTAB-D", subject: "Move test", dept: "ESTAB", priority: "normal", classification: "public", currentWith: ACTOR });
     await q.publish(COMMANDS.fileCreate, mc); await waitProcessed(mc.messageId);
@@ -129,19 +164,21 @@ describe("CSMOP hardening", () => {
   });
 
   it("generates a gapless dispatch number when none supplied", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); await q.start();
     const did = randomUUID();
     const md = env(COMMANDS.dispatchCreate, { id: did, tenantId: TENANT, toAddress: "Ministry of Finance", mode: "post", subject: "OM forwarding" });
     await q.publish(COMMANDS.dispatchCreate, md); await waitProcessed(md.messageId);
     await q.stop();
-    const d = (await db.select().from(estabDispatch).where(eq(estabDispatch.id, did)))[0];
+    const d = (await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabDispatch).where(eq(estabDispatch.id, did))),
+    ))[0];
     const yr = new Date().getFullYear();
     expect(d?.dispatchNo).toBe(`DSP/${yr}/000001`);
     expect(d?.deliveryStatus).toBe("sent");
   });
 
   it("attaches a diarised receipt to a file and detaches it with a reason", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); await q.start();
     const fid = randomUUID(), iid = randomUUID();
     const mc = env(COMMANDS.fileCreate, { id: fid, tenantId: TENANT, section: "ESTAB-E", subject: "Receipt test", dept: "ESTAB", priority: "normal", classification: "public", currentWith: OFFICER });
     await q.publish(COMMANDS.fileCreate, mc); await waitProcessed(mc.messageId);
@@ -149,18 +186,23 @@ describe("CSMOP hardening", () => {
     await q.publish(COMMANDS.inwardRegister, mi); await waitProcessed(mi.messageId);
     const ma = env(COMMANDS.inwardAttach, { tenantId: TENANT, inwardId: iid, fileId: fid });
     await q.publish(COMMANDS.inwardAttach, ma); await waitProcessed(ma.messageId);
-    expect((await db.select().from(estabInward).where(eq(estabInward.id, iid)))[0]?.fileId).toBe(fid);
+    const attached = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabInward).where(eq(estabInward.id, iid))),
+    );
+    expect(attached[0]?.fileId).toBe(fid);
     const mdet = env(COMMANDS.inwardDetach, { tenantId: TENANT, inwardId: iid, reason: "wrong file" });
     await q.publish(COMMANDS.inwardDetach, mdet); await waitProcessed(mdet.messageId);
     await q.stop();
-    const inw = (await db.select().from(estabInward).where(eq(estabInward.id, iid)))[0];
+    const inw = (await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabInward).where(eq(estabInward.id, iid))),
+    ))[0];
     expect(inw?.fileId).toBeNull();
     expect(inw?.detachedReason).toBe("wrong file");
   });
 
   it("DFA maker-checker: drafter cannot approve own DFA; a different officer can", async () => {
     const did = randomUUID();
-    const mk = new MemoryQueue({ maxAttempts: 1 }); registerDfaConsumers(mk); await mk.start();
+    const mk = wireTenantAwareQueue(new MemoryQueue({ maxAttempts: 1 })); registerDfaConsumers(mk); await mk.start();
     const mCreate = env(COMMANDS.dfaCreate, { id: did, tenantId: TENANT, dfaNo: "DFA/2026/1", communicationType: "letter", subject: "S", body: "B" }, ACTOR);
     await mk.publish(COMMANDS.dfaCreate, mCreate); await waitProcessed(mCreate.messageId);
     const mSubmit = env(COMMANDS.dfaSubmit, { id: did, tenantId: TENANT }, ACTOR);
@@ -169,13 +211,19 @@ describe("CSMOP hardening", () => {
     const mSelf = env(COMMANDS.dfaApprove, { id: did, tenantId: TENANT }, ACTOR);
     await mk.publish(COMMANDS.dfaApprove, mSelf);
     await waitFor(async () => mk.dlq.length === 1);
-    expect((await db.select().from(estabDfa).where(eq(estabDfa.id, did)))[0]?.status).toBe("pending_approval");
+    const selfCheck = (await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabDfa).where(eq(estabDfa.id, did))),
+    ))[0];
+    expect(selfCheck?.status).toBe("pending_approval");
     expect(mk.dlq[0]?.error).toMatch(/MAKER_CHECKER/);
     // different officer approves → approved
     const mOk = env(COMMANDS.dfaApprove, { id: did, tenantId: TENANT }, ACTOR2);
     await mk.publish(COMMANDS.dfaApprove, mOk); await waitProcessed(mOk.messageId);
     await mk.stop();
-    expect((await db.select().from(estabDfa).where(eq(estabDfa.id, did)))[0]?.status).toBe("approved");
+    const okCheck = (await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabDfa).where(eq(estabDfa.id, did))),
+    ))[0];
+    expect(okCheck?.status).toBe("approved");
   });
 });
 

@@ -5,27 +5,33 @@ import type { ApprovalRuleRow, ApprovalRuleInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findRuleById(id: string, tenantId: string): Promise<ApprovalRuleRow | null> {
-  const rows = await db.select().from(estabApprovalRule)
-    .where(and(eq(estabApprovalRule.id, id), eq(estabApprovalRule.tenantId, tenantId))).limit(1);
+  const rows = await db.transaction((tx) => tx.select().from(estabApprovalRule)
+    .where(and(eq(estabApprovalRule.id, id), eq(estabApprovalRule.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listRules(tenantId: string): Promise<ApprovalRuleRow[]> {
-  return db.select().from(estabApprovalRule)
+  return db.transaction((tx) => tx.select().from(estabApprovalRule)
     .where(eq(estabApprovalRule.tenantId, tenantId))
-    .orderBy(asc(estabApprovalRule.sourceType), asc(estabApprovalRule.minAmountMinor));
+    .orderBy(asc(estabApprovalRule.sourceType), asc(estabApprovalRule.minAmountMinor)));
 }
 
 /** Active rules for a single source type, ordered by band (used by the resolver). */
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listActiveRulesForSource(tenantId: string, sourceType: string): Promise<ApprovalRuleRow[]> {
-  return db.select().from(estabApprovalRule)
+  return db.transaction((tx) => tx.select().from(estabApprovalRule)
     .where(and(
       eq(estabApprovalRule.tenantId, tenantId),
       eq(estabApprovalRule.sourceType, sourceType),
       eq(estabApprovalRule.active, true),
     ))
-    .orderBy(asc(estabApprovalRule.minAmountMinor), asc(estabApprovalRule.priority));
+    .orderBy(asc(estabApprovalRule.minAmountMinor), asc(estabApprovalRule.priority)));
 }
 
 export async function insertRule(tx: Writer, row: ApprovalRuleInsert): Promise<void> {

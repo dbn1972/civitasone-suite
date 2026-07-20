@@ -8,12 +8,29 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { and, eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabCorrespondence, estabFilePuc } from "../src/modules/correspondence/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerCorrespondenceConsumers } from "../src/modules/correspondence/consumer.js";
+
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly here (not the
+ * `createQueue()` factory) does NOT auto-wrap subscribed handlers with
+ * `withTenantConsumer`. Production wiring (queue-service's `createQueue()`)
+ * decorates `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`, which is what lets `db.transaction()`
+ * pick up the tenant GUC. Without this wrapping, consumer writes/reads in
+ * these tests run with no RLS GUC set. Mirror that decoration here.
+ */
+function wireTenantAwareQueue<Q extends Queue>(q: Q): Q {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 // Unique random tenant per run so parallel/repeat runs never collide. All
 // segments are valid hex (no letters g-z).
@@ -37,13 +54,20 @@ function envelope(topic: string, payload: Record<string, unknown>) {
   };
 }
 
+// Test-harness fix: bare db.delete() outside db.transaction() runs with no
+// RLS GUC set (wrapWithTenantGuc only injects app.tenant_id inside
+// transactions). Wrap cleanup in runWithTenant + db.transaction().
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(estabFilePuc).where(eq(estabFilePuc.tenantId, TENANT));
-  await db.delete(estabCorrespondence).where(eq(estabCorrespondence.tenantId, TENANT));
-  for (const id of messageIds) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.delete(estabFilePuc).where(eq(estabFilePuc.tenantId, TENANT));
+      await tx.delete(estabCorrespondence).where(eq(estabCorrespondence.tenantId, TENANT));
+      for (const id of messageIds) {
+        await tx.delete(processed).where(eq(processed.messageId, id));
+      }
+    }),
+  );
 }
 
 const settle = () => new Promise<void>((r) => setTimeout(r, 400));
@@ -56,7 +80,7 @@ describe("Correspondence — CSMOP page numbering & PUC", () => {
   });
 
   it("assigns running, non-overlapping page ranges and incrementing corr_no", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerCorrespondenceConsumers(q);
     await q.start();
 
@@ -80,9 +104,11 @@ describe("Correspondence — CSMOP page numbering & PUC", () => {
     await settle();
     await q.stop();
 
-    const rows = await db.select().from(estabCorrespondence)
-      .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
-      .orderBy(estabCorrespondence.pageFrom);
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabCorrespondence)
+        .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
+        .orderBy(estabCorrespondence.pageFrom)),
+    );
 
     expect(rows).toHaveLength(2);
     expect(rows[0]?.corrNo).toBe("C-1");
@@ -97,14 +123,16 @@ describe("Correspondence — CSMOP page numbering & PUC", () => {
   });
 
   it("page numbers are STABLE — a third add does not renumber earlier rows", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerCorrespondenceConsumers(q);
     await q.start();
 
     // Snapshot the first two entries before adding a third.
-    const before = await db.select().from(estabCorrespondence)
-      .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
-      .orderBy(estabCorrespondence.pageFrom);
+    const before = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabCorrespondence)
+        .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
+        .orderBy(estabCorrespondence.pageFrom)),
+    );
     expect(before).toHaveLength(2);
 
     const c3 = randomUUID();
@@ -116,9 +144,11 @@ describe("Correspondence — CSMOP page numbering & PUC", () => {
     await settle();
     await q.stop();
 
-    const after = await db.select().from(estabCorrespondence)
-      .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
-      .orderBy(estabCorrespondence.pageFrom);
+    const after = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabCorrespondence)
+        .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
+        .orderBy(estabCorrespondence.pageFrom)),
+    );
 
     expect(after).toHaveLength(3);
     // Earlier rows untouched.
@@ -133,13 +163,15 @@ describe("Correspondence — CSMOP page numbering & PUC", () => {
   });
 
   it("supports multiple simultaneous active PUCs; unmark sets active=false", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerCorrespondenceConsumers(q);
     await q.start();
 
-    const rows = await db.select().from(estabCorrespondence)
-      .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
-      .orderBy(estabCorrespondence.pageFrom);
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabCorrespondence)
+        .where(and(eq(estabCorrespondence.tenantId, TENANT), eq(estabCorrespondence.fileId, FILE_1)))
+        .orderBy(estabCorrespondence.pageFrom)),
+    );
     const corrA = rows[0]!.id;
     const corrB = rows[1]!.id;
 
@@ -152,11 +184,13 @@ describe("Correspondence — CSMOP page numbering & PUC", () => {
     }));
     await settle();
 
-    let active = await db.select().from(estabFilePuc).where(and(
-      eq(estabFilePuc.tenantId, TENANT),
-      eq(estabFilePuc.fileId, FILE_1),
-      eq(estabFilePuc.active, true),
-    ));
+    let active = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabFilePuc).where(and(
+        eq(estabFilePuc.tenantId, TENANT),
+        eq(estabFilePuc.fileId, FILE_1),
+        eq(estabFilePuc.active, true),
+      ))),
+    );
     expect(active).toHaveLength(2);
 
     // Unmark the first.
@@ -166,26 +200,32 @@ describe("Correspondence — CSMOP page numbering & PUC", () => {
     await settle();
     await q.stop();
 
-    active = await db.select().from(estabFilePuc).where(and(
-      eq(estabFilePuc.tenantId, TENANT),
-      eq(estabFilePuc.fileId, FILE_1),
-      eq(estabFilePuc.active, true),
-    ));
+    active = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabFilePuc).where(and(
+        eq(estabFilePuc.tenantId, TENANT),
+        eq(estabFilePuc.fileId, FILE_1),
+        eq(estabFilePuc.active, true),
+      ))),
+    );
     expect(active).toHaveLength(1);
     expect(active[0]?.correspondenceId).toBe(corrB);
 
-    const deactivated = await db.select().from(estabFilePuc).where(and(
-      eq(estabFilePuc.tenantId, TENANT),
-      eq(estabFilePuc.correspondenceId, corrA),
-    ));
+    const deactivated = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabFilePuc).where(and(
+        eq(estabFilePuc.tenantId, TENANT),
+        eq(estabFilePuc.correspondenceId, corrA),
+      ))),
+    );
     expect(deactivated[0]?.active).toBe(false);
   });
 
   it("emits audit events for add_correspondence and mark_puc", async () => {
-    const outbox = await db.select().from(outboxMessages).where(and(
-      eq(outboxMessages.tenantId, TENANT),
-      eq(outboxMessages.eventType, "audit.event.record"),
-    ));
+    const outbox = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(outboxMessages).where(and(
+        eq(outboxMessages.tenantId, TENANT),
+        eq(outboxMessages.eventType, "audit.event.record"),
+      ))),
+    );
     const actions = outbox.map((r) => (r.payload as { action?: string }).action);
     expect(actions).toContain("add_correspondence");
     expect(actions).toContain("mark_puc");

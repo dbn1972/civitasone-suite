@@ -500,7 +500,7 @@ export function registerFilesConsumers(queue: Queue): void {
       await repo.insertDispatch(tx, {
         id: p.id, tenantId: p.tenantId, dispatchNo,
         fileId: p.fileId ?? null, toAddress: p.toAddress, mode: p.mode, subject: p.subject,
-        dispatchedAt: new Date(), status: "sent", deliveryStatus: "sent",
+        dispatchedAt: new Date(), status: "dispatched", deliveryStatus: "sent",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "dispatch", p.id);

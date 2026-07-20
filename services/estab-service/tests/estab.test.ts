@@ -7,8 +7,9 @@
  * Test 4 — CQRS: RTI create → queue → consumer → DB row with correct deadline.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabNotings, estabInward } from "../src/modules/files/schema.js";
 import { estabRtiRequests } from "../src/modules/legal/schema.js";
@@ -33,18 +34,41 @@ const MSG_BOOK_2 = "99999999-cccc-4000-8000-000000000002";
 const RTI_1  = "aaaaaaaa-dddd-4000-8000-000000000001";
 const MSG_RTI_1 = "bbbbbbbb-eeee-4000-8000-000000000001";
 
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly here (not the
+ * `createQueue()` factory) does NOT auto-wrap subscribed handlers with
+ * `withTenantConsumer`. Production wiring (queue-service's `createQueue()`)
+ * decorates `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`, which is what lets `db.transaction()`
+ * pick up the tenant GUC. Without this wrapping, consumer writes/reads in
+ * these tests run with no RLS GUC set. Mirror that decoration here.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
+// Test-harness fix: bare db.delete() outside db.transaction() runs with no RLS
+// GUC set (wrapWithTenantGuc only injects app.tenant_id inside transactions).
+// Wrap cleanup in runWithTenant(TENANT, () => db.transaction(...)).
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(estabNotings).where(eq(estabNotings.tenantId, TENANT));
-  // RTI create auto-registers a DAK into estab_inward (unique dak_no per tenant);
-  // clear it too or reruns hit the unique-key collision and roll back.
-  await db.delete(estabInward).where(eq(estabInward.tenantId, TENANT));
-  await db.delete(estabRoomBookings).where(eq(estabRoomBookings.tenantId, TENANT));
-  await db.delete(estabRtiRequests).where(eq(estabRtiRequests.tenantId, TENANT));
-  await db.delete(processed).where(eq(processed.messageId, MSG_NOTE_1));
-  await db.delete(processed).where(eq(processed.messageId, MSG_BOOK_1));
-  await db.delete(processed).where(eq(processed.messageId, MSG_BOOK_2));
-  await db.delete(processed).where(eq(processed.messageId, MSG_RTI_1));
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.delete(estabNotings).where(eq(estabNotings.tenantId, TENANT));
+      // RTI create auto-registers a DAK into estab_inward (unique dak_no per tenant);
+      // clear it too or reruns hit the unique-key collision and roll back.
+      await tx.delete(estabInward).where(eq(estabInward.tenantId, TENANT));
+      await tx.delete(estabRoomBookings).where(eq(estabRoomBookings.tenantId, TENANT));
+      await tx.delete(estabRtiRequests).where(eq(estabRtiRequests.tenantId, TENANT));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_NOTE_1));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_BOOK_1));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_BOOK_2));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_RTI_1));
+    }),
+  );
 }
 
 // ── 1. Noting immutability ─────────────────────────────────────────────────
@@ -54,7 +78,7 @@ describe("Noting — immutability (idempotency)", () => {
   afterAll(async () => { await wipe(); });
 
   it("second noting add with same messageId does not overwrite body", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerFilesConsumers(q);
     await q.start();
 
@@ -79,7 +103,9 @@ describe("Noting — immutability (idempotency)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(estabNotings).where(eq(estabNotings.id, NOTE_1));
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabNotings).where(eq(estabNotings.id, NOTE_1))),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.body).toBe("Original body");
   });
@@ -92,7 +118,7 @@ describe("Room booking — overlap conflict", () => {
   afterAll(async () => { await wipe(); });
 
   it("booking same room for overlapping window emits estab.room.conflict", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerFacilitiesConsumers(q);
     await q.start();
 
@@ -120,11 +146,15 @@ describe("Room booking — overlap conflict", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const bookings = await db.select().from(estabRoomBookings).where(eq(estabRoomBookings.tenantId, TENANT));
+    const bookings = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabRoomBookings).where(eq(estabRoomBookings.tenantId, TENANT))),
+    );
     expect(bookings).toHaveLength(1);
     expect(bookings[0]?.id).toBe(BOOKING_1);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))),
+    );
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain(EVENTS.roomConflict);
   });
@@ -208,7 +238,7 @@ describe("RTI CQRS — create wiring (integration)", () => {
   });
 
   it("estab.rti.create → consumer → DB row with 30-day deadline and rti.created in outbox", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLegalConsumers(q);
     await q.start();
 
@@ -229,7 +259,9 @@ describe("RTI CQRS — create wiring (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(estabRtiRequests).where(eq(estabRtiRequests.id, RTI_1));
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(estabRtiRequests).where(eq(estabRtiRequests.id, RTI_1))),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.rtiNo).toBe("RTI/2026/001");
     expect(rows[0]?.status).toBe("pending");
@@ -242,11 +274,15 @@ describe("RTI CQRS — create wiring (integration)", () => {
     expect(diff).toBeLessThanOrEqual(30);
 
     // Inbox idempotency record
-    const seen = await db.select().from(processed).where(eq(processed.messageId, MSG_RTI_1));
+    const seen = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(processed).where(eq(processed.messageId, MSG_RTI_1))),
+    );
     expect(seen).toHaveLength(1);
 
     // Outbox should have estab.rti.created and audit event
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))),
+    );
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain(EVENTS.rtiCreated);
     expect(eventTypes).toContain("audit.event.record");

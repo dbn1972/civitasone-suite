@@ -5,8 +5,10 @@ import type { GuesthouseInsert, RoomBookingRow, RoomBookingInsert, LibraryBookIn
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function findBookingsByRoom(roomId: string, limit = 200): Promise<RoomBookingRow[]> {
-  return db.select().from(estabRoomBookings).where(eq(estabRoomBookings.roomId, roomId)).limit(limit);
+  return db.transaction((tx) => tx.select().from(estabRoomBookings).where(eq(estabRoomBookings.roomId, roomId)).limit(limit));
 }
 
 export async function insertGuesthouse(tx: Writer, row: GuesthouseInsert): Promise<void> {
@@ -38,6 +40,8 @@ export async function insertIssue(tx: Writer, row: IssueInsert): Promise<void> {
   await tx.insert(estabIssues).values(row);
 }
 
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set.
 export async function listRoomBookingsByTenant(tenantId: string, limit: number): Promise<RoomBookingRow[]> {
-  return db.select().from(estabRoomBookings).where(eq(estabRoomBookings.tenantId, tenantId)).limit(limit);
+  return db.transaction((tx) => tx.select().from(estabRoomBookings).where(eq(estabRoomBookings.tenantId, tenantId)).limit(limit));
 }

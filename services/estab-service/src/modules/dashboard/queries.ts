@@ -11,56 +11,70 @@ export async function getDashboard(tenantId: string) {
   const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
 
-  const [pendingFiles] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [pendingFiles] = await db.transaction((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(estabFiles)
-    .where(and(eq(estabFiles.tenantId, tenantId), eq(estabFiles.status, "active")));
+    .where(and(eq(estabFiles.tenantId, tenantId), eq(estabFiles.status, "active"))));
 
-  const [slaBreached] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [slaBreached] = await db.transaction((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(estabFiles)
     .where(and(
       eq(estabFiles.tenantId, tenantId),
       eq(estabFiles.status, "active"),
       lt(estabFiles.dueBy, now),
-    ));
+    )));
 
-  const [dakPending] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [dakPending] = await db.transaction((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(estabInward)
     .where(and(
       eq(estabInward.tenantId, tenantId),
       eq(estabInward.status, "received"),
       or(isNull(estabInward.fileId)),
-    ));
+    )));
 
-  const [avgPendency] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [avgPendency] = await db.transaction((tx) => tx
     .select({ avg: sql<number>`coalesce(avg(extract(epoch from (now() - ${estabFiles.createdAt}))/86400), 0)::int` })
     .from(estabFiles)
-    .where(and(eq(estabFiles.tenantId, tenantId), eq(estabFiles.status, "active")));
+    .where(and(eq(estabFiles.tenantId, tenantId), eq(estabFiles.status, "active"))));
 
   let meetingsToday = 0;
   try {
-    const [m] = await db.select({ count: sql<number>`count(*)::int` }).from(estabMeetings)
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const [m] = await db.transaction((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(estabMeetings)
       .where(and(
         eq(estabMeetings.tenantId, tenantId),
         gte(estabMeetings.whenAt, todayStart),
         lte(estabMeetings.whenAt, todayEnd),
-      ));
+      )));
     meetingsToday = m?.count ?? 0;
   } catch { /* table may be empty */ }
 
   let vehiclesInUse = 0;
   try {
-    const [v] = await db.select({ count: sql<number>`count(*)::int` }).from(estabVehicles)
-      .where(and(eq(estabVehicles.tenantId, tenantId), eq(estabVehicles.status, "in_use")));
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const [v] = await db.transaction((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(estabVehicles)
+      .where(and(eq(estabVehicles.tenantId, tenantId), eq(estabVehicles.status, "in_use"))));
     vehiclesInUse = v?.count ?? 0;
   } catch { /* ok */ }
 
   let complianceItemsDue = 0;
   try {
-    const [c] = await db.select({ count: sql<number>`count(*)::int` }).from(estabCompliance)
-      .where(and(eq(estabCompliance.tenantId, tenantId), eq(estabCompliance.status, "pending")));
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const [c] = await db.transaction((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(estabCompliance)
+      .where(and(eq(estabCompliance.tenantId, tenantId), eq(estabCompliance.status, "pending"))));
     complianceItemsDue = c?.count ?? 0;
   } catch { /* ok */ }
 

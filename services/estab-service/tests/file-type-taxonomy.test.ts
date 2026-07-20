@@ -7,7 +7,8 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabFiles, estabNotings } from "../src/modules/files/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -18,13 +19,34 @@ import { deriveChildFileNo, toRoman } from "../src/modules/files/domain.js";
 const TENANT = "11111111-aaaa-4000-8000-0000000000f2";
 const OFFICER = "00000000-bbbb-4000-8000-0000000000f2";
 
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly here (not the
+ * `createQueue()` factory) does NOT auto-wrap subscribed handlers with
+ * `withTenantConsumer`. Production wiring (queue-service's `createQueue()`)
+ * decorates `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`, which is what lets `db.transaction()`
+ * pick up the tenant GUC. Mirror that decoration here.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
+// Test-harness fix: bare db.delete()/db.execute() outside db.transaction() runs
+// with no RLS GUC set. Wrap cleanup in runWithTenant + db.transaction().
 async function clean() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.execute(sql`UPDATE files.estab_notings SET note_status='draft' WHERE tenant_id=${TENANT}`);
-  await db.delete(estabNotings).where(eq(estabNotings.tenantId, TENANT));
-  await db.execute(sql`UPDATE files.estab_files SET parent_file_id=NULL, linked_file_ids='{}'::uuid[] WHERE tenant_id=${TENANT}`);
-  await db.execute(sql`DELETE FROM files.estab_doc_seq WHERE tenant_id=${TENANT}`);
-  await db.delete(estabFiles).where(eq(estabFiles.tenantId, TENANT));
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.execute(sql`UPDATE files.estab_notings SET note_status='draft' WHERE tenant_id=${TENANT}`);
+      await tx.delete(estabNotings).where(eq(estabNotings.tenantId, TENANT));
+      await tx.execute(sql`UPDATE files.estab_files SET parent_file_id=NULL, linked_file_ids='{}'::uuid[] WHERE tenant_id=${TENANT}`);
+      await tx.execute(sql`DELETE FROM files.estab_doc_seq WHERE tenant_id=${TENANT}`);
+      await tx.delete(estabFiles).where(eq(estabFiles.tenantId, TENANT));
+    }),
+  );
 }
 
 const env = (type: string, payload: Record<string, unknown>) => {
@@ -34,14 +56,20 @@ const env = (type: string, payload: Record<string, unknown>) => {
 async function waitProcessed(messageId: string, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
-    if ((await db.select().from(processed).where(eq(processed.messageId, messageId))).length === 1) return;
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(processed).where(eq(processed.messageId, messageId))),
+    );
+    if (rows.length === 1) return;
     await new Promise((r) => setTimeout(r, 40));
   }
 }
 async function fileById(id: string) {
-  return (await db.select().from(estabFiles).where(eq(estabFiles.id, id)))[0];
+  const rows = await runWithTenant(TENANT, () =>
+    db.transaction((tx) => tx.select().from(estabFiles).where(eq(estabFiles.id, id))),
+  );
+  return rows[0];
 }
-async function createMain(q: MemoryQueue, id: string, section: string, subject: string) {
+async function createMain(q: Queue, id: string, section: string, subject: string) {
   const m = env(COMMANDS.fileCreate, { id, tenantId: TENANT, section, subject, dept: "ESTAB", priority: "normal", classification: "public", currentWith: OFFICER });
   await q.publish(COMMANDS.fileCreate, m); await waitProcessed(m.messageId);
 }
@@ -60,7 +88,7 @@ describe("file-type taxonomy domain (R2)", () => {
 
 describe("file-type taxonomy (R2)", () => {
   it("opens Vol II and Vol III off a main file, with correct numbering and parentage", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); await q.start();
     const main = randomUUID();
     await createMain(q, main, "VOL-A", "Pay revision");
     const baseNo = (await fileById(main))?.fileNo as string;
@@ -85,7 +113,7 @@ describe("file-type taxonomy (R2)", () => {
   });
 
   it("opens part files with incrementing part numbers", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); await q.start();
     const main = randomUUID();
     await createMain(q, main, "PART-A", "Court case");
     const baseNo = (await fileById(main))?.fileNo as string;
@@ -103,7 +131,7 @@ describe("file-type taxonomy (R2)", () => {
   });
 
   it("links two files symmetrically and reclassifies a file as standing guard", async () => {
-    const q = new MemoryQueue(); registerFilesConsumers(q); await q.start();
+    const q = wireTenantAwareQueue(new MemoryQueue()); registerFilesConsumers(q); await q.start();
     const a = randomUUID(), b = randomUUID();
     await createMain(q, a, "LINK-A", "Policy A");
     await createMain(q, b, "LINK-B", "Policy B");
