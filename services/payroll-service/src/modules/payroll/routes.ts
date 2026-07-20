@@ -157,24 +157,26 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     // SEC-P1-06: insert via the Drizzle table so the encryptedText transform on
     // bank_account_no / bank_ifsc / pan applies — the previous raw-SQL INSERT
     // bypassed it and stored the PII in plaintext (DPDP violation).
-    await db.insert(payrollPensioners).values({
-      id,
-      tenantId: ctx.tenantId,
-      ppoNo: b.ppoNo,
-      fullName: b.fullName,
-      dateOfBirth: b.dateOfBirth,
-      basicPensionMinor: b.basicPensionMinor,
-      commutedPensionMinor: b.commutedPensionMinor ?? 0n,
-      commutationDate: b.commutationDate ?? null,
-      medicalAllowanceMinor: b.medicalAllowanceMinor ?? 0n,
-      ddoCode: b.ddoCode ?? null,
-      bankAccountNo: b.bankAccountNo ?? null,
-      bankIfsc: b.bankIfsc ?? null,
-      pan: b.pan ?? null,
-      taxRegime: b.taxRegime,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    }).onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx.insert(payrollPensioners).values({
+        id,
+        tenantId: ctx.tenantId,
+        ppoNo: b.ppoNo,
+        fullName: b.fullName,
+        dateOfBirth: b.dateOfBirth,
+        basicPensionMinor: b.basicPensionMinor,
+        commutedPensionMinor: b.commutedPensionMinor ?? 0n,
+        commutationDate: b.commutationDate ?? null,
+        medicalAllowanceMinor: b.medicalAllowanceMinor ?? 0n,
+        ddoCode: b.ddoCode ?? null,
+        bankAccountNo: b.bankAccountNo ?? null,
+        bankIfsc: b.bankIfsc ?? null,
+        pan: b.pan ?? null,
+        taxRegime: b.taxRegime,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      }).onConflictDoNothing();
+    });
     return reply.code(201).send({ id, ppoNo: b.ppoNo });
   });
 

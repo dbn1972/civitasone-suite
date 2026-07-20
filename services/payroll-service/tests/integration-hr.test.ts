@@ -3,7 +3,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { eq, inArray } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
 import { payrollLopLedger } from "../src/modules/integration/schema.js";
@@ -25,13 +27,21 @@ const TEST_MESSAGE_IDS = [
   "bbbbbbbb-2222-4000-8000-000000000033",
 ];
 
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(payrollSlips).where(eq(payrollSlips.tenantId, TENANT));
-  await db.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
-  await db.delete(payrollLopLedger).where(eq(payrollLopLedger.tenantId, TENANT));
-  // Clear idempotency keys so consumer re-processes on each test run.
-  await db.delete(processed).where(inArray(processed.messageId, TEST_MESSAGE_IDS));
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(payrollSlips).where(eq(payrollSlips.tenantId, TENANT));
+    await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
+    await tx.delete(payrollLopLedger).where(eq(payrollLopLedger.tenantId, TENANT));
+    await tx.delete(processed).where(inArray(processed.messageId, TEST_MESSAGE_IDS));
+  }));
 }
 
 describe("HR integration consumers", () => {
@@ -39,7 +49,7 @@ describe("HR integration consumers", () => {
   afterAll(async () => { await wipe(); await sqlClient.end(); });
 
   it("accumulates LOP days from hrms.leave.approved", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerIntegrationConsumers(q);
     await q.start();
 
@@ -56,30 +66,33 @@ describe("HR integration consumers", () => {
 
     await new Promise((r) => setTimeout(r, 200));
 
-    const rows = await db.select().from(payrollLopLedger)
-      .where(eq(payrollLopLedger.tenantId, TENANT));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollLopLedger)
+        .where(eq(payrollLopLedger.tenantId, TENANT))));
     expect(rows.some((r) => r.lopDays === 2 && r.source === "leave")).toBe(true);
     await q.stop();
   });
 
   it("emits payroll.run.approved on run approve", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerPayrollConsumers(q);
     await q.start();
 
-    await db.insert(payrollRuns).values({
-      id: RUN_ID, tenantId: TENANT, runNo: "RUN/TEST", month: "2025-06",
-      structureId: STRUCT, totalGrossMinor: 100n, totalNetMinor: 80n,
-      currency: "INR", status: "processing",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(payrollSlips).values({
-      id: "33333333-eeee-4000-8000-000000000033",
-      tenantId: TENANT, runId: RUN_ID, employeeId: EMP_ID, employeeNo: "EMP001",
-      basicMinor: 100n, grossMinor: 100n, totalDeductionsMinor: 20n, netPayMinor: 80n,
-      currency: "INR", components: [], status: "computed",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(payrollRuns).values({
+        id: RUN_ID, tenantId: TENANT, runNo: "RUN/TEST", month: "2025-06",
+        structureId: STRUCT, totalGrossMinor: 100n, totalNetMinor: 80n,
+        currency: "INR", status: "processing",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(payrollSlips).values({
+        id: "33333333-eeee-4000-8000-000000000033",
+        tenantId: TENANT, runId: RUN_ID, employeeId: EMP_ID, employeeNo: "EMP001",
+        basicMinor: 100n, grossMinor: 100n, totalDeductionsMinor: 20n, netPayMinor: 80n,
+        currency: "INR", components: [], status: "computed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
 
     await q.publish(COMMANDS.runApprove, {
       messageId: "bbbbbbbb-2222-4000-8000-000000000033",
@@ -93,10 +106,12 @@ describe("HR integration consumers", () => {
 
     await new Promise((r) => setTimeout(r, 600));
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     expect(outbox.some((o) => o.topic === EVENTS.runApproved)).toBe(true);
 
-    const approved = await db.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_ID));
+    const approved = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_ID))));
     expect(approved[0]?.status).toBe("approved");
     expect(approved[0]?.approvedBy).toBe(APPROVER);
     await q.stop();
@@ -105,15 +120,17 @@ describe("HR integration consumers", () => {
   it("rejects self-approval (maker-checker): approver === creator keeps run in processing", async () => {
     const SELF_RUN = "55555555-aaaa-4000-8000-000000000033";
     const SELF_MSG = "66666666-bbbb-4000-8000-000000000033";
-    await db.delete(processed).where(eq(processed.messageId, SELF_MSG));
-    await db.insert(payrollRuns).values({
-      id: SELF_RUN, tenantId: TENANT, runNo: "RUN/SELF", month: "2025-07",
-      structureId: STRUCT, totalGrossMinor: 100n, totalNetMinor: 80n,
-      currency: "INR", status: "processing",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, SELF_MSG));
+      await tx.insert(payrollRuns).values({
+        id: SELF_RUN, tenantId: TENANT, runNo: "RUN/SELF", month: "2025-07",
+        structureId: STRUCT, totalGrossMinor: 100n, totalNetMinor: 80n,
+        currency: "INR", status: "processing",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
 
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerPayrollConsumers(q);
     await q.start();
     await q.publish(COMMANDS.runApprove, {
@@ -124,7 +141,8 @@ describe("HR integration consumers", () => {
     await new Promise((r) => setTimeout(r, 600));
     await q.stop();
 
-    const rows = await db.select().from(payrollRuns).where(eq(payrollRuns.id, SELF_RUN));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollRuns).where(eq(payrollRuns.id, SELF_RUN))));
     expect(rows[0]?.status).toBe("processing"); // unchanged — self-approval forbidden
     expect(rows[0]?.approvedBy ?? null).toBeNull();
   });

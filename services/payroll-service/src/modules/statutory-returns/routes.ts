@@ -453,7 +453,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const recoveredMinor = paise(b.amountRecovered);
     const taxableMinor = valueMinor - recoveredMinor > 0n ? valueMinor - recoveredMinor : 0n;
 
-    await db.insert(perquisiteComponents).values({
+    const insertValues = {
       tenantId: ctx.tenantId,
       employeeId: b.employeeId,
       fy: b.fy,
@@ -463,14 +463,18 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       amountRecoveredMinor: recoveredMinor,
       taxableValueMinor: taxableMinor,
       createdBy: ctx.actorId,
-    }).onConflictDoUpdate({
-      target: [perquisiteComponents.tenantId, perquisiteComponents.employeeId, perquisiteComponents.fy, perquisiteComponents.nature],
-      set: {
-        description: b.description ?? "",
-        valueByEmployerMinor: valueMinor,
-        amountRecoveredMinor: recoveredMinor,
-        taxableValueMinor: taxableMinor,
-      },
+    } as typeof perquisiteComponents.$inferInsert;
+
+    await db.transaction(async (tx) => {
+      await tx.insert(perquisiteComponents).values(insertValues).onConflictDoUpdate({
+        target: [perquisiteComponents.tenantId, perquisiteComponents.employeeId, perquisiteComponents.fy, perquisiteComponents.nature],
+        set: {
+          description: b.description ?? "",
+          valueByEmployerMinor: valueMinor,
+          amountRecoveredMinor: recoveredMinor,
+          taxableValueMinor: taxableMinor,
+        },
+      });
     });
 
     return reply.code(201).send({

@@ -10,7 +10,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -33,12 +35,21 @@ const MSG_APR = "77777777-aaaa-4000-8000-000000000022";
 const APPROVER = "00000000-aaaa-4000-8000-000000000003"; // maker-checker: approver != maker
 
 async function wipeTestData() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(payrollSlips).where(eq(payrollSlips.tenantId, TENANT));
-  await db.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
-  await db.delete(processed).where(eq(processed.messageId, MSG_1));
-  await db.delete(processed).where(eq(processed.messageId, MSG_2));
-  await db.delete(processed).where(eq(processed.messageId, MSG_APR));
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(payrollSlips).where(eq(payrollSlips.tenantId, TENANT));
+    await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
+    await tx.delete(processed).where(eq(processed.messageId, MSG_1));
+    await tx.delete(processed).where(eq(processed.messageId, MSG_2));
+    await tx.delete(processed).where(eq(processed.messageId, MSG_APR));
+  }));
+}
+
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
 }
 
 // ── 1. Payroll computation (pure) ────────────────────────────────
@@ -179,7 +190,7 @@ describe("Payroll run consumer — CQRS (integration)", () => {
   afterAll(async () => { await wipeTestData(); });
 
   it("run create command inserts run row with processing status", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerPayrollConsumers(q);
     await q.start();
 
@@ -195,7 +206,8 @@ describe("Payroll run consumer — CQRS (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 600));
     await q.stop();
 
-    const runs = await db.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_1));
+    const runs = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_1))));
     expect(runs).toHaveLength(1);
     expect(runs[0]?.runNo).toBe("RUN-TEST-001");
     // The consumer inserts the run as 'processing', then calls processPayrollRun which
@@ -205,7 +217,8 @@ describe("Payroll run consumer — CQRS (integration)", () => {
     // the row must exist (insertion happened), and the message must be marked processed.
     expect(["processing", "failed"]).toContain(runs[0]?.status);
 
-    const proc = await db.select().from(processed).where(eq(processed.messageId, MSG_1));
+    const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(processed).where(eq(processed.messageId, MSG_1))));
     expect(proc).toHaveLength(1);
   });
 });
@@ -216,20 +229,22 @@ describe("Payroll run approve — event emitted (integration)", () => {
   const SLIP_ID = "88888888-aaaa-4000-8000-000000000022";
   beforeAll(async () => {
     await wipeTestData();
-    await db.insert(payrollRuns).values({
-      id: RUN_2, tenantId: TENANT, runNo: "RUN-TEST-002", month: "2024-08",
-      structureId: STRUCT_1, totalGrossMinor: 0n, totalNetMinor: 0n,
-      currency: "INR", status: "processing",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(payrollSlips).values({
-      id: SLIP_ID, tenantId: TENANT, runId: RUN_2,
-      employeeId: ACTOR, employeeNo: "EMP-001",
-      basicMinor: 3_000_000n, grossMinor: 5_000_000n,
-      totalDeductionsMinor: 500_000n, netPayMinor: 4_500_000n,
-      currency: "INR", components: [],
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(payrollRuns).values({
+        id: RUN_2, tenantId: TENANT, runNo: "RUN-TEST-002", month: "2024-08",
+        structureId: STRUCT_1, totalGrossMinor: 0n, totalNetMinor: 0n,
+        currency: "INR", status: "processing",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(payrollSlips).values({
+        id: SLIP_ID, tenantId: TENANT, runId: RUN_2,
+        employeeId: ACTOR, employeeNo: "EMP-001",
+        basicMinor: 3_000_000n, grossMinor: 5_000_000n,
+        totalDeductionsMinor: 500_000n, netPayMinor: 4_500_000n,
+        currency: "INR", components: [],
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
 
   afterAll(async () => {
@@ -238,7 +253,7 @@ describe("Payroll run approve — event emitted (integration)", () => {
   });
 
   it("approve command sets status=approved and emits payroll.run.approved", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerPayrollConsumers(q);
     await q.start();
 
@@ -251,11 +266,13 @@ describe("Payroll run approve — event emitted (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 600));
     await q.stop();
 
-    const runs = await db.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_2));
+    const runs = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_2))));
     expect(runs[0]?.status).toBe("approved");
     expect(runs[0]?.approvedBy).toBe(APPROVER);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     const eventTypes = outbox.map((r) => r.eventType);
     expect(eventTypes).toContain(EVENTS.runApproved);
     expect(eventTypes).toContain("audit.event.record");

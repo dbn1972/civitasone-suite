@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { payrollLopLedger } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -31,13 +31,13 @@ export async function upsertLopDays(
 }
 
 export async function sumLopDays(tenantId: string, employeeId: string, month: string): Promise<number> {
-  const [row] = await db.select({ total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int` })
+  const [row] = await scopedRead((tx) => tx.select({ total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int` })
     .from(payrollLopLedger)
     .where(and(
       eq(payrollLopLedger.tenantId, tenantId),
       eq(payrollLopLedger.employeeId, employeeId),
       eq(payrollLopLedger.month, month),
-    ));
+    )));
   return row?.total ?? 0;
 }
 
@@ -54,7 +54,7 @@ export async function getLopForMonth(
   employeeId: string,
   month: string,
 ): Promise<{ hasLedger: boolean; days: number }> {
-  const [row] = await db.select({
+  const [row] = await scopedRead((tx) => tx.select({
     cnt: sql<number>`count(*)::int`,
     total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int`,
   })
@@ -63,6 +63,6 @@ export async function getLopForMonth(
       eq(payrollLopLedger.tenantId, tenantId),
       eq(payrollLopLedger.employeeId, employeeId),
       eq(payrollLopLedger.month, month),
-    ));
+    )));
   return { hasLedger: (row?.cnt ?? 0) > 0, days: row?.total ?? 0 };
 }

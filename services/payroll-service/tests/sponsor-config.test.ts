@@ -4,10 +4,13 @@
  * Tests the GET/PUT /v1/payroll/sponsor-bank-config endpoints.
  * Uses HS256 test JWTs (JWT_ALGORITHM=HS256 set in vitest.config.ts).
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { sponsorBankConfig } from "../src/modules/sponsor-config/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-3333-4000-8000-000000000033";
@@ -19,6 +22,13 @@ function makeToken(roles: string[] = ["payroll_admin"]) {
 afterAll(async () => { await sqlClient.end(); });
 
 describe("GET /v1/payroll/sponsor-bank-config", () => {
+  beforeAll(async () => {
+    // Ensure no stale data from prior test runs
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(sponsorBankConfig).where(eq(sponsorBankConfig.tenantId, TENANT));
+    }));
+  });
+
   it("returns 404 when no config exists", async () => {
     const app = await buildApp();
     const token = makeToken();

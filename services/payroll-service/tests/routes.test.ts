@@ -173,6 +173,7 @@ describe("Payroll disbursement — requires approval state (route + domain)", ()
   it("consumer: disbursing a run that is in processing status sets run to failed (state machine enforced)", async () => {
     const { MemoryQueue } = await import("@civitasone/queue");
     const { eq } = await import("drizzle-orm");
+    const { runWithTenant, withTenantConsumer } = await import("@civitasone/db");
     const { db } = await import("../src/shared/db.js");
     const { payrollRuns } = await import("../src/modules/payroll/schema.js");
     const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
@@ -185,19 +186,26 @@ describe("Payroll disbursement — requires approval state (route + domain)", ()
     const TENANT = "22222222-dddd-4000-8000-000000000099";
 
     // Clean up
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-    await db.delete(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
-    await db.delete(processed).where(eq(processed.messageId, MSG_DISBURSE));
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.delete(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_DISBURSE));
+    }));
 
     // Insert a run in 'processing' status (not yet approved)
-    await db.insert(payrollRuns).values({
-      id: RUN_DISBURSE_TEST, tenantId: TENANT, runNo: "RUN-DISBURSE-TEST",
-      month: "2024-09", structureId: "ffffffff-0000-4000-8000-000000000099",
-      totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(payrollRuns).values({
+        id: RUN_DISBURSE_TEST, tenantId: TENANT, runNo: "RUN-DISBURSE-TEST",
+        month: "2024-09", structureId: "ffffffff-0000-4000-8000-000000000099",
+        totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
 
     const q = new MemoryQueue();
+    const rawSubscribe = q.subscribe.bind(q);
+    q.subscribe = ((topic: string, handler: unknown) =>
+      rawSubscribe(topic, withTenantConsumer(handler as (msg: { tenantId: string }) => Promise<void>) as typeof handler)) as typeof q.subscribe;
     registerPayrollConsumers(q);
     await q.start();
 
@@ -213,14 +221,17 @@ describe("Payroll disbursement — requires approval state (route + domain)", ()
     await q.stop();
 
     // The run must still be in 'processing' — disburse was rejected by state machine
-    const runs = await db.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
+    const runs = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST))));
     expect(runs).toHaveLength(1);
     expect(runs[0]?.status).not.toBe("disbursed");
 
     // Cleanup
-    await db.delete(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-    await db.delete(processed).where(eq(processed.messageId, MSG_DISBURSE));
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(payrollRuns).where(eq(payrollRuns.id, RUN_DISBURSE_TEST));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_DISBURSE));
+    }));
   });
 });
 

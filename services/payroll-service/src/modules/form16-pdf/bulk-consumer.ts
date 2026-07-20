@@ -12,7 +12,7 @@
  */
 import type { Queue } from "@civitasone/queue";
 import { eq, and, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { buildForm16 } from "../tax/form16.js";
@@ -46,7 +46,7 @@ async function resolveEmployeeList(
 ): Promise<Array<{ employeeId: string; employeeNo: string }>> {
   if (employeeIds && employeeIds.length > 0) {
     // Use provided list — still resolve employeeNo from slips
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .selectDistinct({ employeeId: payrollSlips.employeeId, employeeNo: payrollSlips.employeeNo })
       .from(payrollSlips)
       .innerJoin(payrollRuns, eq(payrollSlips.runId, payrollRuns.id))
@@ -56,12 +56,12 @@ async function resolveEmployeeList(
           inArray(payrollSlips.employeeId, employeeIds),
           eq(payrollRuns.status, "disbursed"),
         ),
-      );
+      ));
     return rows;
   }
 
   // null → all employees with disbursed (finalised) slips in runs for this tenant
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .selectDistinct({ employeeId: payrollSlips.employeeId, employeeNo: payrollSlips.employeeNo })
     .from(payrollSlips)
     .innerJoin(payrollRuns, eq(payrollSlips.runId, payrollRuns.id))
@@ -70,7 +70,7 @@ async function resolveEmployeeList(
         eq(payrollSlips.tenantId, tenantId),
         eq(payrollRuns.status, "disbursed"),
       ),
-    );
+    ));
   return rows;
 }
 
@@ -152,10 +152,12 @@ export function registerForm16BulkConsumers(queue: Queue): void {
       const employees = await resolveEmployeeList(tenantId, fy, employeeIds);
 
       // Update total count on job
-      await db
-        .update(form16BulkJobs)
-        .set({ totalEmployees: employees.length, status: "processing", storagePrefix })
-        .where(eq(form16BulkJobs.id, jobId));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(form16BulkJobs)
+          .set({ totalEmployees: employees.length, status: "processing", storagePrefix })
+          .where(eq(form16BulkJobs.id, jobId));
+      });
 
       if (employees.length === 0) {
         // Nothing to generate — mark complete immediately
@@ -220,10 +222,12 @@ export function registerForm16BulkConsumers(queue: Queue): void {
         }
 
         // Update progress after each employee
-        await db
-          .update(form16BulkJobs)
-          .set({ generated, failed, errorDetails: errorDetails.length > 0 ? errorDetails : null })
-          .where(eq(form16BulkJobs.id, jobId));
+        await db.transaction(async (tx) => {
+          await tx
+            .update(form16BulkJobs)
+            .set({ generated, failed, errorDetails: errorDetails.length > 0 ? errorDetails : null })
+            .where(eq(form16BulkJobs.id, jobId));
+        });
       }
 
       // 4. Mark job complete + emit event + audit
@@ -272,14 +276,16 @@ export function registerForm16BulkConsumers(queue: Queue): void {
       log.error({ jobId, error: errMsg }, "form16 bulk generation failed catastrophically");
 
       try {
-        await db
-          .update(form16BulkJobs)
-          .set({
-            status: "failed",
-            errorDetails: [{ employeeId: "system", employeeNo: "N/A", error: errMsg }],
-            completedAt: new Date(),
-          })
-          .where(eq(form16BulkJobs.id, jobId));
+        await db.transaction(async (tx) => {
+          await tx
+            .update(form16BulkJobs)
+            .set({
+              status: "failed",
+              errorDetails: [{ employeeId: "system", employeeNo: "N/A", error: errMsg }],
+              completedAt: new Date(),
+            })
+            .where(eq(form16BulkJobs.id, jobId));
+        });
       } catch {
         log.error({ jobId }, "failed to update job status after catastrophic error");
       }

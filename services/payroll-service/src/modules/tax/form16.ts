@@ -1,5 +1,5 @@
 import { eq, and, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
@@ -63,13 +63,13 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   // (approved/disbursed). A draft/processing/failed run must not contribute to
   // Form 16 gross or TDS — an out-of-order or abandoned run would otherwise
   // corrupt the Sec-192 true-up.
-  const fyRuns = await db.select().from(payrollRuns)
-    .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months)));
+  const fyRuns = await scopedRead((tx) => tx.select().from(payrollRuns)
+    .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months))));
   const finalisedRunIds = new Set(
     fyRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id),
   );
-  const slipRows = await db.select().from(payrollSlips)
-    .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId)));
+  const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
+    .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId))));
   const fySlips = slipRows.filter((s) => finalisedRunIds.has(s.runId));
   const grossSalary = Math.round(fySlips.reduce((a, s) => a + Number(s.grossMinor) / 100, 0));
 
@@ -84,8 +84,8 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   };
   let totalTdsDeducted = 0;
   for (const month of months) {
-    const tdsRows = await db.select().from(payrollTds)
-      .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.employeeId, employeeId), eq(payrollTds.period, month)));
+    const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
+      .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.employeeId, employeeId), eq(payrollTds.period, month))));
     for (const t of tdsRows) {
       // M3: exclude TDS rows whose source run is not approved/disbursed.
       if (!finalisedRunIds.has(t.runId)) continue;
@@ -95,9 +95,9 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
     }
   }
 
-  const decRows = await db.select().from(taxDeclarations)
+  const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
     .where(and(eq(taxDeclarations.tenantId, tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
-    .limit(1);
+    .limit(1));
   const dec = decRows[0] ?? null;
   const regime = (dec?.regime ?? "new") as "old" | "new";
 

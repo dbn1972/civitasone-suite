@@ -275,12 +275,14 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
 
     // Create the job row
     const jobId = randomUUID();
-    await db.insert(form16BulkJobs).values({
-      id: jobId,
-      tenantId: ctx.tenantId,
-      fy: body.fy,
-      status: "pending",
-      createdBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(form16BulkJobs).values({
+        id: jobId,
+        tenantId: ctx.tenantId,
+        fy: body.fy,
+        status: "pending",
+        createdBy: ctx.actorId,
+      });
     });
 
     // Publish command to queue

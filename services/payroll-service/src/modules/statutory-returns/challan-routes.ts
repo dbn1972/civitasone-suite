@@ -187,7 +187,7 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
     const tdsMinor = paise(b.tdsAmount);
     const totalMinor = b.totalAmount != null ? paise(b.totalAmount) : tdsMinor + paise(b.interest) + paise(b.fee);
 
-    const inserted = await db.insert(payrollTdsChallan).values({
+    const insertValues = {
       tenantId: ctx.tenantId,
       period: b.period,
       section,
@@ -201,7 +201,12 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
       interestMinor: paise(b.interest),
       feeMinor: paise(b.fee),
       createdBy: ctx.actorId,
-    }).onConflictDoNothing({ target: [payrollTdsChallan.tenantId, payrollTdsChallan.cin] }).returning();
+    } as typeof payrollTdsChallan.$inferInsert;
+
+    const inserted = await db.transaction(async (tx) => {
+      return tx.insert(payrollTdsChallan).values(insertValues)
+        .onConflictDoNothing({ target: [payrollTdsChallan.tenantId, payrollTdsChallan.cin] }).returning();
+    });
 
     const idempotent = inserted.length === 0;
     return reply.code(idempotent ? 200 : 201).send({

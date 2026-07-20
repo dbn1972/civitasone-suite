@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../src/shared/db.js";
 import { form16BulkJobs } from "../src/modules/form16-pdf/schema.js";
 import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
@@ -31,7 +32,9 @@ function citizenToken() {
 // Clean up test data before running to avoid conflicts from previous runs
 beforeAll(async () => {
   try {
-    await db.delete(form16BulkJobs).where(eq(form16BulkJobs.tenantId, TENANT));
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(form16BulkJobs).where(eq(form16BulkJobs.tenantId, TENANT));
+    }));
   } catch {
     // Table may not exist in CI — that's fine
   }

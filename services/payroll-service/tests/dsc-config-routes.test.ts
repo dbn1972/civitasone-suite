@@ -8,9 +8,13 @@
  * - 403 wrong role
  * - 401 no token
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
+import { db } from "../src/shared/db.js";
+import { dscConfig } from "../src/modules/dsc-config/schema.js";
 import { randomUUID } from "node:crypto";
 import { validateDscCertificate, DscValidationError } from "@civitasone/render";
 
@@ -192,6 +196,13 @@ describe("PUT /v1/payroll/dsc-config — expired cert", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("GET /v1/payroll/dsc-config", () => {
+  beforeAll(async () => {
+    // Ensure no stale data from prior test runs
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(dscConfig).where(eq(dscConfig.tenantId, TENANT));
+    }));
+  });
+
   it("returns 404 when no DSC configured for tenant", async () => {
     const app = await buildApp();
 
@@ -238,6 +249,13 @@ describe("GET /v1/payroll/dsc-config", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("DELETE /v1/payroll/dsc-config", () => {
+  beforeAll(async () => {
+    // Ensure no stale data from prior test runs
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(dscConfig).where(eq(dscConfig.tenantId, TENANT));
+    }));
+  });
+
   it("returns 404 when no DSC configured", async () => {
     const app = await buildApp();
 

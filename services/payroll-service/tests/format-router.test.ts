@@ -10,6 +10,7 @@ import { buildApp } from "../src/app.js";
 import { db } from "../src/shared/db.js";
 import { sqlClient } from "../src/shared/db.js";
 import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 
@@ -31,36 +32,40 @@ let app: FastifyInstance;
 beforeAll(async () => {
   app = await buildApp();
 
-  // Seed a pay structure (required FK for payroll_runs.structure_id)
-  await db.execute(sql`
-    INSERT INTO payroll.payroll_structures (id, tenant_id, name, created_by, updated_by)
-    VALUES (${STRUCT_ID}::uuid, ${TENANT}::uuid, 'Test Structure', ${ACTOR}::uuid, ${ACTOR}::uuid)
-    ON CONFLICT (id) DO NOTHING
-  `);
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    // Seed a pay structure (required FK for payroll_runs.structure_id)
+    await tx.execute(sql`
+      INSERT INTO payroll.payroll_structures (id, tenant_id, name, created_by, updated_by)
+      VALUES (${STRUCT_ID}::uuid, ${TENANT}::uuid, 'Test Structure', ${ACTOR}::uuid, ${ACTOR}::uuid)
+      ON CONFLICT (id) DO NOTHING
+    `);
 
-  // Seed a payroll run + slips for this tenant
-  await db.execute(sql`
-    INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, run_type, structure_id, status, created_by, updated_by)
-    VALUES (${RUN_ID}::uuid, ${TENANT}::uuid, 'RUN-001', '2026-07', 'pensioner', ${STRUCT_ID}::uuid, 'approved', ${ACTOR}::uuid, ${ACTOR}::uuid)
-    ON CONFLICT (id) DO NOTHING
-  `);
+    // Seed a payroll run + slips for this tenant
+    await tx.execute(sql`
+      INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, run_type, structure_id, status, created_by, updated_by)
+      VALUES (${RUN_ID}::uuid, ${TENANT}::uuid, 'RUN-001', '2026-07', 'pensioner', ${STRUCT_ID}::uuid, 'approved', ${ACTOR}::uuid, ${ACTOR}::uuid)
+      ON CONFLICT (id) DO NOTHING
+    `);
 
-  await db.execute(sql`
-    INSERT INTO payroll.payroll_slips (id, tenant_id, run_id, employee_id, employee_no, net_pay_minor, created_by, updated_by)
-    VALUES
-      (${randomUUID()}::uuid, ${TENANT}::uuid, ${RUN_ID}::uuid, ${EMP_ID_1}::uuid, 'EMP001', 5000000, ${ACTOR}::uuid, ${ACTOR}::uuid),
-      (${randomUUID()}::uuid, ${TENANT}::uuid, ${RUN_ID}::uuid, ${EMP_ID_2}::uuid, 'EMP002', 3500000, ${ACTOR}::uuid, ${ACTOR}::uuid)
-    ON CONFLICT DO NOTHING
-  `);
+    await tx.execute(sql`
+      INSERT INTO payroll.payroll_slips (id, tenant_id, run_id, employee_id, employee_no, net_pay_minor, created_by, updated_by)
+      VALUES
+        (${randomUUID()}::uuid, ${TENANT}::uuid, ${RUN_ID}::uuid, ${EMP_ID_1}::uuid, 'EMP001', 5000000, ${ACTOR}::uuid, ${ACTOR}::uuid),
+        (${randomUUID()}::uuid, ${TENANT}::uuid, ${RUN_ID}::uuid, ${EMP_ID_2}::uuid, 'EMP002', 3500000, ${ACTOR}::uuid, ${ACTOR}::uuid)
+      ON CONFLICT DO NOTHING
+    `);
+  }));
 });
 
 afterAll(async () => {
   // Cleanup test data
-  await db.execute(sql`DELETE FROM payroll.payroll_slips WHERE run_id = ${RUN_ID}::uuid`);
-  await db.execute(sql`DELETE FROM payroll.payroll_runs WHERE id = ${RUN_ID}::uuid`);
-  await db.execute(sql`DELETE FROM payroll.payroll_pensioners WHERE tenant_id = ${TENANT}::uuid`);
-  await db.execute(sql`DELETE FROM payroll.sponsor_bank_config WHERE tenant_id = ${TENANT}::uuid`);
-  await db.execute(sql`DELETE FROM payroll.payroll_structures WHERE id = ${STRUCT_ID}::uuid`);
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM payroll.payroll_slips WHERE run_id = ${RUN_ID}::uuid`);
+    await tx.execute(sql`DELETE FROM payroll.payroll_runs WHERE id = ${RUN_ID}::uuid`);
+    await tx.execute(sql`DELETE FROM payroll.payroll_pensioners WHERE tenant_id = ${TENANT}::uuid`);
+    await tx.execute(sql`DELETE FROM payroll.sponsor_bank_config WHERE tenant_id = ${TENANT}::uuid`);
+    await tx.execute(sql`DELETE FROM payroll.payroll_structures WHERE id = ${STRUCT_ID}::uuid`);
+  }));
   await app.close();
   await sqlClient.end();
 });
@@ -76,16 +81,18 @@ afterAll(async () => {
  */
 async function seedPensionerMaster() {
   // Run is already type 'pensioner', so it reads from payroll_pensioners instead of HRMS
-  await db.execute(sql`
-    INSERT INTO payroll.payroll_pensioners (id, tenant_id, ppo_no, full_name, date_of_birth, basic_pension_minor, bank_account_no, bank_ifsc, created_by, updated_by)
-    VALUES
-      (${EMP_ID_1}::uuid, ${TENANT}::uuid, 'PPO001', 'Rajesh Kumar', '1960-01-15', 5000000, '1234567890123', 'SBIN0001234', ${ACTOR}::uuid, ${ACTOR}::uuid),
-      (${EMP_ID_2}::uuid, ${TENANT}::uuid, 'PPO002', 'Suresh Patel', '1962-06-20', 3500000, '9876543210123', 'HDFC0005678', ${ACTOR}::uuid, ${ACTOR}::uuid)
-    ON CONFLICT (id) DO UPDATE SET
-      bank_account_no = EXCLUDED.bank_account_no,
-      bank_ifsc = EXCLUDED.bank_ifsc,
-      full_name = EXCLUDED.full_name
-  `);
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO payroll.payroll_pensioners (id, tenant_id, ppo_no, full_name, date_of_birth, basic_pension_minor, bank_account_no, bank_ifsc, created_by, updated_by)
+      VALUES
+        (${EMP_ID_1}::uuid, ${TENANT}::uuid, 'PPO001', 'Rajesh Kumar', '1960-01-15', 5000000, '1234567890123', 'SBIN0001234', ${ACTOR}::uuid, ${ACTOR}::uuid),
+        (${EMP_ID_2}::uuid, ${TENANT}::uuid, 'PPO002', 'Suresh Patel', '1962-06-20', 3500000, '9876543210123', 'HDFC0005678', ${ACTOR}::uuid, ${ACTOR}::uuid)
+      ON CONFLICT (id) DO UPDATE SET
+        bank_account_no = EXCLUDED.bank_account_no,
+        bank_ifsc = EXCLUDED.bank_ifsc,
+        full_name = EXCLUDED.full_name
+    `);
+  }));
 }
 
 async function seedSponsorConfig(overrides: Record<string, unknown> = {}) {
@@ -113,7 +120,9 @@ async function seedSponsorConfig(overrides: Record<string, unknown> = {}) {
 }
 
 async function removeSponsorConfig() {
-  await db.execute(sql`DELETE FROM payroll.sponsor_bank_config WHERE tenant_id = ${TENANT}::uuid`);
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM payroll.sponsor_bank_config WHERE tenant_id = ${TENANT}::uuid`);
+  }));
   // Also invalidate the cache so subsequent reads don't serve stale data
   const { cache } = await import("../src/shared/infra.js");
   await cache.invalidate(cache.makeKey(TENANT, "sponsor_bank_config", TENANT));
@@ -205,9 +214,11 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=nach", () => {
     await seedSponsorConfig();
 
     // Set one pensioner's IFSC to invalid
-    await db.execute(sql`
-      UPDATE payroll.payroll_pensioners SET bank_ifsc = 'INVALID' WHERE id = ${EMP_ID_1}::uuid
-    `);
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE payroll.payroll_pensioners SET bank_ifsc = 'INVALID' WHERE id = ${EMP_ID_1}::uuid
+      `);
+    }));
 
     const token = makeToken();
     const res = await app.inject({
@@ -219,9 +230,11 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=nach", () => {
     expect(res.json().code).toBe("BANK_DETAILS_MISSING");
 
     // Restore valid IFSC
-    await db.execute(sql`
-      UPDATE payroll.payroll_pensioners SET bank_ifsc = 'SBIN0001234' WHERE id = ${EMP_ID_1}::uuid
-    `);
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE payroll.payroll_pensioners SET bank_ifsc = 'SBIN0001234' WHERE id = ${EMP_ID_1}::uuid
+      `);
+    }));
     await removeSponsorConfig();
   });
 });

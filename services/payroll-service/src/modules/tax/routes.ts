@@ -288,22 +288,24 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     const body = upsertCeilingBody.parse(req.body);
 
-    const rows = await db
-      .insert(exemptionCeilings)
-      .values({
-        fyStartYear: body.fyStartYear,
-        section: body.section,
-        ceilingMinor: body.ceilingMinor,
-        notes: body.notes ?? null,
-      })
-      .onConflictDoUpdate({
-        target: [exemptionCeilings.fyStartYear, exemptionCeilings.section],
-        set: {
+    const rows = await db.transaction(async (tx) => {
+      return tx
+        .insert(exemptionCeilings)
+        .values({
+          fyStartYear: body.fyStartYear,
+          section: body.section,
           ceilingMinor: body.ceilingMinor,
           notes: body.notes ?? null,
-        },
-      })
-      .returning();
+        })
+        .onConflictDoUpdate({
+          target: [exemptionCeilings.fyStartYear, exemptionCeilings.section],
+          set: {
+            ceilingMinor: body.ceilingMinor,
+            notes: body.notes ?? null,
+          },
+        })
+        .returning();
+    });
 
     const row = rows[0]!;
 

@@ -40,7 +40,7 @@ export type Db = typeof db;
  * above set the GUC from AsyncLocalStorage — reads are then correctly
  * tenant-scoped by RLS, not merely by an app-layer WHERE.
  */
-type ScopedTx = Parameters<Parameters<typeof baseDb.transaction>[0]>[0];
+type ScopedTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
   return db.transaction(fn as Parameters<typeof db.transaction>[0]) as Promise<T>;
 }

@@ -18,24 +18,28 @@ export async function findByTenantId(tenantId: string): Promise<DscConfigRow | n
 }
 
 export async function upsert(tenantId: string, data: DscConfigInsert): Promise<void> {
-  await db.insert(dscConfig).values({ ...data, tenantId }).onConflictDoUpdate({
-    target: dscConfig.tenantId,
-    set: {
-      storageRef: data.storageRef,
-      passphrase: data.passphrase,
-      subjectCn: data.subjectCn,
-      serialNumber: data.serialNumber,
-      notBefore: data.notBefore,
-      notAfter: data.notAfter,
-      sha256Fingerprint: data.sha256Fingerprint,
-      updatedAt: new Date(),
-      updatedBy: data.updatedBy,
-    },
+  await db.transaction(async (tx) => {
+    await tx.insert(dscConfig).values({ ...data, tenantId }).onConflictDoUpdate({
+      target: dscConfig.tenantId,
+      set: {
+        storageRef: data.storageRef,
+        passphrase: data.passphrase,
+        subjectCn: data.subjectCn,
+        serialNumber: data.serialNumber,
+        notBefore: data.notBefore,
+        notAfter: data.notAfter,
+        sha256Fingerprint: data.sha256Fingerprint,
+        updatedAt: new Date(),
+        updatedBy: data.updatedBy,
+      },
+    });
   });
   await cache.invalidate(cache.makeKey(tenantId, CACHE_RESOURCE, tenantId));
 }
 
 export async function remove(tenantId: string): Promise<void> {
-  await db.delete(dscConfig).where(eq(dscConfig.tenantId, tenantId));
+  await db.transaction(async (tx) => {
+    await tx.delete(dscConfig).where(eq(dscConfig.tenantId, tenantId));
+  });
   await cache.invalidate(cache.makeKey(tenantId, CACHE_RESOURCE, tenantId));
 }
