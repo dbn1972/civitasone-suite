@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { hrmsPensionRecords } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "select">;
@@ -12,9 +12,9 @@ export async function insertPensionRecord(
 }
 
 export async function listByEmployee(tenantId: string, employeeId: string) {
-  return db
+  return scopedRead((tx) => tx
     .select()
     .from(hrmsPensionRecords)
     .where(and(eq(hrmsPensionRecords.tenantId, tenantId), eq(hrmsPensionRecords.employeeId, employeeId)))
-    .orderBy(desc(hrmsPensionRecords.createdAt));
+    .orderBy(desc(hrmsPensionRecords.createdAt)));
 }

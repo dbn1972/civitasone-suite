@@ -74,10 +74,10 @@ export async function ceaCommittedForChild(
     sql`${hrmsCeaClaims.status} IN ('submitted','approved')`,
   ];
   if (excludeId) conds.push(ne(hrmsCeaClaims.id, excludeId));
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({ total: sql<string>`COALESCE(SUM(${hrmsCeaClaims.claimedAmountMinor}), 0)` })
     .from(hrmsCeaClaims)
-    .where(and(...conds));
+    .where(and(...conds)));
   return BigInt(rows[0]?.total ?? "0");
 }
 

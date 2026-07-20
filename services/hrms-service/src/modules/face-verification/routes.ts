@@ -31,19 +31,21 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     const existing = await scopedRead((tx) => tx.select().from(hrmsProfilePhotos)
       .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, id))).limit(1));
 
-    if (existing[0]) {
-      // One-time update allowed — deactivate old, insert new
-      await db.update(hrmsProfilePhotos)
-        .set({ isActive: false } as any)
-        .where(eq(hrmsProfilePhotos.id, existing[0].id));
-    }
-
     const photoId = randomUUID();
-    await db.insert(hrmsProfilePhotos).values({
-      id: photoId, tenantId: ctx.tenantId, employeeId: id,
-      photoKey: body.photoKey, photoBucket: body.photoBucket,
-      uploadedAt: new Date(), isActive: true,
-    } as any);
+    await db.transaction(async (tx) => {
+      if (existing[0]) {
+        // One-time update allowed — deactivate old, insert new
+        await tx.update(hrmsProfilePhotos)
+          .set({ isActive: false } as any)
+          .where(eq(hrmsProfilePhotos.id, existing[0].id));
+      }
+
+      await tx.insert(hrmsProfilePhotos).values({
+        id: photoId, tenantId: ctx.tenantId, employeeId: id,
+        photoKey: body.photoKey, photoBucket: body.photoBucket,
+        uploadedAt: new Date(), isActive: true,
+      } as any);
+    });
 
     return reply.code(201).send({ id: photoId, status: "uploaded", message: "Profile photo uploaded. Will be used for attendance face verification." });
   });
@@ -102,7 +104,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     );
 
     // Log verification attempt
-    await db.insert(hrmsFaceVerificationLog).values({
+    await db.transaction((tx) => tx.insert(hrmsFaceVerificationLog).values({
       id: randomUUID(), tenantId: ctx.tenantId, employeeId: body.employeeId,
       geoAttendanceId: body.geoAttendanceId ?? null,
       selfieKey: body.selfieKey, profilePhotoKey: profile.photoKey,
@@ -112,7 +114,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
       onnxScore: result.onnxScore !== null ? String(result.onnxScore) : null,
       rekognitionScore: result.rekognitionScore !== null ? String(result.rekognitionScore) : null,
       processingMs: result.processingMs, failureReason: result.failureReason,
-    } as any);
+    } as any));
 
     return reply.send({
       verified: result.isMatch,
@@ -145,8 +147,8 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
       allowManualOverride: z.boolean().optional(),
     }).parse(req.body);
 
-    await db.update(hrmsFaceConfig).set({ ...body, updatedAt: new Date() } as any)
-      .where(eq(hrmsFaceConfig.tenantId, ctx.tenantId));
+    await db.transaction((tx) => tx.update(hrmsFaceConfig).set({ ...body, updatedAt: new Date() } as any)
+      .where(eq(hrmsFaceConfig.tenantId, ctx.tenantId)));
     return reply.send({ status: "updated" });
   });
 

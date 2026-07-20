@@ -12,27 +12,35 @@ export async function getDashboard(tenantId: string): Promise<{
 }> {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [headcountRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(hrmsEmployees)
-    .where(and(eq(hrmsEmployees.tenantId, tenantId), ne(hrmsEmployees.status, "separated")));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before these reads — bare db.select() calls run with no RLS GUC set,
+  // and running one shared transaction (rather than three separate ones)
+  // also gives a consistent snapshot across the three counts.
+  const { headcountRow, pendingRow, presentRow } = await db.transaction(async (tx) => {
+    const [headcountRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, tenantId), ne(hrmsEmployees.status, "separated")));
 
-  const [pendingRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(hrmsLeaveApps)
-    .where(and(
-      eq(hrmsLeaveApps.tenantId, tenantId),
-      or(eq(hrmsLeaveApps.status, "pending"), eq(hrmsLeaveApps.status, "draft")),
-    ));
+    const [pendingRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(hrmsLeaveApps)
+      .where(and(
+        eq(hrmsLeaveApps.tenantId, tenantId),
+        or(eq(hrmsLeaveApps.status, "pending"), eq(hrmsLeaveApps.status, "draft")),
+      ));
 
-  const [presentRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(hrmsAttendance)
-    .where(and(
-      eq(hrmsAttendance.tenantId, tenantId),
-      eq(hrmsAttendance.attendanceDate, today),
-      eq(hrmsAttendance.status, "present"),
-    ));
+    const [presentRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(hrmsAttendance)
+      .where(and(
+        eq(hrmsAttendance.tenantId, tenantId),
+        eq(hrmsAttendance.attendanceDate, today),
+        eq(hrmsAttendance.status, "present"),
+      ));
+
+    return { headcountRow, pendingRow, presentRow };
+  });
 
   const headcount = headcountRow?.count ?? 0;
   const present = presentRow?.count ?? 0;

@@ -13,7 +13,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
@@ -57,7 +57,7 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/employee-types", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager", "officer"]);
-    const rows = await db.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -67,12 +67,12 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(employeeTypeMaster).values({
+    await db.transaction((tx) => tx.insert(employeeTypeMaster).values({
       id, tenantId: ctx.tenantId, ...body,
       description: body.description ?? null,
       maxContractMonths: body.maxContractMonths ?? null,
       createdBy: ctx.actorId,
-    }).onConflictDoNothing();
+    }).onConflictDoNothing());
     return reply.code(201).send({ id, status: "created" });
   });
 
@@ -93,7 +93,7 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     if (body.maxContractMonths !== undefined) patch.maxContractMonths = body.maxContractMonths;
     if (body.payMode !== undefined) patch.payMode = body.payMode;
     if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder;
-    await db.update(employeeTypeMaster).set(patch as any).where(eq(employeeTypeMaster.id, id));
+    await db.transaction((tx) => tx.update(employeeTypeMaster).set(patch as any).where(eq(employeeTypeMaster.id, id)));
     return reply.send({ id, status: "updated" });
   });
 }

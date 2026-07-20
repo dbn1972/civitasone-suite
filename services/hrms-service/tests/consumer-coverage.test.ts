@@ -9,6 +9,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq, and } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import type { Queue, Handler } from "@civitasone/queue";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 import { hrmsLeaveApps, hrmsLeaveAllocs, hrmsLeaveTypes } from "../src/modules/leave/schema.js";
 import { hrmsAttendance } from "../src/modules/attendance/schema.js";
@@ -47,30 +49,46 @@ const MSG_ATTEND_DUP   = MSG_ATTEND; // duplicate
 const WAIT = 700;
 
 async function wipeAll() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT));
-  await db.delete(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT));
-  await db.delete(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, TENANT));
-  await db.delete(hrmsAttendance).where(eq(hrmsAttendance.tenantId, TENANT));
-  await db.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
-  await db.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
-  await db.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
-  // Clean processed entries for our message IDs
-  for (const mid of [MSG_EMP_CREATE, MSG_EMP_CREATE2, MSG_ALLOC, MSG_ALLOC2,
-    MSG_APPLY, MSG_APPLY2, MSG_APPROVE, MSG_APPROVE2, MSG_ATTEND, MSG_ATTEND2]) {
-    await db.delete(processed).where(eq(processed.messageId, mid));
-  }
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT));
+    await tx.delete(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT));
+    await tx.delete(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, TENANT));
+    await tx.delete(hrmsAttendance).where(eq(hrmsAttendance.tenantId, TENANT));
+    await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
+    await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
+    await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
+    // Clean processed entries for our message IDs
+    for (const mid of [MSG_EMP_CREATE, MSG_EMP_CREATE2, MSG_ALLOC, MSG_ALLOC2,
+      MSG_APPLY, MSG_APPLY2, MSG_APPROVE, MSG_APPROVE2, MSG_ATTEND, MSG_ATTEND2]) {
+      await tx.delete(processed).where(eq(processed.messageId, mid));
+    }
+  }));
 }
 
 async function seedDeptDesig() {
-  await db.insert(hrmsDepartments).values({
-    id: DEPT_1, tenantId: TENANT, code: "COV-DEPT", name: "Coverage Dept",
-    createdBy: ACTOR, updatedBy: ACTOR,
-  });
-  await db.insert(hrmsDesignations).values({
-    id: DESIG_1, tenantId: TENANT, code: "COV-DESIG", name: "Coverage Desig",
-    createdBy: ACTOR, updatedBy: ACTOR,
-  });
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsDepartments).values({
+      id: DEPT_1, tenantId: TENANT, code: "COV-DEPT", name: "Coverage Dept",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
+    await tx.insert(hrmsDesignations).values({
+      id: DESIG_1, tenantId: TENANT, code: "COV-DESIG", name: "Coverage Desig",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
+  }));
+}
+
+/**
+ * MemoryQueue does NOT auto-wrap subscribed handlers with withTenantConsumer.
+ * Production wiring (createQueue()) decorates subscribe() so every consumer
+ * handler runs inside runWithTenant(msg.tenantId, ...). Mirror that here.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
 }
 
 // ── 1. Employee Create Consumer ───────────────────────────────────
@@ -80,7 +98,7 @@ describe("Employee create consumer — coverage", () => {
   afterAll(async () => { await wipeAll(); });
 
   it("inserts employee row with correct fields", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerEmployeeConsumers(q);
     await q.start();
 
@@ -97,19 +115,19 @@ describe("Employee create consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_1));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_1))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.employeeNo).toBe("EMP-COV-001");
     expect(rows[0]?.fullName).toBe("Coverage Employee");
     expect(rows[0]?.status).toBe("probation");
     expect(rows[0]?.basicMinor).toBe(3_000_000n);
 
-    const proc = await db.select().from(processed).where(eq(processed.messageId, MSG_EMP_CREATE));
+    const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(processed).where(eq(processed.messageId, MSG_EMP_CREATE))));
     expect(proc).toHaveLength(1);
   });
 
   it("duplicate messageId is idempotent — not inserted twice", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerEmployeeConsumers(q);
     await q.start();
 
@@ -128,21 +146,21 @@ describe("Employee create consumer — coverage", () => {
     await q.stop();
 
     // Only the original EMP_1 should exist, not the dup payload
-    const rows = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT))));
     const empNos = rows.map((r) => r.employeeNo);
     expect(empNos).toContain("EMP-COV-001");
     expect(empNos).not.toContain("EMP-COV-DUP");
   });
 
   it("emits employee.created event to outbox", async () => {
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     const events = outbox.map((r) => r.eventType);
     expect(events).toContain("hrms.employee.created");
     expect(events).toContain("audit.event.record");
   });
 
   it("second employee create with new messageId succeeds", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerEmployeeConsumers(q);
     await q.start();
 
@@ -160,7 +178,7 @@ describe("Employee create consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_2));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_2))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.fullName).toBe("Second Employee");
     expect(rows[0]?.mobile).toBe("9876543210");
@@ -173,22 +191,24 @@ describe("Leave allocate consumer — coverage", () => {
   beforeAll(async () => {
     await wipeAll();
     await seedDeptDesig();
-    await db.insert(hrmsEmployees).values({
-      id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
-      departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
-      employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(hrmsLeaveTypes).values({
-      id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave",
-      maxDays: 30, isEncashable: true, carryForward: true,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsEmployees).values({
+        id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
+        departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
+        employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsLeaveTypes).values({
+        id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave",
+        maxDays: 30, isEncashable: true, carryForward: true,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
   afterAll(async () => { await wipeAll(); });
 
   it("allocates leave with correct totalDays and balanceDays", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -204,7 +224,7 @@ describe("Leave allocate consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.totalDays).toBe(24);
     expect(rows[0]?.balanceDays).toBe(24);
@@ -212,7 +232,7 @@ describe("Leave allocate consumer — coverage", () => {
   });
 
   it("duplicate allocate messageId is idempotent", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -229,13 +249,13 @@ describe("Leave allocate consumer — coverage", () => {
     await q.stop();
 
     // Only the original allocation row exists
-    const rows = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.totalDays).toBe(24);
   });
 
   it("second allocate with new messageId creates another allocation", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -251,7 +271,7 @@ describe("Leave allocate consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_2));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_2))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.totalDays).toBe(15);
   });
@@ -263,27 +283,29 @@ describe("Leave apply consumer — coverage", () => {
   beforeAll(async () => {
     await wipeAll();
     await seedDeptDesig();
-    await db.insert(hrmsEmployees).values({
-      id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
-      departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
-      employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(hrmsLeaveTypes).values({
-      id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave",
-      maxDays: 30, isEncashable: true, carryForward: true,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(hrmsLeaveAllocs).values({
-      id: ALLOC_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
-      fy: "2024-25", totalDays: 20, balanceDays: 20,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsEmployees).values({
+        id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
+        departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
+        employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsLeaveTypes).values({
+        id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave",
+        maxDays: 30, isEncashable: true, carryForward: true,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsLeaveAllocs).values({
+        id: ALLOC_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
+        fy: "2024-25", totalDays: 20, balanceDays: 20,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
   afterAll(async () => { await wipeAll(); });
 
   it("inserts leave application with pending status", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -300,7 +322,7 @@ describe("Leave apply consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_1));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_1))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("pending");
     expect(rows[0]?.daysApplied).toBe(3);
@@ -308,7 +330,7 @@ describe("Leave apply consumer — coverage", () => {
   });
 
   it("duplicate leave apply messageId is idempotent", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -325,19 +347,19 @@ describe("Leave apply consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT))));
     expect(rows).toHaveLength(1); // only the original
   });
 
   it("emits leave.applied event and audit to outbox", async () => {
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     const events = outbox.map((r) => r.eventType);
     expect(events).toContain("hrms.leave.applied");
     expect(events).toContain("audit.event.record");
   });
 
   it("second leave apply with new message creates second application", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -354,7 +376,7 @@ describe("Leave apply consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_2));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_2))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.daysApplied).toBe(2);
   });
@@ -366,33 +388,35 @@ describe("Leave approve consumer — coverage", () => {
   beforeAll(async () => {
     await wipeAll();
     await seedDeptDesig();
-    await db.insert(hrmsEmployees).values({
-      id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
-      departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
-      employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(hrmsLeaveTypes).values({
-      id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave",
-      maxDays: 30, isEncashable: true, carryForward: true,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(hrmsLeaveAllocs).values({
-      id: ALLOC_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
-      fy: "2024-25", totalDays: 20, balanceDays: 20,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(hrmsLeaveApps).values({
-      id: APP_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
-      allocId: ALLOC_1, fromDate: "2024-09-02", toDate: "2024-09-06",
-      daysApplied: 5, status: "pending",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsEmployees).values({
+        id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
+        departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
+        employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsLeaveTypes).values({
+        id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave",
+        maxDays: 30, isEncashable: true, carryForward: true,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsLeaveAllocs).values({
+        id: ALLOC_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
+        fy: "2024-25", totalDays: 20, balanceDays: 20,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsLeaveApps).values({
+        id: APP_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
+        allocId: ALLOC_1, fromDate: "2024-09-02", toDate: "2024-09-06",
+        daysApplied: 5, status: "pending",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
   afterAll(async () => { await wipeAll(); });
 
   it("approves leave and debits balance", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -405,23 +429,23 @@ describe("Leave approve consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const apps = await db.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_1));
+    const apps = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_1))));
     expect(apps[0]?.status).toBe("approved");
     expect(apps[0]?.approvedBy).toBe(ACTOR);
 
-    const allocs = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1));
+    const allocs = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1))));
     expect(allocs[0]?.balanceDays).toBe(15); // 20 - 5
   });
 
   it("emits leave.approved event to outbox", async () => {
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     const events = outbox.map((r) => r.eventType);
     expect(events).toContain("hrms.leave.approved");
     expect(events).toContain("audit.event.record");
   });
 
   it("duplicate approve messageId is idempotent — balance not debited again", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerLeaveConsumers(q);
     await q.start();
 
@@ -434,7 +458,7 @@ describe("Leave approve consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const allocs = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1));
+    const allocs = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1))));
     expect(allocs[0]?.balanceDays).toBe(15); // still 15, not 10
   });
 });
@@ -445,17 +469,19 @@ describe("Attendance mark consumer — coverage", () => {
   beforeAll(async () => {
     await wipeAll();
     await seedDeptDesig();
-    await db.insert(hrmsEmployees).values({
-      id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
-      departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
-      employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsEmployees).values({
+        id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
+        departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
+        employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
   afterAll(async () => { await wipeAll(); });
 
   it("marks single attendance record", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerAttendanceConsumers(q);
     await q.start();
 
@@ -471,15 +497,15 @@ describe("Attendance mark consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsAttendance)
-      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.employeeId, EMP_1)));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsAttendance)
+      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.employeeId, EMP_1)))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("present");
     expect(rows[0]?.attendanceDate).toBe("2024-09-02");
   });
 
   it("duplicate attendance messageId is idempotent", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerAttendanceConsumers(q);
     await q.start();
 
@@ -496,14 +522,14 @@ describe("Attendance mark consumer — coverage", () => {
     await q.stop();
 
     // No new row for 2024-09-03 since messageId was already processed
-    const rows = await db.select().from(hrmsAttendance)
-      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.employeeId, EMP_1)));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsAttendance)
+      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.employeeId, EMP_1)))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.attendanceDate).toBe("2024-09-02");
   });
 
   it("marks multiple attendance records in one batch", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerAttendanceConsumers(q);
     await q.start();
 
@@ -522,8 +548,8 @@ describe("Attendance mark consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsAttendance)
-      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.employeeId, EMP_1)));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsAttendance)
+      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.employeeId, EMP_1)))));
     // Original (09-02) + two new (09-03, 09-04). The original 09-02 from the upsert
     // may get updated by the prior test's idempotent replay, so we just check >= 2 new.
     expect(rows.length).toBeGreaterThanOrEqual(3);
@@ -533,13 +559,13 @@ describe("Attendance mark consumer — coverage", () => {
   });
 
   it("attendance record includes source field", async () => {
-    const rows = await db.select().from(hrmsAttendance)
-      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.attendanceDate, "2024-09-04")));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsAttendance)
+      .where(and(eq(hrmsAttendance.tenantId, TENANT), eq(hrmsAttendance.attendanceDate, "2024-09-04")))));
     expect(rows[0]?.source).toBe("biometric");
   });
 
   it("attendance emits audit event to outbox", async () => {
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     const events = outbox.map((r) => r.eventType);
     expect(events).toContain("hrms.attendance.marked");
     expect(events).toContain("audit.event.record");
@@ -555,24 +581,28 @@ describe("Employee update consumer — coverage", () => {
   beforeAll(async () => {
     await wipeAll();
     await seedDeptDesig();
-    await db.insert(hrmsEmployees).values({
-      id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
-      departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
-      employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.delete(processed).where(eq(processed.messageId, MSG_UPDATE));
-    await db.delete(processed).where(eq(processed.messageId, MSG_UPDATE2));
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsEmployees).values({
+        id: EMP_1, tenantId: TENANT, employeeNo: "EMP-COV-001", fullName: "Coverage Employee",
+        departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-06-01",
+        employeeType: "permanent", status: "confirmed", basicMinor: 3_000_000n,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.delete(processed).where(eq(processed.messageId, MSG_UPDATE));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_UPDATE2));
+    }));
   });
   afterAll(async () => {
     await wipeAll();
-    await db.delete(processed).where(eq(processed.messageId, MSG_UPDATE));
-    await db.delete(processed).where(eq(processed.messageId, MSG_UPDATE2));
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, MSG_UPDATE));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_UPDATE2));
+    }));
     await sqlClient.end();
   });
 
   it("updates employee mobile and email", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerEmployeeConsumers(q);
     await q.start();
 
@@ -585,13 +615,13 @@ describe("Employee update consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_1));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_1))));
     expect(rows[0]?.mobile).toBe("9999900000");
     expect(rows[0]?.email).toBe("updated@gov.in");
   });
 
   it("updates employee basicMinor", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerEmployeeConsumers(q);
     await q.start();
 
@@ -604,7 +634,7 @@ describe("Employee update consumer — coverage", () => {
     await new Promise<void>((r) => setTimeout(r, WAIT));
     await q.stop();
 
-    const rows = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_1));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_1))));
     expect(rows[0]?.basicMinor).toBe(4_500_000n);
   });
 });

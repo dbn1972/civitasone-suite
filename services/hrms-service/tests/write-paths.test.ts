@@ -21,6 +21,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 import { hrmsServiceBookEntries } from "../src/modules/service-book/schema.js";
 import { hrmsTransfers, hrmsPromotions } from "../src/modules/lifecycle/schema.js";
@@ -58,24 +59,28 @@ const empPension = randomUUID();
 const empIncrement = randomUUID();
 
 async function seedEmployee(id: string, over: Partial<typeof hrmsEmployees.$inferInsert> = {}): Promise<void> {
-  await db.insert(hrmsEmployees).values({
-    id, tenantId: TENANT, employeeNo: `E-${id.slice(0, 8)}`, fullName: "Test Emp",
-    departmentId: deptId, designationId: desigFrom, dateOfJoining: "2005-06-01",
-    status: "confirmed", basicMinor: 5610000n, employeeType: "permanent",
-    createdBy: ACTOR, updatedBy: ACTOR, ...over,
-  });
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsEmployees).values({
+      id, tenantId: TENANT, employeeNo: `E-${id.slice(0, 8)}`, fullName: "Test Emp",
+      departmentId: deptId, designationId: desigFrom, dateOfJoining: "2005-06-01",
+      status: "confirmed", basicMinor: 5610000n, employeeType: "permanent",
+      createdBy: ACTOR, updatedBy: ACTOR, ...over,
+    });
+  }));
 }
 
 beforeAll(async () => {
   app = await buildApp();
-  await db.insert(hrmsDepartments).values([
-    { id: deptId, tenantId: TENANT, code: "D1", name: "Dept 1", createdBy: ACTOR, updatedBy: ACTOR },
-    { id: deptTo, tenantId: TENANT, code: "D2", name: "Dept 2", createdBy: ACTOR, updatedBy: ACTOR },
-  ]);
-  await db.insert(hrmsDesignations).values([
-    { id: desigFrom, tenantId: TENANT, code: "JR", name: "Junior", level: 10, createdBy: ACTOR, updatedBy: ACTOR },
-    { id: desigTo, tenantId: TENANT, code: "SR", name: "Senior", level: 11, createdBy: ACTOR, updatedBy: ACTOR },
-  ]);
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsDepartments).values([
+      { id: deptId, tenantId: TENANT, code: "D1", name: "Dept 1", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: deptTo, tenantId: TENANT, code: "D2", name: "Dept 2", createdBy: ACTOR, updatedBy: ACTOR },
+    ]);
+    await tx.insert(hrmsDesignations).values([
+      { id: desigFrom, tenantId: TENANT, code: "JR", name: "Junior", level: 10, createdBy: ACTOR, updatedBy: ACTOR },
+      { id: desigTo, tenantId: TENANT, code: "SR", name: "Senior", level: 11, createdBy: ACTOR, updatedBy: ACTOR },
+    ]);
+  }));
   await seedEmployee(empPromo);
   await seedEmployee(empTransfer);
   await seedEmployee(empLeave);
@@ -85,18 +90,20 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // Clean all test data for this isolated tenant.
-  await db.delete(hrmsNominations).where(eq(hrmsNominations.tenantId, TENANT));
-  await db.delete(hrmsTrainings).where(eq(hrmsTrainings.tenantId, TENANT));
-  await db.delete(hrmsRtiRequests).where(eq(hrmsRtiRequests.tenantId, TENANT));
-  await db.delete(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT));
-  await db.delete(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT));
-  await db.delete(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, TENANT));
-  await db.delete(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.tenantId, TENANT));
-  await db.delete(hrmsTransfers).where(eq(hrmsTransfers.tenantId, TENANT));
-  await db.delete(hrmsPromotions).where(eq(hrmsPromotions.tenantId, TENANT));
-  await db.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
-  await db.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
-  await db.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(hrmsNominations).where(eq(hrmsNominations.tenantId, TENANT));
+    await tx.delete(hrmsTrainings).where(eq(hrmsTrainings.tenantId, TENANT));
+    await tx.delete(hrmsRtiRequests).where(eq(hrmsRtiRequests.tenantId, TENANT));
+    await tx.delete(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT));
+    await tx.delete(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT));
+    await tx.delete(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, TENANT));
+    await tx.delete(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.tenantId, TENANT));
+    await tx.delete(hrmsTransfers).where(eq(hrmsTransfers.tenantId, TENANT));
+    await tx.delete(hrmsPromotions).where(eq(hrmsPromotions.tenantId, TENANT));
+    await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
+    await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
+    await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
+  }));
   await app.close();
   await sqlClient.end();
 });
@@ -119,10 +126,10 @@ describe("Promotion write-path", () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/lifecycle/promotions", headers: { ...HR, ...CT },
       payload: { employeeId: empPromo, fromDesigId: desigFrom, toDesigId: desigTo, effectiveDate: "2024-04-01", newBasicMinor: 6770000, orderRef: "PROMO/1" } });
     expect(r.statusCode).toBe(202);
-    const [emp] = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empPromo));
+    const [emp] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empPromo))));
     expect(emp.designationId).toBe(desigTo);
     expect(emp.basicMinor).toBe(6770000n);
-    const sb = await db.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.employeeId, empPromo));
+    const sb = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.employeeId, empPromo))));
     expect(sb.some((e) => e.entryType === "promotion")).toBe(true);
   });
 });
@@ -136,7 +143,7 @@ describe("Transfer-order lifecycle: requested -> ordered -> relieved -> joined",
     expect(r.statusCode).toBe(201);
     transferId = r.json().id;
     expect(r.json().status).toBe("requested");
-    const [emp] = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empTransfer));
+    const [emp] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empTransfer))));
     expect(emp.departmentId).toBe(deptId); // unchanged at request time
   });
 
@@ -165,10 +172,10 @@ describe("Transfer-order lifecycle: requested -> ordered -> relieved -> joined",
       payload: { joinedDate: "2024-05-12" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("joined");
-    const [emp] = await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empTransfer));
+    const [emp] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empTransfer))));
     expect(emp.departmentId).toBe(deptTo);
     expect(emp.station).toBe("Pune");
-    const sb = await db.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.employeeId, empTransfer));
+    const sb = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.employeeId, empTransfer))));
     expect(sb.some((e) => e.entryType === "transfer")).toBe(true);
   });
 
@@ -216,8 +223,10 @@ describe("CCS leave apply (CQRS) + approve authz", () => {
   const ltId = randomUUID();
   const allocId = randomUUID();
   beforeAll(async () => {
-    await db.insert(hrmsLeaveTypes).values({ id: ltId, tenantId: TENANT, code: "CL", name: "Casual Leave", maxDays: 8, createdBy: ACTOR, updatedBy: ACTOR });
-    await db.insert(hrmsLeaveAllocs).values({ id: allocId, tenantId: TENANT, employeeId: empLeave, leaveTypeId: ltId, fy: "2024-25", totalDays: 8, balanceDays: 8, createdBy: ACTOR, updatedBy: ACTOR });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsLeaveTypes).values({ id: ltId, tenantId: TENANT, code: "CL", name: "Casual Leave", maxDays: 8, createdBy: ACTOR, updatedBy: ACTOR });
+      await tx.insert(hrmsLeaveAllocs).values({ id: allocId, tenantId: TENANT, employeeId: empLeave, leaveTypeId: ltId, fy: "2024-25", totalDays: 8, balanceDays: 8, createdBy: ACTOR, updatedBy: ACTOR });
+    }));
   });
   it("apply returns 202 (CQRS accepted)", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/leave-applications", headers: { ...HR, ...CT },
@@ -241,19 +250,19 @@ describe("7th CPC pay matrix + annual increment (idempotent)", () => {
     expect(r.json().basicMinor).toBe("5610000");
   });
   it("annual increment advances the isolated employee one cell + writes service-book", async () => {
-    const before = (await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))[0].basicMinor;
+    const before = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
     const r = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
       payload: { effectiveDate: "2024-07-01" } });
     expect(r.statusCode).toBe(200);
-    const after = (await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))[0].basicMinor;
+    const after = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
     expect(after).toBeGreaterThan(before);
   });
   it("re-running for the SAME effectiveDate is idempotent (no second advance)", async () => {
-    const before = (await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))[0].basicMinor;
+    const before = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
     const r = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
       payload: { effectiveDate: "2024-07-01" } });
     expect(r.statusCode).toBe(200);
-    const after = (await db.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))[0].basicMinor;
+    const after = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
     expect(after).toBe(before); // unchanged — guarded
     const body = r.json();
     expect(body.skippedAlreadyIncremented).toBeGreaterThan(0);
@@ -320,15 +329,17 @@ describe("LMS nomination completion (nominated -> completed)", () => {
   const trId = randomUUID();
   const nomId = randomUUID();
   beforeAll(async () => {
-    await db.insert(hrmsTrainings).values({ id: trId, tenantId: TENANT, title: "Ethics in Governance", fromDate: "2024-06-01", toDate: "2024-06-03", status: "planned", createdBy: ACTOR, updatedBy: ACTOR });
-    await db.insert(hrmsNominations).values({ id: nomId, tenantId: TENANT, trainingId: trId, employeeId: empPromo, status: "nominated", createdBy: ACTOR, updatedBy: ACTOR });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsTrainings).values({ id: trId, tenantId: TENANT, title: "Ethics in Governance", fromDate: "2024-06-01", toDate: "2024-06-03", status: "planned", createdBy: ACTOR, updatedBy: ACTOR });
+      await tx.insert(hrmsNominations).values({ id: nomId, tenantId: TENANT, trainingId: trId, employeeId: empPromo, status: "nominated", createdBy: ACTOR, updatedBy: ACTOR });
+    }));
   });
   it("completes a nomination and writes a training service-book entry", async () => {
     const r = await app.inject({ method: "POST", url: `/v1/hrms/nominations/${nomId}/complete`, headers: { ...HR, ...CT },
       payload: { completedDate: "2024-06-03", result: "pass", score: 88, certificateRef: "CERT/1" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("completed");
-    const sb = await db.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.employeeId, empPromo));
+    const sb = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.employeeId, empPromo))));
     expect(sb.some((e) => e.entryType === "training")).toBe(true);
   });
   it("re-completing is blocked (409 ALREADY_COMPLETED)", async () => {

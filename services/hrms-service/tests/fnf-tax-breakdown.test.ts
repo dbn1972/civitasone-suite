@@ -41,6 +41,11 @@ vi.mock("../src/shared/db.js", () => {
   return {
     db: mockDb,
     sqlClient: { end: vi.fn() },
+    // scopedRead runs reads under db.transaction() in production so RLS's
+    // app.tenant_id GUC is set. In this mocked-db test, there's no real
+    // transaction/connection, so just invoke the callback directly with the
+    // same mocked query builder.
+    scopedRead: vi.fn((fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   };
 });
 

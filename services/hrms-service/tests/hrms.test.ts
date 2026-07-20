@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { hrmsLeaveApps, hrmsLeaveAllocs, hrmsLeaveTypes } from "../src/modules/leave/schema.js";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
@@ -34,28 +35,36 @@ const MSG_APP = "99999999-cccc-4000-8000-000000000011";
 const MSG_APR = "aaaaaaaa-dddd-4000-8000-000000000011";
 
 async function wipeTestData() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT));
-  await db.delete(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT));
-  await db.delete(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, TENANT));
-  await db.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
-  await db.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
-  await db.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
-  await db.delete(processed).where(eq(processed.messageId, MSG_APP));
-  await db.delete(processed).where(eq(processed.messageId, MSG_APR));
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.delete(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, TENANT));
+      await tx.delete(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, TENANT));
+      await tx.delete(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, TENANT));
+      await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
+      await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
+      await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_APP));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_APR));
+    }),
+  );
 }
 
 async function seedFixtures() {
-  await db.insert(hrmsDepartments).values({ id: DEPT_1, tenantId: TENANT, code: "DEPT-TEST", name: "Test Dept", createdBy: ACTOR, updatedBy: ACTOR });
-  await db.insert(hrmsDesignations).values({ id: DESIG_1, tenantId: TENANT, code: "DESIG-TEST", name: "Test Desig", createdBy: ACTOR, updatedBy: ACTOR });
-  await db.insert(hrmsEmployees).values({
-    id: EMP_1, tenantId: TENANT, employeeNo: "EMP-TEST-001", fullName: "Test Employee",
-    departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-01-01",
-    employeeType: "permanent", status: "confirmed", basicMinor: 0n,
-    createdBy: ACTOR, updatedBy: ACTOR,
-  });
-  await db.insert(hrmsLeaveTypes).values({ id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave", maxDays: 30, isEncashable: true, carryForward: true, createdBy: ACTOR, updatedBy: ACTOR });
-  await db.insert(hrmsLeaveAllocs).values({ id: ALLOC_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1, fy: "2024-25", totalDays: 20, balanceDays: 20, createdBy: ACTOR, updatedBy: ACTOR });
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.insert(hrmsDepartments).values({ id: DEPT_1, tenantId: TENANT, code: "DEPT-TEST", name: "Test Dept", createdBy: ACTOR, updatedBy: ACTOR });
+      await tx.insert(hrmsDesignations).values({ id: DESIG_1, tenantId: TENANT, code: "DESIG-TEST", name: "Test Desig", createdBy: ACTOR, updatedBy: ACTOR });
+      await tx.insert(hrmsEmployees).values({
+        id: EMP_1, tenantId: TENANT, employeeNo: "EMP-TEST-001", fullName: "Test Employee",
+        departmentId: DEPT_1, designationId: DESIG_1, dateOfJoining: "2023-01-01",
+        employeeType: "permanent", status: "confirmed", basicMinor: 0n,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsLeaveTypes).values({ id: LT_1, tenantId: TENANT, code: "EL", name: "Earned Leave", maxDays: 30, isEncashable: true, carryForward: true, createdBy: ACTOR, updatedBy: ACTOR });
+      await tx.insert(hrmsLeaveAllocs).values({ id: ALLOC_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1, fy: "2024-25", totalDays: 20, balanceDays: 20, createdBy: ACTOR, updatedBy: ACTOR });
+    }),
+  );
 }
 
 // ── 1. Pure domain — leave balance ────────────────────────────────
@@ -123,25 +132,27 @@ describe("Leave apply consumer — CQRS (integration)", () => {
     registerLeaveConsumers(q);
     await q.start();
 
-    await q.publish("hrms.leave.apply", {
-      messageId: MSG_APP, type: "hrms.leave.apply",
-      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-apply-1", schemaVersion: "1.0",
-      payload: {
-        id: APP_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
-        allocId: ALLOC_1, fromDate: "2024-07-01", toDate: "2024-07-03",
-        daysApplied: 3, reason: "Personal", status: "pending",
-      },
-    });
+    await runWithTenant(TENANT, () =>
+      q.publish("hrms.leave.apply", {
+        messageId: MSG_APP, type: "hrms.leave.apply",
+        tenantId: TENANT, actorId: ACTOR, correlationId: "corr-apply-1", schemaVersion: "1.0",
+        payload: {
+          id: APP_1, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
+          allocId: ALLOC_1, fromDate: "2024-07-01", toDate: "2024-07-03",
+          daysApplied: 3, reason: "Personal", status: "pending",
+        },
+      }),
+    );
 
     await new Promise<void>((r) => setTimeout(r, 600));
     await q.stop();
 
-    const apps = await db.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_1));
+    const apps = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_1))));
     expect(apps).toHaveLength(1);
     expect(apps[0]?.status).toBe("pending");
     expect(apps[0]?.daysApplied).toBe(3);
 
-    const proc = await db.select().from(processed).where(eq(processed.messageId, MSG_APP));
+    const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(processed).where(eq(processed.messageId, MSG_APP))));
     expect(proc).toHaveLength(1);
   });
 });
@@ -153,11 +164,15 @@ describe("Leave approve consumer — balance deduction (integration)", () => {
     await wipeTestData();
     await seedFixtures();
     // Pre-insert the leave app so the approve consumer can find it
-    await db.insert(hrmsLeaveApps).values({
-      id: APP_2, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
-      allocId: ALLOC_1, fromDate: "2024-08-01", toDate: "2024-08-05",
-      daysApplied: 5, status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () =>
+      db.transaction(async (tx) => {
+        await tx.insert(hrmsLeaveApps).values({
+          id: APP_2, tenantId: TENANT, employeeId: EMP_1, leaveTypeId: LT_1,
+          allocId: ALLOC_1, fromDate: "2024-08-01", toDate: "2024-08-05",
+          daysApplied: 5, status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
+        });
+      }),
+    );
   });
 
   afterAll(async () => {
@@ -170,23 +185,25 @@ describe("Leave approve consumer — balance deduction (integration)", () => {
     registerLeaveConsumers(q);
     await q.start();
 
-    await q.publish("hrms.leave.approve", {
-      messageId: MSG_APR, type: "hrms.leave.approve",
-      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-approve-1", schemaVersion: "1.0",
-      payload: { id: APP_2, tenantId: TENANT, approvedBy: ACTOR },
-    });
+    await runWithTenant(TENANT, () =>
+      q.publish("hrms.leave.approve", {
+        messageId: MSG_APR, type: "hrms.leave.approve",
+        tenantId: TENANT, actorId: ACTOR, correlationId: "corr-approve-1", schemaVersion: "1.0",
+        payload: { id: APP_2, tenantId: TENANT, approvedBy: ACTOR },
+      }),
+    );
 
     await new Promise<void>((r) => setTimeout(r, 600));
     await q.stop();
 
-    const apps = await db.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_2));
+    const apps = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_2))));
     expect(apps[0]?.status).toBe("approved");
     expect(apps[0]?.approvedBy).toBe(ACTOR);
 
-    const allocs = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1));
+    const allocs = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, ALLOC_1))));
     expect(allocs[0]?.balanceDays).toBe(15); // 20 - 5
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     const topics = outbox.map((r) => r.eventType);
     expect(topics).toContain("hrms.leave.approved");
     expect(topics).toContain("audit.event.record");

@@ -96,9 +96,11 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = issueOrderBody.parse(req.body);
-    const updated = await repo.transitionTransfer(ctx.tenantId, id, ctx.actorId, {
-      from: ["requested", "pending"], to: "ordered",
-      set: { orderNo: body.orderNo, orderDate: body.orderDate, orderRef: body.orderRef ?? null },
+    const updated = await db.transaction(async (tx) => {
+      return repo.transitionTransfer(ctx.tenantId, id, ctx.actorId, {
+        from: ["requested", "pending"], to: "ordered",
+        set: { orderNo: body.orderNo, orderDate: body.orderDate, orderRef: body.orderRef ?? null },
+      }, tx);
     });
     if (!updated) throw new HttpError(409, "INVALID_STATE", "transfer not in a state that can be ordered");
     return reply.send({ id, status: "ordered", orderNo: body.orderNo });
@@ -110,9 +112,11 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = relieveBody.parse(req.body);
-    const updated = await repo.transitionTransfer(ctx.tenantId, id, ctx.actorId, {
-      from: ["ordered"], to: "relieved",
-      set: { relievedDate: body.relievedDate },
+    const updated = await db.transaction(async (tx) => {
+      return repo.transitionTransfer(ctx.tenantId, id, ctx.actorId, {
+        from: ["ordered"], to: "relieved",
+        set: { relievedDate: body.relievedDate },
+      }, tx);
     });
     if (!updated) throw new HttpError(409, "INVALID_STATE", "transfer must be in 'ordered' state to relieve");
     return reply.send({ id, status: "relieved" });

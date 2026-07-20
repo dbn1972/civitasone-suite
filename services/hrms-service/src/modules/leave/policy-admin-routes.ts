@@ -11,7 +11,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { hrmsLeavePolicyRules } from "./policy-schema.js";
 import { hrmsLeaveTypes } from "./schema.js";
 import { randomUUID } from "node:crypto";
@@ -48,34 +48,16 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ADMIN_ROLES);
     const q = z.object({ employeeType: employeeTypeEnum.optional() }).parse(req.query);
 
-    let query = db.select({
-      id: hrmsLeavePolicyRules.id,
-      leaveTypeId: hrmsLeavePolicyRules.leaveTypeId,
-      employeeType: hrmsLeavePolicyRules.employeeType,
-      maxDaysPerYear: hrmsLeavePolicyRules.maxDaysPerYear,
-      carryForward: hrmsLeavePolicyRules.carryForward,
-      maxAccumulation: hrmsLeavePolicyRules.maxAccumulation,
-      encashable: hrmsLeavePolicyRules.encashable,
-      countMethod: hrmsLeavePolicyRules.countMethod,
-      maxContinuousDays: hrmsLeavePolicyRules.maxContinuousDays,
-      minServiceMonths: hrmsLeavePolicyRules.minServiceMonths,
-      genderRestriction: hrmsLeavePolicyRules.genderRestriction,
-      requiresMedicalCert: hrmsLeavePolicyRules.requiresMedicalCert,
-      requiresMedicalCertAfterDays: hrmsLeavePolicyRules.requiresMedicalCertAfterDays,
-      prefixSuffixRule: hrmsLeavePolicyRules.prefixSuffixRule,
-      sandwichRule: hrmsLeavePolicyRules.sandwichRule,
-      proRataOnJoining: hrmsLeavePolicyRules.proRataOnJoining,
-      isActive: hrmsLeavePolicyRules.isActive,
-    }).from(hrmsLeavePolicyRules)
-      .where(eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId));
+    const { rows, types } = await scopedRead(async (tx) => {
+      const policyRows = await (q.employeeType
+        ? tx.select().from(hrmsLeavePolicyRules).where(and(eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId), eq(hrmsLeavePolicyRules.employeeType, q.employeeType)))
+        : tx.select().from(hrmsLeavePolicyRules).where(eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))
+      );
 
-    const rows = await (q.employeeType
-      ? db.select().from(hrmsLeavePolicyRules).where(and(eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId), eq(hrmsLeavePolicyRules.employeeType, q.employeeType)))
-      : db.select().from(hrmsLeavePolicyRules).where(eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))
-    );
-
-    // Join with leave type names
-    const types = await db.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, ctx.tenantId));
+      // Join with leave type names
+      const typeRows = await tx.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, ctx.tenantId));
+      return { rows: policyRows, types: typeRows };
+    });
     const typeMap = new Map(types.map(t => [t.id, { code: t.code, name: t.name }]));
 
     return reply.send({
@@ -132,7 +114,7 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
       updatedBy: ctx.actorId,
     };
 
-    const result = await db.insert(hrmsLeavePolicyRules).values(upsertValues)
+    const result = await db.transaction((tx) => tx.insert(hrmsLeavePolicyRules).values(upsertValues)
       .onConflictDoUpdate({
         target: [hrmsLeavePolicyRules.tenantId, hrmsLeavePolicyRules.leaveTypeId, hrmsLeavePolicyRules.employeeType],
         set: {
@@ -154,7 +136,7 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
           isActive: true,
         },
       })
-      .returning({ id: hrmsLeavePolicyRules.id });
+      .returning({ id: hrmsLeavePolicyRules.id }));
 
     const returnedId = result[0]?.id ?? id;
     return reply.code(201).send({ id: returnedId, status: "created", employeeType: body.employeeType, leaveTypeId: body.leaveTypeId });
@@ -167,13 +149,15 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updatePolicyBody.parse(req.body);
 
-    const existing = await db.select().from(hrmsLeavePolicyRules)
-      .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))).limit(1);
-    if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "policy rule not found");
+    await db.transaction(async (tx) => {
+      const existing = await tx.select().from(hrmsLeavePolicyRules)
+        .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))).limit(1);
+      if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "policy rule not found");
 
-    await db.update(hrmsLeavePolicyRules)
-      .set({ ...body, updatedBy: ctx.actorId, updatedAt: new Date() } as any)
-      .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId)));
+      await tx.update(hrmsLeavePolicyRules)
+        .set({ ...body, updatedBy: ctx.actorId, updatedAt: new Date() } as any)
+        .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId)));
+    });
 
     return reply.send({ id, status: "updated" });
   });
@@ -184,9 +168,9 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    await db.update(hrmsLeavePolicyRules)
+    await db.transaction((tx) => tx.update(hrmsLeavePolicyRules)
       .set({ isActive: false, updatedBy: ctx.actorId, updatedAt: new Date() } as any)
-      .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId)));
+      .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))));
 
     return reply.code(204).send();
   });

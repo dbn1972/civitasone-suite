@@ -15,7 +15,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { computePension, elEncashment, summariseNonQualifying, type PensionResult, type ServiceBookEvent } from "./engine.js";
 import * as serviceBookRepo from "../service-book/repo.js";
@@ -56,11 +56,11 @@ export async function pensionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const q = query.parse(req.query);
 
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(hrmsEmployees)
       .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const emp = rows[0];
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
 

@@ -66,7 +66,7 @@ export async function listLeaveRequestDetails(tenantId: string, limit: number) {
 
 
 export async function listLeaveAllocations(tenantId: string, limit: number) {
-  const { db } = await import("../../shared/db.js");
-  const rows = await db.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, tenantId)).limit(limit);
+  const { scopedRead } = await import("../../shared/db.js");
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, tenantId)).limit(limit));
   return rows.map(r => ({ id: r.id, employeeId: r.employeeId, leaveTypeId: r.leaveTypeId, fy: r.fy, totalDays: r.totalDays, balanceDays: r.balanceDays }));
 }

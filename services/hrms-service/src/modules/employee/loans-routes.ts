@@ -8,7 +8,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
 
 const HR_ROLES = ["hr_admin", "finance_admin", "super_admin"];
@@ -82,7 +82,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/loans", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const rows = await db.select().from(hrmsLoans).where(eq(hrmsLoans.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsLoans).where(eq(hrmsLoans.tenantId, ctx.tenantId)));
     return reply.send({ data: rows.map(r => ({ ...r, sanctionedAmountMinor: Number(r.sanctionedAmountMinor), disbursedAmountMinor: Number(r.disbursedAmountMinor), outstandingMinor: Number(r.outstandingMinor), emiMinor: Number(r.emiMinor) })) });
   });
 
@@ -92,7 +92,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const body = createLoanBody.parse(req.body);
     const id = randomUUID();
     const emi = Math.ceil(body.sanctionedAmountMinor / body.totalEmis);
-    await db.insert(hrmsLoans).values({
+    await db.transaction((tx) => tx.insert(hrmsLoans).values({
       id, tenantId: ctx.tenantId, employeeId: body.employeeId,
       loanType: body.loanType,
       sanctionedAmountMinor: BigInt(body.sanctionedAmountMinor),
@@ -105,7 +105,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
       firstEmiDate: body.firstEmiDate ?? null,
       purpose: body.purpose ?? null,
       status: "active", createdBy: ctx.actorId,
-    });
+    }));
     return reply.code(201).send({ id, status: "created", emiMinor: emi });
   });
 
@@ -114,12 +114,12 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const loan = (await db.select().from(hrmsLoans).where(and(eq(hrmsLoans.id, id), eq(hrmsLoans.tenantId, ctx.tenantId))))[0];
+    const loan = (await scopedRead((tx) => tx.select().from(hrmsLoans).where(and(eq(hrmsLoans.id, id), eq(hrmsLoans.tenantId, ctx.tenantId)))))[0];
     if (!loan) return reply.code(404).send({ code: "NOT_FOUND", message: "loan not found" });
     const newOutstanding = loan.outstandingMinor - loan.emiMinor;
     const newPaid = loan.emisPaid + 1;
     const newStatus = newOutstanding <= 0n ? "completed" : "active";
-    await db.update(hrmsLoans).set({ outstandingMinor: newOutstanding < 0n ? 0n : newOutstanding, emisPaid: newPaid, status: newStatus }).where(eq(hrmsLoans.id, id));
+    await db.transaction((tx) => tx.update(hrmsLoans).set({ outstandingMinor: newOutstanding < 0n ? 0n : newOutstanding, emisPaid: newPaid, status: newStatus }).where(eq(hrmsLoans.id, id)));
     return reply.send({ id, emisPaid: newPaid, outstandingMinor: Number(newOutstanding < 0n ? 0n : newOutstanding), status: newStatus });
   });
 
@@ -128,7 +128,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/salary-advances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const rows = await db.select().from(hrmsSalaryAdvances).where(eq(hrmsSalaryAdvances.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsSalaryAdvances).where(eq(hrmsSalaryAdvances.tenantId, ctx.tenantId)));
     return reply.send({ data: rows.map(r => ({ ...r, amountMinor: Number(r.amountMinor), emiMinor: Number(r.emiMinor), recoveredMinor: Number(r.recoveredMinor) })) });
   });
 
@@ -138,7 +138,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const body = createAdvanceBody.parse(req.body);
     const id = randomUUID();
     const emi = Math.ceil(body.amountMinor / body.recoveryMonths);
-    await db.insert(hrmsSalaryAdvances).values({
+    await db.transaction((tx) => tx.insert(hrmsSalaryAdvances).values({
       id, tenantId: ctx.tenantId, employeeId: body.employeeId,
       amountMinor: BigInt(body.amountMinor),
       purpose: body.purpose,
@@ -147,7 +147,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
       recoveredMinor: 0n,
       requestDate: body.requestDate ?? new Date().toISOString().slice(0, 10),
       status: "pending", createdBy: ctx.actorId,
-    });
+    }));
     return reply.code(201).send({ id, status: "pending", emiMinor: emi });
   });
 
@@ -156,7 +156,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    await db.update(hrmsSalaryAdvances).set({ status: "active", approvedBy: ctx.actorId }).where(and(eq(hrmsSalaryAdvances.id, id), eq(hrmsSalaryAdvances.tenantId, ctx.tenantId)));
+    await db.transaction((tx) => tx.update(hrmsSalaryAdvances).set({ status: "active", approvedBy: ctx.actorId }).where(and(eq(hrmsSalaryAdvances.id, id), eq(hrmsSalaryAdvances.tenantId, ctx.tenantId))));
     return reply.send({ id, status: "approved" });
   });
 }

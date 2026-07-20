@@ -36,14 +36,14 @@ export async function listJobOpeningsByTenant(tenantId: string, limit = 100): Pr
 export async function countApplicationsByJob(tenantId: string, jobIds: string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (jobIds.length === 0) return counts;
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       jobOpeningId: hrmsApplications.jobOpeningId,
       count: sql<number>`count(*)::int`,
     })
     .from(hrmsApplications)
     .where(and(eq(hrmsApplications.tenantId, tenantId), inArray(hrmsApplications.jobOpeningId, jobIds)))
-    .groupBy(hrmsApplications.jobOpeningId);
+    .groupBy(hrmsApplications.jobOpeningId));
   for (const row of rows) counts.set(row.jobOpeningId, row.count);
   return counts;
 }

@@ -66,14 +66,14 @@ export async function listTrainingsByTenant(tenantId: string, limit = 100) {
 export async function countNominationsByTraining(tenantId: string, trainingIds: string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (trainingIds.length === 0) return counts;
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       trainingId: hrmsNominations.trainingId,
       count: sql<number>`count(*)::int`,
     })
     .from(hrmsNominations)
     .where(and(eq(hrmsNominations.tenantId, tenantId), inArray(hrmsNominations.trainingId, trainingIds)))
-    .groupBy(hrmsNominations.trainingId);
+    .groupBy(hrmsNominations.trainingId));
   for (const row of rows) counts.set(row.trainingId, row.count);
   return counts;
 }

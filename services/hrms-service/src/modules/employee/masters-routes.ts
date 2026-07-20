@@ -7,7 +7,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
@@ -35,7 +35,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/departments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -45,8 +45,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const body = createDeptBody.parse(req.body);
     // Hierarchy enforcement: if parent is specified + both have levels, child must be deeper.
     if (body.parentId && body.level !== undefined) {
-      const parent = await db.select().from(hrmsDepartments)
-        .where(eq(hrmsDepartments.id, body.parentId)).limit(1);
+      const parent = await scopedRead((tx) => tx.select().from(hrmsDepartments)
+        .where(eq(hrmsDepartments.id, body.parentId as string)).limit(1));
       if (parent[0]?.level != null && body.level <= parent[0].level) {
         return reply.code(400).send({
           code: "HIERARCHY_VIOLATION",
@@ -55,7 +55,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     const id = randomUUID();
-    await db.insert(hrmsDepartments).values({
+    await db.transaction((tx) => tx.insert(hrmsDepartments).values({
       id, tenantId: ctx.tenantId, code: body.code, name: body.name,
       parentId: body.parentId ?? null,
       ...(body.type ? { type: body.type } : {}),
@@ -64,7 +64,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       ...(body.locationId ? { locationId: body.locationId } : {}),
       ...(body.headEmployeeId ? { headEmployeeId: body.headEmployeeId } : {}),
       createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    });
+    }));
     return reply.code(201).send({ id, status: "created" });
   });
 
@@ -72,7 +72,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/designations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await db.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, ctx.tenantId));
+    const rows = await scopedRead((tx) => tx.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
@@ -81,11 +81,11 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createDesignationBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(hrmsDesignations).values({
+    await db.transaction((tx) => tx.insert(hrmsDesignations).values({
       id, tenantId: ctx.tenantId, code: body.code, name: body.name,
       level: body.level ?? 0, payGrade: body.payGrade ?? null,
       createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    });
+    }));
     return reply.code(201).send({ id, status: "created" });
   });
 }

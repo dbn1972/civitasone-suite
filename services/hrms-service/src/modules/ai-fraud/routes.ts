@@ -62,11 +62,11 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
 
     // Store alerts
     for (const alert of alerts) {
-      await db.insert(hrmsFraudAlerts).values({
+      await db.transaction((tx) => tx.insert(hrmsFraudAlerts).values({
         id: randomUUID(), tenantId: ctx.tenantId, alertType: alert.alertType, severity: alert.severity,
         employeeId: alert.employeeId, description: alert.description, evidence: alert.evidence,
         riskScore: String(alert.riskScore), mlModel: alert.mlModel, status: "open",
-      } as any);
+      } as any));
     }
 
     const duration = Date.now() - startTime;
@@ -102,10 +102,10 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
         upcomingProbationEnd: [],
       });
       for (const rec of recs) {
-        await db.insert(hrmsRecommendations).values({
+        await db.transaction((tx) => tx.insert(hrmsRecommendations).values({
           id: randomUUID(), tenantId: ctx.tenantId, employeeId: rec.employeeId ?? null,
           category: rec.category, title: rec.title, description: rec.description, priority: rec.priority,
-        } as any);
+        } as any));
       }
       const fresh = await scopedRead((tx) => tx.select().from(hrmsRecommendations).where(eq(hrmsRecommendations.tenantId, ctx.tenantId)).limit(50));
       return reply.send({ data: fresh });
@@ -119,8 +119,8 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ status: z.enum(["investigating", "confirmed", "dismissed", "resolved"]), resolutionNotes: z.string().optional() }).parse(req.body);
-    await db.update(hrmsFraudAlerts).set({ status: body.status, resolutionNotes: body.resolutionNotes ?? null, resolvedBy: body.status === "resolved" ? ctx.actorId : null, resolvedAt: body.status === "resolved" ? new Date() : null, updatedAt: new Date() } as any)
-      .where(and(eq(hrmsFraudAlerts.id, id), eq(hrmsFraudAlerts.tenantId, ctx.tenantId)));
+    await db.transaction((tx) => tx.update(hrmsFraudAlerts).set({ status: body.status, resolutionNotes: body.resolutionNotes ?? null, resolvedBy: body.status === "resolved" ? ctx.actorId : null, resolvedAt: body.status === "resolved" ? new Date() : null, updatedAt: new Date() } as any)
+      .where(and(eq(hrmsFraudAlerts.id, id), eq(hrmsFraudAlerts.tenantId, ctx.tenantId))));
     return reply.send({ id, status: body.status });
   });
 

@@ -37,7 +37,7 @@ export async function transitionRti(
   tenantId: string, id: string, actorId: string,
   opts: { from: string[]; to: string; set?: RtiSet },
 ): Promise<RtiRow | null> {
-  const rows = await db.update(hrmsRtiRequests)
+  const rows = await db.transaction((tx) => tx.update(hrmsRtiRequests)
     .set({
       ...opts.set,
       status: opts.to,
@@ -50,6 +50,6 @@ export async function transitionRti(
       eq(hrmsRtiRequests.tenantId, tenantId),
       inArray(hrmsRtiRequests.status, opts.from),
     ))
-    .returning();
+    .returning());
   return rows[0] ?? null;
 }

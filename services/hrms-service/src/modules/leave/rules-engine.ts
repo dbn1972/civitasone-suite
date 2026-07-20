@@ -5,7 +5,7 @@
  */
 
 import { eq, and, gte, lte } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsHolidays } from "../holidays/schema.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -71,8 +71,8 @@ export const LEAVE_POLICIES: LeavePolicy[] = [
 // ─── Holiday-aware date calculations ────────────────────────────────────────
 
 export async function getHolidaysInRange(tenantId: string, from: string, to: string): Promise<string[]> {
-  const rows = await db.select({ date: hrmsHolidays.date }).from(hrmsHolidays)
-    .where(and(eq(hrmsHolidays.tenantId, tenantId), gte(hrmsHolidays.date, from), lte(hrmsHolidays.date, to)));
+  const rows = await scopedRead((tx) => tx.select({ date: hrmsHolidays.date }).from(hrmsHolidays)
+    .where(and(eq(hrmsHolidays.tenantId, tenantId), gte(hrmsHolidays.date, from), lte(hrmsHolidays.date, to))));
   return rows.map(r => String(r.date));
 }
 

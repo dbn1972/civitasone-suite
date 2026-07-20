@@ -38,7 +38,7 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createHolidayBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(hrmsHolidays).values({ id, tenantId: ctx.tenantId, name: body.name, date: body.date, type: body.type, applicableTo: body.applicableTo, createdBy: ctx.actorId });
+    await db.transaction((tx) => tx.insert(hrmsHolidays).values({ id, tenantId: ctx.tenantId, name: body.name, date: body.date, type: body.type, applicableTo: body.applicableTo, createdBy: ctx.actorId }));
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted" as const, correlationId: ctx.correlationId });
   });
 
@@ -46,7 +46,7 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    await db.delete(hrmsHolidays).where(and(eq(hrmsHolidays.id, id), eq(hrmsHolidays.tenantId, ctx.tenantId)));
+    await db.transaction((tx) => tx.delete(hrmsHolidays).where(and(eq(hrmsHolidays.id, id), eq(hrmsHolidays.tenantId, ctx.tenantId))));
     return reply.code(204).send();
   });
 }

@@ -7,7 +7,8 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { hrmsDisciplinaryCases, hrmsDisciplinaryEvents } from "../src/modules/disciplinary/schema.js";
 import { processed } from "../src/shared/outbox.js";
@@ -42,25 +43,54 @@ function decided(caseId: string) {
 }
 
 async function statusOf(id: string): Promise<string | undefined> {
-  const r = (await db.select().from(hrmsDisciplinaryCases).where(eq(hrmsDisciplinaryCases.id, id)))[0];
-  return r?.status;
+  return runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      const r = (await tx.select().from(hrmsDisciplinaryCases).where(eq(hrmsDisciplinaryCases.id, id)))[0];
+      return r?.status;
+    }),
+  );
 }
 async function actionsOf(id: string): Promise<string[]> {
-  const rows = await db.select().from(hrmsDisciplinaryEvents).where(eq(hrmsDisciplinaryEvents.caseId, id));
-  return rows.map((e) => e.action);
+  return runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      const rows = await tx.select().from(hrmsDisciplinaryEvents).where(eq(hrmsDisciplinaryEvents.caseId, id));
+      return rows.map((e) => e.action);
+    }),
+  );
 }
 async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) { if (await fn()) return; await new Promise((r) => setTimeout(r, 50)); }
 }
 
+/**
+ * Test-harness fix: `new MemoryQueue()` does NOT auto-wrap subscribed handlers
+ * with `withTenantConsumer`. Production wiring (`createQueue()`) decorates
+ * `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`. Mirror that decoration here.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 beforeEach(async () => {
-  await db.delete(hrmsDisciplinaryEvents).where(eq(hrmsDisciplinaryEvents.tenantId, TENANT));
-  await db.delete(hrmsDisciplinaryCases).where(eq(hrmsDisciplinaryCases.tenantId, TENANT));
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(hrmsDisciplinaryEvents).where(eq(hrmsDisciplinaryEvents.tenantId, TENANT));
+      await tx.delete(hrmsDisciplinaryCases).where(eq(hrmsDisciplinaryCases.tenantId, TENANT));
+    }),
+  );
 });
 afterAll(async () => {
-  await db.delete(hrmsDisciplinaryEvents).where(eq(hrmsDisciplinaryEvents.tenantId, TENANT));
-  await db.delete(hrmsDisciplinaryCases).where(eq(hrmsDisciplinaryCases.tenantId, TENANT));
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(hrmsDisciplinaryEvents).where(eq(hrmsDisciplinaryEvents.tenantId, TENANT));
+      await tx.delete(hrmsDisciplinaryCases).where(eq(hrmsDisciplinaryCases.tenantId, TENANT));
+    }),
+  );
   await sqlClient.end();
 });
 
@@ -84,13 +114,22 @@ describe("Rule 14 gate (pure)", () => {
 describe("disciplinary eOffice approval — Rule 14 imposition gate (R19)", () => {
   it("blocks imposing a MAJOR penalty when the inquiry is incomplete", async () => {
     const id = randomUUID();
-    await db.insert(hrmsDisciplinaryCases).values(caseRow(id, { proceedingType: "major", penaltyType: "dismissal" }));
-    const q = new MemoryQueue();
+    await runWithTenant(TENANT, () =>
+      db.transaction(async (tx) => {
+        await tx.insert(hrmsDisciplinaryCases).values(caseRow(id, { proceedingType: "major", penaltyType: "dismissal" }));
+      }),
+    );
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerDisciplinaryEOfficeConsumers(q);
     await q.start();
     const m = decided(id);
     await q.publish(CONSUMED_EVENTS.disciplinaryFileDecided, m);
-    await waitFor(async () => (await db.select().from(processed).where(eq(processed.messageId, m._msgId))).length === 1);
+    await waitFor(async () => {
+      const rows = await runWithTenant(TENANT, () =>
+        db.transaction(async (tx) => tx.select().from(processed).where(eq(processed.messageId, m._msgId))),
+      );
+      return rows.length === 1;
+    });
     await q.stop();
 
     expect(await statusOf(id)).toBe("pending_approval"); // NOT imposed
@@ -99,16 +138,25 @@ describe("disciplinary eOffice approval — Rule 14 imposition gate (R19)", () =
 
   it("imposes a MAJOR penalty once the inquiry is complete", async () => {
     const id = randomUUID();
-    await db.insert(hrmsDisciplinaryCases).values(caseRow(id, {
-      proceedingType: "major", penaltyType: "dismissal",
-      chargeMemoRef: "CM-9", inquiryOfficerId: randomUUID(), finding: "guilty", findingDate: "2026-05-01",
-    }));
-    const q = new MemoryQueue();
+    await runWithTenant(TENANT, () =>
+      db.transaction(async (tx) => {
+        await tx.insert(hrmsDisciplinaryCases).values(caseRow(id, {
+          proceedingType: "major", penaltyType: "dismissal",
+          chargeMemoRef: "CM-9", inquiryOfficerId: randomUUID(), finding: "guilty", findingDate: "2026-05-01",
+        }));
+      }),
+    );
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerDisciplinaryEOfficeConsumers(q);
     await q.start();
     const m = decided(id);
     await q.publish(CONSUMED_EVENTS.disciplinaryFileDecided, m);
-    await waitFor(async () => (await db.select().from(processed).where(eq(processed.messageId, m._msgId))).length === 1);
+    await waitFor(async () => {
+      const rows = await runWithTenant(TENANT, () =>
+        db.transaction(async (tx) => tx.select().from(processed).where(eq(processed.messageId, m._msgId))),
+      );
+      return rows.length === 1;
+    });
     await q.stop();
 
     expect(await statusOf(id)).toBe("penalty_imposed");
@@ -117,13 +165,22 @@ describe("disciplinary eOffice approval — Rule 14 imposition gate (R19)", () =
 
   it("imposes a MINOR penalty without requiring an inquiry", async () => {
     const id = randomUUID();
-    await db.insert(hrmsDisciplinaryCases).values(caseRow(id, { proceedingType: "minor", penaltyType: "censure" }));
-    const q = new MemoryQueue();
+    await runWithTenant(TENANT, () =>
+      db.transaction(async (tx) => {
+        await tx.insert(hrmsDisciplinaryCases).values(caseRow(id, { proceedingType: "minor", penaltyType: "censure" }));
+      }),
+    );
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerDisciplinaryEOfficeConsumers(q);
     await q.start();
     const m = decided(id);
     await q.publish(CONSUMED_EVENTS.disciplinaryFileDecided, m);
-    await waitFor(async () => (await db.select().from(processed).where(eq(processed.messageId, m._msgId))).length === 1);
+    await waitFor(async () => {
+      const rows = await runWithTenant(TENANT, () =>
+        db.transaction(async (tx) => tx.select().from(processed).where(eq(processed.messageId, m._msgId))),
+      );
+      return rows.length === 1;
+    });
     await q.stop();
 
     expect(await statusOf(id)).toBe("penalty_imposed");

@@ -11,7 +11,7 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { eq, and } from "drizzle-orm";
 import { hrmsEmployees } from "./schema.js";
 import { hrmsLeaveAllocs } from "../leave/schema.js";
@@ -52,9 +52,9 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     const body = fnfBody.parse(req.body);
 
     // Fetch employee
-    const empRows = await db.select().from(hrmsEmployees)
+    const empRows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
       .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     const emp = empRows[0];
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
@@ -72,11 +72,11 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     const noticeBuyoutMinor = dailyBasicMinor * noticeShortfall;
 
     // 2. Leave Encashment — sum up balance days from all allocations
-    const allocations = await db.select().from(hrmsLeaveAllocs)
+    const allocations = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
       .where(and(
         eq(hrmsLeaveAllocs.tenantId, ctx.tenantId),
         eq(hrmsLeaveAllocs.employeeId, id),
-      ));
+      )));
     const totalLeaveBalance = allocations.reduce((sum, a) => sum + (a.balanceDays ?? 0), 0);
     const leaveEncashmentMinor = dailyBasicMinor * totalLeaveBalance;
 

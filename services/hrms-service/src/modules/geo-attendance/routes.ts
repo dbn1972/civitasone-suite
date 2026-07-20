@@ -43,7 +43,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = z.object({ name: z.string().min(1), address: z.string().optional(), latitude: z.number(), longitude: z.number(), radiusMeters: z.number().int().min(50).max(5000).default(200) }).parse(req.body);
     const id = randomUUID();
-    await db.insert(hrmsOfficeLocations).values({ id, tenantId: ctx.tenantId, name: body.name, address: body.address ?? null, latitude: body.latitude, longitude: body.longitude, radiusMeters: body.radiusMeters, createdBy: ctx.actorId });
+    await db.transaction((tx) => tx.insert(hrmsOfficeLocations).values({ id, tenantId: ctx.tenantId, name: body.name, address: body.address ?? null, latitude: body.latitude, longitude: body.longitude, radiusMeters: body.radiusMeters, createdBy: ctx.actorId }));
     return reply.code(201).send({ id, name: body.name, radiusMeters: body.radiusMeters });
   });
 
@@ -85,7 +85,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
 
     // 4. Store geo-attendance record
     const id = randomUUID();
-    await db.insert(hrmsGeoAttendance).values({
+    await db.transaction((tx) => tx.insert(hrmsGeoAttendance).values({
       id, tenantId: ctx.tenantId, employeeId: body.employeeId,
       attendanceDate: today, checkType: "check_in",
       latitude: body.latitude, longitude: body.longitude,
@@ -96,7 +96,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
       deviceId: body.deviceId ?? null,
       ipAddress: (req.headers["x-forwarded-for"] as string) ?? req.ip ?? null,
       createdBy: ctx.actorId,
-    } as any);
+    } as any));
 
     return reply.code(201).send({
       id, status: withinGeofence ? "within_geofence" : "outside_geofence",
@@ -128,7 +128,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await db.insert(hrmsGeoAttendance).values({
+    await db.transaction((tx) => tx.insert(hrmsGeoAttendance).values({
       id, tenantId: ctx.tenantId, employeeId: body.employeeId,
       attendanceDate: today, checkType: "check_out",
       latitude: body.latitude, longitude: body.longitude,
@@ -138,7 +138,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
       selfieFileKey: body.selfieFileKey ?? null, selfieVerified: false,
       deviceId: body.deviceId ?? null, ipAddress: req.ip ?? null,
       createdBy: ctx.actorId,
-    } as any);
+    } as any));
 
     return reply.code(201).send({ id, status: "check_out_recorded", withinGeofence, distanceMeters: distance ? Math.round(distance) : null });
   });

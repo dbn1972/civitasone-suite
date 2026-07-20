@@ -31,24 +31,24 @@ export async function getEntry(tenantId: string, entryId: string): Promise<Servi
 export async function attestEntry(
   tenantId: string, entryId: string, attestedBy: string, remarks: string | null,
 ): Promise<ServiceBookRow | null> {
-  const rows = await db.update(hrmsServiceBookEntries)
+  const rows = await db.transaction((tx) => tx.update(hrmsServiceBookEntries)
     .set({ attested: true, attestedBy, attestedAt: new Date(), attestRemarks: remarks })
     .where(and(
       eq(hrmsServiceBookEntries.id, entryId),
       eq(hrmsServiceBookEntries.tenantId, tenantId),
       eq(hrmsServiceBookEntries.attested, false),
     ))
-    .returning();
+    .returning());
   return rows[0] ?? null;
 }
 
 export async function updateEntryDescription(
   tenantId: string, entryId: string, description: string, documentRef: string | null,
 ): Promise<void> {
-  await db.update(hrmsServiceBookEntries)
+  await db.transaction((tx) => tx.update(hrmsServiceBookEntries)
     .set({ description, documentRef })
     .where(and(
       eq(hrmsServiceBookEntries.id, entryId),
       eq(hrmsServiceBookEntries.tenantId, tenantId),
-    ));
+    )));
 }
