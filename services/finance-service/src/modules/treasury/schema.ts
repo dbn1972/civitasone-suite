@@ -1,6 +1,7 @@
 import {
   pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, date, boolean, numeric,
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const treasurySchema = pgSchema("treasury");
 
@@ -8,7 +9,7 @@ export const financeBanks = treasurySchema.table("finance_banks", {
   id:           uuid("id").primaryKey().defaultRandom(),
   tenantId:     uuid("tenant_id").notNull(),
   name:         text("name").notNull(),
-  accountNo:    text("account_no").notNull(),
+  accountNo:    encryptedText("account_no").notNull(),
   balanceMinor: bigint("balance_minor", { mode: "bigint" }).notNull().default(0n),
   currency:     char("currency", { length: 3 }).notNull().default("INR"),
   reconciled:   boolean("reconciled").notNull().default(false),

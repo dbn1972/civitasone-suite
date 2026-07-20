@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
+import { encryptPii, decryptPii } from "../../shared/pii-crypto.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
@@ -34,7 +35,13 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       LIMIT ${q.limit} OFFSET ${q.offset}
     `));
 
-    return reply.send({ data: rows });
+    // Decrypt PAN in result rows (transparent to callers)
+    const decryptedRows = (rows as Record<string, unknown>[]).map((row) => ({
+      ...row,
+      pan: row.pan ? decryptPii(row.pan as string) : null,
+    }));
+
+    return reply.send({ data: decryptedRows });
   });
 
   // POST /v1/finance/vendor-tds — record a TDS deduction
@@ -60,6 +67,8 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       fy: z.string().regex(/^\d{4}-\d{2}$/),
     }).parse(req.body);
 
+    const encryptedPan = body.pan ? encryptPii(body.pan) : null;
+
     const rows = await db.execute(sql`
       INSERT INTO gl.finance_vendor_tds (
         tenant_id, vendor_id, vendor_name, pan, bill_id, payment_id, section,
@@ -67,7 +76,7 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
         cess_minor, net_payment_minor, deduction_date, quarter, fy
       ) VALUES (
         ${ctx.tenantId}::uuid, ${body.vendorId}::uuid, ${body.vendorName ?? null},
-        ${body.pan ?? null}, ${body.billId ?? null}::uuid, ${body.paymentId ?? null}::uuid,
+        ${encryptedPan}, ${body.billId ?? null}::uuid, ${body.paymentId ?? null}::uuid,
         ${body.section}, ${body.grossAmountMinor}, ${body.tdsRatePct},
         ${body.tdsAmountMinor}, ${body.surchargeMinor}, ${body.cessMinor},
         ${body.netPaymentMinor}, ${body.deductionDate}::date, ${body.quarter}, ${body.fy}
@@ -102,11 +111,17 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY vendor_name
     `));
 
+    // Decrypt PAN in Form 26Q deductee rows
+    const deductees = (rows as Record<string, unknown>[]).map((row) => ({
+      ...row,
+      pan: row.pan ? decryptPii(row.pan as string) : null,
+    }));
+
     return reply.send({
       form: "26Q",
       fy: q.fy,
       quarter: q.quarter,
-      deductees: rows,
+      deductees,
     });
   });
 }

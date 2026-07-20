@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 const FINANCE_ROLES = ["finance_admin", "super_admin"];
 
@@ -18,8 +19,8 @@ const bankAccounts = paymentsSchema.table("finance_bank_accounts", {
   tenantId: uuid("tenant_id").notNull(),
   bankName: varchar("bank_name", { length: 200 }).notNull(),
   branchName: varchar("branch_name", { length: 200 }),
-  accountNo: varchar("account_no", { length: 30 }).notNull(),
-  ifsc: varchar("ifsc", { length: 11 }).notNull(),
+  accountNo: encryptedText("account_no").notNull(),
+  ifsc: encryptedText("ifsc").notNull(),
   accountType: varchar("account_type", { length: 20 }).notNull().default("current"),
   purpose: varchar("purpose", { length: 64 }),
   status: varchar("status", { length: 12 }).notNull().default("active"),

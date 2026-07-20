@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { encryptPii } from "../../shared/pii-crypto.js";
 
 const log = pino({ name: "finance.tds.consumer" });
 
@@ -20,6 +21,7 @@ export function registerTdsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const { sql } = await import("drizzle-orm");
+      const encryptedPan = p.pan ? encryptPii(p.pan) : null;
       const rows = await (tx as any).execute(sql`
         INSERT INTO gl.finance_vendor_tds (
           tenant_id, vendor_id, vendor_name, pan, bill_id, payment_id, section,
@@ -27,7 +29,7 @@ export function registerTdsConsumers(queue: Queue): void {
           cess_minor, net_payment_minor, deduction_date, quarter, fy
         ) VALUES (
           ${p.tenantId}::uuid, ${p.vendorId}::uuid, ${p.vendorName ?? null},
-          ${p.pan ?? null}, ${p.billId ?? null}::uuid, ${p.paymentId ?? null}::uuid,
+          ${encryptedPan}, ${p.billId ?? null}::uuid, ${p.paymentId ?? null}::uuid,
           ${p.section ?? "194C"}, ${p.grossAmountMinor}::bigint, ${p.tdsRatePct},
           ${p.tdsAmountMinor}::bigint, ${p.surchargeMinor ?? 0}::bigint,
           ${p.cessMinor ?? 0}::bigint, ${p.netPaymentMinor}::bigint,
