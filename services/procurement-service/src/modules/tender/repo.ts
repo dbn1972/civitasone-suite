@@ -9,7 +9,9 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findTenderById(id: string): Promise<TenderRow | null> {
-  const rows = await db.select().from(procurementTenders).where(eq(procurementTenders.id, id)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementTenders).where(eq(procurementTenders.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -20,14 +22,18 @@ export async function findTenderByIdTx(tx: Writer, id: string, tenantId: string)
 }
 
 export async function listTendersByTenant(tenantId: string, limit: number, offset: number): Promise<TenderRow[]> {
-  return db.select().from(procurementTenders)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementTenders)
     .where(eq(procurementTenders.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 export async function findBidsByTender(tenderId: string): Promise<TenderBidRow[]> {
-  return db.select().from(procurementTenderBids).where(eq(procurementTenderBids.tenderId, tenderId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementTenderBids).where(eq(procurementTenderBids.tenderId, tenderId)));
 }
 
 export async function findBidsByTenderTx(tx: Writer, tenderId: string, tenantId: string): Promise<TenderBidRow[]> {
@@ -101,11 +107,13 @@ export async function openFinancialBidVersioned(tx: Writer, bidId: string, expec
  * core two-bid integrity property. Use for pre/post-qualification read paths.
  */
 export async function getRevealedFinancials(tenderId: string, tenantId: string): Promise<Array<{ bidId: string; vendorId: string; amountMinor: bigint }>> {
-  const rows = await db.select().from(procurementTenderFinancialBids)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementTenderFinancialBids)
     .where(and(
       eq(procurementTenderFinancialBids.tenderId, tenderId),
       eq(procurementTenderFinancialBids.tenantId, tenantId),
       eq(procurementTenderFinancialBids.sealed, false),
-    ));
+    )));
   return rows.map((r) => ({ bidId: r.bidId, vendorId: r.vendorId, amountMinor: r.amountMinor }));
 }

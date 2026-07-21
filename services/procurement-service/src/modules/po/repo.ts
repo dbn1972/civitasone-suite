@@ -5,14 +5,18 @@ import { procurementPos, procurementPoItems, type PoRow, type PoInsert } from ".
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findPoById(id: string, tenantId: string): Promise<PoRow | null> {
-  const rows = await db.select().from(procurementPos)
-    .where(and(eq(procurementPos.id, id), eq(procurementPos.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementPos)
+    .where(and(eq(procurementPos.id, id), eq(procurementPos.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findPoItemsByPoId(poId: string, tenantId: string): Promise<(typeof procurementPoItems.$inferSelect)[]> {
-  return db.select().from(procurementPoItems)
-    .where(and(eq(procurementPoItems.poId, poId), eq(procurementPoItems.tenantId, tenantId)));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementPoItems)
+    .where(and(eq(procurementPoItems.poId, poId), eq(procurementPoItems.tenantId, tenantId))));
 }
 
 export async function findPoByIdTx(tx: Writer, id: string, tenantId: string): Promise<PoRow | null> {
@@ -22,7 +26,9 @@ export async function findPoByIdTx(tx: Writer, id: string, tenantId: string): Pr
 }
 
 export async function listPosByTenant(tenantId: string, limit = 100, offset = 0): Promise<PoRow[]> {
-  return db.select().from(procurementPos).where(eq(procurementPos.tenantId, tenantId)).limit(limit).offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementPos).where(eq(procurementPos.tenantId, tenantId)).limit(limit).offset(offset));
 }
 
 export async function insertPo(tx: Writer, row: PoInsert): Promise<void> {

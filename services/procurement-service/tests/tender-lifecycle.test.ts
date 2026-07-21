@@ -20,7 +20,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { and, eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import {
   procurementTenders, procurementTenderBids, procurementTenderFinancialBids,
@@ -53,22 +55,33 @@ function msg(type: string, payload: Record<string, unknown>, actorId = CREATOR, 
   };
 }
 
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function seedVendor(id: string, vendorType = "registered") {
-  await db.insert(procurementVendors).values({
-    id, tenantId: TENANT, name: `Vendor ${id.slice(-2)}`,
-    vendorType, mse: false, msme: false, kycStatus: "verified",
-    createdBy: CREATOR, updatedBy: CREATOR,
-  }).onConflictDoNothing();
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(procurementVendors).values({
+      id, tenantId: TENANT, name: `Vendor ${id.slice(-2)}`,
+      vendorType, mse: false, msme: false, kycStatus: "verified",
+      createdBy: CREATOR, updatedBy: CREATOR,
+    }).onConflictDoNothing();
+  }));
 }
 
 async function wipeTenant(t: string) {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
-  await db.delete(procurementPoItems).where(eq(procurementPoItems.tenantId, t));
-  await db.delete(procurementPos).where(eq(procurementPos.tenantId, t));
-  await db.delete(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenantId, t));
-  await db.delete(procurementTenderBids).where(eq(procurementTenderBids.tenantId, t));
-  await db.delete(procurementTenders).where(eq(procurementTenders.tenantId, t));
-  await db.delete(procurementVendors).where(eq(procurementVendors.tenantId, t));
+  await runWithTenant(t, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
+    await tx.delete(procurementPoItems).where(eq(procurementPoItems.tenantId, t));
+    await tx.delete(procurementPos).where(eq(procurementPos.tenantId, t));
+    await tx.delete(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenantId, t));
+    await tx.delete(procurementTenderBids).where(eq(procurementTenderBids.tenantId, t));
+    await tx.delete(procurementTenders).where(eq(procurementTenders.tenantId, t));
+    await tx.delete(procurementVendors).where(eq(procurementVendors.tenantId, t));
+  }));
 }
 
 /** Run the queue until all in-flight handlers settle, then stop. */
@@ -100,7 +113,7 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
   const closeDate = "2999-12-31";
 
   it("create → tender persisted as draft", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     registerPoConsumers(q);
     await q.start();
@@ -113,27 +126,33 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     }));
     await drain(q);
 
-    const rows = await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    ));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("draft");
     expect(rows[0]?.createdBy).toBe(CREATOR);
   });
 
   it("publish → status published, tenderPublished emitted", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     await q.publish(COMMANDS.tenderPublish, msg(COMMANDS.tenderPublish, { id: tenderId, tenantId: TENANT }));
     await drain(q);
 
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("published");
-    const events = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))).map((r) => r.eventType);
+    const events = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))
+    ))).map((r) => r.eventType);
     expect(events).toContain(EVENTS.tenderPublished);
   });
 
   it("bids submitted → sealed financial envelopes are WITHHELD (bidAmount=0 on technical row)", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     // L1 vendor bids LOWEST (Rs 3,50,000); L2 bids Rs 3,80,000; blacklisted bids LOWEST of all (Rs 3,00,000).
@@ -151,17 +170,21 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     }));
     await drain(q);
 
-    const bids = await db.select().from(procurementTenderBids).where(eq(procurementTenderBids.tenderId, tenderId));
+    const bids = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenderBids).where(eq(procurementTenderBids.tenderId, tenderId))
+    ));
     expect(bids).toHaveLength(3);
     // SEALED integrity: financial value NOT surfaced onto technical row yet.
     for (const b of bids) expect(b.bidAmount).toBe(0n);
-    const fins = await db.select().from(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenderId, tenderId));
+    const fins = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenderId, tenderId))
+    ));
     expect(fins).toHaveLength(3);
     for (const f of fins) expect(f.sealed).toBe(true);
   });
 
   it("duplicate bid from same vendor is rejected (no second bid row)", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     await q.publish(COMMANDS.tenderBidSubmit, msg(COMMANDS.tenderBidSubmit, {
@@ -169,13 +192,15 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
       technicalScore: 99, financialAmountMinor: 1,
     }));
     await drain(q);
-    const bids = await db.select().from(procurementTenderBids)
-      .where(and(eq(procurementTenderBids.tenderId, tenderId), eq(procurementTenderBids.vendorId, V_L1)));
+    const bids = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenderBids)
+        .where(and(eq(procurementTenderBids.tenderId, tenderId), eq(procurementTenderBids.vendorId, V_L1)))
+    ));
     expect(bids).toHaveLength(1);
   });
 
   it("technical-evaluation → all qualified, tech evaluator recorded, status technical_evaluation", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     await q.publish(COMMANDS.tenderTechEvaluate, msg(COMMANDS.tenderTechEvaluate, {
@@ -188,74 +213,90 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     }, TECH_EVAL));
     await drain(q);
 
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("technical_evaluation");
     expect(t?.techEvaluatedBy).toBe(TECH_EVAL);
   });
 
   it("open-financial → envelopes unsealed for qualified bids, amounts surfaced", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     await q.publish(COMMANDS.tenderFinancialOpen, msg(COMMANDS.tenderFinancialOpen, { id: tenderId, tenantId: TENANT }, TECH_EVAL));
     await drain(q);
 
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("financial_evaluation");
-    const fins = await db.select().from(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenderId, tenderId));
+    const fins = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenderId, tenderId))
+    ));
     for (const f of fins) expect(f.sealed).toBe(false);
-    const l1Bid = (await db.select().from(procurementTenderBids).where(eq(procurementTenderBids.id, bidL1)))[0];
+    const l1Bid = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenderBids).where(eq(procurementTenderBids.id, bidL1))
+    )))[0];
     expect(l1Bid?.bidAmount).toBe(35_000_000n); // now revealed
     expect(l1Bid?.financialOpened).toBe(true);
   });
 
   it("SoD: award by the tender CREATOR is rejected in-txn → tender stays unawarded", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     // CREATOR attempts the award (consumer re-checks SoD as defense-in-depth).
     await q.publish(COMMANDS.tenderAward, msg(COMMANDS.tenderAward, { id: tenderId, tenantId: TENANT }, CREATOR));
     await drain(q);
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("financial_evaluation"); // NOT awarded
     expect(t?.awardedVendorId).toBeNull();
   });
 
   it("SoD: award by the TECHNICAL EVALUATOR is rejected in-txn → tender stays unawarded", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     await q.publish(COMMANDS.tenderAward, msg(COMMANDS.tenderAward, { id: tenderId, tenantId: TENANT }, TECH_EVAL));
     await drain(q);
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("financial_evaluation");
   });
 
   it("tenant isolation: a foreign-tenant award command does not touch this tender", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     // Award command scoped to OTHER_TENANT for the same tenderId → not found.
     await q.publish(COMMANDS.tenderAward, msg(COMMANDS.tenderAward, { id: tenderId, tenantId: OTHER_TENANT }, AWARDER, OTHER_TENANT));
     await drain(q);
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("financial_evaluation"); // untouched
   });
 
   it("C2 sanction gate: a high-value award WITHOUT a sanctionRef is rejected in-txn → tender stays unawarded", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     // AWARDER is SoD-clean, but award value > Rs 1,000 and no sanctionRef → SANCTION_REQUIRED.
     await q.publish(COMMANDS.tenderAward, msg(COMMANDS.tenderAward, { id: tenderId, tenantId: TENANT }, AWARDER));
     await drain(q);
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("financial_evaluation"); // NOT awarded — sanction missing
     expect(t?.awardedVendorId).toBeNull();
   });
 
   it("award by distinct AWARDER → L1 = lowest ELIGIBLE bid (blacklisted excluded), po.create emitted", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     // Award value (Rs 3,50,000) is above the SANCTION_REQUIRED floor (Rs 1,000),
@@ -266,37 +307,49 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     }, AWARDER));
     await drain(q);
 
-    const t = (await db.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId)))[0];
+    const t = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenders).where(eq(procurementTenders.id, tenderId))
+    )))[0];
     expect(t?.status).toBe("awarded");
     expect(t?.awardedBy).toBe(AWARDER);
     // Blacklisted vendor bid Rs 3,00,000 (lowest) but is EXCLUDED → L1 is V_L1 at Rs 3,50,000.
     expect(t?.awardedVendorId).toBe(V_L1);
     expect(t?.awardedBidId).toBe(bidL1);
 
-    const l1 = (await db.select().from(procurementTenderBids).where(eq(procurementTenderBids.id, bidL1)))[0];
+    const l1 = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenderBids).where(eq(procurementTenderBids.id, bidL1))
+    )))[0];
     expect(l1?.isL1).toBe(true);
     expect(l1?.rank).toBe(1);
-    const black = (await db.select().from(procurementTenderBids).where(eq(procurementTenderBids.id, bidBlack)))[0];
+    const black = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementTenderBids).where(eq(procurementTenderBids.id, bidBlack))
+    )))[0];
     expect(black?.isL1).toBe(false); // excluded, never ranked #1
 
     // Award emits a PO create command + tenderAwarded event into the outbox.
-    const events = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))).map((r) => r.eventType);
+    const events = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))
+    ))).map((r) => r.eventType);
     expect(events).toContain(EVENTS.tenderAwarded);
     expect(events).toContain(COMMANDS.poCreate);
   });
 
   it("idempotency: re-delivering the award command does not double-award (no extra outbox po.create)", async () => {
-    const before = (await db.select().from(outboxMessages)
-      .where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, COMMANDS.poCreate)))).length;
-    const q = new MemoryQueue();
+    const before = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, COMMANDS.poCreate)))
+    ))).length;
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
     // awarded is a terminal state — a fresh award command must be rejected by the
     // transition guard (INVALID_TRANSITION), producing no new po.create.
     await q.publish(COMMANDS.tenderAward, msg(COMMANDS.tenderAward, { id: tenderId, tenantId: TENANT }, AWARDER));
     await drain(q);
-    const after = (await db.select().from(outboxMessages)
-      .where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, COMMANDS.poCreate)))).length;
+    const after = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, COMMANDS.poCreate)))
+    ))).length;
     expect(after).toBe(before);
   });
 });
@@ -320,7 +373,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
       return { ok: true, status: 200, json: async () => ({ available: "100000000" }) } as unknown as Response;
     }) as typeof fetch;
 
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerPoConsumers(q);
     await q.start();
     await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, {
@@ -330,7 +383,9 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     }));
     await new Promise<void>((r) => setTimeout(r, 400)); // settle create (queue stays running)
 
-    const pos = await db.select().from(procurementPos).where(eq(procurementPos.id, SANCTIONED_PO));
+    const pos = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementPos).where(eq(procurementPos.id, SANCTIONED_PO))
+    ));
     expect(pos).toHaveLength(1);
     // PO is created in `draft` (finance availability checked at create). It only
     // moves to `pending` when submitted to eOffice for administrative approval.
@@ -346,7 +401,9 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     await q.stop();
     global.fetch = originalFetch;
 
-    const afterSubmit = await db.select().from(procurementPos).where(eq(procurementPos.id, SANCTIONED_PO));
+    const afterSubmit = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementPos).where(eq(procurementPos.id, SANCTIONED_PO))
+    ));
     expect(afterSubmit[0]?.status).toBe("pending");
   });
 
@@ -354,7 +411,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     const originalFetch = global.fetch;
     global.fetch = (async () => ({ ok: true, status: 200, json: async () => ({ available: "100" }) }) as unknown as Response) as typeof fetch;
 
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerPoConsumers(q);
     await q.start();
     await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, {
@@ -365,9 +422,13 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     await drain(q);
     global.fetch = originalFetch;
 
-    const pos = await db.select().from(procurementPos).where(eq(procurementPos.id, REJECTED_PO));
+    const pos = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementPos).where(eq(procurementPos.id, REJECTED_PO))
+    ));
     expect(pos).toHaveLength(0);
-    const events = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))).map((r) => r.eventType);
+    const events = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))
+    ))).map((r) => r.eventType);
     expect(events).toContain(EVENTS.poBudgetExceeded);
   });
 });

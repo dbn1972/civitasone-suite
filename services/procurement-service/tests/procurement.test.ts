@@ -9,7 +9,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { procurementGrns } from "../src/modules/grn/schema.js";
 import { procurementIndents } from "../src/modules/indent/schema.js";
@@ -36,12 +38,21 @@ const MSG_G2 = "55555555-eeee-4000-8000-000000000004";
 const MSG_P1 = "55555555-eeee-4000-8000-000000000005";
 
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(procurementGrns).where(eq(procurementGrns.tenantId, TENANT));
-  await db.delete(procurementIndents).where(eq(procurementIndents.tenantId, TENANT));
-  for (const id of [MSG_I1, MSG_IA, MSG_G1, MSG_G2, MSG_P1]) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(procurementGrns).where(eq(procurementGrns.tenantId, TENANT));
+    await tx.delete(procurementIndents).where(eq(procurementIndents.tenantId, TENANT));
+    for (const id of [MSG_I1, MSG_IA, MSG_G1, MSG_G2, MSG_P1]) {
+      await tx.delete(processed).where(eq(processed.messageId, id));
+    }
+  }));
+}
+
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
 }
 
 // ── 1. Indent state machine — pure ────────────────────────────────────────
@@ -82,7 +93,7 @@ describe("PO consumer — budget exceeded (integration)", () => {
       json: async () => ({ available: "0" }),
     } as unknown as Response);
 
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerPoConsumers(q);
     await q.start();
 
@@ -107,10 +118,14 @@ describe("PO consumer — budget exceeded (integration)", () => {
     global.fetch = originalFetch;
 
     // PO should NOT be inserted (budget exceeded → budget_exceeded emitted)
-    const pos = await db.select().from(procurementGrns).where(eq(procurementGrns.tenantId, TENANT));
+    const pos = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementGrns).where(eq(procurementGrns.tenantId, TENANT))
+    ));
     expect(pos).toHaveLength(0); // wrong table intentionally checks that no spurious rows appear
 
-    const rows = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))
+    ));
     const types = rows.map((r) => r.eventType);
     expect(types).toContain(EVENTS.poBudgetExceeded);
     expect(types).not.toContain(EVENTS.poApproved);
@@ -169,7 +184,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
   afterAll(async () => { await wipe(); });
 
   it("GRN qty mismatch: three_way_match=false, grnRejected in outbox", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerGrnConsumers(q);
     await q.start();
 
@@ -197,19 +212,23 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const grns = await db.select().from(procurementGrns).where(eq(procurementGrns.id, GRN_1));
+    const grns = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementGrns).where(eq(procurementGrns.id, GRN_1))
+    ));
     expect(grns).toHaveLength(1);
     expect(grns[0]?.threeWayMatch).toBe(false);
     expect(grns[0]?.status).toBe("rejected");
 
-    const rows = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))
+    ));
     const types = rows.map((r) => r.eventType);
     expect(types).toContain(EVENTS.grnRejected);
     expect(types).not.toContain(EVENTS.grnAccepted);
   });
 
   it("GRN happy path: three_way_match=true, grnAccepted in outbox", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerGrnConsumers(q);
     await q.start();
 
@@ -235,12 +254,16 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const grns = await db.select().from(procurementGrns).where(eq(procurementGrns.id, GRN_2));
+    const grns = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementGrns).where(eq(procurementGrns.id, GRN_2))
+    ));
     expect(grns).toHaveLength(1);
     expect(grns[0]?.threeWayMatch).toBe(true);
     expect(grns[0]?.status).toBe("accepted");
 
-    const rows = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))
+    ));
     const types = rows.map((r) => r.eventType);
     expect(types).toContain(EVENTS.grnAccepted);
   });

@@ -5,8 +5,10 @@ import { procurementVendors, procurementEmpanelment, type VendorRow, type Vendor
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findVendorById(id: string, tenantId: string): Promise<VendorRow | null> {
-  const rows = await db.select().from(procurementVendors)
-    .where(and(eq(procurementVendors.id, id), eq(procurementVendors.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementVendors)
+    .where(and(eq(procurementVendors.id, id), eq(procurementVendors.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -17,7 +19,9 @@ export async function findVendorByIdTx(tx: Writer, id: string, tenantId: string)
 }
 
 export async function listVendorsByTenant(tenantId: string, limit = 100, offset = 0): Promise<VendorRow[]> {
-  return db.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId)).limit(limit).offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId)).limit(limit).offset(offset));
 }
 
 export async function insertVendor(tx: Writer, row: VendorInsert): Promise<void> {

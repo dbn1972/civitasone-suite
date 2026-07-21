@@ -44,12 +44,16 @@ export async function listByTenant(tenantId: string, poId: string | undefined, l
   const where = poId
     ? and(eq(threeWayMatch.tenantId, tenantId), eq(threeWayMatch.poId, poId))
     : eq(threeWayMatch.tenantId, tenantId);
-  return db.select().from(threeWayMatch).where(where).limit(limit).offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(threeWayMatch).where(where).limit(limit).offset(offset));
 }
 
 export async function findLatestForPoGrn(tenantId: string, poId: string, grnId: string): Promise<ThreeWayMatchRow | null> {
-  const rows = await db.select().from(threeWayMatch)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(threeWayMatch)
     .where(and(eq(threeWayMatch.tenantId, tenantId), eq(threeWayMatch.poId, poId), eq(threeWayMatch.grnId, grnId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }

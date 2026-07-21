@@ -5,23 +5,29 @@ import { procurementPos } from "../po/schema.js";
 import { procurementGrns } from "../grn/schema.js";
 
 export async function getDashboard(tenantId: string) {
-  const [pendingIndents] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(procurementIndents)
-    .where(and(
-      eq(procurementIndents.tenantId, tenantId),
-      or(eq(procurementIndents.status, "draft"), eq(procurementIndents.status, "pending")),
-    ));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before these reads — bare db.select() calls run with no RLS GUC set.
+  const [pendingIndents, activePos, grns] = await db.transaction(async (tx) => {
+    const [pendingIndentsRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(procurementIndents)
+      .where(and(
+        eq(procurementIndents.tenantId, tenantId),
+        or(eq(procurementIndents.status, "draft"), eq(procurementIndents.status, "pending")),
+      ));
 
-  const [activePos] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(procurementPos)
-    .where(and(eq(procurementPos.tenantId, tenantId), eq(procurementPos.status, "approved")));
+    const [activePosRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(procurementPos)
+      .where(and(eq(procurementPos.tenantId, tenantId), eq(procurementPos.status, "approved")));
 
-  const [grns] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(procurementGrns)
-    .where(eq(procurementGrns.tenantId, tenantId));
+    const [grnsRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(procurementGrns)
+      .where(eq(procurementGrns.tenantId, tenantId));
+
+    return [pendingIndentsRow, activePosRow, grnsRow] as const;
+  });
 
   return {
     pendingIndents: pendingIndents?.count ?? 0,

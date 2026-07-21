@@ -14,12 +14,16 @@ export async function findEmdByIdTx(tx: Writer, id: string, tenantId: string): P
   return rows[0] ?? null;
 }
 export async function findEmdById(id: string, tenantId: string): Promise<EmdRow | null> {
-  const rows = await db.select().from(procurementEmd)
-    .where(and(eq(procurementEmd.id, id), eq(procurementEmd.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementEmd)
+    .where(and(eq(procurementEmd.id, id), eq(procurementEmd.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 export async function listEmdByTenant(tenantId: string, limit = 50, offset = 0): Promise<EmdRow[]> {
-  return db.select().from(procurementEmd).where(eq(procurementEmd.tenantId, tenantId)).limit(limit).offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementEmd).where(eq(procurementEmd.tenantId, tenantId)).limit(limit).offset(offset));
 }
 export async function updateEmdVersioned(tx: Writer, id: string, expectedVersion: number, patch: Partial<EmdInsert>): Promise<void> {
   const res = await (tx as typeof db).update(procurementEmd)
@@ -39,12 +43,16 @@ export async function findPbgByIdTx(tx: Writer, id: string, tenantId: string): P
   return rows[0] ?? null;
 }
 export async function findPbgById(id: string, tenantId: string): Promise<PbgRow | null> {
-  const rows = await db.select().from(procurementPbg)
-    .where(and(eq(procurementPbg.id, id), eq(procurementPbg.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementPbg)
+    .where(and(eq(procurementPbg.id, id), eq(procurementPbg.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 export async function listPbgByTenant(tenantId: string, limit = 50, offset = 0): Promise<PbgRow[]> {
-  return db.select().from(procurementPbg).where(eq(procurementPbg.tenantId, tenantId)).limit(limit).offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementPbg).where(eq(procurementPbg.tenantId, tenantId)).limit(limit).offset(offset));
 }
 export async function updatePbgVersioned(tx: Writer, id: string, expectedVersion: number, patch: Partial<PbgInsert>): Promise<void> {
   const res = await (tx as typeof db).update(procurementPbg)

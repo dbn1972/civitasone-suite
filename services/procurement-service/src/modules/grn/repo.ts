@@ -5,7 +5,9 @@ import { procurementGrns, procurementGrnItems, procurementInspections, type GrnR
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findGrnById(id: string): Promise<GrnRow | null> {
-  const rows = await db.select().from(procurementGrns).where(eq(procurementGrns.id, id)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementGrns).where(eq(procurementGrns.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -24,21 +26,27 @@ export async function findInspectionByGrnTx(tx: Writer, grnId: string): Promise<
 }
 
 export async function findGrnItemsByGrnId(grnId: string): Promise<(typeof procurementGrnItems.$inferSelect)[]> {
-  return db.select().from(procurementGrnItems).where(eq(procurementGrnItems.grnId, grnId));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementGrnItems).where(eq(procurementGrnItems.grnId, grnId)));
 }
 
 export async function findInspectionByGrnId(grnId: string): Promise<(typeof procurementInspections.$inferSelect) | null> {
-  const rows = await db.select().from(procurementInspections).where(eq(procurementInspections.grnId, grnId)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementInspections).where(eq(procurementInspections.grnId, grnId)).limit(1));
   return rows[0] ?? null;
 }
 
 /** Count accepted GRNs linked to a PO reference (poRef or po id). */
 export async function countAcceptedGrnsByPoRef(tenantId: string, poRef: string): Promise<number> {
-  const rows = await db.select({ cnt: count() }).from(procurementGrns).where(and(
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select({ cnt: count() }).from(procurementGrns).where(and(
     eq(procurementGrns.tenantId, tenantId),
     eq(procurementGrns.poRef, poRef),
     eq(procurementGrns.status, "accepted"),
-  ));
+  )));
   return Number(rows[0]?.cnt ?? 0);
 }
 
@@ -75,8 +83,10 @@ export async function insertInspection(tx: Writer, row: typeof procurementInspec
 }
 
 export async function listGrnsByTenant(tenantId: string, limit = 100, offset = 0): Promise<GrnRow[]> {
-  return db.select().from(procurementGrns)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementGrns)
     .where(eq(procurementGrns.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }

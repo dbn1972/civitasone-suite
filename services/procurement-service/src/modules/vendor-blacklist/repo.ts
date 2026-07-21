@@ -5,18 +5,22 @@ import { vendorBlacklist, type VendorBlacklistRow, type VendorBlacklistInsert } 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function listActiveByTenant(tenantId: string, limit = 50, offset = 0): Promise<VendorBlacklistRow[]> {
-  return db.select().from(vendorBlacklist)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(vendorBlacklist)
     .where(and(eq(vendorBlacklist.tenantId, tenantId), eq(vendorBlacklist.status, "active")))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 export async function findActive(tenantId: string, vendorId: string): Promise<VendorBlacklistRow | null> {
-  const rows = await db.select().from(vendorBlacklist)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(vendorBlacklist)
     .where(and(
       eq(vendorBlacklist.tenantId, tenantId),
       eq(vendorBlacklist.vendorId, vendorId),
       eq(vendorBlacklist.status, "active"),
-    )).limit(1);
+    )).limit(1));
   return rows[0] ?? null;
 }
 
@@ -49,23 +53,29 @@ export async function isCentrallyDebarredTx(tx: Writer, pan: string | null | und
 
 /** List active central (government-wide) debarments — visible to every tenant. */
 export async function listActiveCentral(limit = 50, offset = 0): Promise<VendorBlacklistRow[]> {
-  return db.select().from(vendorBlacklist)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(vendorBlacklist)
     .where(and(eq(vendorBlacklist.scope, "central"), eq(vendorBlacklist.status, "active")))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 export async function findActiveCentralByPan(pan: string): Promise<VendorBlacklistRow | null> {
-  const rows = await db.select().from(vendorBlacklist)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(vendorBlacklist)
     .where(and(
       eq(vendorBlacklist.scope, "central"),
       eq(vendorBlacklist.status, "active"),
       sql`upper(${vendorBlacklist.pan}) = upper(${pan})`,
-    )).limit(1);
+    )).limit(1));
   return rows[0] ?? null;
 }
 
 export async function insertBlacklist(row: VendorBlacklistInsert): Promise<VendorBlacklistRow> {
-  const rows = await db.insert(vendorBlacklist).values(row).returning();
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this write — a bare db.insert() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.insert(vendorBlacklist).values(row).returning());
   return rows[0]!;
 }
 

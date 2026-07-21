@@ -5,8 +5,10 @@ import { procurementAuctions, procurementBids, type AuctionRow, type AuctionInse
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findAuctionById(id: string, tenantId: string): Promise<AuctionRow | null> {
-  const rows = await db.select().from(procurementAuctions)
-    .where(and(eq(procurementAuctions.id, id), eq(procurementAuctions.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(procurementAuctions)
+    .where(and(eq(procurementAuctions.id, id), eq(procurementAuctions.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
