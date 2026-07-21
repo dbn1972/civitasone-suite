@@ -16,7 +16,7 @@
  */
 import { and, eq, count, desc } from "drizzle-orm";
 import { Redis } from "ioredis";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import {
   badgeTemplates,
@@ -41,11 +41,15 @@ export async function getTemplateById(tenantId: string, templateId: string): Pro
   return cache.getOrLoad<BadgeTemplateRow>(
     cache.makeKey(tenantId, RESOURCE_TEMPLATE, templateId),
     async () => {
-      const rows = await db
-        .select()
-        .from(badgeTemplates)
-        .where(and(eq(badgeTemplates.id, templateId), eq(badgeTemplates.tenantId, tenantId)))
-        .limit(1);
+      // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+      // read — a bare db.select() runs with no RLS GUC set.
+      const rows = await scopedRead((tx) =>
+        tx
+          .select()
+          .from(badgeTemplates)
+          .where(and(eq(badgeTemplates.id, templateId), eq(badgeTemplates.tenantId, tenantId)))
+          .limit(1),
+      );
       return rows[0] ?? null;
     },
     TEMPLATE_TTL,
@@ -65,19 +69,23 @@ export async function getActiveTemplate(
   return cache.getOrLoad<BadgeTemplateRow>(
     cacheKey,
     async () => {
-      const rows = await db
-        .select()
-        .from(badgeTemplates)
-        .where(
-          and(
-            eq(badgeTemplates.tenantId, tenantId),
-            eq(badgeTemplates.printerLanguage, printerLanguage),
-            eq(badgeTemplates.visitorCategory, visitorCategory),
-            eq(badgeTemplates.status, "active"),
-          ),
-        )
-        .orderBy(desc(badgeTemplates.templateVersion))
-        .limit(1);
+      // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+      // read — a bare db.select() runs with no RLS GUC set.
+      const rows = await scopedRead((tx) =>
+        tx
+          .select()
+          .from(badgeTemplates)
+          .where(
+            and(
+              eq(badgeTemplates.tenantId, tenantId),
+              eq(badgeTemplates.printerLanguage, printerLanguage),
+              eq(badgeTemplates.visitorCategory, visitorCategory),
+              eq(badgeTemplates.status, "active"),
+            ),
+          )
+          .orderBy(desc(badgeTemplates.templateVersion))
+          .limit(1),
+      );
       return rows[0] ?? null;
     },
     TEMPLATE_TTL,
@@ -120,19 +128,23 @@ export async function listTemplates(
   const where = and(...conditions);
   const offset = (page - 1) * pageSize;
 
-  const [data, totalResult] = await Promise.all([
-    db
-      .select()
-      .from(badgeTemplates)
-      .where(where)
-      .limit(pageSize)
-      .offset(offset)
-      .orderBy(desc(badgeTemplates.createdAt)),
-    db
-      .select({ total: count() })
-      .from(badgeTemplates)
-      .where(where),
-  ]);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before these
+  // reads — a bare db.select() runs with no RLS GUC set.
+  const [data, totalResult] = await scopedRead((tx) =>
+    Promise.all([
+      tx
+        .select()
+        .from(badgeTemplates)
+        .where(where)
+        .limit(pageSize)
+        .offset(offset)
+        .orderBy(desc(badgeTemplates.createdAt)),
+      tx
+        .select({ total: count() })
+        .from(badgeTemplates)
+        .where(where),
+    ]),
+  );
 
   const total = totalResult[0]?.total ?? 0;
 
@@ -145,11 +157,15 @@ export async function listTemplates(
  * Simple DB lookup for a print job by ID (no cache — jobs change frequently).
  */
 export async function getPrintJobById(tenantId: string, jobId: string): Promise<PrintJobRow | null> {
-  const rows = await db
-    .select()
-    .from(printJobs)
-    .where(and(eq(printJobs.id, jobId), eq(printJobs.tenantId, tenantId)))
-    .limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) =>
+    tx
+      .select()
+      .from(printJobs)
+      .where(and(eq(printJobs.id, jobId), eq(printJobs.tenantId, tenantId)))
+      .limit(1),
+  );
   return rows[0] ?? null;
 }
 
@@ -170,19 +186,23 @@ export async function listPrintJobs(
   const where = and(...conditions);
   const offset = (page - 1) * pageSize;
 
-  const [data, totalResult] = await Promise.all([
-    db
-      .select()
-      .from(printJobs)
-      .where(where)
-      .limit(pageSize)
-      .offset(offset)
-      .orderBy(desc(printJobs.createdAt)),
-    db
-      .select({ total: count() })
-      .from(printJobs)
-      .where(where),
-  ]);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before these
+  // reads — a bare db.select() runs with no RLS GUC set.
+  const [data, totalResult] = await scopedRead((tx) =>
+    Promise.all([
+      tx
+        .select()
+        .from(printJobs)
+        .where(where)
+        .limit(pageSize)
+        .offset(offset)
+        .orderBy(desc(printJobs.createdAt)),
+      tx
+        .select({ total: count() })
+        .from(printJobs)
+        .where(where),
+    ]),
+  );
 
   const total = totalResult[0]?.total ?? 0;
 

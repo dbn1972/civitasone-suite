@@ -33,7 +33,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       const receiptNo = `RCPT-${new Date().getUTCFullYear()}-${p.id.slice(0, 8).toUpperCase()}`;
       await repo.insertPayment(tx, {
         id: p.id, tenantId: p.tenantId, invoiceId: p.invoiceId,
-        amountMinor: amount, method: p.method ?? "gateway", status: "completed",
+        amountMinor: amount, method: p.method ?? "gateway", status: "received",
         receiptNo, ...(p.reference ? { reference: p.reference } : {}),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

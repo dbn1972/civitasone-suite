@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq, inArray } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { billingInvoices, billingInvoiceItems, billingInvoiceApprovals } from "../src/modules/invoices/schema.js";
 import { billingPayments, billingGatewayTxns } from "../src/modules/payments/schema.js";
@@ -10,6 +11,19 @@ import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import * as invoiceRepo from "../src/modules/invoices/repo.js";
 import { computeTotals, outstandingMinor, requiresApproval } from "../src/modules/invoices/domain.js";
 import { COMMANDS } from "../src/topics.js";
+
+/**
+ * Test-harness fix: MemoryQueue used directly does NOT auto-wrap handlers with
+ * withTenantConsumer. Production wiring (queue-service's createQueue()) decorates
+ * subscribe() so every consumer handler runs inside runWithTenant(msg.tenantId, ...),
+ * letting db.transaction() pick up the tenant GUC. Mirror that here.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 const ACTOR = "00000000-aaaa-4000-8000-0000000000a1";
 const CHECKER = "00000000-aaaa-4000-8000-0000000000a2";
@@ -28,21 +42,27 @@ const settle = () => new Promise((r) => setTimeout(r, 250));
 
 async function wipe() {
   const tenants = [T1, T2];
-  const invs = await db.select({ id: billingInvoices.id }).from(billingInvoices).where(inArray(billingInvoices.tenantId, tenants));
-  const invIds = invs.map((r) => r.id);
-  if (invIds.length) {
-    await db.delete(billingGatewayTxns).where(inArray(billingGatewayTxns.tenantId, tenants));
-    await db.delete(billingPayments).where(inArray(billingPayments.invoiceId, invIds));
-    await db.delete(billingInvoiceApprovals).where(inArray(billingInvoiceApprovals.invoiceId, invIds));
-    await db.delete(billingInvoiceItems).where(inArray(billingInvoiceItems.invoiceId, invIds));
+  for (const tenantId of tenants) {
+    await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+      const invs = await tx.select({ id: billingInvoices.id }).from(billingInvoices).where(eq(billingInvoices.tenantId, tenantId));
+      const invIds = invs.map((r) => r.id);
+      if (invIds.length) {
+        await tx.delete(billingGatewayTxns).where(eq(billingGatewayTxns.tenantId, tenantId));
+        await tx.delete(billingPayments).where(inArray(billingPayments.invoiceId, invIds));
+        await tx.delete(billingInvoiceApprovals).where(inArray(billingInvoiceApprovals.invoiceId, invIds));
+        await tx.delete(billingInvoiceItems).where(inArray(billingInvoiceItems.invoiceId, invIds));
+      }
+      await tx.delete(billingInvoices).where(eq(billingInvoices.tenantId, tenantId));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
+    }));
   }
-  await db.delete(billingInvoices).where(inArray(billingInvoices.tenantId, tenants));
-  await db.delete(outboxMessages).where(inArray(outboxMessages.tenantId, tenants));
   // processed inbox: clear known message ids used below
-  await db.delete(processed).where(inArray(processed.messageId, [
-    id("inv1"), id("inv2"), id("iss1"), id("can1"), id("pay1"), id("pay2"), id("payX"),
-    id("req1"), id("dec1"), id("decB"), id("isol"), id("reqC"),
-  ]));
+  await runWithTenant(T1, () => db.transaction(async (tx) => {
+    await tx.delete(processed).where(inArray(processed.messageId, [
+      id("inv1"), id("inv2"), id("iss1"), id("can1"), id("pay1"), id("pay2"), id("payX"),
+      id("req1"), id("dec1"), id("decB"), id("isol"), id("reqC"),
+    ]));
+  }));
 }
 
 beforeAll(async () => { await wipe(); });
@@ -174,12 +194,14 @@ describe("idempotency (markProcessed)", () => {
   it("redelivered paymentRecord applies once", async () => {
     // fresh issued bill in T1
     const invId = "33333333-3333-4000-8000-0000000000b1";
-    await db.delete(billingInvoices).where(eq(billingInvoices.id, invId));
-    await db.delete(processed).where(eq(processed.messageId, "44444444-4444-4000-8000-0000000000b1"));
-    await db.insert(billingInvoices).values({
-      id: invId, tenantId: T1, periodMonth: "2026-08", status: "issued",
-      totalMinor: 200000n, paidMinor: 0n, createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(T1, () => db.transaction(async (tx) => {
+      await tx.delete(billingInvoices).where(eq(billingInvoices.id, invId));
+      await tx.delete(processed).where(eq(processed.messageId, "44444444-4444-4000-8000-0000000000b1"));
+      await tx.insert(billingInvoices).values({
+        id: invId, tenantId: T1, periodMonth: "2026-08", status: "issued",
+        totalMinor: 200000n, paidMinor: 0n, createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
     const env = envelope("44444444-4444-4000-8000-0000000000b1", COMMANDS.paymentRecord, T1, {
       id: "55555555-5555-4000-8000-0000000000b1", tenantId: T1, invoiceId: invId, amountMinor: 200000, method: "neft", gateway: "razorpay",
     });
@@ -189,11 +211,13 @@ describe("idempotency (markProcessed)", () => {
     await settle();
     const inv = await invoiceRepo.findById(invId);
     expect(inv!.paidMinor).toBe(200000n); // applied exactly once
-    const receipts = await db.select().from(billingPayments).where(eq(billingPayments.invoiceId, invId));
+    const receipts = await runWithTenant(T1, () => db.transaction((tx) => tx.select().from(billingPayments).where(eq(billingPayments.invoiceId, invId))));
     expect(receipts).toHaveLength(1);
-    await db.delete(billingPayments).where(eq(billingPayments.invoiceId, invId));
-    await db.delete(billingInvoices).where(eq(billingInvoices.id, invId));
-    await db.delete(processed).where(eq(processed.messageId, "44444444-4444-4000-8000-0000000000b1"));
+    await runWithTenant(T1, () => db.transaction(async (tx) => {
+      await tx.delete(billingPayments).where(eq(billingPayments.invoiceId, invId));
+      await tx.delete(billingInvoices).where(eq(billingInvoices.id, invId));
+      await tx.delete(processed).where(eq(processed.messageId, "44444444-4444-4000-8000-0000000000b1"));
+    }));
   });
 });
 

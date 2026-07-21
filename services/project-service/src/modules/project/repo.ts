@@ -8,8 +8,10 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select" | "delete">;
 
 export async function findProjectById(id: string, tenantId: string): Promise<ProjectRow | null> {
-  const rows = await db.select().from(projectProjects)
-    .where(and(eq(projectProjects.id, id), eq(projectProjects.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(projectProjects)
+    .where(and(eq(projectProjects.id, id), eq(projectProjects.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -24,13 +26,17 @@ export async function insertProject(tx: Writer, row: ProjectInsert): Promise<voi
 }
 
 export async function listProjects(tenantId: string, status: string | undefined, limit: number, offset: number): Promise<ProjectRow[]> {
-  const base = db.select().from(projectProjects);
-  if (status) {
-    return base.where(and(eq(projectProjects.tenantId, tenantId), eq(projectProjects.status, status)))
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => {
+    const base = tx.select().from(projectProjects);
+    if (status) {
+      return base.where(and(eq(projectProjects.tenantId, tenantId), eq(projectProjects.status, status)))
+        .limit(limit).offset(offset).orderBy(desc(projectProjects.createdAt));
+    }
+    return base.where(eq(projectProjects.tenantId, tenantId))
       .limit(limit).offset(offset).orderBy(desc(projectProjects.createdAt));
-  }
-  return base.where(eq(projectProjects.tenantId, tenantId))
-    .limit(limit).offset(offset).orderBy(desc(projectProjects.createdAt));
+  });
 }
 
 export async function insertTask(tx: Writer, row: TaskInsert): Promise<void> {
@@ -48,8 +54,10 @@ export async function updateTaskTx(tx: Writer, id: string, patch: Partial<TaskIn
 }
 
 export async function listTasksByProject(projectId: string, tenantId: string): Promise<(typeof projectTasks.$inferSelect)[]> {
-  return db.select().from(projectTasks)
-    .where(and(eq(projectTasks.projectId, projectId), eq(projectTasks.tenantId, tenantId)));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectTasks)
+    .where(and(eq(projectTasks.projectId, projectId), eq(projectTasks.tenantId, tenantId))));
 }
 
 export async function countIncompleteSubTasks(tx: Writer, parentTaskId: string, tenantId: string): Promise<number> {
@@ -63,8 +71,10 @@ export async function insertMilestone(tx: Writer, row: typeof projectMilestones.
 }
 
 export async function findMilestoneById(id: string, tenantId: string): Promise<typeof projectMilestones.$inferSelect | null> {
-  const rows = await db.select().from(projectMilestones)
-    .where(and(eq(projectMilestones.id, id), eq(projectMilestones.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(projectMilestones)
+    .where(and(eq(projectMilestones.id, id), eq(projectMilestones.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -79,12 +89,16 @@ export async function updateMilestoneTx(tx: Writer, id: string, patch: Partial<t
 }
 
 export async function listMilestonesByProject(projectId: string, tenantId: string): Promise<(typeof projectMilestones.$inferSelect)[]> {
-  return db.select().from(projectMilestones)
-    .where(and(eq(projectMilestones.projectId, projectId), eq(projectMilestones.tenantId, tenantId)));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectMilestones)
+    .where(and(eq(projectMilestones.projectId, projectId), eq(projectMilestones.tenantId, tenantId))));
 }
 
 export async function listMilestonesByTenant(tenantId: string, limit: number): Promise<(typeof projectMilestones.$inferSelect)[]> {
-  return db.select().from(projectMilestones).where(eq(projectMilestones.tenantId, tenantId)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectMilestones).where(eq(projectMilestones.tenantId, tenantId)).limit(limit));
 }
 
 // P0-1: persist recomputed progress percentages onto the project aggregate.
@@ -100,6 +114,12 @@ export async function updateProjectProgressTx(
 }
 
 // P0-2/P0-4: list active projects (RAG scheduler scope) and persist RAG/status.
+//
+// INTENTIONAL EXCEPTION — bare db.select(), NOT wrapped in db.transaction():
+// this is the RAG scheduler's sweep (rag.ts runRagTick) and deliberately polls
+// active projects across ALL tenants in one query. Scoping this to a single
+// tenant's GUC would defeat its purpose; per-project writes derived from this
+// scan are applied later, per project, inside their own db.transaction().
 export async function listActiveProjects(limit: number): Promise<ProjectRow[]> {
   return db.select().from(projectProjects)
     .where(eq(projectProjects.status, "active"))

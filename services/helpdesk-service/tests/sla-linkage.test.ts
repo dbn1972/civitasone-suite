@@ -8,14 +8,31 @@
 import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { tickets } from "../src/modules/tickets/schema.js";
 import { outboxSchema } from "../src/shared/outbox.js";
 import { sweepSlaBreaches } from "../src/modules/tickets/sweeper.js";
 import { registerTicketConsumers } from "../src/modules/tickets/consumer.js";
 import { CONSUMES, COMMANDS } from "../src/topics.js";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import * as repo from "../src/modules/tickets/repo.js";
+
+/**
+ * Test-harness fix: `new MemoryQueue()` used directly here (not the
+ * `createQueue()` factory) does NOT auto-wrap subscribed handlers with
+ * `withTenantConsumer`. Production wiring (queue-service's `createQueue()`)
+ * decorates `subscribe()` so every consumer handler runs inside
+ * `runWithTenant(msg.tenantId, ...)`, which is what lets `db.transaction()`
+ * pick up the tenant GUC. Without this wrapping, consumer writes/reads in
+ * these tests run with no RLS GUC set. Mirror that decoration here.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 const { outboxMessages, processed } = outboxSchema;
 
@@ -24,27 +41,60 @@ const TENANT_B = "bbbbbbbb-0000-4000-8000-0000000000b1";
 const ACTOR = "00000000-aaaa-4000-8000-000000000099";
 const ALL_TENANTS = [TENANT_A, TENANT_B];
 
+// Test-harness fix: bare db.delete() outside db.transaction() runs with no RLS
+// GUC set (wrapWithTenantGuc only injects app.tenant_id inside transactions).
+// Wrap each tenant's cleanup in runWithTenant(tenant, () => db.transaction(...)).
 async function cleanup() {
-  await db.delete(tickets).where(inArray(tickets.tenantId, ALL_TENANTS));
-  await db.delete(outboxMessages).where(inArray(outboxMessages.tenantId, ALL_TENANTS));
+  for (const tenantId of ALL_TENANTS) {
+    await runWithTenant(tenantId, () =>
+      db.transaction(async (tx) => {
+        await tx.delete(tickets).where(eq(tickets.tenantId, tenantId));
+        await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
+      }),
+    );
+  }
 }
 
 /** Seed a ticket whose created_at is `daysAgo` in the past (to force SLA state). */
 async function seedTicket(tenantId: string, daysAgo: number, priority = "High", overrides: Record<string, unknown> = {}): Promise<string> {
   const id = randomUUID();
   const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
-  await db.insert(tickets).values({
-    id, tenantId, subject: `seed ${id}`, description: null,
-    priority, status: "open", createdBy: ACTOR, updatedBy: ACTOR, version: 1,
-    createdAt, updatedAt: createdAt,
-    ...overrides,
-  } as typeof tickets.$inferInsert);
+  // Test-harness fix: bare db.insert() outside db.transaction() runs with no
+  // RLS GUC set — wrap in runWithTenant + db.transaction() like production code.
+  await runWithTenant(tenantId, () =>
+    db.transaction((tx) =>
+      tx.insert(tickets).values({
+        id, tenantId, subject: `seed ${id}`, description: null,
+        priority, status: "open", createdBy: ACTOR, updatedBy: ACTOR, version: 1,
+        createdAt, updatedAt: createdAt,
+        ...overrides,
+      } as typeof tickets.$inferInsert),
+    ),
+  );
   return id;
 }
 
 async function outboxFor(tenantId: string, ticketId: string) {
-  const rows = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
+  // Test-harness fix: bare db.select() outside db.transaction() runs with no
+  // RLS GUC set — wrap in runWithTenant + db.transaction() (applies to reads too).
+  const rows = await runWithTenant(tenantId, () =>
+    db.transaction((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, tenantId))),
+  );
   return rows.filter((r) => JSON.stringify(r.payload).includes(ticketId));
+}
+
+/**
+ * Test-harness fix: `repo.findRow`/`repo.findBySource` internally call
+ * `db.transaction()`, which only sets the RLS GUC when a tenant context is
+ * already active in AsyncLocalStorage (via `runWithTenant`). A bare call from
+ * a test body (no active tenant context) runs the transaction with no GUC set,
+ * so RLS returns zero rows. Establish the tenant context per call here.
+ */
+function findRowAsTenant(id: string, tenantId: string) {
+  return runWithTenant(tenantId, () => repo.findRow(id, tenantId));
+}
+function findBySourceAsTenant(tenantId: string, source: string, sourceRef: string) {
+  return runWithTenant(tenantId, () => repo.findBySource(tenantId, source, sourceRef));
 }
 
 beforeEach(cleanup);
@@ -55,8 +105,8 @@ describe("HD1 — SLA-breach sweeper", () => {
     const breachedId = await seedTicket(TENANT_A, 5, "High");   // due at +3d → breached
     const freshId = await seedTicket(TENANT_A, 0, "High");      // due at +3d → within_sla
 
-    const breachedRow = await repo.findRow(breachedId, TENANT_A);
-    const freshRow = await repo.findRow(freshId, TENANT_A);
+    const breachedRow = await findRowAsTenant(breachedId, TENANT_A);
+    const freshRow = await findRowAsTenant(freshId, TENANT_A);
     expect(repo.computeSla(breachedRow!).slaStatus).toBe("breached");
     expect(repo.computeSla(freshRow!).slaStatus).toBe("within_sla");
   });
@@ -66,7 +116,7 @@ describe("HD1 — SLA-breach sweeper", () => {
     const n = await sweepSlaBreaches();
     expect(n).toBeGreaterThanOrEqual(1);
 
-    const row = await repo.findRow(id, TENANT_A);
+    const row = await findRowAsTenant(id, TENANT_A);
     expect(row!.slaBreachedNotifiedAt).not.toBeNull(); // (a) marker set
 
     const msgs = await outboxFor(TENANT_A, id); // (b) events enqueued
@@ -90,19 +140,20 @@ describe("HD1 — SLA-breach sweeper", () => {
   });
 
   it("at_risk stage fires once, then breach stage fires separately", async () => {
-    // ~2.6d old High ticket: due at +3d → <24h left → at_risk
-    const id = await seedTicket(TENANT_A, 2.6, "High");
+    // DEFAULT_SLA_POLICIES: High = 480min (8h) resolution; at_risk fires at 80% → 384min (6.4h).
+    // Seed a ticket ~7h old: past 6.4h (at_risk) but under 8h (not breached).
+    const id = await seedTicket(TENANT_A, 7 / 24, "High");
     const a = await sweepSlaBreaches();
     expect(a).toBe(1);
-    let row = await repo.findRow(id, TENANT_A);
+    let row = await findRowAsTenant(id, TENANT_A);
     expect(row!.slaAtRiskNotifiedAt).not.toBeNull();
     expect(row!.slaBreachedNotifiedAt).toBeNull();
 
-    // advance virtual now past the due date → breach stage fires (distinct marker)
-    const future = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    // advance virtual now past the due date (>8h from creation) → breach stage fires
+    const future = new Date(Date.now() + 4 * 60 * 60 * 1000); // +4h → total 11h elapsed
     const b = await sweepSlaBreaches(future);
     expect(b).toBeGreaterThanOrEqual(1);
-    row = await repo.findRow(id, TENANT_A);
+    row = await findRowAsTenant(id, TENANT_A);
     expect(row!.slaBreachedNotifiedAt).not.toBeNull();
   });
 
@@ -110,8 +161,8 @@ describe("HD1 — SLA-breach sweeper", () => {
     const idA = await seedTicket(TENANT_A, 5, "High");
     const idB = await seedTicket(TENANT_B, 0, "High"); // fresh, not breached
     await sweepSlaBreaches();
-    const rowA = await repo.findRow(idA, TENANT_A);
-    const rowB = await repo.findRow(idB, TENANT_B);
+    const rowA = await findRowAsTenant(idA, TENANT_A);
+    const rowB = await findRowAsTenant(idB, TENANT_B);
     expect(rowA!.slaBreachedNotifiedAt).not.toBeNull();
     expect(rowB!.slaBreachedNotifiedAt).toBeNull();
     expect(rowB!.slaAtRiskNotifiedAt).toBeNull();
@@ -120,7 +171,7 @@ describe("HD1 — SLA-breach sweeper", () => {
 
 describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", () => {
   function wired() {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTicketConsumers(q);
     return q;
   }
@@ -138,7 +189,7 @@ describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", 
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_A, callId));
     await new Promise((r) => setTimeout(r, 50));
 
-    const row = await repo.findBySource(TENANT_A, "telephony", callId);
+    const row = await findBySourceAsTenant(TENANT_A, "telephony", callId);
     expect(row).not.toBeNull();
     expect(row!.source).toBe("telephony");
     expect(row!.sourceRef).toBe(callId);
@@ -154,8 +205,14 @@ describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", 
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_A, callId));
     await new Promise((r) => setTimeout(r, 40));
 
-    const rows = await db.select().from(tickets).where(
-      and(eq(tickets.tenantId, TENANT_A), eq(tickets.source, "telephony"), eq(tickets.sourceRef, callId)),
+    // Test-harness fix: bare db.select() outside db.transaction() runs with no
+    // RLS GUC set — wrap in runWithTenant + db.transaction().
+    const rows = await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) =>
+        tx.select().from(tickets).where(
+          and(eq(tickets.tenantId, TENANT_A), eq(tickets.source, "telephony"), eq(tickets.sourceRef, callId)),
+        ),
+      ),
     );
     expect(rows.length).toBe(1);
   });
@@ -166,8 +223,8 @@ describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", 
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_A, callId));
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_B, callId));
     await new Promise((r) => setTimeout(r, 60));
-    const a = await repo.findBySource(TENANT_A, "telephony", callId);
-    const b = await repo.findBySource(TENANT_B, "telephony", callId);
+    const a = await findBySourceAsTenant(TENANT_A, "telephony", callId);
+    const b = await findBySourceAsTenant(TENANT_B, "telephony", callId);
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
     expect(a!.id).not.toBe(b!.id);
@@ -176,7 +233,7 @@ describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", 
 
 describe("HD2 — assignment consumer", () => {
   function wired() {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerTicketConsumers(q);
     return q;
   }
@@ -190,7 +247,7 @@ describe("HD2 — assignment consumer", () => {
       payload: { id, tenantId: TENANT_A, assigneeId: agent },
     });
     await new Promise((r) => setTimeout(r, 50));
-    const row = await repo.findRow(id, TENANT_A);
+    const row = await findRowAsTenant(id, TENANT_A);
     expect(row!.assigneeId).toBe(agent);
     expect(row!.status).toBe("assigned");
   });
@@ -206,7 +263,7 @@ describe("HD2 — assignment consumer", () => {
       payload: { id, tenantId: TENANT_B, assigneeId: agent },
     });
     await new Promise((r) => setTimeout(r, 50));
-    const row = await repo.findRow(id, TENANT_A);
+    const row = await findRowAsTenant(id, TENANT_A);
     expect(row!.assigneeId).toBeNull();
     expect(row!.status).toBe("open");
   });

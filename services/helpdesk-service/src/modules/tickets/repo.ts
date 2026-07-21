@@ -1,5 +1,5 @@
 import { eq, asc, and, notInArray, isNull, or, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { tickets, type TicketRow, type TicketInsert, type TicketView } from "./schema.js";
 import { slaPolicies } from "../sla/schema.js";
 import { evaluateSlaStatus, resolvePolicy, DEFAULT_SLA_POLICIES, type SlaPolicy, type SlaEvalStatus } from "../sla/domain.js";
@@ -66,7 +66,11 @@ export function computeSla(
 /** Load SLA policies for a given tenant. Returns empty array if none configured. */
 export async function loadPolicies(tenantId: string): Promise<SlaPolicy[]> {
   try {
-    const rows = await db.select().from(slaPolicies).where(eq(slaPolicies.tenantId, tenantId));
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const rows = await db.transaction((tx) =>
+      tx.select().from(slaPolicies).where(eq(slaPolicies.tenantId, tenantId)),
+    );
     return rows.map((r) => ({
       id: r.id,
       tenantId: r.tenantId,
@@ -106,7 +110,9 @@ export function toView(r: TicketRow): TicketView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<TicketView | null> {
-  const rows = await db.select().from(tickets).where(eq(tickets.id, id)).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(tickets).where(eq(tickets.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
@@ -114,18 +120,26 @@ export async function findById(id: string, tenantId: string): Promise<TicketView
 
 /** Raw row fetch (tenant-scoped) — used by consumers that need full columns. */
 export async function findRow(id: string, tenantId: string): Promise<TicketRow | null> {
-  const rows = await db.select().from(tickets)
-    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) =>
+    tx.select().from(tickets)
+      .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId))).limit(1),
+  );
   return rows[0] ?? null;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TicketView[]> {
-  const rows = await db.select().from(tickets)
-    .where(eq(tickets.tenantId, tenantId))
-    /* C-05: Sort by SLA urgency — soonest dueDate first so most-at-risk tickets surface at top */
-    .orderBy(asc(tickets.createdAt))
-    .limit(limit)
-    .offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) =>
+    tx.select().from(tickets)
+      .where(eq(tickets.tenantId, tenantId))
+      /* C-05: Sort by SLA urgency — soonest dueDate first so most-at-risk tickets surface at top */
+      .orderBy(asc(tickets.createdAt))
+      .limit(limit)
+      .offset(offset),
+  );
   // Post-sort: breached → at_risk → within_sla for the SLA queue view
   const views = rows.map(toView);
   const slaPriority: Record<string, number> = { breached: 0, at_risk: 1, within_sla: 2 };
@@ -152,14 +166,27 @@ export async function insert(tx: Writer, row: TicketInsert): Promise<void> {
  * Candidate tickets for the SLA-breach sweeper: still-open (not closed/resolved)
  * and missing at least one SLA notification marker. Whether each is actually
  * at-risk/breached is decided in-process by computeSla() against `now`.
+ *
+ * INTENTIONAL EXCEPTION — bare db.select(), NOT wrapped in db.transaction():
+ * this is a background sweeper that deliberately polls across ALL tenants in
+ * one query (sweepSlaBreaches() then groups the results by tenantId). Scoping
+ * this to a single tenant's GUC would defeat its purpose. A bypass-RLS-role
+ * design (dedicated sweeper role with row access across tenants) would be the
+ * correct long-term fix; left untouched pending that design decision.
+ * Same class of exception as dueTimers() in
+ * services/workflow-service/src/modules/tasks/repo.ts, which is the precedent
+ * for platform-scoped sweeper queries not being wrapped with a tenant GUC.
+ * Per-tenant writes derived from these candidates ARE tenant-scoped — see
+ * sweepSlaBreaches() in ./sweeper.ts, which wraps each tenant's batch in
+ * runWithTenant(tenantId, ...) before writing.
  */
 export async function findOpenForSla(batch = 200): Promise<TicketRow[]> {
-  return db.select().from(tickets)
+  return scopedRead((tx) => tx.select().from(tickets)
     .where(and(
       notInArray(tickets.status, ["closed", "resolved"]),
       or(isNull(tickets.slaAtRiskNotifiedAt), isNull(tickets.slaBreachedNotifiedAt)),
     ))
-    .limit(batch);
+    .limit(batch));
 }
 
 /**
@@ -191,9 +218,13 @@ export async function markSlaNotified(
 
 /** Look up an existing ticket auto-opened from a foreign (source, source_ref). */
 export async function findBySource(tenantId: string, source: string, sourceRef: string): Promise<TicketRow | null> {
-  const rows = await db.select().from(tickets)
-    .where(and(eq(tickets.tenantId, tenantId), eq(tickets.source, source), eq(tickets.sourceRef, sourceRef)))
-    .limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) =>
+    tx.select().from(tickets)
+      .where(and(eq(tickets.tenantId, tenantId), eq(tickets.source, source), eq(tickets.sourceRef, sourceRef)))
+      .limit(1),
+  );
   return rows[0] ?? null;
 }
 

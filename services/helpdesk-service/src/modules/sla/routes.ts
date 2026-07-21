@@ -37,7 +37,11 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     // Gracefully fall back to defaults if table doesn't exist yet (migration not run)
     let policyList: SlaPolicy[];
     try {
-      const policies = await db.select().from(slaPolicies).where(eq(slaPolicies.tenantId, ctx.tenantId));
+      // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+      // before this read — a bare db.select() runs with no RLS GUC set.
+      const policies = await db.transaction((tx) =>
+        tx.select().from(slaPolicies).where(eq(slaPolicies.tenantId, ctx.tenantId)),
+      );
       policyList = policies.length > 0
         ? policies.map((p) => ({
             id: p.id,
@@ -61,7 +65,11 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
       }));
     }
 
-    const rows = await db.select().from(tickets).where(eq(tickets.tenantId, ctx.tenantId));
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const rows = await db.transaction((tx) =>
+      tx.select().from(tickets).where(eq(tickets.tenantId, ctx.tenantId)),
+    );
     let withinSla = 0;
     let breached = 0;
     let atRisk = 0;
@@ -101,7 +109,11 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HELPDESK_ROLES);
 
     try {
-      const rows = await db.select().from(slaPolicies).where(eq(slaPolicies.tenantId, ctx.tenantId));
+      // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+      // before this read — a bare db.select() runs with no RLS GUC set.
+      const rows = await db.transaction((tx) =>
+        tx.select().from(slaPolicies).where(eq(slaPolicies.tenantId, ctx.tenantId)),
+      );
       if (rows.length === 0) {
         return reply.send({ data: DEFAULT_SLA_POLICIES, meta: { source: "defaults" } });
       }
@@ -118,43 +130,52 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = slaPolicyBody.parse(req.body);
 
-    const [existing] = await db.select().from(slaPolicies).where(
-      and(
-        eq(slaPolicies.tenantId, ctx.tenantId),
-        eq(slaPolicies.priority, body.priority),
-        body.category
-          ? eq(slaPolicies.category, body.category)
-          : sql`${slaPolicies.category} IS NULL`,
-      ),
-    ).limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these queries — bare db.select()/db.update()/db.insert() run with no RLS GUC set.
+    const { record, created: wasCreated } = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(slaPolicies).where(
+        and(
+          eq(slaPolicies.tenantId, ctx.tenantId),
+          eq(slaPolicies.priority, body.priority),
+          body.category
+            ? eq(slaPolicies.category, body.category)
+            : sql`${slaPolicies.category} IS NULL`,
+        ),
+      ).limit(1);
 
-    if (existing) {
-      // Update existing policy
-      const [updated] = await db.update(slaPolicies)
-        .set({
-          responseMinutes: body.responseMinutes,
-          resolutionMinutes: body.resolutionMinutes,
-          updatedBy: ctx.actorId,
-          updatedAt: new Date(),
-          version: sql`${slaPolicies.version} + 1`,
-        })
-        .where(eq(slaPolicies.id, existing.id))
-        .returning();
-      return reply.send({ data: updated });
+      if (existing) {
+        // Update existing policy
+        const [updated] = await tx.update(slaPolicies)
+          .set({
+            responseMinutes: body.responseMinutes,
+            resolutionMinutes: body.resolutionMinutes,
+            updatedBy: ctx.actorId,
+            updatedAt: new Date(),
+            version: sql`${slaPolicies.version} + 1`,
+          })
+          .where(eq(slaPolicies.id, existing.id))
+          .returning();
+        return { record: updated, created: false };
+      }
+
+      // Create new policy
+      const [created] = await tx.insert(slaPolicies).values({
+        tenantId: ctx.tenantId,
+        priority: body.priority,
+        category: body.category ?? null,
+        responseMinutes: body.responseMinutes,
+        resolutionMinutes: body.resolutionMinutes,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      }).returning();
+
+      return { record: created, created: true };
+    });
+
+    if (wasCreated) {
+      return reply.code(201).send({ data: record });
     }
-
-    // Create new policy
-    const [created] = await db.insert(slaPolicies).values({
-      tenantId: ctx.tenantId,
-      priority: body.priority,
-      category: body.category ?? null,
-      responseMinutes: body.responseMinutes,
-      resolutionMinutes: body.resolutionMinutes,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    }).returning();
-
-    return reply.code(201).send({ data: created });
+    return reply.send({ data: record });
   });
 
   // ─── CSAT ───────────────────────────────────────────────────────────────
@@ -169,30 +190,36 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_RATING", "rating must be an integer between 1 and 5");
     }
 
-    // Verify ticket exists and is resolved
-    const [ticket] = await db.select().from(tickets).where(
-      and(eq(tickets.id, body.ticketId), eq(tickets.tenantId, ctx.tenantId)),
-    ).limit(1);
-    if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
-    if (ticket.status !== "resolved" && ticket.status !== "closed") {
-      throw new HttpError(422, "TICKET_NOT_RESOLVED", "CSAT can only be submitted for resolved/closed tickets");
-    }
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these queries — bare db.select()/db.insert() run with no RLS GUC set.
+    const record = await db.transaction(async (tx) => {
+      // Verify ticket exists and is resolved
+      const [ticket] = await tx.select().from(tickets).where(
+        and(eq(tickets.id, body.ticketId), eq(tickets.tenantId, ctx.tenantId)),
+      ).limit(1);
+      if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
+      if (ticket.status !== "resolved" && ticket.status !== "closed") {
+        throw new HttpError(422, "TICKET_NOT_RESOLVED", "CSAT can only be submitted for resolved/closed tickets");
+      }
 
-    // Check if already submitted
-    const [existing] = await db.select().from(csatResponses).where(
-      eq(csatResponses.ticketId, body.ticketId),
-    ).limit(1);
-    if (existing) {
-      throw new HttpError(409, "ALREADY_SUBMITTED", "CSAT response already submitted for this ticket");
-    }
+      // Check if already submitted
+      const [existing] = await tx.select().from(csatResponses).where(
+        eq(csatResponses.ticketId, body.ticketId),
+      ).limit(1);
+      if (existing) {
+        throw new HttpError(409, "ALREADY_SUBMITTED", "CSAT response already submitted for this ticket");
+      }
 
-    const [record] = await db.insert(csatResponses).values({
-      tenantId: ctx.tenantId,
-      ticketId: body.ticketId,
-      rating: body.rating,
-      comment: body.comment ?? null,
-      createdBy: ctx.actorId,
-    }).returning();
+      const [created] = await tx.insert(csatResponses).values({
+        tenantId: ctx.tenantId,
+        ticketId: body.ticketId,
+        rating: body.rating,
+        comment: body.comment ?? null,
+        createdBy: ctx.actorId,
+      }).returning();
+
+      return created;
+    });
 
     return reply.code(201).send({ data: record });
   });
@@ -202,7 +229,11 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
 
-    const rows = await db.select().from(csatResponses).where(eq(csatResponses.tenantId, ctx.tenantId));
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const rows = await db.transaction((tx) =>
+      tx.select().from(csatResponses).where(eq(csatResponses.tenantId, ctx.tenantId)),
+    );
     const total = rows.length;
     if (total === 0) {
       return reply.send({ data: { total: 0, average: null, distribution: {} } });
@@ -231,26 +262,32 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = escalateBody.parse(req.body);
 
-    const [ticket] = await db.select().from(tickets).where(and(eq(tickets.id, id), eq(tickets.tenantId, ctx.tenantId))).limit(1);
-    if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these queries — bare db.select()/db.insert()/db.update() run with no RLS GUC set.
+    const record = await db.transaction(async (tx) => {
+      const [ticket] = await tx.select().from(tickets).where(and(eq(tickets.id, id), eq(tickets.tenantId, ctx.tenantId))).limit(1);
+      if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
 
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(ticketEscalations)
-      .where(and(eq(ticketEscalations.tenantId, ctx.tenantId), eq(ticketEscalations.ticketId, id)));
-    const level = (countRow?.count ?? 0) + 1;
+      const [countRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(ticketEscalations)
+        .where(and(eq(ticketEscalations.tenantId, ctx.tenantId), eq(ticketEscalations.ticketId, id)));
+      const level = (countRow?.count ?? 0) + 1;
 
-    const [record] = await db.insert(ticketEscalations).values({
-      tenantId: ctx.tenantId,
-      ticketId: id,
-      escalatedBy: ctx.actorId,
-      reason: body.reason,
-      level,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    }).returning();
+      const [created] = await tx.insert(ticketEscalations).values({
+        tenantId: ctx.tenantId,
+        ticketId: id,
+        escalatedBy: ctx.actorId,
+        reason: body.reason,
+        level,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      }).returning();
 
-    await db.update(tickets).set({ priority: "High", updatedAt: new Date() }).where(eq(tickets.id, id));
+      await tx.update(tickets).set({ priority: "High", updatedAt: new Date() }).where(eq(tickets.id, id));
+      return created;
+    });
+
     return reply.code(201).send({ data: record });
   });
 

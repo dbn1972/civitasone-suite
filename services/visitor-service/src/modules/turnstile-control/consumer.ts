@@ -289,30 +289,35 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
     const p = msg.payload;
     const now = new Date();
 
-    // Fetch all active turnstile/barrier devices at the location
-    const activeDevices = await db
-      .select({ id: devices.id })
-      .from(devices)
-      .where(
-        and(
-          eq(devices.tenantId, msg.tenantId),
-          eq(devices.locationId, p.locationId),
-          eq(devices.status, "active"),
+    // Fetch all active turnstile/barrier devices at the location.
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const activeDevices = await db.transaction((tx) =>
+      tx
+        .select({ id: devices.id })
+        .from(devices)
+        .where(
+          and(
+            eq(devices.tenantId, msg.tenantId),
+            eq(devices.locationId, p.locationId),
+            eq(devices.status, "active"),
+          ),
         ),
-      )
-      .then((rows) => rows); // Note: device_type filter applied below
+    ); // Note: device_type filter applied below
 
     // Filter to turnstile/barrier device types in application layer
-    const turnstileBarrierDevices = await db
-      .select({ id: devices.id })
-      .from(devices)
-      .where(
-        and(
-          eq(devices.tenantId, msg.tenantId),
-          eq(devices.locationId, p.locationId),
-          eq(devices.status, "active"),
+    const turnstileBarrierDevices = await db.transaction((tx) =>
+      tx
+        .select({ id: devices.id })
+        .from(devices)
+        .where(
+          and(
+            eq(devices.tenantId, msg.tenantId),
+            eq(devices.locationId, p.locationId),
+            eq(devices.status, "active"),
+          ),
         ),
-      );
+    );
 
     const relevantDevices = turnstileBarrierDevices.filter(
       (d) => true, // All active devices at location get emergency commands
@@ -371,17 +376,21 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
     const p = msg.payload;
     const now = new Date();
 
-    // Fetch all active turnstile/barrier devices at the location
-    const relevantDevices = await db
-      .select({ id: devices.id })
-      .from(devices)
-      .where(
-        and(
-          eq(devices.tenantId, msg.tenantId),
-          eq(devices.locationId, p.locationId),
-          eq(devices.status, "active"),
+    // Fetch all active turnstile/barrier devices at the location.
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const relevantDevices = await db.transaction((tx) =>
+      tx
+        .select({ id: devices.id })
+        .from(devices)
+        .where(
+          and(
+            eq(devices.tenantId, msg.tenantId),
+            eq(devices.locationId, p.locationId),
+            eq(devices.status, "active"),
+          ),
         ),
-      );
+    );
 
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return;

@@ -136,20 +136,24 @@ async function hasRestrictedArea(
     return { restricted: false, securityLevel: 0, approvers: [] };
   }
 
-  const rows = await db
-    .select({
-      id: areas.id,
-      securityLevel: areas.securityLevel,
-      authorizedApprovers: areas.authorizedApprovers,
-    })
-    .from(areas)
-    .where(
-      and(
-        eq(areas.tenantId, tenantId),
-        eq(areas.locationId, locationId),
-        inArray(areas.id, permittedAreaIds),
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) =>
+    tx
+      .select({
+        id: areas.id,
+        securityLevel: areas.securityLevel,
+        authorizedApprovers: areas.authorizedApprovers,
+      })
+      .from(areas)
+      .where(
+        and(
+          eq(areas.tenantId, tenantId),
+          eq(areas.locationId, locationId),
+          inArray(areas.id, permittedAreaIds),
+        ),
       ),
-    );
+  );
 
   // Find the maximum security level among requested areas
   let maxLevel = 0;

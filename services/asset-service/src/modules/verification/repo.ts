@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   physicalVerifications, physicalVerificationItems, writeoffApprovals,
 } from "./schema.js";
@@ -19,14 +19,18 @@ export async function insertVerificationItem(tx: Writer, row: ItemInsert): Promi
 }
 
 export async function findVerificationById(id: string, tenantId: string) {
-  const rows = await db.select().from(physicalVerifications)
-    .where(and(eq(physicalVerifications.id, id), eq(physicalVerifications.tenantId, tenantId))).limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(physicalVerifications)
+    .where(and(eq(physicalVerifications.id, id), eq(physicalVerifications.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listVerifications(tenantId: string, limit = 50) {
-  return db.select().from(physicalVerifications)
-    .where(eq(physicalVerifications.tenantId, tenantId)).limit(limit);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(physicalVerifications)
+    .where(eq(physicalVerifications.tenantId, tenantId)).limit(limit));
 }
 
 // P0-1: tenant-scoped update — id alone would let one tenant mutate another's verification.
@@ -40,17 +44,21 @@ export async function insertWriteoffRequest(tx: Writer, row: WriteoffInsert): Pr
 }
 
 export async function findWriteoffById(id: string, tenantId: string): Promise<WriteoffRow | null> {
-  const rows = await db.select().from(writeoffApprovals)
-    .where(and(eq(writeoffApprovals.id, id), eq(writeoffApprovals.tenantId, tenantId))).limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(writeoffApprovals)
+    .where(and(eq(writeoffApprovals.id, id), eq(writeoffApprovals.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findApprovedWriteoff(tenantId: string, assetId: string) {
-  const rows = await db.select().from(writeoffApprovals).where(and(
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(writeoffApprovals).where(and(
     eq(writeoffApprovals.tenantId, tenantId),
     eq(writeoffApprovals.assetId, assetId),
     eq(writeoffApprovals.status, "approved"),
-  )).limit(1);
+  )).limit(1));
   return rows[0] ?? null;
 }
 

@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { assetPolicies, assetClaims, type PolicyInsert, type ClaimInsert, type PolicyRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -13,6 +13,8 @@ export async function insertClaim(tx: Writer, row: ClaimInsert): Promise<void> {
 }
 
 export async function findPolicyById(id: string, tenantId: string): Promise<PolicyRow | null> {
-  const rows = await db.select().from(assetPolicies).where(and(eq(assetPolicies.id, id), eq(assetPolicies.tenantId, tenantId))).limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(assetPolicies).where(and(eq(assetPolicies.id, id), eq(assetPolicies.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }

@@ -47,9 +47,9 @@ describe("Billing — Cross-Tenant RLS Isolation", () => {
       headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
       payload: {
         name: "RLS Test Plan",
+        code: "rls-test-plan",
         priceMinor: 99900,
         currency: "INR",
-        interval: "monthly",
       },
     });
     expect(res.statusCode).toBe(202);

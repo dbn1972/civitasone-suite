@@ -39,20 +39,24 @@ export async function predictionRoutes(app: FastifyInstance): Promise<void> {
       eq(mlPredictions.domain, domain),
     );
 
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(mlPredictions)
-      .where(whereClause);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these reads — a bare db.select() runs with no RLS GUC set.
+    const { total, rows } = await db.transaction(async (tx) => {
+      const [countResult] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(mlPredictions)
+        .where(whereClause);
 
-    const total = countResult?.count ?? 0;
+      const predictionRows = await tx
+        .select()
+        .from(mlPredictions)
+        .where(whereClause)
+        .orderBy(desc(mlPredictions.createdAt))
+        .limit(pageSize)
+        .offset(offset);
 
-    const rows = await db
-      .select()
-      .from(mlPredictions)
-      .where(whereClause)
-      .orderBy(desc(mlPredictions.createdAt))
-      .limit(pageSize)
-      .offset(offset);
+      return { total: countResult?.count ?? 0, rows: predictionRows };
+    });
 
     return reply.send({
       data: rows.map((r) => ({

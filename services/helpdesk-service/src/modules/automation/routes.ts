@@ -92,26 +92,32 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createRuleBody.parse(req.body);
 
-    // Enforce max 100 rules per tenant
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(automationRules)
-      .where(and(eq(automationRules.tenantId, ctx.tenantId), eq(automationRules.status, "active")));
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these queries — bare db.select()/db.insert() run with no RLS GUC set.
+    const rule = await db.transaction(async (tx) => {
+      // Enforce max 100 rules per tenant
+      const [countRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(automationRules)
+        .where(and(eq(automationRules.tenantId, ctx.tenantId), eq(automationRules.status, "active")));
 
-    if ((countRow?.count ?? 0) >= MAX_RULES_PER_TENANT) {
-      throw new HttpError(422, "RULE_LIMIT_REACHED", `maximum ${MAX_RULES_PER_TENANT} automation rules per tenant`);
-    }
+      if ((countRow?.count ?? 0) >= MAX_RULES_PER_TENANT) {
+        throw new HttpError(422, "RULE_LIMIT_REACHED", `maximum ${MAX_RULES_PER_TENANT} automation rules per tenant`);
+      }
 
-    const [rule] = await db.insert(automationRules).values({
-      tenantId: ctx.tenantId,
-      name: body.name,
-      ordinal: body.ordinal,
-      enabled: body.enabled,
-      trigger: body.trigger as AutomationTrigger,
-      actions: body.actions as AutomationAction[],
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    }).returning();
+      const [created] = await tx.insert(automationRules).values({
+        tenantId: ctx.tenantId,
+        name: body.name,
+        ordinal: body.ordinal,
+        enabled: body.enabled,
+        trigger: body.trigger as AutomationTrigger,
+        actions: body.actions as AutomationAction[],
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      }).returning();
+
+      return created;
+    });
 
     return reply.code(201).send({ data: rule });
   });
@@ -122,22 +128,28 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const query = listQuery.parse(req.query);
 
-    const rows = await db
-      .select()
-      .from(automationRules)
-      .where(and(eq(automationRules.tenantId, ctx.tenantId), eq(automationRules.status, "active")))
-      .orderBy(asc(automationRules.ordinal))
-      .limit(query.limit)
-      .offset(query.offset);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these reads — a bare db.select() runs with no RLS GUC set.
+    const { rows, total } = await db.transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(automationRules)
+        .where(and(eq(automationRules.tenantId, ctx.tenantId), eq(automationRules.status, "active")))
+        .orderBy(asc(automationRules.ordinal))
+        .limit(query.limit)
+        .offset(query.offset);
 
-    const [countRow] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(automationRules)
-      .where(and(eq(automationRules.tenantId, ctx.tenantId), eq(automationRules.status, "active")));
+      const [countRow] = await tx
+        .select({ total: sql<number>`count(*)::int` })
+        .from(automationRules)
+        .where(and(eq(automationRules.tenantId, ctx.tenantId), eq(automationRules.status, "active")));
+
+      return { rows, total: countRow?.total ?? 0 };
+    });
 
     return reply.send({
       data: rows,
-      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total: countRow?.total ?? 0 },
+      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total },
     });
   });
 
@@ -147,11 +159,15 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
 
-    const [rule] = await db
-      .select()
-      .from(automationRules)
-      .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const [rule] = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(automationRules)
+        .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
 
     if (!rule) throw new HttpError(404, "NOT_FOUND", "automation rule not found");
     return reply.send({ data: rule });
@@ -164,30 +180,36 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = updateRuleBody.parse(req.body);
 
-    const [existing] = await db
-      .select()
-      .from(automationRules)
-      .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these queries — bare db.select()/db.update() run with no RLS GUC set.
+    const updated = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(automationRules)
+        .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
+        .limit(1);
 
-    if (!existing) throw new HttpError(404, "NOT_FOUND", "automation rule not found");
+      if (!existing) throw new HttpError(404, "NOT_FOUND", "automation rule not found");
 
-    const updates: Record<string, unknown> = {
-      updatedBy: ctx.actorId,
-      updatedAt: new Date(),
-      version: existing.version + 1,
-    };
-    if (body.name !== undefined) updates.name = body.name;
-    if (body.ordinal !== undefined) updates.ordinal = body.ordinal;
-    if (body.enabled !== undefined) updates.enabled = body.enabled;
-    if (body.trigger !== undefined) updates.trigger = body.trigger;
-    if (body.actions !== undefined) updates.actions = body.actions;
+      const updates: Record<string, unknown> = {
+        updatedBy: ctx.actorId,
+        updatedAt: new Date(),
+        version: existing.version + 1,
+      };
+      if (body.name !== undefined) updates.name = body.name;
+      if (body.ordinal !== undefined) updates.ordinal = body.ordinal;
+      if (body.enabled !== undefined) updates.enabled = body.enabled;
+      if (body.trigger !== undefined) updates.trigger = body.trigger;
+      if (body.actions !== undefined) updates.actions = body.actions;
 
-    const [updated] = await db
-      .update(automationRules)
-      .set(updates)
-      .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
-      .returning();
+      const [row] = await tx
+        .update(automationRules)
+        .set(updates)
+        .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
+        .returning();
+
+      return row;
+    });
 
     return reply.send({ data: updated });
   });
@@ -198,18 +220,22 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
 
-    const [existing] = await db
-      .select()
-      .from(automationRules)
-      .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these queries — bare db.select()/db.update() run with no RLS GUC set.
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(automationRules)
+        .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)))
+        .limit(1);
 
-    if (!existing) throw new HttpError(404, "NOT_FOUND", "automation rule not found");
+      if (!existing) throw new HttpError(404, "NOT_FOUND", "automation rule not found");
 
-    await db
-      .update(automationRules)
-      .set({ status: "deleted", updatedBy: ctx.actorId, updatedAt: new Date() })
-      .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)));
+      await tx
+        .update(automationRules)
+        .set({ status: "deleted", updatedBy: ctx.actorId, updatedAt: new Date() })
+        .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, ctx.tenantId)));
+    });
 
     return reply.code(204).send();
   });
@@ -220,18 +246,22 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const body = evaluateBody.parse(req.body);
 
-    // Fetch all enabled active rules for this tenant, ordered by ordinal
-    const rules = await db
-      .select()
-      .from(automationRules)
-      .where(
-        and(
-          eq(automationRules.tenantId, ctx.tenantId),
-          eq(automationRules.status, "active"),
-          eq(automationRules.enabled, true),
-        ),
-      )
-      .orderBy(asc(automationRules.ordinal));
+    // Fetch all enabled active rules for this tenant, ordered by ordinal.
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const rules = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(automationRules)
+        .where(
+          and(
+            eq(automationRules.tenantId, ctx.tenantId),
+            eq(automationRules.status, "active"),
+            eq(automationRules.enabled, true),
+          ),
+        )
+        .orderBy(asc(automationRules.ordinal)),
+    );
 
     const matched = evaluateRules(
       {

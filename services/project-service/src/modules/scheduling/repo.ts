@@ -40,17 +40,23 @@ export async function countDepsForTask(dbOrTx: DbLike, projectId: string, tenant
  */
 export async function listDependencies(projectId: string, tenantId: string, page: number, limit: number) {
   const offset = (page - 1) * limit;
-  const rows = await db
-    .select()
-    .from(taskDependencies)
-    .where(and(eq(taskDependencies.projectId, projectId), eq(taskDependencies.tenantId, tenantId)))
-    .limit(limit)
-    .offset(offset);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before these reads — bare db.select() calls run with no RLS GUC set.
+  const [rows, totalResult] = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(taskDependencies)
+      .where(and(eq(taskDependencies.projectId, projectId), eq(taskDependencies.tenantId, tenantId)))
+      .limit(limit)
+      .offset(offset);
 
-  const [totalResult] = await db
-    .select({ cnt: count() })
-    .from(taskDependencies)
-    .where(and(eq(taskDependencies.projectId, projectId), eq(taskDependencies.tenantId, tenantId)));
+    const [totalResult] = await tx
+      .select({ cnt: count() })
+      .from(taskDependencies)
+      .where(and(eq(taskDependencies.projectId, projectId), eq(taskDependencies.tenantId, tenantId)));
+
+    return [rows, totalResult] as const;
+  });
 
   return {
     data: rows,

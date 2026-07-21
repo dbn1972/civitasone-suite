@@ -141,17 +141,21 @@ export async function getCurrentModel(tenantId: string, domain: ModelDomain): Pr
   const cacheKey = currentModelCacheKey(tenantId, domain);
 
   return cache.getOrLoad<ModelMetadata | null>(cacheKey, async () => {
-    const rows = await db
-      .select()
-      .from(mlModels)
-      .where(
-        and(
-          eq(mlModels.tenantId, tenantId),
-          eq(mlModels.domain, domain),
-          eq(mlModels.status, "active"),
-        ),
-      )
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const rows = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(mlModels)
+        .where(
+          and(
+            eq(mlModels.tenantId, tenantId),
+            eq(mlModels.domain, domain),
+            eq(mlModels.status, "active"),
+          ),
+        )
+        .limit(1),
+    );
 
     if (rows.length === 0) return null;
     return rowToMetadata(rows[0]!);
@@ -200,7 +204,9 @@ export async function registerCandidate(
     updatedBy: input.createdBy,
   };
 
-  const [inserted] = await db.insert(mlModels).values(insertRow).returning();
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this write — a bare db.insert() runs with no RLS GUC set.
+  const [inserted] = await db.transaction((tx) => tx.insert(mlModels).values(insertRow).returning());
   return rowToMetadata(inserted!);
 }
 
@@ -218,37 +224,43 @@ export async function registerCandidate(
  * @returns true if promotion succeeded, false if metrics gate failed
  */
 export async function promote(modelId: string, actorId: string): Promise<boolean> {
-  // Fetch the candidate model
-  const [candidate] = await db
-    .select()
-    .from(mlModels)
-    .where(eq(mlModels.id, modelId))
-    .limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before these reads — bare db.select() calls run with no RLS GUC set.
+  const { candidate, currentActive } = await db.transaction(async (tx) => {
+    // Fetch the candidate model
+    const [candidateRow] = await tx
+      .select()
+      .from(mlModels)
+      .where(eq(mlModels.id, modelId))
+      .limit(1);
 
-  if (!candidate) {
-    throw new Error(`Model not found: ${modelId}`);
-  }
+    if (!candidateRow) {
+      throw new Error(`Model not found: ${modelId}`);
+    }
 
-  if (candidate.status !== "candidate") {
-    throw new Error(`Model ${modelId} is not in candidate status (current: ${candidate.status})`);
-  }
+    if (candidateRow.status !== "candidate") {
+      throw new Error(`Model ${modelId} is not in candidate status (current: ${candidateRow.status})`);
+    }
+
+    // Check metrics gate against current active model
+    const currentActiveRows = await tx
+      .select()
+      .from(mlModels)
+      .where(
+        and(
+          eq(mlModels.tenantId, candidateRow.tenantId),
+          eq(mlModels.domain, candidateRow.domain),
+          eq(mlModels.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    return { candidate: candidateRow, currentActive: currentActiveRows };
+  });
 
   const candidateMetrics = (candidate.metrics ?? {}) as ModelMetrics;
   const tenantId = candidate.tenantId;
   const domain = candidate.domain as ModelDomain;
-
-  // Check metrics gate against current active model
-  const currentActive = await db
-    .select()
-    .from(mlModels)
-    .where(
-      and(
-        eq(mlModels.tenantId, tenantId),
-        eq(mlModels.domain, domain),
-        eq(mlModels.status, "active"),
-      ),
-    )
-    .limit(1);
 
   if (currentActive.length > 0) {
     const currentMetrics = (currentActive[0]!.metrics ?? {}) as ModelMetrics;
@@ -340,20 +352,25 @@ export async function promote(modelId: string, actorId: string): Promise<boolean
  * Emits an audit event via outbox.
  */
 export async function deactivate(modelId: string, reason: string): Promise<void> {
-  const [model] = await db
-    .select()
-    .from(mlModels)
-    .where(eq(mlModels.id, modelId))
-    .limit(1);
-
-  if (!model) {
-    throw new Error(`Model not found: ${modelId}`);
-  }
-
-  const tenantId = model.tenantId;
-  const domain = model.domain as ModelDomain;
+  // Wrapped in db.transaction() (extended below) so wrapWithTenantGuc injects
+  // app.tenant_id before this read — a bare db.select() runs with no RLS GUC set.
+  let tenantId!: string;
+  let domain!: ModelDomain;
 
   await db.transaction(async (tx) => {
+    const [model] = await tx
+      .select()
+      .from(mlModels)
+      .where(eq(mlModels.id, modelId))
+      .limit(1);
+
+    if (!model) {
+      throw new Error(`Model not found: ${modelId}`);
+    }
+
+    tenantId = model.tenantId;
+    domain = model.domain as ModelDomain;
+
     // Deactivate the model with optimistic locking
     const deactivated = await tx
       .update(mlModels)
@@ -440,17 +457,21 @@ export async function getVersionHistory(
   domain: ModelDomain,
   limit = 10,
 ): Promise<ModelMetadata[]> {
-  const rows = await db
-    .select()
-    .from(mlModels)
-    .where(
-      and(
-        eq(mlModels.tenantId, tenantId),
-        eq(mlModels.domain, domain),
-      ),
-    )
-    .orderBy(desc(mlModels.version))
-    .limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) =>
+    tx
+      .select()
+      .from(mlModels)
+      .where(
+        and(
+          eq(mlModels.tenantId, tenantId),
+          eq(mlModels.domain, domain),
+        ),
+      )
+      .orderBy(desc(mlModels.version))
+      .limit(limit),
+  );
 
   return rows.map(rowToMetadata);
 }

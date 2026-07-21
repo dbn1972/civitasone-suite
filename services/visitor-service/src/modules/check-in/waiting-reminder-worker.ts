@@ -27,11 +27,13 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, lt, gt } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { EVENTS } from "../../topics.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
+import { db as primaryDb } from "../../shared/db.js";
 import type { Db } from "../../shared/db.js";
 import { loadNamespaceOverrides } from "../config-registry/repo.js";
 import { POLICY_NS, toNumber, MS_PER_MINUTE } from "../config-registry/policy.js";
@@ -115,7 +117,16 @@ export async function processWaitingReminderCycle(
   const windowEnd = new Date(now.getTime() - minThresholdMs);
 
   // Find check-in records in the reminder window where the pass is still
-  // in `checked_in` state (host hasn't acknowledged / meeting hasn't started)
+  // in `checked_in` state (host hasn't acknowledged / meeting hasn't started).
+  // Cross-tenant sweep by design (Requirement 16.5 scans ALL tenants for
+  // visitors waiting past the reminder window) — intentionally has NO tenant
+  // filter. The caller (worker.ts) passes the BYPASSRLS `scannerDb` pool here,
+  // mirroring the documented cross-tenant scan pattern in no-show-worker.ts /
+  // auto-reject-worker.ts / health-checker.ts. INTENTIONAL RLS-GUC EXCEPTION:
+  // a platform-wide sweep has no single tenant to inject via
+  // db.transaction()/wrapWithTenantGuc — same precedent as `dueTimers()` in
+  // services/workflow-service/src/modules/tasks/repo.ts. Do NOT wrap this
+  // call in db.transaction().
   const waitingCheckIns = await db
     .select({
       checkInId: checkIns.id,
@@ -147,24 +158,32 @@ export async function processWaitingReminderCycle(
     if (ageMs <= thresholdMsFor(ci.tenantId) || ageMs >= upperMsFor(ci.tenantId)) continue;
 
     try {
-      // Look up the visit request for host info
-      const visitRows = await db
-        .select({
-          hostEmployeeId: visitRequests.hostEmployeeId,
-          visitorName: visitRequests.visitorName,
-        })
-        .from(visitRequests)
-        .innerJoin(digitalPasses, and(
-          eq(digitalPasses.visitRequestId, visitRequests.id),
-          eq(digitalPasses.tenantId, visitRequests.tenantId),
-        ))
-        .where(
-          and(
-            eq(digitalPasses.id, ci.passId),
-            eq(digitalPasses.tenantId, ci.tenantId),
-          ),
-        )
-        .limit(1);
+      // Look up the visit request for host info. Tenant-scoped read, so it
+      // must run under runWithTenant(ci.tenantId, ...) + db.transaction() so
+      // wrapWithTenantGuc injects app.tenant_id — a bare db.select() runs
+      // with no RLS GUC set. Uses the primary (visitor_svc) `db`, not the
+      // BYPASSRLS scanner pool passed into this function.
+      const visitRows = await runWithTenant(ci.tenantId, () =>
+        primaryDb.transaction((tx) =>
+          tx
+            .select({
+              hostEmployeeId: visitRequests.hostEmployeeId,
+              visitorName: visitRequests.visitorName,
+            })
+            .from(visitRequests)
+            .innerJoin(digitalPasses, and(
+              eq(digitalPasses.visitRequestId, visitRequests.id),
+              eq(digitalPasses.tenantId, visitRequests.tenantId),
+            ))
+            .where(
+              and(
+                eq(digitalPasses.id, ci.passId),
+                eq(digitalPasses.tenantId, ci.tenantId),
+              ),
+            )
+            .limit(1),
+        ),
+      );
       const visit = visitRows[0];
 
       if (!visit?.hostEmployeeId) continue;

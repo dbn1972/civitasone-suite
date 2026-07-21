@@ -15,10 +15,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock DB before importing the extractor
+const mockSelect = vi.fn();
 vi.mock("../src/shared/db.js", () => ({
   db: {
-    select: vi.fn(),
+    select: (...args: unknown[]) => mockSelect(...args),
     execute: vi.fn(async () => []),
+    // wrapWithTenantGuc injects app.tenant_id inside db.transaction() — the
+    // mock invokes the callback with a tx exposing the same select chain so
+    // extractTrainingData's bare-read-turned-transactional-read still works.
+    transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({ select: (...args: unknown[]) => mockSelect(...args) }),
   },
   sqlClient: { end: vi.fn() },
 }));
@@ -47,7 +52,6 @@ import {
   DEFAULT_DATA_CONFIG,
   type TrainingRecord,
 } from "../src/modules/training/data-extractor.js";
-import { db } from "../src/shared/db.js";
 
 const TENANT_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const OTHER_TENANT = "ffffffff-1111-2222-3333-444444444444";
@@ -373,7 +377,7 @@ describe("extractTrainingData", () => {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockResolvedValue(rows),
     };
-    (db.select as ReturnType<typeof vi.fn>).mockReturnValue(chainMock);
+    mockSelect.mockReturnValue(chainMock);
   }
 
   function makeFeatureVectorRows(count: number, options?: {
@@ -517,6 +521,6 @@ describe("extractTrainingData", () => {
 
     await extractTrainingData(TENANT_ID, "leads", customConfig, NOW);
     // Verify the select was called (mock chain)
-    expect(db.select).toHaveBeenCalled();
+    expect(mockSelect).toHaveBeenCalled();
   });
 });

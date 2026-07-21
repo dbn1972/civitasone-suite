@@ -1,5 +1,5 @@
 import { eq, and, isNull, lte, SQL } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { assetDepSchedules, assetDepEntries, type DepScheduleInsert, type DepEntryInsert, type DepScheduleRow, type DepEntryRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -8,20 +8,24 @@ export async function findScheduleByAsset(assetId: string, tenantId: string, dep
   // P0-3: with the dual-book schedules (company + statutory) now persisting per
   // asset, scope the lookup by dep_book so this returns a single deterministic
   // schedule instead of an arbitrary one of the two books.
-  const rows = await db.select().from(assetDepSchedules)
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(assetDepSchedules)
     .where(and(
       eq(assetDepSchedules.assetId, assetId),
       eq(assetDepSchedules.tenantId, tenantId),
       eq(assetDepSchedules.depBook, depBook),
     ))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function findEntriesByAsset(assetId: string, tenantId: string, limit = 500): Promise<DepEntryRow[]> {
-  return db.select().from(assetDepEntries)
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(assetDepEntries)
     .where(and(eq(assetDepEntries.assetId, assetId), eq(assetDepEntries.tenantId, tenantId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findDueEntries(tenantId: string, period: string, depBook?: string, limit = 500): Promise<DepEntryRow[]> {
@@ -29,7 +33,9 @@ export async function findDueEntries(tenantId: string, period: string, depBook?:
   // EVERY tenant due in that period.
   const conditions: SQL[] = [eq(assetDepEntries.tenantId, tenantId), eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt)];
   if (depBook) conditions.push(eq(assetDepEntries.depBook, depBook));
-  return db.select().from(assetDepEntries).where(and(...conditions)).limit(limit);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(assetDepEntries).where(and(...conditions)).limit(limit));
 }
 
 export async function insertSchedule(tx: Writer, row: DepScheduleInsert): Promise<void> {
@@ -49,6 +55,14 @@ export async function markEntryPosted(tx: Writer, id: string, tenantId: string, 
 // P1-1 scheduler support: list (tenantId, period) pairs that still have unposted
 // dep entries up to and including the given period. Drives the worker tick so
 // monthly depreciation posts automatically, per tenant, without a manual call.
+//
+// INTENTIONAL EXCEPTION — bare db.selectDistinct(), NOT wrapped in scopedRead():
+// this is a background scheduler tick that deliberately discovers due
+// (tenantId, period) pairs across ALL tenants in one query (see
+// scheduler.ts#runDepScheduleTick, which then emits a per-tenant depRun command
+// for each pair). Scoping this to a single tenant's GUC would defeat its
+// purpose — there is no single tenant to scope to at this call site. Mirrors
+// helpdesk-service's tickets/repo.ts#findOpenForSla sweeper exception.
 export async function findDueTenantPeriods(uptoPeriod: string): Promise<Array<{ tenantId: string; period: string }>> {
   const rows = await db
     .selectDistinct({ tenantId: assetDepEntries.tenantId, period: assetDepEntries.period })

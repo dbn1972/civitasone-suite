@@ -51,20 +51,24 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
 
     const whereClause = and(...conditions);
 
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(mlModels)
-      .where(whereClause);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these reads — a bare db.select() runs with no RLS GUC set.
+    const { total, rows } = await db.transaction(async (tx) => {
+      const [countResult] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(mlModels)
+        .where(whereClause);
 
-    const total = countResult?.count ?? 0;
+      const modelRows = await tx
+        .select()
+        .from(mlModels)
+        .where(whereClause)
+        .orderBy(desc(mlModels.updatedAt))
+        .limit(pageSize)
+        .offset(offset);
 
-    const rows = await db
-      .select()
-      .from(mlModels)
-      .where(whereClause)
-      .orderBy(desc(mlModels.updatedAt))
-      .limit(pageSize)
-      .offset(offset);
+      return { total: countResult?.count ?? 0, rows: modelRows };
+    });
 
     return reply.send({
       data: rows.map((r) => ({
@@ -95,11 +99,15 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
 
     const { id } = modelIdParams.parse(req.params);
 
-    const [model] = await db
-      .select()
-      .from(mlModels)
-      .where(and(eq(mlModels.id, id), eq(mlModels.tenantId, ctx.tenantId)))
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const [model] = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(mlModels)
+        .where(and(eq(mlModels.id, id), eq(mlModels.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
 
     if (!model) {
       throw new HttpError(404, "NOT_FOUND", "model not found");
@@ -139,11 +147,15 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
     const { id } = modelIdParams.parse(req.params);
 
     // Verify model belongs to tenant
-    const [model] = await db
-      .select()
-      .from(mlModels)
-      .where(and(eq(mlModels.id, id), eq(mlModels.tenantId, ctx.tenantId)))
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const [model] = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(mlModels)
+        .where(and(eq(mlModels.id, id), eq(mlModels.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
 
     if (!model) {
       throw new HttpError(404, "NOT_FOUND", "model not found");
@@ -175,11 +187,15 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
 
     const { id } = modelIdParams.parse(req.params);
 
-    const [model] = await db
-      .select()
-      .from(mlModels)
-      .where(and(eq(mlModels.id, id), eq(mlModels.tenantId, ctx.tenantId)))
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const [model] = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(mlModels)
+        .where(and(eq(mlModels.id, id), eq(mlModels.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
 
     if (!model) {
       throw new HttpError(404, "NOT_FOUND", "model not found");

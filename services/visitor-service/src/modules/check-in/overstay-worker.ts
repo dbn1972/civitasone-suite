@@ -21,6 +21,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, lt } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { digitalPasses } from "../digital-pass/schema.js";
@@ -97,6 +98,16 @@ export async function processOvstayDetectionCycle(
   };
 
   // ── Step 1: Find all checked-in passes past valid_until ──────────────
+  // Cross-tenant sweep by design (Requirement 6.3/6.4 scan ALL tenants for
+  // overstayed passes) — intentionally has NO tenant filter. The caller
+  // (worker.ts) passes the BYPASSRLS `scannerDb` pool here, mirroring the
+  // documented cross-tenant scan pattern in no-show-worker.ts /
+  // auto-reject-worker.ts. INTENTIONAL RLS-GUC EXCEPTION: this is a
+  // platform-wide sweep across every tenant, so there is no single
+  // `app.tenant_id` to inject via db.transaction()/wrapWithTenantGuc — same
+  // precedent as `dueTimers()` in services/workflow-service/src/modules/
+  // tasks/repo.ts, which also sweeps across tenants on a bare `db.select()`
+  // for the same reason. Do NOT wrap this call in db.transaction().
   const overstayedPasses = await db
     .select({
       id: digitalPasses.id,
@@ -145,20 +156,28 @@ export async function processOvstayDetectionCycle(
     // Requirement 6.4: end-of-business-day escalation
     if (now.getTime() - pass.validUntil.getTime() > escalationMsFor(pass.tenantId)) {
       try {
-        // Look up visitor info for the notification payload
-        const visitRows = await db
-          .select({
-            visitorName: visitRequests.visitorName,
-            hostEmployeeId: visitRequests.hostEmployeeId,
-          })
-          .from(visitRequests)
-          .where(
-            and(
-              eq(visitRequests.id, pass.visitRequestId),
-              eq(visitRequests.tenantId, pass.tenantId),
-            ),
-          )
-          .limit(1);
+        // Look up visitor info for the notification payload. Tenant-scoped
+        // read, so it must run under runWithTenant(pass.tenantId, ...) +
+        // db.transaction() so wrapWithTenantGuc injects app.tenant_id —
+        // a bare db.select() runs with no RLS GUC set. Uses the primary
+        // (visitor_svc) `db`, not the BYPASSRLS scanner pool.
+        const visitRows = await runWithTenant(pass.tenantId, () =>
+          db.transaction((tx) =>
+            tx
+              .select({
+                visitorName: visitRequests.visitorName,
+                hostEmployeeId: visitRequests.hostEmployeeId,
+              })
+              .from(visitRequests)
+              .where(
+                and(
+                  eq(visitRequests.id, pass.visitRequestId),
+                  eq(visitRequests.tenantId, pass.tenantId),
+                ),
+              )
+              .limit(1),
+          ),
+        );
         const visit = visitRows[0];
 
         // Higher-severity notification to security supervisor

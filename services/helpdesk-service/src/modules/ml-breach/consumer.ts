@@ -136,28 +136,36 @@ async function rescoreTicket(
 // ── DB Helpers (duplicated from routes to keep consumer self-contained) ───
 
 async function countOpenTicketsForAgent(tenantId: string, agentId: string): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tickets)
-    .where(
-      and(
-        eq(tickets.tenantId, tenantId),
-        eq(tickets.assigneeId, agentId),
-        notInArray(tickets.status, ["closed", "resolved"]),
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) =>
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.tenantId, tenantId),
+          eq(tickets.assigneeId, agentId),
+          notInArray(tickets.status, ["closed", "resolved"]),
+        ),
       ),
-    );
+  );
   return row?.count ?? 0;
 }
 
 async function countOpenTickets(tenantId: string): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tickets)
-    .where(
-      and(
-        eq(tickets.tenantId, tenantId),
-        notInArray(tickets.status, ["closed", "resolved"]),
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) =>
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.tenantId, tenantId),
+          notInArray(tickets.status, ["closed", "resolved"]),
+        ),
       ),
-    );
+  );
   return row?.count ?? 0;
 }

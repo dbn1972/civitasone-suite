@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   assetMaintenancePlans, assetWorkOrders,
   type MaintenancePlanInsert, type WorkOrderInsert, type WorkOrderRow,
@@ -16,7 +16,9 @@ export async function insertWorkOrder(tx: Writer, row: WorkOrderInsert): Promise
 }
 
 export async function findWorkOrderById(id: string, tenantId: string): Promise<WorkOrderRow | null> {
-  const rows = await db.select().from(assetWorkOrders).where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId))).limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(assetWorkOrders).where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -27,14 +29,18 @@ export async function completeWorkOrder(tx: Writer, id: string, tenantId: string
 }
 
 export async function listMaintenanceByAsset(tenantId: string, assetId: string, limit = 500) {
-  return db.select().from(assetWorkOrders)
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(assetWorkOrders)
     .where(and(eq(assetWorkOrders.tenantId, tenantId), eq(assetWorkOrders.assetId, assetId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listMaintenanceByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {
-  return db.select().from(assetWorkOrders)
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(assetWorkOrders)
     .where(eq(assetWorkOrders.tenantId, tenantId))
     .limit(opts?.limit ?? 50)
-    .offset(opts?.offset ?? 0);
+    .offset(opts?.offset ?? 0));
 }

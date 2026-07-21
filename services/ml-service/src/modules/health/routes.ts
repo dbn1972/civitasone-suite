@@ -33,7 +33,14 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Query for active models grouped by domain (across all tenants for health check)
+    // Query for active models grouped by domain (across all tenants for health check).
+    // INTENTIONAL RLS-GUC EXCEPTION: this is a public (no-auth), platform-wide
+    // health check — it must report model availability across EVERY tenant,
+    // not a single tenant's data, so there is no single `app.tenant_id` to
+    // inject via db.transaction()/wrapWithTenantGuc. Same precedent as
+    // `dueTimers()` in services/workflow-service/src/modules/tasks/repo.ts
+    // (and `getActiveTenants()` in ../training/orchestrator.ts within this
+    // service). Do NOT wrap this call in db.transaction().
     const activeModels = await db
       .select({
         domain: mlModels.domain,

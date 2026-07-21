@@ -65,12 +65,12 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
       loadCompiledRules(actor.tenantId),
     ]);
     const subjectAttrs: AttrBag = {
-      ...(ctx.officeId ? { officeId: ctx.officeId } : {}),
-      ...(ctx.positionId ? { positionId: ctx.positionId } : {}),
-      ...(ctx.deptCode ? { deptCode: ctx.deptCode } : {}),
-      ...(ctx.hierarchyDomain ? { hierarchyDomain: ctx.hierarchyDomain } : {}),
-      ...(ctx.jurisdictionUnitIds ? { jurisdictionUnitIds: ctx.jurisdictionUnitIds } : {}),
-      ...(ctx.clearanceLevel ? { clearanceLevel: ctx.clearanceLevel } : {}),
+      ...((ctx as any).officeId ? { officeId: (ctx as any).officeId } : {}),
+      ...((ctx as any).positionId ? { positionId: (ctx as any).positionId } : {}),
+      ...((ctx as any).deptCode ? { deptCode: (ctx as any).deptCode } : {}),
+      ...((ctx as any).hierarchyDomain ? { hierarchyDomain: (ctx as any).hierarchyDomain } : {}),
+      ...((ctx as any).jurisdictionUnitIds ? { jurisdictionUnitIds: (ctx as any).jurisdictionUnitIds } : {}),
+      ...((ctx as any).clearanceLevel ? { clearanceLevel: (ctx as any).clearanceLevel } : {}),
       ...(isInternalCaller && body.subjectAttrs ? body.subjectAttrs : {}),
     };
     const result = evaluateWithAbac({

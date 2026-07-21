@@ -126,49 +126,61 @@ export async function mlBreachRoutes(app: FastifyInstance): Promise<void> {
 
 /** Count open tickets assigned to a specific agent in a tenant. */
 async function countOpenTicketsForAgent(tenantId: string, agentId: string): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tickets)
-    .where(
-      and(
-        eq(tickets.tenantId, tenantId),
-        eq(tickets.assigneeId, agentId),
-        notInArray(tickets.status, ["closed", "resolved"]),
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) =>
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.tenantId, tenantId),
+          eq(tickets.assigneeId, agentId),
+          notInArray(tickets.status, ["closed", "resolved"]),
+        ),
       ),
-    );
+  );
   return row?.count ?? 0;
 }
 
 /** Count total open tickets in a tenant queue. */
 async function countOpenTickets(tenantId: string): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tickets)
-    .where(
-      and(
-        eq(tickets.tenantId, tenantId),
-        notInArray(tickets.status, ["closed", "resolved"]),
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) =>
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.tenantId, tenantId),
+          notInArray(tickets.status, ["closed", "resolved"]),
+        ),
       ),
-    );
+  );
   return row?.count ?? 0;
 }
 
 /** Get open ticket counts per assigned agent in a tenant. */
 async function getAgentWorkloads(tenantId: string): Promise<Array<{ agentId: string; workload: number }>> {
-  const rows = await db
-    .select({
-      agentId: tickets.assigneeId,
-      workload: sql<number>`count(*)::int`,
-    })
-    .from(tickets)
-    .where(
-      and(
-        eq(tickets.tenantId, tenantId),
-        notInArray(tickets.status, ["closed", "resolved"]),
-        sql`${tickets.assigneeId} IS NOT NULL`,
-      ),
-    )
-    .groupBy(tickets.assigneeId);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) =>
+    tx
+      .select({
+        agentId: tickets.assigneeId,
+        workload: sql<number>`count(*)::int`,
+      })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.tenantId, tenantId),
+          notInArray(tickets.status, ["closed", "resolved"]),
+          sql`${tickets.assigneeId} IS NOT NULL`,
+        ),
+      )
+      .groupBy(tickets.assigneeId),
+  );
 
   return rows
     .filter((r): r is { agentId: string; workload: number } => r.agentId !== null)

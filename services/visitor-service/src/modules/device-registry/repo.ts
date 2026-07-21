@@ -13,7 +13,8 @@
  * Requirements validated: 3.2, 3.3, 3.4, 3.5, 3.6, 3.8
  */
 import { and, eq, or, sql, count, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { cache } from "../../shared/infra.js";
 import { devices, deviceAuditLog, type DeviceRow, type DeviceAuditLogRow } from "./schema.js";
 import { setDeviceLoader, type DeviceRecord } from "./device-auth.js";
@@ -53,11 +54,15 @@ export async function getDeviceById(tenantId: string, deviceId: string): Promise
   return cache.getOrLoad<DeviceRow>(
     cache.makeKey(tenantId, RESOURCE, deviceId),
     async () => {
-      const rows = await db
-        .select()
-        .from(devices)
-        .where(and(eq(devices.id, deviceId), eq(devices.tenantId, tenantId)))
-        .limit(1);
+      // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+      // read — a bare db.select() runs with no RLS GUC set.
+      const rows = await scopedRead((tx) =>
+        tx
+          .select()
+          .from(devices)
+          .where(and(eq(devices.id, deviceId), eq(devices.tenantId, tenantId)))
+          .limit(1),
+      );
       return rows[0] ?? null;
     },
     90,
@@ -68,9 +73,19 @@ export async function getDeviceById(tenantId: string, deviceId: string): Promise
  * Lookup device by device_token_hash OR old_token_hash.
  * Used by device-auth middleware for Bearer token resolution.
  * Searches both columns to support rotation grace period.
+ *
+ * IMPORTANT — why this read uses the BYPASSRLS `scannerDb` (NOT scopedRead):
+ *   This lookup runs BEFORE the device's tenant is known (that's the whole point:
+ *   resolve the device — and its tenantId — FROM the token hash alone). There is
+ *   no app.tenant_id GUC to set yet, and visitor.devices is FORCE ROW LEVEL
+ *   SECURITY, so a bare db.select() as the NOBYPASSRLS visitor_svc role would
+ *   return ZERO rows regardless of the hash. Mirrors the documented cross-tenant
+ *   scanner-pool pattern used by the scheduled workers (shared/scanner-db.ts) —
+ *   READ ONLY, never used for writes. Downstream tenant-scoped operations use the
+ *   resolved device.tenantId with the primary `db` under runWithTenant/scopedRead.
  */
 export async function getDeviceByTokenHash(hash: string): Promise<DeviceRecord | null> {
-  const rows = await db
+  const rows = await scannerDb
     .select()
     .from(devices)
     .where(or(eq(devices.deviceTokenHash, hash), eq(devices.oldTokenHash, hash)))
@@ -85,9 +100,12 @@ export async function getDeviceByTokenHash(hash: string): Promise<DeviceRecord |
 /**
  * Lookup device by certificate fingerprint.
  * Used by device-auth middleware for mTLS resolution.
+ *
+ * Same cross-tenant, pre-auth rationale as getDeviceByTokenHash above — uses the
+ * BYPASSRLS `scannerDb`, read-only.
  */
 export async function getDeviceByCertFingerprint(fingerprint: string): Promise<DeviceRecord | null> {
-  const rows = await db
+  const rows = await scannerDb
     .select()
     .from(devices)
     .where(eq(devices.certificateFingerprint, fingerprint))
@@ -130,19 +148,23 @@ export async function listDevices(
   const where = and(...conditions);
   const offset = (page - 1) * pageSize;
 
-  const [data, totalResult] = await Promise.all([
-    db
-      .select()
-      .from(devices)
-      .where(where)
-      .limit(pageSize)
-      .offset(offset)
-      .orderBy(desc(devices.createdAt)),
-    db
-      .select({ total: count() })
-      .from(devices)
-      .where(where),
-  ]);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before these
+  // reads — a bare db.select() runs with no RLS GUC set.
+  const [data, totalResult] = await scopedRead((tx) =>
+    Promise.all([
+      tx
+        .select()
+        .from(devices)
+        .where(where)
+        .limit(pageSize)
+        .offset(offset)
+        .orderBy(desc(devices.createdAt)),
+      tx
+        .select({ total: count() })
+        .from(devices)
+        .where(where),
+    ]),
+  );
 
   const total = totalResult[0]?.total ?? 0;
 
@@ -158,17 +180,21 @@ export async function getDevicesByTypeAndLocation(
   deviceType: string,
   locationId: string,
 ): Promise<DeviceRow[]> {
-  return db
-    .select()
-    .from(devices)
-    .where(
-      and(
-        eq(devices.tenantId, tenantId),
-        eq(devices.deviceType, deviceType),
-        eq(devices.locationId, locationId),
-        eq(devices.status, "active"),
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) =>
+    tx
+      .select()
+      .from(devices)
+      .where(
+        and(
+          eq(devices.tenantId, tenantId),
+          eq(devices.deviceType, deviceType),
+          eq(devices.locationId, locationId),
+          eq(devices.status, "active"),
+        ),
       ),
-    );
+  );
 }
 
 // ── Audit log ─────────────────────────────────────────────────────────────
@@ -188,19 +214,23 @@ export async function getDeviceAuditLog(
   );
   const offset = (page - 1) * pageSize;
 
-  const [data, totalResult] = await Promise.all([
-    db
-      .select()
-      .from(deviceAuditLog)
-      .where(where)
-      .limit(pageSize)
-      .offset(offset)
-      .orderBy(desc(deviceAuditLog.createdAt)),
-    db
-      .select({ total: count() })
-      .from(deviceAuditLog)
-      .where(where),
-  ]);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before these
+  // reads — a bare db.select() runs with no RLS GUC set.
+  const [data, totalResult] = await scopedRead((tx) =>
+    Promise.all([
+      tx
+        .select()
+        .from(deviceAuditLog)
+        .where(where)
+        .limit(pageSize)
+        .offset(offset)
+        .orderBy(desc(deviceAuditLog.createdAt)),
+      tx
+        .select({ total: count() })
+        .from(deviceAuditLog)
+        .where(where),
+    ]),
+  );
 
   const total = totalResult[0]?.total ?? 0;
 
@@ -238,11 +268,15 @@ export async function getLocationHealthSummary(
 export async function getAllLocationHealthSummaries(
   tenantId: string,
 ): Promise<LocationHealthSummary[]> {
-  const locationRows = await db
-    .select({ locationId: devices.locationId })
-    .from(devices)
-    .where(and(eq(devices.tenantId, tenantId), eq(devices.status, "active")))
-    .groupBy(devices.locationId);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const locationRows = await scopedRead((tx) =>
+    tx
+      .select({ locationId: devices.locationId })
+      .from(devices)
+      .where(and(eq(devices.tenantId, tenantId), eq(devices.status, "active")))
+      .groupBy(devices.locationId),
+  );
 
   const summaries: LocationHealthSummary[] = [];
   for (const { locationId } of locationRows) {
@@ -258,17 +292,21 @@ export async function getAllLocationHealthSummaries(
 export async function getFirmwareInventory(
   tenantId: string,
 ): Promise<Array<{ deviceId: string; name: string; deviceType: string; firmwareVersion: string | null; firmwareStatus: string | null; locationId: string }>> {
-  const rows = await db
-    .select({
-      deviceId: devices.id,
-      name: devices.name,
-      deviceType: devices.deviceType,
-      firmwareVersion: devices.firmwareVersion,
-      firmwareStatus: devices.firmwareStatus,
-      locationId: devices.locationId,
-    })
-    .from(devices)
-    .where(and(eq(devices.tenantId, tenantId), eq(devices.status, "active")));
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) =>
+    tx
+      .select({
+        deviceId: devices.id,
+        name: devices.name,
+        deviceType: devices.deviceType,
+        firmwareVersion: devices.firmwareVersion,
+        firmwareStatus: devices.firmwareStatus,
+        locationId: devices.locationId,
+      })
+      .from(devices)
+      .where(and(eq(devices.tenantId, tenantId), eq(devices.status, "active"))),
+  );
 
   return rows;
 }
@@ -277,16 +315,20 @@ export async function getFirmwareInventory(
 
 /** Compute location health from DB (fallback when Redis cache is empty). */
 async function computeLocationHealth(tenantId: string, locationId: string): Promise<LocationHealthSummary | null> {
-  const locationDevices = await db
-    .select()
-    .from(devices)
-    .where(
-      and(
-        eq(devices.tenantId, tenantId),
-        eq(devices.locationId, locationId),
-        eq(devices.status, "active"),
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const locationDevices = await scopedRead((tx) =>
+    tx
+      .select()
+      .from(devices)
+      .where(
+        and(
+          eq(devices.tenantId, tenantId),
+          eq(devices.locationId, locationId),
+          eq(devices.status, "active"),
+        ),
       ),
-    );
+  );
 
   if (locationDevices.length === 0) return null;
 
@@ -353,17 +395,21 @@ export async function getDeviceBoundToGate(
   tenantId: string,
   gateId: string,
 ): Promise<DeviceRow | null> {
-  const rows = await db
-    .select()
-    .from(devices)
-    .where(
-      and(
-        eq(devices.tenantId, tenantId),
-        eq(devices.gateId, gateId),
-        eq(devices.status, "active"),
-      ),
-    )
-    .limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) =>
+    tx
+      .select()
+      .from(devices)
+      .where(
+        and(
+          eq(devices.tenantId, tenantId),
+          eq(devices.gateId, gateId),
+          eq(devices.status, "active"),
+        ),
+      )
+      .limit(1),
+  );
 
   return rows[0] ?? null;
 }

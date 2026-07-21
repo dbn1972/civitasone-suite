@@ -309,16 +309,20 @@ export async function extractTrainingData(
 
   // Step 2: Query feature vectors with tenant-scoped WHERE clause
   // Requirement 23.2 / 4.2: tenant-scoped WHERE clause on all training queries
-  const rawRecords = await db
-    .select()
-    .from(mlFeatureVectors)
-    .where(
-      and(
-        eq(mlFeatureVectors.tenantId, tenantId),
-        eq(mlFeatureVectors.domain, domain),
-        gte(mlFeatureVectors.computedAt, windowStart),
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rawRecords = await db.transaction((tx) =>
+    tx
+      .select()
+      .from(mlFeatureVectors)
+      .where(
+        and(
+          eq(mlFeatureVectors.tenantId, tenantId),
+          eq(mlFeatureVectors.domain, domain),
+          gte(mlFeatureVectors.computedAt, windowStart),
+        ),
       ),
-    );
+  );
 
   if (rawRecords.length === 0) {
     log.info({ tenantId, domain, correlationId }, "no training data found within rolling window");

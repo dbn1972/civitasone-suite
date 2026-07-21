@@ -123,33 +123,42 @@ export interface PurgeResult {
 export async function purgeTenantData(tenantId: string): Promise<PurgeResult> {
   const startMs = Date.now();
 
-  // 1. Delete predictions (references ml_models via model_id FK)
-  const predictionsResult = await db
-    .delete(mlPredictions)
-    .where(eq(mlPredictions.tenantId, tenantId))
-    .returning({ id: mlPredictions.id });
-  const predictionsDeleted = predictionsResult.length;
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before these writes — bare db.delete() calls run with no RLS GUC set
+  // and would silently delete zero rows under FORCE ROW LEVEL SECURITY.
+  const { predictionsDeleted, trainingRunsDeleted, featureVectorsDeleted, modelsDeleted } =
+    await db.transaction(async (tx) => {
+      // 1. Delete predictions (references ml_models via model_id FK)
+      const predictionsResult = await tx
+        .delete(mlPredictions)
+        .where(eq(mlPredictions.tenantId, tenantId))
+        .returning({ id: mlPredictions.id });
 
-  // 2. Delete training runs (references ml_models via model_id FK)
-  const trainingRunsResult = await db
-    .delete(mlTrainingRuns)
-    .where(eq(mlTrainingRuns.tenantId, tenantId))
-    .returning({ id: mlTrainingRuns.id });
-  const trainingRunsDeleted = trainingRunsResult.length;
+      // 2. Delete training runs (references ml_models via model_id FK)
+      const trainingRunsResult = await tx
+        .delete(mlTrainingRuns)
+        .where(eq(mlTrainingRuns.tenantId, tenantId))
+        .returning({ id: mlTrainingRuns.id });
 
-  // 3. Delete feature vectors (no FK dependencies)
-  const featureVectorsResult = await db
-    .delete(mlFeatureVectors)
-    .where(eq(mlFeatureVectors.tenantId, tenantId))
-    .returning({ id: mlFeatureVectors.id });
-  const featureVectorsDeleted = featureVectorsResult.length;
+      // 3. Delete feature vectors (no FK dependencies)
+      const featureVectorsResult = await tx
+        .delete(mlFeatureVectors)
+        .where(eq(mlFeatureVectors.tenantId, tenantId))
+        .returning({ id: mlFeatureVectors.id });
 
-  // 4. Delete models (now safe since FK-dependent rows are gone)
-  const modelsResult = await db
-    .delete(mlModels)
-    .where(eq(mlModels.tenantId, tenantId))
-    .returning({ id: mlModels.id });
-  const modelsDeleted = modelsResult.length;
+      // 4. Delete models (now safe since FK-dependent rows are gone)
+      const modelsResult = await tx
+        .delete(mlModels)
+        .where(eq(mlModels.tenantId, tenantId))
+        .returning({ id: mlModels.id });
+
+      return {
+        predictionsDeleted: predictionsResult.length,
+        trainingRunsDeleted: trainingRunsResult.length,
+        featureVectorsDeleted: featureVectorsResult.length,
+        modelsDeleted: modelsResult.length,
+      };
+    });
 
   // 5. Delete S3 objects under tenant prefix
   let s3ObjectsDeleted = 0;

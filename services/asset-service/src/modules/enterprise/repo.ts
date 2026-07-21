@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   projectAuc, assetLeases, assetImpairments, functionalLocations, spareParts,
 } from "./schema.js";
@@ -37,13 +37,17 @@ export const interOrgTransfers = lifecycleSchema.table("inter_org_transfers", {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findAssetByBarcode(tenantId: string, barcode: string) {
-  const rows = await db.select().from(assetAssets)
-    .where(and(eq(assetAssets.tenantId, tenantId), eq(assetAssets.barcode, barcode))).limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(assetAssets)
+    .where(and(eq(assetAssets.tenantId, tenantId), eq(assetAssets.barcode, barcode))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listAuc(tenantId: string, limit = 500) {
-  return db.select().from(projectAuc).where(eq(projectAuc.tenantId, tenantId)).limit(limit);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(projectAuc).where(eq(projectAuc.tenantId, tenantId)).limit(limit));
 }
 
 export async function insertAuc(tx: Writer, row: typeof projectAuc.$inferInsert) {
@@ -51,7 +55,9 @@ export async function insertAuc(tx: Writer, row: typeof projectAuc.$inferInsert)
 }
 
 export async function findAucById(id: string, tenantId: string) {
-  const rows = await db.select().from(projectAuc).where(and(eq(projectAuc.id, id), eq(projectAuc.tenantId, tenantId))).limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(projectAuc).where(and(eq(projectAuc.id, id), eq(projectAuc.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -64,7 +70,9 @@ export async function insertLease(tx: Writer, row: typeof assetLeases.$inferInse
 }
 
 export async function listLeases(tenantId: string, limit = 500) {
-  return db.select().from(assetLeases).where(eq(assetLeases.tenantId, tenantId)).limit(limit);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(assetLeases).where(eq(assetLeases.tenantId, tenantId)).limit(limit));
 }
 
 export async function insertImpairment(tx: Writer, row: typeof assetImpairments.$inferInsert) {
@@ -72,11 +80,15 @@ export async function insertImpairment(tx: Writer, row: typeof assetImpairments.
 }
 
 export async function listImpairments(tenantId: string, assetId: string, limit = 500) {
-  return db.select().from(assetImpairments).where(and(eq(assetImpairments.tenantId, tenantId), eq(assetImpairments.assetId, assetId))).limit(limit);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(assetImpairments).where(and(eq(assetImpairments.tenantId, tenantId), eq(assetImpairments.assetId, assetId))).limit(limit));
 }
 
 export async function listLocations(tenantId: string, limit = 500) {
-  return db.select().from(functionalLocations).where(eq(functionalLocations.tenantId, tenantId)).limit(limit);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(functionalLocations).where(eq(functionalLocations.tenantId, tenantId)).limit(limit));
 }
 
 export async function insertLocation(tx: Writer, row: typeof functionalLocations.$inferInsert) {
@@ -92,7 +104,9 @@ export async function insertPendingDisposal(tx: Writer, row: typeof pendingDispo
 }
 
 export async function findPendingDisposal(id: string, tenantId: string) {
-  const rows = await db.select().from(pendingDisposals).where(and(eq(pendingDisposals.id, id), eq(pendingDisposals.tenantId, tenantId))).limit(1);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(pendingDisposals).where(and(eq(pendingDisposals.id, id), eq(pendingDisposals.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 

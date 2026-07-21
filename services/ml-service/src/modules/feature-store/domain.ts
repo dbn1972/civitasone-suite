@@ -97,23 +97,26 @@ export async function computeAndCache(
     computedAt: now,
   };
 
-  // Upsert into PostgreSQL (durable store)
-  await db
-    .insert(mlFeatureVectors)
-    .values({
-      tenantId,
-      domain,
-      entityId,
-      features,
-      computedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [mlFeatureVectors.tenantId, mlFeatureVectors.domain, mlFeatureVectors.entityId],
-      set: {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this write — a bare db.insert() runs with no RLS GUC set.
+  await db.transaction((tx) =>
+    tx
+      .insert(mlFeatureVectors)
+      .values({
+        tenantId,
+        domain,
+        entityId,
         features,
         computedAt: now,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: [mlFeatureVectors.tenantId, mlFeatureVectors.domain, mlFeatureVectors.entityId],
+        set: {
+          features,
+          computedAt: now,
+        },
+      }),
+  );
 
   // Prime cache with fresh vector
   const key = featureCacheKey(tenantId, domain, entityId);
@@ -135,16 +138,20 @@ export async function batchRefresh(
   tenantId: string,
   domain: FeatureDomain,
 ): Promise<number> {
-  // Get all entities that have feature vectors for this tenant+domain
-  const existing = await db
-    .select({ entityId: mlFeatureVectors.entityId })
-    .from(mlFeatureVectors)
-    .where(
-      and(
-        eq(mlFeatureVectors.tenantId, tenantId),
-        eq(mlFeatureVectors.domain, domain),
+  // Get all entities that have feature vectors for this tenant+domain.
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const existing = await db.transaction((tx) =>
+    tx
+      .select({ entityId: mlFeatureVectors.entityId })
+      .from(mlFeatureVectors)
+      .where(
+        and(
+          eq(mlFeatureVectors.tenantId, tenantId),
+          eq(mlFeatureVectors.domain, domain),
+        ),
       ),
-    );
+  );
 
   let refreshed = 0;
   for (const row of existing) {
@@ -170,17 +177,21 @@ async function loadFromPostgres(
   domain: FeatureDomain,
   entityId: string,
 ): Promise<FeatureVector | null> {
-  const rows = await db
-    .select()
-    .from(mlFeatureVectors)
-    .where(
-      and(
-        eq(mlFeatureVectors.tenantId, tenantId),
-        eq(mlFeatureVectors.domain, domain),
-        eq(mlFeatureVectors.entityId, entityId),
-      ),
-    )
-    .limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) =>
+    tx
+      .select()
+      .from(mlFeatureVectors)
+      .where(
+        and(
+          eq(mlFeatureVectors.tenantId, tenantId),
+          eq(mlFeatureVectors.domain, domain),
+          eq(mlFeatureVectors.entityId, entityId),
+        ),
+      )
+      .limit(1),
+  );
 
   if (rows.length === 0) return null;
 

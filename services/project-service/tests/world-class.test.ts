@@ -14,7 +14,8 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { projectProjects } from "../src/modules/project/schema.js";
@@ -37,7 +38,10 @@ function token(opts: { sub: string; tid: string; roles?: string[] }): string {
 }
 
 async function seedProject(id: string, tenantId: string): Promise<void> {
-  await db
+  // Wrapped in runWithTenant + db.transaction() so wrapWithTenantGuc injects
+  // app.tenant_id before this write — a bare db.insert() runs with no RLS
+  // GUC set and violates the tenant_isolation policy under FORCE RLS.
+  await runWithTenant(tenantId, () => db.transaction((tx) => tx
     .insert(projectProjects)
     .values({
       id,
@@ -47,17 +51,22 @@ async function seedProject(id: string, tenantId: string): Promise<void> {
       createdBy: USER_1,
       updatedBy: USER_1,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()));
 }
 
 async function wipe(): Promise<void> {
+  // Wrapped in runWithTenant + db.transaction() so wrapWithTenantGuc injects
+  // app.tenant_id before these writes — bare sqlClient/db calls run with no
+  // RLS GUC set and are silently rejected/scoped to zero rows under FORCE RLS.
   for (const t of [TENANT_A, TENANT_B]) {
-    await sqlClient`DELETE FROM project.project_ra_bills WHERE tenant_id = ${t}`;
-    await sqlClient`DELETE FROM project.project_time_extensions WHERE tenant_id = ${t}`;
-    await sqlClient`DELETE FROM project.project_risks WHERE tenant_id = ${t}`;
-    await sqlClient`DELETE FROM project.project_evm WHERE tenant_id = ${t}`;
-    await sqlClient`DELETE FROM project.project_penalties WHERE tenant_id = ${t}`;
-    await db.delete(projectProjects).where(eq(projectProjects.tenantId, t));
+    await runWithTenant(t, () => db.transaction(async (tx) => {
+      await tx.execute(sql`DELETE FROM project.project_ra_bills WHERE tenant_id = ${t}`);
+      await tx.execute(sql`DELETE FROM project.project_time_extensions WHERE tenant_id = ${t}`);
+      await tx.execute(sql`DELETE FROM project.project_risks WHERE tenant_id = ${t}`);
+      await tx.execute(sql`DELETE FROM project.project_evm WHERE tenant_id = ${t}`);
+      await tx.execute(sql`DELETE FROM project.project_penalties WHERE tenant_id = ${t}`);
+      await tx.delete(projectProjects).where(eq(projectProjects.tenantId, t));
+    }));
   }
 }
 

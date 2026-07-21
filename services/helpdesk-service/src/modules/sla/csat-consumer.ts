@@ -38,10 +38,14 @@ export async function scheduleCsatSurvey(
   ticketId: string,
   tenantId: string,
 ): Promise<boolean> {
-  // Check if ticket is resolved
-  const [ticket] = await db.select().from(tickets).where(
-    and(eq(tickets.id, ticketId), eq(tickets.tenantId, tenantId)),
-  ).limit(1);
+  // Check if ticket is resolved.
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [ticket] = await db.transaction((tx) =>
+    tx.select().from(tickets).where(
+      and(eq(tickets.id, ticketId), eq(tickets.tenantId, tenantId)),
+    ).limit(1),
+  );
 
   if (!ticket) {
     log.warn({ ticketId, tenantId }, "csat: ticket not found");
@@ -53,10 +57,14 @@ export async function scheduleCsatSurvey(
     return false;
   }
 
-  // Check if CSAT already submitted (idempotency)
-  const [existing] = await db.select().from(csatResponses).where(
-    eq(csatResponses.ticketId, ticketId),
-  ).limit(1);
+  // Check if CSAT already submitted (idempotency).
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [existing] = await db.transaction((tx) =>
+    tx.select().from(csatResponses).where(
+      eq(csatResponses.ticketId, ticketId),
+    ).limit(1),
+  );
 
   if (existing) {
     log.debug({ ticketId }, "csat: already submitted, skipping");

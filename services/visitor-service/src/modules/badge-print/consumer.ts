@@ -451,11 +451,15 @@ export function registerBadgePrintConsumers(queue: Queue): void {
     try {
       const redis = getRedis();
       if (redis) {
-        const rows = await db
-          .select({ priority: printJobs.priority })
-          .from(printJobs)
-          .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)))
-          .limit(1);
+        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+        // before this read — a bare db.select() runs with no RLS GUC set.
+        const rows = await db.transaction((tx) =>
+          tx
+            .select({ priority: printJobs.priority })
+            .from(printJobs)
+            .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)))
+            .limit(1),
+        );
         const job = rows[0];
         if (job) {
           const score = computeJobScore(job.priority as "standard" | "high", new Date());
@@ -534,11 +538,15 @@ export function registerBadgePrintConsumers(queue: Queue): void {
       const redis = getRedis();
       if (redis) {
         // Remove from old device's queue (we need the old device id)
-        const rows = await db
-          .select({ priority: printJobs.priority, deviceId: printJobs.deviceId })
-          .from(printJobs)
-          .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)))
-          .limit(1);
+        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+        // before this read — a bare db.select() runs with no RLS GUC set.
+        const rows = await db.transaction((tx) =>
+          tx
+            .select({ priority: printJobs.priority, deviceId: printJobs.deviceId })
+            .from(printJobs)
+            .where(and(eq(printJobs.id, p.jobId), eq(printJobs.tenantId, msg.tenantId)))
+            .limit(1),
+        );
         const job = rows[0];
         if (job) {
           // The job is already updated with new deviceId, so we ZADD to the new device

@@ -1,5 +1,5 @@
 import { eq, and, SQL } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { assetCategories, assetAssets, type CategoryInsert, type AssetInsert, type AssetRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -7,9 +7,11 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 // P0-1: every by-id read/update MUST be tenant-scoped. Filtering on id alone
 // leaks/mutates another tenant's asset. All call sites pass the request tenant.
 export async function findAssetById(id: string, tenantId: string): Promise<AssetRow | null> {
-  const rows = await db.select().from(assetAssets)
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) => tx.select().from(assetAssets)
     .where(and(eq(assetAssets.id, id), eq(assetAssets.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -18,10 +20,12 @@ export async function findAssetsByTenant(tenantId: string, opts?: { category?: s
   if (opts?.category) conditions.push(eq(assetAssets.categoryId, opts.category));
   if (opts?.status)   conditions.push(eq(assetAssets.status, opts.status));
   if (opts?.type)     conditions.push(eq(assetAssets.assetType, opts.type));
-  return db.select().from(assetAssets)
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) => tx.select().from(assetAssets)
     .where(and(...conditions))
     .limit(opts?.limit ?? 50)
-    .offset(opts?.offset ?? 0);
+    .offset(opts?.offset ?? 0));
 }
 
 export async function insertCategory(tx: Writer, row: CategoryInsert): Promise<void> {

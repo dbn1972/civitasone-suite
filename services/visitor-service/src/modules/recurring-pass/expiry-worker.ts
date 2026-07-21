@@ -95,7 +95,17 @@ export async function processRecurringPassExpiryCycle(
   const expiryWindowStart = now;
   const expiryWindowEnd = new Date(now.getTime() + daysBeforeExpiry * 24 * 60 * 60_000);
 
-  // Find active recurring passes expiring within the notification window
+  // Find active recurring passes expiring within the notification window.
+  // Cross-tenant sweep by design (Requirement 12.5 scans ALL tenants for
+  // passes expiring within the window) — intentionally has NO tenant filter.
+  // The caller (worker.ts) passes the BYPASSRLS `scannerDb` pool here,
+  // mirroring the documented cross-tenant scan pattern in no-show-worker.ts /
+  // auto-reject-worker.ts / health-checker.ts. No per-tenant DB follow-up
+  // happens in this cycle (only queue.publish), so no runWithTenant wrap
+  // is needed here. INTENTIONAL RLS-GUC EXCEPTION: a platform-wide sweep has
+  // no single tenant to inject via db.transaction()/wrapWithTenantGuc — same
+  // precedent as `dueTimers()` in services/workflow-service/src/modules/
+  // tasks/repo.ts. Do NOT wrap this call in db.transaction().
   const expiringPasses = await db
     .select({
       id: recurringPasses.id,

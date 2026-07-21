@@ -8,6 +8,7 @@
  */
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
@@ -105,6 +106,12 @@ export function shouldTrigger(now: Date, schedule: { dayOfWeek: number; hour: nu
  * Retrieves active tenants that have ML data. In production this would query
  * the tenant service or a local materialized view of active tenants.
  * For now, we query distinct tenant_ids from ml_feature_vectors or ml_training_runs.
+ *
+ * NOTE: this intentionally scans across ALL tenants (no tenant_id filter) —
+ * it is a background sweeper that enumerates which tenants have ML data so
+ * the orchestration loop below can then process each tenant individually
+ * (with its own tenant context established via runWithTenant). This is the
+ * documented cross-tenant sweeper exception; it is not a tenant-scoped read.
  */
 export async function getActiveTenants(): Promise<string[]> {
   const result = await db.execute(
@@ -147,6 +154,12 @@ export async function checkDataThreshold(
  * and registers the candidate model if metrics pass.
  *
  * Enforces a timeout of maxTrainingDurationMs (30 min default).
+ *
+ * This is a cron-triggered background job (no request/consumer context), so
+ * we establish the tenant AsyncLocalStorage context explicitly via
+ * runWithTenant — combined with wrapping each bare db call below in
+ * db.transaction(), this ensures wrapWithTenantGuc injects app.tenant_id
+ * before every read/write here.
  */
 export async function trainTenantDomain(
   tenantId: string,
@@ -166,75 +179,87 @@ export async function trainTenantDomain(
   const correlationId = randomUUID();
 
   try {
-    // Insert training run record as "running"
-    await db.insert(mlTrainingRuns).values({
-      id: trainingRunId,
-      tenantId,
-      domain,
-      status: "running",
-      startedAt: new Date(),
-      recordCount,
+    return await runWithTenant(tenantId, async () => {
+      // Insert training run record as "running"
+      await db.transaction((tx) =>
+        tx.insert(mlTrainingRuns).values({
+          id: trainingRunId,
+          tenantId,
+          domain,
+          status: "running",
+          startedAt: new Date(),
+          recordCount,
+        }),
+      );
+
+      // Execute training with timeout
+      const result = await Promise.race([
+        executeTraining(tenantId, domain, recordCount, config),
+        createTimeout(config.maxTrainingDurationMs),
+      ]);
+
+      const durationMs = Date.now() - startTime;
+
+      if (result === "timeout") {
+        // Mark as failed due to timeout
+        await db.transaction((tx) =>
+          tx
+            .update(mlTrainingRuns)
+            .set({
+              status: "failed",
+              completedAt: new Date(),
+              errorMessage: `Training exceeded timeout of ${config.maxTrainingDurationMs}ms`,
+            })
+            .where(eq(mlTrainingRuns.id, trainingRunId)),
+        );
+
+        log.error({ tenantId, domain, durationMs }, "training timed out");
+
+        // Emit training completed event (failed)
+        await emitTrainingCompletedEvent(tenantId, domain, trainingRunId, null, "failed", recordCount, null, durationMs, correlationId);
+
+        return { status: "failed" as const, durationMs, metrics: null };
+      }
+
+      // Training succeeded — update run record
+      await db.transaction((tx) =>
+        tx
+          .update(mlTrainingRuns)
+          .set({
+            status: "completed",
+            completedAt: new Date(),
+            metrics: result.metrics,
+            modelId: result.modelId,
+          })
+          .where(eq(mlTrainingRuns.id, trainingRunId)),
+      );
+
+      log.info(
+        { tenantId, domain, durationMs, recordCount, metrics: result.metrics },
+        "training completed successfully"
+      );
+
+      // Emit training completed event (success)
+      await emitTrainingCompletedEvent(tenantId, domain, trainingRunId, result.modelId, "completed", recordCount, result.metrics, durationMs, correlationId);
+
+      return { status: "completed" as const, durationMs, metrics: result.metrics };
     });
-
-    // Execute training with timeout
-    const result = await Promise.race([
-      executeTraining(tenantId, domain, recordCount, config),
-      createTimeout(config.maxTrainingDurationMs),
-    ]);
-
-    const durationMs = Date.now() - startTime;
-
-    if (result === "timeout") {
-      // Mark as failed due to timeout
-      await db
-        .update(mlTrainingRuns)
-        .set({
-          status: "failed",
-          completedAt: new Date(),
-          errorMessage: `Training exceeded timeout of ${config.maxTrainingDurationMs}ms`,
-        })
-        .where(eq(mlTrainingRuns.id, trainingRunId));
-
-      log.error({ tenantId, domain, durationMs }, "training timed out");
-
-      // Emit training completed event (failed)
-      await emitTrainingCompletedEvent(tenantId, domain, trainingRunId, null, "failed", recordCount, null, durationMs, correlationId);
-
-      return { status: "failed", durationMs, metrics: null };
-    }
-
-    // Training succeeded — update run record
-    await db
-      .update(mlTrainingRuns)
-      .set({
-        status: "completed",
-        completedAt: new Date(),
-        metrics: result.metrics,
-        modelId: result.modelId,
-      })
-      .where(eq(mlTrainingRuns.id, trainingRunId));
-
-    log.info(
-      { tenantId, domain, durationMs, recordCount, metrics: result.metrics },
-      "training completed successfully"
-    );
-
-    // Emit training completed event (success)
-    await emitTrainingCompletedEvent(tenantId, domain, trainingRunId, result.modelId, "completed", recordCount, result.metrics, durationMs, correlationId);
-
-    return { status: "completed", durationMs, metrics: result.metrics };
   } catch (err: unknown) {
     const durationMs = Date.now() - startTime;
     const errorMessage = err instanceof Error ? err.message : "Unknown training error";
 
-    await db
-      .update(mlTrainingRuns)
-      .set({
-        status: "failed",
-        completedAt: new Date(),
-        errorMessage,
-      })
-      .where(eq(mlTrainingRuns.id, trainingRunId));
+    await runWithTenant(tenantId, () =>
+      db.transaction((tx) =>
+        tx
+          .update(mlTrainingRuns)
+          .set({
+            status: "failed",
+            completedAt: new Date(),
+            errorMessage,
+          })
+          .where(eq(mlTrainingRuns.id, trainingRunId)),
+      ),
+    );
 
     log.error({ tenantId, domain, durationMs, err: errorMessage }, "training failed");
 

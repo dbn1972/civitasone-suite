@@ -9,7 +9,7 @@
  * Requirements validated: 6.1, 6.4, 6.6
  */
 import { and, eq, count, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import {
   scanSessions,
@@ -34,11 +34,15 @@ export async function getScanSession(tenantId: string, sessionId: string): Promi
   return cache.getOrLoad<ScanSessionRow>(
     cache.makeKey(tenantId, RESOURCE_SCAN_SESSION, sessionId),
     async () => {
-      const rows = await db
-        .select()
-        .from(scanSessions)
-        .where(and(eq(scanSessions.id, sessionId), eq(scanSessions.tenantId, tenantId)))
-        .limit(1);
+      // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+      // read — a bare db.select() runs with no RLS GUC set.
+      const rows = await scopedRead((tx) =>
+        tx
+          .select()
+          .from(scanSessions)
+          .where(and(eq(scanSessions.id, sessionId), eq(scanSessions.tenantId, tenantId)))
+          .limit(1),
+      );
       return rows[0] ?? null;
     },
     SESSION_TTL,
@@ -53,11 +57,15 @@ export async function getOcrResult(tenantId: string, sessionId: string): Promise
   return cache.getOrLoad<OcrResultRow>(
     cache.makeKey(tenantId, RESOURCE_OCR_RESULT, sessionId),
     async () => {
-      const rows = await db
-        .select()
-        .from(ocrResults)
-        .where(and(eq(ocrResults.scanSessionId, sessionId), eq(ocrResults.tenantId, tenantId)))
-        .limit(1);
+      // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+      // read — a bare db.select() runs with no RLS GUC set.
+      const rows = await scopedRead((tx) =>
+        tx
+          .select()
+          .from(ocrResults)
+          .where(and(eq(ocrResults.scanSessionId, sessionId), eq(ocrResults.tenantId, tenantId)))
+          .limit(1),
+      );
       return rows[0] ?? null;
     },
     SESSION_TTL,
@@ -91,19 +99,23 @@ export async function listScans(
   const where = and(...conditions);
   const offset = (page - 1) * pageSize;
 
-  const [data, totalResult] = await Promise.all([
-    db
-      .select()
-      .from(scanSessions)
-      .where(where)
-      .limit(pageSize)
-      .offset(offset)
-      .orderBy(desc(scanSessions.createdAt)),
-    db
-      .select({ total: count() })
-      .from(scanSessions)
-      .where(where),
-  ]);
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before these
+  // reads — a bare db.select() runs with no RLS GUC set.
+  const [data, totalResult] = await scopedRead((tx) =>
+    Promise.all([
+      tx
+        .select()
+        .from(scanSessions)
+        .where(where)
+        .limit(pageSize)
+        .offset(offset)
+        .orderBy(desc(scanSessions.createdAt)),
+      tx
+        .select({ total: count() })
+        .from(scanSessions)
+        .where(where),
+    ]),
+  );
 
   const total = totalResult[0]?.total ?? 0;
 

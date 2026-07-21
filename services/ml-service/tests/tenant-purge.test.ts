@@ -46,10 +46,14 @@ const mockDbDelete = vi.fn().mockReturnValue({ where: deleteWhereMock });
 const mockMarkProcessed = vi.fn().mockResolvedValue(true);
 
 // Mock shared/db — the real module connects to PostgreSQL
+// wrapWithTenantGuc injects app.tenant_id inside db.transaction() — the mock
+// invokes the callback with a tx exposing the same delete chain so
+// purgeTenantData's bare-write-turned-transactional-write still works.
 vi.mock("../src/shared/db.js", () => ({
   db: {
     delete: (...args: unknown[]) => mockDbDelete(...args),
-    transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
+    transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ delete: (...args: unknown[]) => mockDbDelete(...args) }),
   },
 }));
 
@@ -300,7 +304,7 @@ describe("tenant purge handler", () => {
 
       await handler(msg);
 
-      expect(mockMarkProcessed).toHaveBeenCalledWith({}, "msg-123");
+      expect(mockMarkProcessed).toHaveBeenCalledWith(expect.objectContaining({ delete: expect.any(Function) }), "msg-123");
     });
 
     it("consumer handler skips already-processed messages", async () => {

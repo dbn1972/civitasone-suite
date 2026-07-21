@@ -46,52 +46,62 @@ vi.mock("../src/shared/db.js", () => {
     return c;
   }
 
+  function select(fields?: Record<string, unknown>) {
+    // Count queries (have a "count" field)
+    if (fields && Object.keys(fields).some((k) => k === "count")) {
+      const countArr = Object.assign([{ count: mockState.countResult }], {
+        groupBy: () => mockState.groupByResult,
+      });
+      return { from: () => ({ where: () => countArr }) };
+    }
+    // Aggregate queries (evaluations) — detect by field names
+    if (fields && Object.keys(fields).length >= 3 &&
+        Object.keys(fields).some((k) => k === "total" || k === "avgConfidence")) {
+      // For groupBy queries (domain breakdown), where().groupBy() returns array
+      // For single aggregate queries, where() returns [result]
+      const result = Object.assign([mockState.aggregateResult], {
+        groupBy: () => mockState.groupByResult,
+      });
+      return { from: () => ({ where: () => result }) };
+    }
+    // Domain/count aggregate for health
+    if (fields && Object.keys(fields).some((k) => k === "domain") &&
+        Object.keys(fields).some((k) => k === "count")) {
+      return { from: () => ({ where: () => ({ groupBy: () => mockState.groupByResult }) }) };
+    }
+    // Regular select — return queryResult
+    return chain(mockState.queryResult);
+  }
+
+  function insert() {
+    return {
+      values: () => ({
+        returning: () => [mockState.insertResult ?? { id: "new-id" }],
+      }),
+    };
+  }
+
+  function update() {
+    return {
+      set: () => ({
+        where: () => ({
+          returning: () => [mockState.updateResult ?? { id: "updated" }],
+        }),
+      }),
+    };
+  }
+
   return {
     db: {
-      select: (fields?: Record<string, unknown>) => {
-        // Count queries (have a "count" field)
-        if (fields && Object.keys(fields).some((k) => k === "count")) {
-          const countArr = Object.assign([{ count: mockState.countResult }], {
-            groupBy: () => mockState.groupByResult,
-          });
-          return { from: () => ({ where: () => countArr }) };
-        }
-        // Aggregate queries (evaluations) — detect by field names
-        if (fields && Object.keys(fields).length >= 3 &&
-            Object.keys(fields).some((k) => k === "total" || k === "avgConfidence")) {
-          // For groupBy queries (domain breakdown), where().groupBy() returns array
-          // For single aggregate queries, where() returns [result]
-          const result = Object.assign([mockState.aggregateResult], {
-            groupBy: () => mockState.groupByResult,
-          });
-          return { from: () => ({ where: () => result }) };
-        }
-        // Domain/count aggregate for health
-        if (fields && Object.keys(fields).some((k) => k === "domain") &&
-            Object.keys(fields).some((k) => k === "count")) {
-          return { from: () => ({ where: () => ({ groupBy: () => mockState.groupByResult }) }) };
-        }
-        // Regular select — return queryResult
-        return chain(mockState.queryResult);
-      },
-      insert: () => ({
-        values: () => ({
-          returning: () => [mockState.insertResult ?? { id: "new-id" }],
-        }),
-      }),
-      update: () => ({
-        set: () => ({
-          where: () => ({
-            returning: () => [mockState.updateResult ?? { id: "updated" }],
-          }),
-        }),
-      }),
+      select,
+      insert,
+      update,
+      // wrapWithTenantGuc injects app.tenant_id inside db.transaction() — the
+      // mock invokes the callback with a tx exposing the same select/insert/
+      // update chains as bare db so route-level transactional reads/writes
+      // continue to resolve against mockState.
       transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          update: () => ({ set: () => ({ where: () => ({ returning: () => [{}] }) }) }),
-          insert: () => ({ values: () => ({ returning: () => [{}] }) }),
-          select: () => ({ from: () => ({ where: () => ({ orderBy: () => ({ limit: () => [] }) }) }) }),
-        };
+        const tx = { select, insert, update };
         return fn(tx);
       },
     },

@@ -12,10 +12,12 @@ export async function insertPhysicalProgress(tx: Writer, row: PhysicalProgressIn
 }
 
 export async function listPhysicalProgressByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectPhysicalProgress.$inferSelect)[]> {
-  return db.select().from(projectPhysicalProgress)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectPhysicalProgress)
     .where(and(eq(projectPhysicalProgress.projectId, projectId), eq(projectPhysicalProgress.tenantId, tenantId)))
     .orderBy(desc(projectPhysicalProgress.periodDate))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function insertFinancialProgress(tx: Writer, row: typeof projectFinancialProgress.$inferInsert): Promise<void> {
@@ -23,20 +25,24 @@ export async function insertFinancialProgress(tx: Writer, row: typeof projectFin
 }
 
 export async function listFinancialProgressByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectFinancialProgress.$inferSelect)[]> {
-  return db.select().from(projectFinancialProgress)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectFinancialProgress)
     .where(and(eq(projectFinancialProgress.projectId, projectId), eq(projectFinancialProgress.tenantId, tenantId)))
     .orderBy(desc(projectFinancialProgress.periodDate))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findDprByProjectAndDate(projectId: string, dprDate: string, tenantId: string): Promise<(typeof projectDprs.$inferSelect) | null> {
-  const rows = await db.select().from(projectDprs)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(projectDprs)
     .where(and(
       eq(projectDprs.projectId, projectId),
       eq(projectDprs.dprDate, dprDate),
       eq(projectDprs.tenantId, tenantId),
     ))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
@@ -45,10 +51,12 @@ export async function insertDpr(tx: Writer, row: DprInsert): Promise<void> {
 }
 
 export async function listDprsByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectDprs.$inferSelect)[]> {
-  return db.select().from(projectDprs)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectDprs)
     .where(and(eq(projectDprs.projectId, projectId), eq(projectDprs.tenantId, tenantId)))
     .orderBy(desc(projectDprs.dprDate))
-    .limit(limit);
+    .limit(limit));
 }
 
 // P0-1 aggregation helpers (run inside the recording tx).

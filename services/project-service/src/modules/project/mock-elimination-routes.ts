@@ -30,7 +30,9 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
       cache.makeKey(tenantId, "project", "escalations"),
       async () => {
         // Escalations are projects with status delayed/on_hold and flagged
-        const result = await db.select({
+        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+        // before this read — a bare db.select() runs with no RLS GUC set.
+        const result = await db.transaction((tx) => tx.select({
           id: projectProjects.id,
           projectCode: projectProjects.code,
           name: projectProjects.name,
@@ -42,7 +44,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
             sql`${projectProjects.status} IN ('delayed', 'on_hold', 'blocked')`,
           ))
           .orderBy(desc(projectProjects.createdAt))
-          .limit(200);
+          .limit(200));
         return result.map((r, i) => ({
           escalationId: `ESC-${String(i + 1).padStart(3, "0")}`,
           project: r.name,
@@ -68,7 +70,9 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
       cache.makeKey(tenantId, "project", "beneficiaries"),
       async () => {
         // Beneficiaries are derived from projects with citizen-facing schemes
-        const result = await db.select({
+        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+        // before this read — a bare db.select() runs with no RLS GUC set.
+        const result = await db.transaction((tx) => tx.select({
           id: projectProjects.id,
           name: projectProjects.name,
           code: projectProjects.code,
@@ -76,7 +80,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
         }).from(projectProjects)
           .where(eq(projectProjects.tenantId, tenantId))
           .orderBy(desc(projectProjects.createdAt))
-          .limit(200);
+          .limit(200));
         return result.map((r, i) => ({
           id: `BEN-${String(i + 1).padStart(3, "0")}`,
           name: `Beneficiary ${i + 1}`,
@@ -101,35 +105,39 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
     const rows = await cache.getOrLoad(
       cache.makeKey(tenantId, "project", "dprs"),
       async () => {
-        const result = await db.select({
-          id: projectDprs.id,
-          dprNo: projectDprs.dprNo,
-          projectId: projectDprs.projectId,
-          dprDate: projectDprs.dprDate,
-          status: projectDprs.status,
-          submittedBy: projectDprs.submittedBy,
-        }).from(projectDprs)
-          .where(eq(projectDprs.tenantId, tenantId))
-          .orderBy(desc(projectDprs.dprDate))
-          .limit(200);
+        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+        // before these reads — bare db.select() calls run with no RLS GUC set.
+        return db.transaction(async (tx) => {
+          const result = await tx.select({
+            id: projectDprs.id,
+            dprNo: projectDprs.dprNo,
+            projectId: projectDprs.projectId,
+            dprDate: projectDprs.dprDate,
+            status: projectDprs.status,
+            submittedBy: projectDprs.submittedBy,
+          }).from(projectDprs)
+            .where(eq(projectDprs.tenantId, tenantId))
+            .orderBy(desc(projectDprs.dprDate))
+            .limit(200);
 
-        const out = [];
-        for (const r of result) {
-          const proj = await db.select({ name: projectProjects.name })
-            .from(projectProjects)
-            .where(and(eq(projectProjects.id, r.projectId), eq(projectProjects.tenantId, tenantId)))
-            .limit(1);
-          out.push({
-            dprNo: r.dprNo,
-            projectTitle: proj[0]?.name ?? "Unknown Project",
-            submittedBy: r.submittedBy ?? "—",
-            submittedDate: r.dprDate?.toString() ?? "—",
-            estimatedCost: "—",
-            status: r.status,
-            reviewingAuthority: "PMU",
-          });
-        }
-        return out;
+          const out = [];
+          for (const r of result) {
+            const proj = await tx.select({ name: projectProjects.name })
+              .from(projectProjects)
+              .where(and(eq(projectProjects.id, r.projectId), eq(projectProjects.tenantId, tenantId)))
+              .limit(1);
+            out.push({
+              dprNo: r.dprNo,
+              projectTitle: proj[0]?.name ?? "Unknown Project",
+              submittedBy: r.submittedBy ?? "—",
+              submittedDate: r.dprDate?.toString() ?? "—",
+              estimatedCost: "—",
+              status: r.status,
+              reviewingAuthority: "PMU",
+            });
+          }
+          return out;
+        });
       },
     );
 
@@ -145,7 +153,9 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
     const rows = await cache.getOrLoad(
       cache.makeKey(tenantId, "project", "wbs"),
       async () => {
-        const result = await db.select({
+        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+        // before this read — a bare db.select() runs with no RLS GUC set.
+        const result = await db.transaction((tx) => tx.select({
           id: projectTasks.id,
           name: projectTasks.name,
           status: projectTasks.status,
@@ -154,7 +164,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
         }).from(projectTasks)
           .where(eq(projectTasks.tenantId, tenantId))
           .orderBy(projectTasks.name)
-          .limit(500);
+          .limit(500));
         return result.map((r) => ({
           id: r.id,
           name: r.name,
@@ -176,7 +186,9 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
     const rows = await cache.getOrLoad(
       cache.makeKey(tenantId, "project", "delay-analysis"),
       async () => {
-        const result = await db.select({
+        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+        // before this read — a bare db.select() runs with no RLS GUC set.
+        const result = await db.transaction((tx) => tx.select({
           id: projectProjects.id,
           name: projectProjects.name,
           status: projectProjects.status,
@@ -185,7 +197,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
         }).from(projectProjects)
           .where(eq(projectProjects.tenantId, tenantId))
           .orderBy(desc(projectProjects.createdAt))
-          .limit(200);
+          .limit(200));
         return result.map((r) => ({
           project: r.name,
           originalDeadline: r.endDate?.toString() ?? "—",

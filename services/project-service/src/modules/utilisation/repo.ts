@@ -13,7 +13,9 @@ export async function insertUcItems(tx: Writer, rows: UcItemInsert[]): Promise<v
 }
 
 export async function listUcStatementsByScheme(schemeId: string, tenantId: string, limit = 500): Promise<(typeof projectUcStatements.$inferSelect)[]> {
-  return db.select().from(projectUcStatements)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectUcStatements)
     .where(and(eq(projectUcStatements.schemeId, schemeId), eq(projectUcStatements.tenantId, tenantId)))
-    .limit(limit);
+    .limit(limit));
 }

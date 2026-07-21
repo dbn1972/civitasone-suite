@@ -188,17 +188,21 @@ async function resolveExperiment(
   experimentId?: string,
 ): Promise<{ useChallenger: boolean; experimentId: string | null }> {
   try {
-    const experiments = await db
-      .select()
-      .from(mlExperiments)
-      .where(
-        and(
-          eq(mlExperiments.tenantId, tenantId),
-          eq(mlExperiments.domain, domain),
-          eq(mlExperiments.status, "active"),
-        ),
-      )
-      .limit(1);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before this read — a bare db.select() runs with no RLS GUC set.
+    const experiments = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(mlExperiments)
+        .where(
+          and(
+            eq(mlExperiments.tenantId, tenantId),
+            eq(mlExperiments.domain, domain),
+            eq(mlExperiments.status, "active"),
+          ),
+        )
+        .limit(1),
+    );
 
     if (experiments.length === 0) {
       return { useChallenger: false, experimentId: null };

@@ -15,7 +15,7 @@ import { eq, and, inArray } from "drizzle-orm";
 const ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 const RESOURCE = "role_feature_grant";
 
-function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
+function safeParse<O>(schema: z.ZodType<O, z.ZodTypeDef, unknown>, data: unknown): O {
   const result = schema.safeParse(data);
   if (!result.success) {
     const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");

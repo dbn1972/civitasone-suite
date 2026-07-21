@@ -85,7 +85,7 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
         message: "invalid request",
         correlationId,
         retryable: false,
-        fieldErrors: (err as ZodError).issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+        fieldErrors: (err as unknown as ZodError).issues.map((i) => ({ field: i.path.join("."), message: i.message })),
       });
     }
     if (err instanceof HttpError) {

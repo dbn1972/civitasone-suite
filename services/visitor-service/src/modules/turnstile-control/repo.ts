@@ -8,7 +8,7 @@
  */
 import { eq, and, desc, count } from "drizzle-orm";
 import { Redis } from "ioredis";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { passageEvents, deviceCommands } from "./schema.js";
 
@@ -49,11 +49,15 @@ export async function getPassageEvents(
   tenantId: string,
   passId: string,
 ): Promise<typeof passageEvents.$inferSelect[]> {
-  return db
-    .select()
-    .from(passageEvents)
-    .where(and(eq(passageEvents.tenantId, tenantId), eq(passageEvents.passId, passId)))
-    .orderBy(desc(passageEvents.eventTimestamp));
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) =>
+    tx
+      .select()
+      .from(passageEvents)
+      .where(and(eq(passageEvents.tenantId, tenantId), eq(passageEvents.passId, passId)))
+      .orderBy(desc(passageEvents.eventTimestamp)),
+  );
 }
 
 /**
@@ -72,11 +76,15 @@ export async function getDeviceCommands(
   if (status) {
     conditions.push(eq(deviceCommands.status, status));
   }
-  return db
-    .select()
-    .from(deviceCommands)
-    .where(and(...conditions))
-    .orderBy(desc(deviceCommands.createdAt));
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  return scopedRead((tx) =>
+    tx
+      .select()
+      .from(deviceCommands)
+      .where(and(...conditions))
+      .orderBy(desc(deviceCommands.createdAt)),
+  );
 }
 
 /**
@@ -98,13 +106,17 @@ export async function getAntiPassbackState(
     if (cached) return cached;
   }
 
-  // Fallback: query DB for most recent passage event
-  const rows = await db
-    .select({ direction: passageEvents.direction })
-    .from(passageEvents)
-    .where(and(eq(passageEvents.tenantId, tenantId), eq(passageEvents.passId, passId)))
-    .orderBy(desc(passageEvents.eventTimestamp))
-    .limit(1);
+  // Fallback: query DB for most recent passage event.
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const rows = await scopedRead((tx) =>
+    tx
+      .select({ direction: passageEvents.direction })
+      .from(passageEvents)
+      .where(and(eq(passageEvents.tenantId, tenantId), eq(passageEvents.passId, passId)))
+      .orderBy(desc(passageEvents.eventTimestamp))
+      .limit(1),
+  );
 
   return rows[0]?.direction ?? null;
 }
@@ -160,10 +172,14 @@ export async function updateCommandStatus(
     updateFields.acknowledgedAt = timestamp;
   }
 
-  const result = await db
-    .update(deviceCommands)
-    .set(updateFields)
-    .where(and(eq(deviceCommands.id, commandId), eq(deviceCommands.tenantId, tenantId)));
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this write — a bare db.update() runs with no RLS GUC set.
+  await db.transaction((tx) =>
+    tx
+      .update(deviceCommands)
+      .set(updateFields)
+      .where(and(eq(deviceCommands.id, commandId), eq(deviceCommands.tenantId, tenantId))),
+  );
 
   return true;
 }
@@ -176,16 +192,20 @@ export async function getCommandCountForDevice(
   tenantId: string,
   deviceId: string,
 ): Promise<number> {
-  const result = await db
-    .select({ total: count() })
-    .from(deviceCommands)
-    .where(
-      and(
-        eq(deviceCommands.tenantId, tenantId),
-        eq(deviceCommands.deviceId, deviceId),
-        eq(deviceCommands.status, "queued"),
+  // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
+  // read — a bare db.select() runs with no RLS GUC set.
+  const result = await scopedRead((tx) =>
+    tx
+      .select({ total: count() })
+      .from(deviceCommands)
+      .where(
+        and(
+          eq(deviceCommands.tenantId, tenantId),
+          eq(deviceCommands.deviceId, deviceId),
+          eq(deviceCommands.status, "queued"),
+        ),
       ),
-    );
+  );
   return result[0]?.total ?? 0;
 }
 

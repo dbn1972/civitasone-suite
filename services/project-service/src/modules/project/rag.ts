@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
@@ -72,15 +73,22 @@ export async function runRagTick(limit = 1000): Promise<{ scanned: number; flipp
 
     const nextStatus = delayed ? "delayed" : "active";
     if (project.rag !== rag || project.status !== nextStatus) {
-      await db.transaction(async (tx) => {
-        await repo.updateProjectRagStatusTx(tx, project.id, { rag, status: nextStatus });
-        // also flip any overdue, still-open milestones to 'delayed' so the detail view reflects slippage
-        for (const m of milestones) {
-          if (m.status !== "completed" && m.status !== "cancelled"
-            && m.plannedDate.toString() < today && m.status !== "delayed") {
-            await repo.updateMilestoneTx(tx, m.id, { status: "delayed" });
+      // RLS fix: listActiveProjects() polls across ALL tenants (intentional,
+      // see repo.ts), but this per-project write IS tenant-scoped and must run
+      // with that tenant's GUC set. db.transaction() only picks up
+      // app.tenant_id from AsyncLocalStorage (wrapWithTenantGuc), so establish
+      // the tenant context for this project via runWithTenant() first.
+      await runWithTenant(project.tenantId, async () => {
+        await db.transaction(async (tx) => {
+          await repo.updateProjectRagStatusTx(tx, project.id, { rag, status: nextStatus });
+          // also flip any overdue, still-open milestones to 'delayed' so the detail view reflects slippage
+          for (const m of milestones) {
+            if (m.status !== "completed" && m.status !== "cancelled"
+              && m.plannedDate.toString() < today && m.status !== "delayed") {
+              await repo.updateMilestoneTx(tx, m.id, { status: "delayed" });
+            }
           }
-        }
+        });
       });
       await cache.invalidate(cache.makeKey(project.tenantId, "project", project.id));
       flipped += 1;

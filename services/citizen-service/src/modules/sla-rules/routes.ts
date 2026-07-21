@@ -24,6 +24,8 @@ export async function slaRulesRoutes(app: FastifyInstance): Promise<void> {
       escalationHours: body.escalationHours,
       escalateTo: body.escalateTo,
       isActive: body.isActive,
+      createdBy: ctx.actorId,
+      updatedBy: ctx.actorId,
     });
     return reply.code(201).send({ data: record });
   });

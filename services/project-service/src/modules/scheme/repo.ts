@@ -10,8 +10,10 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findSchemeById(id: string, tenantId: string): Promise<SchemeRow | null> {
-  const rows = await db.select().from(projectSchemes)
-    .where(and(eq(projectSchemes.id, id), eq(projectSchemes.tenantId, tenantId))).limit(1);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(projectSchemes)
+    .where(and(eq(projectSchemes.id, id), eq(projectSchemes.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
@@ -44,9 +46,11 @@ export async function insertComponent(tx: Writer, row: ComponentInsert): Promise
 }
 
 export async function listComponentsByScheme(schemeId: string, tenantId: string, limit = 500): Promise<ComponentRow[]> {
-  return db.select().from(projectSchemeComponents)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectSchemeComponents)
     .where(and(eq(projectSchemeComponents.schemeId, schemeId), eq(projectSchemeComponents.tenantId, tenantId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function updateComponentReleasedTx(tx: Writer, id: string, delta: bigint, currentVersion: number): Promise<void> {
@@ -114,23 +118,31 @@ export async function updateFundReleaseTx(tx: Writer, id: string, patch: Partial
 }
 
 export async function listFundReleasesByScheme(schemeId: string, tenantId: string, limit = 500): Promise<FundReleaseRow[]> {
-  return db.select().from(projectFundReleases)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectFundReleases)
     .where(and(eq(projectFundReleases.schemeId, schemeId), eq(projectFundReleases.tenantId, tenantId)))
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function listFundReleasesByTenant(tenantId: string, limit: number): Promise<FundReleaseRow[]> {
-  return db.select().from(projectFundReleases).where(eq(projectFundReleases.tenantId, tenantId)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectFundReleases).where(eq(projectFundReleases.tenantId, tenantId)).limit(limit));
 }
 
 export async function listSchemesByTenant(tenantId: string, limit: number): Promise<SchemeRow[]> {
-  return db.select().from(projectSchemes).where(eq(projectSchemes.tenantId, tenantId)).limit(limit);
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectSchemes).where(eq(projectSchemes.tenantId, tenantId)).limit(limit));
 }
 
 export async function countProjectsByScheme(schemeId: string, tenantId: string): Promise<number> {
-  const [row] = await db
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const [row] = await db.transaction((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(projectProjects)
-    .where(and(eq(projectProjects.schemeId, schemeId), eq(projectProjects.tenantId, tenantId)));
+    .where(and(eq(projectProjects.schemeId, schemeId), eq(projectProjects.tenantId, tenantId))));
   return row?.count ?? 0;
 }

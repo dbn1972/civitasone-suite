@@ -21,3 +21,17 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Run a READ inside a transaction so PostgreSQL RLS is enforced on the read
+ * path. Plain `db.select()` runs on a pooled connection with no `app.tenant_id`
+ * GUC set, so RLS fail-closed policies return ZERO rows. Wrapping in
+ * `db.transaction()` lets createTenantDb's wrapWithTenantGuc set the GUC from
+ * AsyncLocalStorage when a tenant context is active. When no context is active
+ * (cross-tenant sweepers), the transaction passes through without GUC — which
+ * still works with pooled connections that have direct table access.
+ */
+type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export function scopedRead<T>(fn: (tx: ScopedTx) => PromiseLike<T>): Promise<T> {
+  return db.transaction(fn as (tx: ScopedTx) => Promise<T>);
+}

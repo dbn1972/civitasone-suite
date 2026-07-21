@@ -13,20 +13,29 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-// Mock DB before importing orchestrator
-vi.mock("../src/shared/db.js", () => ({
-  db: {
+// Mock DB before importing orchestrator.
+// The orchestrator now wraps every bare db.insert/update call in
+// db.transaction((tx) => tx.<verb>(...)) per the RLS-GUC fix pattern, so the
+// mocked transaction() must hand the callback a tx object that supports
+// insert/update/select/delete chains. To keep existing test overrides of
+// db.insert/db.update working (tests simulate failures by re-mocking these),
+// the tx object simply delegates to the outer db.insert/db.update mocks.
+vi.mock("../src/shared/db.js", () => {
+  const db = {
     insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => [{}]) })) })),
     update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({})) })) })),
     execute: vi.fn(async () => []),
-    transaction: vi.fn(async (fn: (tx: unknown) => Promise<void>) => {
-      await fn({
-        insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => [{}]) })) })),
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+      return fn({
+        insert: (...args: unknown[]) => (db.insert as (...a: unknown[]) => unknown)(...args),
+        update: (...args: unknown[]) => (db.update as (...a: unknown[]) => unknown)(...args),
+        select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({})) })) })),
+        delete: vi.fn(() => ({ where: vi.fn(() => ({})) })),
       });
     }),
-  },
-  sqlClient: { end: vi.fn() },
-}));
+  };
+  return { db, sqlClient: { end: vi.fn() } };
+});
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), put: vi.fn(), invalidate: vi.fn() },
@@ -297,7 +306,10 @@ describe("runTrainingLoop", () => {
     }));
     (db.transaction as ReturnType<typeof vi.fn>).mockImplementation(async (fn: (tx: unknown) => Promise<void>) => {
       await fn({
-        insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => [{}]) })) })),
+        insert: (...args: unknown[]) => (db.insert as (...a: unknown[]) => unknown)(...args),
+        update: (...args: unknown[]) => (db.update as (...a: unknown[]) => unknown)(...args),
+        select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({})) })) })),
+        delete: vi.fn(() => ({ where: vi.fn(() => ({})) })),
       });
     });
   });

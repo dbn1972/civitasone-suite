@@ -12,6 +12,7 @@ export async function createVerification(ctx: RequestContext, body: {
     await repo.insertVerification(tx, {
       id, tenantId: ctx.tenantId, verificationDate: body.verificationDate,
       verifiedBy: ctx.actorId, status: "draft", notes: body.notes ?? null,
+      createdBy: ctx.actorId, updatedBy: ctx.actorId,
     });
   });
   return { id, status: "draft" };

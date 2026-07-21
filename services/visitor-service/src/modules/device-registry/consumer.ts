@@ -583,16 +583,20 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
     // Post-commit: invalidate cache for all affected devices (best-effort)
     // We re-query to get the device ids (not inside the tx to avoid holding connection)
     try {
-      const affected = await db
-        .select({ id: devices.id })
-        .from(devices)
-        .where(
-          and(
-            eq(devices.tenantId, msg.tenantId),
-            eq(devices.deviceType, p.deviceType),
-            eq(devices.locationId, p.locationId),
+      // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+      // before this read — a bare db.select() runs with no RLS GUC set.
+      const affected = await db.transaction((tx) =>
+        tx
+          .select({ id: devices.id })
+          .from(devices)
+          .where(
+            and(
+              eq(devices.tenantId, msg.tenantId),
+              eq(devices.deviceType, p.deviceType),
+              eq(devices.locationId, p.locationId),
+            ),
           ),
-        );
+      );
       for (const d of affected) {
         await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE, d.id));
       }

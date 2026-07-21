@@ -53,27 +53,34 @@ export async function evaluationRoutes(app: FastifyInstance): Promise<void> {
 
     const whereClause = and(...conditions);
 
-    // Aggregate metrics
-    const [metrics] = await db
-      .select({
-        total: sql<number>`count(*)::int`,
-        avgConfidence: sql<number>`coalesce(avg(${mlPredictions.confidence}::numeric), 0)::float`,
-        fallbackCount: sql<number>`count(*) filter (where ${mlPredictions.isFallback} = true)::int`,
-      })
-      .from(mlPredictions)
-      .where(whereClause);
+    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+    // before these reads — bare db.select() runs with no RLS GUC set and
+    // would silently return zero rows under FORCE ROW LEVEL SECURITY.
+    const { metrics, domainBreakdown } = await db.transaction(async (tx) => {
+      // Aggregate metrics
+      const [aggMetrics] = await tx
+        .select({
+          total: sql<number>`count(*)::int`,
+          avgConfidence: sql<number>`coalesce(avg(${mlPredictions.confidence}::numeric), 0)::float`,
+          fallbackCount: sql<number>`count(*) filter (where ${mlPredictions.isFallback} = true)::int`,
+        })
+        .from(mlPredictions)
+        .where(whereClause);
 
-    // Per-domain breakdown
-    const domainBreakdown = await db
-      .select({
-        domain: mlPredictions.domain,
-        total: sql<number>`count(*)::int`,
-        avgConfidence: sql<number>`coalesce(avg(${mlPredictions.confidence}::numeric), 0)::float`,
-        fallbackCount: sql<number>`count(*) filter (where ${mlPredictions.isFallback} = true)::int`,
-      })
-      .from(mlPredictions)
-      .where(whereClause)
-      .groupBy(mlPredictions.domain);
+      // Per-domain breakdown
+      const domains = await tx
+        .select({
+          domain: mlPredictions.domain,
+          total: sql<number>`count(*)::int`,
+          avgConfidence: sql<number>`coalesce(avg(${mlPredictions.confidence}::numeric), 0)::float`,
+          fallbackCount: sql<number>`count(*) filter (where ${mlPredictions.isFallback} = true)::int`,
+        })
+        .from(mlPredictions)
+        .where(whereClause)
+        .groupBy(mlPredictions.domain);
+
+      return { metrics: aggMetrics, domainBreakdown: domains };
+    });
 
     const total = metrics?.total ?? 0;
     const fallbackCount = metrics?.fallbackCount ?? 0;

@@ -28,22 +28,26 @@ export async function insertIntakeIdempotent(
 }
 
 export async function findById(tenantId: string, id: string): Promise<BoardDecisionIntakeRow | null> {
-  const rows = await db.select().from(projectBoardDecisionIntake)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  const rows = await db.transaction((tx) => tx.select().from(projectBoardDecisionIntake)
     .where(and(eq(projectBoardDecisionIntake.tenantId, tenantId), eq(projectBoardDecisionIntake.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function listByStatus(
   tenantId: string, status = "pending_review", limit = 200,
 ): Promise<BoardDecisionIntakeRow[]> {
-  return db.select().from(projectBoardDecisionIntake)
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(projectBoardDecisionIntake)
     .where(and(
       eq(projectBoardDecisionIntake.tenantId, tenantId),
       eq(projectBoardDecisionIntake.status, status),
     ))
     .orderBy(desc(projectBoardDecisionIntake.createdAt))
-    .limit(limit);
+    .limit(limit));
 }
 
 /**
