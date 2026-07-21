@@ -198,12 +198,13 @@ describe("Task 14.5: GET /v1/workflow/tasks/:id/forwards — integration", () =>
 
 describe("Task 14.8: POST /v1/workflow/decisions — create", () => {
   it("returns 201 with valid body", async () => {
+    const uniqueCode = `discount_rules_${Date.now()}`;
     const res = await app.inject({
       method: "POST",
       url: "/v1/workflow/decisions",
       headers: authHeader(["workflow_admin"]),
       payload: {
-        code: "discount_rules",
+        code: uniqueCode,
         name: "Discount Rules",
         hitPolicy: "first",
         inputs: [{ key: "amount", label: "Order Amount", type: "number" }],
@@ -212,7 +213,7 @@ describe("Task 14.8: POST /v1/workflow/decisions — create", () => {
       },
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json().data.code).toBe("discount_rules");
+    expect(res.json().data.code).toBe(uniqueCode);
     expect(res.json().data.id).toBeDefined();
   });
 

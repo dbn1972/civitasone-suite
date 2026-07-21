@@ -92,13 +92,13 @@ export async function expireSubscription(tx: Writer, id: string): Promise<void> 
 }
 
 export async function findExpiredSubscriptions(now: Date, batch: number): Promise<MessageSubscriptionRow[]> {
-  return db.select().from(messageSubscriptions)
+  return scopedRead((tx) => tx.select().from(messageSubscriptions)
     .where(and(
       eq(messageSubscriptions.status, "active"),
       isNotNull(messageSubscriptions.timeoutAt),
       lte(messageSubscriptions.timeoutAt, now),
     ))
-    .limit(batch);
+    .limit(batch));
 }
 
 export async function findSubscriptionsByInstance(instanceId: string): Promise<{

@@ -71,8 +71,10 @@ export async function deadLetter(
 
 /** Clear the attempt counter once a message processes successfully. */
 export async function clearAttempts(topic: string, messageId: string): Promise<void> {
-  await db.delete(consumerAttempts)
-    .where(and(eq(consumerAttempts.topic, topic), eq(consumerAttempts.messageId, messageId)));
+  await db.transaction(async (tx) => {
+    await tx.delete(consumerAttempts)
+      .where(and(eq(consumerAttempts.topic, topic), eq(consumerAttempts.messageId, messageId)));
+  });
 }
 
 /** Admin list of dead letters, tenant-scoped. */
@@ -95,9 +97,11 @@ export async function findDeadLetter(id: string, tenantId: string): Promise<Dead
 
 /** Mark a dead letter requeued (after re-publishing it). */
 export async function markRequeued(id: string, tenantId: string, actorId: string): Promise<boolean> {
-  const updated = await db.update(deadLetters)
-    .set({ status: "requeued", requeuedAt: new Date(), requeuedBy: actorId })
-    .where(and(eq(deadLetters.id, id), eq(deadLetters.tenantId, tenantId), eq(deadLetters.status, "dead")))
-    .returning({ id: deadLetters.id });
+  const updated = await db.transaction(async (tx) => {
+    return tx.update(deadLetters)
+      .set({ status: "requeued", requeuedAt: new Date(), requeuedBy: actorId })
+      .where(and(eq(deadLetters.id, id), eq(deadLetters.tenantId, tenantId), eq(deadLetters.status, "dead")))
+      .returning({ id: deadLetters.id });
+  });
   return updated.length > 0;
 }

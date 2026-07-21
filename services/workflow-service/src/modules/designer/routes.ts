@@ -90,17 +90,19 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await db.insert(designerDefinitions).values({
-      id,
-      tenantId: ctx.tenantId,
-      name: body.name,
-      description: body.description ?? null,
-      elements: body.elements as DesignerNode[],
-      edges: body.edges as DesignerEdge[],
-      status: "draft",
-      version: 1,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(designerDefinitions).values({
+        id,
+        tenantId: ctx.tenantId,
+        name: body.name,
+        description: body.description ?? null,
+        elements: body.elements as DesignerNode[],
+        edges: body.edges as DesignerEdge[],
+        status: "draft",
+        version: 1,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
     });
 
     // Publish command for audit trail
@@ -310,10 +312,12 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "designer definition not found");
     }
 
-    await db
-      .update(designerDefinitions)
-      .set({ status: "deleted", updatedAt: new Date(), updatedBy: ctx.actorId })
-      .where(eq(designerDefinitions.id, id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(designerDefinitions)
+        .set({ status: "deleted", updatedAt: new Date(), updatedBy: ctx.actorId })
+        .where(eq(designerDefinitions.id, id));
+    });
 
     return reply.code(204).send();
   });
@@ -389,16 +393,18 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Update the definition with imported elements
-    await db
-      .update(designerDefinitions)
-      .set({
-        elements: parsed.nodes,
-        edges: parsed.edges,
-        version: existing.version + 1,
-        updatedAt: new Date(),
-        updatedBy: ctx.actorId,
-      })
-      .where(eq(designerDefinitions.id, id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(designerDefinitions)
+        .set({
+          elements: parsed.nodes,
+          edges: parsed.edges,
+          version: existing.version + 1,
+          updatedAt: new Date(),
+          updatedBy: ctx.actorId,
+        })
+        .where(eq(designerDefinitions.id, id));
+    });
 
     return reply.code(200).send({
       data: {

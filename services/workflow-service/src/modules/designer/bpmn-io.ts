@@ -89,11 +89,10 @@ export function parseBpmnXml(xml: string): ParsedBpmnResult {
   }
 
   // Extract process metadata
-  const processMatch =
-    xml.match(/<(?:bpmn2?:)?process[^>]*id="([^"]*)"[^>]*(?:name="([^"]*)")?/) ??
-    xml.match(/<(?:bpmn2?:)?process[^>]*name="([^"]*)"[^>]*id="([^"]*)"/) ;
-  const processId = processMatch?.[1] ?? "Process_1";
-  const processName = processMatch?.[2] ?? processMatch?.[1] ?? "Imported Process";
+  const processIdMatch = xml.match(/<(?:bpmn2?:)?process[^>]*\bid="([^"]*)"/);
+  const processNameMatch = xml.match(/<(?:bpmn2?:)?process[^>]*\bname="([^"]*)"/);
+  const processId = processIdMatch?.[1] ?? "Process_1";
+  const processName = processNameMatch?.[1] ?? processId;
 
   // Extract DI positions (BPMNShape elements)
   const diPositions = extractDiPositions(xml);
@@ -146,8 +145,8 @@ export function parseBpmnXml(xml: string): ParsedBpmnResult {
       id,
       source,
       target,
-      label: label ?? undefined,
-      waypoints: waypoints.length > 0 ? waypoints : undefined,
+      ...(label != null ? { label } : {}),
+      ...(waypoints.length > 0 ? { waypoints } : {}),
     });
   }
 

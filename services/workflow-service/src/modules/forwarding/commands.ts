@@ -1,7 +1,7 @@
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID } from "node:crypto";
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import * as historyRepo from "../history/repo.js";
 import * as taskRepo from "../tasks/repo.js";
@@ -33,14 +33,16 @@ export async function forwardTask(
   if (!assigned) throw new HttpError(409, "CONFLICT", "task assignment failed (concurrent update)");
 
   // Record the forward
-  await db.insert(taskForwards).values({
-    tenantId: ctx.tenantId,
-    taskId,
-    instanceId: existing.instanceId,
-    fromUser,
-    toUser: toUserId,
-    remarks: remarks ?? null,
-    action: "forward",
+  await db.transaction(async (tx) => {
+    await tx.insert(taskForwards).values({
+      tenantId: ctx.tenantId,
+      taskId,
+      instanceId: existing.instanceId,
+      fromUser,
+      toUser: toUserId,
+      remarks: remarks ?? null,
+      action: "forward",
+    });
   });
 
   // Audit trail in transition_history
@@ -76,14 +78,14 @@ export async function recallTask(
   if (existing.status !== "pending") throw new HttpError(409, "CONFLICT", "task is not pending");
 
   // Verify actor is the from_user of the last forward or is an admin
-  const lastForward = await db.select().from(taskForwards)
+  const lastForward = await scopedRead((tx) => tx.select().from(taskForwards)
     .where(and(
       eq(taskForwards.taskId, taskId),
       eq(taskForwards.tenantId, ctx.tenantId),
       eq(taskForwards.action, "forward"),
     ))
     .orderBy(desc(taskForwards.createdAt))
-    .limit(1);
+    .limit(1));
 
   const isAdmin = ctx.roles.includes("workflow_admin") || ctx.roles.includes("super_admin");
 
@@ -101,14 +103,16 @@ export async function recallTask(
   if (!assigned) throw new HttpError(409, "CONFLICT", "task assignment failed (concurrent update)");
 
   // Record the recall
-  await db.insert(taskForwards).values({
-    tenantId: ctx.tenantId,
-    taskId,
-    instanceId: existing.instanceId,
-    fromUser: existing.assigneeId ?? ctx.actorId,
-    toUser: ctx.actorId,
-    remarks: remarks ?? null,
-    action: "recall",
+  await db.transaction(async (tx) => {
+    await tx.insert(taskForwards).values({
+      tenantId: ctx.tenantId,
+      taskId,
+      instanceId: existing.instanceId,
+      fromUser: existing.assigneeId ?? ctx.actorId,
+      toUser: ctx.actorId,
+      remarks: remarks ?? null,
+      action: "recall",
+    });
   });
 
   // Audit trail in transition_history
@@ -134,7 +138,7 @@ export async function recallTask(
  * List all forward/recall records for a task, ordered by created_at descending.
  */
 export async function listForwards(taskId: string, tenantId: string): Promise<TaskForwardRow[]> {
-  return db.select().from(taskForwards)
+  return scopedRead((tx) => tx.select().from(taskForwards)
     .where(and(eq(taskForwards.taskId, taskId), eq(taskForwards.tenantId, tenantId)))
-    .orderBy(desc(taskForwards.createdAt));
+    .orderBy(desc(taskForwards.createdAt)));
 }

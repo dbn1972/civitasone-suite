@@ -112,15 +112,17 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       active: z.boolean().default(true),
     }).parse(req.body);
 
-    await db.insert(roleMembers).values({
-      tenantId: ctx.tenantId,
-      roleRef: body.roleRef,
-      userId: body.userId,
-      ...(body.reportsTo !== undefined ? { reportsTo: body.reportsTo } : {}),
-      active: body.active,
-    }).onConflictDoUpdate({
-      target: [roleMembers.tenantId, roleMembers.roleRef, roleMembers.userId],
-      set: { reportsTo: body.reportsTo ?? null, active: body.active },
+    await db.transaction(async (tx) => {
+      await tx.insert(roleMembers).values({
+        tenantId: ctx.tenantId,
+        roleRef: body.roleRef,
+        userId: body.userId,
+        ...(body.reportsTo !== undefined ? { reportsTo: body.reportsTo } : {}),
+        active: body.active,
+      }).onConflictDoUpdate({
+        target: [roleMembers.tenantId, roleMembers.roleRef, roleMembers.userId],
+        set: { reportsTo: body.reportsTo ?? null, active: body.active },
+      });
     });
     return reply.code(201).send({ data: { roleRef: body.roleRef, userId: body.userId } });
   });

@@ -2,7 +2,7 @@ import { pino } from "pino";
 import { and, eq, lte, gt, isNotNull, or, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
@@ -38,22 +38,22 @@ export async function sweepOverdueTasks(
   cooldownMs = DEFAULT_COOLDOWN_MS,
 ): Promise<number> {
   const cooldownCutoff = new Date(now.getTime() - cooldownMs);
-  const due = await db.select().from(tasks)
+  const due = await scopedRead((tx) => tx.select().from(tasks)
     .where(and(
       eq(tasks.status, "pending"),
       isNotNull(tasks.dueAt),
       lte(tasks.dueAt, now),
       or(isNull(tasks.escalatedAt), lte(tasks.escalatedAt, cooldownCutoff)),
     ))
-    .limit(batch);
+    .limit(batch));
 
   let escalated = 0;
   for (const t of due) {
     // resolve a real recipient: the instance owner (a user UUID), else the
     // task's role ref (role-resolved owner), else the instance id as last resort.
     let ownerId: string | null = null;
-    const inst = await db.select({ createdBy: instances.createdBy }).from(instances)
-      .where(eq(instances.id, t.instanceId)).limit(1);
+    const inst = await scopedRead((tx) => tx.select({ createdBy: instances.createdBy }).from(instances)
+      .where(eq(instances.id, t.instanceId)).limit(1));
     ownerId = inst[0]?.createdBy ?? null;
     const recipient = ownerId ?? t.roleRef ?? t.instanceId;
 
@@ -160,7 +160,7 @@ export async function sweepReminders(now: Date = new Date(), batch = 200): Promi
   const thresholds = reminderThresholds();
   // candidate tasks: pending, have an SLA (due_at), NOT yet overdue, and still
   // have an un-fired threshold (reminder_count < thresholds.length).
-  const due = await db.select().from(tasks)
+  const due = await scopedRead((tx) => tx.select().from(tasks)
     .where(and(
       eq(tasks.status, "pending"),
       eq(tasks.isCall, false),
@@ -168,7 +168,7 @@ export async function sweepReminders(now: Date = new Date(), batch = 200): Promi
       gt(tasks.dueAt, now),                                  // not yet breached
       lte(tasks.reminderCount, sql`${thresholds.length - 1}`),
     ))
-    .limit(batch);
+    .limit(batch));
 
   let sent = 0;
   for (const t of due) {
@@ -183,8 +183,8 @@ export async function sweepReminders(now: Date = new Date(), batch = 200): Promi
     if (elapsed < threshold) continue; // not yet at the next threshold
 
     // resolve recipient (instance owner, else role, else instance id).
-    const inst = await db.select({ createdBy: instances.createdBy }).from(instances)
-      .where(eq(instances.id, t.instanceId)).limit(1);
+    const inst = await scopedRead((tx) => tx.select({ createdBy: instances.createdBy }).from(instances)
+      .where(eq(instances.id, t.instanceId)).limit(1));
     const recipient = inst[0]?.createdBy ?? t.roleRef ?? t.instanceId;
 
     await db.transaction(async (tx) => {

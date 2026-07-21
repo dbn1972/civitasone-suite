@@ -252,24 +252,24 @@ export async function archiveOtherVersionsTx(
 
 /** List template definitions (is_template = true), across tenants (platform). */
 export async function listTemplates(limit = 50, offset = 0) {
-  return db.select().from(definitions)
+  return scopedRead((tx) => tx.select().from(definitions)
     .where(eq(definitions.isTemplate, true))
     .orderBy(desc(definitions.createdAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
 }
 
 /** Fetch a template by id (must be a template; tenant-agnostic by design). */
 export async function findTemplateById(id: string) {
-  const rows = await db.select().from(definitions)
+  const rows = await scopedRead((tx) => tx.select().from(definitions)
     .where(and(eq(definitions.id, id), eq(definitions.isTemplate, true)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }
 
 /** Raw node rows for a definition (used when cloning a template's graph). */
 export async function listNodeRows(definitionId: string) {
-  return db.select().from(definitionNodes)
+  return scopedRead((tx) => tx.select().from(definitionNodes)
     .where(eq(definitionNodes.definitionId, definitionId))
-    .orderBy(asc(definitionNodes.sortOrder));
+    .orderBy(asc(definitionNodes.sortOrder)));
 }

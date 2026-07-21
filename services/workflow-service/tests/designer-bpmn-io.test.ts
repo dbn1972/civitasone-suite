@@ -119,3 +119,4 @@ describe("parseBpmnXml", () => {
     expect(taskNode!.position.x).toBe(300);
     expect(taskNode!.position.y).toBe(180);
   });
+});

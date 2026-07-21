@@ -24,15 +24,17 @@ export async function create(input: {
   toDate: string | null;
   reason: string | null;
 }): Promise<DelegationView> {
-  const rows = await db.insert(delegations).values({
-    tenantId: input.tenantId,
-    delegatorId: input.delegatorId,
-    delegateId: input.delegateId,
-    fromDate: input.fromDate,
-    toDate: input.toDate,
-    reason: input.reason,
-    isActive: true,
-  }).returning();
+  const rows = await db.transaction(async (tx) => {
+    return tx.insert(delegations).values({
+      tenantId: input.tenantId,
+      delegatorId: input.delegatorId,
+      delegateId: input.delegateId,
+      fromDate: input.fromDate,
+      toDate: input.toDate,
+      reason: input.reason,
+      isActive: true,
+    }).returning();
+  });
   return toView(rows[0]!);
 }
 
@@ -56,10 +58,12 @@ export async function findById(id: string, tenantId: string): Promise<Delegation
 
 /** Soft-delete: revoke a delegation (is_active = false). Returns the updated view or null. */
 export async function revoke(id: string, tenantId: string): Promise<DelegationView | null> {
-  const rows = await db.update(delegations)
-    .set({ isActive: false })
-    .where(and(eq(delegations.id, id), eq(delegations.tenantId, tenantId)))
-    .returning();
+  const rows = await db.transaction(async (tx) => {
+    return tx.update(delegations)
+      .set({ isActive: false })
+      .where(and(eq(delegations.id, id), eq(delegations.tenantId, tenantId)))
+      .returning();
+  });
   return rows[0] ? toView(rows[0]) : null;
 }
 

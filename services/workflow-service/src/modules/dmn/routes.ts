@@ -87,19 +87,21 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
     const body = createBodySchema.parse(req.body);
 
     const id = randomUUID();
-    await db.insert(dmnTables).values({
-      id,
-      tenantId: ctx.tenantId,
-      name: body.name,
-      description: body.description ?? null,
-      hitPolicy: body.hitPolicy,
-      inputs: body.inputs as DmnInput[],
-      outputs: body.outputs as DmnOutput[],
-      rules: body.rules as DmnRule[],
-      status: "draft",
-      version: 1,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
+    await db.transaction(async (tx) => {
+      await tx.insert(dmnTables).values({
+        id,
+        tenantId: ctx.tenantId,
+        name: body.name,
+        description: body.description ?? null,
+        hitPolicy: body.hitPolicy,
+        inputs: body.inputs as DmnInput[],
+        outputs: body.outputs as DmnOutput[],
+        rules: body.rules as DmnRule[],
+        status: "draft",
+        version: 1,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
     });
 
     // Audit event
@@ -283,10 +285,12 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "DMN table not found");
     }
 
-    await db
-      .update(dmnTables)
-      .set({ status: "deleted", updatedAt: new Date(), updatedBy: ctx.actorId })
-      .where(eq(dmnTables.id, id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(dmnTables)
+        .set({ status: "deleted", updatedAt: new Date(), updatedBy: ctx.actorId })
+        .where(eq(dmnTables.id, id));
+    });
 
     return reply.code(204).send();
   });

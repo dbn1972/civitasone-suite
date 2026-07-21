@@ -219,19 +219,21 @@ export async function claim(
 ): Promise<TaskView | null> {
   const existing = await findById(id, tenantId);
   if (!existing) return null;
-  const updated = await db.update(tasks).set({
-    assigneeId: actorId,
-    updatedBy: actorId,
-    updatedAt: new Date(),
-    version: existing.version + 1,
-  })
-    .where(and(
-      eq(tasks.id, id),
-      eq(tasks.status, "pending"),
-      isNull(tasks.assigneeId),
-      eq(tasks.version, existing.version),
-    ))
-    .returning({ id: tasks.id });
+  const updated = await db.transaction(async (tx) => {
+    return tx.update(tasks).set({
+      assigneeId: actorId,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: existing.version + 1,
+    })
+      .where(and(
+        eq(tasks.id, id),
+        eq(tasks.status, "pending"),
+        isNull(tasks.assigneeId),
+        eq(tasks.version, existing.version),
+      ))
+      .returning({ id: tasks.id });
+  });
   if (updated.length === 0) return null;
   return { ...existing, assigneeId: actorId, version: existing.version + 1 };
 }
@@ -279,18 +281,20 @@ export async function assign(
 ): Promise<TaskView | null> {
   const existing = await findById(id, tenantId);
   if (!existing) return null;
-  const updated = await db.update(tasks).set({
-    assigneeId,
-    updatedBy: actorId,
-    updatedAt: new Date(),
-    version: existing.version + 1,
-  })
-    .where(and(
-      eq(tasks.id, id),
-      eq(tasks.status, "pending"),
-      eq(tasks.version, existing.version),
-    ))
-    .returning({ id: tasks.id });
+  const updated = await db.transaction(async (tx) => {
+    return tx.update(tasks).set({
+      assigneeId,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: existing.version + 1,
+    })
+      .where(and(
+        eq(tasks.id, id),
+        eq(tasks.status, "pending"),
+        eq(tasks.version, existing.version),
+      ))
+      .returning({ id: tasks.id });
+  });
   if (updated.length === 0) return null;
   return { ...existing, assigneeId, version: existing.version + 1 };
 }
@@ -307,7 +311,7 @@ export async function dueTimers(now: Date, batch: number): Promise<TaskRow[]> {
   // instance's bound definition (instance.definitionId) + the task's nodeKey,
   // so a stale fire_at on a task remapped onto a non-timer / non-opted-in node
   // is NOT auto-completed.
-  const rows = await db.select({ task: tasks }).from(tasks)
+  const rows = await scopedRead((tx) => tx.select({ task: tasks }).from(tasks)
     .innerJoin(instances, eq(instances.id, tasks.instanceId))
     .innerJoin(
       definitionNodes,
@@ -323,6 +327,6 @@ export async function dueTimers(now: Date, batch: number): Promise<TaskRow[]> {
       eq(definitionNodes.nodeType, "timer"),
       eq(definitionNodes.deemedApproval, true),
     ))
-    .limit(batch);
+    .limit(batch));
   return rows.map((r) => r.task);
 }

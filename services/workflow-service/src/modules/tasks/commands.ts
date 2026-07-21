@@ -1,7 +1,7 @@
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, TASK_RESOURCE } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
@@ -99,11 +99,11 @@ export async function completeTask(
     if (instance && (instance.createdBy === ctx.actorId || delegatorIds.has(instance.createdBy))) {
       throw new HttpError(403, "SELF_APPROVAL_DENIED", "the submitter of a workflow may not approve their own request");
     }
-    const priorTasks = await db.select().from(tasks)
+    const priorTasks = await scopedRead((tx) => tx.select().from(tasks)
       .where(and(
         eq(tasks.instanceId, existing.instanceId),
         eq(tasks.status, "completed"),
-      ));
+      )));
     // repeat-actor: a prior step completed by the actor directly OR by a
     // delegator the actor is now acting on behalf of (four-eyes via delegation).
     const conflict = priorTasks.some(
@@ -115,12 +115,12 @@ export async function completeTask(
   } else {
     // record whether the super_admin is actually overriding a SoD conflict
     const instance = await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId);
-    const priorByActor = await db.select().from(tasks)
+    const priorByActor = await scopedRead((tx) => tx.select().from(tasks)
       .where(and(
         eq(tasks.instanceId, existing.instanceId),
         eq(tasks.status, "completed"),
         eq(tasks.completedBy, ctx.actorId),
-      ));
+      )));
     sodOverride = (instance?.createdBy === ctx.actorId) || priorByActor.length > 0;
   }
 
