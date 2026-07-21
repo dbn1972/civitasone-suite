@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 
 /**
  * SYN-1 (03) behavioral coverage — idempotency, conflict detection, per-mutation
@@ -9,6 +10,13 @@ import { MemoryQueue } from "@civitasone/queue";
  * the identity DB). Run with DB_URL set.
  */
 const dbUrl = process.env.DB_URL;
+
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", () => {
   const tenantId = "00000000-0000-0000-0000-000000000001";
@@ -20,20 +28,26 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
     const clientMutationId = randomUUID();
     const entityId = randomUUID();
 
-    await repo.recordProcessedMutation(db, {
-      tenantId, deviceId, clientMutationId, mailbox: "approvals",
-      entityId, status: "applied", resultEtag: "etag-1", resultSeq: "1",
-    });
+    await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+      await repo.recordProcessedMutation(tx, {
+        tenantId, deviceId, clientMutationId, mailbox: "approvals",
+        entityId, status: "applied", resultEtag: "etag-1", resultSeq: "1",
+      });
+    }));
 
     // The unique (tenant, device, clientMutationId) constraint rejects a replay.
     await expect(
-      repo.recordProcessedMutation(db, {
-        tenantId, deviceId, clientMutationId, mailbox: "approvals",
-        entityId, status: "applied", resultEtag: "etag-2", resultSeq: "2",
-      }),
+      runWithTenant(tenantId, () => db.transaction(async (tx) => {
+        await repo.recordProcessedMutation(tx, {
+          tenantId, deviceId, clientMutationId, mailbox: "approvals",
+          entityId, status: "applied", resultEtag: "etag-2", resultSeq: "2",
+        });
+      })),
     ).rejects.toThrow();
 
-    const found = await repo.findProcessedMutation(db, tenantId, deviceId, clientMutationId);
+    const found = await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+      return repo.findProcessedMutation(tx, tenantId, deviceId, clientMutationId);
+    }));
     expect(found?.status).toBe("applied");
     expect(found?.resultEtag).toBe("etag-1");
   });
@@ -43,14 +57,19 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
     const { db } = await import("../src/shared/db.js");
     const entityId = randomUUID();
 
-    const first = await repo.appendChangelogOne(db, {
-      tenantId, mailbox: "approvals", entityId, operation: "create", payload: { v: 1 },
-    });
-    const second = await repo.appendChangelogOne(db, {
-      tenantId, mailbox: "approvals", entityId, operation: "update", payload: { v: 2 },
-    });
+    const { first, second } = await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+      const f = await repo.appendChangelogOne(tx, {
+        tenantId, mailbox: "approvals", entityId, operation: "create", payload: { v: 1 },
+      });
+      const s = await repo.appendChangelogOne(tx, {
+        tenantId, mailbox: "approvals", entityId, operation: "update", payload: { v: 2 },
+      });
+      return { first: f, second: s };
+    })) as { first: { seq: string; etag: string }; second: { seq: string; etag: string } };
 
-    const latest = await repo.getLatestEntityState(db, tenantId, "approvals", entityId);
+    const latest = await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+      return repo.getLatestEntityState(tx, tenantId, "approvals", entityId);
+    }));
     expect(latest?.etag).toBe(second.etag);
     expect(latest?.etag).not.toBe(first.etag);
 
@@ -66,30 +85,32 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
     const userB = randomUUID();
     const tenant = randomUUID();
 
-    await repo.appendChangelog({
-      tenantId: tenant, mailbox: "notifications", entityId: randomUUID(),
-      operation: "upsert", payload: { for: "A" }, ownerUserId: userA,
-    });
-    await repo.appendChangelog({
-      tenantId: tenant, mailbox: "notifications", entityId: randomUUID(),
-      operation: "upsert", payload: { for: "B" }, ownerUserId: userB,
-    });
-    await repo.appendChangelog({
-      tenantId: tenant, mailbox: "notifications", entityId: randomUUID(),
-      operation: "upsert", payload: { for: "all" }, ownerUserId: null,
+    await runWithTenant(tenant, async () => {
+      await repo.appendChangelog({
+        tenantId: tenant, mailbox: "notifications", entityId: randomUUID(),
+        operation: "upsert", payload: { for: "A" }, ownerUserId: userA,
+      });
+      await repo.appendChangelog({
+        tenantId: tenant, mailbox: "notifications", entityId: randomUUID(),
+        operation: "upsert", payload: { for: "B" }, ownerUserId: userB,
+      });
+      await repo.appendChangelog({
+        tenantId: tenant, mailbox: "notifications", entityId: randomUUID(),
+        operation: "upsert", payload: { for: "all" }, ownerUserId: null,
+      });
     });
 
     // User A's private pull sees their own row + the unowned/shared row, NOT B's.
-    const rowsForA = await repo.pullSince(tenant, "notifications", 0n, 100, {
+    const rowsForA = await runWithTenant(tenant, () => repo.pullSince(tenant, "notifications", 0n, 100, {
       userId: userA, userPrivate: true,
-    });
+    }));
     const owners = rowsForA.map((r) => r.ownerUserId);
     expect(owners).toContain(userA);
     expect(owners).toContain(null);
     expect(owners).not.toContain(userB);
 
     // Without the private flag (legacy/shared mailbox) all rows are returned.
-    const rowsShared = await repo.pullSince(tenant, "notifications", 0n, 100);
+    const rowsShared = await runWithTenant(tenant, () => repo.pullSince(tenant, "notifications", 0n, 100));
     expect(rowsShared.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -101,7 +122,7 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
 
     // Wire the real feeder rules onto an in-memory queue and emit the domain
     // delete event (crm.contact.deleted → crm_contacts, operation "delete").
-    const queue = new MemoryQueue();
+    const queue = wireTenantAwareQueue(new MemoryQueue());
     registerSyncFeederConsumers(queue);
     await queue.publish("crm.contact.deleted", {
       type: "crm.contact.deleted", tenantId: tenant, actorId: randomUUID(),
@@ -111,7 +132,7 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
     await new Promise((r) => setTimeout(r, 30));
 
     // The feeder must have appended a tombstone (operation === "delete").
-    const rows = await repo.pullSince(tenant, "crm_contacts", 0n, 100);
+    const rows = await runWithTenant(tenant, () => repo.pullSince(tenant, "crm_contacts", 0n, 100));
     const tombstone = rows.find((r) => r.entityId === contactId);
     expect(tombstone).toBeDefined();
     expect(tombstone?.operation).toBe("delete");
@@ -141,12 +162,14 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
     const serviceActor = "00000000-0000-0000-0000-000000000099";
 
     // A push requires a trusted, non-revoked device owned by the actor.
-    await db.insert(registeredDevices).values({
-      id: deviceId, tenantId: tenant, userId: serviceActor,
-      platform: "ios", label: "test-device", fingerprint: randomUUID(),
-      trustToken: "test-token", trustLevel: "recognized",
-      createdBy: serviceActor, updatedBy: serviceActor,
-    });
+    await runWithTenant(tenant, () => db.transaction(async (tx) => {
+      await tx.insert(registeredDevices).values({
+        id: deviceId, tenantId: tenant, userId: serviceActor,
+        platform: "ios", label: "test-device", fingerprint: randomUUID(),
+        trustToken: "test-token", trustLevel: "recognized",
+        createdBy: serviceActor, updatedBy: serviceActor,
+      });
+    }));
 
     const app = await buildApp();
     try {
@@ -183,9 +206,10 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
       // Write-through: the applied mutation must have enqueued the matching
       // domain command (crm_contacts + create → crm.contact.create) onto the
       // transactional outbox, in the same tx as the changelog write.
-      const outRows = await db.select().from(outboxMessages).where(
-        and(eq(outboxMessages.tenantId, tenant), eq(outboxMessages.topic, "crm.contact.create")),
-      );
+      const outRows = await runWithTenant(tenant, () => db.transaction(async (tx) =>
+        tx.select().from(outboxMessages).where(
+          and(eq(outboxMessages.tenantId, tenant), eq(outboxMessages.topic, "crm.contact.create")),
+        )));
       const cmd = outRows.find((r) => (r.payload as { id?: string }).id === entityId);
       expect(cmd).toBeDefined();
       expect(cmd?.eventType).toBe("crm.contact.create");

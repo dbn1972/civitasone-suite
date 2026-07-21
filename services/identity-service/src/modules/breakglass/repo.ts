@@ -63,12 +63,16 @@ export async function listByTenant(tenantId: string, status: string | undefined,
 /**
  * TTL sweep: flip any still-"active" grant past its expiry to "expired".
  * Tenant-agnostic housekeeping run by the worker. Returns the count swept.
+ * Runs inside a transaction so the tenant GUC (when called via runWithTenant)
+ * is properly set for RLS enforcement.
  */
 export async function sweepExpiredGrants(): Promise<number> {
-  const rows = await db.update(grants)
-    .set({ status: "expired", updatedAt: new Date() })
-    .where(and(eq(grants.status, "active"), lte(grants.expiresAt, sql`now()`)))
-    .returning({ id: grants.id });
+  const rows = await db.transaction(async (tx) =>
+    tx.update(grants)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(and(eq(grants.status, "active"), lte(grants.expiresAt, sql`now()`)))
+      .returning({ id: grants.id }),
+  );
   return rows.length;
 }
 

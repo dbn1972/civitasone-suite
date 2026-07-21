@@ -22,30 +22,20 @@ const RP_ID = process.env.WEBAUTHN_RP_ID ?? "localhost";
 const RP_NAME = process.env.WEBAUTHN_RP_NAME ?? "CivitasOne";
 const ORIGIN = process.env.WEBAUTHN_ORIGIN ?? "http://localhost:3000";
 
-// H9 FIX: Challenge store backed by Redis for fleet-wide consistency.
+// H9 FIX: Challenge store backed by @civitasone/cache for fleet-wide consistency.
 // In a multi-pod deployment, "begin" on pod A and "finish" on pod B must work.
 // Falls back to in-memory Map when Redis is unavailable (dev/test).
-import { createClient, type RedisClientType } from "redis";
+import { cache } from "../../shared/infra.js";
 
 interface ChallengeEntry { challenge: string; expiresAt: number }
 
-class RedisChallengeStore {
-  private client: RedisClientType;
+class CacheChallengeStore {
   private prefix = "webauthn:challenge:";
   private ttlSeconds = 300; // 5 minutes
 
-  constructor(redisUrl: string) {
-    this.client = createClient({ url: redisUrl }) as RedisClientType;
-    this.client.connect().catch(() => { /* handled in get/set gracefully */ });
-  }
-
   async set(key: string, entry: ChallengeEntry): Promise<void> {
     try {
-      await this.client.setEx(
-        `${this.prefix}${key}`,
-        this.ttlSeconds,
-        JSON.stringify(entry),
-      );
+      await cache.put(`${this.prefix}${key}`, entry, this.ttlSeconds);
     } catch {
       // Fallback: if Redis is down, the challenge will fail on verify (fail-closed)
     }
@@ -53,8 +43,9 @@ class RedisChallengeStore {
 
   async get(key: string): Promise<ChallengeEntry | undefined> {
     try {
-      const raw = await this.client.get(`${this.prefix}${key}`);
-      return raw ? JSON.parse(raw) as ChallengeEntry : undefined;
+      const result = await cache.getOrLoad<ChallengeEntry>(`${this.prefix}${key}`, async () => null);
+      if (!result) return undefined;
+      return result;
     } catch {
       return undefined;
     }
@@ -62,36 +53,12 @@ class RedisChallengeStore {
 
   async delete(key: string): Promise<void> {
     try {
-      await this.client.del(`${this.prefix}${key}`);
+      await cache.invalidate(`${this.prefix}${key}`);
     } catch { /* best effort */ }
   }
 }
 
-class InMemoryChallengeStore {
-  private store = new Map<string, ChallengeEntry>();
-
-  async set(key: string, entry: ChallengeEntry): Promise<void> {
-    this.store.set(key, entry);
-  }
-
-  async get(key: string): Promise<ChallengeEntry | undefined> {
-    const entry = this.store.get(key);
-    if (entry && Date.now() > entry.expiresAt) {
-      this.store.delete(key);
-      return undefined;
-    }
-    return entry;
-  }
-
-  async delete(key: string): Promise<void> {
-    this.store.delete(key);
-  }
-}
-
-const REDIS_URL = process.env.REDIS_URL ?? "";
-const challengeStore = REDIS_URL
-  ? new RedisChallengeStore(REDIS_URL)
-  : new InMemoryChallengeStore();
+const challengeStore = new CacheChallengeStore();
 
 function generateChallenge(): string {
   return randomBytes(32).toString("base64url");

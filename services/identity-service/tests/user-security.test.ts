@@ -10,8 +10,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { MemoryQueue } from "@civitasone/queue";
+import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { users } from "../src/modules/users/schema.js";
 import { sessions } from "../src/modules/sessions/schema.js";
@@ -43,32 +44,45 @@ function token(roles: string[], tid: string): string {
 }
 const bearer = (roles: string[], tid: string) => ({ authorization: `Bearer ${token(roles, tid)}` });
 
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function seedUser(id: string, tenantId: string, email: string) {
-  await db.insert(users).values({
-    id, tenantId, email, name: "Test User", status: "active",
-    createdBy: ACTOR, updatedBy: ACTOR,
-  }).onConflictDoNothing();
+  await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    await tx.insert(users).values({
+      id, tenantId, email, name: "Test User", status: "active",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing();
+  }));
 }
 
 async function seedSession(id: string, userId: string, tenantId: string, status: string) {
-  await db.insert(sessions).values({
-    id, tenantId, userId, ip: "203.0.113.1", status,
-    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-    createdBy: ACTOR, updatedBy: ACTOR,
-  }).onConflictDoNothing();
+  await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    await tx.insert(sessions).values({
+      id, tenantId, userId, ip: "203.0.113.1", status,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing();
+  }));
 }
 
 async function cleanup() {
-  for (const id of [SESS_A, SESS_B, SESS_REVOKED, SESS_OTHER]) {
-    await db.delete(sessions).where(eq(sessions.id, id));
-  }
-  for (const id of [USER_REVOKE, USER_RESET, OTHER_USER]) {
-    await db.delete(users).where(eq(users.id, id));
-  }
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
-  for (const id of [MSG_REVOKE_1, MSG_REVOKE_2, MSG_RESET_1]) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await runWithTenant(T1, () => db.transaction(async (tx) => {
+    for (const id of [SESS_A, SESS_B, SESS_REVOKED, SESS_OTHER]) {
+      await tx.delete(sessions).where(eq(sessions.id, id));
+    }
+    for (const id of [USER_REVOKE, USER_RESET, OTHER_USER]) {
+      await tx.delete(users).where(eq(users.id, id));
+    }
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
+    for (const id of [MSG_REVOKE_1, MSG_REVOKE_2, MSG_RESET_1]) {
+      await tx.delete(processed).where(eq(processed.messageId, id));
+    }
+  }));
 }
 
 beforeAll(async () => {
@@ -159,7 +173,7 @@ describe("revoke-all consumer — CQRS (integration)", () => {
   });
 
   it("revokes all active sessions for the user, leaves others, emits audit", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerSessionConsumers(q);
     await q.start();
     await q.publish("identity.session.revoke_all", {
@@ -170,20 +184,23 @@ describe("revoke-all consumer — CQRS (integration)", () => {
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(sessions).where(eq(sessions.userId, USER_REVOKE));
+    const rows = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(sessions).where(eq(sessions.userId, USER_REVOKE))));
     for (const r of rows) expect(r.status).toBe("revoked");
 
     // a different user's active session must be untouched
-    const other = await db.select().from(sessions).where(eq(sessions.id, SESS_OTHER));
+    const other = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(sessions).where(eq(sessions.id, SESS_OTHER))));
     expect(other[0]?.status).toBe("active");
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1));
+    const outbox = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1))));
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
     expect(outbox.map((r) => r.eventType)).toContain("identity.session.revoked_all");
   });
 
   it("is idempotent — a repeat (new messageId) finds nothing active and does not throw", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerSessionConsumers(q);
     await q.start();
     await q.publish("identity.session.revoke_all", {
@@ -194,14 +211,15 @@ describe("revoke-all consumer — CQRS (integration)", () => {
     await new Promise((r) => setTimeout(r, 400));
     await q.stop();
 
-    const rows = await db.select().from(sessions).where(eq(sessions.userId, USER_REVOKE));
+    const rows = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(sessions).where(eq(sessions.userId, USER_REVOKE))));
     for (const r of rows) expect(r.status).toBe("revoked");
   });
 });
 
 describe("reset-password consumer — CQRS (integration)", () => {
   it("emits audit + password_reset_requested event via outbox", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerUserConsumers(q);
     await q.start();
     await q.publish("identity.user.reset_password", {
@@ -212,12 +230,14 @@ describe("reset-password consumer — CQRS (integration)", () => {
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    const outbox = await db.select().from(outboxMessages)
-      .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "identity.user.password_reset_requested")));
+    const outbox = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "identity.user.password_reset_requested")))));
     expect(outbox.length).toBeGreaterThanOrEqual(1);
 
-    const audit = await db.select().from(outboxMessages)
-      .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record")));
+    const audit = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record")))));
     const actions = audit.map((r) => (r.payload as { action?: string }).action);
     expect(actions).toContain("reset_password");
   });

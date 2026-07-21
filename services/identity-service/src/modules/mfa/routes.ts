@@ -51,16 +51,21 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
     const now = new Date();
 
     if (existing[0]) {
-      await db.update(mfaConfigs)
-        .set({
-          method: "totp", secret: encrypted, enabled: false,
-          updatedBy: ctx.actorId, version: existing[0].version + 1, updatedAt: now,
-        })
-        .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+      const currentVersion = existing[0].version;
+      await db.transaction(async (tx) => {
+        await tx.update(mfaConfigs)
+          .set({
+            method: "totp", secret: encrypted, enabled: false,
+            updatedBy: ctx.actorId, version: currentVersion + 1, updatedAt: now,
+          })
+          .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+      });
     } else {
-      await db.insert(mfaConfigs).values({
-        tenantId: ctx.tenantId, userId: ctx.actorId, method: "totp",
-        secret: encrypted, enabled: false, createdBy: ctx.actorId, updatedBy: ctx.actorId, version: 1,
+      await db.transaction(async (tx) => {
+        await tx.insert(mfaConfigs).values({
+          tenantId: ctx.tenantId, userId: ctx.actorId, method: "totp",
+          secret: encrypted, enabled: false, createdBy: ctx.actorId, updatedBy: ctx.actorId, version: 1,
+        });
       });
     }
 
@@ -112,13 +117,15 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
       // SEC H1: count the failure; lock out after MFA_MAX_FAILED consecutive misses.
       const nextFailed = (config.failedAttempts ?? 0) + 1;
       const lock = nextFailed >= MFA_MAX_FAILED;
-      await db.update(mfaConfigs)
-        .set({
-          failedAttempts: lock ? 0 : nextFailed,
-          ...(lock ? { lockedUntil: new Date(now.getTime() + MFA_LOCKOUT_MS) } : {}),
-          updatedBy: ctx.actorId, version: config.version + 1, updatedAt: now,
-        })
-        .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+      await db.transaction(async (tx) => {
+        await tx.update(mfaConfigs)
+          .set({
+            failedAttempts: lock ? 0 : nextFailed,
+            ...(lock ? { lockedUntil: new Date(now.getTime() + MFA_LOCKOUT_MS) } : {}),
+            updatedBy: ctx.actorId, version: config.version + 1, updatedAt: now,
+          })
+          .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+      });
       if (lock) {
         throw new HttpError(429, "MFA_LOCKED", `too many failed attempts; locked for ${Math.ceil(MFA_LOCKOUT_MS / 1000)}s`);
       }
@@ -132,15 +139,17 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Success: record the consumed step, clear failure/lockout, enable if needed.
-    await db.update(mfaConfigs)
-      .set({
-        lastUsedStep: matchedStep,
-        failedAttempts: 0,
-        lockedUntil: null,
-        ...(config.enabled ? {} : { enabled: true }),
-        updatedBy: ctx.actorId, version: config.version + 1, updatedAt: now,
-      })
-      .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+    await db.transaction(async (tx) => {
+      await tx.update(mfaConfigs)
+        .set({
+          lastUsedStep: matchedStep,
+          failedAttempts: 0,
+          lockedUntil: null,
+          ...(config.enabled ? {} : { enabled: true }),
+          updatedBy: ctx.actorId, version: config.version + 1, updatedAt: now,
+        })
+        .where(and(eq(mfaConfigs.userId, ctx.actorId), eq(mfaConfigs.tenantId, ctx.tenantId)));
+    });
 
     return reply.code(200).send({
       data: { verified: true, method: "totp", enabledAt: new Date().toISOString() },

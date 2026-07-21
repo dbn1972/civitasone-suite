@@ -71,7 +71,7 @@ export async function appendChangelog(entry: {
   operation: string; payload?: Record<string, unknown>; ownerUserId?: string | null;
 }): Promise<{ seq: string; etag: string }> {
   const etag = randomBytes(8).toString("hex");
-  const rows = await db.insert(entityChangelog).values({
+  const rows = await db.transaction(async (tx) => tx.insert(entityChangelog).values({
     tenantId: entry.tenantId,
     mailbox: entry.mailbox,
     entityId: entry.entityId,
@@ -79,7 +79,7 @@ export async function appendChangelog(entry: {
     payload: entry.payload ?? null,
     ownerUserId: entry.ownerUserId ?? null,
     etag,
-  }).returning({ seq: entityChangelog.seq, etag: entityChangelog.etag });
+  }).returning({ seq: entityChangelog.seq, etag: entityChangelog.etag }));
   return { seq: String(rows[0]?.seq ?? "0"), etag: rows[0]?.etag ?? etag };
 }
 
