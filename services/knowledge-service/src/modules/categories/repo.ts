@@ -1,5 +1,5 @@
 import { eq, and, desc, isNull, asc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { categories, type CategoryRow, type CategoryInsert, type CategoryView } from "./schema.js";
 
@@ -25,18 +25,22 @@ export function toView(r: CategoryRow): CategoryView {
 
 export async function listByTenant(tenantId: string): Promise<CategoryView[]> {
   return cache.listOrLoad(tenantId, RESOURCE, "tree", async () => {
-    const rows = await db.select().from(categories)
-      .where(eq(categories.tenantId, tenantId))
-      .orderBy(asc(categories.sortOrder), asc(categories.name));
+    const rows = await scopedRead((tx) =>
+      tx.select().from(categories)
+        .where(eq(categories.tenantId, tenantId))
+        .orderBy(asc(categories.sortOrder), asc(categories.name))
+    );
     return rows.map(toView);
   });
 }
 
 export async function getById(tenantId: string, id: string): Promise<CategoryView | null> {
   return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE, id), async () => {
-    const rows = await db.select().from(categories)
-      .where(eq(categories.id, id));
-    if (!rows.length || rows[0]!.tenantId !== tenantId) return null;
+    const rows = await scopedRead((tx) =>
+      tx.select().from(categories)
+        .where(and(eq(categories.id, id), eq(categories.tenantId, tenantId)))
+    );
+    if (!rows.length) return null;
     return toView(rows[0]!);
   });
 }
@@ -65,9 +69,11 @@ export function buildTree(flatList: CategoryView[]): CategoryView[] {
  * Get children of a category (direct descendants).
  */
 export async function getChildren(tenantId: string, parentId: string): Promise<CategoryView[]> {
-  const rows = await db.select().from(categories)
-    .where(and(eq(categories.tenantId, tenantId), eq(categories.parentId, parentId)))
-    .orderBy(asc(categories.sortOrder), asc(categories.name));
+  const rows = await scopedRead((tx) =>
+    tx.select().from(categories)
+      .where(and(eq(categories.tenantId, tenantId), eq(categories.parentId, parentId)))
+      .orderBy(asc(categories.sortOrder), asc(categories.name))
+  );
   return rows.map(toView);
 }
 
@@ -75,8 +81,10 @@ export async function getChildren(tenantId: string, parentId: string): Promise<C
  * Walk up the tree to get all ancestors of a category (from nearest parent to root).
  */
 export async function getAncestors(tenantId: string, id: string): Promise<CategoryView[]> {
-  const all = await db.select().from(categories)
-    .where(eq(categories.tenantId, tenantId));
+  const all = await scopedRead((tx) =>
+    tx.select().from(categories)
+      .where(eq(categories.tenantId, tenantId))
+  );
   const map = new Map(all.map((r) => [r.id, r]));
   const ancestors: CategoryView[] = [];
   let current = map.get(id);

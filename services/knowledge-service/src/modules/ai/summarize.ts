@@ -15,7 +15,7 @@
  */
 
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { documents } from "../documents/schema.js";
 import { documentVersions } from "../versions/schema.js";
 import { getObject } from "@civitasone/storage";
@@ -72,12 +72,14 @@ export async function summarizeDocument(
   tenantId: string,
 ): Promise<SummarizeResult> {
   // Step 1: Verify document exists and belongs to tenant
-  const docRows = await db.select().from(documents)
-    .where(and(
-      eq(documents.id, documentId),
-      eq(documents.tenantId, tenantId),
-    ))
-    .limit(1);
+  const docRows = await scopedRead((tx) =>
+    tx.select().from(documents)
+      .where(and(
+        eq(documents.id, documentId),
+        eq(documents.tenantId, tenantId),
+      ))
+      .limit(1)
+  );
 
   if (docRows.length === 0) {
     throw new DocumentNotFoundError();
@@ -86,13 +88,15 @@ export async function summarizeDocument(
   const doc = docRows[0]!;
 
   // Step 2: Get the latest version to find S3 key
-  const versionRows = await db.select().from(documentVersions)
-    .where(and(
-      eq(documentVersions.documentId, documentId),
-      eq(documentVersions.tenantId, tenantId),
-    ))
-    .orderBy(desc(documentVersions.versionNo))
-    .limit(1);
+  const versionRows = await scopedRead((tx) =>
+    tx.select().from(documentVersions)
+      .where(and(
+        eq(documentVersions.documentId, documentId),
+        eq(documentVersions.tenantId, tenantId),
+      ))
+      .orderBy(desc(documentVersions.versionNo))
+      .limit(1)
+  );
 
   if (versionRows.length === 0) {
     throw new DocumentNotFoundError();

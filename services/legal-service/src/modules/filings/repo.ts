@@ -5,7 +5,8 @@ import { legalFilings, type FilingRow, type FilingInsert } from "./schema.js";
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findFilingById(id: string): Promise<FilingRow | null> {
-  const rows = await db.select().from(legalFilings).where(eq(legalFilings.id, id)).limit(1);
+  const rows = await db.transaction(async (tx) =>
+    tx.select().from(legalFilings).where(eq(legalFilings.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -18,5 +19,6 @@ export async function listFilings(tenantId: string, caseId?: string, filingType?
   if (caseId) conditions.push(eq(legalFilings.caseId, caseId));
   if (filingType) conditions.push(eq(legalFilings.filingType, filingType));
   if (status) conditions.push(eq(legalFilings.status, status));
-  return db.select().from(legalFilings).where(and(...conditions)).orderBy(desc(legalFilings.filingDate)).limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select().from(legalFilings).where(and(...conditions)).orderBy(desc(legalFilings.filingDate)).limit(limit));
 }

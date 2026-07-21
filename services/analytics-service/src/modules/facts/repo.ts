@@ -5,7 +5,7 @@
  * never double-counts.
  */
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { factEvents, type FactEventInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -23,18 +23,22 @@ export async function ingest(tx: Writer, row: FactEventInsert): Promise<void> {
 
 /** Total fact rows for a tenant (used by tenant-isolation tests + health stats). */
 export async function countByTenant(tenantId: string): Promise<number> {
-  const rows = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(factEvents)
-    .where(eq(factEvents.tenantId, tenantId));
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(factEvents)
+      .where(eq(factEvents.tenantId, tenantId)),
+  );
   return rows[0]?.n ?? 0;
 }
 
 export async function existsDedupe(tenantId: string, dedupeKey: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: factEvents.id })
-    .from(factEvents)
-    .where(and(eq(factEvents.tenantId, tenantId), eq(factEvents.dedupeKey, dedupeKey)))
-    .limit(1);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select({ id: factEvents.id })
+      .from(factEvents)
+      .where(and(eq(factEvents.tenantId, tenantId), eq(factEvents.dedupeKey, dedupeKey)))
+      .limit(1),
+  );
   return rows.length > 0;
 }

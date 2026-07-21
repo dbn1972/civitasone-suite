@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { documentShares, type DocumentShareRow, type DocumentShareInsert, type DocumentShareView } from "./schema.js";
 
@@ -23,26 +23,32 @@ export function toView(r: DocumentShareRow): DocumentShareView {
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DocumentShareView[]> {
   return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await db.select().from(documentShares)
-      .where(eq(documentShares.tenantId, tenantId))
-      .orderBy(desc(documentShares.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const rows = await scopedRead((tx) =>
+      tx.select().from(documentShares)
+        .where(eq(documentShares.tenantId, tenantId))
+        .orderBy(desc(documentShares.createdAt))
+        .limit(limit)
+        .offset(offset)
+    );
     return rows.map(toView);
   });
 }
 
 export async function listByDocument(tenantId: string, documentId: string): Promise<DocumentShareView[]> {
-  const rows = await db.select().from(documentShares)
-    .where(and(eq(documentShares.tenantId, tenantId), eq(documentShares.documentId, documentId)))
-    .orderBy(desc(documentShares.createdAt));
+  const rows = await scopedRead((tx) =>
+    tx.select().from(documentShares)
+      .where(and(eq(documentShares.tenantId, tenantId), eq(documentShares.documentId, documentId)))
+      .orderBy(desc(documentShares.createdAt))
+  );
   return rows.map(toView);
 }
 
 export async function getById(tenantId: string, id: string): Promise<DocumentShareView | null> {
   return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE, id), async () => {
-    const rows = await db.select().from(documentShares)
-      .where(and(eq(documentShares.id, id), eq(documentShares.tenantId, tenantId)));
+    const rows = await scopedRead((tx) =>
+      tx.select().from(documentShares)
+        .where(and(eq(documentShares.id, id), eq(documentShares.tenantId, tenantId)))
+    );
     if (!rows.length) return null;
     return toView(rows[0]!);
   });

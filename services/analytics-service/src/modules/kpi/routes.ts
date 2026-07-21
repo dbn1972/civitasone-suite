@@ -5,7 +5,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { savedMetrics } from "../metrics/schema.js";
 import { factEvents } from "../facts/schema.js";
 import { eq, count } from "drizzle-orm";
@@ -26,14 +26,16 @@ export async function kpiRoutes(app: FastifyInstance): Promise<void> {
     const rows = await cache.getOrLoad(
       cache.makeKey(tenantId, "analytics", "kpis"),
       async () => {
-        const result = await db.select({
-          id: savedMetrics.id,
-          name: savedMetrics.name,
-          metricKey: savedMetrics.metricKey,
-        }).from(savedMetrics)
-          .where(eq(savedMetrics.tenantId, tenantId))
-          .orderBy(savedMetrics.name)
-          .limit(200);
+        const result = await scopedRead(async (tx) =>
+          tx.select({
+            id: savedMetrics.id,
+            name: savedMetrics.name,
+            metricKey: savedMetrics.metricKey,
+          }).from(savedMetrics)
+            .where(eq(savedMetrics.tenantId, tenantId))
+            .orderBy(savedMetrics.name)
+            .limit(200),
+        );
         return result.map((r) => ({
           kpiName: r.name,
           category: r.metricKey?.split(".")[0] ?? "General",
@@ -58,14 +60,16 @@ export async function kpiRoutes(app: FastifyInstance): Promise<void> {
       cache.makeKey(tenantId, "analytics", "data-warehouse"),
       async () => {
         // Summarize fact_events by source module
-        const result = await db.select({
-          source: factEvents.source,
-          recordCount: count(factEvents.id),
-        }).from(factEvents)
-          .where(eq(factEvents.tenantId, tenantId))
-          .groupBy(factEvents.source)
-          .orderBy(factEvents.source)
-          .limit(50);
+        const result = await scopedRead(async (tx) =>
+          tx.select({
+            source: factEvents.source,
+            recordCount: count(factEvents.id),
+          }).from(factEvents)
+            .where(eq(factEvents.tenantId, tenantId))
+            .groupBy(factEvents.source)
+            .orderBy(factEvents.source)
+            .limit(50),
+        );
         return result.map((r) => ({
           dataset: r.source ?? "Unknown",
           lastRefresh: new Date().toISOString().slice(0, 16).replace("T", " "),

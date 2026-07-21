@@ -15,5 +15,13 @@ const SCHEMA = {
 
 const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb({ schema: SCHEMA });
 
+/**
+ * scopedRead — wraps a read query in db.transaction() so PostgreSQL RLS policies
+ * (tenant isolation via GUC) are enforced on the read path.
+ */
+export function scopedRead<T>(fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  return db.transaction(fn as never) as Promise<T>;
+}
+
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;

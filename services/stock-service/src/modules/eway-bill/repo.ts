@@ -1,6 +1,7 @@
 import { eq, and, desc } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { ewayBills, type EwayBillRow, type EwayBillInsert } from "./schema.js";
 
 export async function insertEwayBill(tx: typeof db, row: EwayBillInsert): Promise<void> {
@@ -23,12 +24,14 @@ export async function findById(tenantId: string, id: string): Promise<EwayBillRo
   const result = await cache.getOrLoad<EwayBillRow | null>(
     `stock:${tenantId}:eway_bill:${id}`,
     async () => {
-      const rows = await db
-        .select()
-        .from(ewayBills)
-        .where(and(eq(ewayBills.id, id), eq(ewayBills.tenantId, tenantId)))
-        .limit(1);
-      return rows[0] ?? null;
+      return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+        const rows = await tx
+          .select()
+          .from(ewayBills)
+          .where(and(eq(ewayBills.id, id), eq(ewayBills.tenantId, tenantId)))
+          .limit(1);
+        return rows[0] ?? null;
+      }));
     },
   );
   return result ?? undefined;
@@ -38,15 +41,17 @@ export async function findByTenant(
   tenantId: string,
   opts: { status?: string | undefined; limit: number; offset: number },
 ): Promise<EwayBillRow[]> {
-  const conditions = [eq(ewayBills.tenantId, tenantId)];
-  if (opts.status) {
-    conditions.push(eq(ewayBills.status, opts.status));
-  }
-  return db
-    .select()
-    .from(ewayBills)
-    .where(and(...conditions))
-    .orderBy(desc(ewayBills.createdAt))
-    .limit(opts.limit)
-    .offset(opts.offset);
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const conditions = [eq(ewayBills.tenantId, tenantId)];
+    if (opts.status) {
+      conditions.push(eq(ewayBills.status, opts.status));
+    }
+    return tx
+      .select()
+      .from(ewayBills)
+      .where(and(...conditions))
+      .orderBy(desc(ewayBills.createdAt))
+      .limit(opts.limit)
+      .offset(opts.offset);
+  }));
 }

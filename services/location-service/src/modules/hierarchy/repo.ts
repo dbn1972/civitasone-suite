@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { administrativeUnits, type AdministrativeUnitRow, type AdministrativeUnitInsert, type AdministrativeUnitView } from "./schema.js";
 
 function toView(r: AdministrativeUnitRow): AdministrativeUnitView {
@@ -19,21 +19,21 @@ function toView(r: AdministrativeUnitRow): AdministrativeUnitView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<AdministrativeUnitView | null> {
-  const rows = await db.select().from(administrativeUnits).where(eq(administrativeUnits.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(administrativeUnits).where(eq(administrativeUnits.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
 }
 
 export async function listAllByTenant(tenantId: string): Promise<AdministrativeUnitView[]> {
-  const rows = await db.select().from(administrativeUnits)
-    .where(eq(administrativeUnits.tenantId, tenantId));
+  const rows = await scopedRead((tx) => tx.select().from(administrativeUnits)
+    .where(eq(administrativeUnits.tenantId, tenantId)));
   return rows.map(toView);
 }
 
 export async function findChildren(parentId: string, tenantId: string): Promise<AdministrativeUnitView[]> {
-  const rows = await db.select().from(administrativeUnits)
-    .where(and(eq(administrativeUnits.parentId, parentId), eq(administrativeUnits.tenantId, tenantId)));
+  const rows = await scopedRead((tx) => tx.select().from(administrativeUnits)
+    .where(and(eq(administrativeUnits.parentId, parentId), eq(administrativeUnits.tenantId, tenantId))));
   return rows.map(toView);
 }
 

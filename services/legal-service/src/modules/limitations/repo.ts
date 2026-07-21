@@ -4,7 +4,8 @@ import { limitationRules } from "./schema.js";
 import type { LimitationRuleRow, LimitationRuleInsert } from "./schema.js";
 
 export async function findById(id: string): Promise<LimitationRuleRow | undefined> {
-  const rows = await db.select().from(limitationRules).where(eq(limitationRules.id, id)).limit(1);
+  const rows = await db.transaction(async (tx) =>
+    tx.select().from(limitationRules).where(eq(limitationRules.id, id)).limit(1));
   return rows[0];
 }
 
@@ -27,8 +28,10 @@ export async function list(
   const offset = (page - 1) * pageSize;
 
   const [data, countResult] = await Promise.all([
-    db.select().from(limitationRules).where(where).limit(pageSize).offset(offset).orderBy(limitationRules.deadline),
-    db.select({ count: sql<number>`count(*)::int` }).from(limitationRules).where(where),
+    db.transaction(async (tx) =>
+      tx.select().from(limitationRules).where(where).limit(pageSize).offset(offset).orderBy(limitationRules.deadline)),
+    db.transaction(async (tx) =>
+      tx.select({ count: sql<number>`count(*)::int` }).from(limitationRules).where(where)),
   ]);
 
   return { data, total: countResult[0]?.count ?? 0 };

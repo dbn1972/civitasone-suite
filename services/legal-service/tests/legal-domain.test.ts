@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { legalCases } from "../src/modules/cases/schema.js";
 import { legalOpinions } from "../src/modules/opinions/schema.js";
@@ -23,22 +25,32 @@ const FILING_1 = "55555555-aaaa-4000-8000-0000000000d0";
 
 const M = (n: number): string => `66666666-dddd-4000-8000-0000000000${String(n).padStart(2, "0")}`;
 
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function wipe(): Promise<void> {
   for (const t of [TENANT_A, TENANT_B]) {
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
-    await db.delete(legalOpinions).where(eq(legalOpinions.tenantId, t));
-    await db.delete(legalCounselBriefs).where(eq(legalCounselBriefs.tenantId, t));
-    await db.delete(legalFilings).where(eq(legalFilings.tenantId, t));
-    await db.delete(legalCases).where(eq(legalCases.tenantId, t));
+    await runWithTenant(t, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
+      await tx.delete(legalOpinions).where(eq(legalOpinions.tenantId, t));
+      await tx.delete(legalCounselBriefs).where(eq(legalCounselBriefs.tenantId, t));
+      await tx.delete(legalFilings).where(eq(legalFilings.tenantId, t));
+      await tx.delete(legalCases).where(eq(legalCases.tenantId, t));
+    }));
   }
-  for (let i = 1; i <= 30; i++) {
-    await db.delete(processed).where(eq(processed.messageId, M(i)));
-  }
-  // also clear the inbox for the fixed lifecycle messageIds, else a re-run is
-  // (correctly) deduped by markProcessed and the row is never re-created.
-  for (const mid of [OP_1, BRIEF_1, FILING_1]) {
-    await db.delete(processed).where(eq(processed.messageId, mid));
-  }
+  // processed table doesn't have tenantId scoping on RLS, so run under TENANT_A
+  await runWithTenant(TENANT_A, () => db.transaction(async (tx) => {
+    for (let i = 1; i <= 30; i++) {
+      await tx.delete(processed).where(eq(processed.messageId, M(i)));
+    }
+    for (const mid of [OP_1, BRIEF_1, FILING_1]) {
+      await tx.delete(processed).where(eq(processed.messageId, mid));
+    }
+  }));
 }
 
 async function drain(_q: MemoryQueue): Promise<void> {
@@ -47,11 +59,13 @@ async function drain(_q: MemoryQueue): Promise<void> {
 
 beforeAll(async () => {
   await wipe();
-  await db.insert(legalCases).values({
-    id: CASE_A, tenantId: TENANT_A, caseNo: "WP-2026-D01",
-    title: "Domain test case", court: "High Court Delhi",
-    status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
-  });
+  await runWithTenant(TENANT_A, () => db.transaction(async (tx) => {
+    await tx.insert(legalCases).values({
+      id: CASE_A, tenantId: TENANT_A, caseNo: "WP-2026-D01",
+      title: "Domain test case", court: "High Court Delhi",
+      status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
+    });
+  }));
 });
 afterAll(async () => { await wipe(); await sqlClient.end(); });
 
@@ -67,7 +81,7 @@ describe("Legal opinion domain — lifecycle guard (pure)", () => {
 // ── Opinion lifecycle CQRS ─────────────────────────────────────────────────────
 describe("Legal opinion — sought → drafted → issued (integration)", () => {
   it("full lifecycle persists status transitions, timestamps and emits opinion.issued + audit", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerOpinionConsumers(q);
     await q.start();
 
@@ -78,7 +92,8 @@ describe("Legal opinion — sought → drafted → issued (integration)", () => 
                  question: "Is the notification ultra vires?", caseId: CASE_A, soughtBy: "Secretary, Dept" },
     });
     await drain(q);
-    let [op] = await db.select().from(legalOpinions).where(eq(legalOpinions.id, OP_1));
+    let [op] = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalOpinions).where(eq(legalOpinions.id, OP_1))));
     expect(op?.status).toBe("sought");
     expect(op?.caseId).toBe(CASE_A);
 
@@ -88,7 +103,8 @@ describe("Legal opinion — sought → drafted → issued (integration)", () => 
       payload: { opinionId: OP_1, tenantId: TENANT_A, counselName: "Sr. Adv. R. Mehta", opinionText: "In my considered opinion..." },
     });
     await drain(q);
-    [op] = await db.select().from(legalOpinions).where(eq(legalOpinions.id, OP_1));
+    [op] = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalOpinions).where(eq(legalOpinions.id, OP_1))));
     expect(op?.status).toBe("drafted");
     expect(op?.counselName).toBe("Sr. Adv. R. Mehta");
     expect(op?.draftedAt).not.toBeNull();
@@ -101,11 +117,13 @@ describe("Legal opinion — sought → drafted → issued (integration)", () => 
     await drain(q);
     await q.stop();
 
-    [op] = await db.select().from(legalOpinions).where(eq(legalOpinions.id, OP_1));
+    [op] = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalOpinions).where(eq(legalOpinions.id, OP_1))));
     expect(op?.status).toBe("issued");
     expect(op?.issuedAt).not.toBeNull();
 
-    const events = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A));
+    const events = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A))));
     expect(events.map((e) => e.eventType)).toContain(EVENTS.opinionIssued);
     expect(events.map((e) => e.eventType)).toContain("audit.event.record");
     const issued = events.find((e) => e.eventType === EVENTS.opinionIssued);
@@ -113,7 +131,7 @@ describe("Legal opinion — sought → drafted → issued (integration)", () => 
   });
 
   it("idempotency: redelivering opinion.seek with same messageId inserts exactly one row", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerOpinionConsumers(q);
     await q.start();
     const ID = "33333333-cccc-4000-8000-0000000000d0";
@@ -127,7 +145,8 @@ describe("Legal opinion — sought → drafted → issued (integration)", () => 
     await q.publish(COMMANDS.opinionSeek, dup);
     await drain(q);
     await q.stop();
-    const rows = await db.select().from(legalOpinions).where(eq(legalOpinions.id, ID));
+    const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalOpinions).where(eq(legalOpinions.id, ID))));
     expect(rows.length).toBe(1);
   });
 });
@@ -135,7 +154,7 @@ describe("Legal opinion — sought → drafted → issued (integration)", () => 
 // ── Counsel brief ──────────────────────────────────────────────────────────────
 describe("Legal counsel brief — assignment (integration)", () => {
   it("assign persists brief tied to case + emits counsel_brief.assigned + audit", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerCounselBriefConsumers(q);
     await q.start();
     await q.publish(COMMANDS.counselBriefAssign, {
@@ -146,17 +165,19 @@ describe("Legal counsel brief — assignment (integration)", () => {
     });
     await drain(q);
     await q.stop();
-    const [b] = await db.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.id, BRIEF_1));
+    const [b] = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.id, BRIEF_1))));
     expect(b?.status).toBe("assigned");
     expect(b?.caseId).toBe(CASE_A);
     expect(b?.counselName).toBe("Adv. K. Iyer");
     expect(b?.feeMinor).toBe(250000n);
-    const events = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A));
+    const events = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A))));
     expect(events.map((e) => e.eventType)).toContain(EVENTS.counselBriefAssigned);
   });
 
   it("idempotency: redelivered assignment yields one brief row", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerCounselBriefConsumers(q);
     await q.start();
     const ID = "44444444-cccc-4000-8000-0000000000d0";
@@ -170,7 +191,8 @@ describe("Legal counsel brief — assignment (integration)", () => {
     await q.publish(COMMANDS.counselBriefAssign, dup);
     await drain(q);
     await q.stop();
-    const rows = await db.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.id, ID));
+    const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.id, ID))));
     expect(rows.length).toBe(1);
   });
 });
@@ -178,7 +200,7 @@ describe("Legal counsel brief — assignment (integration)", () => {
 // ── Filing / affidavit ─────────────────────────────────────────────────────────
 describe("Legal filing/affidavit — record (integration)", () => {
   it("record an affidavit against a case, status filed, filed_at set, emits filing.recorded + audit", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerFilingConsumers(q);
     await q.start();
     await q.publish(COMMANDS.filingRecord, {
@@ -190,12 +212,14 @@ describe("Legal filing/affidavit — record (integration)", () => {
     });
     await drain(q);
     await q.stop();
-    const [f] = await db.select().from(legalFilings).where(eq(legalFilings.id, FILING_1));
+    const [f] = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalFilings).where(eq(legalFilings.id, FILING_1))));
     expect(f?.filingType).toBe("affidavit");
     expect(f?.status).toBe("filed");
     expect(f?.filedAt).not.toBeNull();
     expect(f?.caseId).toBe(CASE_A);
-    const events = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A));
+    const events = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A))));
     expect(events.map((e) => e.eventType)).toContain(EVENTS.filingRecorded);
   });
 });
@@ -203,7 +227,7 @@ describe("Legal filing/affidavit — record (integration)", () => {
 // ── Tenant isolation ───────────────────────────────────────────────────────────
 describe("Legal — tenant isolation", () => {
   it("opinion.draft for an opinion owned by another tenant does not mutate it", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerOpinionConsumers(q);
     await q.start();
     const ID = "33333333-eeee-4000-8000-0000000000d0";
@@ -222,7 +246,8 @@ describe("Legal — tenant isolation", () => {
     });
     await drain(q);
     await q.stop();
-    const [op] = await db.select().from(legalOpinions).where(eq(legalOpinions.id, ID));
+    const [op] = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(legalOpinions).where(eq(legalOpinions.id, ID))));
     expect(op?.status).toBe("sought");        // unchanged
     expect(op?.counselName).toBeNull();        // not hijacked
   });

@@ -1,6 +1,6 @@
 /** queries repo — query runs, scheduled queries, export jobs. Tenant-scoped. */
 import { and, eq, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   queryRuns,
   scheduledQueries,
@@ -77,22 +77,26 @@ export async function fail(tx: Writer, id: string, error: string, actorId: strin
 }
 
 export async function findById(id: string, tenantId: string): Promise<QueryRunView | null> {
-  const rows = await db
-    .select()
-    .from(queryRuns)
-    .where(and(eq(queryRuns.id, id), eq(queryRuns.tenantId, tenantId)))
-    .limit(1);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(queryRuns)
+      .where(and(eq(queryRuns.id, id), eq(queryRuns.tenantId, tenantId)))
+      .limit(1),
+  );
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<QueryRunView[]> {
-  const rows = await db
-    .select()
-    .from(queryRuns)
-    .where(eq(queryRuns.tenantId, tenantId))
-    .orderBy(desc(queryRuns.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(queryRuns)
+      .where(eq(queryRuns.tenantId, tenantId))
+      .orderBy(desc(queryRuns.createdAt))
+      .limit(limit)
+      .offset(offset),
+  );
   return rows.map(toView);
 }
 
@@ -102,13 +106,15 @@ export async function insertScheduled(tx: Writer, row: ScheduledInsert): Promise
 }
 
 export async function listScheduled(tenantId: string, limit: number, offset: number): Promise<ScheduledView[]> {
-  const rows = await db
-    .select()
-    .from(scheduledQueries)
-    .where(eq(scheduledQueries.tenantId, tenantId))
-    .orderBy(desc(scheduledQueries.updatedAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(scheduledQueries)
+      .where(eq(scheduledQueries.tenantId, tenantId))
+      .orderBy(desc(scheduledQueries.updatedAt))
+      .limit(limit)
+      .offset(offset),
+  );
   return rows.map(toScheduledView);
 }
 
@@ -131,21 +137,25 @@ export async function completeExport(
 }
 
 export async function listExports(tenantId: string, limit: number, offset: number): Promise<ExportView[]> {
-  const rows = await db
-    .select()
-    .from(exportJobs)
-    .where(eq(exportJobs.tenantId, tenantId))
-    .orderBy(desc(exportJobs.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(exportJobs)
+      .where(eq(exportJobs.tenantId, tenantId))
+      .orderBy(desc(exportJobs.createdAt))
+      .limit(limit)
+      .offset(offset),
+  );
   return rows.map(toExportView);
 }
 
 export async function findExportById(id: string, tenantId: string): Promise<ExportView | null> {
-  const rows = await db
-    .select()
-    .from(exportJobs)
-    .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, tenantId)))
-    .limit(1);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(exportJobs)
+      .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, tenantId)))
+      .limit(1),
+  );
   return rows[0] ? toExportView(rows[0]) : null;
 }

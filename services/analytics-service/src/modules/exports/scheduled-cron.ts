@@ -53,14 +53,16 @@ export async function tick(): Promise<number> {
   let dispatched = 0;
 
   // Find all enabled scheduled exports where nextRunAt <= now
-  const dueExports = await db
-    .select()
-    .from(scheduledExports)
-    .where(and(
-      eq(scheduledExports.enabled, true),
-      lte(scheduledExports.nextRunAt, now),
-    ))
-    .limit(100); // cap per tick to avoid overwhelming the queue
+  const dueExports = await db.transaction(async (tx) =>
+    tx
+      .select()
+      .from(scheduledExports)
+      .where(and(
+        eq(scheduledExports.enabled, true),
+        lte(scheduledExports.nextRunAt, now),
+      ))
+      .limit(100),
+  ); // cap per tick to avoid overwhelming the queue
 
   for (const scheduled of dueExports) {
     const exportId = randomUUID();
@@ -85,15 +87,17 @@ export async function tick(): Promise<number> {
     const nextRunAt = computeNextRunAt(now, scheduled.cadence as ScheduledExportCadence);
 
     // Update lastRunAt and nextRunAt
-    await db
-      .update(scheduledExports)
-      .set({
-        lastRunAt: now,
-        nextRunAt,
-        updatedAt: now,
-        updatedBy: SYSTEM_ACTOR,
-      })
-      .where(eq(scheduledExports.id, scheduled.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(scheduledExports)
+        .set({
+          lastRunAt: now,
+          nextRunAt,
+          updatedAt: now,
+          updatedBy: SYSTEM_ACTOR,
+        })
+        .where(eq(scheduledExports.id, scheduled.id));
+    });
 
     dispatched++;
 

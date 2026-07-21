@@ -4,7 +4,7 @@
  * `version` column (compare-and-set); a stale version affects 0 rows.
  */
 import { and, eq, asc, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   dashboards,
   dashboardWidgets,
@@ -54,23 +54,27 @@ export function toShareView(r: ShareRow): ShareView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<DashboardView | null> {
-  const rows = await db
-    .select()
-    .from(dashboards)
-    .where(and(eq(dashboards.id, id), eq(dashboards.tenantId, tenantId)))
-    .limit(1);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(dashboards)
+      .where(and(eq(dashboards.id, id), eq(dashboards.tenantId, tenantId)))
+      .limit(1),
+  );
   const row = rows[0];
   return row ? toView(row) : null;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DashboardView[]> {
-  const rows = await db
-    .select()
-    .from(dashboards)
-    .where(eq(dashboards.tenantId, tenantId))
-    .orderBy(desc(dashboards.updatedAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(dashboards)
+      .where(eq(dashboards.tenantId, tenantId))
+      .orderBy(desc(dashboards.updatedAt))
+      .limit(limit)
+      .offset(offset),
+  );
   return rows.map(toView);
 }
 
@@ -110,11 +114,13 @@ export async function insertWidget(tx: Writer, row: WidgetInsert): Promise<void>
 }
 
 export async function listWidgets(dashboardId: string, tenantId: string): Promise<WidgetView[]> {
-  const rows = await db
-    .select()
-    .from(dashboardWidgets)
-    .where(and(eq(dashboardWidgets.dashboardId, dashboardId), eq(dashboardWidgets.tenantId, tenantId)))
-    .orderBy(asc(dashboardWidgets.position));
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(dashboardWidgets)
+      .where(and(eq(dashboardWidgets.dashboardId, dashboardId), eq(dashboardWidgets.tenantId, tenantId)))
+      .orderBy(asc(dashboardWidgets.position)),
+  );
   return rows.map(toWidgetView);
 }
 
@@ -130,9 +136,11 @@ export async function upsertShare(tx: Writer, row: ShareInsert): Promise<void> {
 }
 
 export async function listShares(dashboardId: string, tenantId: string): Promise<ShareView[]> {
-  const rows = await db
-    .select()
-    .from(dashboardShares)
-    .where(and(eq(dashboardShares.dashboardId, dashboardId), eq(dashboardShares.tenantId, tenantId)));
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(dashboardShares)
+      .where(and(eq(dashboardShares.dashboardId, dashboardId), eq(dashboardShares.tenantId, tenantId))),
+  );
   return rows.map(toShareView);
 }

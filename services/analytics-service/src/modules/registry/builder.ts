@@ -82,7 +82,7 @@ function buildCondition(f: FilterSpec): SQL {
   }
 }
 
-function buildSelect(db: Db, tenantId: string, spec: QuerySpec) {
+function buildSelect(tx: Db, tenantId: string, spec: QuerySpec) {
   const dims = spec.dimensions.map(resolveDimension); // throws on non-whitelisted
 
   // SELECT: each whitelisted dimension column + the metric aggregate as "value".
@@ -97,7 +97,7 @@ function buildSelect(db: Db, tenantId: string, spec: QuerySpec) {
   if (spec.dateTo) conds.push(lte(factEvents.occurredAt, new Date(spec.dateTo)));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q: any = db.select(selection as any).from(factEvents).where(and(...conds));
+  let q: any = tx.select(selection as any).from(factEvents).where(and(...conds));
   if (dims.length > 0) q = q.groupBy(...dims.map((d) => d.column));
   q = q.limit(spec.limit);
   return q;
@@ -107,13 +107,13 @@ function buildSelect(db: Db, tenantId: string, spec: QuerySpec) {
  * Compile (but do not execute) the query for a tenant. Throws RegistryError if
  * the spec references anything outside the whitelist.
  */
-export function buildAggregateQuery(db: Db, tenantId: string, spec: QuerySpec) {
-  return buildSelect(db, tenantId, spec);
+export function buildAggregateQuery(tx: Db, tenantId: string, spec: QuerySpec) {
+  return buildSelect(tx, tenantId, spec);
 }
 
 /** Execute the query and normalise rows to numbers for the metric value. */
-export async function runAggregateQuery(db: Db, tenantId: string, spec: QuerySpec): Promise<QueryResult> {
-  const rows = (await buildAggregateQuery(db, tenantId, spec)) as Array<Record<string, unknown>>;
+export async function runAggregateQuery(tx: Db, tenantId: string, spec: QuerySpec): Promise<QueryResult> {
+  const rows = (await buildAggregateQuery(tx, tenantId, spec)) as Array<Record<string, unknown>>;
   const normalised: QueryResultRow[] = rows.map((r) => {
     const out: QueryResultRow = {};
     for (const d of spec.dimensions) out[d] = r[d] == null ? "—" : String(r[d]);

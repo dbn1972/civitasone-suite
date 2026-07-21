@@ -12,7 +12,8 @@ import {
 export type Writer = Pick<typeof db, "insert" | "update" | "select" | "delete">;
 
 export async function findDocumentById(id: string): Promise<MatterDocumentRow | null> {
-  const rows = await db.select().from(matterDocuments).where(eq(matterDocuments.id, id)).limit(1);
+  const rows = await db.transaction(async (tx) =>
+    tx.select().from(matterDocuments).where(eq(matterDocuments.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -47,7 +48,8 @@ export async function listDocuments(
   } else {
     conditions.push(isNull(matterDocuments.parentFolderId));
   }
-  return db.select().from(matterDocuments).where(and(...conditions));
+  return db.transaction(async (tx) =>
+    tx.select().from(matterDocuments).where(and(...conditions)));
 }
 
 export async function insertVersion(tx: Writer, row: DocumentVersionInsert): Promise<void> {
@@ -55,12 +57,12 @@ export async function insertVersion(tx: Writer, row: DocumentVersionInsert): Pro
 }
 
 export async function listVersions(documentId: string, limit: number): Promise<DocumentVersionRow[]> {
-  return db
-    .select()
-    .from(documentVersions)
-    .where(eq(documentVersions.documentId, documentId))
-    .orderBy(desc(documentVersions.versionNumber))
-    .limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select()
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, documentId))
+      .orderBy(desc(documentVersions.versionNumber))
+      .limit(limit));
 }
 
 export async function setLegalHold(tx: Writer, id: string, hold: boolean): Promise<void> {

@@ -46,18 +46,20 @@ async function sweep(): Promise<void> {
 
   for (const [cadence, minutes] of Object.entries(CADENCE_MINUTES)) {
     const cutoff = new Date(now.getTime() - minutes * 60_000);
-    const due = await db
-      .select()
-      .from(scheduledQueries)
-      .where(and(
-        eq(scheduledQueries.enabled, true),
-        eq(scheduledQueries.cadence, cadence),
-        or(
-          isNull(scheduledQueries.lastRunAt),
-          lte(scheduledQueries.lastRunAt, cutoff),
-        ),
-      ))
-      .limit(100); // cap to avoid overwhelming a single sweep tick
+    const due = await db.transaction(async (tx) =>
+      tx
+        .select()
+        .from(scheduledQueries)
+        .where(and(
+          eq(scheduledQueries.enabled, true),
+          eq(scheduledQueries.cadence, cadence),
+          or(
+            isNull(scheduledQueries.lastRunAt),
+            lte(scheduledQueries.lastRunAt, cutoff),
+          ),
+        ))
+        .limit(100),
+    ); // cap to avoid overwhelming a single sweep tick
 
     for (const sq of due) {
       const runId = randomUUID();
@@ -83,10 +85,12 @@ async function sweep(): Promise<void> {
       });
 
       // Update lastRunAt so it won't be picked up again until next cadence
-      await db
-        .update(scheduledQueries)
-        .set({ lastRunAt: now, updatedAt: now })
-        .where(eq(scheduledQueries.id, sq.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(scheduledQueries)
+          .set({ lastRunAt: now, updatedAt: now })
+          .where(eq(scheduledQueries.id, sq.id));
+      });
 
       dispatched++;
     }

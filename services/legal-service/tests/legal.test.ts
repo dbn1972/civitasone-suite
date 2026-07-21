@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { legalCases } from "../src/modules/cases/schema.js";
 import { legalHearings } from "../src/modules/hearings/schema.js";
@@ -21,14 +23,27 @@ const REVIEW_1  = "44444444-dddd-4000-8000-000000000020";
 
 const MSG = (n: number): string => `55555555-eeee-4000-8000-0000000000${String(n).padStart(2, "0")}`;
 
+/**
+ * Wraps MemoryQueue subscriptions with tenant context so the consumer's
+ * db.transaction() picks up the RLS GUC via AsyncLocalStorage.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function wipe(): Promise<void> {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(legalHearings).where(eq(legalHearings.tenantId, TENANT));
-  await db.delete(legalContractReviews).where(eq(legalContractReviews.tenantId, TENANT));
-  await db.delete(legalCases).where(eq(legalCases.tenantId, TENANT));
-  for (let i = 1; i <= 10; i++) {
-    await db.delete(processed).where(eq(processed.messageId, MSG(i)));
-  }
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(legalHearings).where(eq(legalHearings.tenantId, TENANT));
+    await tx.delete(legalContractReviews).where(eq(legalContractReviews.tenantId, TENANT));
+    await tx.delete(legalCases).where(eq(legalCases.tenantId, TENANT));
+    for (let i = 1; i <= 10; i++) {
+      await tx.delete(processed).where(eq(processed.messageId, MSG(i)));
+    }
+  }));
 }
 
 afterAll(async () => { await sqlClient.end(); });
@@ -80,22 +95,24 @@ describe("Legal hearing domain — adjournment (pure)", () => {
 describe("Legal hearing — adjournment CQRS (integration)", () => {
   beforeAll(async () => {
     await wipe();
-    await db.insert(legalCases).values({
-      id: CASE_1, tenantId: TENANT, caseNo: "WP-2026-001",
-      title: "Disputed contract award", court: "High Court Delhi",
-      status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
-    });
-    await db.insert(legalHearings).values({
-      id: HEARING_1, tenantId: TENANT, caseId: CASE_1,
-      hearingDate: "2026-07-01", court: "High Court Delhi",
-      purpose: "First hearing", status: "scheduled",
-      nextDate: "2026-07-01",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(legalCases).values({
+        id: CASE_1, tenantId: TENANT, caseNo: "WP-2026-001",
+        title: "Disputed contract award", court: "High Court Delhi",
+        status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(legalHearings).values({
+        id: HEARING_1, tenantId: TENANT, caseId: CASE_1,
+        hearingDate: "2026-07-01", court: "High Court Delhi",
+        purpose: "First hearing", status: "scheduled",
+        nextDate: "2026-07-01",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
 
   it("adjourn: next_date updated on case, previous_date (hearingDate) archived in hearing", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerCaseConsumers(q);
     registerHearingConsumers(q);
     await q.start();
@@ -111,20 +128,23 @@ describe("Legal hearing — adjournment CQRS (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
-    const [hearing] = await db.select().from(legalHearings).where(eq(legalHearings.id, HEARING_1));
+    const [hearing] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalHearings).where(eq(legalHearings.id, HEARING_1))));
     expect(hearing?.status).toBe("adjourned");
     expect(hearing?.nextDate).toBe("2026-08-15");
     expect(hearing?.previousDate).toBe("2026-07-01");
 
-    const [kase] = await db.select().from(legalCases).where(eq(legalCases.id, CASE_1));
+    const [kase] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.id, CASE_1))));
     expect(kase?.nextDate).toBe("2026-08-15");
 
-    const events = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const events = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     expect(events.map((e) => e.eventType)).toContain(EVENTS.caseDateSet);
   });
 
   it("second adjournment updates next_date again, archives original hearingDate as previous_date", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerHearingConsumers(q);
     await q.start();
 
@@ -139,32 +159,36 @@ describe("Legal hearing — adjournment CQRS (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
-    const [hearing] = await db.select().from(legalHearings).where(eq(legalHearings.id, HEARING_1));
+    const [hearing] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalHearings).where(eq(legalHearings.id, HEARING_1))));
     expect(hearing?.nextDate).toBe("2026-09-20");
     // consumer archives hearing.hearingDate (the column) as previousDate on each adjournment
     expect(hearing?.previousDate).toBe("2026-07-01");
 
-    const [kase] = await db.select().from(legalCases).where(eq(legalCases.id, CASE_1));
+    const [kase] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.id, CASE_1))));
     expect(kase?.nextDate).toBe("2026-09-20");
   });
 });
 
 describe("Legal contract review — clearance CQRS (integration)", () => {
   beforeAll(async () => {
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-    await db.delete(legalContractReviews).where(eq(legalContractReviews.tenantId, TENANT));
-    for (const id of [MSG(3), MSG(4)]) {
-      await db.delete(processed).where(eq(processed.messageId, id));
-    }
-    await db.insert(legalContractReviews).values({
-      id: REVIEW_1, tenantId: TENANT, contractRef: "procurement_po:abc-uuid",
-      subject: "Supply of IT equipment", valueMinor: 5000000n, currency: "INR",
-      status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+      await tx.delete(legalContractReviews).where(eq(legalContractReviews.tenantId, TENANT));
+      for (const id of [MSG(3), MSG(4)]) {
+        await tx.delete(processed).where(eq(processed.messageId, id));
+      }
+      await tx.insert(legalContractReviews).values({
+        id: REVIEW_1, tenantId: TENANT, contractRef: "procurement_po:abc-uuid",
+        subject: "Supply of IT equipment", valueMinor: 5000000n, currency: "INR",
+        status: "pending", createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
   });
 
   it("clearance: status → cleared, cleared_at set, legal.contract_review.cleared emitted", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerContractConsumers(q);
     await q.start();
 
@@ -179,11 +203,13 @@ describe("Legal contract review — clearance CQRS (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
-    const [review] = await db.select().from(legalContractReviews).where(eq(legalContractReviews.id, REVIEW_1));
+    const [review] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalContractReviews).where(eq(legalContractReviews.id, REVIEW_1))));
     expect(review?.status).toBe("cleared");
     expect(review?.clearedAt).not.toBeNull();
 
-    const events = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const events = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     expect(events.map((e) => e.eventType)).toContain(EVENTS.contractReviewCleared);
     const cleared = events.find((e) => e.eventType === EVENTS.contractReviewCleared);
     expect((cleared?.payload as Record<string, unknown>)?.reviewId).toBe(REVIEW_1);
@@ -191,7 +217,7 @@ describe("Legal contract review — clearance CQRS (integration)", () => {
   });
 
   it("re-clearing an already-cleared review is rejected by domain guard, status unchanged", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerContractConsumers(q);
     await q.start();
 
@@ -203,7 +229,8 @@ describe("Legal contract review — clearance CQRS (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 400));
     await q.stop();
 
-    const [review] = await db.select().from(legalContractReviews).where(eq(legalContractReviews.id, REVIEW_1));
+    const [review] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalContractReviews).where(eq(legalContractReviews.id, REVIEW_1))));
     expect(review?.status).toBe("cleared");
   });
 });

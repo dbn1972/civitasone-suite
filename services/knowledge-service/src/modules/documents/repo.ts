@@ -1,6 +1,6 @@
 import { eq, desc, ilike, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { documents, type DocumentRow, type DocumentInsert, type DocumentView } from "./schema.js";
 
 export function toView(r: DocumentRow): DocumentView {
@@ -22,11 +22,13 @@ export function toView(r: DocumentRow): DocumentView {
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DocumentView[]> {
-  const rows = await db.select().from(documents)
-    .where(eq(documents.tenantId, tenantId))
-    .orderBy(desc(documents.updatedAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedRead((tx) =>
+    tx.select().from(documents)
+      .where(eq(documents.tenantId, tenantId))
+      .orderBy(desc(documents.updatedAt))
+      .limit(limit)
+      .offset(offset)
+  );
   return rows.map(toView);
 }
 
@@ -41,10 +43,12 @@ export async function searchByTenant(
     ilike(documents.title, `%${query}%`),
     ...(category ? [eq(documents.category, category)] : []),
   ];
-  const rows = await db.select().from(documents)
-    .where(and(...conditions))
-    .orderBy(desc(documents.updatedAt))
-    .limit(limit);
+  const rows = await scopedRead((tx) =>
+    tx.select().from(documents)
+      .where(and(...conditions))
+      .orderBy(desc(documents.updatedAt))
+      .limit(limit)
+  );
   return rows.map(toView);
 }
 

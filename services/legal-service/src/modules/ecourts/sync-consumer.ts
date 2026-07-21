@@ -182,14 +182,18 @@ export async function syncMatter(
       .filter((h) => h.date >= today)
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    if (futureHearings.length > 0) {
-      nextHearingDate = futureHearings[0].date;
-      nextHearingPurpose = futureHearings[0].purpose;
+    const firstFuture = futureHearings[0];
+    if (firstFuture) {
+      nextHearingDate = firstFuture.date;
+      nextHearingPurpose = firstFuture.purpose;
     } else {
       // No future hearings — use the most recent one
       const sorted = [...result.hearingDates].sort((a, b) => b.date.localeCompare(a.date));
-      nextHearingDate = sorted[0].date;
-      nextHearingPurpose = sorted[0].purpose;
+      const mostRecent = sorted[0];
+      if (mostRecent) {
+        nextHearingDate = mostRecent.date;
+        nextHearingPurpose = mostRecent.purpose;
+      }
     }
   }
 
@@ -231,7 +235,8 @@ export async function syncMatter(
       });
     } else {
       // Update purpose if changed
-      if (nextHearingPurpose && existing[0].purpose !== nextHearingPurpose) {
+      const existingHearing = existing[0]!;
+      if (nextHearingPurpose && existingHearing.purpose !== nextHearingPurpose) {
         await db
           .update(legalHearings)
           .set({
@@ -239,7 +244,7 @@ export async function syncMatter(
             updatedAt: new Date(),
             updatedBy: SYSTEM_ACTOR,
           })
-          .where(eq(legalHearings.id, existing[0].id));
+          .where(eq(legalHearings.id, existingHearing.id));
       }
     }
   }
@@ -255,14 +260,15 @@ export async function syncMatter(
     }
   }
 
-  return {
+  const result_: SyncMatterResult = {
     caseId,
     cnrNumber,
     success: true,
-    nextHearingDate,
-    nextHearingPurpose,
     ordersDownloaded,
   };
+  if (nextHearingDate !== undefined) result_.nextHearingDate = nextHearingDate;
+  if (nextHearingPurpose !== undefined) result_.nextHearingPurpose = nextHearingPurpose;
+  return result_;
 }
 
 // ── Poll tick ─────────────────────────────────────────────────────

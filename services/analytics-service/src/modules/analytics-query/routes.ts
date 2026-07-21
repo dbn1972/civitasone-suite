@@ -7,7 +7,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { registerErrorHandler } from "../../shared/errors.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { analyticsQueryBody, drillThroughParams, drillThroughQuery } from "./validators.js";
 import { executeAnalyticsQuery, executeDrillThrough } from "./executor.js";
 import { CalcFieldError, JoinError, DrillThroughError } from "./domain.js";
@@ -29,7 +29,7 @@ export async function analyticsQueryRoutes(app: FastifyInstance): Promise<void> 
     const body = analyticsQueryBody.parse(req.body);
 
     try {
-      const result = await executeAnalyticsQuery(db, ctx.tenantId, body);
+      const result = await scopedRead(async (tx) => executeAnalyticsQuery(tx as any, ctx.tenantId, body));
       return reply.code(200).send({ data: result });
     } catch (err) {
       if (err instanceof CalcFieldError) {
@@ -59,14 +59,14 @@ export async function analyticsQueryRoutes(app: FastifyInstance): Promise<void> 
     const query = drillThroughQuery.parse(req.query);
 
     try {
-      const result = await executeDrillThrough(
-        db,
+      const result = await scopedRead(async (tx) => executeDrillThrough(
+        tx as any,
         ctx.tenantId,
         params.reportId,
         params.cellId,
         query.limit,
         query.offset,
-      );
+      ));
       return reply.code(200).send({ data: result });
     } catch (err) {
       if (err instanceof DrillThroughError) {

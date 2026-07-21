@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { jurisdictions, type JurisdictionRow, type JurisdictionInsert, type JurisdictionView } from "./schema.js";
 
 function toView(r: JurisdictionRow): JurisdictionView {
@@ -15,21 +15,21 @@ function toView(r: JurisdictionRow): JurisdictionView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<JurisdictionView | null> {
-  const rows = await db.select().from(jurisdictions).where(eq(jurisdictions.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(jurisdictions).where(eq(jurisdictions.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
 }
 
 export async function findByOffice(officeId: string, tenantId: string): Promise<JurisdictionView[]> {
-  const rows = await db.select().from(jurisdictions)
-    .where(and(eq(jurisdictions.officeId, officeId), eq(jurisdictions.tenantId, tenantId)));
+  const rows = await scopedRead((tx) => tx.select().from(jurisdictions)
+    .where(and(eq(jurisdictions.officeId, officeId), eq(jurisdictions.tenantId, tenantId))));
   return rows.map(toView);
 }
 
 export async function findByUnit(unitId: string, tenantId: string): Promise<JurisdictionView[]> {
-  const rows = await db.select().from(jurisdictions)
-    .where(and(eq(jurisdictions.unitId, unitId), eq(jurisdictions.tenantId, tenantId)));
+  const rows = await scopedRead((tx) => tx.select().from(jurisdictions)
+    .where(and(eq(jurisdictions.unitId, unitId), eq(jurisdictions.tenantId, tenantId))));
   return rows.map(toView);
 }
 
@@ -40,21 +40,21 @@ export async function findOfficesByArea(unitId: string, tenantId: string): Promi
 
 /** Find the primary administrative area for a given office. */
 export async function findAreaForOffice(officeId: string, tenantId: string): Promise<JurisdictionView | null> {
-  const rows = await db.select().from(jurisdictions)
+  const rows = await scopedRead((tx) => tx.select().from(jurisdictions)
     .where(and(
       eq(jurisdictions.officeId, officeId),
       eq(jurisdictions.tenantId, tenantId),
       eq(jurisdictions.isPrimary, true),
     ))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<JurisdictionView[]> {
-  const rows = await db.select().from(jurisdictions)
+  const rows = await scopedRead((tx) => tx.select().from(jurisdictions)
     .where(eq(jurisdictions.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 

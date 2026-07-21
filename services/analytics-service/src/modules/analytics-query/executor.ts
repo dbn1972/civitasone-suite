@@ -103,7 +103,7 @@ function metricExpr(metricKey: string): SQL<number> {
  * - Row cap: 1000
  */
 export async function executeAnalyticsQuery(
-  db: Db,
+  tx: Db,
   tenantId: string,
   body: AnalyticsQueryBody,
 ): Promise<QueryResult> {
@@ -159,7 +159,7 @@ export async function executeAnalyticsQuery(
 
   // Build and execute query
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q: any = db.select(selection as any).from(factEvents).where(and(...conds));
+  let q: any = tx.select(selection as any).from(factEvents).where(and(...conds));
   if (dims.length > 0) {
     q = q.groupBy(...dims.map((d) => d.column));
   }
@@ -203,7 +203,7 @@ export async function executeAnalyticsQuery(
  * - Always tenant-scoped
  */
 export async function executeDrillThrough(
-  db: Db,
+  tx: Db,
   tenantId: string,
   reportId: string,
   cellId: string,
@@ -211,7 +211,7 @@ export async function executeDrillThrough(
   offset: number,
 ): Promise<DrillThroughResult> {
   // Look up the query run (report) by ID — must belong to this tenant
-  const runs = await db
+  const runs = await tx
     .select()
     .from(queryRuns)
     .where(and(eq(queryRuns.id, reportId), eq(queryRuns.tenantId, tenantId)))
@@ -250,7 +250,7 @@ export async function executeDrillThrough(
   // Cap at DRILL_THROUGH_ROW_CAP
   const cappedLimit = Math.min(limit, DRILL_THROUGH_ROW_CAP);
 
-  const rawRows = await db
+  const rawRows = await tx
     .select({
       id: factEvents.id,
       source: factEvents.source,

@@ -1,5 +1,6 @@
 import { eq, and, gte, lte, SQL } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
+import { db, scopedRead } from "../../shared/db.js";
 import { stockEntries, stockEntryItems, type EntryInsert, type EntryItemInsert, type EntryRow } from "./schema.js";
 import { stockLedger, type LedgerInsert } from "../ledger/schema.js";
 import { stockValuationRates } from "../valuation/schema.js";
@@ -20,26 +21,30 @@ export async function appendLedger(tx: Writer, row: LedgerInsert): Promise<void>
 }
 
 export async function getCurrentBalance(tenantId: string, itemId: string, warehouseId: string): Promise<number> {
-  const rows = await db.select().from(stockValuationRates)
-    .where(and(
-      eq(stockValuationRates.tenantId, tenantId),
-      eq(stockValuationRates.itemId, itemId),
-      eq(stockValuationRates.warehouseId, warehouseId)
-    ))
-    .limit(1);
-  return rows[0]?.qty ?? 0;
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(stockValuationRates)
+      .where(and(
+        eq(stockValuationRates.tenantId, tenantId),
+        eq(stockValuationRates.itemId, itemId),
+        eq(stockValuationRates.warehouseId, warehouseId)
+      ))
+      .limit(1);
+    return rows[0]?.qty ?? 0;
+  }));
 }
 
 export async function getValuationRate(tenantId: string, itemId: string, warehouseId: string): Promise<{ qty: number; rateMinor: bigint }> {
-  const rows = await db.select().from(stockValuationRates)
-    .where(and(
-      eq(stockValuationRates.tenantId, tenantId),
-      eq(stockValuationRates.itemId, itemId),
-      eq(stockValuationRates.warehouseId, warehouseId)
-    ))
-    .limit(1);
-  const row = rows[0];
-  return { qty: row?.qty ?? 0, rateMinor: row?.rateMinor ?? 0n };
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(stockValuationRates)
+      .where(and(
+        eq(stockValuationRates.tenantId, tenantId),
+        eq(stockValuationRates.itemId, itemId),
+        eq(stockValuationRates.warehouseId, warehouseId)
+      ))
+      .limit(1);
+    const row = rows[0];
+    return { qty: row?.qty ?? 0, rateMinor: row?.rateMinor ?? 0n };
+  }));
 }
 
 export async function upsertValuationRate(
@@ -54,9 +59,13 @@ export async function upsertValuationRate(
     });
 }
 
-export async function findEntryById(id: string): Promise<EntryRow | null> {
-  const rows = await db.select().from(stockEntries).where(eq(stockEntries.id, id)).limit(1);
-  return rows[0] ?? null;
+export async function findEntryById(id: string, tenantId: string): Promise<EntryRow | null> {
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(stockEntries)
+      .where(and(eq(stockEntries.id, id), eq(stockEntries.tenantId, tenantId)))
+      .limit(1);
+    return rows[0] ?? null;
+  }));
 }
 
 export async function markEntryPosted(tx: Writer, id: string, actorId: string): Promise<void> {
@@ -66,12 +75,14 @@ export async function markEntryPosted(tx: Writer, id: string, actorId: string): 
 }
 
 export async function findLedger(tenantId: string, itemId: string | null, opts?: { from?: string; to?: string; limit?: number; offset?: number }) {
-  const conditions: SQL[] = [eq(stockLedger.tenantId, tenantId)];
-  if (itemId) conditions.push(eq(stockLedger.itemId, itemId));
-  if (opts?.from) conditions.push(gte(stockLedger.postingDate, opts.from));
-  if (opts?.to)   conditions.push(lte(stockLedger.postingDate, opts.to));
-  return db.select().from(stockLedger)
-    .where(and(...conditions))
-    .limit(opts?.limit ?? 100)
-    .offset(opts?.offset ?? 0);
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const conditions: SQL[] = [eq(stockLedger.tenantId, tenantId)];
+    if (itemId) conditions.push(eq(stockLedger.itemId, itemId));
+    if (opts?.from) conditions.push(gte(stockLedger.postingDate, opts.from));
+    if (opts?.to)   conditions.push(lte(stockLedger.postingDate, opts.to));
+    return tx.select().from(stockLedger)
+      .where(and(...conditions))
+      .limit(opts?.limit ?? 100)
+      .offset(opts?.offset ?? 0);
+  }));
 }

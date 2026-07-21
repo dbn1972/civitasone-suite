@@ -22,13 +22,16 @@ export async function insertOrder(tx: Writer, row: typeof legalOrders.$inferInse
 }
 
 export async function listHearingsByTenant(tenantId: string, limit: number): Promise<HearingRow[]> {
-  return db.select().from(legalHearings).where(eq(legalHearings.tenantId, tenantId)).limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select().from(legalHearings).where(eq(legalHearings.tenantId, tenantId)).limit(limit));
 }
 
 export async function listOrdersByTenant(tenantId: string, limit: number) {
-  return db.select().from(legalOrders).where(eq(legalOrders.tenantId, tenantId)).limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select().from(legalOrders).where(eq(legalOrders.tenantId, tenantId)).limit(limit));
 }
 
 export async function listOpinionsByTenant(tenantId: string, limit: number) {
-  return db.select().from(legalOpinions).where(eq(legalOpinions.tenantId, tenantId)).limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select().from(legalOpinions).where(eq(legalOpinions.tenantId, tenantId)).limit(limit));
 }

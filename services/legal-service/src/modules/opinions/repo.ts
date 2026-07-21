@@ -5,7 +5,8 @@ import { legalOpinions, type OpinionRow, type OpinionInsert } from "./schema.js"
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findOpinionById(id: string): Promise<OpinionRow | null> {
-  const rows = await db.select().from(legalOpinions).where(eq(legalOpinions.id, id)).limit(1);
+  const rows = await db.transaction(async (tx) =>
+    tx.select().from(legalOpinions).where(eq(legalOpinions.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -26,5 +27,6 @@ export async function listOpinions(tenantId: string, status?: string, caseId?: s
   const conditions = [eq(legalOpinions.tenantId, tenantId)];
   if (status) conditions.push(eq(legalOpinions.status, status));
   if (caseId) conditions.push(eq(legalOpinions.caseId, caseId));
-  return db.select().from(legalOpinions).where(and(...conditions)).orderBy(desc(legalOpinions.soughtAt)).limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select().from(legalOpinions).where(and(...conditions)).orderBy(desc(legalOpinions.soughtAt)).limit(limit));
 }

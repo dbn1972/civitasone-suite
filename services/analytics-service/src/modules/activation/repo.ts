@@ -8,33 +8,37 @@
  * if a step is emitted more than once. Tenant-scoped (RLS isolates per office).
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { factEvents } from "../facts/schema.js";
 
 export async function recordActivation(tenantId: string, step: string): Promise<void> {
   const systemActor = "00000000-0000-0000-0000-000000000000";
-  await db
-    .insert(factEvents)
-    .values({
-      tenantId,
-      source: "activation",
-      eventType: step,
-      category: "activation",
-      status: "ok",
-      dedupeKey: `activation:${step}`,
-      createdBy: systemActor,
-      updatedBy: systemActor,
-    })
-    .onConflictDoNothing({ target: [factEvents.tenantId, factEvents.dedupeKey] });
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(factEvents)
+      .values({
+        tenantId,
+        source: "activation",
+        eventType: step,
+        category: "activation",
+        status: "ok",
+        dedupeKey: `activation:${step}`,
+        createdBy: systemActor,
+        updatedBy: systemActor,
+      })
+      .onConflictDoNothing({ target: [factEvents.tenantId, factEvents.dedupeKey] });
+  });
 }
 
 export type ActivationRow = { step: string; at: string };
 
 export async function listActivation(tenantId: string): Promise<ActivationRow[]> {
-  const rows = await db
-    .select({ step: factEvents.eventType, at: factEvents.occurredAt })
-    .from(factEvents)
-    .where(and(eq(factEvents.tenantId, tenantId), eq(factEvents.source, "activation")));
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select({ step: factEvents.eventType, at: factEvents.occurredAt })
+      .from(factEvents)
+      .where(and(eq(factEvents.tenantId, tenantId), eq(factEvents.source, "activation"))),
+  );
   return rows.map((r) => ({
     step: r.step,
     at: r.at instanceof Date ? r.at.toISOString() : String(r.at),
@@ -50,10 +54,12 @@ export type ActivationRowWithTenant = ActivationRow & { tenantId: string };
  * dev/UAT the service role bypasses RLS so it returns all offices' rows.
  */
 export async function listActivationAllTenants(): Promise<ActivationRowWithTenant[]> {
-  const rows = await db
-    .select({ tenantId: factEvents.tenantId, step: factEvents.eventType, at: factEvents.occurredAt })
-    .from(factEvents)
-    .where(eq(factEvents.source, "activation"));
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select({ tenantId: factEvents.tenantId, step: factEvents.eventType, at: factEvents.occurredAt })
+      .from(factEvents)
+      .where(eq(factEvents.source, "activation")),
+  );
   return rows.map((r) => ({
     tenantId: r.tenantId,
     step: r.step,

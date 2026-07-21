@@ -1,6 +1,6 @@
 import { eq, and, lte, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { retentionPolicies, type RetentionPolicyRow, type RetentionPolicyInsert, type RetentionPolicyView } from "./schema.js";
 
@@ -27,19 +27,23 @@ export function toView(r: RetentionPolicyRow): RetentionPolicyView {
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<RetentionPolicyView[]> {
   return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await db.select().from(retentionPolicies)
-      .where(eq(retentionPolicies.tenantId, tenantId))
-      .orderBy(desc(retentionPolicies.updatedAt))
-      .limit(limit)
-      .offset(offset);
+    const rows = await scopedRead((tx) =>
+      tx.select().from(retentionPolicies)
+        .where(eq(retentionPolicies.tenantId, tenantId))
+        .orderBy(desc(retentionPolicies.updatedAt))
+        .limit(limit)
+        .offset(offset)
+    );
     return rows.map(toView);
   });
 }
 
 export async function getById(tenantId: string, id: string): Promise<RetentionPolicyView | null> {
   return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE, id), async () => {
-    const rows = await db.select().from(retentionPolicies)
-      .where(and(eq(retentionPolicies.id, id), eq(retentionPolicies.tenantId, tenantId)));
+    const rows = await scopedRead((tx) =>
+      tx.select().from(retentionPolicies)
+        .where(and(eq(retentionPolicies.id, id), eq(retentionPolicies.tenantId, tenantId)))
+    );
     if (!rows.length) return null;
     return toView(rows[0]!);
   });
@@ -51,11 +55,13 @@ export async function getById(tenantId: string, id: string): Promise<RetentionPo
  * for documents in the category.
  */
 export async function listExpiring(tenantId: string, limit: number, offset: number): Promise<RetentionPolicyView[]> {
-  const rows = await db.select().from(retentionPolicies)
-    .where(eq(retentionPolicies.tenantId, tenantId))
-    .orderBy(retentionPolicies.retentionYears)
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedRead((tx) =>
+    tx.select().from(retentionPolicies)
+      .where(eq(retentionPolicies.tenantId, tenantId))
+      .orderBy(retentionPolicies.retentionYears)
+      .limit(limit)
+      .offset(offset)
+  );
   return rows.map(toView);
 }
 

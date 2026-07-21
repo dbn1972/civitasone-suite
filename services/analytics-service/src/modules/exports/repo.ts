@@ -3,7 +3,7 @@
  * Uses the enhanced export_jobs schema from the exports module.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { exportJobs, type ExportJobRow } from "./schema.js";
 
 export interface ExportJobReadView {
@@ -29,10 +29,12 @@ export function toReadView(r: ExportJobRow): ExportJobReadView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<ExportJobReadView | null> {
-  const rows = await db
-    .select()
-    .from(exportJobs)
-    .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, tenantId)))
-    .limit(1);
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(exportJobs)
+      .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, tenantId)))
+      .limit(1),
+  );
   return rows[0] ? toReadView(rows[0]) : null;
 }

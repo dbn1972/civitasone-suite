@@ -8,7 +8,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { eq, and } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { stockEntries } from "../src/modules/entry/schema.js";
 import { stockLedger } from "../src/modules/ledger/schema.js";
@@ -17,6 +19,17 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerEntryConsumers } from "../src/modules/entry/consumer.js";
 import { weightedAvgRate, assertStockNotNegative } from "../src/modules/entry/domain.js";
 import { COMMANDS } from "../src/topics.js";
+
+/**
+ * Wraps queue subscriptions with tenant context so that db.transaction()
+ * inside consumers correctly sets the app.tenant_id GUC for RLS.
+ */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
 
 const ACTOR    = "00000000-aaaa-4000-8000-000000000001";
 const TENANT   = "11111111-aaaa-4000-8000-000000000001";
@@ -29,13 +42,15 @@ const MSG_1    = "dddddddd-1111-4000-8000-000000000001";
 const MSG_2    = "dddddddd-2222-4000-8000-000000000002";
 
 async function wipe(entryId: string, msgId: string, itemId: string) {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(stockLedger).where(eq(stockLedger.entryId, entryId));
-  await db.delete(stockEntries).where(eq(stockEntries.id, entryId));
-  await db.delete(processed).where(eq(processed.messageId, msgId));
-  await db.delete(stockValuationRates).where(
-    and(eq(stockValuationRates.tenantId, TENANT), eq(stockValuationRates.itemId, itemId))
-  );
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(stockLedger).where(eq(stockLedger.entryId, entryId));
+    await tx.delete(stockEntries).where(eq(stockEntries.id, entryId));
+    await tx.delete(processed).where(eq(processed.messageId, msgId));
+    await tx.delete(stockValuationRates).where(
+      and(eq(stockValuationRates.tenantId, TENANT), eq(stockValuationRates.itemId, itemId))
+    );
+  }));
 }
 
 // ── 1. Weighted average valuation — pure ──────────────────────────────────
@@ -81,7 +96,7 @@ describe("Entry consumer — CQRS wiring (integration)", () => {
   afterAll(async () => { await wipe(ENTRY_1, MSG_1, ITEM_1); });
 
   it("receipt entry: ledger appended, valuation updated, stock.entry.created in outbox", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerEntryConsumers(q);
     await q.start();
 
@@ -101,30 +116,40 @@ describe("Entry consumer — CQRS wiring (integration)", () => {
     await q.stop();
 
     // Entry posted
-    const entries = await db.select().from(stockEntries).where(eq(stockEntries.id, ENTRY_1));
+    const entries = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockEntries).where(eq(stockEntries.id, ENTRY_1))
+    ));
     expect(entries).toHaveLength(1);
     expect(entries[0]?.status).toBe("posted");
 
     // Ledger appended
-    const ledger = await db.select().from(stockLedger).where(eq(stockLedger.entryId, ENTRY_1));
+    const ledger = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockLedger).where(eq(stockLedger.entryId, ENTRY_1))
+    ));
     expect(ledger.length).toBeGreaterThanOrEqual(1);
     expect(ledger[0]?.balanceQty).toBe(100);
 
     // Valuation updated
-    const rates = await db.select().from(stockValuationRates)
-      .where(and(eq(stockValuationRates.tenantId, TENANT), eq(stockValuationRates.itemId, ITEM_1)));
+    const rates = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockValuationRates)
+        .where(and(eq(stockValuationRates.tenantId, TENANT), eq(stockValuationRates.itemId, ITEM_1)))
+    ));
     expect(rates).toHaveLength(1);
     expect(rates[0]?.qty).toBe(100);
     expect(rates[0]?.rateMinor).toBe(10000n);
 
     // Events emitted
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))
+    ));
     const types = outbox.map((r) => r.eventType);
     expect(types).toContain("stock.entry.created");
     expect(types).toContain("audit.event.record");
 
     // _inbox.processed marked
-    const seen = await db.select().from(processed).where(eq(processed.messageId, MSG_1));
+    const seen = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(processed).where(eq(processed.messageId, MSG_1))
+    ));
     expect(seen).toHaveLength(1);
   });
 });
@@ -167,7 +192,7 @@ describe("Entry consumer — idempotency (integration)", () => {
   });
 
   it("duplicate entry create message processed only once", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerEntryConsumers(q);
     await q.start();
 
@@ -189,10 +214,14 @@ describe("Entry consumer — idempotency (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
-    const entries = await db.select().from(stockEntries).where(eq(stockEntries.id, ENTRY_2));
+    const entries = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockEntries).where(eq(stockEntries.id, ENTRY_2))
+    ));
     expect(entries).toHaveLength(1);
 
-    const ledger = await db.select().from(stockLedger).where(eq(stockLedger.entryId, ENTRY_2));
+    const ledger = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockLedger).where(eq(stockLedger.entryId, ENTRY_2))
+    ));
     expect(ledger).toHaveLength(1);
   });
 });

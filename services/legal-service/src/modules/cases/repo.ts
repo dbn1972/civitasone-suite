@@ -5,7 +5,8 @@ import { legalCases, legalParties, type CaseRow, type CaseInsert } from "./schem
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findCaseById(id: string): Promise<CaseRow | null> {
-  const rows = await db.select().from(legalCases).where(eq(legalCases.id, id)).limit(1);
+  const rows = await db.transaction(async (tx) =>
+    tx.select().from(legalCases).where(eq(legalCases.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -26,7 +27,8 @@ export async function listCases(tenantId: string, status?: string, caseTypeId?: 
   const conditions = [eq(legalCases.tenantId, tenantId)];
   if (status) conditions.push(eq(legalCases.status, status));
   if (caseTypeId) conditions.push(eq(legalCases.caseTypeId, caseTypeId));
-  return db.select().from(legalCases).where(and(...conditions)).limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select().from(legalCases).where(and(...conditions)).limit(limit));
 }
 
 export async function insertParty(tx: Writer, row: typeof legalParties.$inferInsert): Promise<void> {

@@ -12,7 +12,7 @@
  * Idempotent via inbox markProcessed; events + audit flow through the outbox.
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, AUDIT_TOPIC, QUERY_RESOURCE, SCHEDULED_RESOURCE } from "../../topics.js";
@@ -64,7 +64,7 @@ export function registerQueriesConsumers(queue: Queue): void {
     let error: string | null = null;
     try {
       const spec = querySpecSchema.parse(p.spec);
-      const res = await runAggregateQuery(db, msg.tenantId, spec); // tenant-scoped, parameterised
+      const res = await scopedRead(async (tx) => runAggregateQuery(tx as any, msg.tenantId, spec)); // tenant-scoped, parameterised
       result = res as unknown as Record<string, unknown>;
       resultRows = res.rowCount;
     } catch (e) {

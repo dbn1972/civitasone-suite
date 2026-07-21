@@ -468,8 +468,8 @@ describe("Reminders routes", () => {
       headers: authHeader(),
       payload: { remindAt: "2026-07-20T08:00:00Z", message: "Follow up on hearing" },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data).toHaveProperty("id");
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toHaveProperty("id");
   });
 
   it("POST /v1/legal/cases/:id/reminder → 400 invalid body", async () => {

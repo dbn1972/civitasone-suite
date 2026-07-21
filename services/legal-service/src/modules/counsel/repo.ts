@@ -5,7 +5,8 @@ import { legalCounselBriefs, type CounselBriefRow, type CounselBriefInsert } fro
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findBriefById(id: string): Promise<CounselBriefRow | null> {
-  const rows = await db.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.id, id)).limit(1);
+  const rows = await db.transaction(async (tx) =>
+    tx.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
@@ -17,5 +18,6 @@ export async function listBriefs(tenantId: string, caseId?: string, status?: str
   const conditions = [eq(legalCounselBriefs.tenantId, tenantId)];
   if (caseId) conditions.push(eq(legalCounselBriefs.caseId, caseId));
   if (status) conditions.push(eq(legalCounselBriefs.status, status));
-  return db.select().from(legalCounselBriefs).where(and(...conditions)).orderBy(desc(legalCounselBriefs.assignedAt)).limit(limit);
+  return db.transaction(async (tx) =>
+    tx.select().from(legalCounselBriefs).where(and(...conditions)).orderBy(desc(legalCounselBriefs.assignedAt)).limit(limit));
 }

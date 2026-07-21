@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { geofences, type GeofenceRow, type GeofenceInsert, type GeofenceView } from "./schema.js";
 import { haversineDistance } from "./validators.js";
 
@@ -19,23 +19,23 @@ function toView(r: GeofenceRow): GeofenceView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<GeofenceView | null> {
-  const rows = await db.select().from(geofences).where(eq(geofences.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(geofences).where(eq(geofences.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<GeofenceView[]> {
-  const rows = await db.select().from(geofences)
+  const rows = await scopedRead((tx) => tx.select().from(geofences)
     .where(eq(geofences.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 
 export async function listActiveByTenant(tenantId: string): Promise<GeofenceView[]> {
-  const rows = await db.select().from(geofences)
-    .where(and(eq(geofences.tenantId, tenantId), eq(geofences.active, true)));
+  const rows = await scopedRead((tx) => tx.select().from(geofences)
+    .where(and(eq(geofences.tenantId, tenantId), eq(geofences.active, true))));
   return rows.map(toView);
 }
 

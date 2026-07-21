@@ -8,7 +8,7 @@
  * them on RequestContext, and the ABAC engine (EPIC-2) fences by them.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { offices, positions, postings } from "./org-schema.js";
 import { jurisdictions } from "../jurisdiction/schema.js";
 
@@ -58,7 +58,7 @@ export async function resolveActivePosting(
   tenantId: string,
   employeeId: string,
 ): Promise<ActivePosting | null> {
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       officeId: offices.id,
       officeType: offices.officeType,
@@ -78,18 +78,18 @@ export async function resolveActivePosting(
     // Substantive charge wins over acting/additional if an employee holds more
     // than one active posting.
     .orderBy(postings.chargeType)
-    .limit(1);
+    .limit(1));
 
   const row = rows[0];
   if (!row) return null;
 
-  const jur = await db
+  const jur = await scopedRead((tx) => tx
     .select({ unitId: jurisdictions.unitId, level: jurisdictions.level })
     .from(jurisdictions)
     .where(and(
       eq(jurisdictions.tenantId, tenantId),
       eq(jurisdictions.officeId, row.officeId),
-    ));
+    )));
 
   return {
     employeeId,
