@@ -3,7 +3,7 @@
  * All reads go through Redis cache (read-through pattern).
  */
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cycleCounts } from "./schema.js";
 import { eq, and, SQL, sql } from "drizzle-orm";
 import { SERVICE, RESOURCE } from "../../topics.js";
@@ -18,9 +18,9 @@ interface CycleCountQuery {
 
 export async function getCycleCount(tenantId: string, id: string) {
   return cache.getOrLoad(`${SERVICE}:${tenantId}:${RESOURCE.cycleCount}:${id}`, async () => {
-    const rows = await db.select().from(cycleCounts)
+    const rows = await scopedRead((tx) => tx.select().from(cycleCounts)
       .where(and(eq(cycleCounts.tenantId, tenantId), eq(cycleCounts.id, id)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   });
 }
@@ -35,8 +35,8 @@ export async function listCycleCounts(tenantId: string, query: CycleCountQuery) 
   const where = and(...conditions);
 
   const [rows, countResult] = await Promise.all([
-    db.select().from(cycleCounts).where(where).limit(query.limit).offset(query.offset),
-    db.select({ count: sql<number>`count(*)::int` }).from(cycleCounts).where(where),
+    scopedRead((tx) => tx.select().from(cycleCounts).where(where).limit(query.limit).offset(query.offset)),
+    scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(cycleCounts).where(where)),
   ]);
 
   const total = countResult[0]?.count ?? 0;

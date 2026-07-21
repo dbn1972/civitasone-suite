@@ -6,7 +6,7 @@
  *
  * Requirements: 8.5, 8.7
  */
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { stockLedger } from "../movements/schema.js";
 import { items } from "../items/schema.js";
 import { eq, and, gte, sql } from "drizzle-orm";
@@ -30,10 +30,10 @@ export async function countMovements(tenantId: string, itemId: string, warehouse
     conditions.push(eq(stockLedger.storeId, warehouseId));
   }
 
-  const result = await db
+  const result = await scopedRead((tx) => tx
     .select({ count: sql<number>`count(*)::int` })
     .from(stockLedger)
-    .where(and(...conditions));
+    .where(and(...conditions)));
 
   return result[0]?.count ?? 0;
 }
@@ -54,7 +54,7 @@ export async function getDailyMovements(tenantId: string, itemId: string, wareho
     conditions.push(eq(stockLedger.storeId, warehouseId));
   }
 
-  const rows = await db
+  const rows = await scopedRead((tx) => tx
     .select({
       date: stockLedger.postingDate,
       qty: sql<number>`coalesce(sum(${stockLedger.qtyOut}), 0)::int`,
@@ -62,7 +62,7 @@ export async function getDailyMovements(tenantId: string, itemId: string, wareho
     .from(stockLedger)
     .where(and(...conditions))
     .groupBy(stockLedger.postingDate)
-    .orderBy(stockLedger.postingDate);
+    .orderBy(stockLedger.postingDate));
 
   return rows.map((r) => ({ date: String(r.date), qty: r.qty }));
 }
@@ -74,14 +74,14 @@ export async function getDailyMovements(tenantId: string, itemId: string, wareho
 export async function getItemForecastMeta(tenantId: string, itemId: string): Promise<{ leadTimeDays: number; reorderLevel: number; reorderQty: number } | null> {
   const key = cache.makeKey(tenantId, RESOURCE.item, `${itemId}:forecast-meta`);
   return cache.getOrLoad(key, async () => {
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select({
         reorderLevel: items.reorderLevel,
         reorderQty: items.reorderQty,
       })
       .from(items)
       .where(and(eq(items.id, itemId), eq(items.tenantId, tenantId)))
-      .limit(1);
+      .limit(1));
 
     if (rows.length === 0) return null;
     const defaultLeadTimeDays = Number(process.env.INVENTORY_DEFAULT_LEAD_TIME_DAYS ?? "7");

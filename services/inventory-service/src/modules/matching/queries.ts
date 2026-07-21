@@ -3,7 +3,7 @@
  * All reads go through Redis cache (read-through pattern).
  */
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { threeWayMatches } from "./schema.js";
 import { eq, and, SQL, sql } from "drizzle-orm";
 import { SERVICE, RESOURCE } from "../../topics.js";
@@ -19,9 +19,9 @@ interface MatchQuery {
 
 export async function getMatch(tenantId: string, id: string) {
   return cache.getOrLoad(`${SERVICE}:${tenantId}:${RESOURCE.threeWayMatch}:${id}`, async () => {
-    const rows = await db.select().from(threeWayMatches)
+    const rows = await scopedRead((tx) => tx.select().from(threeWayMatches)
       .where(and(eq(threeWayMatches.tenantId, tenantId), eq(threeWayMatches.id, id)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   });
 }
@@ -37,8 +37,8 @@ export async function listMatches(tenantId: string, query: MatchQuery) {
   const where = and(...conditions);
 
   const [rows, countResult] = await Promise.all([
-    db.select().from(threeWayMatches).where(where).limit(query.limit).offset(query.offset),
-    db.select({ count: sql<number>`count(*)::int` }).from(threeWayMatches).where(where),
+    scopedRead((tx) => tx.select().from(threeWayMatches).where(where).limit(query.limit).offset(query.offset)),
+    scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(threeWayMatches).where(where)),
   ]);
 
   const total = countResult[0]?.count ?? 0;

@@ -4,7 +4,7 @@
  * movements on the same (item, store) serialise instead of racing.
  */
 import { eq, and, lte, gte, desc, sql, type SQL } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   movements, movementLines, stockBalances, stockLedger,
   type MovementInsert, type MovementLineInsert, type LedgerInsert,
@@ -67,9 +67,9 @@ export async function listBalances(
   const conds: SQL[] = [eq(stockBalances.tenantId, tenantId)];
   if (opts.itemId) conds.push(eq(stockBalances.itemId, opts.itemId));
   if (opts.storeId) conds.push(eq(stockBalances.storeId, opts.storeId));
-  return db.select().from(stockBalances)
+  return scopedRead((tx) => tx.select().from(stockBalances)
     .where(and(...conds))
-    .limit(opts.limit).offset(opts.offset);
+    .limit(opts.limit).offset(opts.offset));
 }
 
 // ── Stock ledger ─────────────────────────────────────────────────────────
@@ -82,10 +82,10 @@ export async function listLedger(
   if (opts.storeId) conds.push(eq(stockLedger.storeId, opts.storeId));
   if (opts.from) conds.push(gte(stockLedger.postingDate, opts.from));
   if (opts.to) conds.push(lte(stockLedger.postingDate, opts.to));
-  return db.select().from(stockLedger)
+  return scopedRead((tx) => tx.select().from(stockLedger)
     .where(and(...conds))
     .orderBy(desc(stockLedger.createdAt))
-    .limit(opts.limit).offset(opts.offset);
+    .limit(opts.limit).offset(opts.offset));
 }
 
 // ── Low-stock report ─────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ export interface LowStockRow {
  * Joins balances to the item master so the report carries the reorder policy.
  */
 export async function listLowStock(tenantId: string, limit: number, offset: number): Promise<LowStockRow[]> {
-  const rows = await db.select({
+  const rows = await scopedRead((tx) => tx.select({
     itemId: stockBalances.itemId,
     storeId: stockBalances.storeId,
     name: items.name,
@@ -121,7 +121,7 @@ export async function listLowStock(tenantId: string, limit: number, offset: numb
       gte(items.reorderLevel, 1),
       lte(stockBalances.onHandQty, items.reorderLevel),
     ))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
   return rows;
 }
 

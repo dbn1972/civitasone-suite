@@ -4,14 +4,14 @@
 import { eq, and } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { batches, serialNumbers, type BatchRow, type SerialNumberRow } from "./schema.js";
 
 export async function getBatch(tenantId: string, id: string): Promise<BatchRow | null> {
   return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE.batch, id), async () => {
-    const rows = await db.select().from(batches)
+    const rows = await scopedRead((tx) => tx.select().from(batches)
       .where(and(eq(batches.id, id), eq(batches.tenantId, tenantId)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   });
 }
@@ -24,10 +24,10 @@ export async function listBatches(
   if (opts.itemId) conditions.push(eq(batches.itemId, opts.itemId));
   if (opts.status) conditions.push(eq(batches.status, opts.status));
 
-  const rows = await db.select().from(batches)
+  const rows = await scopedRead((tx) => tx.select().from(batches)
     .where(and(...conditions))
     .limit(opts.limit)
-    .offset(opts.offset);
+    .offset(opts.offset));
 
   return {
     data: rows,
@@ -41,9 +41,9 @@ export async function listBatches(
 
 export async function getSerial(tenantId: string, id: string): Promise<SerialNumberRow | null> {
   return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE.serial, id), async () => {
-    const rows = await db.select().from(serialNumbers)
+    const rows = await scopedRead((tx) => tx.select().from(serialNumbers)
       .where(and(eq(serialNumbers.id, id), eq(serialNumbers.tenantId, tenantId)))
-      .limit(1);
+      .limit(1));
     return rows[0] ?? null;
   });
 }
@@ -57,10 +57,10 @@ export async function listSerials(
   if (opts.batchId) conditions.push(eq(serialNumbers.batchId, opts.batchId));
   if (opts.status) conditions.push(eq(serialNumbers.status, opts.status));
 
-  const rows = await db.select().from(serialNumbers)
+  const rows = await scopedRead((tx) => tx.select().from(serialNumbers)
     .where(and(...conditions))
     .limit(opts.limit)
-    .offset(opts.offset);
+    .offset(opts.offset));
 
   return {
     data: rows,
@@ -77,12 +77,12 @@ export async function listSerials(
  * Used by the consumer to enforce uniqueness before insert.
  */
 export async function serialExists(tenantId: string, itemId: string, serialNumber: string): Promise<boolean> {
-  const rows = await db.select().from(serialNumbers)
+  const rows = await scopedRead((tx) => tx.select().from(serialNumbers)
     .where(and(
       eq(serialNumbers.tenantId, tenantId),
       eq(serialNumbers.itemId, itemId),
       eq(serialNumbers.serialNumber, serialNumber),
     ))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }

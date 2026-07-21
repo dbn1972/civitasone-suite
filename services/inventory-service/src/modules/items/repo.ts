@@ -3,7 +3,7 @@
  * Every read is tenant-scoped; updates are optimistic-locked on `version`.
  */
 import { eq, and, sql, type SQL } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { DomainError } from "../../shared/domain.js";
 import {
   items, categories, uoms,
@@ -73,17 +73,17 @@ export async function updateItemChecked(
 }
 
 export async function findItemRow(id: string, tenantId: string): Promise<ItemRow | null> {
-  const rows = await db.select().from(items)
-    .where(and(eq(items.id, id), eq(items.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(items)
+    .where(and(eq(items.id, id), eq(items.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findItemView(id: string, tenantId: string): Promise<ItemView | null> {
-  const rows = await db.select(itemViewColumns).from(items)
+  const rows = await scopedRead((tx) => tx.select(itemViewColumns).from(items)
     .leftJoin(categories, eq(items.categoryId, categories.id))
     .leftJoin(uoms, eq(items.uomId, uoms.id))
     .where(and(eq(items.id, id), eq(items.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toView(rows[0] as RawItemView) : null;
 }
 
@@ -94,12 +94,12 @@ export async function listItemViews(
   const conds: SQL[] = [eq(items.tenantId, tenantId)];
   if (opts.categoryId) conds.push(eq(items.categoryId, opts.categoryId));
   if (opts.status) conds.push(eq(items.status, opts.status));
-  const rows = await db.select(itemViewColumns).from(items)
+  const rows = await scopedRead((tx) => tx.select(itemViewColumns).from(items)
     .leftJoin(categories, eq(items.categoryId, categories.id))
     .leftJoin(uoms, eq(items.uomId, uoms.id))
     .where(and(...conds))
     .limit(opts.limit)
-    .offset(opts.offset);
+    .offset(opts.offset));
   return rows.map((r) => toView(r as RawItemView));
 }
 
@@ -110,9 +110,9 @@ export async function insertCategory(tx: Writer, row: CategoryInsert): Promise<v
 }
 
 export async function listCategories(tenantId: string, limit: number, offset: number): Promise<CategoryRow[]> {
-  return db.select().from(categories)
+  return scopedRead((tx) => tx.select().from(categories)
     .where(eq(categories.tenantId, tenantId))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 // ── UoMs ──────────────────────────────────────────────────────────────────
@@ -122,9 +122,9 @@ export async function insertUom(tx: Writer, row: UomInsert): Promise<void> {
 }
 
 export async function listUoms(tenantId: string, limit: number, offset: number): Promise<UomRow[]> {
-  return db.select().from(uoms)
+  return scopedRead((tx) => tx.select().from(uoms)
     .where(eq(uoms.tenantId, tenantId))
-    .limit(limit).offset(offset);
+    .limit(limit).offset(offset));
 }
 
 export { toView };

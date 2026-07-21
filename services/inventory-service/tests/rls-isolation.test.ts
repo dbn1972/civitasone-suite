@@ -44,7 +44,7 @@ describe("Inventory — Cross-Tenant RLS Isolation", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/inventory/items",
-      headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${tokenA}`, "x-tenant-id": TENANT_A, "content-type": "application/json" },
       payload: {
         name: "RLS Isolation Test Item",
         sku: `SKU-RLS-${Date.now()}`,
@@ -62,7 +62,7 @@ describe("Inventory — Cross-Tenant RLS Isolation", () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/inventory/items",
-      headers: { authorization: `Bearer ${tokenB}` },
+      headers: { authorization: `Bearer ${tokenB}`, "x-tenant-id": TENANT_B },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -76,7 +76,7 @@ describe("Inventory — Cross-Tenant RLS Isolation", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/inventory/items/${createdItemId}`,
-      headers: { authorization: `Bearer ${tokenB}` },
+      headers: { authorization: `Bearer ${tokenB}`, "x-tenant-id": TENANT_B },
     });
     expect(res.statusCode).toBe(404);
   });
@@ -86,7 +86,7 @@ describe("Inventory — Cross-Tenant RLS Isolation", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/inventory/items/${createdItemId}`,
-      headers: { authorization: `Bearer ${tokenB}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${tokenB}`, "x-tenant-id": TENANT_B, "content-type": "application/json" },
       payload: { name: "Hacked Item" },
     });
     // 400 = validation before DB, 404 = not found for tenant, 405 = method not allowed
@@ -98,7 +98,7 @@ describe("Inventory — Cross-Tenant RLS Isolation", () => {
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/inventory/items/${createdItemId}`,
-      headers: { authorization: `Bearer ${tokenB}` },
+      headers: { authorization: `Bearer ${tokenB}`, "x-tenant-id": TENANT_B },
     });
     expect([404, 405]).toContain(res.statusCode);
   });
@@ -107,7 +107,7 @@ describe("Inventory — Cross-Tenant RLS Isolation", () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/inventory/warehouses",
-      headers: { authorization: `Bearer ${tokenB}` },
+      headers: { authorization: `Bearer ${tokenB}`, "x-tenant-id": TENANT_B },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();

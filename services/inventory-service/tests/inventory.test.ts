@@ -13,6 +13,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq, and } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import type { Queue, Handler } from "@civitasone/queue";
 import { db, sqlClient } from "../src/shared/db.js";
 import { items, categories, uoms } from "../src/modules/items/schema.js";
 import { stores } from "../src/modules/stores/schema.js";
@@ -42,36 +44,51 @@ const MSG_ISSUE= "44440000-2222-4000-8000-000000000002";
 const MSG_DUP  = "44440000-3333-4000-8000-000000000003";
 const MSG_ISO  = "44440000-4444-4000-8000-000000000004";
 
+/** Wrap MemoryQueue so consumer handlers run inside runWithTenant (sets GUC). */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function seed(): Promise<void> {
   await cleanup();
-  for (const t of [TENANT, TENANT_B]) {
-    await db.insert(stores).values([
-      { id: t === TENANT ? STORE_1 : "22221111-0000-4000-8000-0000000000b1", tenantId: t, name: "Central Store", code: `CS-${t.slice(0, 4)}`, createdBy: ACTOR, updatedBy: ACTOR },
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(stores).values([
+      { id: STORE_1, tenantId: TENANT, name: "Central Store", code: "CS-1111", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: STORE_2, tenantId: TENANT, name: "Sub Store", code: "SS-1", createdBy: ACTOR, updatedBy: ACTOR },
     ]).onConflictDoNothing();
-  }
-  await db.insert(stores).values([
-    { id: STORE_2, tenantId: TENANT, name: "Sub Store", code: "SS-1", createdBy: ACTOR, updatedBy: ACTOR },
-  ]).onConflictDoNothing();
-  await db.insert(items).values([
-    { id: ITEM_1, tenantId: TENANT, name: "A4 Paper Ream", sku: "PPR-A4", reorderLevel: 10, reorderQty: 50, createdBy: ACTOR, updatedBy: ACTOR },
-    { id: ITEM_2, tenantId: TENANT, name: "Stapler", sku: "STP-01", reorderLevel: 0, reorderQty: 0, createdBy: ACTOR, updatedBy: ACTOR },
-  ]).onConflictDoNothing();
+    await tx.insert(items).values([
+      { id: ITEM_1, tenantId: TENANT, name: "A4 Paper Ream", sku: "PPR-A4", reorderLevel: 10, reorderQty: 50, createdBy: ACTOR, updatedBy: ACTOR },
+      { id: ITEM_2, tenantId: TENANT, name: "Stapler", sku: "STP-01", reorderLevel: 0, reorderQty: 0, createdBy: ACTOR, updatedBy: ACTOR },
+    ]).onConflictDoNothing();
+  }));
+  await runWithTenant(TENANT_B, () => db.transaction(async (tx) => {
+    await tx.insert(stores).values([
+      { id: "22221111-0000-4000-8000-0000000000b1", tenantId: TENANT_B, name: "Central Store", code: "CS-bbbb", createdBy: ACTOR, updatedBy: ACTOR },
+    ]).onConflictDoNothing();
+  }));
 }
 
 async function cleanup(): Promise<void> {
   for (const t of [TENANT, TENANT_B]) {
-    await db.delete(stockLedger).where(eq(stockLedger.tenantId, t));
-    await db.delete(stockBalances).where(eq(stockBalances.tenantId, t));
-    await db.delete(movementLines).where(eq(movementLines.tenantId, t));
-    await db.delete(movements).where(eq(movements.tenantId, t));
-    await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
-    await db.delete(items).where(eq(items.tenantId, t));
-    await db.delete(stores).where(eq(stores.tenantId, t));
-    await db.delete(categories).where(eq(categories.tenantId, t));
-    await db.delete(uoms).where(eq(uoms.tenantId, t));
+    await runWithTenant(t, () => db.transaction(async (tx) => {
+      await tx.delete(stockLedger).where(eq(stockLedger.tenantId, t));
+      await tx.delete(stockBalances).where(eq(stockBalances.tenantId, t));
+      await tx.delete(movementLines).where(eq(movementLines.tenantId, t));
+      await tx.delete(movements).where(eq(movements.tenantId, t));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
+      await tx.delete(items).where(eq(items.tenantId, t));
+      await tx.delete(stores).where(eq(stores.tenantId, t));
+      await tx.delete(categories).where(eq(categories.tenantId, t));
+      await tx.delete(uoms).where(eq(uoms.tenantId, t));
+    }));
   }
   for (const m of [MSG_RCPT, MSG_ISSUE, MSG_DUP, MSG_ISO]) {
-    await db.delete(processed).where(eq(processed.messageId, m));
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, m));
+    }));
   }
 }
 
@@ -174,7 +191,7 @@ describe("movement consumer — CQRS behaviour (integration)", () => {
   });
 
   it("receipt posts balance + ledger + outbox events, and is idempotent", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerMovementConsumers(q);
     await q.start();
 
@@ -192,36 +209,40 @@ describe("movement consumer — CQRS behaviour (integration)", () => {
 
     // Redeliver the SAME messageId on a fresh consumer (fresh queue dedupe set)
     // so idempotency is enforced by markProcessed, not the in-memory bus.
-    const q2 = new MemoryQueue();
+    const q2 = wireTenantAwareQueue(new MemoryQueue());
     registerMovementConsumers(q2);
     await q2.start();
     await q2.publish(COMMANDS.receiptCreate, msg);
     await wait(400);
     await q2.stop();
 
-    const bal = await db.select().from(stockBalances)
-      .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_1), eq(stockBalances.storeId, STORE_1)));
+    const bal = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockBalances)
+        .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_1), eq(stockBalances.storeId, STORE_1)))));
     expect(bal).toHaveLength(1);
     expect(bal[0]?.onHandQty).toBe(100);          // not 200 → idempotent (markProcessed)
     expect(bal[0]?.avgRateMinor).toBe(10000n);
 
-    const led = await db.select().from(stockLedger)
-      .where(and(eq(stockLedger.tenantId, TENANT), eq(stockLedger.movementId, MSG_RCPT)));
+    const led = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockLedger)
+        .where(and(eq(stockLedger.tenantId, TENANT), eq(stockLedger.movementId, MSG_RCPT)))));
     expect(led).toHaveLength(1);
     expect(led[0]?.qtyIn).toBe(100);
     expect(led[0]?.balanceQty).toBe(100);
 
-    const types = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))).map((r) => r.eventType);
+    const types = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))))).map((r) => r.eventType);
     expect(types).toContain(EVENTS.receiptPosted);
     expect(types).toContain("audit.event.record");
     expect(types).toContain("finance.gl.post");
 
-    const seen = await db.select().from(processed).where(eq(processed.messageId, MSG_RCPT));
+    const seen = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(processed).where(eq(processed.messageId, MSG_RCPT))));
     expect(seen).toHaveLength(1);
   });
 
   it("issue that breaches reorder level emits inventory.stock.low", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerMovementConsumers(q);
     await q.start();
 
@@ -236,12 +257,14 @@ describe("movement consumer — CQRS behaviour (integration)", () => {
     await wait(500);
     await q.stop();
 
-    const bal = await db.select().from(stockBalances)
-      .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_1), eq(stockBalances.storeId, STORE_1)));
+    const bal = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockBalances)
+        .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_1), eq(stockBalances.storeId, STORE_1)))));
     expect(bal[0]?.onHandQty).toBe(5); // 100 - 95
 
-    const low = (await db.select().from(outboxMessages)
-      .where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, EVENTS.stockLow))));
+    const low = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, EVENTS.stockLow)))));
     expect(low.length).toBeGreaterThanOrEqual(1);
     const payload = low[0]?.payload as { itemId: string; onHandQty: number; suggestedReorderQty: number };
     expect(payload.itemId).toBe(ITEM_1);
@@ -250,7 +273,7 @@ describe("movement consumer — CQRS behaviour (integration)", () => {
   });
 
   it("rejects an issue that would drive stock negative (no balance mutation)", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerMovementConsumers(q);
     await q.start();
     await q.publish(COMMANDS.issueCreate, {
@@ -265,18 +288,20 @@ describe("movement consumer — CQRS behaviour (integration)", () => {
     await q.stop();
 
     // Balance unchanged (still 5), and the failed movement rolled back.
-    const bal = await db.select().from(stockBalances)
-      .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_1), eq(stockBalances.storeId, STORE_1)));
+    const bal = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockBalances)
+        .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_1), eq(stockBalances.storeId, STORE_1)))));
     expect(bal[0]?.onHandQty).toBe(5);
-    const mv = await db.select().from(movements).where(eq(movements.id, MSG_DUP));
+    const mv = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(movements).where(eq(movements.id, MSG_DUP))));
     expect(mv).toHaveLength(0);
   });
 
   it("balances are tenant-scoped (no cross-tenant leak)", async () => {
-    const ownTenant = await queries.listBalances(TENANT, { limit: 100, offset: 0 });
+    const ownTenant = await runWithTenant(TENANT, () => queries.listBalances(TENANT, { limit: 100, offset: 0 }));
     expect(ownTenant.data.some((b) => b.itemId === ITEM_1)).toBe(true);
 
-    const otherTenant = await queries.listBalances(TENANT_B, { limit: 100, offset: 0 });
+    const otherTenant = await runWithTenant(TENANT_B, () => queries.listBalances(TENANT_B, { limit: 100, offset: 0 }));
     expect(otherTenant.data.some((b) => b.itemId === ITEM_1)).toBe(false);
   });
 });
