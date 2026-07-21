@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -31,6 +31,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
+
+  // Also propagate tenantId into AsyncLocalStorage from req.ctx (set by authPlugin)
+  // so that scopedRead/db.transaction auto-injects the GUC for bare reads/writes.
+  app.addHook("onRequest", async (req) => {
+    const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+    if (tid) tenantStorage.enterWith({ tenantId: tid });
+  });
 
   registerOpsRoutes(app, { service: "contract-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 

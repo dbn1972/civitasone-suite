@@ -1,13 +1,16 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
+import { db, scopedRead } from "../../shared/db.js";
 import { grantSchemes, grantEligibilityCriteria, type SchemeRow, type SchemeInsert, type CriterionRow, type CriterionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findSchemeById(id: string, tenantId: string): Promise<SchemeRow | null> {
-  const rows = await db.select().from(grantSchemes)
-    .where(and(eq(grantSchemes.id, id), eq(grantSchemes.tenantId, tenantId))).limit(1);
-  return rows[0] ?? null;
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(grantSchemes)
+      .where(and(eq(grantSchemes.id, id), eq(grantSchemes.tenantId, tenantId))).limit(1);
+    return rows[0] ?? null;
+  }));
 }
 
 export async function findSchemeByIdTx(tx: Writer, id: string, tenantId: string): Promise<SchemeRow | null> {
@@ -21,8 +24,8 @@ export async function updateScheme(tx: Writer, id: string, patch: Partial<Scheme
     .where(eq(grantSchemes.id, id));
 }
 
-export async function findCriteriaByScheme(schemeId: string, limit = 200): Promise<CriterionRow[]> {
-  return db.select().from(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.schemeId, schemeId)).limit(limit);
+export async function findCriteriaByScheme(schemeId: string, tenantId: string, limit = 200): Promise<CriterionRow[]> {
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => tx.select().from(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.schemeId, schemeId)).limit(limit)));
 }
 
 export async function insertScheme(tx: Writer, row: SchemeInsert): Promise<void> {
@@ -30,7 +33,9 @@ export async function insertScheme(tx: Writer, row: SchemeInsert): Promise<void>
 }
 
 export async function listSchemesByTenant(tenantId: string, limit: number): Promise<SchemeRow[]> {
-  return db.select().from(grantSchemes).where(eq(grantSchemes.tenantId, tenantId)).limit(limit);
+  return runWithTenant(tenantId, () =>
+    scopedRead(async (tx) =>
+      tx.select().from(grantSchemes).where(eq(grantSchemes.tenantId, tenantId)).limit(limit)));
 }
 
 export async function insertCriterion(tx: Writer, row: CriterionInsert): Promise<void> {

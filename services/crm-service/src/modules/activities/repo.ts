@@ -1,5 +1,5 @@
 import { eq, desc, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { activities, type ActivityRow, type ActivityInsert, type ActivityView } from "./schema.js";
 
 export function toView(r: ActivityRow): ActivityView {
@@ -23,11 +23,11 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   const conditions = contactId
     ? and(eq(activities.tenantId, tenantId), eq(activities.contactId, contactId))
     : eq(activities.tenantId, tenantId);
-  const rows = await db.select().from(activities)
+  const rows = await scopedRead((tx) => tx.select().from(activities)
     .where(conditions)
     .orderBy(desc(activities.createdAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 

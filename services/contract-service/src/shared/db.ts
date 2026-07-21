@@ -31,3 +31,14 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on
+ * the read path too. Plain db.select() runs on a pooled connection with no
+ * app.tenant_id GUC set, so under the NOBYPASSRLS service role the fail-closed
+ * policy returns ZERO rows. Wrapping the read in db.transaction lets the
+ * TenantRouter-adopted `db` set the GUC from AsyncLocalStorage.
+ */
+export function scopedRead<T>(fn: (tx: Db) => PromiseLike<T>): Promise<T> {
+  return db.transaction(fn as unknown as (tx: any) => Promise<T>);
+}

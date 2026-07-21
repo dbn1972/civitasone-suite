@@ -1,5 +1,6 @@
 import { eq, and, count, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   grantUcStatements, grantComplianceReports, grantUcValidations,
   type UcRow, type UcInsert, type UcValidationInsert,
@@ -12,15 +13,19 @@ export async function insertUcStatement(tx: Writer, row: UcInsert): Promise<void
 }
 
 export async function listUcByApplication(applicationId: string, tenantId: string, limit = 500): Promise<UcRow[]> {
-  return db.select().from(grantUcStatements)
-    .where(and(eq(grantUcStatements.applicationId, applicationId), eq(grantUcStatements.tenantId, tenantId)))
-    .limit(limit);
+  return runWithTenant(tenantId, () =>
+    scopedRead(async (tx) =>
+      tx.select().from(grantUcStatements)
+        .where(and(eq(grantUcStatements.applicationId, applicationId), eq(grantUcStatements.tenantId, tenantId)))
+        .limit(limit)));
 }
 
 export async function listUcByTenant(tenantId: string, limit: number): Promise<UcRow[]> {
-  return db.select().from(grantUcStatements)
-    .where(eq(grantUcStatements.tenantId, tenantId))
-    .limit(limit);
+  return runWithTenant(tenantId, () =>
+    scopedRead(async (tx) =>
+      tx.select().from(grantUcStatements)
+        .where(eq(grantUcStatements.tenantId, tenantId))
+        .limit(limit)));
 }
 
 /**
@@ -36,24 +41,28 @@ export async function hasSubmittedUcForApplication(
 ): Promise<boolean> {
   if (installmentNo <= 1) return true;
   const priorTranche = installmentNo - 1;
-  const rows = await db
-    .select({ cnt: count() })
-    .from(grantUcStatements)
-    .where(and(
-      eq(grantUcStatements.tenantId, tenantId),
-      eq(grantUcStatements.applicationId, applicationId),
-      eq(grantUcStatements.installmentNo, priorTranche),
-      eq(grantUcStatements.validationStatus, "validated"),
-    ));
-  return (rows[0]?.cnt ?? 0) >= 1;
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx
+      .select({ cnt: count() })
+      .from(grantUcStatements)
+      .where(and(
+        eq(grantUcStatements.tenantId, tenantId),
+        eq(grantUcStatements.applicationId, applicationId),
+        eq(grantUcStatements.installmentNo, priorTranche),
+        eq(grantUcStatements.validationStatus, "validated"),
+      ));
+    return (rows[0]?.cnt ?? 0) >= 1;
+  }));
 }
 
 /** Fetch a single UC statement scoped to tenant (for validation decisions). */
 export async function findUcById(ucId: string, tenantId: string): Promise<UcRow | null> {
-  const rows = await db.select().from(grantUcStatements)
-    .where(and(eq(grantUcStatements.id, ucId), eq(grantUcStatements.tenantId, tenantId)))
-    .limit(1);
-  return rows[0] ?? null;
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(grantUcStatements)
+      .where(and(eq(grantUcStatements.id, ucId), eq(grantUcStatements.tenantId, tenantId)))
+      .limit(1);
+    return rows[0] ?? null;
+  }));
 }
 
 /** Persist a UC validation decision row (utilisation.grant_uc_validations). */
@@ -84,11 +93,13 @@ export async function setUcValidationStatus(
 
 /** Latest validation decision for a UC (tenant-scoped), or null. */
 export async function findLatestUcValidation(ucId: string, tenantId: string) {
-  const rows = await db.select().from(grantUcValidations)
-    .where(and(eq(grantUcValidations.ucId, ucId), eq(grantUcValidations.tenantId, tenantId)))
-    .orderBy(desc(grantUcValidations.validatedAt))
-    .limit(1);
-  return rows[0] ?? null;
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(grantUcValidations)
+      .where(and(eq(grantUcValidations.ucId, ucId), eq(grantUcValidations.tenantId, tenantId)))
+      .orderBy(desc(grantUcValidations.validatedAt))
+      .limit(1);
+    return rows[0] ?? null;
+  }));
 }
 
 export async function insertComplianceReport(tx: Writer, row: typeof grantComplianceReports.$inferInsert): Promise<void> {

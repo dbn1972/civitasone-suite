@@ -16,9 +16,10 @@ export async function getRedlines(
   versionNumber: number,
 ): Promise<RedlineRow[]> {
   const key = cache.makeKey(tenantId, "redline", `${contractId}:${versionNumber}`);
-  return cache.getOrLoad<RedlineRow[]>(key, () =>
+  const result = await cache.getOrLoad<RedlineRow[]>(key, () =>
     repo.getRedlinesByVersion(contractId, tenantId, versionNumber),
   );
+  return result ?? [];
 }
 
 export async function getLatestVersion(

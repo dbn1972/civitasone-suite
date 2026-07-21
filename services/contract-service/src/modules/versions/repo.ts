@@ -1,13 +1,10 @@
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { contractVersions, redlines, type ContractVersionRow, type RedlineRow, type ContractVersionInsert, type RedlineInsert } from "./schema.js";
 
 /** Execute a read within a tenant-scoped transaction (sets app.tenant_id GUC for RLS). */
 async function tenantRead<T>(tenantId: string, fn: (tx: typeof db) => Promise<T>): Promise<T> {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
-    return fn(tx as unknown as typeof db);
-  });
+  return scopedRead(fn as (tx: any) => Promise<T>);
 }
 
 export async function countVersionsByContract(contractId: string, tenantId: string): Promise<number> {
@@ -75,13 +72,13 @@ export async function listVersions(
 }
 
 export async function insertVersion(version: ContractVersionInsert): Promise<ContractVersionRow> {
-  const [row] = await db.insert(contractVersions).values(version).returning();
+  const [row] = await scopedRead((tx) => tx.insert(contractVersions).values(version).returning());
   return row!;
 }
 
 export async function insertRedlines(records: RedlineInsert[]): Promise<RedlineRow[]> {
   if (records.length === 0) return [];
-  const rows = await db.insert(redlines).values(records).returning();
+  const rows = await scopedRead((tx) => tx.insert(redlines).values(records).returning());
   return rows;
 }
 

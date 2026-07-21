@@ -1,5 +1,5 @@
 import { eq, desc, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { deals, type DealRow, type DealInsert, type DealView } from "./schema.js";
 import { contacts } from "../contacts/schema.js";
 
@@ -69,24 +69,24 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<DealView | null> {
-  const rows = await db.select({ deal: deals, contactName: contacts.name })
+  const rows = await scopedRead((tx) => tx.select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
-    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`))
-    .limit(1);
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
+    .limit(1));
   const row = rows[0];
   if (!row) return null;
   return toView(row.deal, row.contactName);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DealView[]> {
-  const rows = await db.select({ deal: deals, contactName: contacts.name })
+  const rows = await scopedRead((tx) => tx.select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
-    .where(and(eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`))
+    .where(and(eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
     .orderBy(desc(deals.updatedAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map((r) => toView(r.deal, r.contactName));
 }
 
@@ -131,7 +131,7 @@ export async function updateStageWithVersion(
   // Fetch current deal for previous stage (for audit event)
   const current = await (tx as typeof db).select({ stage: deals.stage, version: deals.version })
     .from(deals)
-    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`))
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
     .limit(1);
   if (!current[0]) return { updated: false };
 
@@ -158,7 +158,7 @@ export async function updateStageWithVersion(
       eq(deals.id, id),
       eq(deals.tenantId, tenantId),
       eq(deals.version, expectedVersion),
-      sql`${deals.status} <> 'deleted'`,
+      sql`${deals.status} NOT IN ('deleted','cancelled')`,
     ))
     .returning({ id: deals.id });
 
@@ -167,17 +167,17 @@ export async function updateStageWithVersion(
 
 /** Tenant-scoped existence check for a deal (cross-tenant FK guard). */
 export async function dealExists(tenantId: string, dealId: string): Promise<boolean> {
-  const rows = await db.select({ one: sql`1` }).from(deals)
+  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(deals)
     .where(and(eq(deals.tenantId, tenantId), eq(deals.id, dealId)))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }
 
 /** Tenant-scoped existence check for a contact (cross-tenant FK guard). */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
-  const rows = await db.select({ one: sql`1` }).from(contacts)
+  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }
 
@@ -196,12 +196,12 @@ export async function updateDeal(
   if (fields.contactId !== undefined) patch.contactId = fields.contactId;
   await (tx as typeof db).update(deals)
     .set(patch)
-    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} <> 'deleted'`));
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`));
 }
 
-/** P1-1: soft-delete a deal (status='deleted'); excluded from find/list. */
+/** P1-1: soft-delete a deal (status='cancelled'); excluded from find/list. */
 export async function softDelete(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {
   await (tx as typeof db).update(deals)
-    .set({ status: "deleted", updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1` })
+    .set({ status: "cancelled", updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1` })
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
 }

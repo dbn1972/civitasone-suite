@@ -46,11 +46,12 @@ describe("Contract — Cross-Tenant RLS Isolation", () => {
       url: "/v1/contract/contracts",
       headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
       payload: {
+        contractNo: "RLS-001",
         title: "RLS Isolation Test Contract",
         vendorId: "eeeeeeee-0001-0000-0000-000000000001",
         valueMinor: 10000000,
         startDate: "2026-01-01",
-        endDate: "2026-12-31",
+        expiry: "2026-12-31",
       },
     });
     expect(res.statusCode).toBe(202);
@@ -106,7 +107,7 @@ describe("Contract — Cross-Tenant RLS Isolation", () => {
   it("Tenant B rate contracts list shows zero Tenant A data", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/v1/contract/rate-contracts",
+      url: "/v1/contract/rate-contracts?item=STA-001",
       headers: { authorization: `Bearer ${tokenB}` },
     });
     expect(res.statusCode).toBe(200);

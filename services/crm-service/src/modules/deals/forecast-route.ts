@@ -6,8 +6,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { scopedRead } from "../../shared/db.js";
 import { deals } from "./schema.js";
 import { pipelines, type PipelineStage } from "../pipelines/schema.js";
 import { weightedForecast, weightedForecastByStage, type DealForForecast } from "./forecast.js";
@@ -39,22 +39,22 @@ export async function forecastRoutes(app: FastifyInstance): Promise<void> {
       conditions.push(eq(deals.pipelineId, query.pipelineId));
     }
 
-    const activeDeals = await db.select({
+    const activeDeals = await scopedRead((tx) => tx.select({
       id: deals.id,
       stageId: deals.stageId,
       valueMinor: deals.valueMinor,
       pipelineId: deals.pipelineId,
     })
       .from(deals)
-      .where(and(...conditions));
+      .where(and(...conditions)));
 
     // Fetch all pipelines for this tenant to build stage probabilities map
-    const pipelineRows = await db.select({
+    const pipelineRows = await scopedRead((tx) => tx.select({
       id: pipelines.id,
       stages: pipelines.stages,
     })
       .from(pipelines)
-      .where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.status, "active")));
+      .where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.status, "active"))));
 
     // Build stageId → probability map from all pipeline stages
     const stageProbabilities = new Map<string, number>();

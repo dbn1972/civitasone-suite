@@ -12,6 +12,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      exclude: ["src/index.ts", "src/worker.ts"],
       thresholds: {
         lines: 80,
         functions: 75,

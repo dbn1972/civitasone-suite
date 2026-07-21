@@ -11,6 +11,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { contractContracts, contractAmendments } from "../src/modules/contracts/schema.js";
@@ -27,10 +29,19 @@ const CHECKER = "00000000-aaaa-4000-8000-0000000000a2";
 const TENANT  = "11111111-aaaa-4000-8000-0000000000ff";
 const OTHER_T = "11111111-aaaa-4000-8000-0000000000fe";
 
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(contractAmendments).where(eq(contractAmendments.tenantId, TENANT));
-  await db.delete(contractContracts).where(eq(contractContracts.tenantId, TENANT));
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(contractAmendments).where(eq(contractAmendments.tenantId, TENANT));
+    await tx.delete(contractContracts).where(eq(contractContracts.tenantId, TENANT));
+  }));
 }
 
 function pub(q: MemoryQueue, type: string, actorId: string, payload: Record<string, unknown>, messageId = randomUUID()) {
@@ -42,7 +53,7 @@ function pub(q: MemoryQueue, type: string, actorId: string, payload: Record<stri
 const settle = () => new Promise<void>((r) => setTimeout(r, 400));
 
 async function status(id: string): Promise<string | undefined> {
-  const [row] = await db.select().from(contractContracts).where(eq(contractContracts.id, id));
+  const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractContracts).where(eq(contractContracts.id, id))));
   return row?.status;
 }
 
@@ -86,7 +97,7 @@ describe("contract lifecycle (integration)", () => {
   afterAll(async () => { await wipe(); await sqlClient.end(); });
 
   it("draft -> approved -> active -> closed transitions persist + emit events", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerContractConsumers(q);
     await q.start();
 
@@ -112,7 +123,7 @@ describe("contract lifecycle (integration)", () => {
     expect(await status(id)).toBe("closed");
     await q.stop();
 
-    const events = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))
+    const events = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))))
       .map((r) => r.eventType);
     for (const e of [EVENTS.contractCreated, EVENTS.contractApproved, EVENTS.contractActivated, EVENTS.contractClosed]) {
       expect(events).toContain(e);
@@ -121,7 +132,7 @@ describe("contract lifecycle (integration)", () => {
   });
 
   it("amendment applies value-delta in paise and writes one ledger row", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerContractConsumers(q);
     await q.start();
 
@@ -143,17 +154,17 @@ describe("contract lifecycle (integration)", () => {
     await settle();
     await q.stop();
 
-    const [row] = await db.select().from(contractContracts).where(eq(contractContracts.id, id));
+    const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractContracts).where(eq(contractContracts.id, id))));
     expect(row?.valueMinor).toBe(10000000n + 2500000n - 500000n); // 12,000,000n
 
-    const ams = await db.select().from(contractAmendments).where(eq(contractAmendments.contractId, id));
+    const ams = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractAmendments).where(eq(contractAmendments.contractId, id))));
     expect(ams).toHaveLength(2);
     expect(ams.map((a) => a.amendmentNo).sort()).toEqual([1, 2]);
     expect(ams.reduce((s, a) => s + a.valueDelta, 0n)).toBe(2000000n);
   });
 
   it("idempotency: redelivering the same approve messageId transitions once", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerContractConsumers(q);
     await q.start();
 
@@ -174,16 +185,16 @@ describe("contract lifecycle (integration)", () => {
     await q.stop();
 
     expect(await status(id)).toBe("approved");
-    const proc = await db.select().from(processed).where(eq(processed.messageId, approveMsg));
+    const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(processed).where(eq(processed.messageId, approveMsg))));
     expect(proc).toHaveLength(1);
     // exactly one approved event in the outbox for this contract
-    const approvedEvents = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))
+    const approvedEvents = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))))
       .filter((r) => r.eventType === EVENTS.contractApproved && (r.payload as any)?.contractId === id);
     expect(approvedEvents).toHaveLength(1);
   });
 
   it("tenant isolation: amend payload tenant differs -> contract not found for other tenant scope", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerContractConsumers(q);
     await q.start();
     const id = randomUUID();
@@ -194,8 +205,8 @@ describe("contract lifecycle (integration)", () => {
     }, id);
     await settle();
     await q.stop();
-    const otherScoped = await db.select().from(contractContracts)
-      .where(eq(contractContracts.tenantId, OTHER_T));
+    const otherScoped = await runWithTenant(OTHER_T, () => db.transaction(async (tx) => tx.select().from(contractContracts)
+      .where(eq(contractContracts.tenantId, OTHER_T))));
     expect(otherScoped.find((r) => r.id === id)).toBeUndefined();
   });
 });

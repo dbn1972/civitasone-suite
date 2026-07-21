@@ -1,5 +1,5 @@
 import { eq, and, or, ilike, desc, sql, type SQL } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { contacts, accounts, type ContactRow, type ContactInsert, type ContactView, type ContactDetailView, type AccountInsert } from "./schema.js";
 import { deals } from "../deals/schema.js";
 import { activities } from "../activities/schema.js";
@@ -30,22 +30,22 @@ function toView(r: ContactRow): ContactView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<ContactView | null> {
-  const rows = await db.select().from(contacts).where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(contacts).where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId))).limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function findDetail(id: string, tenantId: string): Promise<ContactDetailView | null> {
   const contact = await findById(id, tenantId);
-  if (!contact || contact.status === "deleted") return null;
+  if (!contact || contact.status === "inactive") return null;
 
-  const dealRows = await db.select().from(deals)
+  const dealRows = await scopedRead((tx) => tx.select().from(deals)
     .where(and(eq(deals.tenantId, tenantId), eq(deals.contactId, id), eq(deals.status, "active")))
-    .orderBy(desc(deals.updatedAt));
+    .orderBy(desc(deals.updatedAt)));
 
-  const activityRows = await db.select().from(activities)
+  const activityRows = await scopedRead((tx) => tx.select().from(activities)
     .where(and(eq(activities.tenantId, tenantId), eq(activities.contactId, id)))
     .orderBy(desc(activities.createdAt))
-    .limit(20);
+    .limit(20));
 
   return {
     id: contact.id,
@@ -90,7 +90,7 @@ export async function listByTenant(
   offset: number,
   filters: ListFilters = {},
 ): Promise<ContactView[]> {
-  const conditions: SQL[] = [eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`];
+  const conditions: SQL[] = [eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`];
   if (filters.search) {
     const q = `%${filters.search}%`;
     // email/phone are AES-GCM ciphertext at rest and cannot be ILIKE-matched;
@@ -107,19 +107,19 @@ export async function listByTenant(
     conditions.push(sql`${contacts.lastActivityAt} > now() - interval '30 days' OR ${contacts.createdAt} > now() - interval '7 days'`);
   }
 
-  const rows = await db.select().from(contacts)
+  const rows = await scopedRead((tx) => tx.select().from(contacts)
     .where(and(...conditions))
     .orderBy(desc(contacts.updatedAt))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 
 export async function exportAll(tenantId: string, limit = 5000): Promise<ContactView[]> {
-  const rows = await db.select().from(contacts)
-    .where(and(eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`))
+  const rows = await scopedRead((tx) => tx.select().from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`))
     .orderBy(contacts.name)
-    .limit(limit);
+    .limit(limit));
   return rows.map(toView);
 }
 
@@ -161,14 +161,14 @@ export async function update(tx: Writer, id: string, tenantId: string, patch: Pa
 
 /** Tenant-scoped, non-deleted fetch of the raw row (for merge field-copy). */
 export async function findActiveRow(id: string, tenantId: string): Promise<ContactRow | null> {
-  const rows = await db.select().from(contacts)
-    .where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`))
-    .limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(contacts)
+    .where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`))
+    .limit(1));
   return rows[0] ?? null;
 }
 
 export async function softDelete(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {
-  await update(tx, id, tenantId, { status: "deleted" }, actorId);
+  await update(tx, id, tenantId, { status: "inactive" }, actorId);
 }
 
 export async function reassignActivities(tx: Writer, fromId: string, toId: string, tenantId: string): Promise<void> {
@@ -194,26 +194,26 @@ export async function insertAccount(tx: Writer, row: AccountInsert): Promise<voi
 }
 
 export async function listAccounts(tenantId: string, limit = 500): Promise<{ id: string; name: string; industry: string | null }[]> {
-  return db.select({ id: accounts.id, name: accounts.name, industry: accounts.industry })
+  return scopedRead((tx) => tx.select({ id: accounts.id, name: accounts.name, industry: accounts.industry })
     .from(accounts)
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active")))
     .orderBy(accounts.name)
-    .limit(limit);
+    .limit(limit));
 }
 
 /** Tenant-scoped existence check for an account (cross-tenant FK guard). */
 export async function accountExists(tenantId: string, accountId: string): Promise<boolean> {
-  const rows = await db.select({ one: sql`1` }).from(accounts)
+  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(accounts)
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId)))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }
 
 /** Tenant-scoped existence check for a contact (cross-tenant FK guard). */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
-  const rows = await db.select({ one: sql`1` }).from(contacts)
+  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
-    .limit(1);
+    .limit(1));
   return rows.length > 0;
 }
 

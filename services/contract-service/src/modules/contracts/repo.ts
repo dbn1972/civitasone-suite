@@ -1,32 +1,32 @@
 import { eq, and, lte, gte, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { contractContracts, contractAmendments, type ContractRow, type ContractInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findContractById(id: string): Promise<ContractRow | null> {
-  const rows = await db.select().from(contractContracts).where(eq(contractContracts.id, id)).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(contractContracts).where(eq(contractContracts.id, id)).limit(1));
   return rows[0] ?? null;
 }
 
 export async function listContractsByTenant(tenantId: string, limit: number): Promise<ContractRow[]> {
-  return db.select().from(contractContracts)
+  return scopedRead((tx) => tx.select().from(contractContracts)
     .where(eq(contractContracts.tenantId, tenantId))
     .orderBy(sql`${contractContracts.createdAt} desc`)
-    .limit(limit);
+    .limit(limit));
 }
 
 /** Read model: active contracts in force. */
 export async function listActiveByTenant(tenantId: string, limit: number): Promise<ContractRow[]> {
-  return db.select().from(contractContracts)
+  return scopedRead((tx) => tx.select().from(contractContracts)
     .where(and(eq(contractContracts.tenantId, tenantId), eq(contractContracts.status, "active")))
     .orderBy(sql`${contractContracts.expiry} asc`)
-    .limit(limit);
+    .limit(limit));
 }
 
 /** Read model: active contracts expiring on or before `before` (YYYY-MM-DD). */
 export async function listExpiringByTenant(tenantId: string, before: string, limit: number): Promise<ContractRow[]> {
-  return db.select().from(contractContracts)
+  return scopedRead((tx) => tx.select().from(contractContracts)
     .where(and(
       eq(contractContracts.tenantId, tenantId),
       eq(contractContracts.status, "active"),
@@ -34,7 +34,7 @@ export async function listExpiringByTenant(tenantId: string, before: string, lim
       gte(contractContracts.expiry, sql`current_date`),
     ))
     .orderBy(sql`${contractContracts.expiry} asc`)
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function findContractByIdTx(tx: Writer, id: string): Promise<ContractRow | null> {
@@ -55,10 +55,10 @@ export async function insertAmendment(tx: Writer, row: typeof contractAmendments
 }
 
 export async function listAmendments(contractId: string, tenantId: string, limit = 100): Promise<Array<typeof contractAmendments.$inferSelect>> {
-  return db.select().from(contractAmendments)
+  return scopedRead((tx) => tx.select().from(contractAmendments)
     .where(and(eq(contractAmendments.contractId, contractId), eq(contractAmendments.tenantId, tenantId)))
     .orderBy(sql`${contractAmendments.amendmentNo} asc`)
-    .limit(limit);
+    .limit(limit));
 }
 
 export async function countAmendments(tx: Writer, contractId: string): Promise<number> {

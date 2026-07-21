@@ -226,9 +226,10 @@ export function registerDisbursementConsumers(queue: Queue): void {
       ? await (async () => {
           const { grantDisbursements } = await import("./schema.js");
           const { eq, and } = await import("drizzle-orm");
-          const rows = await db.select().from(grantDisbursements)
-            .where(and(eq(grantDisbursements.id, p.disbursementId!), eq(grantDisbursements.tenantId, msg.tenantId)))
-            .limit(1);
+          const rows = await db.transaction(async (tx) =>
+            tx.select().from(grantDisbursements)
+              .where(and(eq(grantDisbursements.id, p.disbursementId!), eq(grantDisbursements.tenantId, msg.tenantId)))
+              .limit(1));
           return rows[0] ?? null;
         })()
       : p.pfmsTxnId ? await repo.findDisbursementByPfmsTxnId(p.pfmsTxnId, msg.tenantId) : null;

@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { pipelines, type PipelineRow, type PipelineInsert, type PipelineView } from "./schema.js";
 
 export function toView(r: PipelineRow): PipelineView {
@@ -16,22 +16,22 @@ export function toView(r: PipelineRow): PipelineView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<PipelineView | null> {
-  const rows = await db.select()
+  const rows = await scopedRead((tx) => tx.select()
     .from(pipelines)
     .where(and(eq(pipelines.id, id), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
-    .limit(1);
+    .limit(1));
   const row = rows[0];
   if (!row) return null;
   return toView(row);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<PipelineView[]> {
-  const rows = await db.select()
+  const rows = await scopedRead((tx) => tx.select()
     .from(pipelines)
     .where(and(eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
     .orderBy(pipelines.name)
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 

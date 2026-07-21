@@ -25,3 +25,19 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Drizzle transaction handle exposed to {@link scopedRead} callbacks.
+ * Preserves full column typing (the public db.transaction rewrites tx to any).
+ */
+type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * Executes a read-only callback inside a Postgres transaction so that the
+ * tenant-aware GUC (`app.tenant_id`) is set from AsyncLocalStorage. Without
+ * this wrapper, bare `db.select()` calls bypass RLS because the GUC is only
+ * injected by `wrapWithTenantGuc` inside `db.transaction()`.
+ */
+export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
+}

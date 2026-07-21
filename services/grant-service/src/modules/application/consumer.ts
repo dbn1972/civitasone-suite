@@ -26,7 +26,7 @@ export function registerApplicationConsumers(queue: Queue): void {
     };
 
     // Eligibility check — runs before DB write
-    const criteria = await schemeRepo.findCriteriaByScheme(p.schemeId);
+    const criteria = await schemeRepo.findCriteriaByScheme(p.schemeId, p.tenantId);
     if (criteria.length > 0) {
       const ben = await beneficiaryRepo.findBeneficiaryById(p.beneficiaryId, p.tenantId);
       if (ben) {

@@ -1,19 +1,19 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { contractRateContracts, contractRateItems, type RcRow, type RcInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function findRcById(id: string, tenantId: string): Promise<RcRow | null> {
-  const rows = await db.select().from(contractRateContracts)
-    .where(and(eq(contractRateContracts.id, id), eq(contractRateContracts.tenantId, tenantId))).limit(1);
+  const rows = await scopedRead((tx) => tx.select().from(contractRateContracts)
+    .where(and(eq(contractRateContracts.id, id), eq(contractRateContracts.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findRcsByItem(tenantId: string, itemCode: string): Promise<RcRow[]> {
-  const items = await db.select().from(contractRateItems)
+  const items = await scopedRead((tx) => tx.select().from(contractRateItems)
     .where(and(eq(contractRateItems.tenantId, tenantId), eq(contractRateItems.itemCode, itemCode)))
-    .limit(100);
+    .limit(100));
   if (!items.length) return [];
   const rcIds = [...new Set(items.map((i) => i.rcId))];
   const rcs: RcRow[] = [];

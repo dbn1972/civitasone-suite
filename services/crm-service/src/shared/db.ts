@@ -25,3 +25,21 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Drizzle transaction handle exposed to {@link scopedRead} callbacks.
+ * Preserves full column typing (the public db.transaction rewrites tx to any).
+ */
+type ScopedTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type { ScopedTx };
+
+/**
+ * Run a READ inside a tenant transaction so PostgreSQL RLS is enforced on
+ * the read path. A bare `db.select()` runs on a pooled connection with no
+ * `app.tenant_id` GUC — under FORCE ROW LEVEL SECURITY, it silently returns
+ * zero rows. Wrapping in `db.transaction` makes the TenantRouter wrapper set
+ * the GUC from AsyncLocalStorage, so reads are tenant-scoped by RLS.
+ */
+export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(fn);
+}

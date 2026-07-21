@@ -1,5 +1,5 @@
 import { eq, and, gte, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { contacts } from "../contacts/schema.js";
 import { deals } from "../deals/schema.js";
@@ -29,25 +29,25 @@ export async function getDashboard(tenantId: string) {
       const todayUtc = new Date();
       todayUtc.setUTCHours(0, 0, 0, 0);
 
-      const [contactRow] = await db
+      const [contactRow] = await scopedRead((tx) => tx
         .select({ count: sql<number>`count(*)::int` })
         .from(contacts)
-        .where(and(eq(contacts.tenantId, tenantId), sql`${contacts.status} <> 'deleted'`));
+        .where(and(eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`)));
 
-      const [openDeals] = await db
+      const [openDeals] = await scopedRead((tx) => tx
         .select({ count: sql<number>`count(*)::int` })
         .from(deals)
-        .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
+        .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active"))));
 
-      const [pipeline] = await db
+      const [pipeline] = await scopedRead((tx) => tx
         .select({ total: sql<string>`coalesce(sum(${deals.valueMinor}), 0)::bigint` })
         .from(deals)
-        .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active")));
+        .where(and(eq(deals.tenantId, tenantId), eq(deals.status, "active"))));
 
-      const [todayActs] = await db
+      const [todayActs] = await scopedRead((tx) => tx
         .select({ count: sql<number>`count(*)::int` })
         .from(activities)
-        .where(and(eq(activities.tenantId, tenantId), gte(activities.createdAt, todayUtc)));
+        .where(and(eq(activities.tenantId, tenantId), gte(activities.createdAt, todayUtc))));
 
       // Keep the pipeline sum exact as paise (bigint). Postgres returns the
       // ::bigint sum as a string; never coerce the full paise total through

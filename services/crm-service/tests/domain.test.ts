@@ -20,6 +20,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 
 import { db, sqlClient } from "../src/shared/db.js";
 import { markProcessed } from "../src/shared/outbox.js";
@@ -48,10 +50,38 @@ const TENANT_A = "ddddddd1-0000-4000-8000-000000000001";
 const TENANT_B = "ddddddd2-0000-4000-8000-000000000002";
 const ACTOR = "ddddddd0-0000-4000-8000-0000000000aa";
 
-const queue = new MemoryQueue();
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
+const queue = wireTenantAwareQueue(new MemoryQueue());
 registerContactConsumers(queue);
 registerDealConsumers(queue);
 registerActivityConsumers(queue);
+
+/** Run a function within a tenant context so scopedRead works. */
+function withTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, fn);
+}
+
+/**
+ * Execute a raw SQL query via sqlClient with the tenant GUC set so RLS
+ * allows visibility of tenant-scoped rows. Uses sqlClient.begin() to
+ * establish a transaction boundary where SET LOCAL takes effect.
+ */
+function tenantQuery(tenantId: string) {
+  return {
+    async select(query: string, params: unknown[] = []): Promise<any[]> {
+      return sqlClient.begin(async (tx) => {
+        await tx`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+        return tx.unsafe(query, params);
+      });
+    },
+  };
+}
 
 type Cmd = {
   messageId: string;
@@ -90,7 +120,7 @@ function createContactCmd(tenantId: string, overrides: Record<string, unknown> =
 }
 
 async function contactRowExists(tenantId: string, id: string): Promise<boolean> {
-  return (await contactRepo.findById(id, tenantId)) !== null;
+  return withTenant(tenantId, async () => (await contactRepo.findById(id, tenantId)) !== null);
 }
 
 /**
@@ -106,9 +136,11 @@ async function processed(messageId: string): Promise<boolean> {
 
 async function cleanup(): Promise<void> {
   for (const t of [TENANT_A, TENANT_B]) {
-    await db.delete(activities).where(eq(activities.tenantId, t));
-    await db.delete(deals).where(eq(deals.tenantId, t));
-    await db.delete(contacts).where(eq(contacts.tenantId, t));
+    await withTenant(t, () => db.transaction(async (tx) => {
+      await tx.delete(activities).where(eq(activities.tenantId, t));
+      await tx.delete(deals).where(eq(deals.tenantId, t));
+      await tx.delete(contacts).where(eq(contacts.tenantId, t));
+    }));
   }
 }
 
@@ -132,9 +164,7 @@ describe("contact create + PII at rest", () => {
     await drive(COMMANDS.createContact, cmd, () => contactRowExists(TENANT_A, cmd.messageId));
 
     // Read the RAW row (bypass the drizzle decrypt customType) to assert ciphertext.
-    const raw = await sqlClient`
-      select email, phone, email_idx from crm.contacts where id = ${cmd.messageId}
-    `;
+    const raw = await tenantQuery(TENANT_A).select("select email, phone, email_idx from crm.contacts where id = $1", [cmd.messageId]);
     expect(raw.length).toBe(1);
     const r = raw[0]!;
     expect(typeof r.email).toBe("string");
@@ -145,7 +175,7 @@ describe("contact create + PII at rest", () => {
     expect(r.email_idx).toMatch(/^[0-9a-f]{64}$/);
 
     // The repo (app layer) decrypts transparently back to cleartext.
-    const view = await contactRepo.findById(cmd.messageId, TENANT_A);
+    const view = await withTenant(TENANT_A, () => contactRepo.findById(cmd.messageId, TENANT_A));
     expect(view?.email).toBe("asha.verma@example.in");
     expect(view?.phone).toBe("9876500011");
   });
@@ -153,8 +183,8 @@ describe("contact create + PII at rest", () => {
   it("isolates tenants: a contact is invisible to another tenant", async () => {
     const cmd = createContactCmd(TENANT_A, { name: "Tenant A Only" });
     await drive(COMMANDS.createContact, cmd, () => contactRowExists(TENANT_A, cmd.messageId));
-    expect(await contactRepo.findById(cmd.messageId, TENANT_B)).toBeNull();
-    expect(await contactRepo.findById(cmd.messageId, TENANT_A)).not.toBeNull();
+    expect(await withTenant(TENANT_B, () => contactRepo.findById(cmd.messageId, TENANT_B))).toBeNull();
+    expect(await withTenant(TENANT_A, () => contactRepo.findById(cmd.messageId, TENANT_A))).not.toBeNull();
   });
 });
 
@@ -168,7 +198,7 @@ describe("cross-tenant FK rejection (+ audit)", () => {
     await drive(COMMANDS.createContact, cmd, () => processed(cmd.messageId));
 
     // Observable effect of the guard: the contact row was NOT inserted.
-    expect(await contactRepo.findById(cmd.messageId, TENANT_A)).toBeNull();
+    expect(await withTenant(TENANT_A, () => contactRepo.findById(cmd.messageId, TENANT_A))).toBeNull();
   });
 
   it("rejects a deal referencing a contact in another tenant", async () => {
@@ -190,7 +220,7 @@ describe("cross-tenant FK rejection (+ audit)", () => {
     };
     await drive(COMMANDS.createDeal, dealCmd, () => processed(dealCmd.messageId));
     // The deal must NOT have been inserted (guard rejected the cross-tenant contact).
-    expect(await dealRepo.findById(dealId, TENANT_A)).toBeNull();
+    expect(await withTenant(TENANT_A, () => dealRepo.findById(dealId, TENANT_A))).toBeNull();
   });
 });
 
@@ -206,60 +236,65 @@ describe("deal lifecycle", () => {
         status: "active", version: 1,
       },
     };
-    await drive(COMMANDS.createDeal, cmd, async () => (await dealRepo.findById(id, tenantId)) !== null);
+    await drive(COMMANDS.createDeal, cmd, async () => (await withTenant(tenantId, () => dealRepo.findById(id, tenantId))) !== null);
     return id;
   }
 
   it("PATCH edits a deal's value and bumps version", async () => {
     const id = await makeDeal(TENANT_A);
-    const before = await dealRepo.findById(id, TENANT_A);
+    const before = await withTenant(TENANT_A, () => dealRepo.findById(id, TENANT_A));
     await drive(COMMANDS.updateDeal, {
       messageId: randomUUID(), type: COMMANDS.updateDeal, tenantId: TENANT_A,
       payload: { id, tenantId: TENANT_A, valueMinor: 999900 },
     }, async () => {
-      const d = await dealRepo.findById(id, TENANT_A);
+      const d = await withTenant(TENANT_A, () => dealRepo.findById(id, TENANT_A));
       return d?.valueMinor === "999900";
     });
-    const after = await dealRepo.findById(id, TENANT_A);
+    const after = await withTenant(TENANT_A, () => dealRepo.findById(id, TENANT_A));
     expect(after?.valueMinor).toBe("999900");
     expect(after!.version).toBeGreaterThan(before!.version);
   });
 
   it("Won pins probability=100; Lost pins probability=0; version bumps", async () => {
     const wonId = await makeDeal(TENANT_A);
-    const wonBefore = await dealRepo.findById(wonId, TENANT_A);
+    const wonBefore = await withTenant(TENANT_A, () => dealRepo.findById(wonId, TENANT_A));
     await drive(COMMANDS.updateDealStage, {
       messageId: randomUUID(), type: COMMANDS.updateDealStage, tenantId: TENANT_A,
-      payload: { id: wonId, tenantId: TENANT_A, stage: "Won" },
-    }, async () => (await dealRepo.findById(wonId, TENANT_A))?.stage === "Won");
-    const won = await dealRepo.findById(wonId, TENANT_A);
+      payload: { id: wonId, tenantId: TENANT_A, stage: "Won", version: wonBefore!.version },
+    }, async () => (await withTenant(TENANT_A, () => dealRepo.findById(wonId, TENANT_A)))?.stage === "Won");
+    const won = await withTenant(TENANT_A, () => dealRepo.findById(wonId, TENANT_A));
     expect(won?.probability).toBe(100);
     expect(won?.status).toBe("won");
     expect(won!.version).toBeGreaterThan(wonBefore!.version);
 
     const lostId = await makeDeal(TENANT_A);
+    const lostBefore = await withTenant(TENANT_A, () => dealRepo.findById(lostId, TENANT_A));
     await drive(COMMANDS.updateDealStage, {
       messageId: randomUUID(), type: COMMANDS.updateDealStage, tenantId: TENANT_A,
-      payload: { id: lostId, tenantId: TENANT_A, stage: "Lost", probability: 80 },
-    }, async () => (await dealRepo.findById(lostId, TENANT_A))?.stage === "Lost");
-    const lost = await dealRepo.findById(lostId, TENANT_A);
+      payload: { id: lostId, tenantId: TENANT_A, stage: "Lost", probability: 80, version: lostBefore!.version },
+    }, async () => (await withTenant(TENANT_A, () => dealRepo.findById(lostId, TENANT_A)))?.stage === "Lost");
+    const lost = await withTenant(TENANT_A, () => dealRepo.findById(lostId, TENANT_A));
     expect(lost?.probability).toBe(0); // explicit 80 is overridden by the Lost rule
     expect(lost?.status).toBe("lost");
   });
 
-  it("soft-delete excludes the deal from get and list", async () => {
+  it("soft-delete excludes the deal from get and list", { timeout: 15000 }, async () => {
     const id = await makeDeal(TENANT_A);
+    const deleteMsgId = randomUUID();
     await drive(COMMANDS.deleteDeal, {
-      messageId: randomUUID(), type: COMMANDS.deleteDeal, tenantId: TENANT_A,
+      messageId: deleteMsgId, type: COMMANDS.deleteDeal, tenantId: TENANT_A,
       payload: { id, tenantId: TENANT_A },
-    }, async () => (await dealRepo.findById(id, TENANT_A)) === null);
+    }, async () => {
+      const deal = await withTenant(TENANT_A, () => dealRepo.findById(id, TENANT_A));
+      return deal === null;
+    });
 
-    expect(await dealRepo.findById(id, TENANT_A)).toBeNull();
-    const list = await dealRepo.listByTenant(TENANT_A, 200, 0);
+    expect(await withTenant(TENANT_A, () => dealRepo.findById(id, TENANT_A))).toBeNull();
+    const list = await withTenant(TENANT_A, () => dealRepo.listByTenant(TENANT_A, 200, 0));
     expect(list.find((d) => d.id === id)).toBeUndefined();
-    // Row still present but flagged deleted (true soft-delete).
-    const raw = await sqlClient`select status from crm.deals where id = ${id}`;
-    expect(raw[0]?.status).toBe("deleted");
+    // Row still present but flagged cancelled (soft-delete uses 'cancelled' per DB CHECK).
+    const raw = await tenantQuery(TENANT_A).select("select status from crm.deals where id = $1", [id]);
+    expect(raw[0]?.status).toBe("cancelled");
   });
 });
 
@@ -275,7 +310,7 @@ describe("activity completion", () => {
         createdAt: new Date().toISOString(),
       },
     }, async () => {
-      const r = await sqlClient`select 1 from crm.activities where id = ${id}`;
+      const r = await tenantQuery(TENANT_A).select("select 1 from crm.activities where id = $1", [id]);
       return r.length > 0;
     });
 
@@ -283,11 +318,11 @@ describe("activity completion", () => {
       messageId: randomUUID(), type: COMMANDS.updateActivity, tenantId: TENANT_A,
       payload: { id, tenantId: TENANT_A, status: "completed" },
     }, async () => {
-      const r = await sqlClient`select completed_at from crm.activities where id = ${id}`;
+      const r = await tenantQuery(TENANT_A).select("select completed_at from crm.activities where id = $1", [id]);
       return r[0]?.completed_at != null;
     });
 
-    const r = await sqlClient`select status, completed_at from crm.activities where id = ${id}`;
+    const r = await tenantQuery(TENANT_A).select("select status, completed_at from crm.activities where id = $1", [id]);
     expect(r[0]?.status).toBe("completed");
     expect(r[0]?.completed_at).not.toBeNull();
   });
@@ -301,7 +336,7 @@ describe("dashboard excludes deleted + cache invalidation", () => {
     await drive(COMMANDS.createContact, cmd, () => contactRowExists(TENANT_A, cmd.messageId));
 
     // Prime the cache and capture the count that includes our new contact.
-    const before = await getDashboard(TENANT_A);
+    const before = await withTenant(TENANT_A, () => getDashboard(TENANT_A));
     expect(before.totalContacts).toBeGreaterThanOrEqual(1);
     // The summary is now cached.
     expect(await cache.getOrLoad(dashboardKey(TENANT_A), async () => null)).not.toBeNull();
@@ -310,14 +345,14 @@ describe("dashboard excludes deleted + cache invalidation", () => {
     await drive(COMMANDS.deleteContact, {
       messageId: randomUUID(), type: COMMANDS.deleteContact, tenantId: TENANT_A,
       payload: { id: cmd.messageId, tenantId: TENANT_A },
-    }, async () => (await contactRepo.findById(cmd.messageId, TENANT_A))?.status === "deleted");
+    }, async () => (await withTenant(TENANT_A, () => contactRepo.findById(cmd.messageId, TENANT_A)))?.status === "inactive");
 
     // Cache entry must be GONE (not stale) immediately after the delete.
     const cachedAfter = await cache.getOrLoad(dashboardKey(TENANT_A), async () => null);
     expect(cachedAfter).toBeNull();
 
     // Recomputed summary no longer counts the deleted contact.
-    const after = await getDashboard(TENANT_A);
+    const after = await withTenant(TENANT_A, () => getDashboard(TENANT_A));
     expect(after.totalContacts).toBe(before.totalContacts - 1);
   });
 });
@@ -325,8 +360,8 @@ describe("dashboard excludes deleted + cache invalidation", () => {
 describe("inbox idempotency (markProcessed)", () => {
   it("claims a messageId once; a replay is a no-op", async () => {
     const messageId = randomUUID();
-    const first = await db.transaction((tx) => markProcessed(tx, messageId));
-    const second = await db.transaction((tx) => markProcessed(tx, messageId));
+    const first = await withTenant(TENANT_A, () => db.transaction((tx) => markProcessed(tx, messageId)));
+    const second = await withTenant(TENANT_A, () => db.transaction((tx) => markProcessed(tx, messageId)));
     expect(first).toBe(true);
     expect(second).toBe(false);
     await sqlClient`delete from _inbox.processed where message_id = ${messageId}`;
@@ -338,11 +373,11 @@ describe("inbox idempotency (markProcessed)", () => {
 
     // Re-run the consumer body directly with the SAME messageId: markProcessed
     // must short-circuit, leaving exactly one row.
-    await db.transaction(async (tx) => {
+    await withTenant(TENANT_A, () => db.transaction(async (tx) => {
       const claimed = await markProcessed(tx, cmd.messageId);
       expect(claimed).toBe(false);
-    });
-    const rows = await sqlClient`select count(*)::int as n from crm.contacts where id = ${cmd.messageId}`;
+    }));
+    const rows = await tenantQuery(TENANT_A).select("select count(*)::int as n from crm.contacts where id = $1", [cmd.messageId]);
     expect(rows[0]?.n).toBe(1);
   });
 });

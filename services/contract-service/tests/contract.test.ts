@@ -7,6 +7,8 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { contractContracts } from "../src/modules/contracts/schema.js";
@@ -24,13 +26,22 @@ const RC_1    = "33333333-cccc-4000-8000-000000000003";
 const MSG_C1  = "44444444-dddd-4000-8000-000000000003";
 const MSG_RC1 = "44444444-dddd-4000-8000-000000000004";
 
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(contractContracts).where(eq(contractContracts.tenantId, TENANT));
-  await db.delete(contractRateContracts).where(eq(contractRateContracts.tenantId, TENANT));
-  for (const id of [MSG_C1, MSG_RC1]) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(contractContracts).where(eq(contractContracts.tenantId, TENANT));
+    await tx.delete(contractRateContracts).where(eq(contractRateContracts.tenantId, TENANT));
+    for (const id of [MSG_C1, MSG_RC1]) {
+      await tx.delete(processed).where(eq(processed.messageId, id));
+    }
+  }));
 }
 
 // ── 1. Contract amendment — pure ─────────────────────────────────────────
@@ -56,7 +67,7 @@ describe("Contract consumer — CQRS wiring (integration)", () => {
   afterAll(async () => { await wipe(); });
 
   it("contract.contract.create inserts row and emits contract.contract.created", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerContractConsumers(q);
     await q.start();
 
@@ -80,13 +91,13 @@ describe("Contract consumer — CQRS wiring (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(contractContracts).where(eq(contractContracts.id, CON_1));
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractContracts).where(eq(contractContracts.id, CON_1))));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.contractNo).toBe("CON-2026-001");
     expect(rows[0]?.status).toBe("draft");
     expect(rows[0]?.valueMinor).toBe(28600000n);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
     expect(outbox.map((r) => r.eventType)).toContain(EVENTS.contractCreated);
   });
 });
@@ -98,7 +109,7 @@ describe("Rate contract consumer — CQRS wiring (integration)", () => {
   afterAll(async () => { await wipe(); await sqlClient.end(); });
 
   it("rate contract is inserted and processable", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerRateConsumers(q);
     await q.start();
 
@@ -124,12 +135,12 @@ describe("Rate contract consumer — CQRS wiring (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rcs = await db.select().from(contractRateContracts).where(eq(contractRateContracts.id, RC_1));
+    const rcs = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractRateContracts).where(eq(contractRateContracts.id, RC_1))));
     expect(rcs).toHaveLength(1);
     expect(rcs[0]?.rcNo).toBe("RC-2026-001");
     expect(rcs[0]?.status).toBe("active");
 
-    const proc = await db.select().from(processed).where(eq(processed.messageId, MSG_RC1));
+    const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(processed).where(eq(processed.messageId, MSG_RC1))));
     expect(proc).toHaveLength(1);
   });
 });

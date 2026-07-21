@@ -1,5 +1,5 @@
-import { eq, and, sql, desc } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { eq, and, sql } from "drizzle-orm";
+import { db, scopedRead } from "../../shared/db.js";
 import { customFields, type CustomFieldRow, type CustomFieldInsert, type CustomFieldView } from "./schema.js";
 
 export function toView(r: CustomFieldRow): CustomFieldView {
@@ -18,9 +18,9 @@ export function toView(r: CustomFieldRow): CustomFieldView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<CustomFieldView | null> {
-  const rows = await db.select().from(customFields)
+  const rows = await scopedRead((tx) => tx.select().from(customFields)
     .where(and(eq(customFields.id, id), eq(customFields.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -30,18 +30,18 @@ export async function listByEntityType(
   limit: number,
   offset: number,
 ): Promise<CustomFieldView[]> {
-  const rows = await db.select().from(customFields)
+  const rows = await scopedRead((tx) => tx.select().from(customFields)
     .where(and(eq(customFields.tenantId, tenantId), eq(customFields.entityType, entityType)))
     .orderBy(customFields.ordinal)
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 
 export async function countByEntityType(tenantId: string, entityType: string): Promise<number> {
-  const result = await db.select({ count: sql<number>`count(*)::int` })
+  const result = await scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` })
     .from(customFields)
-    .where(and(eq(customFields.tenantId, tenantId), eq(customFields.entityType, entityType)));
+    .where(and(eq(customFields.tenantId, tenantId), eq(customFields.entityType, entityType))));
   return result[0]?.count ?? 0;
 }
 

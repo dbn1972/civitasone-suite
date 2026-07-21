@@ -76,7 +76,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const contact = await queries.getContact(id, ctx.tenantId, isAdmin(ctx.roles));
-    if (!contact || contact.status === "deleted") throw new HttpError(404, "NOT_FOUND", "contact not found");
+    if (!contact || contact.status === "inactive") throw new HttpError(404, "NOT_FOUND", "contact not found");
     return reply.send(contact);
   });
 
@@ -88,7 +88,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     // P1-3 ownership authz: a non-admin may only modify contacts they own.
     if (!isAdmin(ctx.roles)) {
       const existing = await queries.getContact(id, ctx.tenantId, true);
-      if (!existing || existing.status === "deleted") {
+      if (!existing || existing.status === "inactive") {
         throw new HttpError(404, "NOT_FOUND", "contact not found");
       }
       if (existing.ownerId && existing.ownerId !== ctx.actorId) {

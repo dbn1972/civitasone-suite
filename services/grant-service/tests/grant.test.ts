@@ -8,7 +8,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { grantBeneficiaries, grantAadhaarLinks } from "../src/modules/beneficiary/schema.js";
@@ -40,20 +42,34 @@ const MSG_UC   = "aaaaaaaa-bbbb-4ccc-8ddd-000000000003";
 const MSG_INST = "aaaaaaaa-bbbb-4ccc-8ddd-000000000004";
 const MSG_DISB = "aaaaaaaa-bbbb-4ccc-8ddd-000000000005";
 
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
+/** Helper: scoped read within tenant transaction (test assertion reads) */
+async function scopedQuery<T>(tenant: string, fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  return runWithTenant(tenant, () => db.transaction((tx) => fn(tx as unknown as typeof db)));
+}
+
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(grantUcStatements).where(eq(grantUcStatements.tenantId, TENANT));
-  await db.delete(grantDisbursements).where(eq(grantDisbursements.tenantId, TENANT));
-  await db.delete(grantInstallments).where(eq(grantInstallments.tenantId, TENANT));
-  await db.delete(grantApplications).where(eq(grantApplications.tenantId, TENANT));
-  await db.delete(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.tenantId, TENANT));
-  await db.delete(grantSchemes).where(eq(grantSchemes.tenantId, TENANT));
-  await db.delete(grantAadhaarLinks).where(eq(grantAadhaarLinks.tenantId, TENANT));
-  await db.delete(grantBeneficiaries).where(eq(grantBeneficiaries.tenantId, TENANT));
-  const msgIds = [MSG_BEN, MSG_AAD, MSG_UC, MSG_INST, MSG_DISB];
-  for (const id of msgIds) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(grantUcStatements).where(eq(grantUcStatements.tenantId, TENANT));
+    await tx.delete(grantDisbursements).where(eq(grantDisbursements.tenantId, TENANT));
+    await tx.delete(grantInstallments).where(eq(grantInstallments.tenantId, TENANT));
+    await tx.delete(grantApplications).where(eq(grantApplications.tenantId, TENANT));
+    await tx.delete(grantEligibilityCriteria).where(eq(grantEligibilityCriteria.tenantId, TENANT));
+    await tx.delete(grantSchemes).where(eq(grantSchemes.tenantId, TENANT));
+    await tx.delete(grantAadhaarLinks).where(eq(grantAadhaarLinks.tenantId, TENANT));
+    await tx.delete(grantBeneficiaries).where(eq(grantBeneficiaries.tenantId, TENANT));
+    const msgIds = [MSG_BEN, MSG_AAD, MSG_UC, MSG_INST, MSG_DISB];
+    for (const id of msgIds) {
+      await tx.delete(processed).where(eq(processed.messageId, id));
+    }
+  }));
 }
 
 describe("Beneficiary domain — Aadhaar masking (DPDP §4)", () => {
@@ -63,7 +79,7 @@ describe("Beneficiary domain — Aadhaar masking (DPDP §4)", () => {
     expect(token).toHaveLength(64);
     expect(token).not.toContain("123456789012");
 
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerBeneficiaryConsumers(q);
     await q.start();
     await wipe();
@@ -86,7 +102,8 @@ describe("Beneficiary domain — Aadhaar masking (DPDP §4)", () => {
     });
     await new Promise((r) => setTimeout(r, 400));
 
-    const links = await db.select().from(grantAadhaarLinks).where(eq(grantAadhaarLinks.beneficiaryId, BEN));
+    const links = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(grantAadhaarLinks).where(eq(grantAadhaarLinks.beneficiaryId, BEN)));
     expect(links).toHaveLength(1);
     expect(links[0]!.aadhaarLast4).toBe("9012");
     expect(links[0]!.aadhaarToken).toBe(token);
@@ -120,7 +137,7 @@ describe("Utilisation consumer — expenditure exceeds disbursed (integration)",
   afterAll(async () => { await wipe(); });
 
   it("UC with zero disbursed → uc.expenditure_exceeds in outbox, no UC row", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerUtilisationConsumers(q);
     await q.start();
 
@@ -132,10 +149,12 @@ describe("Utilisation consumer — expenditure exceeds disbursed (integration)",
     });
     await new Promise((r) => setTimeout(r, 600));
 
-    const ucs = await db.select().from(grantUcStatements).where(eq(grantUcStatements.applicationId, APP));
+    const ucs = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(grantUcStatements).where(eq(grantUcStatements.applicationId, APP)));
     expect(ucs).toHaveLength(0);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
     const exceeded = outbox.find((o) => o.eventType === EVENTS.ucExpenditureExceeds);
     expect(exceeded).toBeDefined();
 
@@ -148,27 +167,29 @@ describe("Disbursement consumer — CQRS wiring (integration)", () => {
   afterAll(async () => { await wipe(); });
 
   it("approved app + installment → disburse → DB row + outbox", async () => {
-    const q = new MemoryQueue();
+    const q = wireTenantAwareQueue(new MemoryQueue());
     registerSchemeConsumers(q);
     registerApplicationConsumers(q);
     registerDisbursementConsumers(q);
     await q.start();
 
     // Seed scheme with budget envelope (P0-5 budget gate must be satisfiable)
-    await db.insert(grantSchemes).values({
-      id: SCHEME, tenantId: TENANT, code: "SCH-CQRS", name: "CQRS Scheme",
-      budgetMinor: 1000000n, disbursedMinor: 0n,
-      minAmountMinor: 0n, maxAmountMinor: 1000000n, currency: "INR", status: "active",
-      createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantSchemes).values({
+        id: SCHEME, tenantId: TENANT, code: "SCH-CQRS", name: "CQRS Scheme",
+        budgetMinor: 1000000n, disbursedMinor: 0n,
+        minAmountMinor: 0n, maxAmountMinor: 1000000n, currency: "INR", status: "active",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
 
-    // Seed approved application directly
-    await db.insert(grantApplications).values({
-      id: APP, tenantId: TENANT, grantNo: "G-001", schemeId: SCHEME,
-      beneficiaryId: BEN, purpose: "test", amountRequestedMinor: 500000n,
-      amountApprovedMinor: 500000n, currency: "INR", status: "approved",
-      approvedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR,
-    });
+      // Seed approved application directly
+      await tx.insert(grantApplications).values({
+        id: APP, tenantId: TENANT, grantNo: "G-001", schemeId: SCHEME,
+        beneficiaryId: BEN, purpose: "test", amountRequestedMinor: 500000n,
+        amountApprovedMinor: 500000n, currency: "INR", status: "approved",
+        approvedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
 
     await q.publish(COMMANDS.installmentCreate, {
       messageId: MSG_INST, type: COMMANDS.installmentCreate,
@@ -189,7 +210,8 @@ describe("Disbursement consumer — CQRS wiring (integration)", () => {
     });
     await new Promise((r) => setTimeout(r, 600));
 
-    const disbs = await db.select().from(grantDisbursements).where(eq(grantDisbursements.id, DISB));
+    const disbs = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(grantDisbursements).where(eq(grantDisbursements.id, DISB)));
     expect(disbs).toHaveLength(1);
     expect(disbs[0]!.status).toBe("initiated");
     expect(disbs[0]!.pfmsTxnId).toContain("PFMS-");

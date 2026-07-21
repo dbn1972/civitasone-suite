@@ -9,7 +9,7 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { contractMilestones, contractContracts } from "./schema.js";
 import { eq, and } from "drizzle-orm";
 
@@ -126,10 +126,10 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const rows = await db
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(contractMilestones)
-      .where(and(eq(contractMilestones.contractId, id), eq(contractMilestones.tenantId, ctx.tenantId)));
+      .where(and(eq(contractMilestones.contractId, id), eq(contractMilestones.tenantId, ctx.tenantId))));
     return reply.send({ data: rows });
   });
 
@@ -143,18 +143,18 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const { id, milestoneId } = milestoneIdParam.parse(req.params);
     const body = markLateBody.parse(req.body);
 
-    const [contract] = await db
+    const [contract] = await scopedRead((tx) => tx
       .select()
       .from(contractContracts)
       .where(and(eq(contractContracts.id, id), eq(contractContracts.tenantId, ctx.tenantId)))
-      .limit(1);
+      .limit(1));
     if (!contract) throw new HttpError(404, "NOT_FOUND", "contract not found");
 
-    const [milestone] = await db
+    const [milestone] = await scopedRead((tx) => tx
       .select()
       .from(contractMilestones)
       .where(and(eq(contractMilestones.id, milestoneId), eq(contractMilestones.contractId, id)))
-      .limit(1);
+      .limit(1));
     if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
     if (milestone.status === "completed") throw new HttpError(409, "ALREADY_COMPLETED", "milestone is already completed");
 
@@ -176,7 +176,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
 
     const isLate = delayDays > 0;
     const newStatus = isLate ? "completed_late" : "completed";
-    await db
+    await scopedRead((tx) => tx
       .update(contractMilestones)
       .set({
         status: newStatus,
@@ -185,7 +185,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
         updatedBy: ctx.actorId,
         version: (milestone.version ?? 1) + 1,
       } as any)
-      .where(eq(contractMilestones.id, milestoneId));
+      .where(eq(contractMilestones.id, milestoneId)));
 
     return reply.send({
       data: {
@@ -207,20 +207,20 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const { id, milestoneId } = milestoneIdParam.parse(req.params);
     const body = z.object({ achievedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
 
-    const [milestone] = await db
+    const [milestone] = await scopedRead((tx) => tx
       .select()
       .from(contractMilestones)
       .where(and(eq(contractMilestones.id, milestoneId), eq(contractMilestones.contractId, id)))
-      .limit(1);
+      .limit(1));
     if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
     if (milestone.status === "completed" || milestone.status === "completed_late") {
       throw new HttpError(409, "ALREADY_COMPLETED", "milestone is already completed");
     }
 
-    await db
+    await scopedRead((tx) => tx
       .update(contractMilestones)
       .set({ status: "completed", achievedDate: body.achievedDate, updatedAt: new Date(), updatedBy: ctx.actorId, version: (milestone.version ?? 1) + 1 } as any)
-      .where(eq(contractMilestones.id, milestoneId));
+      .where(eq(contractMilestones.id, milestoneId)));
 
     return reply.send({
       data: { milestoneId, contractId: id, status: "completed", achievedDate: body.achievedDate, penaltyMinor: 0, netPayableMinor: Number(milestone.amountMinor) },
