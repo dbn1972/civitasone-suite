@@ -1,5 +1,6 @@
 /** zod validators — applied at the route boundary. */
 import { z } from "zod";
+import { resolveModules, type ResolutionResult } from "@civitasone/schemas/module-resolver";
 
 export const editionValues = ["small_office", "psu", "govt_dept"] as const;
 export const billingCycleValues = ["monthly", "quarterly", "annual"] as const;
@@ -31,3 +32,14 @@ export const updatePlanBody = z.object({
 export type UpdatePlanBody = z.infer<typeof updatePlanBody>;
 
 export const planIdParam = z.object({ planId: z.string().uuid() });
+
+/**
+ * Resolves module dependencies for a plan's enabledModules array.
+ * Auto-expands dependencies so the plan is always consistent.
+ *
+ * Called at plan creation and update time to ensure the stored module set
+ * is always valid and complete — no unmet dependencies at runtime.
+ */
+export function resolveAndValidateModules(userSelected: string[]): ResolutionResult {
+  return resolveModules(userSelected);
+}

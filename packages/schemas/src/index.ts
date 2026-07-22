@@ -5,3 +5,5 @@ export * from "./web.js";
 export * from "./http.js";
 export * from "./validate.js";
 export * from "./plugin.js";
+export * from "./module-manifest.js";
+export * from "./module-resolver.js";

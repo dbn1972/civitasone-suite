@@ -122,3 +122,32 @@ export function migrationsConfirmed(record: MigrationProgress): boolean {
 export function canTransitionToReady(record: MigrationProgress): boolean {
   return migrationsConfirmed(record);
 }
+
+// ── Module Dependency Resolution ──────────────────────────────────────────────
+
+import { validateModuleSet, resolveModules, type ResolutionResult } from "@civitasone/schemas/module-resolver";
+
+export interface ModuleValidationResult {
+  valid: boolean;
+  resolved: ResolutionResult;
+  unmet: Array<{ module: string; missing: string }>;
+}
+
+/**
+ * Validates and resolves the module set for a tenant provisioning request.
+ * Ensures the enabled module set is consistent before running migrations.
+ *
+ * Used during tenant provisioning as a belt-and-suspenders check — the plan
+ * should already have resolved dependencies at creation time, but we verify
+ * again at provisioning time to catch any drift or manual edits.
+ */
+export function validateProvisioningModules(enabledModules: string[]): ModuleValidationResult {
+  const validation = validateModuleSet(enabledModules);
+  const resolved = resolveModules(enabledModules);
+
+  return {
+    valid: validation.valid,
+    resolved,
+    unmet: validation.unmet,
+  };
+}

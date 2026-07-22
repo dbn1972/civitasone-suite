@@ -10,6 +10,7 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { stagesRoutes } from "./modules/stages/routes.js";
 import { provisioningRoutes } from "./modules/provisioning/routes.js";
+import { moduleRoutes } from "./modules/provisioning/module-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
@@ -21,6 +22,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "install-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
   await app.register(stagesRoutes);
   await app.register(provisioningRoutes);
+  await app.register(moduleRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

@@ -13,7 +13,9 @@
     "./identity": "./dist/identity.js",
     "./http": "./dist/http.js",
     "./validate": "./dist/validate.js",
-    "./plugin": "./dist/plugin.js"
+    "./plugin": "./dist/plugin.js",
+    "./module-manifest": "./dist/module-manifest.js",
+    "./module-resolver": "./dist/module-resolver.js"
   },
   "scripts": {
     "build": "tsc",
