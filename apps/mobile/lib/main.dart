@@ -62,6 +62,14 @@ import 'features/stock_scanner/stock_scanner_screen.dart';
 import 'features/citizen_requests/citizen_requests_screen.dart';
 import 'features/citizen_requests/request_filing_screen.dart';
 import 'features/citizen_requests/request_detail_screen.dart';
+import 'features/visitor_pass/visitor_pass_screen.dart';
+import 'features/estab/dak_inbox_screen.dart';
+import 'features/estab/file_noting_screen.dart';
+import 'features/legal/court_cases_screen.dart';
+import 'features/meetings/meetings_screen.dart';
+import 'features/procurement/grn_receipt_screen.dart';
+import 'features/grants/grant_status_screen.dart';
+import 'features/inventory/inventory_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -193,6 +201,14 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/stock/scanner', builder: (_, __) => const StockScannerScreen()),
             GoRoute(path: '/citizen/requests', builder: (_, __) => const CitizenRequestsScreen()),
             GoRoute(path: '/citizen/requests/:id', builder: (_, state) => RequestDetailScreen(requestId: state.pathParameters['id']!)),
+            GoRoute(path: '/visitor/pass', builder: (_, __) => const VisitorPassScreen()),
+            GoRoute(path: '/estab/dak', builder: (_, __) => const DakInboxScreen()),
+            GoRoute(path: '/estab/files/:fileId/notes', builder: (_, state) => FileNotingScreen(fileId: state.pathParameters['fileId']!)),
+            GoRoute(path: '/legal/cases', builder: (_, __) => const CourtCasesScreen()),
+            GoRoute(path: '/meetings', builder: (_, __) => const MeetingsScreen()),
+            GoRoute(path: '/procurement/grn', builder: (_, __) => const GrnReceiptScreen()),
+            GoRoute(path: '/grants/status', builder: (_, __) => const GrantStatusScreen()),
+            GoRoute(path: '/inventory', builder: (_, __) => const InventoryScreen()),
           ],
         ),
         // Small Business shell — separate bottom nav for biz mode
@@ -533,6 +549,10 @@ class DashboardScreen extends ConsumerWidget {
     (label: 'Helpdesk', icon: Icons.support_agent, route: '/helpdesk/tickets', color: Color(0xFF0EA5E9), description: 'Tickets, SLA, support'),
     (label: 'Projects', icon: Icons.folder, route: '/projects', color: Color(0xFFD946EF), description: 'Tasks, milestones, resources'),
     (label: 'MIS Reports', icon: Icons.bar_chart, route: '/mis', color: Color(0xFF14B8A6), description: 'Analytics, dashboards'),
+    (label: 'Legal', icon: Icons.gavel, route: '/legal/cases', color: Color(0xFF7C3AED), description: 'Court cases, hearings, reminders'),
+    (label: 'Meetings', icon: Icons.groups, route: '/meetings', color: Color(0xFF0284C7), description: 'Schedule, action items'),
+    (label: 'Grants', icon: Icons.card_giftcard, route: '/grants/status', color: Color(0xFF059669), description: 'Application status tracking'),
+    (label: 'Inventory', icon: Icons.inventory_2, route: '/inventory', color: Color(0xFFCA8A04), description: 'Issue, receipt, stock levels'),
   ];
 }
 
