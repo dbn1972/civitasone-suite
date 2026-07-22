@@ -129,7 +129,7 @@ export async function subscriptionDowngrade(ctx: RequestContext, body: { targetP
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function subscriptionCancelSelf(ctx: RequestContext, body: { reason: string; feedback?: string }): Promise<Accepted> {
+export async function subscriptionCancelSelf(ctx: RequestContext, body: { reason: string; feedback?: string | undefined }): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.subscriptionCancelSelf, {
     messageId: id,

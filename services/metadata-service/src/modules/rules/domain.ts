@@ -26,6 +26,7 @@ export interface FieldDef {
   apiName: string;
   fieldType: string;
   isRequired: boolean;
+  label?: string;
   picklistValues?: string[];
 }
 
