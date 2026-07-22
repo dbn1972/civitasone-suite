@@ -174,6 +174,12 @@ describe("resolveModules", () => {
     expect(legalEntry!.mode).toBe("full");
   });
 
+  it("resolves works → finance", () => {
+    const result = resolveModules(["works"]);
+    expect(result.enabledModules).toContain("works");
+    expect(result.enabledModules).toContain("finance");
+  });
+
   it("resolves grant → finance + citizen", () => {
     const result = resolveModules(["grant"]);
     expect(result.enabledModules).toContain("grant");

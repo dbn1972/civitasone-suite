@@ -190,6 +190,36 @@ Schemas: `checkout`, `invoice`, `subscription`.
 - `invoice.invoice` — session_id → `checkout.session`, number, total BigInt.
 - `subscription.subscription` — tenant_id, plan, period.
 
+### works — `civitas_works`
+Schema: `works`.
+
+**Masters (17 lookup/reference tables):**
+- `works.authorities` — id, tenant_id, name, code, level, active, version.
+- `works.work_types` — id, tenant_id, name, code, active, version.
+- `works.work_sub_types` — id, tenant_id, work_type_id → `works.work_types`, name, code, active, version.
+- `works.proposer_types` — id, tenant_id, name, active, version.
+- `works.programs` — id, tenant_id, name, active, version.
+- `works.publication_levels` — id, tenant_id, name, active, version.
+- `works.repair_types` — id, tenant_id, program_id → `works.programs`, name, active, version.
+- `works.schemes` — id, tenant_id, name, sponsor, active, version.
+- `works.scopes` — id, tenant_id, work_type_id → `works.work_types`, name, unit, active, version.
+- `works.tender_types` — id, tenant_id, name, rate_type, active, version.
+- `works.user_departments` — id, tenant_id, name, demand_number, active, version.
+- `works.contractor_classes` — id, tenant_id, name, description, active, version.
+- `works.issue_types` — id, tenant_id, name, active, version.
+- `works.issue_description_types` — id, tenant_id, issue_type_id → `works.issue_types`, name, active, version.
+- `works.assets` — id, tenant_id, code, name, type, district, taluka, chainage, cost BigInt, active, version.
+- `works.work_description_types` — id, tenant_id, work_type_id → `works.work_types`, keyword, active, version.
+- `works.sr_items` — id, tenant_id, zone, sr_year, item_code, description, unit, rate BigInt, active, version.
+
+**Domain tables (proposals, approvals, BoQ, tender, execution, billing):**
+- `works.work_proposals`, `works.work_coa_mappings`, `works.work_office_mappings`, `works.work_splits`
+- `works.administrative_approvals`, `works.technical_sanctions`, `works.financial_targets`
+- `works.boq_items`, `works.schedule_a_items`, `works.material_coefficients`, `works.recapitulation`
+- `works.tenders`, `works.pre_tenders`, `works.quotations`, `works.quotation_items`, `works.awards`
+- `works.work_scopes`, `works.scope_progress`, `works.work_issues`, `works.issue_observations`, `works.work_photos`, `works.physical_targets`, `works.physical_completions`
+- `works.measurement_books`, `works.measurements`, `works.bills`, `works.bill_items`, `works.bill_recoveries`, `works.account_compilations`, `works.work_closures`
+
 ---
 
 ## 4. Migration Conventions

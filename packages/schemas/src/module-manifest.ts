@@ -159,6 +159,19 @@ export const MODULE_MANIFEST: ModuleDef[] = [
     requires: ["finance:budgets"],
   },
   {
+    id: "works",
+    name: "Works & Billing",
+    description: "Engineering works lifecycle — proposal, approval, BoQ, tender, execution, billing",
+    requires: ["finance:gl", "finance:budgets"],
+    subModules: [
+      { id: "proposal", name: "Work Proposals", description: "Work registration, COA, splitting" },
+      { id: "boq", name: "Bill of Quantities", description: "SR items, measurements, recapitulation" },
+      { id: "tender", name: "Tendering", description: "Pre-tender, quotation, award" },
+      { id: "execution", name: "Execution & Monitoring", description: "Scope progress, photos, issues" },
+      { id: "billing", name: "Works Billing", description: "e-MB, RA bills, abstract bills" },
+    ],
+  },
+  {
     id: "billing",
     name: "SaaS Billing",
     description: "Subscription management, invoicing, usage metering",
