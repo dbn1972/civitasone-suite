@@ -1,0 +1,85 @@
+import type { Queue } from "@civitasone/queue";
+import { db } from "../../shared/db.js";
+import { markProcessed, enqueue } from "../../shared/outbox.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
+import { workProposals } from "./schema.js";
+import { generateWorkNumber } from "./domain.js";
+import { cache } from "../../shared/infra.js";
+
+export function registerProposalConsumers(q: Queue): void {
+  q.subscribe(COMMANDS.proposalCreate, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return; // idempotent skip
+
+      const p = msg.payload as Record<string, unknown>;
+      const workNumber = generateWorkNumber(
+        (p.executingDivisionId as string) ?? "GEN",
+        new Date().getFullYear(),
+        Math.floor(Math.random() * 9999) + 1
+      );
+
+      await tx.insert(workProposals).values({
+        id: p.id as string,
+        tenantId: msg.tenantId,
+        workNumber,
+        category: p.category as string,
+        description: p.description as string,
+        workTypeId: p.workTypeId as string,
+        workSubTypeId: (p.workSubTypeId as string) ?? undefined,
+        estimatedCostMinor: BigInt(p.estimatedCostMinor as string | number),
+        executingDivisionId: (p.executingDivisionId as string) ?? undefined,
+        district: (p.district as string) ?? undefined,
+        taluka: (p.taluka as string) ?? undefined,
+        village: (p.village as string) ?? undefined,
+        programId: (p.programId as string) ?? undefined,
+        schemeId: (p.schemeId as string) ?? undefined,
+        remarks: (p.remarks as string) ?? undefined,
+        status: "draft",
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.proposalCreated,
+        eventType: EVENTS.proposalCreated,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id: p.id, workNumber },
+      });
+    });
+    await cache.invalidate(`works:${msg.tenantId}:master:work_proposals:*`);
+  });
+
+  q.subscribe(COMMANDS.proposalDaoFinalize, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const { workId } = msg.payload as { workId: string };
+
+      await tx.update(workProposals)
+        .set({
+          status: "dao_finalized",
+          daoFinalizedBy: msg.actorId,
+          daoFinalizedAt: new Date(),
+          updatedBy: msg.actorId,
+          updatedAt: new Date(),
+        })
+        .where(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (await import("drizzle-orm")).eq(workProposals.id, workId) as any
+        );
+
+      await enqueue(tx, {
+        topic: EVENTS.proposalDaoFinalized,
+        eventType: EVENTS.proposalDaoFinalized,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { workId },
+      });
+    });
+  });
+}
