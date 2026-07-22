@@ -1,19 +1,36 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api_client.dart';
 import 'auth/pkce_auth.dart';
 import 'sync/sync_database.dart';
 import 'sync/sync_engine.dart';
 
+// Fix: [AUDIT-P0-2] Remove hardcoded emulator URLs — fail-fast on missing config
+class AppConfig {
+  AppConfig._();
+
+  static String get apiBaseUrl {
+    const env = String.fromEnvironment('API_BASE');
+    if (env.isNotEmpty) return env;
+    if (kDebugMode) return 'http://10.0.2.2:8080'; // Android emulator only
+    throw StateError('API_BASE_URL not configured for production build');
+  }
+
+  static String get keycloakUrl {
+    const env = String.fromEnvironment('KEYCLOAK_ISSUER');
+    if (env.isNotEmpty) return env;
+    if (kDebugMode) return 'http://10.0.2.2:8180/realms/civitasone'; // Android emulator only
+    throw StateError('KEYCLOAK_URL not configured for production build');
+  }
+}
+
 final apiBaseProvider = Provider<String>(
-  (_) => const String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:8080'),
+  (_) => AppConfig.apiBaseUrl,
 );
 
 /// Keycloak issuer URL — override via --dart-define=KEYCLOAK_ISSUER=https://...
 final keycloakIssuerProvider = Provider<String>(
-  (_) => const String.fromEnvironment(
-    'KEYCLOAK_ISSUER',
-    defaultValue: 'http://10.0.2.2:8180/realms/civitasone',
-  ),
+  (_) => AppConfig.keycloakUrl,
 );
 
 final authProvider = Provider<PkceAuthService>((ref) {

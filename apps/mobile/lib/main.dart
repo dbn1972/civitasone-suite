@@ -434,28 +434,34 @@ class DashboardScreen extends ConsumerWidget {
           crossAxisSpacing: 12,
           childAspectRatio: 0.95,
           children: visibleActions.map((a) {
-            return InkWell(
-              onTap: () => context.go(a.route),
-              borderRadius: BorderRadius.circular(12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: a.color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(14),
+            // Fix: [AUDIT-P0-1] Wrap quick actions in Semantics for accessibility
+            return Semantics(
+              label: a.label,
+              button: true,
+              enabled: true,
+              child: InkWell(
+                onTap: () => context.go(a.route),
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: a.color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(a.icon, color: a.color, size: 24),
                     ),
-                    child: Icon(a.icon, color: a.color, size: 24),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(a.label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: theme.colorScheme.onSurface)),
-                ],
+                    const SizedBox(height: 6),
+                    Text(a.label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: theme.colorScheme.onSurface)),
+                  ],
+                ),
               ),
             );
           }).toList(),

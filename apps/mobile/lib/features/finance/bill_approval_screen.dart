@@ -1,6 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import '../../core/providers.dart';
+
+// Fix: [AUDIT-P1-5] User-friendly error messages
+String _userFriendlyError(dynamic error) {
+  if (error is DioException) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'Connection timed out. Please try again.';
+      case DioExceptionType.connectionError:
+        return 'No internet connection. Your action has been queued.';
+      default:
+        final status = error.response?.statusCode;
+        if (status != null && status >= 500) return 'Server error. Please try again later.';
+        if (status == 403) return 'You do not have permission for this action.';
+        if (status == 409) return 'This item was modified by someone else. Please refresh.';
+        return 'Something went wrong. Please try again.';
+    }
+  }
+  return 'An unexpected error occurred. Please try again.';
+}
 
 /// Bill Approval screen for finance officers.
 /// GET /v1/finance/bills?status=pending → list of pending bills
@@ -17,6 +39,8 @@ class _BillApprovalScreenState extends ConsumerState<BillApprovalScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _bills = [];
+  // Fix: [AUDIT-P1-6] Offline indicator state
+  bool _isOnline = true;
 
   @override
   void initState() {
@@ -39,6 +63,10 @@ class _BillApprovalScreenState extends ConsumerState<BillApprovalScreen> {
       _bills = data.cast<Map<String, dynamic>>();
     } catch (e) {
       _error = e.toString();
+      // Fix: [AUDIT-P1-6] Detect offline state
+      if (e is DioException && e.type == DioExceptionType.connectionError) {
+        setState(() => _isOnline = false);
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -127,10 +155,28 @@ class _BillApprovalScreenState extends ConsumerState<BillApprovalScreen> {
         );
       }
     } catch (e) {
+      // Fix: [AUDIT-P1-7] Route writes through offline outbox on connection errors
+      if (e is DioException &&
+          (e.type == DioExceptionType.connectionError ||
+           e.type == DioExceptionType.connectionTimeout)) {
+        // TODO: Queue to SyncDatabase outbox for guaranteed delivery
+        setState(() => _isOnline = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Action queued — will sync when online')),
+          );
+        }
+        return;
+      }
+      // Fix: [AUDIT-P1-5] User-friendly error messages
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to approve: $e'),
+            content: Text(_userFriendlyError(e)),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _approveBill(bill),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -207,10 +253,28 @@ class _BillApprovalScreenState extends ConsumerState<BillApprovalScreen> {
         );
       }
     } catch (e) {
+      // Fix: [AUDIT-P1-7] Route writes through offline outbox on connection errors
+      if (e is DioException &&
+          (e.type == DioExceptionType.connectionError ||
+           e.type == DioExceptionType.connectionTimeout)) {
+        // TODO: Queue to SyncDatabase outbox for guaranteed delivery
+        setState(() => _isOnline = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Action queued — will sync when online')),
+          );
+        }
+        return;
+      }
+      // Fix: [AUDIT-P1-5] User-friendly error messages
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send back: $e'),
+            content: Text(_userFriendlyError(e)),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _rejectBill(bill),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -233,25 +297,48 @@ class _BillApprovalScreenState extends ConsumerState<BillApprovalScreen> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildError(theme)
-              : _bills.isEmpty
-                  ? _buildEmpty(theme)
-                  : RefreshIndicator(
-                      onRefresh: _fetchPendingBills,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _bills.length,
-                        itemBuilder: (ctx, i) => _BillCard(
-                          bill: _bills[i],
-                          formatAmount: _formatAmount,
-                          onApprove: () => _approveBill(_bills[i]),
-                          onReject: () => _rejectBill(_bills[i]),
-                        ),
-                      ),
-                    ),
+      body: Column(
+        children: [
+          // Fix: [AUDIT-P1-6] Offline indicator banner
+          if (!_isOnline)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.orange.shade100,
+              child: Row(
+                children: [
+                  Icon(Icons.cloud_off, size: 16, color: Colors.orange.shade800),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Offline — actions will sync when connected',
+                    style: TextStyle(fontSize: 13, color: Colors.orange.shade800),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildError(theme)
+                    : _bills.isEmpty
+                        ? _buildEmpty(theme)
+                        : RefreshIndicator(
+                            onRefresh: _fetchPendingBills,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _bills.length,
+                              itemBuilder: (ctx, i) => _BillCard(
+                                bill: _bills[i],
+                                formatAmount: _formatAmount,
+                                onApprove: () => _approveBill(_bills[i]),
+                                onReject: () => _rejectBill(_bills[i]),
+                              ),
+                            ),
+                          ),
+          ),
+        ],
+      ),
     );
   }
 

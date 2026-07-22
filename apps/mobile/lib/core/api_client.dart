@@ -1,9 +1,39 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'auth/pkce_auth.dart';
+
+// Fix: [AUDIT-P1-3] Retry interceptor for 5xx responses (exponential backoff)
+class RetryInterceptor extends Interceptor {
+  final Dio dio;
+  final int maxRetries;
+
+  RetryInterceptor({required this.dio, this.maxRetries = 3});
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
+    final statusCode = err.response?.statusCode ?? 0;
+    final retryCount = (err.requestOptions.extra['retryCount'] as int?) ?? 0;
+
+    if (statusCode >= 500 && retryCount < maxRetries) {
+      final delay = Duration(seconds: math.pow(2, retryCount).toInt());
+      await Future.delayed(delay);
+
+      err.requestOptions.extra['retryCount'] = retryCount + 1;
+      try {
+        final response = await dio.fetch(err.requestOptions);
+        handler.resolve(response);
+        return;
+      } catch (e) {
+        // Fall through to original handler
+      }
+    }
+    handler.next(err);
+  }
+}
 
 /// Dio-based API client that connects to the CivitasOne gateway.
 ///
@@ -38,6 +68,9 @@ class ApiClient {
       onRequest: _onRequest,
       onError: _onError,
     ));
+
+    // Fix: [AUDIT-P1-3] Register retry interceptor for 5xx responses
+    _dio.interceptors.add(RetryInterceptor(dio: _dio));
 
     // SEC: Only log in debug mode — never log tokens/bodies in release
     if (kDebugMode) {

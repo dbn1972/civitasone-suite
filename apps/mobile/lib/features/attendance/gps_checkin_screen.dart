@@ -115,7 +115,8 @@ class _GpsCheckInScreenState extends ConsumerState<GpsCheckInScreen> {
           content: Text(type == CheckInType.checkIn
               ? 'Checked in successfully'
               : 'Checked out successfully'),
-          backgroundColor: Colors.green,
+          // Fix: [AUDIT-P1-4] Use WCAG-compliant darker green
+          backgroundColor: const Color(0xFF15803D),
         ),
       );
       Navigator.of(context).pop();
@@ -294,8 +295,9 @@ class _GpsCheckInScreenState extends ConsumerState<GpsCheckInScreen> {
                         style: const TextStyle(fontSize: 18),
                       ),
                 style: FilledButton.styleFrom(
+                  // Fix: [AUDIT-P1-4] Use darker green for WCAG 4.5:1 contrast on white text
                   backgroundColor: actionType == CheckInType.checkIn
-                      ? Colors.green
+                      ? const Color(0xFF15803D)
                       : Colors.red,
                 ),
               ),
