@@ -68,6 +68,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerOpsRoutes(app, { service: "visitor-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
+  registerSchemaErrorHandler(app, HttpError);
+
   // Module route registrations — added one per module as each is scaffolded.
   await app.register(locationRoutes);
   await app.register(blacklistRoutes);
@@ -88,8 +90,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(documentScanRoutes);
   await app.register(turnstileControlRoutes);
   await app.register(configRegistryRoutes);
-
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

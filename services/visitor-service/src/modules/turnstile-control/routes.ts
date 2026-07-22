@@ -51,7 +51,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
    * POST /v1/visitor/turnstiles/passage — Report a passage event.
    * Route → zod validate → publishPassageRecord → 202.
    */
-  app.post("/v1/visitor/turnstiles/passage", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/turnstiles/passage", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const body = passageEventBody.parse(req.body);
 
@@ -80,7 +80,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
    * POST /v1/visitor/turnstiles/tailgating — Report tailgating detection.
    * Route → zod validate → create security incident → 202.
    */
-  app.post("/v1/visitor/turnstiles/tailgating", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/turnstiles/tailgating", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const body = tailgatingBody.parse(req.body);
 
@@ -111,7 +111,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
    * Dequeues the next non-expired command from the device's command queue.
    * Returns 200 with command or 204 if no commands pending.
    */
-  app.get("/v1/visitor/turnstiles/commands/poll", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.get("/v1/visitor/turnstiles/commands/poll", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
 
     const command = await dequeueCommand(deviceCtx.tenantId, deviceCtx.deviceId);
@@ -133,7 +133,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
    * POST /v1/visitor/turnstiles/commands/:commandId/ack — Acknowledge command.
    * Device confirms it has executed the command.
    */
-  app.post("/v1/visitor/turnstiles/commands/:commandId/ack", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/turnstiles/commands/:commandId/ack", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const { commandId } = commandIdParams.parse(req.params);
 
@@ -195,7 +195,7 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
    * POST /v1/visitor/devices/sync — Batch sync offline-queued events.
    * Device auth (bearer or mTLS).
    */
-  app.post("/v1/visitor/devices/sync", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/devices/sync", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const body = batchSyncBody.parse(req.body);
 

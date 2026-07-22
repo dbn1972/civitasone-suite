@@ -31,7 +31,7 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     // `BusinessHours` type from schema.ts), so re-assert the validated shape.
     const created = await repo.createLocation(ctx.tenantId, ctx.actorId, {
       ...body,
-      businessHours: body.businessHours as BusinessHours,
+      businessHours: body.businessHours as BusinessHours | undefined,
     });
     return reply.code(201).send({ data: created });
   });

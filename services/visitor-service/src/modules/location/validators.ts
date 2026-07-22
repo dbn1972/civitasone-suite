@@ -25,7 +25,7 @@ export const idParam = z.object({ id: z.string().uuid("invalid id") });
 export const createLocationBody = z.object({
   name: z.string().min(1, "name is required").max(200, "name must be 200 characters or fewer"),
   address: z.string().max(2000, "address must be 2000 characters or fewer").optional(),
-  businessHours: businessHoursSchema,
+  businessHours: businessHoursSchema.optional(),
   capacity: z.number().int().positive().max(100_000).optional(),
   capacityThreshold: z.number().int().positive().max(100_000).optional(),
   active: z.boolean().optional(),

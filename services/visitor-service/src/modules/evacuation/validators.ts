@@ -12,7 +12,6 @@ import { z } from "zod";
  *  auth is bypassed. */
 export const rosterQuery = z.object({
   locationId: z.string().uuid("invalid locationId"),
-  tenantId: z.string().uuid("invalid tenantId"),
 });
 export type RosterQuery = z.infer<typeof rosterQuery>;
 

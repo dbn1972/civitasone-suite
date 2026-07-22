@@ -173,7 +173,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
    *
    * Requirements: 3.1, 3.2, 3.8, 8.3
    */
-  app.post("/v1/visitor/devices/heartbeat", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/devices/heartbeat", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const body = heartbeatBody.parse(req.body);
 
