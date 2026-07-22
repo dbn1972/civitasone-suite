@@ -1,3 +1,4 @@
+import 'dart:async'; // Fix: [AUDIT-P3-8]
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -99,16 +100,16 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
       final engine = ref.read(syncEngineProvider);
       if (engine != null) {
         // Fire and forget; failures are retried by the periodic task.
-        // ignore: discarded_futures
-        syncAllMailboxes(engine);
+        // Fix: [AUDIT-P3-8] Replace discarded_futures ignore with unawaited()
+        unawaited(syncAllMailboxes(engine));
       }
       // Device trust heartbeat — report posture to server
       final heartbeat = DeviceHeartbeat(
         apiBaseUrl: ref.read(apiBaseProvider),
         auth: ref.read(authProvider),
       );
-      // ignore: discarded_futures
-      heartbeat.send();
+      // Fix: [AUDIT-P3-8] Replace discarded_futures ignore with unawaited()
+      unawaited(heartbeat.send());
     }
   }
 
@@ -477,13 +478,16 @@ class DashboardScreen extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 onTap: () => context.go(m.route),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: m.color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                // Fix: [AUDIT-P2-4] ExcludeSemantics on decorative icons
+                leading: ExcludeSemantics(
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: m.color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(m.icon, color: m.color, size: 22),
                   ),
-                  child: Icon(m.icon, color: m.color, size: 22),
                 ),
                 title: Text(m.label,
                     style: const TextStyle(fontWeight: FontWeight.w500)),

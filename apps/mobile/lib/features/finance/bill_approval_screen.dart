@@ -2,27 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../core/providers.dart';
-
-// Fix: [AUDIT-P1-5] User-friendly error messages
-String _userFriendlyError(dynamic error) {
-  if (error is DioException) {
-    switch (error.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-        return 'Connection timed out. Please try again.';
-      case DioExceptionType.connectionError:
-        return 'No internet connection. Your action has been queued.';
-      default:
-        final status = error.response?.statusCode;
-        if (status != null && status >= 500) return 'Server error. Please try again later.';
-        if (status == 403) return 'You do not have permission for this action.';
-        if (status == 409) return 'This item was modified by someone else. Please refresh.';
-        return 'Something went wrong. Please try again.';
-    }
-  }
-  return 'An unexpected error occurred. Please try again.';
-}
+import '../../core/error_utils.dart'; // Fix: [AUDIT-P2-6]
 
 /// Bill Approval screen for finance officers.
 /// GET /v1/finance/bills?status=pending → list of pending bills
@@ -172,7 +152,7 @@ class _BillApprovalScreenState extends ConsumerState<BillApprovalScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_userFriendlyError(e)),
+            content: Text(userFriendlyError(e)), // Fix: [AUDIT-P2-6]
             action: SnackBarAction(
               label: 'Retry',
               onPressed: () => _approveBill(bill),
@@ -270,7 +250,7 @@ class _BillApprovalScreenState extends ConsumerState<BillApprovalScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_userFriendlyError(e)),
+            content: Text(userFriendlyError(e)), // Fix: [AUDIT-P2-6]
             action: SnackBarAction(
               label: 'Retry',
               onPressed: () => _rejectBill(bill),

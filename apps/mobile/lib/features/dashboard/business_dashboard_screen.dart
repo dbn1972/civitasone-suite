@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../core/providers.dart';
 
+// Fix: [AUDIT-P3-10] Pre-compute color constants instead of withOpacity in build methods
+final _invoiceIconBg = Colors.blue.withOpacity(0.1);
+final _paymentIconBg = Colors.green.withOpacity(0.1);
+
 /// Daily business dashboard. Zero clutter. One-thumb operation.
 /// Gradient header with date, 3 stat cards, quick actions, recent activity.
 class BusinessDashboardScreen extends ConsumerStatefulWidget {
@@ -336,9 +340,10 @@ class _BusinessDashboardScreenState
                         children: [
                           CircleAvatar(
                             radius: 16,
+                            // Fix: [AUDIT-P3-10] Use pre-computed color constants
                             backgroundColor: item['type'] == 'invoice'
-                                ? Colors.blue.withOpacity(0.1)
-                                : Colors.green.withOpacity(0.1),
+                                ? _invoiceIconBg
+                                : _paymentIconBg,
                             child: Icon(
                               item['type'] == 'invoice'
                                   ? Icons.receipt_long
@@ -410,31 +415,35 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(height: 8),
-            loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    value,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 11,
-                    color: Theme.of(context).colorScheme.outline)),
-          ],
+    // Fix: [AUDIT-P2-5] Semantics for screen readers
+    return Semantics(
+      label: '$label: $value',
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(height: 8),
+              loading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      value,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.outline)),
+            ],
+          ),
         ),
       ),
     );
@@ -454,6 +463,9 @@ class _QuickAction extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
+  // Fix: [AUDIT-P3-10] Cache computed color to avoid allocation in build
+  Color get _bgColor => color.withOpacity(0.1);
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -466,7 +478,7 @@ class _QuickAction extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 26,
-              backgroundColor: color.withOpacity(0.1),
+              backgroundColor: _bgColor,
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(height: 6),
