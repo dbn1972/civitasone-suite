@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-07-03T12:21:25.095Z
+Generated: 2026-07-22T09:25:58.372Z
 
-**Summary:** 150 WIRED | 0 MISSING | 0 MISMATCH | 263 NO_LOADER
+**Summary:** 191 WIRED | 0 MISSING | 0 MISMATCH | 249 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -11,6 +11,7 @@ Generated: 2026-07-03T12:21:25.095Z
 | admin | /admin/editions | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/entitlements | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/feature-flags | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/gateway-config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/gateways | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/invoices | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/metering | — | — | — | — | — | — NO_LOADER |
@@ -22,15 +23,24 @@ Generated: 2026-07-03T12:21:25.095Z
 | admin | /admin/scheduled-jobs | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tech-admin | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tenant-provision | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/tenants/[id] | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/tenants/[id] | getAdminTenantDetail | /api/v1/admin/tenants/:param | admin → /v1/admin/tenants/:param | ✓ `/v1/admin/tenants/:id` | ✓ | ✅ WIRED |
+| admin | /admin/tenants/[id] | getAdminTenantModules | /api/v1/admin/tenants/:param/config | admin → /v1/admin/tenants/:param/config | ✓ `/v1/admin/tenants/:id/config` | ✓ | ✅ WIRED |
 | admin | /admin/tenants | — | — | — | — | — | — NO_LOADER |
-| analytics | /analytics/ai-insights | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/ai-insights | getAnalyticsAiInsights | /api/v1/analytics/ai-insights | analytics → /v1/analytics/ai-insights | ✓ `/v1/analytics/ai-insights` | ✓ | ✅ WIRED |
 | analytics | /analytics/dashboards | — | — | — | — | — | — NO_LOADER |
-| analytics | /analytics/data-warehouse | — | — | — | — | — | — NO_LOADER |
-| analytics | /analytics/kpi | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/data-warehouse | getAnalyticsDataWarehouse | /api/v1/analytics/data-warehouse | analytics → /v1/analytics/data-warehouse | ✓ `/v1/analytics/data-warehouse` | ✓ | ✅ WIRED |
+| analytics | /analytics/kpi | getAnalyticsKpis | /api/v1/analytics/kpis | analytics → /v1/analytics/kpis | ✓ `/v1/analytics/kpis` | ✓ | ✅ WIRED |
 | analytics | /analytics/list | getAnalyticsDashboards | /api/v1/analytics/dashboards | analytics → /v1/analytics/dashboards | ✓ `/v1/analytics/dashboards` | ✓ | ✅ WIRED |
+| analytics | /analytics/ml-insights/anomalies | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/ml-insights/inventory | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/ml-insights/leads | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/ml-insights | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/ml-insights/projects | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/ml-insights/subscriptions | — | — | — | — | — | — NO_LOADER |
+| analytics | /analytics/ml-insights/tickets | — | — | — | — | — | — NO_LOADER |
 | analytics | /analytics | — | — | — | — | — | — NO_LOADER |
 | analytics | /analytics/queries | — | — | — | — | — | — NO_LOADER |
+| approvals | /approvals | — | — | — | — | — | — NO_LOADER |
 | assets | /assets/[id] | getAssetById | /api/v1/asset/assets/:param | asset → /v1/assets/assets/:param | ✓ `/v1/assets/assets/:id` | ✓ | ✅ WIRED |
 | assets | /assets/bulk-import | — | — | — | — | — | — NO_LOADER |
 | assets | /assets/dashboard | getAssetDashboard | /api/v1/asset/dashboard | asset → /v1/assets/dashboard | ✓ `/v1/assets/dashboard` | ✓ | ✅ WIRED |
@@ -47,17 +57,17 @@ Generated: 2026-07-03T12:21:25.095Z
 | assets | /assets/register | — | — | — | — | — | — NO_LOADER |
 | assets | /assets/scan | — | — | — | — | — | — NO_LOADER |
 | assets | /assets/verification | — | — | — | — | — | — NO_LOADER |
-| audit | /audit/cag | — | — | — | — | — | — NO_LOADER |
+| audit | /audit/cag | getCagParas | /api/v1/audit/paras | audit → /v1/audit/paras | ✓ `/v1/audit/paras` | ✓ | ✅ WIRED |
 | audit | /audit/compliance | getAuditCompliance | /api/v1/audit/compliance | audit → /v1/audit/compliance | ✓ `/v1/audit/compliance` | ✓ | ✅ WIRED |
 | audit | /audit/dashboard | getAuditDashboard | /api/v1/audit/dashboard | audit → /v1/audit/dashboard | ✓ `/v1/audit/dashboard` | ✓ | ✅ WIRED |
 | audit | /audit/exports | getAuditExports | /api/v1/audit/exports | audit → /v1/audit/exports | ✓ `/v1/audit/exports` | ✓ | ✅ WIRED |
-| audit | /audit/investigation | — | — | — | — | — | — NO_LOADER |
+| audit | /audit/investigation | getInvestigations | /api/v1/audit/investigations | audit → /v1/audit/investigations | ✓ `/v1/audit/investigations` | ✓ | ✅ WIRED |
 | audit | /audit/observations/[id] | getAuditObservationById | /api/v1/audit/observations/:param | audit → /v1/audit/observations/:param | ✓ `/v1/audit/observations/:id` | ✓ | ✅ WIRED |
 | audit | /audit/observations | getAuditObservations | /api/v1/audit/observations | audit → /v1/audit/observations | ✓ `/v1/audit/observations` | ✓ | ✅ WIRED |
 | audit | /audit | getAuditItems | /api/audit/events | audit-events → /audit/events | ✓ `/audit/events` | ✓ | ✅ WIRED |
 | audit | /audit/plan | getAuditPlan | /api/v1/audit/plan | audit → /v1/audit/plan | ✓ `/v1/audit/plan` | ✓ | ✅ WIRED |
 | audit | /audit/risk-register | getRiskRegister | /api/v1/audit/risks | audit → /v1/audit/risks | ✓ `/v1/audit/risks` | ✓ | ✅ WIRED |
-| audit | /audit/vigilance | — | — | — | — | — | — NO_LOADER |
+| audit | /audit/vigilance | getVigilanceCases | /api/v1/audit/vigilance | audit → /v1/audit/vigilance | ✓ `/v1/audit/vigilance` | ✓ | ✅ WIRED |
 | billing | /billing/invoices | getBillingInvoices | /api/v1/billing/invoices | billing → /v1/billing/invoices | ✓ `/v1/billing/invoices` | ✓ | ✅ WIRED |
 | billing | /billing/list | getBillingPlans | /api/v1/billing/plans | billing → /v1/billing/plans | ✓ `/v1/billing/plans` | ✓ | ✅ WIRED |
 | billing | /billing | — | — | — | — | — | — NO_LOADER |
@@ -66,22 +76,27 @@ Generated: 2026-07-03T12:21:25.095Z
 | billing | /billing/plans/new | — | — | — | — | — | — NO_LOADER |
 | billing | /billing/plans | getBillingPlans | /api/v1/billing/plans | billing → /v1/billing/plans | ✓ `/v1/billing/plans` | ✓ | ✅ WIRED |
 | billing | /billing/subscriptions | getBillingSubscriptions | /api/v1/billing/subscriptions | billing → /v1/billing/subscriptions | ✓ `/v1/billing/subscriptions` | ✓ | ✅ WIRED |
-| citizen | /citizen/alerts | — | — | — | — | — | — NO_LOADER |
+| citizen | /citizen/alerts | getCitizenAlerts | /api/v1/citizen/alerts | citizen → /v1/citizen/alerts | ✓ `/v1/citizen/alerts` | ✓ | ✅ WIRED |
 | citizen | /citizen/feedback | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/grievances/new | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/grievances | — | — | — | — | — | — NO_LOADER |
-| citizen | /citizen/notices | — | — | — | — | — | — NO_LOADER |
+| citizen | /citizen/notices | getCitizenNotices | /api/v1/citizen/notices | citizen → /v1/citizen/notices | ✓ `/v1/citizen/notices` | ✓ | ✅ WIRED |
 | citizen | /citizen | — | — | — | — | — | — NO_LOADER |
-| citizen | /citizen/portal | — | — | — | — | — | — NO_LOADER |
+| citizen | /citizen/portal | getCitizenPortal | /api/v1/citizen/portal/metrics | citizen → /v1/citizen/portal/metrics | ✓ `/v1/citizen/portal/metrics` | ✓ | ✅ WIRED |
 | citizen | /citizen/requests/[id] | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/requests | getCitizenRequests | /api/v1/citizen/requests | citizen → /v1/citizen/requests | ✓ `/v1/citizen/requests` | ✓ | ✅ WIRED |
 | citizen | /citizen/rti/[id] | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/rti | getRTIApplications | /api/v1/citizen/rti | citizen → /v1/citizen/rti | ✓ `/v1/citizen/rti` | ✓ | ✅ WIRED |
-| citizen | /citizen/surveys | — | — | — | — | — | — NO_LOADER |
+| citizen | /citizen/surveys | getCitizenSurveys | /api/v1/citizen/surveys | citizen → /v1/citizen/surveys | ✓ `/v1/citizen/surveys` | ✓ | ✅ WIRED |
 | contracts | /contracts/[id] | — | — | — | — | — | — NO_LOADER |
 | contracts | /contracts/list | getContracts | /api/v1/contract/contracts | contract → /v1/contract/contracts | ✓ `/v1/contract/contracts` | ✓ | ✅ WIRED |
 | contracts | /contracts/new | — | — | — | — | — | — NO_LOADER |
 | contracts | /contracts | — | — | — | — | — | — NO_LOADER |
+| court | /court/admin | — | — | — | — | — | — NO_LOADER |
+| court | /court/cases/[caseId] | — | — | — | — | — | — NO_LOADER |
+| court | /court/cases | — | — | — | — | — | — NO_LOADER |
+| court | /court/cause-list | — | — | — | — | — | — NO_LOADER |
+| court | /court | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/activities | getCRMActivities | /api/v1/crm/activities | crm → /v1/crm/activities | ✓ `/v1/crm/activities` | ✓ | ✅ WIRED |
 | crm | /crm/contacts/[id]/edit | getContactById | /api/v1/crm/contacts/:param/detail | crm → /v1/crm/contacts/:param/detail | ✓ `/v1/crm/contacts/:id/detail` | ✓ | ✅ WIRED |
 | crm | /crm/contacts/[id] | getContactById | /api/v1/crm/contacts/:param/detail | crm → /v1/crm/contacts/:param/detail | ✓ `/v1/crm/contacts/:id/detail` | ✓ | ✅ WIRED |
@@ -93,6 +108,8 @@ Generated: 2026-07-03T12:21:25.095Z
 | crm | /crm/deals/new | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/deals | getDeals | /api/v1/crm/deals | crm → /v1/crm/deals | ✓ `/v1/crm/deals` | ✓ | ✅ WIRED |
 | crm | /crm | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/pipeline | getPipelines | /api/v1/crm/pipelines | crm → /v1/crm/pipelines | ✓ `/v1/crm/pipelines` | ✓ | ✅ WIRED |
+| crm | /crm/pipeline | getPipelineDeals | /api/v1/crm/deals | crm → /v1/crm/deals | ✓ `/v1/crm/deals` | ✓ | ✅ WIRED |
 | dashboard | /dashboard | — | — | — | — | — | — NO_LOADER |
 | developer-portal | /developer-portal | getAPIKeys | /api/v1/admin/api-keys | admin → /v1/admin/api-keys | ✓ `/v1/admin/api-keys` | ✓ | ✅ WIRED |
 | estab | /estab/approval-matrix | — | — | — | — | — | — NO_LOADER |
@@ -173,7 +190,7 @@ Generated: 2026-07-03T12:21:25.095Z
 | finance | /finance/treasury/rbi | — | — | — | — | — | — NO_LOADER |
 | finance | /finance/user-charges | — | — | — | — | — | — NO_LOADER |
 | finance | /finance/vendors/[id] | — | — | — | — | — | — NO_LOADER |
-| finance | /finance/vendors | — | — | — | — | — | — NO_LOADER |
+| finance | /finance/vendors | getFinanceVendors | /api/v1/finance/vendors | finance → /v1/finance/vendors | ✓ `/v1/finance/vendors` | ✓ | ✅ WIRED |
 | grants | /grants/[id] | getGrantById | /api/v1/grants/grants/:param | grant → /v1/grants/grants/:param | ✓ `/v1/grants/grants/:id` | ✓ | ✅ WIRED |
 | grants | /grants/applications | — | — | — | — | — | — NO_LOADER |
 | grants | /grants/dashboard | getGrantsDashboard | /api/v1/grants/dashboard | grant → /v1/grants/dashboard | ✓ `/v1/grants/dashboard` | ✓ | ✅ WIRED |
@@ -302,6 +319,11 @@ Generated: 2026-07-03T12:21:25.095Z
 | legal | /legal | — | — | — | — | — | — NO_LOADER |
 | locations | /locations/list | getLocations | /api/v1/locations | locations → /v1/locations/ | ✓ `/v1/locations` | ✓ | ✅ WIRED |
 | locations | /locations | — | — | — | — | — | — NO_LOADER |
+| meeting | /meeting/admin | — | — | — | — | — | — NO_LOADER |
+| meeting | /meeting/meetings/[meetingId]/minutes | — | — | — | — | — | — NO_LOADER |
+| meeting | /meeting/meetings/[meetingId] | — | — | — | — | — | — NO_LOADER |
+| meeting | /meeting/meetings | getMeetings | /api/v1/estab/meetings | estab → /v1/estab/meetings | ✓ `/v1/estab/meetings` | ✓ | ✅ WIRED |
+| meeting | /meeting | getMeetings | /api/v1/estab/meetings | estab → /v1/estab/meetings | ✓ `/v1/estab/meetings` | ✓ | ✅ WIRED |
 | notifications | /notifications/compose | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/deliveries/[id] | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/deliveries | — | — | — | — | — | — NO_LOADER |
@@ -312,13 +334,13 @@ Generated: 2026-07-03T12:21:25.095Z
 | plugins | /plugins | getPlugins | /api/v1/plugins/items | plugin → /v1/plugins/items | ✓ `/v1/plugins/items` | ✓ | ✅ WIRED |
 | procurement | /procurement/approvals/escalation | — | — | — | — | — | — NO_LOADER |
 | procurement | /procurement/approvals | getProcurementApprovals | /api/v1/procurement/approvals | procurement → /v1/procurement/approvals | ✓ `/v1/procurement/approvals` | ✓ | ✅ WIRED |
-| procurement | /procurement/bid-evaluation | — | — | — | — | — | — NO_LOADER |
+| procurement | /procurement/bid-evaluation | getProcurementBidEvaluations | /api/v1/procurement/bid-evaluations | procurement → /v1/procurement/bid-evaluations | ✓ `/v1/procurement/bid-evaluations` | ✓ | ✅ WIRED |
 | procurement | /procurement/contracts/new | — | — | — | — | — | — NO_LOADER |
 | procurement | /procurement/contracts | getContracts | /api/v1/contract/contracts | contract → /v1/contract/contracts | ✓ `/v1/contract/contracts` | ✓ | ✅ WIRED |
 | procurement | /procurement/dashboard | getProcurementDashboard | /api/v1/procurement/dashboard | procurement → /v1/procurement/dashboard | ✓ `/v1/procurement/dashboard` | ✓ | ✅ WIRED |
-| procurement | /procurement/emd-bg | — | — | — | — | — | — NO_LOADER |
-| procurement | /procurement/empanelment | — | — | — | — | — | — NO_LOADER |
-| procurement | /procurement/gem | — | — | — | — | — | — NO_LOADER |
+| procurement | /procurement/emd-bg | getProcurementEMD | /api/v1/procurement/emd | procurement → /v1/procurement/emd | ✓ `/v1/procurement/emd` | ✓ | ✅ WIRED |
+| procurement | /procurement/empanelment | getProcurementEmpanelment | /api/v1/procurement/empanelment | procurement → /v1/procurement/empanelment | ✓ `/v1/procurement/empanelment` | ✓ | ✅ WIRED |
+| procurement | /procurement/gem | getProcurementGem | /api/v1/procurement/gem/items | procurement → /v1/procurement/gem/items | ✓ `/v1/procurement/gem/items` | ✓ | ✅ WIRED |
 | procurement | /procurement/grn/[id] | getProcurementGRNById | /api/v1/procurement/grns/:param | procurement → /v1/procurement/grns/:param | ✓ `/v1/procurement/grns/:id` | ✓ | ✅ WIRED |
 | procurement | /procurement/grn/new | — | — | — | — | — | — NO_LOADER |
 | procurement | /procurement/grn | — | — | — | — | — | — NO_LOADER |
@@ -329,8 +351,8 @@ Generated: 2026-07-03T12:21:25.095Z
 | procurement | /procurement/orders/new | — | — | — | — | — | — NO_LOADER |
 | procurement | /procurement/orders | — | — | — | — | — | — NO_LOADER |
 | procurement | /procurement | — | — | — | — | — | — NO_LOADER |
-| procurement | /procurement/pre-bid | — | — | — | — | — | — NO_LOADER |
-| procurement | /procurement/reverse-auction | — | — | — | — | — | — NO_LOADER |
+| procurement | /procurement/pre-bid | getProcurementPreBid | /api/v1/procurement/pre-bid-conferences | procurement → /v1/procurement/pre-bid-conferences | ✓ `/v1/procurement/pre-bid-conferences` | ✓ | ✅ WIRED |
+| procurement | /procurement/reverse-auction | getProcurementReverseAuctions | /api/v1/procurement/reverse-auctions | procurement → /v1/procurement/reverse-auctions | ✓ `/v1/procurement/reverse-auctions` | ✓ | ✅ WIRED |
 | procurement | /procurement/rfq/[id] | getRFQById | /api/v1/procurement/rfqs/:param | procurement → /v1/procurement/rfqs/:param | ✓ `/v1/procurement/rfqs/:id` | ✓ | ✅ WIRED |
 | procurement | /procurement/rfq/new | — | — | — | — | — | — NO_LOADER |
 | procurement | /procurement/rfq | getRFQs | /api/v1/procurement/rfqs | procurement → /v1/procurement/rfqs | ✓ `/v1/procurement/rfqs` | ✓ | ✅ WIRED |
@@ -341,13 +363,13 @@ Generated: 2026-07-03T12:21:25.095Z
 | procurement | /procurement/vendors/new | — | — | — | — | — | — NO_LOADER |
 | procurement | /procurement/vendors | — | — | — | — | — | — NO_LOADER |
 | projects | /projects/[id] | getProjectById | /api/v1/project/projects/:param | project → /v1/projects/projects/:param | ✓ `/v1/projects/projects/:id` | ✓ | ✅ WIRED |
-| projects | /projects/beneficiaries | — | — | — | — | — | — NO_LOADER |
+| projects | /projects/beneficiaries | getProjectBeneficiaries | /api/v1/projects/beneficiaries | projects → /v1/projects/beneficiaries | ✓ `/v1/projects/beneficiaries` | ✓ | ✅ WIRED |
 | projects | /projects/dashboard | getProjectsDashboard | /api/v1/project/dashboard | project → /v1/projects/dashboard | ✓ `/v1/projects/dashboard` | ✓ | ✅ WIRED |
 | projects | /projects/dashboard | getProjects | /api/v1/project/projects | project → /v1/projects/projects | ✓ `/v1/projects/projects` | ✓ | ✅ WIRED |
 | projects | /projects/dashboard | getSchemes | /api/v1/project/schemes | project → /v1/projects/schemes | ✓ `/v1/projects/:id` | ✓ | ✅ WIRED |
-| projects | /projects/delay-analysis | — | — | — | — | — | — NO_LOADER |
-| projects | /projects/dpr-tracking | — | — | — | — | — | — NO_LOADER |
-| projects | /projects/escalations | — | — | — | — | — | — NO_LOADER |
+| projects | /projects/delay-analysis | getProjectDelayAnalysis | /api/v1/projects/delay-analysis | projects → /v1/projects/delay-analysis | ✓ `/v1/projects/delay-analysis` | ✓ | ✅ WIRED |
+| projects | /projects/dpr-tracking | getProjectDprs | /api/v1/projects/dprs | projects → /v1/projects/dprs | ✓ `/v1/projects/dprs` | ✓ | ✅ WIRED |
+| projects | /projects/escalations | getProjectEscalations | /api/v1/projects/escalations | projects → /v1/projects/escalations | ✓ `/v1/projects/escalations` | ✓ | ✅ WIRED |
 | projects | /projects/fund-releases | getProjectFundReleases | /api/v1/project/fund-releases | project → /v1/projects/fund-releases | ✓ `/v1/projects/:id` | ✓ | ✅ WIRED |
 | projects | /projects/list | getProjects | /api/v1/project/projects | project → /v1/projects/projects | ✓ `/v1/projects/projects` | ✓ | ✅ WIRED |
 | projects | /projects/milestones | getMilestones | /api/v1/project/milestones | project → /v1/projects/milestones | ✓ `/v1/projects/milestones` | ✓ | ✅ WIRED |
@@ -356,7 +378,7 @@ Generated: 2026-07-03T12:21:25.095Z
 | projects | /projects/schemes/[id] | — | — | — | — | — | — NO_LOADER |
 | projects | /projects/schemes | getSchemes | /api/v1/project/schemes | project → /v1/projects/schemes | ✓ `/v1/projects/:id` | ✓ | ✅ WIRED |
 | projects | /projects/utilization | — | — | — | — | — | — NO_LOADER |
-| projects | /projects/wbs | — | — | — | — | — | — NO_LOADER |
+| projects | /projects/wbs | getProjectWbs | /api/v1/projects/wbs | projects → /v1/projects/wbs | ✓ `/v1/projects/wbs` | ✓ | ✅ WIRED |
 | reports | /reports/[id] | getReportJobById | /api/v1/reports/report-jobs/:param | reports → /v1/reports/report-jobs/:param | ✓ `/v1/reports/report-jobs/:id` | ✓ | ✅ WIRED |
 | reports | /reports/dashboard | getReportsDashboard | /api/v1/reports/dashboards | reports → /v1/reports/dashboards | ✓ `/v1/reports/dashboards` | ✓ | ✅ WIRED |
 | reports | /reports/kpi | getKPIs | /api/v1/reports/kpis | reports → /v1/reports/kpis | ✓ `/v1/reports/kpis` | ✓ | ✅ WIRED |
@@ -384,37 +406,42 @@ Generated: 2026-07-03T12:21:25.095Z
 | tenant-admin | /tenant-admin/audit | getTenantAuditLog | /api/v1/audit/events | audit → /v1/audit/events | ✓ `/v1/audit/events` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/breakglass/[id] | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/breakglass | getBreakglassLog | /api/v1/admin/breakglass | admin → /v1/admin/breakglass | ✓ `/v1/admin/breakglass` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/compliance | — | — | — | — | — | — NO_LOADER |
-| tenant-admin | /tenant-admin/data-export | — | — | — | — | — | — NO_LOADER |
-| tenant-admin | /tenant-admin/domain | — | — | — | — | — | — NO_LOADER |
-| tenant-admin | /tenant-admin/idp | — | — | — | — | — | — NO_LOADER |
-| tenant-admin | /tenant-admin/install | — | — | — | — | — | — NO_LOADER |
-| tenant-admin | /tenant-admin/mfa | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/compliance | getComplianceOverview | /api/v1/admin/compliance | admin → /v1/admin/compliance | ✓ `/v1/admin/compliance` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/data-export | getDataExports | /api/v1/admin/data-exports | admin → /v1/admin/data-exports | ✓ `/v1/admin/data-exports` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/domain | getCustomDomains | /api/v1/admin/domains | admin → /v1/admin/domains | ✓ `/v1/admin/domains` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/idp | getIdpProviders | /api/v1/admin/idp/providers | admin → /v1/admin/idp/providers | ✓ `/v1/admin/idp/providers` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/install | getInstallSteps | /api/v1/install/steps | install → /v1/install/steps | ✓ `/v1/install/steps` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/mfa | getMfaUsers | /api/v1/admin/mfa/users | admin → /v1/admin/mfa/users | ✓ `/v1/admin/mfa/users` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/notifications/channels | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/notifications | getNotificationPreferences | /api/notification/preferences | notification → /notifications/preferences | ✓ `/notifications/preferences` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/operations | getAdminOperationsDashboard | /api/v1/admin/operations | admin → /v1/admin/operations | ✓ `/v1/admin/operations` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/org-hierarchy | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/org-hierarchy | getOrgHierarchy | /api/v1/admin/org-hierarchy | admin → /v1/admin/org-hierarchy | ✓ `/v1/admin/org-hierarchy` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/org-type | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin | getTenantAdminDashboard | /api/v1/admin/health | admin → /v1/admin/health | ✓ `/v1/admin/health` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/plans | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/plans | getPlansData | /api/v1/billing/plans | billing → /v1/billing/plans | ✓ `/v1/billing/plans` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/platform-config | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/readiness | getTenantAdminDashboard | /api/v1/admin/health | admin → /v1/admin/health | ✓ `/v1/admin/health` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/roles/[id] | getAdminRoleById | /api/policy/roles/:param | policy → /policy/roles/:param | ✓ `/policy/roles/:id` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/roles | getAdminRoles | /api/policy/roles | policy → /policy/roles | ✓ `/policy/roles` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/security | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/security | getSecurityOverview | /api/v1/admin/security/overview | admin → /v1/admin/security/overview | ✓ `/v1/admin/security/overview` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/sessions/[id] | — | — | — | — | — | — NO_LOADER |
 | tenant-admin | /tenant-admin/sessions | getActiveSessions | /api/identity/sessions | identity → /identity/sessions | ✓ `/identity/sessions` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/settings | getTenantModules | /api/v1/admin/tenant/modules | admin → /v1/admin/tenant/modules | ✓ `/v1/admin/tenant/modules` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/siem | — | — | — | — | — | — NO_LOADER |
-| tenant-admin | /tenant-admin/sso | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/siem | getSiemAlerts | /api/v1/admin/siem/alerts | admin → /v1/admin/siem/alerts | ✓ `/v1/admin/siem/alerts` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/sso | getSsoProviders | /api/v1/admin/sso/providers | admin → /v1/admin/sso/providers | ✓ `/v1/admin/sso/providers` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/subscription | getSubscription | /api/v1/billing/subscriptions | billing → /v1/billing/subscriptions | ✓ `/v1/billing/subscriptions` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/usage | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/usage | getUsageQuotas | /api/v1/admin/usage | admin → /v1/admin/usage | ✓ `/v1/admin/usage` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/users/[id] | getAdminUserById | /api/identity/users/:param | identity → /identity/users/:param | ✓ `/identity/users/:id` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/users | getAdminUsers | /api/identity/users | identity → /identity/users | ✓ `/identity/users` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/webhooks | — | — | — | — | — | — NO_LOADER |
+| tenant-admin | /tenant-admin/webhooks | getWebhooks | /api/v1/admin/webhooks | admin → /v1/admin/webhooks | ✓ `/v1/admin/webhooks` | ✓ | ✅ WIRED |
 | themes | /themes | getThemeTokens | /api/v1/themes/tokens | theme → /v1/themes/tokens | ✓ `/v1/themes/tokens` | ✓ | ✅ WIRED |
+| visitor | /visitor/admin | — | — | — | — | — | — NO_LOADER |
+| visitor | /visitor/guard | — | — | — | — | — | — NO_LOADER |
+| visitor | /visitor/host | — | — | — | — | — | — NO_LOADER |
+| visitor | /visitor | — | — | — | — | — | — NO_LOADER |
 | workflow | /workflow/definitions/[id] | — | — | — | — | — | — NO_LOADER |
 | workflow | /workflow/definitions | — | — | — | — | — | — NO_LOADER |
+| workflow | /workflow/designer | — | — | — | — | — | — NO_LOADER |
 | workflow | /workflow/instances/[id] | — | — | — | — | — | — NO_LOADER |
 | workflow | /workflow/list | — | — | — | — | — | — NO_LOADER |
 | workflow | /workflow/my-tasks | — | — | — | — | — | — NO_LOADER |

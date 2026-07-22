@@ -82,6 +82,7 @@ const SERVICE_DIR_MAP = {
   'hrms': 'hrms-service',
   'payroll': 'payroll-service',
   'project': 'project-service',
+  'projects': 'project-service',
   'asset': 'asset-service',
   'grant': 'grant-service',
   'citizen': 'citizen-service',

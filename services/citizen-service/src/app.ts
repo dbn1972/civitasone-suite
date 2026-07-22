@@ -50,6 +50,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(slaRulesRoutes);
   await app.register(aiTriageRoutes);
   await app.register(citizenRoutingRoutes);
+  const { citizenGapRoutes } = await import("./modules/gap/routes.js");
+  await app.register(citizenGapRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

@@ -57,6 +57,17 @@
     },
     {
       "module": "admin",
+      "screen": "/admin/gateway-config",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "admin",
       "screen": "/admin/gateways",
       "loaders": [],
       "apiPaths": [],
@@ -179,13 +190,32 @@
     {
       "module": "admin",
       "screen": "/admin/tenants/[id]",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminTenantDetail"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/tenants/:param"
+      ],
+      "upstream": "admin → /v1/admin/tenants/:param",
+      "routeHandler": "/v1/admin/tenants/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/tenants/[id]",
+      "loaders": [
+        "getAdminTenantModules"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/tenants/:param/config"
+      ],
+      "upstream": "admin → /v1/admin/tenants/:param/config",
+      "routeHandler": "/v1/admin/tenants/:id/config",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -201,13 +231,17 @@
     {
       "module": "analytics",
       "screen": "/analytics/ai-insights",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAnalyticsAiInsights"
+      ],
+      "apiPaths": [
+        "/api/v1/analytics/ai-insights"
+      ],
+      "upstream": "analytics → /v1/analytics/ai-insights",
+      "routeHandler": "/v1/analytics/ai-insights",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "analytics",
@@ -223,24 +257,32 @@
     {
       "module": "analytics",
       "screen": "/analytics/data-warehouse",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAnalyticsDataWarehouse"
+      ],
+      "apiPaths": [
+        "/api/v1/analytics/data-warehouse"
+      ],
+      "upstream": "analytics → /v1/analytics/data-warehouse",
+      "routeHandler": "/v1/analytics/data-warehouse",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "analytics",
       "screen": "/analytics/kpi",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAnalyticsKpis"
+      ],
+      "apiPaths": [
+        "/api/v1/analytics/kpis"
+      ],
+      "upstream": "analytics → /v1/analytics/kpis",
+      "routeHandler": "/v1/analytics/kpis",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "analytics",
@@ -259,6 +301,83 @@
     },
     {
       "module": "analytics",
+      "screen": "/analytics/ml-insights/anomalies",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/inventory",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/leads",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/projects",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/subscriptions",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/tickets",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "analytics",
       "screen": "/analytics",
       "loaders": [],
       "apiPaths": [],
@@ -271,6 +390,17 @@
     {
       "module": "analytics",
       "screen": "/analytics/queries",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "approvals",
+      "screen": "/approvals",
       "loaders": [],
       "apiPaths": [],
       "upstream": null,
@@ -482,13 +612,17 @@
     {
       "module": "audit",
       "screen": "/audit/cag",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getCagParas"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/paras"
+      ],
+      "upstream": "audit → /v1/audit/paras",
+      "routeHandler": "/v1/audit/paras",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "audit",
@@ -538,13 +672,17 @@
     {
       "module": "audit",
       "screen": "/audit/investigation",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getInvestigations"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/investigations"
+      ],
+      "upstream": "audit → /v1/audit/investigations",
+      "routeHandler": "/v1/audit/investigations",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "audit",
@@ -624,13 +762,17 @@
     {
       "module": "audit",
       "screen": "/audit/vigilance",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getVigilanceCases"
+      ],
+      "apiPaths": [
+        "/api/v1/audit/vigilance"
+      ],
+      "upstream": "audit → /v1/audit/vigilance",
+      "routeHandler": "/v1/audit/vigilance",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "billing",
@@ -743,13 +885,17 @@
     {
       "module": "citizen",
       "screen": "/citizen/alerts",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getCitizenAlerts"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/alerts"
+      ],
+      "upstream": "citizen → /v1/citizen/alerts",
+      "routeHandler": "/v1/citizen/alerts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "citizen",
@@ -787,13 +933,17 @@
     {
       "module": "citizen",
       "screen": "/citizen/notices",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getCitizenNotices"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/notices"
+      ],
+      "upstream": "citizen → /v1/citizen/notices",
+      "routeHandler": "/v1/citizen/notices",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "citizen",
@@ -809,13 +959,17 @@
     {
       "module": "citizen",
       "screen": "/citizen/portal",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getCitizenPortal"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/portal/metrics"
+      ],
+      "upstream": "citizen → /v1/citizen/portal/metrics",
+      "routeHandler": "/v1/citizen/portal/metrics",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "citizen",
@@ -872,13 +1026,17 @@
     {
       "module": "citizen",
       "screen": "/citizen/surveys",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getCitizenSurveys"
+      ],
+      "apiPaths": [
+        "/api/v1/citizen/surveys"
+      ],
+      "upstream": "citizen → /v1/citizen/surveys",
+      "routeHandler": "/v1/citizen/surveys",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "contracts",
@@ -920,6 +1078,61 @@
     {
       "module": "contracts",
       "screen": "/contracts",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "court",
+      "screen": "/court/admin",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cases/[caseId]",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cases",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cause-list",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "court",
+      "screen": "/court",
       "loaders": [],
       "apiPaths": [],
       "upstream": null,
@@ -1072,6 +1285,36 @@
       "tablesPresent": null,
       "status": "NO_LOADER",
       "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/pipeline",
+      "loaders": [
+        "getPipelines"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/pipelines"
+      ],
+      "upstream": "crm → /v1/crm/pipelines",
+      "routeHandler": "/v1/crm/pipelines",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/pipeline",
+      "loaders": [
+        "getPipelineDeals"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/deals"
+      ],
+      "upstream": "crm → /v1/crm/deals",
+      "routeHandler": "/v1/crm/deals",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "dashboard",
@@ -2056,13 +2299,17 @@
     {
       "module": "finance",
       "screen": "/finance/vendors",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getFinanceVendors"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/vendors"
+      ],
+      "upstream": "finance → /v1/finance/vendors",
+      "routeHandler": "/v1/finance/vendors",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "grants",
@@ -3677,6 +3924,69 @@
       "detail": "navigation hub — no data loader"
     },
     {
+      "module": "meeting",
+      "screen": "/meeting/admin",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings/[meetingId]/minutes",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings/[meetingId]",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings",
+      "loaders": [
+        "getMeetings"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/meetings"
+      ],
+      "upstream": "estab → /v1/estab/meetings",
+      "routeHandler": "/v1/estab/meetings",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting",
+      "loaders": [
+        "getMeetings"
+      ],
+      "apiPaths": [
+        "/api/v1/estab/meetings"
+      ],
+      "upstream": "estab → /v1/estab/meetings",
+      "routeHandler": "/v1/estab/meetings",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
       "module": "notifications",
       "screen": "/notifications/compose",
       "loaders": [],
@@ -3797,13 +4107,17 @@
     {
       "module": "procurement",
       "screen": "/procurement/bid-evaluation",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementBidEvaluations"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/bid-evaluations"
+      ],
+      "upstream": "procurement → /v1/procurement/bid-evaluations",
+      "routeHandler": "/v1/procurement/bid-evaluations",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
@@ -3849,35 +4163,47 @@
     {
       "module": "procurement",
       "screen": "/procurement/emd-bg",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementEMD"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/emd"
+      ],
+      "upstream": "procurement → /v1/procurement/emd",
+      "routeHandler": "/v1/procurement/emd",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
       "screen": "/procurement/empanelment",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementEmpanelment"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/empanelment"
+      ],
+      "upstream": "procurement → /v1/procurement/empanelment",
+      "routeHandler": "/v1/procurement/empanelment",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
       "screen": "/procurement/gem",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementGem"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/gem/items"
+      ],
+      "upstream": "procurement → /v1/procurement/gem/items",
+      "routeHandler": "/v1/procurement/gem/items",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
@@ -4004,24 +4330,32 @@
     {
       "module": "procurement",
       "screen": "/procurement/pre-bid",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementPreBid"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/pre-bid-conferences"
+      ],
+      "upstream": "procurement → /v1/procurement/pre-bid-conferences",
+      "routeHandler": "/v1/procurement/pre-bid-conferences",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
       "screen": "/procurement/reverse-auction",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementReverseAuctions"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/reverse-auctions"
+      ],
+      "upstream": "procurement → /v1/procurement/reverse-auctions",
+      "routeHandler": "/v1/procurement/reverse-auctions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
@@ -4160,13 +4494,17 @@
     {
       "module": "projects",
       "screen": "/projects/beneficiaries",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProjectBeneficiaries"
+      ],
+      "apiPaths": [
+        "/api/v1/projects/beneficiaries"
+      ],
+      "upstream": "projects → /v1/projects/beneficiaries",
+      "routeHandler": "/v1/projects/beneficiaries",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "projects",
@@ -4216,35 +4554,47 @@
     {
       "module": "projects",
       "screen": "/projects/delay-analysis",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProjectDelayAnalysis"
+      ],
+      "apiPaths": [
+        "/api/v1/projects/delay-analysis"
+      ],
+      "upstream": "projects → /v1/projects/delay-analysis",
+      "routeHandler": "/v1/projects/delay-analysis",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "projects",
       "screen": "/projects/dpr-tracking",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProjectDprs"
+      ],
+      "apiPaths": [
+        "/api/v1/projects/dprs"
+      ],
+      "upstream": "projects → /v1/projects/dprs",
+      "routeHandler": "/v1/projects/dprs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "projects",
       "screen": "/projects/escalations",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProjectEscalations"
+      ],
+      "apiPaths": [
+        "/api/v1/projects/escalations"
+      ],
+      "upstream": "projects → /v1/projects/escalations",
+      "routeHandler": "/v1/projects/escalations",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "projects",
@@ -4353,13 +4703,17 @@
     {
       "module": "projects",
       "screen": "/projects/wbs",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProjectWbs"
+      ],
+      "apiPaths": [
+        "/api/v1/projects/wbs"
+      ],
+      "upstream": "projects → /v1/projects/wbs",
+      "routeHandler": "/v1/projects/wbs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "reports",
@@ -4713,68 +5067,92 @@
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/compliance",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getComplianceOverview"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/compliance"
+      ],
+      "upstream": "admin → /v1/admin/compliance",
+      "routeHandler": "/v1/admin/compliance",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/data-export",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getDataExports"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/data-exports"
+      ],
+      "upstream": "admin → /v1/admin/data-exports",
+      "routeHandler": "/v1/admin/data-exports",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/domain",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getCustomDomains"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/domains"
+      ],
+      "upstream": "admin → /v1/admin/domains",
+      "routeHandler": "/v1/admin/domains",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/idp",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getIdpProviders"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/idp/providers"
+      ],
+      "upstream": "admin → /v1/admin/idp/providers",
+      "routeHandler": "/v1/admin/idp/providers",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/install",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getInstallSteps"
+      ],
+      "apiPaths": [
+        "/api/v1/install/steps"
+      ],
+      "upstream": "install → /v1/install/steps",
+      "routeHandler": "/v1/install/steps",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/mfa",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getMfaUsers"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/mfa/users"
+      ],
+      "upstream": "admin → /v1/admin/mfa/users",
+      "routeHandler": "/v1/admin/mfa/users",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
@@ -4820,13 +5198,17 @@
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/org-hierarchy",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getOrgHierarchy"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/org-hierarchy"
+      ],
+      "upstream": "admin → /v1/admin/org-hierarchy",
+      "routeHandler": "/v1/admin/org-hierarchy",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
@@ -4857,13 +5239,17 @@
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/plans",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getPlansData"
+      ],
+      "apiPaths": [
+        "/api/v1/billing/plans"
+      ],
+      "upstream": "billing → /v1/billing/plans",
+      "routeHandler": "/v1/billing/plans",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
@@ -4924,13 +5310,17 @@
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/security",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getSecurityOverview"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/security/overview"
+      ],
+      "upstream": "admin → /v1/admin/security/overview",
+      "routeHandler": "/v1/admin/security/overview",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
@@ -4976,24 +5366,32 @@
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/siem",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getSiemAlerts"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/siem/alerts"
+      ],
+      "upstream": "admin → /v1/admin/siem/alerts",
+      "routeHandler": "/v1/admin/siem/alerts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/sso",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getSsoProviders"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/sso/providers"
+      ],
+      "upstream": "admin → /v1/admin/sso/providers",
+      "routeHandler": "/v1/admin/sso/providers",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
@@ -5013,13 +5411,17 @@
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/usage",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getUsageQuotas"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/usage"
+      ],
+      "upstream": "admin → /v1/admin/usage",
+      "routeHandler": "/v1/admin/usage",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "tenant-admin",
@@ -5054,13 +5456,17 @@
     {
       "module": "tenant-admin",
       "screen": "/tenant-admin/webhooks",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getWebhooks"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/webhooks"
+      ],
+      "upstream": "admin → /v1/admin/webhooks",
+      "routeHandler": "/v1/admin/webhooks",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "themes",
@@ -5078,6 +5484,50 @@
       "detail": "ok"
     },
     {
+      "module": "visitor",
+      "screen": "/visitor/admin",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "visitor",
+      "screen": "/visitor/guard",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "visitor",
+      "screen": "/visitor/host",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "visitor",
+      "screen": "/visitor",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
       "module": "workflow",
       "screen": "/workflow/definitions/[id]",
       "loaders": [],
@@ -5091,6 +5541,17 @@
     {
       "module": "workflow",
       "screen": "/workflow/definitions",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/designer",
       "loaders": [],
       "apiPaths": [],
       "upstream": null,
@@ -5145,9 +5606,9 @@
     }
   ],
   "counts": {
-    "wired": 150,
+    "wired": 191,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 263
+    "noLoader": 249
   }
 }

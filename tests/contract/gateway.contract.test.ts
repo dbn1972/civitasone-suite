@@ -99,6 +99,8 @@ describe("gateway contract", () => {
       ["asset", "assets"],
       // grant-service: plural /grants + singular /grant alias
       ["grant", "grant-alias"],
+      // court-service: singular /court + plural /courts alias
+      ["court", "courts"],
     ];
 
     const byUpstream = new Map<string, string[]>();

@@ -9,9 +9,15 @@ export class HttpError extends Error {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function resolveContext(req: FastifyRequest): RequestContext {
   try {
-    return resolveServiceContext(req);
+    const ctx = resolveServiceContext(req);
+    if (!ctx.tenantId || !UUID_RE.test(ctx.tenantId)) {
+      throw new HttpError(401, "UNAUTHENTICATED", "missing or malformed tenant context");
+    }
+    return ctx;
   } catch (err) {
     if (err instanceof AuthContextError) {
       throw new HttpError(err.status, err.code, err.message);

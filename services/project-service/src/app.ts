@@ -61,6 +61,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { delayForecastRoutes } = await import("./modules/delay-forecast/routes.js");
   await app.register(delayForecastRoutes);
 
+  const { projectGapRoutes } = await import("./modules/gap/routes.js");
+  await app.register(projectGapRoutes);
+
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

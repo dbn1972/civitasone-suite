@@ -285,6 +285,10 @@ module.exports = {
     worker("location",     "location_svc",     "civitas_location"),
     worker("inventory",    "inventory_svc",    "civitas_inventory"),
     worker("telephony",    "telephony_svc",    "civitas_telephony"),
+    worker("ml",           "ml_svc",           "civitas_ml"),
+    worker("meeting",      "meeting_svc",      "civitas_meeting"),
+    worker("court",        "court_svc",        "civitas_court"),
+    worker("visitor",      "visitor_svc",      "civitas_visitor"),
 
     // ── Infrastructure services ────────────────────────────────────────────────
     {
@@ -306,6 +310,10 @@ module.exports = {
     },
 
     svc("analytics",    3031, "analytics_svc",    "civitas_analytics"),
+    svc("ml",           3032, "ml_svc",           "civitas_ml"),
+    svc("meeting",      3033, "meeting_svc",      "civitas_meeting"),
+    svc("court",        3034, "court_svc",        "civitas_court"),
+    svc("visitor",      3035, "visitor_svc",      "civitas_visitor"),
     svc("location",     4012, "location_svc",     "civitas_location"),
 
     // ── Gateway ────────────────────────────────────────────────────────────────

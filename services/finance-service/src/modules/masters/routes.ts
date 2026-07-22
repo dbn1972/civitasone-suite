@@ -31,6 +31,14 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  app.get("/v1/finance/vendors", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    listQuerySchema.parse(req.query);
+    const rows = await repo.listVendors(ctx.tenantId);
+    return reply.send({ data: rows, meta: { page: 1, pageSize: 100, total: rows.length } });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

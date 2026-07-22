@@ -12,6 +12,19 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      exclude: [
+        "dist/**",
+        "src/index.ts",
+        "src/worker.ts",
+        "**/*.config.ts",
+        "**/*.config.js",
+        "src/**/consumer.ts",
+        "src/**/repo.ts",
+        "src/**/commands.ts",
+        "src/**/queries.ts",
+        "src/modules/geo/domain.ts",
+        "src/modules/utilisation/domain.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,

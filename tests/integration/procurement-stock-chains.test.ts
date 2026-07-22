@@ -23,7 +23,7 @@ import { ChainHarness, setCurrentHarness } from "./harness.js";
 // --- stock-service data layer ----------------------------------------------
 vi.mock("../../services/stock-service/src/shared/db.js", async () => {
   const h = await import("./harness.js");
-  return { db: h.mockDb, sqlClient: {} };
+  return { db: h.mockDb, sqlClient: {}, scopedRead: (fn: any) => h.mockDb.transaction(fn) };
 });
 
 vi.mock("../../services/stock-service/src/shared/outbox.js", async () => {

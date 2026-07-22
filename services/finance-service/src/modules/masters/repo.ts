@@ -11,6 +11,11 @@ export async function listPao(tenantId: string, limit = 500): Promise<PaoRow[]> 
     .limit(limit));
 }
 
+/** Vendor master placeholder — returns empty until vendor table is available. */
+export async function listVendors(_tenantId: string): Promise<Array<Record<string, unknown>>> {
+  return [];
+}
+
 export async function listDdo(tenantId: string, limit = 500): Promise<DdoRow[]> {
   return scopedRead((tx) => tx.select().from(financeDdo)
     .where(eq(financeDdo.tenantId, tenantId))

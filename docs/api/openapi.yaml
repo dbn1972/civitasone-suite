@@ -350,7 +350,8 @@ paths:
       description: |
         Records employee attendance using GPS coordinates. Validates that the
         check-in location is within the configured geofence radius for the
-        employee's assigned office. Includes device fingerprint for fraud detection.
+        employee's assigned office. Rejects check-ins on gazetted holidays.
+        Returns geofence status (within/outside) and distance from office.
       requestBody:
         required: true
         content:
@@ -358,12 +359,82 @@ paths:
             schema:
               $ref: "#/components/schemas/GeoCheckInRequest"
       responses:
-        "202":
-          description: Check-in accepted
+        "201":
+          description: Check-in recorded
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AcceptedResponse"
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [within_geofence, outside_geofence]
+                  distanceMeters:
+                    type: integer
+                    nullable: true
+                  officeName:
+                    type: string
+                    nullable: true
+                  radiusMeters:
+                    type: integer
+                    nullable: true
+                  isHoliday:
+                    type: boolean
+                  holidayName:
+                    type: string
+                    nullable: true
+                  message:
+                    type: string
+        "400":
+          description: Validation error or gazetted holiday
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/attendance/geo-check-out:
+    post:
+      operationId: geoCheckOut
+      tags: [HRMS]
+      summary: GPS-based attendance check-out
+      description: |
+        Records employee check-out using GPS coordinates. Validates location
+        against the configured office geofence. Paired with geo-check-in to
+        calculate total hours worked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoCheckInRequest"
+      responses:
+        "201":
+          description: Check-out recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [check_out_recorded]
+                  withinGeofence:
+                    type: boolean
+                  distanceMeters:
+                    type: integer
+                    nullable: true
         "400":
           description: Validation error
           content:
@@ -372,12 +443,217 @@ paths:
                 $ref: "#/components/schemas/ValidationError"
         "401":
           description: Missing or invalid bearer token
-        "422":
-          description: Outside geofence radius
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/attendance/geo-history:
+    get:
+      operationId: getGeoAttendanceHistory
+      tags: [HRMS]
+      summary: Get geo-attendance history
+      description: |
+        Returns the geo-attendance check-in/check-out history for an employee.
+        Defaults to the authenticated user's records. HR admins can query any
+        employee by passing employeeId.
+      parameters:
+        - name: employeeId
+          in: query
+          description: Employee UUID (defaults to authenticated user)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Attendance history records (max 60)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        date:
+                          type: string
+                          format: date
+                        checkType:
+                          type: string
+                          enum: [check_in, check_out]
+                        withinGeofence:
+                          type: boolean
+                        distanceMeters:
+                          type: integer
+                          nullable: true
+                        markedAt:
+                          type: string
+                          format: date-time
+                        selfieFileKey:
+                          type: string
+                          nullable: true
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/attendance/reportees:
+    get:
+      operationId: getReporteesAttendance
+      tags: [HRMS]
+      summary: Get reportees' geo-attendance
+      description: |
+        Returns geo-attendance records for the authenticated officer's direct
+        reports. HR admins see all employees in the tenant. Used by reporting
+        officers to monitor team attendance and geofence compliance.
+      responses:
+        "200":
+          description: Reportees attendance records (max 100)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        employeeId:
+                          type: string
+                          format: uuid
+                        date:
+                          type: string
+                          format: date
+                        checkType:
+                          type: string
+                          enum: [check_in, check_out]
+                        withinGeofence:
+                          type: boolean
+                        distanceMeters:
+                          type: integer
+                          nullable: true
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/office-locations:
+    get:
+      operationId: listOfficeLocations
+      tags: [HRMS]
+      summary: List office locations
+      description: |
+        Returns all configured office locations for the current tenant.
+        Office locations define geofence boundaries for GPS-based attendance
+        validation. Each location has coordinates and a radius in meters.
+      responses:
+        "200":
+          description: List of office locations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        address:
+                          type: string
+                          nullable: true
+                        latitude:
+                          type: number
+                          format: double
+                        longitude:
+                          type: number
+                          format: double
+                        radiusMeters:
+                          type: integer
+                        isActive:
+                          type: boolean
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createOfficeLocation
+      tags: [HRMS]
+      summary: Create an office location
+      description: |
+        Registers a new office location with GPS coordinates and geofence radius.
+        Used to define the valid perimeter for geo-attendance check-ins. Radius
+        must be between 50 and 5000 meters (default 200m).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, latitude, longitude]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                address:
+                  type: string
+                latitude:
+                  type: number
+                  format: double
+                  minimum: -90
+                  maximum: 90
+                longitude:
+                  type: number
+                  format: double
+                  minimum: -180
+                  maximum: 180
+                radiusMeters:
+                  type: integer
+                  minimum: 50
+                  maximum: 5000
+                  default: 200
+      responses:
+        "201":
+          description: Office location created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  radiusMeters:
+                    type: integer
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires hr_admin or super_admin
       security:
         - bearerAuth: []
 
@@ -2688,6 +2964,222 @@ paths:
           description: SCIM is not configured
       security:
         - scimBearerToken: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Audit Service — Audit Plans
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/audit/plans:
+    post:
+      operationId: createAuditPlan
+      tags: [Audit]
+      summary: Create an audit plan
+      description: |
+        Creates a top-level audit plan (annual/periodic audit coverage for an
+        area). The plan starts in `draft` status. Write goes through CQRS:
+        the route validates and publishes a command; a consumer persists the
+        row and emits an audit event. Returns 202 Accepted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAuditPlanRequest"
+      responses:
+        "202":
+          description: Audit plan creation accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires audit_officer, audit_admin, or super_admin
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listAuditPlans
+      tags: [Audit]
+      summary: List audit plans
+      description: |
+        Returns audit plans (the `plan.audit_plans` top-level entities, not
+        the per-department plan-items sub-resource — see GET /v1/audit/plan
+        for that) for the caller's tenant, read-through Redis cache.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: List of audit plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditPlan"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires audit_officer, audit_admin, finance_admin, or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/audit/plans/{id}/items:
+    post:
+      operationId: createAuditPlanItem
+      tags: [Audit]
+      summary: Add a plan item (department/unit schedule) to an audit plan
+      description: |
+        Schedules an audited department/unit against a parent audit plan.
+        Write goes through CQRS (command → consumer → DB + audit event).
+        Returns 202 Accepted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Audit plan ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAuditPlanItemRequest"
+      responses:
+        "202":
+          description: Plan item creation accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires audit_officer, audit_admin, or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/audit/plans/{id}/start:
+    patch:
+      operationId: startAuditPlan
+      tags: [Audit]
+      summary: Start an audit plan
+      description: |
+        Transitions an audit plan out of `draft` into an active state.
+        Invalidates the cached plan entry. Write goes through CQRS (command →
+        consumer). Returns 202 Accepted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Audit plan ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Plan start accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires audit_officer, audit_admin, or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/audit/plans/{id}:
+    get:
+      operationId: getAuditPlan
+      tags: [Audit]
+      summary: Get an audit plan by ID
+      description: |
+        Returns a single audit plan by ID, scoped to the caller's tenant,
+        read-through Redis cache.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Audit plan ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Audit plan found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPlan"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires audit_officer, audit_admin, finance_admin, or super_admin
+        "404":
+          description: Plan not found (or not visible to this tenant)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/audit/plan:
+    get:
+      operationId: listAuditPlanItems
+      tags: [Audit]
+      summary: List audit plan items (per-department schedule)
+      description: |
+        Returns the flattened list of audit plan ITEMS (per-department/unit
+        scheduled audits) across the caller's tenant — distinct from
+        GET /v1/audit/plans, which lists the parent plan entities themselves.
+        Read-through Redis cache.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: List of audit plan items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPlanItemList"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires audit_officer, audit_admin, finance_admin, or super_admin
+      security:
+        - bearerAuth: []
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Citizen Service
@@ -5527,6 +6019,122 @@ components:
 
     # ─── Finance ───────────────────────────────────────────────────────────────
 
+    # ─── Audit ─────────────────────────────────────────────────────────────────
+
+    CreateAuditPlanRequest:
+      type: object
+      required: [planNo, title, area, periodFrom, periodTo]
+      properties:
+        planNo:
+          type: string
+          minLength: 1
+          maxLength: 64
+        title:
+          type: string
+          minLength: 1
+          maxLength: 256
+        area:
+          type: string
+          minLength: 1
+          maxLength: 128
+        periodFrom:
+          type: string
+          format: date
+        periodTo:
+          type: string
+          format: date
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+          default: medium
+
+    CreateAuditPlanItemRequest:
+      type: object
+      required: [deptRef, scheduledFrom, scheduledTo]
+      properties:
+        deptRef:
+          type: string
+          minLength: 1
+          maxLength: 128
+        unitRef:
+          type: string
+          maxLength: 128
+        scheduledFrom:
+          type: string
+          format: date
+        scheduledTo:
+          type: string
+          format: date
+
+    AuditPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        planNo:
+          type: string
+        title:
+          type: string
+        area:
+          type: string
+        periodFrom:
+          type: string
+          format: date
+        periodTo:
+          type: string
+          format: date
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        status:
+          type: string
+          enum: [draft, active, completed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+        updatedBy:
+          type: string
+          format: uuid
+        version:
+          type: integer
+
+    AuditPlanItem:
+      type: object
+      properties:
+        id:
+          type: string
+        auditUnit:
+          type: string
+        department:
+          type: string
+        type:
+          type: string
+          enum: [routine]
+        plannedFrom:
+          type: string
+          format: date
+        plannedTo:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [planned, in_progress, completed, deferred]
+
+    AuditPlanItemList:
+      type: array
+      items:
+        $ref: "#/components/schemas/AuditPlanItem"
+
     # ─── Visitor / Badge Print ─────────────────────────────────────────────────
 
     BadgeTemplate:
@@ -6009,8 +6617,11 @@ components:
 
     GeoCheckInRequest:
       type: object
-      required: [latitude, longitude, accuracy, deviceFingerprint]
+      required: [employeeId, latitude, longitude]
       properties:
+        employeeId:
+          type: string
+          format: uuid
         latitude:
           type: number
           format: double
@@ -6021,15 +6632,20 @@ components:
           format: double
           minimum: -180
           maximum: 180
-        accuracy:
+        accuracyMeters:
           type: number
+          minimum: 0
           description: GPS accuracy in meters
-        deviceFingerprint:
+        selfieFileKey:
           type: string
-        photoUrl:
+          description: S3/MinIO object key for the selfie image
+        deviceId:
           type: string
-          format: uri
-          description: Optional selfie for verification
+          description: Device identifier for fraud detection
+        officeLocationId:
+          type: string
+          format: uuid
+          description: Target office location (auto-detected if omitted)
 
     IdCard:
       type: object

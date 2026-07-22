@@ -34,9 +34,9 @@ describe("Queue production guard", () => {
     expect(() => resolveQueueDriver()).toThrow(/QUEUE_DRIVER is required/i);
   });
 
-  it("throws on an unknown/typo QUEUE_DRIVER (no silent rabbitmq→memory alias)", async () => {
+  it("throws on an unknown/typo QUEUE_DRIVER (no silent fallback to memory)", async () => {
     process.env.NODE_ENV = "production";
-    process.env.QUEUE_DRIVER = "rabbitmq";
+    process.env.QUEUE_DRIVER = "rabitqm";
     const { resolveQueueDriver } = await import("../../services/queue-service/src/bus.js");
     expect(() => resolveQueueDriver()).toThrow(/unknown QUEUE_DRIVER/i);
   });
