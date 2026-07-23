@@ -30,6 +30,8 @@ import {
   publishInspectorAssign,
   publishTourPlanGenerate,
   publishGeoAttendanceMark,
+  publishTourPlanSubmit,
+  publishTourPlanApprove,
   type InspectorAssignPayload,
   type TourPlanGeneratePayload,
   type GeoAttendanceMarkPayload,
@@ -98,6 +100,11 @@ const inspectorIdParam = z.object({
   inspectorId: z.string().uuid("inspectorId must be a valid UUID"),
 });
 
+/** Tour plan ID path param (SVC-109 approval workflow). */
+const tourPlanIdParam = z.object({
+  id: z.string().uuid("id must be a valid UUID"),
+});
+
 // ─── Route registration ─────────────────────────────────────────────────────
 
 export async function registerAssignmentRoutes(app: FastifyInstance): Promise<void> {
@@ -157,6 +164,26 @@ export async function registerAssignmentRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, INSPECTOR_ROLES);
     const body = markGeoAttendanceSchema.parse(req.body) as GeoAttendanceMarkPayload;
     const result = await publishGeoAttendanceMark(body, ctx);
+    return reply.code(202).send({ data: result });
+  });
+
+  // ── Tour Plan Approval Workflow (SVC-109) ─────────────────────────────────
+
+  /** POST /v1/inspection/tour-plans/:id/submit — inspector submits tour plan for approval. */
+  app.post("/v1/inspection/tour-plans/:id/submit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INSPECTOR_ROLES);
+    const { id } = tourPlanIdParam.parse(req.params);
+    const result = await publishTourPlanSubmit({ tourPlanId: id }, ctx);
+    return reply.code(202).send({ data: result });
+  });
+
+  /** POST /v1/inspection/tour-plans/:id/approve — supervising officer approves tour plan. */
+  app.post("/v1/inspection/tour-plans/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SUPERVISING_ROLES);
+    const { id } = tourPlanIdParam.parse(req.params);
+    const result = await publishTourPlanApprove({ tourPlanId: id }, ctx);
     return reply.code(202).send({ data: result });
   });
 }
