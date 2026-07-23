@@ -92,10 +92,85 @@ void ensurePartitions();
 const partitionMaint = setInterval(() => void ensurePartitions(), 24 * 60 * 60_000);
 partitionMaint.unref();
 
+// ── Overdue findings detection (Requirement 9.5) ─────────────────────────────
+// Runs every hour. Finds findings in notice_issued state with past-due compliance
+// notices, transitions them to overdue, and publishes escalation notification events.
+import { findOverdueFindings, updateFindingState } from "./modules/findings/repo.js";
+import { EVENTS } from "./topics.js";
+
+async function processOverdueFindings(): Promise<void> {
+  try {
+    // We need to iterate tenants — for now use a direct query to get distinct tenants
+    const tenantRows = await db.execute(sql`SELECT DISTINCT tenant_id FROM findings.findings WHERE state = 'notice_issued' AND deleted_at IS NULL`);
+    const tenantIds = (tenantRows as unknown as Array<{ tenant_id: string }>).map((r) => r.tenant_id);
+
+    for (const tenantId of tenantIds) {
+      const overdueFindings = await findOverdueFindings(tenantId);
+
+      for (const finding of overdueFindings) {
+        try {
+          await db.transaction(async (tx) => {
+            // Transition to overdue
+            await updateFindingState(tx, finding.id, tenantId, "overdue", "system");
+
+            // Emit overdue event via outbox for notification escalation
+            const { enqueue: outboxEnqueue } = await import("./shared/outbox.js");
+            await outboxEnqueue(tx, {
+              topic: EVENTS.findingOverdue,
+              eventType: EVENTS.findingOverdue,
+              tenantId,
+              actorId: "system",
+              correlationId: `overdue-check-${finding.id}`,
+              payload: {
+                findingId: finding.id,
+                findingNumber: finding.findingNumber,
+                inspectionId: finding.inspectionId,
+                entityId: finding.inspectionId,
+                dueDate: "past",
+              },
+            });
+
+            // Notification escalation event
+            await outboxEnqueue(tx, {
+              topic: "notification.send",
+              eventType: "notification.send",
+              tenantId,
+              actorId: "system",
+              correlationId: `overdue-notif-${finding.id}`,
+              payload: {
+                type: "finding.overdue_escalation",
+                data: {
+                  findingId: finding.id,
+                  findingNumber: finding.findingNumber,
+                  inspectionId: finding.inspectionId,
+                },
+              },
+            });
+          });
+
+          log.info({ event: "finding_transitioned_overdue", findingId: finding.id, tenantId },
+            "finding transitioned to overdue");
+        } catch (err) {
+          log.warn({ err, findingId: finding.id, tenantId, event: "overdue_transition_failed" },
+            "failed to transition finding to overdue");
+        }
+      }
+    }
+  } catch (err) {
+    log.warn({ err, event: "overdue_check_failed" }, "overdue findings detection failed");
+  }
+}
+
+// Run overdue check on startup (after brief delay) and then every hour
+setTimeout(() => void processOverdueFindings(), 30_000);
+const overdueCheck = setInterval(() => void processOverdueFindings(), 60 * 60_000);
+overdueCheck.unref();
+
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(partitionMaint);
+  clearInterval(overdueCheck);
   clearInterval(purge);
   clearInterval(relay);
   await queue.stop();

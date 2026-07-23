@@ -23,7 +23,7 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import {
   validateCompetency,
   checkConflictOfInterest,
@@ -41,6 +41,20 @@ import type {
 const log = pino({ name: "assignment-consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
+
+// ── Consumed Event Payload Types ──────────────────────────────────────────────
+
+/**
+ * Payload shape for hrms.leave.updated events published by hrms-service.
+ * Cross-service contract: { employeeId, tenantId, leaveType, startDate, endDate, status }
+ */
+interface EmployeeLeaveUpdatedPayload {
+  employeeId: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+}
 
 // ── HRMS Circuit Breaker ──────────────────────────────────────────────────────
 
@@ -454,5 +468,60 @@ export function registerAssignmentConsumers(queue: Queue): void {
       },
       "geo-attendance recorded",
     );
+  });
+
+  // ─── employeeLeaveUpdated (CONSUMED EVENT from hrms-service) ──────────
+  // When an employee's leave changes, invalidate any cached tour plans for
+  // that inspector so subsequent tour plan generation picks up the new data.
+  // Requirement 4.4: Tour plans respect inspector leave and existing commitments.
+  queue.subscribe<EmployeeLeaveUpdatedPayload>(CONSUMED_EVENTS.employeeLeaveUpdated, async (msg) => {
+    const p = msg.payload;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // Invalidate the inspector's tour plan cache so the next generation
+      // uses fresh leave data from HRMS.
+      log.info(
+        {
+          event: "employee_leave_updated",
+          employeeId: p.employeeId,
+          leaveType: p.leaveType,
+          startDate: p.startDate,
+          endDate: p.endDate,
+          status: p.status,
+          tenantId: msg.tenantId,
+        },
+        "received leave update from hrms-service — invalidating tour plan cache",
+      );
+
+      // Audit event: record the consumed cross-service event
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: p.employeeId,
+        correlationId: msg.correlationId,
+        payload: {
+          action: "leave.updated_received",
+          resourceType: "tour_plan",
+          resourceId: p.employeeId,
+          details: {
+            leaveType: p.leaveType,
+            startDate: p.startDate,
+            endDate: p.endDate,
+            status: p.status,
+          },
+        },
+      });
+    });
+
+    // Cache invalidation (outside transaction, best-effort)
+    try {
+      await cache.invalidate(cache.makeKey(msg.tenantId, "tour_plan", p.employeeId));
+    } catch (err) {
+      log.warn({ err, tenantId: msg.tenantId, employeeId: p.employeeId, event: "cache_invalidate_failed" },
+        "failed to invalidate tour_plan cache after leave update");
+    }
   });
 }
