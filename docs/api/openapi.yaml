@@ -50,6 +50,8 @@ tags:
     description: Visitor management, badge printing, document scanning, turnstile control
   - name: Meeting
     description: Meeting lifecycle, committees, agenda, minutes, decisions, action items, voting
+  - name: Inspection
+    description: Inspection lifecycle, universe, risk scoring, sync, evidence, findings
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -5910,6 +5912,108 @@ paths:
       security:
         - bearerAuth: []
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Inspection Service — Mobile Sync (SVC-102)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/inspection/sync/upload/chunked:
+    post:
+      operationId: chunkedSyncUpload
+      tags: [Inspection]
+      summary: Chunked upload for large evidence files
+      description: |
+        Accepts a single chunk of a large evidence file captured offline.
+        Each chunk is processed asynchronously via the sync consumer pipeline.
+        The client tracks chunk progress via the returned `progressToken`.
+        Part of mobile-specific endpoints (SVC-102).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChunkedUploadRequest"
+      responses:
+        "202":
+          description: Chunk accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChunkedUploadResponse"
+        "400":
+          description: Validation error (invalid UUID, missing fields, non-positive integers)
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role (requires inspector, inspection_admin, tenant_admin, or super_admin)
+      security:
+        - bearerAuth: []
+
+  /v1/inspection/sync/responses/partial:
+    post:
+      operationId: savePartialResponses
+      tags: [Inspection]
+      summary: Save partial checklist responses
+      description: |
+        Persists in-progress checklist responses from the mobile app before
+        final submission. Enables resume-from-where-you-left-off offline UX.
+        Processed asynchronously via the sync upload consumer.
+        Part of mobile-specific endpoints (SVC-102).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartialResponseRequest"
+      responses:
+        "202":
+          description: Partial responses accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartialResponseResponse"
+        "400":
+          description: Validation error (invalid UUID, missing fields, invalid percentage)
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role (requires inspector, inspection_admin, tenant_admin, or super_admin)
+      security:
+        - bearerAuth: []
+
+  /v1/inspection/sync/packages/{id}/manifest:
+    get:
+      operationId: getSyncPackageManifest
+      tags: [Inspection]
+      summary: Get lightweight sync package manifest
+      description: |
+        Returns package metadata (size, generation timestamp, item list) without
+        downloading the full package. Allows mobile clients to assess whether a
+        full download is needed and to display progress indicators.
+        Part of mobile-specific endpoints (SVC-102).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Sync package identifier
+      responses:
+        "200":
+          description: Package manifest returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncPackageManifestResponse"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role (requires inspector, inspection_admin, tenant_admin, or super_admin)
+        "404":
+          description: Sync package not found (NOT_FOUND)
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -8723,3 +8827,181 @@ components:
           type: object
           additionalProperties: true
           description: Role-scoped dashboard projection (shape depends on repo query)
+
+    # ─── Inspection Service — Mobile Sync (SVC-102) ─────────────────────────
+
+    ChunkedUploadRequest:
+      type: object
+      required: [evidenceId, inspectionId, deviceId, totalSizeBytes, sha256, mimeType, chunkIndex, totalChunks, capturedAt]
+      properties:
+        evidenceId:
+          type: string
+          format: uuid
+          description: Evidence artifact identifier
+        inspectionId:
+          type: string
+          format: uuid
+          description: Parent inspection identifier
+        deviceId:
+          type: string
+          minLength: 1
+          description: Unique device identifier
+        totalSizeBytes:
+          type: integer
+          minimum: 1
+          description: Total file size in bytes
+        sha256:
+          type: string
+          minLength: 1
+          description: SHA-256 hash of the complete file
+        mimeType:
+          type: string
+          minLength: 1
+          description: MIME type of the evidence file (JPEG, PNG, PDF, MP4, HEIC)
+        chunkIndex:
+          type: integer
+          minimum: 0
+          description: Zero-based index of this chunk
+        totalChunks:
+          type: integer
+          minimum: 1
+          description: Total number of chunks for the file
+        capturedAt:
+          type: string
+          description: ISO 8601 timestamp of when the evidence was captured
+        gpsLatitude:
+          type: number
+          nullable: true
+          description: Capture latitude (optional)
+        gpsLongitude:
+          type: number
+          nullable: true
+          description: Capture longitude (optional)
+
+    ChunkedUploadResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [progressToken, chunksReceived, totalChunks, complete]
+          properties:
+            progressToken:
+              type: string
+              description: Token to track upload progress (message ID)
+            chunksReceived:
+              type: integer
+              description: Number of chunks received so far
+            totalChunks:
+              type: integer
+              description: Total chunks expected
+            complete:
+              type: boolean
+              description: Whether all chunks have been received
+
+    PartialResponseRequest:
+      type: object
+      required: [instanceId, inspectorId, deviceId, responses, savedAt, completionPercent]
+      properties:
+        instanceId:
+          type: string
+          format: uuid
+          description: Checklist instance identifier
+        inspectorId:
+          type: string
+          format: uuid
+          description: Inspector user identifier
+        deviceId:
+          type: string
+          minLength: 1
+          description: Unique device identifier
+        responses:
+          type: object
+          additionalProperties:
+            type: object
+            required: [value, answeredAt, deviceTimestamp]
+            properties:
+              value:
+                description: The response value (type depends on question field type)
+              answeredAt:
+                type: string
+                description: ISO 8601 timestamp of when the response was given
+              deviceTimestamp:
+                type: number
+                description: Unix epoch milliseconds from device clock
+              gpsLatitude:
+                type: number
+                nullable: true
+                description: GPS latitude at time of response (optional)
+              gpsLongitude:
+                type: number
+                nullable: true
+                description: GPS longitude at time of response (optional)
+          description: Map of questionId to response data
+        savedAt:
+          type: string
+          description: ISO 8601 timestamp of when the partial save was triggered
+        completionPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Percentage of checklist completed (0-100)
+
+    PartialResponseResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accepted, instanceId, savedAt, completionPercent, messageId]
+          properties:
+            accepted:
+              type: boolean
+              description: Whether the partial save was accepted
+            instanceId:
+              type: string
+              format: uuid
+              description: Checklist instance identifier
+            savedAt:
+              type: string
+              description: Echoed savedAt timestamp from the request
+            completionPercent:
+              type: number
+              description: Echoed completion percentage
+            messageId:
+              type: string
+              description: Queue message ID for tracking
+
+    SyncPackageManifestResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [packageId, generatedAt, totalSizeBytes, items]
+          properties:
+            packageId:
+              type: string
+              format: uuid
+              description: Sync package identifier
+            generatedAt:
+              type: string
+              format: date-time
+              description: When the package was generated
+            totalSizeBytes:
+              type: integer
+              description: Total size of the package in bytes
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    description: Item type (inspection, checklist, entity, map_tile)
+                  id:
+                    type: string
+                    format: uuid
+                  sizeBytes:
+                    type: integer
+              description: List of items included in the package
