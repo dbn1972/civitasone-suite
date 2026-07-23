@@ -74,7 +74,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   // so each encapsulated child inherits it at load time.
   registerSchemaErrorHandler(app, HttpError);
 
-  // Module routes will be registered here in subsequent tasks.
+  // Module routes
+  const { registerCapaRoutes } = await import("./modules/capa/routes.js");
+  const { registerEnforcementRoutes } = await import("./modules/enforcement/routes.js");
+  const { registerLicenceRoutes } = await import("./modules/licence/routes.js");
+  const { registerSurveyRoutes } = await import("./modules/survey/routes.js");
+  const { registerTelemetryRoutes } = await import("./modules/telemetry/routes.js");
+
+  await app.register(registerCapaRoutes);
+  await app.register(registerEnforcementRoutes);
+  await app.register(registerLicenceRoutes);
+  await app.register(registerSurveyRoutes);
+  await app.register(registerTelemetryRoutes);
 
   return app;
 }

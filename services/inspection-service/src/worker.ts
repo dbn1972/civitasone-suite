@@ -28,6 +28,11 @@ import { registerSyncConsumers } from "./modules/sync/consumer.js";
 import { registerEvidenceConsumers } from "./modules/evidence/consumer.js";
 import { registerExecutionConsumers } from "./modules/execution/consumer.js";
 import { registerFindingsConsumers } from "./modules/findings/consumer.js";
+import { registerCapaConsumers } from "./modules/capa/consumer.js";
+import { registerEnforcementConsumers } from "./modules/enforcement/consumer.js";
+import { registerLicenceConsumers } from "./modules/licence/consumer.js";
+import { registerSurveyConsumers } from "./modules/survey/consumer.js";
+import { registerTelemetryConsumers } from "./modules/telemetry/consumer.js";
 
 registerUniverseConsumers(queue);
 registerRiskConsumers(queue);
@@ -38,6 +43,11 @@ registerSyncConsumers(queue);
 registerEvidenceConsumers(queue);
 registerExecutionConsumers(queue);
 registerFindingsConsumers(queue);
+registerCapaConsumers(queue);
+registerEnforcementConsumers(queue);
+registerLicenceConsumers(queue);
+registerSurveyConsumers(queue);
+registerTelemetryConsumers(queue);
 
 // ── DLQ handling ─────────────────────────────────────────────────────────────
 // Subscribe to DLQ topics for observability. Messages that exceed max retries

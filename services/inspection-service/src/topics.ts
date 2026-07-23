@@ -100,6 +100,72 @@ export const COMMANDS = {
   complianceNoticeCreate: "inspection.compliance_notice.create",
   /** payload: { findingId, verificationEvidenceIds?, verifierNotes? } — transitions finding to closed with verification */
   findingVerifyResolved: "inspection.finding.verify_resolved",
+
+  // ── CAPA (SVC-106) ───────────────────────────────────────────────────────
+  /** payload: { findingId, type: "corrective"|"preventive", description, ownerId?, dueDate? } */
+  capaCreate: "inspection.capa.create",
+  /** payload: { capaId, version, ownerId?, dueDate?, description? } */
+  capaUpdate: "inspection.capa.update",
+  /** payload: { capaId, evidenceOfClosure: unknown[] } — mark CAPA complete with closure evidence */
+  capaComplete: "inspection.capa.complete",
+  /** payload: { capaId, effectivenessVerified: boolean } — verify effectiveness (maker-checker) */
+  capaVerify: "inspection.capa.verify",
+  /** payload: { capaId } — trigger re-inspection based on CAPA */
+  capaTriggerReinspection: "inspection.capa.trigger_reinspection",
+
+  // ── Enforcement (SVC-107) ────────────────────────────────────────────────
+  /** payload: { provisionId, effectiveFrom, effectiveTo?, amount (bigint string), currency?, description? } */
+  penaltyRateCreate: "inspection.penalty_rate.create",
+  /** payload: { findingId, entityId, issuedTo, responseDeadline } */
+  showCauseCreate: "inspection.show_cause.create",
+  /** payload: { showCauseId, responseText } */
+  showCauseRespond: "inspection.show_cause.respond",
+  /** payload: { findingId, entityId, showCauseId?, penaltyRateId?, amount (bigint string), currency? } */
+  penaltyOrderCreate: "inspection.penalty_order.create",
+  /** payload: { penaltyOrderId } — issue order (checker ≠ maker enforced) */
+  penaltyOrderIssue: "inspection.penalty_order.issue",
+  /** payload: { penaltyOrderId } — refer to legal-service for prosecution */
+  prosecutionRefer: "inspection.prosecution.refer",
+
+  // ── Licence (SVC-108) ────────────────────────────────────────────────────
+  /** payload: { entityId, licenceType, licenceNumber, validFrom, validTo, conditions?, renewalFee?, currency? } */
+  licenceCreate: "inspection.licence.create",
+  /** payload: { licenceId, version, licenceType?, licenceNumber?, validFrom?, validTo?, conditions?, renewalFee? } */
+  licenceUpdate: "inspection.licence.update",
+  /** payload: { licenceId } — initiate licence renewal */
+  licenceRenew: "inspection.licence.renew",
+  /** payload: { licenceId } — suspend licence */
+  licenceSuspend: "inspection.licence.suspend",
+  /** payload: { licenceId } — revoke licence */
+  licenceRevoke: "inspection.licence.revoke",
+
+  // ── Survey & Sampling (SVC-104) ─────────────────────────────────────────
+  /** payload: { title, description?, targetEntityType, questionnaire, samplingMethod, sampleSizePercent, stratificationField? } */
+  surveyCreate: "inspection.survey.create",
+  /** payload: { surveyId, version, title?, description?, questionnaire?, samplingMethod?, sampleSizePercent?, stratificationField? } */
+  surveyUpdate: "inspection.survey.update",
+  /** payload: { surveyId, entityIds, entities?, seed } — activate survey and select sample */
+  surveyActivate: "inspection.survey.activate",
+  /** payload: { surveyId } — close survey */
+  surveyClose: "inspection.survey.close",
+  /** payload: { surveyId, entityId, inspectorId, answers, capturedAt, deviceId?, syncUploadId? } */
+  surveyResponseSubmit: "inspection.survey_response.submit",
+  /** payload: { surveyId } — trigger aggregation computation */
+  surveyAggregate: "inspection.survey.aggregate",
+
+  // ── Telemetry / IoT (SVC-110) ───────────────────────────────────────────
+  /** payload: { deviceType, deviceIdentifier, name, entityId?, latitude?, longitude?, metadata? } */
+  deviceCreate: "inspection.device.create",
+  /** payload: { deviceId, version, name?, entityId?, latitude?, longitude?, status?, metadata? } */
+  deviceUpdate: "inspection.device.update",
+  /** payload: { deviceId, readingType, value, unit, latitude?, longitude?, capturedAt, metadata? } — high-throughput */
+  readingIngest: "inspection.reading.ingest",
+  /** payload: { deviceType, readingType, operator, thresholdValue, severity } */
+  alertRuleCreate: "inspection.alert_rule.create",
+  /** payload: { alertId } — acknowledge alert */
+  alertAcknowledge: "inspection.alert.acknowledge",
+  /** payload: { alertId, findingDescription? } — create finding from alert */
+  alertCreateFinding: "inspection.alert.create_finding",
 } as const;
 
 /**
@@ -151,6 +217,62 @@ export const EVENTS = {
   // ── Sync ─────────────────────────────────────────────────────────────────
   /** payload: { packageId, inspectorId, inspectionIds, generatedAt, sizeBytes? } — fires when offline package is ready for download */
   syncPackageReady: "inspection.sync_package.ready",
+
+  // ── CAPA (SVC-106) ───────────────────────────────────────────────────────
+  /** payload: { capaId, findingId, type, ownerId } */
+  capaCreated: "inspection.capa.created",
+  /** payload: { capaId, completedBy } */
+  capaCompleted: "inspection.capa.completed",
+  /** payload: { capaId, verifiedBy, effectivenessVerified } */
+  capaVerified: "inspection.capa.verified",
+  /** payload: { capaId, findingId } */
+  capaReinspectionTriggered: "inspection.capa.reinspection_triggered",
+
+  // ── Enforcement (SVC-107) ────────────────────────────────────────────────
+  /** payload: { showCauseId, findingId, entityId, issuedTo } */
+  showCauseIssued: "inspection.show_cause.issued",
+  /** payload: { penaltyOrderId, findingId, entityId, amount } */
+  penaltyOrderCreated: "inspection.penalty_order.created",
+  /** payload: { penaltyOrderId, issuedBy, amount } */
+  penaltyOrderIssued: "inspection.penalty_order.issued",
+  /** payload: { referralId, penaltyOrderId, entityId } */
+  prosecutionReferred: "inspection.prosecution.referred",
+
+  // ── Licence (SVC-108) ────────────────────────────────────────────────────
+  /** payload: { licenceId, entityId, licenceType, licenceNumber } */
+  licenceRegistered: "inspection.licence.registered",
+  /** payload: { licenceId, entityId } */
+  licenceRenewalInitiated: "inspection.licence.renewal_initiated",
+  /** payload: { licenceId, entityId } */
+  licenceSuspended: "inspection.licence.suspended",
+  /** payload: { licenceId, entityId } */
+  licenceRevoked: "inspection.licence.revoked",
+
+  // ── Survey & Sampling (SVC-104) ─────────────────────────────────────────
+  /** payload: { surveyId, title, targetEntityType, samplingMethod } */
+  surveyCreated: "inspection.survey.created",
+  /** payload: { surveyId, totalPopulation, sampleSize, samplingMethod } */
+  surveyActivated: "inspection.survey.activated",
+  /** payload: { surveyId } */
+  surveyClosed: "inspection.survey.closed",
+  /** payload: { responseId, surveyId, entityId, inspectorId } */
+  surveyResponseSubmitted: "inspection.survey_response.submitted",
+  /** payload: { aggregationId, surveyId, responseCount } */
+  surveyAggregated: "inspection.survey.aggregated",
+
+  // ── Telemetry / IoT (SVC-110) ───────────────────────────────────────────
+  /** payload: { deviceId, deviceType, deviceIdentifier, name } */
+  deviceRegistered: "inspection.device.registered",
+  /** payload: { readingId, deviceId, readingType, value, unit } */
+  readingIngested: "inspection.reading.ingested",
+  /** payload: { alertId, deviceId, readingId, alertType, severity, thresholdValue, actualValue } */
+  alertTriggered: "inspection.alert.triggered",
+  /** payload: { alertId, acknowledgedBy } */
+  alertAcknowledged: "inspection.alert.acknowledged",
+  /** payload: { alertId, deviceId, findingDescription? } */
+  alertFindingCreated: "inspection.alert.finding_created",
+  /** payload: { ruleId, deviceType, readingType, operator, thresholdValue, severity } */
+  alertRuleCreated: "inspection.alert_rule.created",
 } as const;
 
 /**
