@@ -289,6 +289,12 @@ module.exports = {
     worker("meeting",      "meeting_svc",      "civitas_meeting"),
     worker("court",        "court_svc",        "civitas_court"),
     worker("visitor",      "visitor_svc",      "civitas_visitor"),
+    worker("inspection",   "inspection_svc",   "civitas_inspection", {
+      S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
+      S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
+      S3_REGION: process.env.S3_REGION ?? "ap-south-1",
+      HRMS_SERVICE_URL: "http://127.0.0.1:3012",
+    }),
 
     // ── Infrastructure services ────────────────────────────────────────────────
     {
@@ -314,6 +320,12 @@ module.exports = {
     svc("meeting",      3033, "meeting_svc",      "civitas_meeting"),
     svc("court",        3034, "court_svc",        "civitas_court"),
     svc("visitor",      3035, "visitor_svc",      "civitas_visitor"),
+    svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
+      S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
+      S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
+      S3_REGION: process.env.S3_REGION ?? "ap-south-1",
+      HRMS_SERVICE_URL: "http://127.0.0.1:3012",
+    }),
     svc("location",     4012, "location_svc",     "civitas_location"),
 
     // ── Gateway ────────────────────────────────────────────────────────────────

@@ -47,6 +47,7 @@ const ROUTE_TO_MODULE: Record<string, string> = {
   court: "court",
   courts: "court",
   visitor: "visitor",
+  inspection: "inspection",
   billing: "billing",
   inventory: "inventory",
   reports: "reports",

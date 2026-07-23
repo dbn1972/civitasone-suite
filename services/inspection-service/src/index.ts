@@ -9,8 +9,8 @@
 import { buildApp } from "./app.js";
 import { sqlClient } from "./shared/db.js";
 
-const PORT = Number(process.env.PORT ?? 3036);
-const HOST = process.env.HOST ?? "0.0.0.0";
+const PORT = Number(process.env.PORT ?? 3037);
+const HOST = process.env.BIND_HOST ?? process.env.HOST ?? "0.0.0.0";
 
 const app = await buildApp();
 

@@ -347,6 +347,15 @@ describe("Assignment consumers", () => {
       deviceId: "device-001", timestamp: "2025-06-15T10:00:00Z",
     }));
   });
+
+  it("handles employeeLeaveUpdated (consumed event from hrms-service)", async () => {
+    const handler = handlers.get("hrms.leave.updated");
+    expect(handler).toBeDefined();
+    await handler!(makeMsg("hrms.leave.updated", {
+      employeeId: USER_ID, leaveType: "casual", startDate: "2025-07-01",
+      endDate: "2025-07-03", status: "approved",
+    }));
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
