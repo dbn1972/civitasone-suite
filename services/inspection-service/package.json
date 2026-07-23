@@ -1,0 +1,46 @@
+{
+  "name": "@civitasone/inspection-service",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "worker": "tsx src/worker.ts",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.645.0",
+    "@aws-sdk/s3-request-presigner": "3.645.0",
+    "@civitasone/auth": "workspace:*",
+    "@civitasone/cache": "workspace:*",
+    "@civitasone/circuit-breaker": "workspace:*",
+    "@civitasone/db": "workspace:*",
+    "@civitasone/events": "workspace:*",
+    "@civitasone/observability": "workspace:*",
+    "@civitasone/outbox": "workspace:*",
+    "@civitasone/queue": "workspace:*",
+    "@civitasone/schemas": "workspace:*",
+    "@civitasone/types": "workspace:*",
+    "@fastify/cors": "9.0.1",
+    "drizzle-orm": "0.30.10",
+    "fastify": "4.29.1",
+    "ioredis": "5.11.1",
+    "pino": "8.21.0",
+    "postgres": "3.4.9",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "@vitest/coverage-v8": "2.1.9",
+    "fast-check": "3.23.2",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vitest": "2.1.9"
+  }
+}
