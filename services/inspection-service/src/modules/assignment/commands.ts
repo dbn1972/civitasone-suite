@@ -88,3 +88,33 @@ export async function publishGeoAttendanceMark(
   await queue.publish(COMMANDS.geoAttendanceMark, msg);
   return { accepted: true, messageId: msg.messageId };
 }
+
+// ── Tour Plan Approval Payloads (SVC-109) ────────────────────────────────────
+
+export interface TourPlanSubmitPayload {
+  tourPlanId: string;
+}
+
+export interface TourPlanApprovePayload {
+  tourPlanId: string;
+}
+
+// ── Tour Plan Approval Publish Functions (SVC-109) ───────────────────────────
+
+export async function publishTourPlanSubmit(
+  payload: TourPlanSubmitPayload,
+  ctx: RequestContext,
+): Promise<{ accepted: true; messageId: string }> {
+  const msg = envelope(ctx, COMMANDS.tourPlanSubmit, { ...payload, tenantId: ctx.tenantId });
+  await queue.publish(COMMANDS.tourPlanSubmit, msg);
+  return { accepted: true, messageId: msg.messageId };
+}
+
+export async function publishTourPlanApprove(
+  payload: TourPlanApprovePayload,
+  ctx: RequestContext,
+): Promise<{ accepted: true; messageId: string }> {
+  const msg = envelope(ctx, COMMANDS.tourPlanApprove, { ...payload, tenantId: ctx.tenantId });
+  await queue.publish(COMMANDS.tourPlanApprove, msg);
+  return { accepted: true, messageId: msg.messageId };
+}

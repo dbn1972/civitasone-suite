@@ -60,6 +60,12 @@ export const COMMANDS = {
   inspectorAssign: "inspection.inspector.assign",
   /** payload: { inspectorId, periodStart, periodEnd, maxDailyInspections? } — groups inspections by geo proximity, respects leave */
   tourPlanGenerate: "inspection.tour_plan.generate",
+  /** payload: { tourPlanId } — inspector submits tour plan for supervisory approval (SVC-109) */
+  tourPlanSubmit: "inspection.tour_plan.submit",
+  /** payload: { tourPlanId } — supervising officer approves a submitted tour plan (SVC-109) */
+  tourPlanApprove: "inspection.tour_plan.approve",
+  /** payload: { employeeId, claimType: "ta_da", amountMinor, description, tourPlanId, inspectionIds, travelDate, geoAttendanceId } — published to hrms-service (SVC-109) */
+  tadaClaimCreate: "inspection.tada_claim.create",
   /** payload: { inspectionId, inspectorId, latitude, longitude, deviceId, timestamp } — validated against entity geofence */
   geoAttendanceMark: "inspection.geo_attendance.mark",
 
@@ -191,6 +197,12 @@ export const EVENTS = {
   // ── Assignment ───────────────────────────────────────────────────────────
   /** payload: { inspectionId, inspectorId, assignedBy, competencies } — fires after successful assignment (no conflicts) */
   inspectorAssigned: "inspection.inspector.assigned",
+  /** payload: { tourPlanId, inspectorId, submittedBy, submittedAt } — fires when inspector submits tour plan for approval (SVC-109) */
+  tourPlanSubmitted: "inspection.tour_plan.submitted",
+  /** payload: { tourPlanId, inspectorId, approvedBy, approvedAt } — fires when supervising officer approves tour plan (SVC-109) */
+  tourPlanApproved: "inspection.tour_plan.approved",
+  /** payload: { claimId, employeeId, tourPlanId, travelDate, inspectionIds } — fires after TA/DA claim event published to hrms (SVC-109) */
+  tadaClaimPublished: "inspection.tada_claim.published",
 
   // ── Execution ────────────────────────────────────────────────────────────
   /** payload: { inspectionId, entityId, inspectorId, startedAt, geoLatitude?, geoLongitude? } — fires on scheduled → in_progress */

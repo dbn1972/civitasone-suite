@@ -4,7 +4,7 @@
  *
  * No side effects, no DB access, no I/O. Fully deterministic and property-testable.
  *
- * _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 4.8_
+ * _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 4.8, SVC-109 (tour plan approval)_
  */
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -194,4 +194,77 @@ export function validateGeofence(
     locationMismatch: distanceMeters > radius,
     distanceMeters: Math.round(distanceMeters),
   };
+}
+
+
+// ── Tour Plan States (SVC-109) ────────────────────────────────────────────────
+
+/**
+ * Tour plan lifecycle states.
+ * - draft: initially created, editable by inspector
+ * - submitted: inspector submits for supervisory approval
+ * - approved: supervising officer approves
+ * - rejected: supervising officer rejects (can be revised back to draft)
+ */
+export const TOUR_PLAN_STATES = ["draft", "submitted", "approved", "rejected"] as const;
+export type TourPlanState = typeof TOUR_PLAN_STATES[number];
+
+/**
+ * Allowed state transitions for tour plans.
+ * - draft → submitted (inspector submits)
+ * - submitted → approved (supervisor approves) or rejected (supervisor rejects)
+ * - rejected → draft (inspector revises)
+ * - approved → (terminal state, no further transitions)
+ */
+export const TOUR_PLAN_TRANSITIONS: Record<TourPlanState, readonly TourPlanState[]> = {
+  draft: ["submitted"],
+  submitted: ["approved", "rejected"],
+  approved: [],
+  rejected: ["draft"],
+};
+
+/**
+ * Assert that a tour plan state transition is valid per the state machine.
+ *
+ * @param current - The current state of the tour plan.
+ * @param target - The desired target state.
+ * @returns `true` if the transition is allowed.
+ * @throws {DomainError} with code `INVALID_TOUR_PLAN_TRANSITION` if disallowed.
+ *
+ * _Validates: SVC-109 Tour Plan Approval Workflow_
+ */
+export function assertValidTourPlanTransition(current: TourPlanState, target: TourPlanState): true {
+  const allowedTargets = TOUR_PLAN_TRANSITIONS[current];
+
+  if (!allowedTargets.includes(target)) {
+    throw new DomainError(
+      "INVALID_TOUR_PLAN_TRANSITION",
+      `Cannot transition tour plan from '${current}' to '${target}'. Allowed transitions from '${current}': ${allowedTargets.length > 0 ? allowedTargets.join(", ") : "none (terminal state)"}`,
+      { current, target, allowed: [...allowedTargets] },
+    );
+  }
+
+  return true;
+}
+
+/**
+ * Enforce maker-checker on tour plan approval: the approver must not be the creator.
+ *
+ * @param creatorId - The user who created/submitted the tour plan.
+ * @param approverId - The user attempting to approve.
+ * @returns `true` if maker ≠ checker.
+ * @throws {DomainError} with code `MAKER_CHECKER_VIOLATION` if same person.
+ *
+ * _Validates: SVC-109 Maker-Checker on Approval_
+ */
+export function assertMakerCheckerApproval(creatorId: string, approverId: string): true {
+  if (creatorId === approverId) {
+    throw new DomainError(
+      "MAKER_CHECKER_VIOLATION",
+      "Tour plan cannot be approved by the same person who created/submitted it",
+      { creatorId, approverId },
+    );
+  }
+
+  return true;
 }
