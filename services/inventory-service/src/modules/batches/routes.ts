@@ -8,6 +8,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, registerErrorHandler, HttpError } from "../../shared/context.js";
 import {
   createBatchBody, updateBatchBody, createSerialBody, issueFromBatchBody,
+  quarantineBatchBody, recallBatchBody,
   batchQueryParams, serialQueryParams, idParam,
 } from "./validators.js";
 import * as commands from "./commands.js";
@@ -87,6 +88,23 @@ export async function batchRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = serialQueryParams.parse(req.query);
     return reply.send(await queries.listSerials(ctx.tenantId, q));
+  });
+
+  // ── Quarantine & Recall (SVC-055) ────────────────────────────────────────
+  app.patch("/v1/inventory/batches/:id/quarantine", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["inventory_manager", "inventory_admin", "qc_inspector", "super_admin"]);
+    const { id } = idParam.parse(req.params);
+    const body = quarantineBatchBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.quarantineBatch(ctx, id, body.reason));
+  });
+
+  app.post("/v1/inventory/batches/:id/recall", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["inventory_manager", "inventory_admin", "super_admin"]);
+    const { id } = idParam.parse(req.params);
+    const body = recallBatchBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recallBatch(ctx, id, body.reason, body.severity));
   });
 
   registerErrorHandler(app);

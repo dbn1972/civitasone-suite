@@ -10,6 +10,7 @@ import { registerDepreciationConsumers } from "./modules/depreciation/consumer.j
 import { registerMaintenanceConsumers }  from "./modules/maintenance/consumer.js";
 import { registerInsuranceConsumers }    from "./modules/insurance/consumer.js";
 import { registerEnterpriseConsumers }   from "./modules/enterprise/consumer.js";
+import { registerCondemnationConsumers } from "./modules/condemnation/consumer.js";
 import { startDepScheduler }            from "./modules/depreciation/scheduler.js";
 
 const log = pino({ name: "asset-worker" });
@@ -21,6 +22,7 @@ registerDepreciationConsumers(queue);
 registerMaintenanceConsumers(queue);
 registerInsuranceConsumers(queue);
 registerEnterpriseConsumers(queue);
+registerCondemnationConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

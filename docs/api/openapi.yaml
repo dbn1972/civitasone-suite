@@ -36,6 +36,8 @@ tags:
     description: Requests, RTI, grievances
   - name: Stock
     description: Items, barcode lookup, goods receipt
+  - name: Inventory
+    description: Batch management, quarantine, recall
   - name: Helpdesk
     description: Tickets, SLA, escalation
   - name: Audit
@@ -3458,6 +3460,114 @@ paths:
           description: Missing or invalid bearer token
         "403":
           description: Insufficient role — requires store_keeper or inventory_admin
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Inventory Service — Batch Quarantine & Recall (SVC-055)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/inventory/batches/{id}/quarantine:
+    patch:
+      operationId: quarantineBatch
+      tags: [Inventory]
+      summary: Quarantine a batch
+      description: |
+        Places a batch into quarantine status, preventing it from being issued
+        or consumed until further review. Used when quality concerns are raised.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Reason for quarantining the batch
+      responses:
+        "202":
+          description: Quarantine command accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires inventory_manager, inventory_admin, or qc_inspector
+        "404":
+          description: Batch not found
+      security:
+        - bearerAuth: []
+
+  /v1/inventory/batches/{id}/recall:
+    post:
+      operationId: recallBatch
+      tags: [Inventory]
+      summary: Recall a batch
+      description: |
+        Initiates a product recall for a batch. Records the severity level
+        and triggers downstream notifications for affected parties.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, severity]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Reason for the recall
+                severity:
+                  type: string
+                  enum: [low, medium, high, critical]
+                  description: Severity level of the recall
+      responses:
+        "202":
+          description: Recall command accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires inventory_manager or inventory_admin
+        "404":
+          description: Batch not found
       security:
         - bearerAuth: []
 

@@ -39,3 +39,27 @@ export async function issueFromBatch(ctx: RequestContext, body: IssueFromBatchBo
   await publish(COMMANDS.batchIssue, ctx, id, { id, tenantId: ctx.tenantId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * Quarantine a batch — marks it unavailable for issue pending quality review.
+ * Used when a defect is discovered or shelf life is approaching expiry.
+ */
+export async function quarantineBatch(ctx: RequestContext, batchId: string, reason: string): Promise<Accepted> {
+  await publish(COMMANDS.batchQuarantine, ctx, batchId, {
+    id: batchId, tenantId: ctx.tenantId, reason,
+  });
+  return { id: batchId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * Recall a batch — traces all issued locations and generates recall notices.
+ * The consumer identifies all movement_lines that reference this batch
+ * and emits notifications to the receiving stores/employees.
+ */
+export async function recallBatch(ctx: RequestContext, batchId: string, reason: string, severity: string): Promise<Accepted> {
+  const recallId = randomUUID();
+  await publish(COMMANDS.batchRecall, ctx, recallId, {
+    id: recallId, batchId, tenantId: ctx.tenantId, reason, severity,
+  });
+  return { id: recallId, status: "accepted", correlationId: ctx.correlationId };
+}
