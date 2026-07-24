@@ -52,18 +52,18 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
   });
 
   it("submit records the maker", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/submit`, headers: hdr(tok(TENANT_A, MAKER)) });
+    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/submit`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
     expect(res.statusCode).toBe(200);
   });
 
   it("MAKER-CHECKER: publish by the submitter is rejected 403", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/publish`, headers: hdr(tok(TENANT_A, MAKER)) });
+    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/publish`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("MAKER_CHECKER");
   });
 
   it("publish by a different checker succeeds + emits outbox event", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/publish`, headers: hdr(tok(TENANT_A, CHECKER)) });
+    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/publish`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe("published");
     const topics = await outboxTopics();
@@ -71,7 +71,7 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
   });
 
   it("published rule set is immutable (re-publish 409)", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/publish`, headers: hdr(tok(TENANT_A, CHECKER)) });
+    const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/publish`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
     expect(res.statusCode).toBe(409);
   });
 
@@ -203,13 +203,13 @@ describe("SVC-086 issuance maker-checker, gapless numbering, public verify", () 
 
   it("MAKER-CHECKER: approve by requester rejected 403", async () => {
     certId1 = await requestCert();
-    const res = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId1}/approve`, headers: hdr(tok(TENANT_A, MAKER)) });
+    const res = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId1}/approve`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("MAKER_CHECKER");
   });
 
   it("approve by checker allocates cert no + verify token + signature; gapless sequence", async () => {
-    const a1 = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId1}/approve`, headers: hdr(tok(TENANT_A, CHECKER)) });
+    const a1 = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId1}/approve`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
     expect(a1.statusCode).toBe(200);
     const b1 = a1.json();
     expect(b1.certNo).toMatch(/^BIRTH-\d{4}-\d{6}$/);
@@ -218,7 +218,7 @@ describe("SVC-086 issuance maker-checker, gapless numbering, public verify", () 
     token1 = b1.verifyToken;
 
     certId2 = await requestCert();
-    const a2 = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId2}/approve`, headers: hdr(tok(TENANT_A, CHECKER)) });
+    const a2 = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId2}/approve`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
     const seq1 = Number(b1.certNo.split("-")[2]);
     const seq2 = Number(a2.json().certNo.split("-")[2]);
     expect(seq2).toBe(seq1 + 1); // gapless, consecutive
