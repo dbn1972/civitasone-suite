@@ -93,6 +93,7 @@ export const COMMANDS = {
 } as const;
 
 export const EVENTS = {
+  certificateIssued: "assessment.certificate.issued",
   employeeCreated:   "hrms.employee.created",
   employeeSeparated: "hrms.employee.separated",
   leaveApplied:      "hrms.leave.applied",

@@ -22,6 +22,7 @@ import { schema as disciplinaryModule } from "../modules/disciplinary/schema.js"
 import { schema as reservationModule }  from "../modules/reservation/schema.js";
 import { schema as medicalModule }      from "../modules/medical/schema.js";
 import { schema as boardIntakeModule } from "../modules/board-intake/schema.js";
+import { schema as assessmentModule } from "../modules/assessment/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -42,6 +43,7 @@ const SCHEMA = {
   ...reservationModule,
   ...medicalModule,
   ...boardIntakeModule,
+  ...assessmentModule,
   ...outboxSchema,
 };
 
