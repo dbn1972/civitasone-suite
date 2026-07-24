@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import {
   idParam, uploadBody, digilockerFetchBody, verifyBody, resubmitBody,
   checklistQuery, applicationQuery,
@@ -16,14 +16,18 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = uploadBody.parse(req.body);
-    return reply.code(201).send(await commands.upload(ctx, body));
+    // IDOR: constrain citizenId to the actor unless an officer specifies another.
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return reply.code(201).send(await commands.upload(ctx, { ...body, citizenId }));
   });
 
   app.post("/v1/citizen/documents/digilocker-fetch", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = digilockerFetchBody.parse(req.body);
-    return reply.code(201).send(await commands.digilockerFetchIntake(ctx, body));
+    // IDOR: constrain citizenId to the actor unless an officer specifies another.
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return reply.code(201).send(await commands.digilockerFetchIntake(ctx, { ...body, citizenId }));
   });
 
   app.get("/v1/citizen/documents/checklist", async (req, reply) => {
@@ -43,7 +47,12 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { applicationId } = applicationQuery.parse(req.query);
-    return reply.send({ data: await queries.listByApplication(ctx.tenantId, applicationId) });
+    // IDOR: a citizen may only list documents they own; officers see all for the app.
+    if (isOfficer(ctx)) {
+      return reply.send({ data: await queries.listByApplication(ctx.tenantId, applicationId) });
+    }
+    const scopedCitizenId = resolveCitizenId(ctx, undefined);
+    return reply.send({ data: await queries.listByApplicationForCitizen(ctx.tenantId, applicationId, scopedCitizenId) });
   });
 
   app.get("/v1/citizen/documents/:id", async (req, reply) => {
@@ -52,6 +61,8 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const sub = await queries.getSubmission(ctx.tenantId, id);
     if (!sub) throw new HttpError(404, "NOT_FOUND", "document submission not found");
+    // IDOR: a citizen may only read their own submission (officers bypass).
+    assertOwnership(ctx, sub.citizenId);
     return reply.send(sub);
   });
 

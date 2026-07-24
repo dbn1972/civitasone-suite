@@ -48,9 +48,22 @@ function issuanceSecret(env: NodeJS.ProcessEnv = process.env): string {
   return env.CITIZEN_ISSUANCE_SECRET ?? env.CITIZEN_PII_KEY ?? "civitasone-issuance-dev-secret";
 }
 
-/** HMAC-SHA256 signature (seal) over the payload hash. */
+/**
+ * Derive a DISTINCT seal key rather than sealing with the raw secret. When only
+ * CITIZEN_PII_KEY is configured, the actual HMAC key is a one-way derivative of
+ * it (domain-separated by "citizen-issuance-seal-v1"), so the seal key is never
+ * literally the PII encryption key. Deterministic: sign + verify both derive the
+ * same key, so a seal produced here always verifies here. (No persisted seals
+ * predate this change — the SVC-086 issuance tables ship on this same branch —
+ * so no v1/v2 compatibility gate is required.)
+ */
+function sealKey(env: NodeJS.ProcessEnv = process.env): string {
+  return createHmac("sha256", issuanceSecret(env)).update("citizen-issuance-seal-v1").digest("hex");
+}
+
+/** HMAC-SHA256 signature (seal) over the payload hash, keyed by the derived seal key. */
 export function signPayloadHash(payloadHash: string, env: NodeJS.ProcessEnv = process.env): string {
-  return createHmac("sha256", issuanceSecret(env)).update(payloadHash).digest("hex");
+  return createHmac("sha256", sealKey(env)).update(payloadHash).digest("hex");
 }
 
 /** Verify a payload against a stored hash + signature (used by the public verify). */

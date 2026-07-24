@@ -161,6 +161,28 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
     expect(topics).toContain("citizen.receipt.issued");
   });
 
+  it("concurrent offline receipts allocate unique, consecutive numbers (no dup, no 500)", async () => {
+    const N = 6;
+    const results = await Promise.all(
+      Array.from({ length: N }, () =>
+        app.inject({
+          method: "POST", url: "/v1/citizen/payments/offline", headers: hdr(tok(TENANT_A, MAKER)),
+          payload: { applicationId: APP_ID, scheduleId, subject: {} },
+        }),
+      ),
+    );
+    for (const r of results) {
+      expect(r.statusCode).toBe(201);
+      expect(r.json().receiptNo).toMatch(/^RCT-\d{4}-\d{8}$/);
+    }
+    const nos = results.map((r) => r.json().receiptNo as string);
+    // No duplicate receipt numbers under concurrency (the racy count(*)+1 could dup).
+    expect(new Set(nos).size).toBe(N);
+    // Gapless + consecutive: the atomic counter hands out a contiguous run.
+    const seqs = nos.map((n) => Number(n.split("-")[2])).sort((a, b) => a - b);
+    for (let i = 1; i < seqs.length; i++) expect(seqs[i]).toBe(seqs[i - 1] + 1);
+  });
+
   it("MAKER-CHECKER refund: approve by requester rejected, by other approved", async () => {
     const reqRes = await app.inject({
       method: "POST", url: `/v1/citizen/payments/${paymentId}/refunds`, headers: hdr(tok(TENANT_A, MAKER)),

@@ -3,7 +3,6 @@ import type { RequestContext } from "@civitasone/types";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
-import { queue } from "../../shared/infra.js";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -112,19 +111,21 @@ export async function assistedEnrol(ctx: RequestContext, matchId: string, body: 
     if (match.enrolledApplicationId) throw new HttpError(409, "ALREADY_ENROLLED", "match already enrolled");
     const appId = randomUUID();
     await repo.updateMatch(tx, matchId, ctx.tenantId, { enrolledApplicationId: appId, updatedBy: ctx.actorId });
-    await audit(tx, ctx, "assisted_enrol", matchId);
-    return { appId, match };
-  }).then(async ({ appId, match }) => {
-    // Submit the pre-filled application via the same command path citizens use.
-    await queue.publish(COMMANDS.applicationSubmit, {
-      messageId: appId, type: COMMANDS.applicationSubmit,
-      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    // FIX: emit the downstream application-submit command through the transactional
+    // outbox in the SAME tx as the enrolled-guard update, so the guard and the
+    // submit command commit atomically (no dual-write hole — a retry after the
+    // guard committed but before the submit published no longer 409s into the void).
+    // The relay dispatches command topics (worker.ts startRelay → registerApplicationConsumers).
+    await enqueue(tx, {
+      topic: COMMANDS.applicationSubmit, eventType: COMMANDS.applicationSubmit,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
       payload: {
         id: appId, tenantId: ctx.tenantId, refNo: `APP-${Date.now()}`,
         citizenId: match.citizenId, serviceId: match.serviceId,
         serviceType: body.serviceType ?? "assisted-enrolment", documentTypes: [],
       },
     });
+    await audit(tx, ctx, "assisted_enrol", matchId);
     return appId;
   });
   return { applicationId, status: "accepted" };

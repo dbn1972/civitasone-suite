@@ -1,7 +1,7 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
-  feeSchedules, feePayments, feeRefunds,
+  feeSchedules, feePayments, feeRefunds, feeReceiptCounters,
   type FeeScheduleRow, type FeeScheduleInsert,
   type PaymentRow, type PaymentInsert, type RefundRow, type RefundInsert,
 } from "./schema.js";
@@ -55,15 +55,22 @@ export async function listPaymentsByApplication(tenantId: string, applicationId:
     .orderBy(desc(feePayments.createdAt)).limit(limit));
 }
 
-/** Count receipts already issued this year (for a monotonically increasing receipt no). */
-export async function countReceiptsForYear(tx: Writer, tenantId: string, year: number): Promise<number> {
-  const rows = await (tx as typeof db).select({ n: sql<number>`count(*)::int` }).from(feePayments)
-    .where(and(
-      eq(feePayments.tenantId, tenantId),
-      sql`${feePayments.receiptNo} IS NOT NULL`,
-      sql`extract(year from ${feePayments.receiptIssuedAt}) = ${year}`,
-    ));
-  return rows[0]?.n ?? 0;
+/**
+ * Atomically reserve the next receipt sequence for (tenant, year). The
+ * INSERT..ON CONFLICT DO UPDATE..RETURNING is race-free — concurrent offline
+ * collections serialize on the counter PK and receive consecutive numbers,
+ * replacing the racy SELECT count(*)+1 (which allotted duplicate receipt nos
+ * under concurrency). Mirrors issuance.nextSequence.
+ */
+export async function nextReceiptSeq(tx: Writer, tenantId: string, year: number): Promise<number> {
+  const rows = await (tx as typeof db).insert(feeReceiptCounters)
+    .values({ tenantId, year, lastSeq: 1 })
+    .onConflictDoUpdate({
+      target: [feeReceiptCounters.tenantId, feeReceiptCounters.year],
+      set: { lastSeq: sql`${feeReceiptCounters.lastSeq} + 1`, updatedAt: new Date() },
+    })
+    .returning({ lastSeq: feeReceiptCounters.lastSeq });
+  return rows[0]!.lastSeq;
 }
 
 export async function insertRefund(tx: Writer, row: RefundInsert): Promise<void> {

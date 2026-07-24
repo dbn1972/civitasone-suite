@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, resolveCitizenId, assertOwnership, HttpError } from "../../shared/context.js";
 import {
   idParam, fileAppealBody, assignBody, transferRecordsBody,
   scheduleHearingBody, recordHearingBody, prepareOrderBody, issueOrderBody,
@@ -16,7 +16,9 @@ export async function appealRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = fileAppealBody.parse(req.body);
-    return reply.code(201).send(await commands.fileAppeal(ctx, body));
+    // IDOR: constrain citizenId to the actor unless an officer specifies another.
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return reply.code(201).send(await commands.fileAppeal(ctx, { ...body, citizenId }));
   });
 
   app.get("/v1/citizen/appeals", async (req, reply) => {
@@ -31,6 +33,8 @@ export async function appealRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const appeal = await queries.getAppeal(ctx.tenantId, id);
     if (!appeal) throw new HttpError(404, "NOT_FOUND", "appeal not found");
+    // IDOR: a citizen may only read their own appeal (officers bypass).
+    assertOwnership(ctx, appeal.citizenId);
     return reply.send(appeal);
   });
 

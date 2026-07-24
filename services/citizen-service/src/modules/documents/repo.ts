@@ -36,6 +36,16 @@ export async function listByApplication(tenantId: string, applicationId: string)
   return db.transaction((tx) => listByApplicationTx(tx, tenantId, applicationId));
 }
 
+export async function listByApplicationForCitizenTx(tx: Writer, tenantId: string, applicationId: string, citizenId: string): Promise<DocSubmissionRow[]> {
+  return (tx as typeof db).select().from(documentSubmissions)
+    .where(and(eq(documentSubmissions.tenantId, tenantId), eq(documentSubmissions.applicationId, applicationId), eq(documentSubmissions.citizenId, citizenId)))
+    .orderBy(desc(documentSubmissions.createdAt));
+}
+
+export async function listByApplicationForCitizen(tenantId: string, applicationId: string, citizenId: string): Promise<DocSubmissionRow[]> {
+  return db.transaction((tx) => listByApplicationForCitizenTx(tx, tenantId, applicationId, citizenId));
+}
+
 export async function listPendingVerification(tenantId: string, limit = 200): Promise<DocSubmissionRow[]> {
   return db.transaction((tx) => tx.select().from(documentSubmissions)
     .where(and(eq(documentSubmissions.tenantId, tenantId), eq(documentSubmissions.verificationStatus, "pending")))

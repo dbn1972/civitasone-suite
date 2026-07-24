@@ -355,3 +355,93 @@ describe("SVC-089 appeal filing-window + order maker-checker + remand", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+
+// ══════════════════════ SVC-084 IDOR — cross-citizen document access ═════════
+describe("SVC-084 IDOR: a citizen cannot read/attribute another citizen's document", () => {
+  const APP_ID = "44444444-0000-4000-8000-000000000016";
+  const CITIZEN_B = "99999999-0000-4000-8000-000000000016";
+  let docId: string;
+
+  it("citizen A uploads a submission (owned by A)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/citizen/documents/upload", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
+      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof" },
+    });
+    expect(res.statusCode).toBe(201);
+    docId = res.json().id;
+  });
+
+  it("owner citizen A CAN read their own submission (200)", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/citizen/documents/${docId}`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().id).toBe(docId);
+  });
+
+  it("citizen B CANNOT read citizen A's submission (404, no existence leak)", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/citizen/documents/${docId}`, headers: hdr(tok(TENANT_A, CITIZEN_B, ["citizen"])),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("citizen B CANNOT upload attributing the document to citizen A (403 FORBIDDEN)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/citizen/documents/upload", headers: hdr(tok(TENANT_A, CITIZEN_B, ["citizen"])),
+      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof", citizenId: CITIZEN },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+  });
+
+  it("citizen B CANNOT list citizen A's documents by applicationId (A's rows excluded)", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/citizen/documents?applicationId=${APP_ID}`, headers: hdr(tok(TENANT_A, CITIZEN_B, ["citizen"])),
+    });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data as Array<{ id: string }>;
+    expect(data.find((d) => d.id === docId)).toBeUndefined();
+  });
+});
+
+// ══════════════════════ SVC-089 IDOR — cross-citizen appeal access ═══════════
+describe("SVC-089 IDOR: a citizen cannot read/spoof another citizen's appeal", () => {
+  const APP_ID = "66666666-0000-4000-8000-000000000016";
+  const CITIZEN_B = "99999999-0000-4000-8000-000000000016";
+  let appealId: string;
+
+  it("citizen A files an appeal (owned by A)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/citizen/appeals", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
+      payload: { applicationId: APP_ID, grounds: "unfair decision", decisionDate: isoDaysAgo(3), windowDays: 30 },
+    });
+    expect(res.statusCode).toBe(201);
+    appealId = res.json().id;
+  });
+
+  it("owner citizen A CAN read their own appeal (200)", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/citizen/appeals/${appealId}`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().id).toBe(appealId);
+  });
+
+  it("citizen B CANNOT read citizen A's appeal (404, no existence leak)", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/citizen/appeals/${appealId}`, headers: hdr(tok(TENANT_A, CITIZEN_B, ["citizen"])),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("citizen B CANNOT file an appeal spoofing citizen A's citizenId (403 FORBIDDEN)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/citizen/appeals", headers: hdr(tok(TENANT_A, CITIZEN_B, ["citizen"])),
+      payload: { applicationId: APP_ID, citizenId: CITIZEN, grounds: "spoof attempt", decisionDate: isoDaysAgo(3), windowDays: 30 },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+  });
+});

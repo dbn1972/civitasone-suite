@@ -9,6 +9,12 @@ import type { FeeScheduleRow } from "./schema.js";
 import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable, type FeeComputation } from "./domain.js";
 import type { CreateScheduleBody, ComputeFeeBody, CreateIntentBody, RecordOfflineBody, RefundRequestBody, RefundDecisionBody } from "./validators.js";
 
+/** True for a Postgres unique-violation (optionally on a specific constraint). */
+function isUniqueViolation(err: unknown, constraint?: string): boolean {
+  const e = err as { code?: string; constraint_name?: string } | null;
+  return !!e && e.code === "23505" && (!constraint || e.constraint_name === constraint);
+}
+
 async function audit(tx: Parameters<typeof enqueue>[0], ctx: RequestContext, action: string, resourceType: string, resourceId: string): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
@@ -95,15 +101,24 @@ export async function recordOfflinePayment(ctx: RequestContext, body: RecordOffl
     const fee = compute(sched, body.subject);
     const now = new Date();
     const year = now.getUTCFullYear();
-    const seq = (await repo.countReceiptsForYear(tx, ctx.tenantId, year)) + 1;
+    // Atomic per-(tenant, year) sequence — no duplicate receipt nos under concurrency.
+    const seq = await repo.nextReceiptSeq(tx, ctx.tenantId, year);
     const receiptNo = buildReceiptNo(year, seq);
-    await repo.insertPayment(tx, {
-      id, tenantId: ctx.tenantId, applicationId: body.applicationId, scheduleId: sched.id,
-      citizenId: body.citizenId ?? null, amount: fee.amount.toFixed(2), currency: sched.currency,
-      exemptionApplied: fee.exemptionApplied, method: "offline", status: "offline_recorded",
-      gatewayRef: body.reference ?? null, receiptNo, receiptIssuedAt: now,
-      reconciliationStatus: "reconciled", createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    });
+    try {
+      await repo.insertPayment(tx, {
+        id, tenantId: ctx.tenantId, applicationId: body.applicationId, scheduleId: sched.id,
+        citizenId: body.citizenId ?? null, amount: fee.amount.toFixed(2), currency: sched.currency,
+        exemptionApplied: fee.exemptionApplied, method: "offline", status: "offline_recorded",
+        gatewayRef: body.reference ?? null, receiptNo, receiptIssuedAt: now,
+        reconciliationStatus: "reconciled", createdBy: ctx.actorId, updatedBy: ctx.actorId,
+      });
+    } catch (err) {
+      // Defensive: a receipt-no collision is a retryable conflict, not a raw 500.
+      if (isUniqueViolation(err, "uq_payments_receipt_no")) {
+        throw new HttpError(409, "RECEIPT_CONFLICT", "receipt number already allocated; please retry");
+      }
+      throw err;
+    }
     await enqueue(tx, {
       topic: EVENTS.receiptIssued, eventType: EVENTS.receiptIssued,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,

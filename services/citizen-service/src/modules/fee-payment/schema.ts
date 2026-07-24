@@ -1,7 +1,15 @@
-import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb, numeric, boolean, primaryKey } from "drizzle-orm/pg-core";
 import type { ExemptionRule } from "./domain.js";
 
 export const feeSchema = pgSchema("fee");
+
+/** Atomic per-(tenant, year) offline-receipt sequence — replaces the racy count(*)+1. */
+export const feeReceiptCounters = feeSchema.table("receipt_counters", {
+  tenantId:  uuid("tenant_id").notNull(),
+  year:      integer("year").notNull(),
+  lastSeq:   integer("last_seq").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ pk: primaryKey({ columns: [t.tenantId, t.year] }) }));
 
 export const feeSchedules = feeSchema.table("schedules", {
   id:          uuid("id").primaryKey().defaultRandom(),
@@ -65,4 +73,4 @@ export type PaymentInsert     = typeof feePayments.$inferInsert;
 export type RefundRow         = typeof feeRefunds.$inferSelect;
 export type RefundInsert      = typeof feeRefunds.$inferInsert;
 
-export const schema = { feeSchedules, feePayments, feeRefunds };
+export const schema = { feeSchedules, feePayments, feeRefunds, feeReceiptCounters };
