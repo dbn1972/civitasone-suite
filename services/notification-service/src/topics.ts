@@ -37,6 +37,8 @@ export const CONSUMED_EVENTS = {
   helpdeskTicketEscalated:  "helpdesk.ticket.escalated",
   citizenRequestCreated:    "citizen.request.created",
   auditParaIssued:          "audit.para.issued",
+  /** Admin change/release management publishes release-notes broadcasts (LOOP 2). */
+  notificationBroadcastSend: "notification.broadcast.send",
   /** ML prediction events — high-risk notifications */
   mlBreachRiskHigh:         "ml.prediction.breach_risk_high",
   mlTaskHighRisk:           "ml.prediction.task_high_risk",

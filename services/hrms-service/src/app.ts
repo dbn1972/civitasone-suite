@@ -50,6 +50,9 @@ import { visitingCardRoutes } from "./modules/visiting-cards/routes.js";
 import { deviceTrustRoutes } from "./modules/device-trust/routes.js";
 import { boardIntakeRoutes } from "./modules/board-intake/routes.js";
 import { assessmentRoutes } from "./modules/assessment/routes.js";
+import { trainingAdminRoutes } from "./modules/training-admin/routes.js";
+import { learningRoutes } from "./modules/learning/routes.js";
+import { competencyRoutes } from "./modules/competency/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -124,6 +127,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(deviceTrustRoutes);
   await app.register(boardIntakeRoutes);
   await app.register(assessmentRoutes);
+  await app.register(trainingAdminRoutes);
+  await app.register(learningRoutes);
+  await app.register(competencyRoutes);
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
   await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);

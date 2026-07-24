@@ -15,6 +15,8 @@ import { searchRoutes } from "./modules/search/routes.js";
 import { versionRoutes } from "./modules/versions/routes.js";
 import { sharingRoutes } from "./modules/sharing/routes.js";
 import { aiRoutes } from "./modules/ai/routes.js";
+import { policyRoutes } from "./modules/policies/routes.js";
+import { assistantRoutes } from "./modules/assistant/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -38,6 +40,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(versionRoutes);
   await app.register(sharingRoutes);
   await app.register(aiRoutes);
+  await app.register(policyRoutes);
+  await app.register(assistantRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

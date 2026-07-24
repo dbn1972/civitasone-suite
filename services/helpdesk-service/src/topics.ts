@@ -12,6 +12,13 @@ export const EVENTS = {
   ticketAssigned: "helpdesk.ticket.assigned",
   ticketEscalated: "helpdesk.ticket.escalated",
   ticketTransitioned: "helpdesk.ticket.transitioned",
+  // SVC-129 — service catalogue / self-service request lifecycle.
+  requestRaised: "helpdesk.request.raised",
+  requestApproved: "helpdesk.request.approved",
+  requestRejected: "helpdesk.request.rejected",
+  requestStageAdvanced: "helpdesk.request.stage_advanced",
+  requestFulfilled: "helpdesk.request.fulfilled",
+  requestBreachEscalated: "helpdesk.request.breach_escalated",
 } as const;
 
 /** Foreign producer topics this service CONSUMES (HD2 inbound linkage). */
@@ -28,7 +35,10 @@ export const CONSUMES = {
 export const SOURCE = {
   telephony: "telephony",
   crm: "crm",
+  // LOOP 1 — knowledge-service assistant escalate-to-ticket handoff.
+  assistant: "knowledge_assistant",
 } as const;
 
 export const SERVICE = "helpdesk";
 export const RESOURCE = "ticket";
+export const RESOURCE_REQUEST = "service_request";

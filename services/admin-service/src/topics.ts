@@ -69,6 +69,11 @@ export const EVENTS = {
   customDomainRegistered: "admin.custom_domain.registered",
   customDomainVerified:   "admin.custom_domain.verified",
   customDomainDeleted:    "admin.custom_domain.deleted",
+  // ── change / release management (SVC-130) ──────────────────────────────
+  changeApproved:    "admin.change.approved",
+  changeScheduled:   "admin.change.scheduled",
+  changeCompleted:   "admin.change.completed",
+  changeRolledBack:  "admin.change.rolled_back",
 } as const;
 
 export const SERVICE = "admin";

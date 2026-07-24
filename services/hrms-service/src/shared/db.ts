@@ -23,6 +23,9 @@ import { schema as reservationModule }  from "../modules/reservation/schema.js";
 import { schema as medicalModule }      from "../modules/medical/schema.js";
 import { schema as boardIntakeModule } from "../modules/board-intake/schema.js";
 import { schema as assessmentModule } from "../modules/assessment/schema.js";
+import { schema as trainingAdminModule } from "../modules/training-admin/schema.js";
+import { schema as learningModule }      from "../modules/learning/schema.js";
+import { schema as competencyModule }    from "../modules/competency/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -44,6 +47,9 @@ const SCHEMA = {
   ...medicalModule,
   ...boardIntakeModule,
   ...assessmentModule,
+  ...trainingAdminModule,
+  ...learningModule,
+  ...competencyModule,
   ...outboxSchema,
 };
 

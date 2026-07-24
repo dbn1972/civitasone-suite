@@ -1,6 +1,7 @@
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsTrainings, hrmsNominations, type NominationRow } from "./schema.js";
+import { trainingSessions } from "../training-admin/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -76,4 +77,59 @@ export async function countNominationsByTraining(tenantId: string, trainingIds: 
     .groupBy(hrmsNominations.trainingId));
   for (const row of rows) counts.set(row.trainingId, row.count);
   return counts;
+}
+
+
+/**
+ * SVC-121/122 -- a single employee's training nominations for the caller tenant,
+ * with the linked training and (optional) session. Read inside scopedRead so the
+ * tenant GUC is set and RLS enforces isolation (not merely the WHERE clause).
+ */
+export interface EmployeeNominationRow {
+  id: string;
+  status: string;
+  trainingId: string;
+  trainingTitle: string | null;
+  trainingFromDate: string | null;
+  trainingToDate: string | null;
+  trainingVenue: string | null;
+  sessionId: string | null;
+  sessionTitle: string | null;
+  sessionDate: string | null;
+  waitlistPosition: number | null;
+  result: string | null;
+  score: number | null;
+  completedDate: string | null;
+  createdAt: Date;
+}
+
+export async function listNominationsByEmployee(
+  tenantId: string, employeeId: string, limit = 100,
+): Promise<EmployeeNominationRow[]> {
+  return scopedRead((tx) => tx
+    .select({
+      id: hrmsNominations.id,
+      status: hrmsNominations.status,
+      trainingId: hrmsNominations.trainingId,
+      trainingTitle: hrmsTrainings.title,
+      trainingFromDate: hrmsTrainings.fromDate,
+      trainingToDate: hrmsTrainings.toDate,
+      trainingVenue: hrmsTrainings.venue,
+      sessionId: hrmsNominations.sessionId,
+      sessionTitle: trainingSessions.title,
+      sessionDate: trainingSessions.sessionDate,
+      waitlistPosition: hrmsNominations.waitlistPosition,
+      result: hrmsNominations.result,
+      score: hrmsNominations.score,
+      completedDate: hrmsNominations.completedDate,
+      createdAt: hrmsNominations.createdAt,
+    })
+    .from(hrmsNominations)
+    .leftJoin(hrmsTrainings, eq(hrmsTrainings.id, hrmsNominations.trainingId))
+    .leftJoin(trainingSessions, eq(trainingSessions.id, hrmsNominations.sessionId))
+    .where(and(
+      eq(hrmsNominations.tenantId, tenantId),
+      eq(hrmsNominations.employeeId, employeeId),
+    ))
+    .limit(limit)) as Promise<EmployeeNominationRow[]>;
 }

@@ -131,6 +131,13 @@ type AuditParaIssuedPayload = {
  */
 const SECURITY_DESK = "security_control_room";
 
+/**
+ * Role recipient for tenant-wide release-notes broadcasts (LOOP 2). Resolved
+ * against the message-envelope tenant by the delivery pipeline, so the release
+ * note reaches the tenant's user audience rather than any single person id.
+ */
+const BROADCAST_AUDIENCE = "all_users";
+
 type VisitorSecurityIncidentPayload = {
   incidentType?: string;
   type?: string;
@@ -167,6 +174,23 @@ type VisitorEmergencyUnlockPayload = {
   reason?: string;
   deviceCount?: number;
   triggeredAt?: string;
+};
+
+// ─── Admin release-notes broadcast payload (LOOP 2) ───────────────────────
+
+/**
+ * LOOP 2 — admin-service change management emits notification.broadcast.send on a
+ * successful release with notes to publish. There is no single per-person target:
+ * the release note fans out to the tenant's user audience. We address it to a
+ * role recipient (BROADCAST_AUDIENCE) resolved per tenant by the delivery pipeline,
+ * mirroring the visitor security-desk role-recipient convention above.
+ */
+type BroadcastSendPayload = {
+  channel?: string;
+  changeId?: string;
+  title?: string;
+  releaseNotes?: string;
+  affectedServices?: string[];
 };
 
 // ─── Recipient resolution ────────────────────────────────────────────────────
@@ -390,6 +414,21 @@ function resolveRecipients(eventType: string, payload: Record<string, unknown>):
           reason: p.reason ?? "emergency",
           deviceCount: String(p.deviceCount ?? ""),
           triggeredAt: p.triggeredAt ?? "",
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.notificationBroadcastSend: {
+      const p = payload as BroadcastSendPayload;
+      return [{
+        recipientId: BROADCAST_AUDIENCE,
+        recipient: BROADCAST_AUDIENCE,
+        variables: {
+          title: p.title ?? "Platform Update",
+          releaseNotes: p.releaseNotes ?? "",
+          affectedServices: Array.isArray(p.affectedServices) ? p.affectedServices.join(", ") : "",
+          changeId: p.changeId ?? "",
+          channel: p.channel ?? "release_notes",
         },
       }];
     }

@@ -49,6 +49,7 @@ import { registerSelfServiceConsumers } from "./modules/self-service/consumer.js
 import { registerSocialConsumers }     from "./modules/social/consumer.js";
 import { registerVisitingCardConsumers } from "./modules/visiting-cards/consumer.js";
 import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
+import { registerCompetencyConsumers } from "./modules/competency/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 
 const log = pino({ name: "hrms-worker" });
@@ -99,6 +100,8 @@ registerSocialConsumers(queue);
 registerVisitingCardConsumers(queue);
 // Cross-service choreography: board decision → HR intake (for-review).
 registerBoardIntakeConsumers(queue);
+// SVC-124: assessment.certificate.issued -> employee held competency.
+registerCompetencyConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

@@ -8,16 +8,22 @@ import * as repo from "./repo.js";
 const AUDIT_TOPIC = "audit.event.record";
 
 type CreatePayload = {
-  id: string;
-  tenantId: string;
+  // Internal intake supplies id + status; the cross-service knowledge-assistant
+  // escalate-to-ticket handoff (LOOP 1) omits both and instead carries a source
+  // tag + externalRef, so these are optional.
+  id?: string;
+  tenantId?: string;
   subject: string;
-  description: string | null;
-  priority: string;
-  status: string;
+  description?: string | null;
+  priority?: string;
+  status?: string;
   ticketType?: string | null;
   typeFields?: Record<string, unknown> | null;
   assetIds?: string[] | null;
   assetVerified?: boolean;
+  // LOOP 1 — knowledge-service assistant escalate-to-ticket handoff.
+  source?: string;
+  externalRef?: string;
 };
 
 type AssignPayload = {
@@ -55,16 +61,55 @@ function keyFor(tenantId: string, id: string) {
 export function registerTicketConsumers(queue: Queue): void {
   // ---- create -------------------------------------------------------------
   queue.subscribe<CreatePayload>(COMMANDS.createTicket, async (msg) => {
+    const p = msg.payload;
+    // LOOP 1 — cross-service escalate-to-ticket. knowledge-service's assistant
+    // emits helpdesk.ticket.create with NO pre-assigned id/status, but a source
+    // ("knowledge_assistant") + externalRef. Route it through the SAME idempotent
+    // linked-insert path used for telephony/crm inbound linkage, keyed on
+    // (tenant, source, source_ref=externalRef): redelivery yields exactly one
+    // ticket, and (like the sibling hops) we emit ticketCreated only on first create.
+    if (!p.id) {
+      const source = p.source ?? SOURCE.assistant;
+      const sourceRef = p.externalRef ?? msg.messageId;
+      const subject = (p.subject ?? "").trim() || `Escalated request — ${sourceRef}`;
+      let openedId: string | null = null;
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const { id, created } = await repo.insertLinkedIdempotent(tx, {
+          tenantId: msg.tenantId,
+          subject,
+          description: p.description ?? null,
+          priority: p.priority ?? "Medium",
+          status: "open",
+          source,
+          sourceRef,
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+          version: 1,
+        });
+        openedId = id;
+        if (created) {
+          await emit(tx, msg, EVENTS.ticketCreated, { ticketId: id, subject, source, sourceRef }, "create", id);
+        }
+      });
+      if (openedId) {
+        const row = await repo.findById(openedId, msg.tenantId);
+        if (row) await cache.put(keyFor(msg.tenantId, openedId), row);
+        await cache.invalidateResource(msg.tenantId, RESOURCE);
+      }
+      return;
+    }
+    // Internal intake path (API-originated create command with a full payload).
+    const ticketId = p.id; // narrowed to string by the guard above
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const p = msg.payload;
       await repo.insert(tx, {
-        id: p.id,
-        tenantId: p.tenantId,
+        id: ticketId,
+        tenantId: p.tenantId ?? msg.tenantId,
         subject: p.subject,
-        description: p.description,
-        priority: p.priority,
-        status: p.status,
+        description: p.description ?? null,
+        priority: p.priority ?? "Medium",
+        status: p.status ?? "open",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
@@ -73,10 +118,10 @@ export function registerTicketConsumers(queue: Queue): void {
         assetIds: p.assetIds ?? null,
         assetVerified: p.assetVerified ?? false,
       });
-      await emit(tx, msg, EVENTS.ticketCreated, { ticketId: p.id, subject: p.subject, ticketType: p.ticketType ?? null }, "create", p.id);
+      await emit(tx, msg, EVENTS.ticketCreated, { ticketId, subject: p.subject, ticketType: p.ticketType ?? null }, "create", ticketId);
     });
-    const row = await repo.findById(msg.payload.id, msg.tenantId);
-    if (row) await cache.put(keyFor(msg.tenantId, msg.payload.id), row);
+    const row = await repo.findById(ticketId, msg.tenantId);
+    if (row) await cache.put(keyFor(msg.tenantId, ticketId), row);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
 

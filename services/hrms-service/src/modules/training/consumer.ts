@@ -27,7 +27,7 @@ export function registerTrainingConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertNomination(tx, {
         id: p.id, tenantId: p.tenantId, trainingId: p.trainingId, employeeId: p.employeeId,
-        status: "nominated", certificateRef: null,
+        status: "nominated", certificateRef: null, nominatedBy: msg.actorId,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "nominate", "nomination", p.id);

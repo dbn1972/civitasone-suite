@@ -67,14 +67,16 @@ describe("domain-events templates", () => {
     }
   });
 
-  it("getRegisteredEventTypes returns all 19 event types", () => {
+  it("getRegisteredEventTypes returns all 20 event types", () => {
     const types = getRegisteredEventTypes();
-    expect(types).toHaveLength(19);
+    expect(types).toHaveLength(20);
     expect(types).toContain("hrms.leave.approved");
     expect(types).toContain("audit.para.issued");
     // Visitor security/safety events wired into the notification choreography.
     expect(types).toContain("visitor.security_incident.created");
     expect(types).toContain("visitor.emergency.unlock.triggered");
+    // LOOP 2 — admin release-notes broadcast.
+    expect(types).toContain("notification.broadcast.send");
   });
 
   it("interpolate replaces {{placeholders}} with values", () => {

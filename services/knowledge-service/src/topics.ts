@@ -54,6 +54,19 @@ export const EVENTS = {
   // Sharing
   shareCreated: "knowledge.share.created",
   shareRevoked: "knowledge.share.revoked",
+
+  // SVC-126 governed policy/SOP/circular lifecycle
+  policyCreated: "knowledge.policy.created",
+  policySubmitted: "knowledge.policy.submitted",
+  policyApproved: "knowledge.policy.approved",
+  policyPublished: "knowledge.policy.published",
+  policySuperseded: "knowledge.policy.superseded",
+  policyWithdrawn: "knowledge.policy.withdrawn",
+  policyAcknowledged: "knowledge.policy.acknowledged",
+
+  // SVC-127 virtual assistant & guided support
+  assistantAnswered: "knowledge.assistant.answered",
+  assistantEscalated: "knowledge.assistant.escalated",
 } as const;
 
 export const SERVICE = "knowledge";

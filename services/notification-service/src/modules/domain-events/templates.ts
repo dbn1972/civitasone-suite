@@ -226,6 +226,17 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
       body: "An emergency unlock was triggered at location {{locationId}}.\n\nReason: {{reason}}\nDevices released: {{deviceCount}}\nTriggered at: {{triggeredAt}}\n\nPlease confirm the situation and secure the location once safe.\n\nRegards,\nVisitor Management Security",
     },
   },
+  {
+    eventType: "notification.broadcast.send",
+    push: {
+      title: "New Release \u2014 {{title}}",
+      body: "{{releaseNotes}}",
+    },
+    email: {
+      title: "Release Notes \u2014 {{title}}",
+      body: "The following change has been released:\n\n{{title}}\n\n{{releaseNotes}}\n\nAffected services: {{affectedServices}}\n\nRegards,\nPlatform Administration",
+    },
+  },
 ];
 
 const templateMap = new Map<string, NotificationTemplate>();
