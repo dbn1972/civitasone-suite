@@ -19,6 +19,10 @@ import { escalationRoutes } from "./modules/escalation/routes.js";
 import { slaRulesRoutes } from "./modules/sla-rules/routes.js";
 import { aiTriageRoutes } from "./modules/ai/routes.js";
 import { citizenRoutingRoutes } from "./modules/routing/routes.js";
+import { eligibilityRoutes } from "./modules/eligibility/routes.js";
+import { feePaymentRoutes } from "./modules/fee-payment/routes.js";
+import { issuanceRoutes } from "./modules/issuance/routes.js";
+import { discoveryRoutes } from "./modules/discovery/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   // P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so we never boot fail-open.
@@ -50,6 +54,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(slaRulesRoutes);
   await app.register(aiTriageRoutes);
   await app.register(citizenRoutingRoutes);
+  await app.register(eligibilityRoutes);
+  await app.register(feePaymentRoutes);
+  await app.register(issuanceRoutes);
+  await app.register(discoveryRoutes);
   const { citizenGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(citizenGapRoutes);
 
