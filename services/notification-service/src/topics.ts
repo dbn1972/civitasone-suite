@@ -11,6 +11,34 @@ export const COMMANDS = {
   createCampaign:   "notification.campaign.create",
   sendCampaign:     "notification.campaign.send",
   cancelCampaign:   "notification.campaign.cancel",
+  // Scheduling
+  scheduleNotification:   "notification.schedule.create",
+  cancelSchedule:         "notification.schedule.cancel",
+  // Digest
+  createDigestRule:       "notification.digest_rule.create",
+  updateDigestRule:       "notification.digest_rule.update",
+  flushDigest:            "notification.digest.flush",
+  // Webhook
+  createWebhookEndpoint:  "notification.webhook.create",
+  updateWebhookEndpoint:  "notification.webhook.update",
+  // Analytics
+  recordOpen:             "notification.analytics.open",
+  recordClick:            "notification.analytics.click",
+  // DND
+  setDndWindow:           "notification.dnd.set",
+  updateDndWindow:        "notification.dnd.update",
+  // I18N
+  createLocaleVariant:    "notification.i18n.create",
+  updateLocaleVariant:    "notification.i18n.update",
+  // Segments
+  createSegment:          "notification.segment.create",
+  updateSegment:          "notification.segment.update",
+  resolveSegment:         "notification.segment.resolve",
+  // Approval
+  submitTemplate:         "notification.template.submit",
+  approveTemplate:        "notification.template.approve",
+  rejectTemplate:         "notification.template.reject",
+  publishTemplate:        "notification.template.publish",
 } as const;
 
 export const EVENTS = {
@@ -23,6 +51,31 @@ export const EVENTS = {
   channelCreated:        "notification.channel.created",
   alertRuleCreated:      "notification.alert_rule.created",
   campaignCreated:       "notification.campaign.created",
+  // Scheduling
+  scheduled:              "notification.scheduled",
+  scheduleCancelled:      "notification.schedule.cancelled",
+  // Digest
+  digestFlushed:          "notification.digest.flushed",
+  // Webhook
+  webhookEndpointCreated: "notification.webhook.created",
+  // Analytics
+  openTracked:            "notification.analytics.open_tracked",
+  clickTracked:           "notification.analytics.click_tracked",
+  // DND
+  dndWindowSet:           "notification.dnd.window_set",
+  dndHeld:                "notification.dnd.held",
+  dndReleased:            "notification.dnd.released",
+  // I18N
+  localeVariantCreated:   "notification.i18n.variant_created",
+  localeVariantStale:     "notification.i18n.variant_stale",
+  // Segments
+  segmentCreated:         "notification.segment.created",
+  segmentResolved:        "notification.segment.resolved",
+  // Approval
+  templateSubmitted:      "notification.template.submitted",
+  templateApproved:       "notification.template.approved",
+  templateRejected:       "notification.template.rejected",
+  templatePublished:      "notification.template.published",
 } as const;
 
 /** Events consumed from other services — triggers user notifications. */
