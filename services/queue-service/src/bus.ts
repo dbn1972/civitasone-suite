@@ -497,6 +497,7 @@ export class SqsQueue implements Queue {
   ): void {
     const stack = err instanceof Error ? err.stack : String(err);
     // Structured single-line log so it is greppable + parseable by log shippers.
+    // eslint-disable-next-line no-console -- structured operational error log
     console.error(
       JSON.stringify({
         level: "error",
@@ -524,6 +525,7 @@ export class SqsQueue implements Queue {
       }));
       // OPS-1: DLQ routing is now observable (metric + structured log).
       incrementDlqMessage(topic);
+      // eslint-disable-next-line no-console -- structured operational error log
       console.error(
         JSON.stringify({ level: "error", event: "queue_message_dead_lettered", service: this.service, topic, reason }),
       );

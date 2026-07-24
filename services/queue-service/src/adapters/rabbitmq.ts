@@ -206,6 +206,7 @@ export class RabbitMqQueue implements Queue {
       this.connection = await connect(this.url);
       this.connection.on("close", () => { this.connection = null; this.publishChannel = null; this.consumeChannel = null; });
       this.connection.on("error", (err) => {
+        // eslint-disable-next-line no-console -- structured operational error log
         console.error(JSON.stringify({ level: "error", event: "rabbitmq_connection_error", service: this.service, err: String(err) }));
       });
     }
@@ -254,6 +255,7 @@ export class RabbitMqQueue implements Queue {
   }
 
   private logError(topic: string, msg: CommandEnvelope | null, deliveryCount: number, err: unknown): void {
+    // eslint-disable-next-line no-console -- structured operational error log
     console.error(JSON.stringify({
       level: "error",
       event: "queue_consumer_error",

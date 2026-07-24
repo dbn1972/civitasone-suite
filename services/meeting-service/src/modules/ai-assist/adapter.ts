@@ -164,7 +164,7 @@ export function resolveAiConfig(_tenantId: string, overrides?: AIConfigOverrides
 
 // ─── Heuristic provider (offline, deterministic — dev/test/on-prem default) ──
 
-const ACTION_LINE_RE = /^\s*(?:action|todo|task|follow[- ]?up)\s*[:\-]\s*(.+)$/i;
+const ACTION_LINE_RE = /^\s*(?:action|todo|task|follow[- ]?up)\s*[:-]\s*(.+)$/i;
 const ASSIGNEE_RE = /@([A-Za-z0-9_.-]{2,40})/;
 const DEADLINE_RE = /\b(?:by|before|due)\s+([A-Za-z0-9 ,/-]{3,40})/i;
 

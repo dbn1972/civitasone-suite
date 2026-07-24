@@ -23,7 +23,7 @@ const PAN_PATTERN = /\b[A-Z]{5}\d{4}[A-Z]\b/g;
 const PHONE_PATTERN = /\b\d{10}\b/g;
 
 /** Email: standard email regex */
-const EMAIL_PATTERN = /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g;
+const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 
 // ── Public API ────────────────────────────────────────────────────
 

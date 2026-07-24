@@ -83,6 +83,7 @@ describe("Route Completeness Audit", () => {
     for (const route of routes) {
       const errorPath = join(route, "error.tsx");
       if (!existsSync(errorPath)) continue;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- test-only dynamic fs read
       const content = require("fs").readFileSync(errorPath, "utf8") as string;
       // Check for raw error.message being rendered (leaks internal details)
       if (content.includes("error.message") && !content.includes("RouteError")) {

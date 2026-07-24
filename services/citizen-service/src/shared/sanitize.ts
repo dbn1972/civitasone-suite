@@ -19,7 +19,9 @@ import { z } from "zod";
 
 // C0 controls U+0000-U+001F and C1/DEL controls U+007F-U+009F.
 // Single-line strips ALL of them; multi-line keeps \n (0x0A) and \t (0x09).
+// eslint-disable-next-line no-control-regex -- intentional C0/C1 control-character sanitizer
 const CONTROL_CHARS_SINGLELINE = /[\u0000-\u001F\u007F-\u009F]/g;
+// eslint-disable-next-line no-control-regex -- intentional C0/C1 control-character sanitizer
 const CONTROL_CHARS_MULTILINE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
 // Spreadsheet formula triggers when a cell begins with one of these.
 const FORMULA_LEAD = /^[=+\-@\t\r]/;
