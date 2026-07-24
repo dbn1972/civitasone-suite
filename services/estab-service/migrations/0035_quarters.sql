@@ -162,25 +162,25 @@ ALTER TABLE quarters.estab_overstay_penalties ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'rls_quarters_tenant' AND tablename = 'estab_quarters') THEN
-    EXECUTE 'CREATE POLICY rls_quarters_tenant ON quarters.estab_quarters USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY rls_quarters_tenant ON quarters.estab_quarters USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'rls_allotments_tenant' AND tablename = 'estab_quarter_allotments') THEN
-    EXECUTE 'CREATE POLICY rls_allotments_tenant ON quarters.estab_quarter_allotments USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY rls_allotments_tenant ON quarters.estab_quarter_allotments USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'rls_licence_fee_tenant' AND tablename = 'estab_licence_fee_rates') THEN
-    EXECUTE 'CREATE POLICY rls_licence_fee_tenant ON quarters.estab_licence_fee_rates USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY rls_licence_fee_tenant ON quarters.estab_licence_fee_rates USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'rls_overstay_tenant' AND tablename = 'estab_overstay_penalties') THEN
-    EXECUTE 'CREATE POLICY rls_overstay_tenant ON quarters.estab_overstay_penalties USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY rls_overstay_tenant ON quarters.estab_overstay_penalties USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
 END $$;
 

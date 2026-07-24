@@ -127,15 +127,15 @@ ALTER TABLE fleet.driver_roster ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'fuel_logs_tenant_isolation') THEN
-    EXECUTE 'CREATE POLICY fuel_logs_tenant_isolation ON fleet.fuel_logs USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY fuel_logs_tenant_isolation ON fleet.fuel_logs USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'trip_logs_tenant_isolation') THEN
-    EXECUTE 'CREATE POLICY trip_logs_tenant_isolation ON fleet.trip_logs USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY trip_logs_tenant_isolation ON fleet.trip_logs USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'vehicle_documents_tenant_isolation') THEN
-    EXECUTE 'CREATE POLICY vehicle_documents_tenant_isolation ON fleet.vehicle_documents USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY vehicle_documents_tenant_isolation ON fleet.vehicle_documents USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'driver_roster_tenant_isolation') THEN
-    EXECUTE 'CREATE POLICY driver_roster_tenant_isolation ON fleet.driver_roster USING (tenant_id = current_setting(''app.tenant_id'')::uuid)';
+    EXECUTE 'CREATE POLICY driver_roster_tenant_isolation ON fleet.driver_roster USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)';
   END IF;
 END $$;
