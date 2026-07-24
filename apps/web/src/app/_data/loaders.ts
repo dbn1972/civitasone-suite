@@ -3991,3 +3991,87 @@ function buildApprovalLink(module: string, refType: string, refId: string, taskI
       return `/workflow/tasks`;
   }
 }
+
+// ── SVC-129 Service Catalogue loaders (helpdesk-service) ─────────────────────
+
+export type CatalogueFormField = {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "number" | "select" | "boolean";
+  required?: boolean;
+  options?: string[];
+};
+export type CatalogueStage = { key: string; name: string; assigneeRole?: string | null };
+export type CatalogueOla = { id: string; name: string; kind: string; provider: string; targetMinutes: number };
+
+export type CatalogueOfferingSummary = {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  status: string;
+  approvalRequired: boolean;
+  defaultPriority: string;
+  requestFormSchema: CatalogueFormField[];
+  fulfilmentStages: CatalogueStage[];
+  olas?: CatalogueOla[];
+};
+
+export type ServiceRequestSummary = {
+  id: string;
+  offeringId: string;
+  ticketId: string | null;
+  requestedBy: string;
+  status: string;
+  currentStage: string | null;
+  slaStatus: string;
+  resolutionDeadline: string | null;
+  breachEscalatedAt: string | null;
+  createdAt: string;
+};
+
+export type RequestBreachReport = {
+  data: ServiceRequestSummary[];
+  summary: { breached: number; atRisk: number; escalated: number; total: number };
+};
+
+/** Browse the service catalogue (active offerings). */
+export async function getCatalogueOfferings(): Promise<LoaderResult<CatalogueOfferingSummary[]>> {
+  return fetchJson<unknown, CatalogueOfferingSummary[]>("/v1/helpdesk/catalogue/offerings", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "helpdesk.catalogue.offerings",
+    mapResponse: (p) => ((p as { data?: CatalogueOfferingSummary[] } | null)?.data ?? []),
+  });
+}
+
+/** Offering detail incl. request form schema, fulfilment stages and OLAs. */
+export async function getCatalogueOffering(id: string): Promise<LoaderResult<CatalogueOfferingSummary | null>> {
+  return fetchJson<unknown, CatalogueOfferingSummary | null>(`/v1/helpdesk/catalogue/offerings/${id}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "helpdesk.catalogue.offering",
+    mapResponse: (p) => ((p as { data?: CatalogueOfferingSummary } | null)?.data ?? null),
+  });
+}
+
+/** The current user's service requests (self-service portal — my requests). */
+export async function getMyServiceRequests(): Promise<LoaderResult<ServiceRequestSummary[]>> {
+  return fetchJson<unknown, ServiceRequestSummary[]>("/v1/helpdesk/catalogue/requests?mine=true", [], {
+    revalidateSeconds: 15,
+    telemetryKey: "helpdesk.catalogue.my_requests",
+    mapResponse: (p) => ((p as { data?: ServiceRequestSummary[] } | null)?.data ?? []),
+  });
+}
+
+/** SLA-breach report over service requests. */
+export async function getRequestBreachReport(): Promise<LoaderResult<RequestBreachReport>> {
+  const empty: RequestBreachReport = { data: [], summary: { breached: 0, atRisk: 0, escalated: 0, total: 0 } };
+  return fetchJson<unknown, RequestBreachReport>("/v1/helpdesk/catalogue/requests/breaches", empty, {
+    revalidateSeconds: 30,
+    telemetryKey: "helpdesk.catalogue.breaches",
+    mapResponse: (p) => {
+      const r = p as Partial<RequestBreachReport> | null;
+      if (!r || !r.summary) return empty;
+      return { data: r.data ?? [], summary: r.summary };
+    },
+  });
+}

@@ -12,6 +12,7 @@ import { ticketRoutes } from "./modules/tickets/routes.js";
 import { slaRoutes } from "./modules/sla/routes.js";
 import { automationRoutes } from "./modules/automation/routes.js";
 import { mlBreachRoutes } from "./modules/ml-breach/routes.js";
+import { catalogueRoutes } from "./modules/catalogue/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,6 +34,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(slaRoutes);
   await app.register(automationRoutes);
   await app.register(mlBreachRoutes);
+  await app.register(catalogueRoutes);
   const { slaEngineRoutes } = await import("./modules/sla-engine/routes.js");
   await app.register(slaEngineRoutes);
   registerSchemaErrorHandler(app, HttpError);

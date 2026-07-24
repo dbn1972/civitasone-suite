@@ -12,6 +12,13 @@ export const EVENTS = {
   ticketAssigned: "helpdesk.ticket.assigned",
   ticketEscalated: "helpdesk.ticket.escalated",
   ticketTransitioned: "helpdesk.ticket.transitioned",
+  // SVC-129 — service catalogue / self-service request lifecycle.
+  requestRaised: "helpdesk.request.raised",
+  requestApproved: "helpdesk.request.approved",
+  requestRejected: "helpdesk.request.rejected",
+  requestStageAdvanced: "helpdesk.request.stage_advanced",
+  requestFulfilled: "helpdesk.request.fulfilled",
+  requestBreachEscalated: "helpdesk.request.breach_escalated",
 } as const;
 
 /** Foreign producer topics this service CONSUMES (HD2 inbound linkage). */
@@ -32,3 +39,4 @@ export const SOURCE = {
 
 export const SERVICE = "helpdesk";
 export const RESOURCE = "ticket";
+export const RESOURCE_REQUEST = "service_request";
