@@ -50,6 +50,8 @@ import { registerSocialConsumers }     from "./modules/social/consumer.js";
 import { registerVisitingCardConsumers } from "./modules/visiting-cards/consumer.js";
 import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
 import { registerCompetencyConsumers } from "./modules/competency/consumer.js";
+import { registerContractConsumers } from "./modules/contracts/consumer.js";
+import { registerContractExpiryConsumers } from "./modules/contracts/expiry-consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 
 const log = pino({ name: "hrms-worker" });
@@ -102,6 +104,9 @@ registerVisitingCardConsumers(queue);
 registerBoardIntakeConsumers(queue);
 // SVC-124: assessment.certificate.issued -> employee held competency.
 registerCompetencyConsumers(queue);
+// Contract renewal workflow consumers.
+registerContractConsumers(queue);
+registerContractExpiryConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
