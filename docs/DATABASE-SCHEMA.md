@@ -112,14 +112,20 @@ Schemas: `gl`, `budget`, `treasury`, `payments`, `org`.
 - Emits `finance.budget.created`; consumes payroll disbursement events.
 
 ### hrms — `civitas_hrms`
-Schemas: `employee`, `leave`, `gpf`, `pension`, `disciplinary`, `claims`, `recruitment`.
+Schemas: `employee`, `leave`, `gpf`, `pension`, `disciplinary`, `claims`, `recruitment`, `contracts`.
 
 - `employee.employee` — id, tenant_id, code, name, unit_id.
 - `leave.leave_type`, `leave.leave_balance` (employee_id → `employee.employee`), `leave.leave_request` (employee_id, type_id → `leave.leave_type`, status).
 - `gpf.account` — employee_id → `employee.employee`, opening_balance BigInt; `gpf.transaction`.
 - `pension.case` — employee_id, retirement_date, status.
 - `disciplinary.case`, `claims.claim`, `recruitment.vacancy` / `recruitment.application`.
+- `contracts.hrms_contracts` — id, tenant_id, employee_id, contract_no (unique per tenant), start_date, end_date, terms JSONB, renewal_count, status (draft/active/expiring/expired/renewed/terminated/escalated), previous_contract_id, version. Partial unique index on (tenant_id, employee_id) WHERE status = 'active'.
+- `contracts.hrms_contract_renewals` — id, tenant_id, contract_id, renewal_number, initiated_by, status (pending_approval/approved/rejected/budget_insufficient/cancelled), new_end_date, original_terms JSONB, new_terms JSONB, approval_chain JSONB, approved_by, rejected_by, rejection_reason, budget_ref, new_contract_id, version. Partial unique index on (tenant_id, contract_id) WHERE status = 'pending_approval'.
+- `contracts.hrms_contract_notifications` — id, tenant_id, contract_id, milestone (integer), sent_at. Unique constraint on (tenant_id, contract_id, milestone) for deduplication.
+- `contracts.hrms_contract_config` — id, tenant_id (unique), reminder_milestones JSONB, approval_chain JSONB, auto_separation_enabled boolean, scheduler_time_utc, version.
+- `contracts.hrms_contract_seq` — tenant_id (PK), next_val integer. Sequential contract number generator per tenant.
 - Emits `hrms.leave.approved`; on leave approval, payroll and finance react.
+- Emits `hrms.contract.*` events (created, renewed, expired, escalated, separated); consumes `contractRenewalDecided` from workflow-service.
 
 ### payroll — `civitas_payroll`
 Schemas: `run`, `component`, `payslip`, `bank`.
@@ -154,11 +160,19 @@ Schemas: `log`.
 - Append-only. Subscribes broadly to `*.{pastTense}` events across services to build an immutable audit trail.
 
 ### estab — `civitas_estab`
-Schemas: `post`, `posting`, `seniority`.
+Schemas: `post`, `posting`, `seniority`, `quarters`, `fleet`.
 
 - `post.post` — sanctioned posts (id, tenant_id, grade, cadre).
 - `posting.posting` — employee_id (from hrms), post_id → `post.post`, from_date, to_date.
 - `seniority.list` — cadre-wise seniority ordering.
+- `quarters.estab_quarters` — quarter inventory (id, tenant_id, quarter_no, quarter_type, category, address, locality, carpet_area_sqft, status, condition, org_unit, version).
+- `quarters.estab_quarter_allotments` — allotment workflow (id, tenant_id, quarter_id → `quarters.estab_quarters`, employee_ref, eligibility_score, waitlist_position, status, allotted_at/by, occupied_at, vacation_due_date, vacated_at, version).
+- `quarters.estab_licence_fee_rates` — effective-dated monthly licence-fee schedule (id, tenant_id, quarter_type, pay_level, monthly_minor BigInt, currency, effective_from/to, version).
+- `quarters.estab_overstay_penalties` — overstay penalty records (id, tenant_id, allotment_id → `quarters.estab_quarter_allotments`, employee_ref, penalty_days, daily_rate_minor BigInt, multiplier, total_minor BigInt, status, version).
+- `fleet.fuel_logs` — refuelling events (id, tenant_id, vehicle_id, log_date, fuel_type, litres numeric(10,2), cost_minor BigInt, currency, odometer_km, pump_name, receipt_ref, version).
+- `fleet.trip_logs` — trip/log-book (id, tenant_id, vehicle_id, driver_id, trip_date, start_odometer, end_odometer, start_time, end_time, purpose, passenger_name, route, status, version).
+- `fleet.vehicle_documents` — permits/insurance/PUC/fitness (id, tenant_id, vehicle_id, doc_type, doc_number, issued_at, valid_from, valid_until, issuer, amount_minor BigInt, currency, status, reminder_sent, version).
+- `fleet.driver_roster` — driver shift assignments (id, tenant_id, driver_id, vehicle_id, shift_date, shift_type, status, version).
 
 ### grant — `civitas_grant`
 Schemas: `scheme`, `sanction`, `utilization`.
@@ -168,11 +182,14 @@ Schemas: `scheme`, `sanction`, `utilization`.
 - `utilization.uc` — sanction_id → `sanction.sanction`, utilized BigInt (utilization certificate).
 
 ### asset — `civitas_asset`
-Schemas: `register`, `depreciation`, `disposal`, `maintenance`.
+Schemas: `register`, `lifecycle`, `depreciation`, `maintenance`, `insurance`, `enterprise`.
 
 - `register.asset` — id, tenant_id, tag, category, acquired_at, cost BigInt.
 - `depreciation.entry` — asset_id → `register.asset`, period, amount BigInt.
-- `disposal.file` — asset_id, method, status; emits `asset.disposal.decided` after `asset.disposal.file_decided` command.
+- `lifecycle.asset_disposals` — asset_id, method, status; emits `asset.disposal.decided` after `asset.disposal.file_decided` command.
+- `lifecycle.condemnation_surveys` — id, tenant_id, asset_id, survey_date, surveyed_by, condition, estimated_repair_cost_minor BigInt, recommendation, status, version.
+- `lifecycle.condemnation_recommendations` — id, tenant_id, survey_id, asset_id, committee_members JSONB, decision, reserve_value_minor BigInt, floor_value_minor BigInt, status, version.
+- `lifecycle.asset_auctions` — id, tenant_id, asset_id, recommendation_id, reserve_value_minor BigInt, highest_bid_minor BigInt, sale_proceeds_minor BigInt, finance_receipt_ref, status, version.
 - `maintenance.ticket` — asset_id, schedule.
 
 ### citizen — `civitas_citizen`
@@ -271,6 +288,20 @@ Because each service owns its own database, **there are no cross-database foreig
 
 - hrms emits employee lifecycle events; payroll/estab project the minimal fields they need into their own tables.
 - Integrity across services is **eventual**, reconciled by the outbox→event→inbox pipeline, not enforced by the database engine.
+
+### revenue — `civitas_revenue`
+Schemas: `rates`, `assessee`, `billing`, `bbps`, `collection`.
+
+- `rates.rate_heads` — id, tenant_id, code varchar(64), name, category varchar(64) (property_tax/water/sewerage/etc.), unit_of_measure, is_active boolean, version. Unique: (tenant_id, code).
+- `rates.rate_slabs` — id, tenant_id, rate_head_id → `rates.rate_heads`, slab_type varchar(16) (flat/band/ad_valorem), band_from BigInt, band_to BigInt, rate_value BigInt (paise or bps depending on slab_type), effective_from date, effective_to date, unit_of_measure, is_active, version.
+- `rates.penalty_rules` — id, tenant_id, rate_head_id → `rates.rate_heads`, interest_type (simple/compound), annual_rate_bps int, grace_days int, cap_months int (nullable = uncapped), rounding_mode (round_half_up/floor/ceil), is_active, version.
+- `rates.rebate_rules` — id, tenant_id, rate_head_id → `rates.rate_heads`, rebate_type (early_payment/category), discount_bps int, valid_until_days_before_due int, is_active, version.
+- `assessee.assessees` — property/tax assessees (id, tenant_id, registration details).
+- `billing.bills` — demand/bill generation (id, tenant_id, amount BigInt).
+- `bbps.biller_config`, `bbps.bbps_transactions` — BBPS integration.
+- `collection.collections` — payment collections.
+- Port 3038, gateway prefix `/api/v1/revenue`.
+- Emits `revenue.rate_head.created`, `revenue.bill.generated`; consumes `finance.bank_statement.reconciled`.
 
 ---
 

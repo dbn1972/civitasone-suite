@@ -90,14 +90,31 @@ export const COMMANDS = {
 
   // workforce-planning
   workforcePlanRefresh: "hrms.workforce_plan.refresh",
+
+  // contracts
+  contractCreate:          "hrms.contract.create",
+  contractActivate:        "hrms.contract.activate",
+  contractTerminate:       "hrms.contract.terminate",
+  contractRenewalInitiate: "hrms.contract.renewal.initiate",
+  contractRenewalBulk:     "hrms.contract.renewal.bulk",
+  contractExpiryDetect:    "hrms.contract.expiry.detect",
+  contractAutoSeparate:    "hrms.contract.auto_separate",
 } as const;
 
 export const EVENTS = {
+  certificateIssued: "assessment.certificate.issued",
   employeeCreated:   "hrms.employee.created",
   employeeSeparated: "hrms.employee.separated",
   leaveApplied:      "hrms.leave.applied",
   leaveApproved:     "hrms.leave.approved",
   attendanceMarked:  "hrms.attendance.marked",
+
+  // contracts
+  contractCreated:    "hrms.contract.created",
+  contractRenewed:    "hrms.contract.renewed",
+  contractExpired:    "hrms.contract.expired",
+  contractEscalated:  "hrms.contract.escalated",
+  contractSeparated:  "hrms.contract.separated",
 } as const;
 
 export const CONSUMED_EVENTS = {
@@ -122,6 +139,9 @@ export const CONSUMED_EVENTS = {
   // PENDING_REVIEW triage item — see modules/board-intake/consumer.ts. Payload:
   // { decisionId, meetingId, text, authority?, effectiveDate?, committeeId? }.
   boardDecisionHr: "meeting.decision.hr",
+
+  // contracts
+  contractRenewalDecided: "hrms.contract.renewal.decided",
 } as const;
 
 export const SERVICE = "hrms";

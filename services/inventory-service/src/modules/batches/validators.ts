@@ -51,6 +51,18 @@ export const serialQueryParams = z.object({
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+// ── Quarantine / Recall (SVC-055) ──────────────────────────────────────────
+export const quarantineBatchBody = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type QuarantineBatchBody = z.infer<typeof quarantineBatchBody>;
+
+export const recallBatchBody = z.object({
+  reason:   z.string().min(1).max(500),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+});
+export type RecallBatchBody = z.infer<typeof recallBatchBody>;
+
 // Consumer payload schemas
 export const createBatchPayload = createBatchBody.extend({
   id:       z.string().uuid(),

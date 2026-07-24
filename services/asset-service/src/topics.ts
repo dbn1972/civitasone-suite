@@ -12,6 +12,13 @@ export const COMMANDS = {
   impairmentTestRun:    "asset.impairment_test.run",
   insurancePolicyCreate:"asset.insurance.policy.create",
   insuranceClaimCreate: "asset.insurance.claim.create",
+  // Condemnation/disposal/auction (SVC-060)
+  condemnationSurveyCreate:  "asset.condemnation.survey.create",
+  condemnationSurveySubmit:  "asset.condemnation.survey.submit",
+  condemnationRecommend:     "asset.condemnation.recommend",
+  condemnationApprove:       "asset.condemnation.approve",
+  auctionCreate:             "asset.auction.create",
+  auctionComplete:           "asset.auction.complete",
 } as const;
 
 export const EVENTS = {
