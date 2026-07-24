@@ -13,8 +13,8 @@ const columns = [
   { key: "scope", label: "Scope", sortable: true },
 ];
 
-export function BoqTable({ items, source }: { items: Record<string, unknown>[]; source: string }) {
-  const { data } = useSeededResource("works-boq", items, source, items.length === 0);
+export function BoqTable({ items, source }: { items: Record<string, unknown>[]; source: "api" | "error" }) {
+  const { data } = useSeededResource("works-boq", items, source, (rows) => rows.length === 0);
 
   return (
     <DataTable

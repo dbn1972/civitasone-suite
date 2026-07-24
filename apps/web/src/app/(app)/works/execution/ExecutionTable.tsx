@@ -13,8 +13,8 @@ const columns = [
   { key: "issues", label: "Issues", align: "right" as const, sortable: true },
 ];
 
-export function ExecutionTable({ progress, source }: { progress: Record<string, unknown>[]; source: string }) {
-  const { data } = useSeededResource("works-execution", progress, source, progress.length === 0);
+export function ExecutionTable({ progress, source }: { progress: Record<string, unknown>[]; source: "api" | "error" }) {
+  const { data } = useSeededResource("works-execution", progress, source, (rows) => rows.length === 0);
 
   return (
     <DataTable

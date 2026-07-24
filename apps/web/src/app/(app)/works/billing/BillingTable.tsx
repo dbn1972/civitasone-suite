@@ -13,8 +13,8 @@ const columns = [
   { key: "status", label: "Status", cellType: "status" as const, sortable: true },
 ];
 
-export function BillingTable({ bills, source }: { bills: Record<string, unknown>[]; source: string }) {
-  const { data } = useSeededResource("works-billing", bills, source, bills.length === 0);
+export function BillingTable({ bills, source }: { bills: Record<string, unknown>[]; source: "api" | "error" }) {
+  const { data } = useSeededResource("works-billing", bills, source, (rows) => rows.length === 0);
 
   return (
     <DataTable

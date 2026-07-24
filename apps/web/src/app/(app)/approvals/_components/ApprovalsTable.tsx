@@ -120,7 +120,7 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
             render: (row: ApprovalRow) => (
               <span style={{ color: row.isOverdue ? "#ef4444" : "inherit", fontWeight: row.isOverdue ? 600 : 400 }}>
                 {row.dueDateDisplay as string}
-                {row.isOverdue && " ⚠️"}
+                {Boolean(row.isOverdue) && " ⚠️"}
               </span>
             ),
           },

@@ -31,7 +31,7 @@
     "lint": {},
     "typecheck": {
       "dependsOn": [
-        "^typecheck"
+        "^build"
       ]
     },
     "clean": {

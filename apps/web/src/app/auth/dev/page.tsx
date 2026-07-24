@@ -84,7 +84,7 @@ export default function DevLoginPage({ searchParams }: { searchParams: { error?:
         </form>
 
         <div style={hint}>
-          <div style={hintTitle}>Demo accounts — password <code style={userTag}>Civitas@123</code></div>
+          <div style={hintTitle}>Demo accounts — password <code style={userTag}>{process.env.DEV_LOGIN_PASSWORD ?? "(set DEV_LOGIN_PASSWORD)"}</code></div>
           <div style={row}><span style={userTag}>superadmin</span><span>Full access · all modules</span></div>
           <div style={row}><span style={userTag}>officer</span><span>Finance · HR · Procurement</span></div>
           <div style={row}><span style={userTag}>auditor</span><span>Audit · Legal</span></div>
