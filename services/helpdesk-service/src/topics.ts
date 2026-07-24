@@ -35,6 +35,8 @@ export const CONSUMES = {
 export const SOURCE = {
   telephony: "telephony",
   crm: "crm",
+  // LOOP 1 — knowledge-service assistant escalate-to-ticket handoff.
+  assistant: "knowledge_assistant",
 } as const;
 
 export const SERVICE = "helpdesk";
