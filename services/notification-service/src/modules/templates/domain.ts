@@ -8,6 +8,13 @@ export type TemplateView = {
   status: string;
   version: number;
   supersededBy: string | null;
+  // Approval workflow fields (optional — null when not in approval flow)
+  contentType?: string | null;
+  submittedBy?: string | null;
+  submittedAt?: Date | null;
+  approvedBy?: string | null;
+  approvedAt?: Date | null;
+  rejectionReason?: string | null;
 };
 
 export type PrefView = {

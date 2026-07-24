@@ -31,10 +31,10 @@ export async function recordClick(
 }
 
 export interface MetricsFilters {
-  templateId?: string;
-  campaignId?: string;
-  periodStart?: Date;
-  periodEnd?: Date;
+  templateId?: string | undefined;
+  campaignId?: string | undefined;
+  periodStart?: Date | undefined;
+  periodEnd?: Date | undefined;
 }
 
 /** Get aggregate delivery metrics for a tenant, optionally filtered. */

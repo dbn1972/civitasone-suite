@@ -10,15 +10,15 @@ export interface SetDndWindowPayload {
   startTime: string;
   endTime: string;
   timezone: string;
-  days?: string[];
+  days?: string[] | undefined;
 }
 
 export interface UpdateDndWindowPayload {
-  startTime?: string;
-  endTime?: string;
-  timezone?: string;
-  days?: string[];
-  enabled?: boolean;
+  startTime?: string | undefined;
+  endTime?: string | undefined;
+  timezone?: string | undefined;
+  days?: string[] | undefined;
+  enabled?: boolean | undefined;
 }
 
 export async function setDndWindow(ctx: RequestContext, payload: SetDndWindowPayload): Promise<Accepted> {
