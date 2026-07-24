@@ -16,11 +16,9 @@ const mockInsert = vi.fn().mockReturnValue({ values: mockValues });
 mockValues.mockReturnValue({ returning: mockReturning });
 
 const mockSelectFrom = vi.fn().mockReturnThis();
-const mockSelectWhere = vi.fn().mockReturnThis();
-const mockSelectLimit = vi.fn().mockResolvedValue([]);
+const mockSelectWhere = vi.fn().mockResolvedValue([]);
 const mockSelect = vi.fn().mockReturnValue({ from: mockSelectFrom });
 mockSelectFrom.mockReturnValue({ where: mockSelectWhere });
-mockSelectWhere.mockReturnValue({ limit: mockSelectLimit });
 
 const mockSet = vi.fn().mockReturnThis();
 const mockUpdateWhere = vi.fn().mockReturnThis();
@@ -160,8 +158,7 @@ describe("Assessment Consumer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset mock for select to return empty arrays (for rate slab lookups)
-    mockSelectWhere.mockReturnValue({ limit: mockSelectLimit });
-    mockSelectLimit.mockResolvedValue([]);
+    mockSelectWhere.mockResolvedValue([]);
     // For the assessmentCreate flow, select returns rate data
     mockSelectFrom.mockReturnValue({ where: mockSelectWhere });
     // Returning for insert
@@ -209,13 +206,11 @@ describe("Assessment Consumer", () => {
   describe("assessmentRemitDecide", () => {
     it("throws on maker-checker violation (same user as maker)", async () => {
       // Return a pending remission with makerUserId = actor-1
-      mockSelectWhere.mockReturnValue({
-        limit: vi.fn().mockResolvedValue([{
-          id: "rem-1",
-          makerUserId: "actor-1",
-          status: "pending",
-        }]),
-      });
+      mockSelectWhere.mockResolvedValueOnce([{
+        id: "rem-1",
+        makerUserId: "actor-1",
+        status: "pending",
+      }]);
 
       const msg = buildMsg({
         payload: { assessmentId: "assessment-1", approve: true },
