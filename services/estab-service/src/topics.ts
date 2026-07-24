@@ -69,6 +69,20 @@ export const COMMANDS = {
   weedoutApprove:       "estab.weedout.approve",
   weedoutReject:        "estab.weedout.reject",
   weedoutDestroy:       "estab.weedout.destroy",
+  // residential quarters (SVC-058)
+  quarterCreate:           "estab.quarter.create",
+  quarterApply:            "estab.quarter.apply",
+  quarterAllot:            "estab.quarter.allot",
+  quarterOccupy:           "estab.quarter.occupy",
+  quarterVacationNotice:   "estab.quarter.vacation_notice",
+  quarterVacate:           "estab.quarter.vacate",
+  quarterLicenceFeeRate:   "estab.quarter.licence_fee_rate",
+  // fleet management (SVC-059)
+  fuelLogCreate:           "estab.fleet.fuel_log.create",
+  tripLogCreate:           "estab.fleet.trip_log.create",
+  tripLogComplete:         "estab.fleet.trip_log.complete",
+  vehicleDocCreate:        "estab.fleet.vehicle_doc.create",
+  driverRosterCreate:      "estab.fleet.driver_roster.create",
 } as const;
 
 /**
