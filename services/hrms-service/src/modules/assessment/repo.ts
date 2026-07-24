@@ -89,7 +89,7 @@ export async function countAttempts(tenantId: string, assessmentId: string, empl
 }
 export async function insertAttempt(tx: Writer, row: typeof attempts.$inferInsert): Promise<AttemptRow> {
   const rows = await tx.insert(attempts).values(row).returning();
-  return rows[0];
+  return rows[0]!;
 }
 export async function getAttempt(tenantId: string, id: string): Promise<AttemptRow | undefined> {
   const rows = await scopedRead((t) => t.select().from(attempts)

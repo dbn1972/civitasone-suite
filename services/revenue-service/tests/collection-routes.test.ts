@@ -1,0 +1,229 @@
+/**
+ * Collection module — route-level integration tests.
+ *
+ * Covers: POST /receipts 202, POST /refunds 202, PATCH /refunds/:id/decide 202,
+ * POST /adjustments 202, GET /assessees/:id/receipts paginated,
+ * 400/401/403 error paths.
+ */
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { signToken } from "@civitasone/auth";
+
+const SECRET = "test_secret_for_civitasone_32chr";
+const TENANT_ID = "t1111111-1111-1111-1111-111111111111";
+const USER_ID = "u1111111-1111-1111-1111-111111111111";
+const ASSESSEE_ID = "a2222222-2222-2222-2222-222222222222";
+const DEMAND_ID = "d1111111-1111-1111-1111-111111111111";
+const RECEIPT_ID = "r1111111-1111-1111-1111-111111111111";
+const REFUND_ID = "f1111111-1111-1111-1111-111111111111";
+
+function makeToken(roles: string[]) {
+  return signToken({ sub: USER_ID, tid: TENANT_ID, roles, sid: "s1" }, SECRET, 3600);
+}
+
+const AUTH = { authorization: `Bearer ${makeToken(["revenue_admin"])}` };
+const BAD_ROLE = { authorization: `Bearer ${makeToken(["employee"])}` };
+
+// ── Mocks ─────────────────────────────────────────────────────────────────────
+
+vi.mock("../src/shared/db.js", () => ({
+  db: {
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue([]),
+  },
+  sqlClient: { end: vi.fn() },
+  dbFor: vi.fn(),
+  sqlClientFor: vi.fn(),
+  tierOf: vi.fn(),
+  dbForRead: vi.fn(),
+}));
+
+vi.mock("../src/shared/infra.js", () => ({
+  cache: {
+    put: vi.fn().mockResolvedValue(undefined),
+    get: vi.fn().mockResolvedValue(null),
+    getOrLoad: vi.fn().mockResolvedValue([]),
+    invalidate: vi.fn().mockResolvedValue(undefined),
+  },
+  queue: {
+    publish: vi.fn().mockResolvedValue(undefined),
+    subscribe: vi.fn(),
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    healthCheck: vi.fn().mockResolvedValue({ healthy: true }),
+  },
+}));
+
+// ── App Setup ─────────────────────────────────────────────────────────────────
+
+let app: FastifyInstance;
+
+beforeAll(async () => {
+  const { buildApp } = await import("../src/app.js");
+  app = await buildApp();
+  await app.ready();
+});
+
+afterAll(async () => {
+  await app.close();
+});
+
+// ── POST /v1/revenue/receipts ─────────────────────────────────────────────────
+
+describe("POST /v1/revenue/receipts", () => {
+  const VALID_BODY = {
+    assesseeId: ASSESSEE_ID,
+    demandId: DEMAND_ID,
+    amountMinor: "500000",
+    channel: "counter",
+    reference: "REF-001",
+  };
+
+  it("returns 202 with valid body and correct role", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/receipts", headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data).toHaveProperty("messageId");
+  });
+
+  it("returns 400 with missing required fields", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/receipts", headers: AUTH, payload: { channel: "counter" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/receipts", payload: VALID_BODY });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/receipts", headers: BAD_ROLE, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── POST /v1/revenue/refunds ──────────────────────────────────────────────────
+
+describe("POST /v1/revenue/refunds", () => {
+  const VALID_BODY = { receiptId: RECEIPT_ID, reason: "Duplicate payment" };
+
+  it("returns 202 with valid body", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/refunds", headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data).toHaveProperty("messageId");
+  });
+
+  it("returns 400 with missing receiptId", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/refunds", headers: AUTH, payload: { reason: "X" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/refunds", payload: VALID_BODY });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/refunds", headers: BAD_ROLE, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── PATCH /v1/revenue/refunds/:id/decide ──────────────────────────────────────
+
+describe("PATCH /v1/revenue/refunds/:id/decide", () => {
+  const VALID_BODY = { approve: true, reason: "Verified" };
+
+  it("returns 202 with valid body", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/refunds/${REFUND_ID}/decide`, headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data).toHaveProperty("messageId");
+  });
+
+  it("returns 400 with missing approve field", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/refunds/${REFUND_ID}/decide`, headers: AUTH, payload: { reason: "X" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 with invalid UUID param", async () => {
+    const res = await app.inject({ method: "PATCH", url: "/v1/revenue/refunds/not-a-uuid/decide", headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/refunds/${REFUND_ID}/decide`, payload: VALID_BODY });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/refunds/${REFUND_ID}/decide`, headers: BAD_ROLE, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── POST /v1/revenue/adjustments ──────────────────────────────────────────────
+
+describe("POST /v1/revenue/adjustments", () => {
+  const VALID_BODY = {
+    assesseeId: ASSESSEE_ID,
+    fromDemandId: DEMAND_ID,
+    toDemandId: "d2222222-2222-2222-2222-222222222222",
+    amountMinor: "100000",
+    reason: "Transfer excess to next period",
+  };
+
+  it("returns 202 with valid body", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/adjustments", headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data).toHaveProperty("messageId");
+  });
+
+  it("returns 400 with missing fields", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/adjustments", headers: AUTH, payload: { reason: "X" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/adjustments", payload: VALID_BODY });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/adjustments", headers: BAD_ROLE, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GET /v1/revenue/assessees/:id/receipts (paginated) ────────────────────────
+
+describe("GET /v1/revenue/assessees/:id/receipts", () => {
+  it("returns 200 with paginated response", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/receipts`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json).toHaveProperty("data");
+    expect(json).toHaveProperty("meta");
+    expect(json.meta).toHaveProperty("page");
+    expect(json.meta).toHaveProperty("pageSize");
+    expect(json.meta).toHaveProperty("total");
+  });
+
+  it("returns 400 with invalid UUID param", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/assessees/not-a-uuid/receipts", headers: AUTH });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/receipts` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/receipts`, headers: BAD_ROLE });
+    expect(res.statusCode).toBe(403);
+  });
+});
