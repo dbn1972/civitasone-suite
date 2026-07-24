@@ -7,6 +7,9 @@ function toTemplateView(r: typeof notificationTemplates.$inferSelect): TemplateV
   return {
     id: r.id, tenantId: r.tenantId, channel: r.channel, name: r.name, subject: r.subject ?? null,
     body: r.body, status: r.status, version: r.version, supersededBy: r.supersededBy ?? null,
+    contentType: r.contentType ?? null, submittedBy: r.submittedBy ?? null,
+    submittedAt: r.submittedAt ?? null, approvedBy: r.approvedBy ?? null,
+    approvedAt: r.approvedAt ?? null, rejectionReason: r.rejectionReason ?? null,
   };
 }
 function toPrefView(r: typeof notificationPrefs.$inferSelect): PrefView {
@@ -98,6 +101,33 @@ export async function upsertPrefs(tx: Writer, row: PrefInsert): Promise<void> {
 export async function findTemplateByIdTx(tx: Writer, id: string): Promise<TemplateView | null> {
   const rows = await tx.select().from(notificationTemplates).where(eq(notificationTemplates.id, id)).limit(1);
   return rows[0] ? toTemplateView(rows[0]) : null;
+}
+
+/** Update the status and approval-related fields of a template. Used by the approval workflow. */
+export async function updateTemplateStatus(
+  tx: Writer,
+  templateId: string,
+  newStatus: string,
+  fields: {
+    submittedBy?: string;
+    submittedAt?: Date;
+    approvedBy?: string;
+    approvedAt?: Date;
+    rejectionReason?: string;
+    updatedBy: string;
+  },
+): Promise<void> {
+  const set: Record<string, unknown> = {
+    status: newStatus,
+    updatedAt: new Date(),
+    updatedBy: fields.updatedBy,
+  };
+  if (fields.submittedBy !== undefined) set.submittedBy = fields.submittedBy;
+  if (fields.submittedAt !== undefined) set.submittedAt = fields.submittedAt;
+  if (fields.approvedBy !== undefined) set.approvedBy = fields.approvedBy;
+  if (fields.approvedAt !== undefined) set.approvedAt = fields.approvedAt;
+  if (fields.rejectionReason !== undefined) set.rejectionReason = fields.rejectionReason;
+  await tx.update(notificationTemplates).set(set).where(eq(notificationTemplates.id, templateId));
 }
 
 // Tenant-scoped channel update of an existing pref row by id. Only the provided

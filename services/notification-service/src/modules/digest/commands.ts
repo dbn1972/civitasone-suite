@@ -9,15 +9,15 @@ export interface CreateDigestRulePayload {
   eventType: string;
   channel: string;
   accumulationWindowMinutes: number;
-  maxBatchSize?: number;
+  maxBatchSize?: number | undefined;
   digestTemplateId: string;
 }
 
 export interface UpdateDigestRulePayload {
-  accumulationWindowMinutes?: number;
-  maxBatchSize?: number;
-  digestTemplateId?: string;
-  enabled?: boolean;
+  accumulationWindowMinutes?: number | undefined;
+  maxBatchSize?: number | undefined;
+  digestTemplateId?: string | undefined;
+  enabled?: boolean | undefined;
 }
 
 export async function createDigestRule(ctx: RequestContext, payload: CreateDigestRulePayload): Promise<Accepted> {

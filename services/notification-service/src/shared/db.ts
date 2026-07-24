@@ -11,6 +11,13 @@ import { channelsModuleSchema } from "../modules/channels/schema.js";
 import { alertsModuleSchema } from "../modules/alerts/schema.js";
 import { bulkModuleSchema } from "../modules/bulk/schema.js";
 import { streamModuleSchema } from "../modules/stream/schema.js";
+import { schedulingModuleSchema } from "../modules/scheduling/schema.js";
+import { digestModuleSchema } from "../modules/digest/schema.js";
+import { webhookModuleSchema } from "../modules/webhook/schema.js";
+import { analyticsModuleSchema } from "../modules/analytics/schema.js";
+import { dndModuleSchema } from "../modules/dnd/schema.js";
+import { i18nModuleSchema } from "../modules/i18n/schema.js";
+import { segmentsModuleSchema } from "../modules/segments/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -20,6 +27,13 @@ const SCHEMA = {
   ...alertsModuleSchema,
   ...bulkModuleSchema,
   ...streamModuleSchema,
+  ...schedulingModuleSchema,
+  ...digestModuleSchema,
+  ...webhookModuleSchema,
+  ...analyticsModuleSchema,
+  ...dndModuleSchema,
+  ...i18nModuleSchema,
+  ...segmentsModuleSchema,
   ...outboxSchema,
 };
 

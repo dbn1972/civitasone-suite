@@ -7,6 +7,11 @@ export async function getTemplate(tenantId: string, id: string): Promise<Templat
   return cache.getOrLoad<TemplateView>(cache.makeKey(tenantId, RESOURCE.template, id), () => repo.findTemplateById(id));
 }
 
+/** Alias for getTemplate — used by approval routes for clarity. */
+export async function getTemplateById(tenantId: string, id: string): Promise<TemplateView | null> {
+  return getTemplate(tenantId, id);
+}
+
 export async function listTemplates(tenantId: string): Promise<TemplateView[]> {
   return cache.getOrLoad<TemplateView[]>(
     cache.makeKey(tenantId, `${RESOURCE.template}_list`, tenantId),
