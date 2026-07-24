@@ -176,11 +176,14 @@ Schemas: `scheme`, `sanction`, `utilization`.
 - `utilization.uc` — sanction_id → `sanction.sanction`, utilized BigInt (utilization certificate).
 
 ### asset — `civitas_asset`
-Schemas: `register`, `depreciation`, `disposal`, `maintenance`.
+Schemas: `register`, `lifecycle`, `depreciation`, `maintenance`, `insurance`, `enterprise`.
 
 - `register.asset` — id, tenant_id, tag, category, acquired_at, cost BigInt.
 - `depreciation.entry` — asset_id → `register.asset`, period, amount BigInt.
-- `disposal.file` — asset_id, method, status; emits `asset.disposal.decided` after `asset.disposal.file_decided` command.
+- `lifecycle.asset_disposals` — asset_id, method, status; emits `asset.disposal.decided` after `asset.disposal.file_decided` command.
+- `lifecycle.condemnation_surveys` — id, tenant_id, asset_id, survey_date, surveyed_by, condition, estimated_repair_cost_minor BigInt, recommendation, status, version.
+- `lifecycle.condemnation_recommendations` — id, tenant_id, survey_id, asset_id, committee_members JSONB, decision, reserve_value_minor BigInt, floor_value_minor BigInt, status, version.
+- `lifecycle.asset_auctions` — id, tenant_id, asset_id, recommendation_id, reserve_value_minor BigInt, highest_bid_minor BigInt, sale_proceeds_minor BigInt, finance_receipt_ref, status, version.
 - `maintenance.ticket` — asset_id, schedule.
 
 ### citizen — `civitas_citizen`
