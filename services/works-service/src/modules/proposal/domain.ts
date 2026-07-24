@@ -14,11 +14,11 @@ export interface WorkProposal {
 
 export interface CoaMapping {
   majorHead: string;
-  subMajorHead?: string | null;
-  minorHead?: string | null;
-  subHead?: string | null;
-  detailHead?: string | null;
-  objectHead?: string | null;
+  subMajorHead?: string | null | undefined;
+  minorHead?: string | null | undefined;
+  subHead?: string | null | undefined;
+  detailHead?: string | null | undefined;
+  objectHead?: string | null | undefined;
 }
 
 export interface WorkSplit {

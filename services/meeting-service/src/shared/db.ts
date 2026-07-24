@@ -26,7 +26,7 @@ export type Db = typeof db;
  * underlying (pre-wrap) transaction so `tx.select()` keeps full column typing —
  * the public `db.transaction` is re-typed with `tx: any`, which would erase it.
  */
-type ScopedTx = Parameters<Parameters<typeof baseDb.transaction>[0]>[0];
+type ScopedTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Run a READ inside the tenant transaction so PostgreSQL RLS is enforced on

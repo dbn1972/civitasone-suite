@@ -6,7 +6,7 @@ import { db } from "../../shared/db.js";
 import { fuelLogs, tripLogs, vehicleDocuments, driverRoster } from "./schema.js";
 import type { FuelLogRow, TripLogRow, VehicleDocumentRow, DriverRosterRow } from "./schema.js";
 
-type QueryOpts = { vehicleId?: string; from?: string; to?: string; limit: number; offset: number };
+type QueryOpts = { vehicleId?: string | undefined; from?: string | undefined; to?: string | undefined; limit: number; offset: number };
 
 export async function listFuelLogs(tenantId: string, opts: QueryOpts): Promise<FuelLogRow[]> {
   const conds: SQL[] = [eq(fuelLogs.tenantId, tenantId)];

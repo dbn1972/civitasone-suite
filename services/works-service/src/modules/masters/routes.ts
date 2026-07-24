@@ -43,7 +43,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       const ctx = resolveContext(req);
       requireRole(ctx, READ_ROLES);
       const query = v.paginationSchema.parse(req.query);
-      const data = await listMaster(master.table, ctx.tenantId, query.page, query.pageSize);
+      const data = (await listMaster(master.table, ctx.tenantId, query.page, query.pageSize)) ?? [];
       return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
     });
 
