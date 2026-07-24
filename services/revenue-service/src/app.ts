@@ -8,6 +8,13 @@ import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
+import { rateEngineRoutes } from "./modules/rate-engine/routes.js";
+import { assesseeRoutes } from "./modules/assessee/routes.js";
+import { assessmentRoutes } from "./modules/assessment/routes.js";
+import { billingRoutes } from "./modules/billing/routes.js";
+import { collectionRoutes } from "./modules/collection/routes.js";
+import { arrearsRoutes } from "./modules/arrears/routes.js";
+import { bbpsRoutes } from "./modules/bbps/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -23,7 +30,15 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerOpsRoutes(app, { service: "revenue-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
-  // Module routes will be registered here as they are built
+  // Module routes
+  await app.register(rateEngineRoutes);
+  await app.register(assesseeRoutes);
+  await app.register(assessmentRoutes);
+  await app.register(billingRoutes);
+  await app.register(collectionRoutes);
+  await app.register(arrearsRoutes);
+  await app.register(bbpsRoutes);
+
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

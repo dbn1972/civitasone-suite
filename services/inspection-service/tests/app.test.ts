@@ -81,13 +81,44 @@ describe("GET /metrics", () => {
 });
 
 describe("auth enforcement", () => {
-  it("returns 401 for unknown routes without Bearer token", async () => {
+  it("returns 401 for protected routes without Bearer token", async () => {
     // Any route that isn't a public path (/health, /ready, /metrics)
     // will go through the auth hook — since no matching route exists we get
     // 404 only AFTER auth passes. With no token, auth rejects with 401.
     const res = await app.inject({ method: "GET", url: "/v1/inspection/entities" });
     // Auth plugin returns 401 before routing to a 404, proving auth is enforced
     expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 for protected routes with valid JWT but insufficient role", async () => {
+    // Sign a valid token with a role that is NOT in the allowed set for the
+    // enforcement penalty-rates endpoint (requires inspection_admin, tenant_admin, or super_admin).
+    const { signToken } = await import("@civitasone/auth");
+    const token = signToken(
+      {
+        sub: "00000000-0000-0000-0000-000000000001",
+        tid: "00000000-0000-0000-0000-000000000099",
+        roles: ["citizen"], // deliberately wrong role — not in ADMIN_ROLES
+        sid: "sess-test",
+      },
+      "test_secret_for_civitasone_32chr",
+      3600,
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/inspection/enforcement/penalty-rates",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        provisionId: "00000000-0000-0000-0000-000000000001",
+        effectiveFrom: "2025-01-01",
+        amount: "100000",
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    const body = res.json();
+    expect(body.code).toBe("FORBIDDEN");
   });
 });
 

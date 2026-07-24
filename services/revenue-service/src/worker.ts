@@ -3,10 +3,26 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
+import { registerRateEngineConsumers } from "./modules/rate-engine/consumer.js";
+import { registerAssesseeConsumers } from "./modules/assessee/consumer.js";
+import { registerAssessmentConsumers } from "./modules/assessment/consumer.js";
+import { registerBillingConsumers } from "./modules/billing/consumer.js";
+import { registerCollectionConsumers } from "./modules/collection/consumer.js";
+import { registerArrearsConsumers } from "./modules/arrears/consumer.js";
+import { registerBbpsConsumers } from "./modules/bbps/consumer.js";
+import { registerReconConsumers } from "./modules/collection/recon-consumer.js";
 
 const log = pino({ name: "revenue-worker" });
 
-// Consumers will be registered here as modules are built.
+// Register all module consumers
+registerRateEngineConsumers(queue);
+registerAssesseeConsumers(queue);
+registerAssessmentConsumers(queue);
+registerBillingConsumers(queue);
+registerCollectionConsumers(queue);
+registerArrearsConsumers(queue);
+registerBbpsConsumers(queue);
+registerReconConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

@@ -79,6 +79,7 @@ export const EVENTS = {
 
   // ── Assessment ───────────────────────────────────────────────────────────
   assesseeCreated: "revenue.assessee.created",
+  assesseeUpdated: "revenue.assessee.updated",
   assessmentCreated: "revenue.assessment.created",
   /** Demand raised — triggers receivable GL posting in finance-service */
   demandRaised: "revenue.demand.raised",
