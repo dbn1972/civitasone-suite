@@ -5,7 +5,7 @@
  * _Requirements: SVC-131_
  */
 import {
-  pgSchema, uuid, text, integer, varchar, timestamp, date, bigint, boolean, jsonb,
+  pgSchema, uuid, text, integer, varchar, timestamp, date, bigint, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const assessmentSchema = pgSchema("assessment");

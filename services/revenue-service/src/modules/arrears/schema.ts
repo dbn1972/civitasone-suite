@@ -5,7 +5,7 @@
  * _Requirements: SVC-137_
  */
 import {
-  pgSchema, uuid, text, integer, varchar, timestamp, date, bigint, boolean, jsonb,
+  pgSchema, uuid, text, integer, varchar, timestamp, date, bigint,
 } from "drizzle-orm/pg-core";
 
 export const arrearsSchema = pgSchema("arrears");

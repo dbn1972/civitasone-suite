@@ -5,7 +5,7 @@
  * _Requirements: SVC-132_
  */
 import {
-  pgSchema, uuid, text, integer, varchar, timestamp, date, bigint, jsonb,
+  pgSchema, uuid, integer, varchar, timestamp, date, bigint,
 } from "drizzle-orm/pg-core";
 
 export const billingSchema = pgSchema("billing");

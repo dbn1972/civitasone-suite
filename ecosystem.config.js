@@ -289,6 +289,7 @@ module.exports = {
     worker("meeting",      "meeting_svc",      "civitas_meeting"),
     worker("court",        "court_svc",        "civitas_court"),
     worker("visitor",      "visitor_svc",      "civitas_visitor"),
+    worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
       S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
@@ -320,6 +321,7 @@ module.exports = {
     svc("meeting",      3033, "meeting_svc",      "civitas_meeting"),
     svc("court",        3034, "court_svc",        "civitas_court"),
     svc("visitor",      3035, "visitor_svc",      "civitas_visitor"),
+    svc("revenue",      3038, "revenue_svc",      "civitas_revenue"),
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
       S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
