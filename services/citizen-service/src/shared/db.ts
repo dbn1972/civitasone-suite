@@ -12,6 +12,13 @@ import { schema as rtiModule }         from "../modules/rti/schema.js";
 import { schema as helpdeskModule }    from "../modules/helpdesk/schema.js";
 import { schema as analyticsModule }   from "../modules/analytics/schema.js";
 import { schema as slaRulesModule }    from "../modules/sla-rules/schema.js";
+import { schema as eligibilityModule } from "../modules/eligibility/schema.js";
+import { schema as feePaymentModule }  from "../modules/fee-payment/schema.js";
+import { schema as issuanceModule }    from "../modules/issuance/schema.js";
+import { schema as discoveryModule }   from "../modules/discovery/schema.js";
+import { schema as catalogueModule }   from "../modules/catalogue/schema.js";
+import { schema as documentsModule }   from "../modules/documents/schema.js";
+import { schema as appealModule }      from "../modules/appeal/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -22,6 +29,13 @@ const SCHEMA = {
   ...helpdeskModule,
   ...analyticsModule,
   ...slaRulesModule,
+  ...eligibilityModule,
+  ...feePaymentModule,
+  ...issuanceModule,
+  ...discoveryModule,
+  ...catalogueModule,
+  ...documentsModule,
+  ...appealModule,
   ...outboxSchema,
 };
 

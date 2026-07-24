@@ -26,6 +26,8 @@ export const COMMANDS = {
   grievanceSlaCheck:       "citizen.grievance.sla_check",
   ticketSlaCheck:          "citizen.ticket.sla_check",
   rtiSlaCheck:             "citizen.rti.sla_check",
+  // SVC-085 fee & payment
+  paymentRequested:        "citizen.payment.requested",
 } as const;
 
 export const EVENTS = {
@@ -39,6 +41,22 @@ export const EVENTS = {
   profileDeleted:         "citizen.profile.deleted",
   ticketSlaBreached:      "citizen.ticket.sla_breached",
   rtiSlaBreached:         "citizen.rti.sla_breached",
+  // SVC-083 eligibility
+  eligibilityRuleSetPublished: "citizen.eligibility.ruleset_published",
+  // SVC-085 fee & payment
+  receiptIssued:          "citizen.receipt.issued",
+  // SVC-086 issuance
+  certificateIssued:      "citizen.certificate.issued",
+  certificateRevoked:     "citizen.certificate.revoked",
+  // SVC-090 proactive discovery
+  serviceDiscovered:      "citizen.discovery.service_discovered",
+  // SVC-081 government service catalogue
+  serviceDefinitionPublished: "citizen.catalogue.published",
+  // SVC-084 document submission & verification
+  documentVerified:       "citizen.document.verified",
+  // SVC-089 appeal, review & revision
+  appealFiled:            "citizen.appeal.filed",
+  appealDecided:          "citizen.appeal.decided",
 } as const;
 
 export const CONSUMED_EVENTS = {
