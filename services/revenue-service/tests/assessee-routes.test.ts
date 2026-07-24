@@ -52,6 +52,27 @@ vi.mock("../src/shared/infra.js", () => ({
   },
 }));
 
+// Bridge authPlugin (sets req.ctx) → revenue-service resolveContext (reads req.user)
+vi.mock("../src/shared/context.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/shared/context.js")>();
+  return {
+    ...original,
+    resolveContext: (req: any) => {
+      const ctx = req.ctx;
+      if (!ctx || ctx.actorId === "system" || ctx.actorId === "anonymous") {
+        throw new original.HttpError(401, "UNAUTHENTICATED", "missing authentication");
+      }
+      return {
+        actorId: ctx.actorId,
+        tenantId: ctx.tenantId,
+        roles: ctx.roles ?? [],
+        sessionId: ctx.sessionId ?? "",
+        correlationId: ctx.correlationId ?? req.id,
+      };
+    },
+  };
+});
+
 // ── App Setup ─────────────────────────────────────────────────────────────────
 
 let app: FastifyInstance;

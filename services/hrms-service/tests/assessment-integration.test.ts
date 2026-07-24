@@ -24,6 +24,7 @@ function tok(actor: string) {
   return signToken({ sub: actor, tid: TENANT, roles: ["super_admin", "hr_admin"], sid: "s" }, SECRET, 3600);
 }
 const auth = (t: string) => ({ authorization: `Bearer ${t}`, "content-type": "application/json" });
+const bare = (t: string) => ({ authorization: `Bearer ${t}` });
 
 let app: FastifyInstance;
 let bankId: string;
@@ -59,7 +60,7 @@ beforeAll(async () => {
   expect(res.statusCode).toBe(201);
   assessmentId = res.json().id;
 
-  res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/submit-for-approval`, headers: auth(tok(MAKER)) });
+  res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/submit-for-approval`, headers: bare(tok(MAKER)) });
   expect(res.statusCode).toBe(200);
 });
 
@@ -70,13 +71,13 @@ afterAll(async () => {
 
 describe("maker-checker on publish", () => {
   it("rejects publish by the creator (maker == checker)", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/publish`, headers: auth(tok(MAKER)) });
+    const res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/publish`, headers: bare(tok(MAKER)) });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("MAKER_CHECKER");
   });
 
   it("allows publish by a different checker", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/publish`, headers: auth(tok(CHECKER)) });
+    const res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/publish`, headers: bare(tok(CHECKER)) });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe("published");
     expect(res.json().approvedBy).toBe(CHECKER);
@@ -109,13 +110,23 @@ describe("attempt + certificate issuance", () => {
 
     // outbox row present for this tenant (read inside tenant GUC context)
     tenantStorage.enterWith({ tenantId: TENANT });
+    // NOTE: this service stores outbox payloads as a JSON-string scalar in the
+    // jsonb column (service-wide convention), so unwrap with #>>'{}' then re-cast.
     const outboxRows = await db.transaction((tx) =>
-      tx.execute(sql`select payload from _outbox.messages where topic = 'assessment.certificate.issued' and tenant_id = ${TENANT}::uuid`));
+      tx.execute(sql`select event_type,
+                            (payload #>> '{}')::jsonb ->> 'employee_id'    as employee_id,
+                            (payload #>> '{}')::jsonb ->> 'assessment_id'  as assessment_id,
+                            (payload #>> '{}')::jsonb ->> 'competency_ref' as competency_ref
+                       from _outbox.messages
+                      where topic = 'assessment.certificate.issued'
+                        and tenant_id = ${TENANT}::uuid
+                        and (payload #>> '{}')::jsonb ->> 'assessment_id' = ${assessmentId}`));
     expect(outboxRows.length).toBe(1);
-    const payload = (outboxRows[0] as { payload: Record<string, unknown> }).payload;
-    expect(payload.employee_id).toBe(EMP_PASS);
-    expect(payload.assessment_id).toBe(assessmentId);
-    expect(payload.competency_ref).toBe("COMP-FIRE");
+    const row = outboxRows[0] as Record<string, unknown>;
+    expect(row.event_type).toBe("assessment.certificate.issued");
+    expect(row.employee_id).toBe(EMP_PASS);
+    expect(row.assessment_id).toBe(assessmentId);
+    expect(row.competency_ref).toBe("COMP-FIRE");
   });
 
   it("issuance is idempotent — a second insert for the same attempt is a no-op", async () => {
@@ -154,7 +165,7 @@ describe("attempt + certificate issuance", () => {
 
   it("verify endpoint returns active status for the issued certificate", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/hrms/assessment/certificates/verify/${verifyToken}`,
-      headers: auth(tok(CHECKER)) });
+      headers: bare(tok(CHECKER)) });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe("active");
     expect(res.json().employeeId).toBe(EMP_PASS);
