@@ -11,12 +11,13 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      exclude: ["src/index.ts", "src/worker.ts"],
+      include: ["src/**/*.ts"],
+      exclude: ["src/index.ts", "src/worker.ts", "src/shared/db.ts", "src/shared/infra.ts", "src/shared/outbox.ts"],
       thresholds: {
-        lines: 80,
-        functions: 75,
-        branches: 65,
-        statements: 80,
+        lines: 99,
+        functions: 97,
+        branches: 92,
+        statements: 99,
       },
     },
   },

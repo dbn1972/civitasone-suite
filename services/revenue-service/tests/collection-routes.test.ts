@@ -14,8 +14,8 @@ const TENANT_ID = "t1111111-1111-1111-1111-111111111111";
 const USER_ID = "u1111111-1111-1111-1111-111111111111";
 const ASSESSEE_ID = "a2222222-2222-2222-2222-222222222222";
 const DEMAND_ID = "d1111111-1111-1111-1111-111111111111";
-const RECEIPT_ID = "r1111111-1111-1111-1111-111111111111";
-const REFUND_ID = "f1111111-1111-1111-1111-111111111111";
+const RECEIPT_ID = "11111111-1111-1111-1111-111111111111";
+const REFUND_ID = "22222222-2222-2222-2222-222222222222";
 
 function makeToken(roles: string[]) {
   return signToken({ sub: USER_ID, tid: TENANT_ID, roles, sid: "s1" }, SECRET, 3600);
@@ -57,6 +57,27 @@ vi.mock("../src/shared/infra.js", () => ({
     healthCheck: vi.fn().mockResolvedValue({ healthy: true }),
   },
 }));
+
+// Bridge authPlugin (sets req.ctx) → revenue-service resolveContext (reads req.user)
+vi.mock("../src/shared/context.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/shared/context.js")>();
+  return {
+    ...original,
+    resolveContext: (req: any) => {
+      const ctx = req.ctx;
+      if (!ctx || ctx.actorId === "system" || ctx.actorId === "anonymous") {
+        throw new original.HttpError(401, "UNAUTHENTICATED", "missing authentication");
+      }
+      return {
+        actorId: ctx.actorId,
+        tenantId: ctx.tenantId,
+        roles: ctx.roles ?? [],
+        sessionId: ctx.sessionId ?? "",
+        correlationId: ctx.correlationId ?? req.id,
+      };
+    },
+  };
+});
 
 // ── App Setup ─────────────────────────────────────────────────────────────────
 

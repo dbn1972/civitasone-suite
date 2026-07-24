@@ -50,6 +50,27 @@ vi.mock("../src/shared/infra.js", () => ({
   },
 }));
 
+// Bridge authPlugin (sets req.ctx) → revenue-service resolveContext (reads req.user)
+vi.mock("../src/shared/context.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/shared/context.js")>();
+  return {
+    ...original,
+    resolveContext: (req: any) => {
+      const ctx = req.ctx;
+      if (!ctx || ctx.actorId === "system" || ctx.actorId === "anonymous") {
+        throw new original.HttpError(401, "UNAUTHENTICATED", "missing authentication");
+      }
+      return {
+        actorId: ctx.actorId,
+        tenantId: ctx.tenantId,
+        roles: ctx.roles ?? [],
+        sessionId: ctx.sessionId ?? "",
+        correlationId: ctx.correlationId ?? req.id,
+      };
+    },
+  };
+});
+
 // ── App Setup ─────────────────────────────────────────────────────────────────
 
 let app: FastifyInstance;
@@ -93,32 +114,27 @@ describe("BBPS routes when BBPS_ENABLED is not true", () => {
 // ── POST /v1/revenue/bbps/fetch-bill ──────────────────────────────────────────
 
 describe("POST /v1/revenue/bbps/fetch-bill (validation)", () => {
-  it("returns 400 with empty body", async () => {
+  it("returns 403 BBPS_DISABLED even with empty body (BBPS check runs first)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/bbps/fetch-bill", headers: AUTH, payload: {} });
-    // Will be 403 BBPS_DISABLED (checked before validation) or 400
-    // Since BBPS check happens first, it should be 403
     expect(res.statusCode).toBe(403);
   });
 
-  it("returns 401 without auth", async () => {
+  it("returns 401 without auth (authPlugin intercepts before route)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/bbps/fetch-bill", payload: { assesseeIdentifier: "X" } });
-    // BBPS check happens before auth resolution in the route, so 403 BBPS_DISABLED
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
   });
 });
 
 // ── POST /v1/revenue/bbps/pay-bill ────────────────────────────────────────────
 
 describe("POST /v1/revenue/bbps/pay-bill (validation)", () => {
-  it("returns 400 with empty body", async () => {
+  it("returns 403 BBPS_DISABLED even with empty body (BBPS check runs first)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/bbps/pay-bill", headers: AUTH, payload: {} });
-    // BBPS check first → 403
     expect(res.statusCode).toBe(403);
   });
 
-  it("returns 401 without auth", async () => {
+  it("returns 401 without auth (authPlugin intercepts before route)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/bbps/pay-bill", payload: { assesseeIdentifier: "X", amountMinor: "100", bbpsTxnId: "T1", channel: "web" } });
-    // BBPS check first → 403
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
   });
 });
