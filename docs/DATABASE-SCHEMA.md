@@ -193,12 +193,24 @@ Schemas: `register`, `lifecycle`, `depreciation`, `maintenance`, `insurance`, `e
 - `maintenance.ticket` — asset_id, schedule.
 
 ### citizen — `civitas_citizen`
-Schemas: `rti`, `grievance`, `service`.
+Schemas: `rti`, `grievance`, `service`, `application`, `catalogue`, `eligibility`, `documents`, `fee`, `issuance`, `appeal`, `discovery`.
 
 - `rti.request` — id, tenant_id, applicant, subject, status.
 - `rti.transfer` — request_id → `rti.request`, to_unit; emits `citizen.rti.transferred` after `citizen.rti.transfer`.
 - `grievance.grievance` — id, applicant, category, status.
 - `service.application` — citizen service delivery requests.
+
+**Service delivery — SVC-081..090 (migrations `0015`/`0016`; every table tenant_id + FORCE RLS via `portal.current_tenant_id()`):**
+- `catalogue.service_definitions` — **SVC-081** versioned service catalogue: owner, linked eligibility rule-set / fee schedule / issuance type, required-docs checklist, SLA, channels, forms, outputs. Maker-checker + immutable-per-version publish; emits `citizen.catalogue.published`.
+- `application.citizen_applications` (+ `tracking_no`, `channel`, `assisted_by`, `acknowledged_at`), `application.application_drafts` — **SVC-082** online + assisted intake: draft save/resume, acknowledgement with unique tracking number, channel attribution (portal/counter/mobile/assisted).
+- `eligibility.rule_sets` (versioned, maker-checker publish), `eligibility.evaluations` — **SVC-083** configurable entitlement rules → reasoned outcome (eligible / refer-manual / not-eligible); emits `citizen.eligibility.ruleset_published`.
+- `documents.submissions` — **SVC-084** upload + DigiLocker-gated intake (env-gated: `provider_unconfigured`, no fake success), checklist sourced from catalogue, verify/reject/deficiency-memo/resubmission; emits `citizen.document.verified`.
+- `fee.schedules`, `fee.payments`, `fee.refunds` — **SVC-085** fee calc + exemptions, online (gateway env-gated → honest `pending`) + offline receipt, refund (maker-checker), reconciliation; emits `citizen.payment.requested`, `citizen.receipt.issued`.
+- `issuance.counters`, `issuance.certificates`, `issuance.certificate_events` — **SVC-086** certificate/licence/permit issuance: maker-checker approval, gapless number, HMAC seal + public token/QR verify (no auth), validity + amend/renew/revoke; emits `citizen.certificate.issued`, `citizen.certificate.revoked`.
+- `appeal.appeals`, `appeal.hearings` — **SVC-089** appeal/review/revision: filing-window validation, appellate authority, records transfer, hearing, order (maker-checker prepare≠issue), remand; emits `citizen.appeal.filed`, `citizen.appeal.decided`.
+- `discovery.consents`, `discovery.matches` — **SVC-090** consent-gated proactive discovery: run eligibility rules against a citizen profile → likely-eligible services → notify + assisted enrolment; emits `notification.send`, `citizen.discovery.service_discovered`.
+
+> Runtime note: `citizen_svc` currently holds `BYPASSRLS`, so the FORCE-RLS policies above are a defence-in-depth backstop; tenant isolation is enforced at the app layer via tenant-scoped `WHERE` (`findByIdTx(id, tenantId)`).
 
 ### billing — `civitas_billing`
 Schemas: `checkout`, `invoice`, `subscription`.
