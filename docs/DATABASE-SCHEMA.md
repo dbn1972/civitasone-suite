@@ -112,14 +112,20 @@ Schemas: `gl`, `budget`, `treasury`, `payments`, `org`.
 - Emits `finance.budget.created`; consumes payroll disbursement events.
 
 ### hrms — `civitas_hrms`
-Schemas: `employee`, `leave`, `gpf`, `pension`, `disciplinary`, `claims`, `recruitment`.
+Schemas: `employee`, `leave`, `gpf`, `pension`, `disciplinary`, `claims`, `recruitment`, `contracts`.
 
 - `employee.employee` — id, tenant_id, code, name, unit_id.
 - `leave.leave_type`, `leave.leave_balance` (employee_id → `employee.employee`), `leave.leave_request` (employee_id, type_id → `leave.leave_type`, status).
 - `gpf.account` — employee_id → `employee.employee`, opening_balance BigInt; `gpf.transaction`.
 - `pension.case` — employee_id, retirement_date, status.
 - `disciplinary.case`, `claims.claim`, `recruitment.vacancy` / `recruitment.application`.
+- `contracts.hrms_contracts` — id, tenant_id, employee_id, contract_no (unique per tenant), start_date, end_date, terms JSONB, renewal_count, status (draft/active/expiring/expired/renewed/terminated/escalated), previous_contract_id, version. Partial unique index on (tenant_id, employee_id) WHERE status = 'active'.
+- `contracts.hrms_contract_renewals` — id, tenant_id, contract_id, renewal_number, initiated_by, status (pending_approval/approved/rejected/budget_insufficient/cancelled), new_end_date, original_terms JSONB, new_terms JSONB, approval_chain JSONB, approved_by, rejected_by, rejection_reason, budget_ref, new_contract_id, version. Partial unique index on (tenant_id, contract_id) WHERE status = 'pending_approval'.
+- `contracts.hrms_contract_notifications` — id, tenant_id, contract_id, milestone (integer), sent_at. Unique constraint on (tenant_id, contract_id, milestone) for deduplication.
+- `contracts.hrms_contract_config` — id, tenant_id (unique), reminder_milestones JSONB, approval_chain JSONB, auto_separation_enabled boolean, scheduler_time_utc, version.
+- `contracts.hrms_contract_seq` — tenant_id (PK), next_val integer. Sequential contract number generator per tenant.
 - Emits `hrms.leave.approved`; on leave approval, payroll and finance react.
+- Emits `hrms.contract.*` events (created, renewed, expired, escalated, separated); consumes `contractRenewalDecided` from workflow-service.
 
 ### payroll — `civitas_payroll`
 Schemas: `run`, `component`, `payslip`, `bank`.
