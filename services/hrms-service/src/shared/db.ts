@@ -26,6 +26,7 @@ import { schema as assessmentModule } from "../modules/assessment/schema.js";
 import { schema as trainingAdminModule } from "../modules/training-admin/schema.js";
 import { schema as learningModule }      from "../modules/learning/schema.js";
 import { schema as competencyModule }    from "../modules/competency/schema.js";
+import { schema as contractsModule }    from "../modules/contracts/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -50,6 +51,7 @@ const SCHEMA = {
   ...trainingAdminModule,
   ...learningModule,
   ...competencyModule,
+  ...contractsModule,
   ...outboxSchema,
 };
 
