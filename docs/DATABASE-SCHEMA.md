@@ -283,6 +283,20 @@ Because each service owns its own database, **there are no cross-database foreig
 - hrms emits employee lifecycle events; payroll/estab project the minimal fields they need into their own tables.
 - Integrity across services is **eventual**, reconciled by the outbox→event→inbox pipeline, not enforced by the database engine.
 
+### revenue — `civitas_revenue`
+Schemas: `rates`, `assessee`, `billing`, `bbps`, `collection`.
+
+- `rates.rate_heads` — id, tenant_id, code varchar(64), name, category varchar(64) (property_tax/water/sewerage/etc.), unit_of_measure, is_active boolean, version. Unique: (tenant_id, code).
+- `rates.rate_slabs` — id, tenant_id, rate_head_id → `rates.rate_heads`, slab_type varchar(16) (flat/band/ad_valorem), band_from BigInt, band_to BigInt, rate_value BigInt (paise or bps depending on slab_type), effective_from date, effective_to date, unit_of_measure, is_active, version.
+- `rates.penalty_rules` — id, tenant_id, rate_head_id → `rates.rate_heads`, interest_type (simple/compound), annual_rate_bps int, grace_days int, cap_months int (nullable = uncapped), rounding_mode (round_half_up/floor/ceil), is_active, version.
+- `rates.rebate_rules` — id, tenant_id, rate_head_id → `rates.rate_heads`, rebate_type (early_payment/category), discount_bps int, valid_until_days_before_due int, is_active, version.
+- `assessee.assessees` — property/tax assessees (id, tenant_id, registration details).
+- `billing.bills` — demand/bill generation (id, tenant_id, amount BigInt).
+- `bbps.biller_config`, `bbps.bbps_transactions` — BBPS integration.
+- `collection.collections` — payment collections.
+- Port 3038, gateway prefix `/api/v1/revenue`.
+- Emits `revenue.rate_head.created`, `revenue.bill.generated`; consumes `finance.bank_statement.reconciled`.
+
 ---
 
 *For messaging contracts and per-service routes see `SERVICES.md`; for the overall architecture see `ARCHITECTURE.md`.*
