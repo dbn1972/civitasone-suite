@@ -36,9 +36,14 @@
  *   entry.stock_receipts       → inventory.cost_layers
  */
 
-// Items
-export { items, categories, uoms } from "./items/schema.js";
-export type { ItemRow, ItemInsert, CategoryRow, CategoryInsert, UomRow, UomInsert } from "./items/schema.js";
+// Items + substitutes + bins + custodians + reservations + goods-returns
+export { items, categories, uoms, itemSubstitutes, bins, custodians, reservations, goodsReturns } from "./items/schema.js";
+export type {
+  ItemRow, ItemInsert, CategoryRow, CategoryInsert, UomRow, UomInsert,
+  ItemSubstituteRow, ItemSubstituteInsert, BinRow, BinInsert,
+  CustodianRow, CustodianInsert, ReservationRow, ReservationInsert,
+  GoodsReturnRow, GoodsReturnInsert,
+} from "./items/schema.js";
 
 // Warehouses (canonical — replaces stock-service warehouses)
 export { warehouses } from "./warehouses/schema.js";

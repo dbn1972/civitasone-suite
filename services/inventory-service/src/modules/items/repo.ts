@@ -6,10 +6,15 @@ import { eq, and, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { DomainError } from "../../shared/domain.js";
 import {
-  items, categories, uoms,
+  items, categories, uoms, itemSubstitutes, bins, custodians, reservations, goodsReturns,
   type ItemInsert, type ItemRow, type ItemView,
   type CategoryInsert, type CategoryRow,
   type UomInsert, type UomRow,
+  type ItemSubstituteRow, type ItemSubstituteInsert,
+  type BinRow, type BinInsert,
+  type CustodianRow, type CustodianInsert,
+  type ReservationRow, type ReservationInsert,
+  type GoodsReturnRow, type GoodsReturnInsert,
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -27,10 +32,17 @@ const itemViewColumns = {
   itemType: items.itemType,
   reorderLevel: items.reorderLevel,
   reorderQty: items.reorderQty,
+  reorderMax: items.reorderMax,
   valuationMethod: items.valuationMethod,
   unitCostMinor: items.unitCostMinor,
   currency: items.currency,
   isActive: items.isActive,
+  hsnCode: items.hsnCode,
+  gstRate: items.gstRate,
+  taxClass: items.taxClass,
+  shelfLifeDays: items.shelfLifeDays,
+  requiresBatchTracking: items.requiresBatchTracking,
+  requiresSerialTracking: items.requiresSerialTracking,
   version: items.version,
 } as const;
 
@@ -124,6 +136,90 @@ export async function insertUom(tx: Writer, row: UomInsert): Promise<void> {
 export async function listUoms(tenantId: string, limit: number, offset: number): Promise<UomRow[]> {
   return scopedRead((tx) => tx.select().from(uoms)
     .where(eq(uoms.tenantId, tenantId))
+    .limit(limit).offset(offset));
+}
+
+// ── Substitutes (SVC-051) ──────────────────────────────────────────────────
+
+export async function insertSubstitute(tx: Writer, row: ItemSubstituteInsert): Promise<void> {
+  await tx.insert(itemSubstitutes).values(row);
+}
+
+export async function listSubstitutes(tenantId: string, itemId: string): Promise<ItemSubstituteRow[]> {
+  return scopedRead((tx) => tx.select().from(itemSubstitutes)
+    .where(and(eq(itemSubstitutes.tenantId, tenantId), eq(itemSubstitutes.itemId, itemId))));
+}
+
+// ── Bins/Rack (SVC-052) ────────────────────────────────────────────────────
+
+export async function insertBin(tx: Writer, row: BinInsert): Promise<void> {
+  await tx.insert(bins).values(row);
+}
+
+export async function listBins(tenantId: string, limit: number, offset: number): Promise<BinRow[]> {
+  return scopedRead((tx) => tx.select().from(bins)
+    .where(eq(bins.tenantId, tenantId))
+    .limit(limit).offset(offset));
+}
+
+// ── Reservations (SVC-054) ─────────────────────────────────────────────────
+
+export async function insertReservation(tx: Writer, row: ReservationInsert): Promise<void> {
+  await tx.insert(reservations).values(row);
+}
+
+export async function releaseReservation(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  expectedVersion: number,
+  actorId: string,
+): Promise<void> {
+  const updated = await (tx as typeof db)
+    .update(reservations)
+    .set({ status: "released", updatedBy: actorId, updatedAt: new Date(), version: sql`${reservations.version} + 1` })
+    .where(and(eq(reservations.id, id), eq(reservations.tenantId, tenantId), eq(reservations.version, expectedVersion), eq(reservations.status, "active")))
+    .returning();
+  if (updated.length === 0) throw new DomainError("RESERVATION_RELEASE_FAILED", `reservation ${id} not found, already released, or version conflict`);
+}
+
+export async function listReservations(tenantId: string, limit: number, offset: number): Promise<ReservationRow[]> {
+  return scopedRead((tx) => tx.select().from(reservations)
+    .where(and(eq(reservations.tenantId, tenantId), eq(reservations.status, "active")))
+    .limit(limit).offset(offset));
+}
+
+/** Sum of active reservations for an item at a store (used by issue validation). */
+export async function sumReservedQty(tenantId: string, itemId: string, storeId: string): Promise<number> {
+  const result = await scopedRead((tx) => tx.select({ total: sql<number>`COALESCE(SUM(${reservations.qty}), 0)` })
+    .from(reservations)
+    .where(and(eq(reservations.tenantId, tenantId), eq(reservations.itemId, itemId), eq(reservations.storeId, storeId), eq(reservations.status, "active"))));
+  return Number(result[0]?.total ?? 0);
+}
+
+// ── Goods Returns + QC (SVC-053) ───────────────────────────────────────────
+
+export async function insertGoodsReturn(tx: Writer, row: GoodsReturnInsert): Promise<void> {
+  await tx.insert(goodsReturns).values(row);
+}
+
+export async function updateGoodsReturnQc(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  patch: { qcStatus: string; qcInspectedBy: string; qcInspectedAt: Date; qcNotes?: string; disposition: string },
+): Promise<void> {
+  const updated = await (tx as typeof db)
+    .update(goodsReturns)
+    .set({ ...patch, updatedAt: new Date(), updatedBy: patch.qcInspectedBy, version: sql`${goodsReturns.version} + 1` })
+    .where(and(eq(goodsReturns.id, id), eq(goodsReturns.tenantId, tenantId), eq(goodsReturns.qcStatus, "pending")))
+    .returning();
+  if (updated.length === 0) throw new DomainError("QC_NOT_PENDING", `goods return ${id} is not pending inspection`);
+}
+
+export async function listGoodsReturns(tenantId: string, limit: number, offset: number): Promise<GoodsReturnRow[]> {
+  return scopedRead((tx) => tx.select().from(goodsReturns)
+    .where(eq(goodsReturns.tenantId, tenantId))
     .limit(limit).offset(offset));
 }
 

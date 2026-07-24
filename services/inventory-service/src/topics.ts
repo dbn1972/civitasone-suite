@@ -13,6 +13,16 @@ export const COMMANDS = {
   itemUpdate:       "inventory.item.update",
   categoryCreate:   "inventory.category.create",
   uomCreate:        "inventory.uom.create",
+  // Substitutes (SVC-051)
+  substituteCreate: "inventory.substitute.create",
+  // Bins/rack (SVC-052)
+  binCreate:        "inventory.bin.create",
+  // Reservations/allocations (SVC-054)
+  reservationCreate:  "inventory.reservation.create",
+  reservationRelease: "inventory.reservation.release",
+  // Goods returns + QC (SVC-053)
+  goodsReturnCreate:  "inventory.goods_return.create",
+  goodsReturnInspect: "inventory.goods_return.inspect",
   // Stores (store locations)
   storeCreate:      "inventory.store.create",
   // Warehouses (canonical model — unification with stock-service)
@@ -27,6 +37,9 @@ export const COMMANDS = {
   batchCreate:      "inventory.batch.create",
   batchIssue:       "inventory.batch.issue",
   serialRegister:   "inventory.serial.register",
+  // Batch quarantine/recall (SVC-055)
+  batchQuarantine:  "inventory.batch.quarantine",
+  batchRecall:      "inventory.batch.recall",
   // Cycle count
   cycleCountCreate:  "inventory.cycle-count.create",
   cycleCountApprove: "inventory.cycle-count.approve",
@@ -65,6 +78,22 @@ export const EVENTS = {
   matchCompleted:    "inventory.match.completed",
   /** Emitted when a three-way match discrepancy is resolved. */
   matchResolved:     "inventory.match.resolved",
+  /** Emitted when a substitute is registered for an item. */
+  substituteCreated: "inventory.substitute.created",
+  /** Emitted when a bin location is created in a store. */
+  binCreated:        "inventory.bin.created",
+  /** Emitted when stock is reserved against an indent/PO. */
+  reservationCreated: "inventory.reservation.created",
+  /** Emitted when a reservation is released (issued or cancelled). */
+  reservationReleased: "inventory.reservation.released",
+  /** Emitted when goods are returned and a QC inspection is pending. */
+  goodsReturnCreated: "inventory.goods_return.created",
+  /** Emitted when QC inspection is completed on returned goods. */
+  goodsReturnInspected: "inventory.goods_return.inspected",
+  /** Emitted when a batch is quarantined (quality/expiry concern). */
+  batchQuarantined: "inventory.batch.quarantined",
+  /** Emitted when a batch recall is issued — traces to all issued locations. */
+  batchRecalled:     "inventory.batch.recalled",
 } as const;
 
 /** Topics owned by OTHER services that inventory-service consumes. */
