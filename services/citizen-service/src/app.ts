@@ -23,6 +23,10 @@ import { eligibilityRoutes } from "./modules/eligibility/routes.js";
 import { feePaymentRoutes } from "./modules/fee-payment/routes.js";
 import { issuanceRoutes } from "./modules/issuance/routes.js";
 import { discoveryRoutes } from "./modules/discovery/routes.js";
+import { catalogueRoutes } from "./modules/catalogue/routes.js";
+import { intakeRoutes } from "./modules/application/intake-routes.js";
+import { documentsRoutes } from "./modules/documents/routes.js";
+import { appealRoutes } from "./modules/appeal/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   // P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so we never boot fail-open.
@@ -58,6 +62,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(feePaymentRoutes);
   await app.register(issuanceRoutes);
   await app.register(discoveryRoutes);
+  await app.register(catalogueRoutes);
+  await app.register(intakeRoutes);
+  await app.register(documentsRoutes);
+  await app.register(appealRoutes);
   const { citizenGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(citizenGapRoutes);
 

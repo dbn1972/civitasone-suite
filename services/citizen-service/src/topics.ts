@@ -50,6 +50,13 @@ export const EVENTS = {
   certificateRevoked:     "citizen.certificate.revoked",
   // SVC-090 proactive discovery
   serviceDiscovered:      "citizen.discovery.service_discovered",
+  // SVC-081 government service catalogue
+  serviceDefinitionPublished: "citizen.catalogue.published",
+  // SVC-084 document submission & verification
+  documentVerified:       "citizen.document.verified",
+  // SVC-089 appeal, review & revision
+  appealFiled:            "citizen.appeal.filed",
+  appealDecided:          "citizen.appeal.decided",
 } as const;
 
 export const CONSUMED_EVENTS = {
