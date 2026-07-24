@@ -306,6 +306,7 @@ export type MobileCapability = typeof REQUIRED_CAPABILITIES[number];
 /**
  * MobileChecklistContract — aggregated namespace documenting the mobile API contract.
  */
+// eslint-disable-next-line @typescript-eslint/no-namespace -- type-only aggregation namespace documenting the mobile API contract
 export namespace MobileChecklistContract {
   export type SyncPackage = MobileSyncPackage;
   export type OfflineResponse = MobileOfflineResponse;

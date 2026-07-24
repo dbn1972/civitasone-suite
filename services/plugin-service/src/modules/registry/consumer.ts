@@ -43,7 +43,7 @@ export function registerRegistryConsumers(queue: Queue): void {
         manifestJson: p.manifestJson,
         state: "installed",
         installedAt: new Date(),
-        config: p.config ?? undefined,
+        ...(p.config != null ? { config: p.config } : {}),
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,

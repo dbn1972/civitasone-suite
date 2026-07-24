@@ -23,11 +23,11 @@ export function ApprovalsTable({
 }: {
   aaApprovals: Record<string, unknown>[];
   tsApprovals: Record<string, unknown>[];
-  source: string;
+  source: "api" | "error";
 }) {
   const [tab, setTab] = useState<Tab>("aa");
-  const { data: aaData } = useSeededResource("works-approvals-aa", aaApprovals, source, aaApprovals.length === 0);
-  const { data: tsData } = useSeededResource("works-approvals-ts", tsApprovals, source, tsApprovals.length === 0);
+  const { data: aaData } = useSeededResource("works-approvals-aa", aaApprovals, source, (rows) => rows.length === 0);
+  const { data: tsData } = useSeededResource("works-approvals-ts", tsApprovals, source, (rows) => rows.length === 0);
   const rows = tab === "aa" ? aaData : tsData;
 
   return (

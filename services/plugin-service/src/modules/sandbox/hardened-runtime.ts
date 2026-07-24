@@ -199,7 +199,7 @@ export async function executePlugin(
         resolve({
           success: msg.success ?? false,
           output: msg.output,
-          error: msg.error,
+          ...(msg.error !== undefined ? { error: msg.error } : {}),
           executionMs: Date.now() - startMs,
         });
       }

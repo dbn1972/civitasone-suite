@@ -1,16 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { ErrorState } from "../../_components/ds";
 
 export default function ApprovalsError({ reset }: { reset: () => void }) {
   return (
     <ErrorState
-      title="Something went wrong"
-      message="We couldn't load your approvals. This is usually a temporary issue."
-      retry={reset}
-      back="/dashboard"
-      help="/help/approvals"
+      error={{
+        what: "Something went wrong.",
+        next: "We couldn't load your approvals. This is usually a temporary issue — please try again.",
+        actions: ["retry", "back", "help"],
+      }}
+      onRetry={reset}
+      backHref="/dashboard"
+      helpHref="/help/approvals"
     />
   );
 }

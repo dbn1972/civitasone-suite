@@ -83,7 +83,7 @@ function getSigningKey(header: jwt.JwtHeader): Promise<string> {
 
 /**
  * SEC-1: HS256 (shared-secret) auth is forbidden in production. The dev/test
- * shared secret (`civitasone-dev-secret`) was used to forge a super_admin token.
+ * shared development secret was used to forge a super_admin token.
  * In production we verify exclusively against the Keycloak JWKS (RS256); any
  * attempt to run HS256 in prod is a fatal misconfiguration, not a silent fallback.
  */

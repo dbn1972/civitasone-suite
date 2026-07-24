@@ -29,6 +29,7 @@ export function RouteError({
 }) {
   useEffect(() => {
     // Developer-only: never shown to the clerk.
+    // eslint-disable-next-line no-console -- error boundary logging
     console.error("Route error:", error);
   }, [error]);
 

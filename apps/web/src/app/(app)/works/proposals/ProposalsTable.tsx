@@ -13,8 +13,8 @@ const columns = [
   { key: "office", label: "Office", sortable: true },
 ];
 
-export function ProposalsTable({ proposals, source }: { proposals: Record<string, unknown>[]; source: string }) {
-  const { data, isEmpty } = useSeededResource("works-proposals", proposals, source, proposals.length === 0);
+export function ProposalsTable({ proposals, source }: { proposals: Record<string, unknown>[]; source: "api" | "error" }) {
+  const { data } = useSeededResource("works-proposals", proposals, source, (rows) => rows.length === 0);
 
   return (
     <DataTable

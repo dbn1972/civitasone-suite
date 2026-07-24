@@ -82,7 +82,7 @@ describe("useSSEConnection", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     MockEventSource.reset();
-    (globalThis as unknown as { EventSource: typeof MockEventSource }).EventSource = MockEventSource as unknown as typeof EventSource;
+    (globalThis as unknown as { EventSource: typeof MockEventSource }).EventSource = MockEventSource;
   });
 
   afterEach(() => {

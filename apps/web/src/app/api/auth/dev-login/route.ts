@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 
 const SECRET = process.env.JWT_SECRET ?? "civitasone-dev-secret";
 const TENANT = process.env.DEMO_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
+// Dev-only demo password. Real value lives in an untracked apps/web/.env (DEV_LOGIN_PASSWORD).
+const DEV_PASSWORD = process.env.DEV_LOGIN_PASSWORD ?? "";
 
 const ALL_ROLES = [
   "super_admin", "admin", "tenant_admin", "platform_admin",
@@ -20,16 +22,16 @@ type DevUser = { password: string; sub: string; name: string; email: string; rol
 
 const USERS: Record<string, DevUser> = {
   superadmin: {
-    password: "Civitas@123", sub: "00000000-0000-0000-0000-000000000099",
+    password: DEV_PASSWORD, sub: "00000000-0000-0000-0000-000000000099",
     name: "Super Admin", email: "superadmin@civitasone.dev", roles: ALL_ROLES,
   },
   officer: {
-    password: "Civitas@123", sub: "00000000-0000-0000-0000-000000000098",
+    password: DEV_PASSWORD, sub: "00000000-0000-0000-0000-000000000098",
     name: "Department Officer", email: "officer@civitasone.dev",
     roles: ["officer", "finance_admin", "hr_admin", "procurement_admin", "crm_admin", "reader", "viewer"],
   },
   auditor: {
-    password: "Civitas@123", sub: "00000000-0000-0000-0000-000000000097",
+    password: DEV_PASSWORD, sub: "00000000-0000-0000-0000-000000000097",
     name: "Auditor / Legal", email: "auditor@civitasone.dev",
     roles: ["audit_admin", "legal_admin", "reader", "viewer"],
   },

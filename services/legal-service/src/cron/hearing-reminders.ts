@@ -54,6 +54,7 @@ export function startHearingReminderCron(): void {
           .where(eq(legalCases.id, h.caseId));
       }
     } catch (err) {
+      // eslint-disable-next-line no-console -- cron error logging to stderr
       console.error("[legal-cron] hearing reminder failed:", err);
     }
   };

@@ -14,9 +14,9 @@ const columns = [
 
 type Tab = "closed" | "dropped" | "completion";
 
-export function ClosureTable({ closures, source }: { closures: Record<string, unknown>[]; source: string }) {
+export function ClosureTable({ closures, source }: { closures: Record<string, unknown>[]; source: "api" | "error" }) {
   const [tab, setTab] = useState<Tab>("closed");
-  const { data } = useSeededResource("works-closure", closures, source, closures.length === 0);
+  const { data } = useSeededResource("works-closure", closures, source, (rows) => rows.length === 0);
   const rows = data.filter((c) => String(c.status ?? "").toLowerCase() === tab);
 
   return (

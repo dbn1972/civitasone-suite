@@ -12,8 +12,8 @@ const columns = [
   { key: "status", label: "Status", cellType: "status" as const, sortable: true },
 ];
 
-export function TendersTable({ tenders, source }: { tenders: Record<string, unknown>[]; source: string }) {
-  const { data } = useSeededResource("works-tenders", tenders, source, tenders.length === 0);
+export function TendersTable({ tenders, source }: { tenders: Record<string, unknown>[]; source: "api" | "error" }) {
+  const { data } = useSeededResource("works-tenders", tenders, source, (rows) => rows.length === 0);
 
   return (
     <DataTable
