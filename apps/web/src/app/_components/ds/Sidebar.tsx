@@ -57,6 +57,7 @@ const NAV: NavGroup[] = [
     items: [
       { icon: "🤝", label: "CRM", href: "/crm", moduleKey: "crm" },
       { icon: "🎧", label: "Helpdesk", href: "/helpdesk", moduleKey: "helpdesk" },
+      { icon: "🗂️", label: "Service Catalogue", href: "/helpdesk/catalogue", moduleKey: "helpdesk" },
       { icon: "🪪", label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
       { icon: "🛂", label: "Visitor Mgmt", href: "/visitor", moduleKey: "visitor" },
       { icon: "⚖️", label: "Meeting Mgmt", href: "/meeting", moduleKey: "meeting" },
@@ -75,8 +76,12 @@ const NAV: NavGroup[] = [
     items: [
       { icon: "📈", label: "Reports", href: "/reports", moduleKey: "reports" },
       { icon: "📚", label: "Knowledge", href: "/knowledge", moduleKey: "knowledge" },
+      { icon: "📋", label: "Policies & SOPs", href: "/knowledge/policies", moduleKey: "knowledge" },
+      { icon: "❔", label: "FAQ", href: "/knowledge/faqs", moduleKey: "knowledge" },
+      { icon: "🤖", label: "Assistant", href: "/knowledge/assistant", moduleKey: "knowledge" },
       { icon: "🔔", label: "Notifications", href: "/notifications", moduleKey: null },
       { icon: "🛡️", label: "Tenant Admin", href: "/tenant-admin", moduleKey: null },
+      { icon: "🔧", label: "Change & Release", href: "/change", moduleKey: null },
     ],
   },
 ];
