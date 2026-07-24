@@ -12,10 +12,10 @@ export interface CreateWebhookEndpointPayload {
 }
 
 export interface UpdateWebhookEndpointPayload {
-  name?: string;
-  url?: string;
-  secret?: string;
-  enabled?: boolean;
+  name?: string | undefined;
+  url?: string | undefined;
+  secret?: string | undefined;
+  enabled?: boolean | undefined;
 }
 
 export async function createWebhookEndpoint(ctx: RequestContext, payload: CreateWebhookEndpointPayload): Promise<Accepted> {

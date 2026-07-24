@@ -10,6 +10,13 @@ export const notificationTemplates = templatesSchema.table("templates", {
   subject:   varchar("subject", { length: 256 }),
   body:      text("body").notNull(),
   status:    varchar("status", { length: 24 }).notNull().default("active"),
+  // Approval workflow columns (added by migration 0020)
+  contentType:     varchar("content_type", { length: 16 }).notNull().default("text"),
+  submittedBy:     uuid("submitted_by"),
+  submittedAt:     timestamp("submitted_at", { withTimezone: true }),
+  approvedBy:      uuid("approved_by"),
+  approvedAt:      timestamp("approved_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

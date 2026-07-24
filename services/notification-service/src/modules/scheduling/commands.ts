@@ -8,10 +8,10 @@ export type Accepted = { id: string; status: string; correlationId: string };
 export interface ScheduleNotificationPayload {
   templateId: string;
   recipient: string;
-  recipientId?: string;
+  recipientId?: string | undefined;
   channel: string;
-  priority?: string;
-  variables?: Record<string, unknown>;
+  priority?: string | undefined;
+  variables?: Record<string, unknown> | undefined;
   scheduledAt: string;
 }
 

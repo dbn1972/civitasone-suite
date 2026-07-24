@@ -4,6 +4,7 @@ import { smsAdapter } from "./sms.js";
 import { pushAdapter } from "./push.js";
 import { inAppAdapter } from "./in_app.js";
 import { whatsAppAdapter } from "./whatsapp.js";
+import { webhookAdapter } from "./webhook.js";
 import { setNotificationPublisherForTests, MemoryNotificationPublisher } from "./pubsub.js";
 
 export type { SendParams, SendResult, ChannelAdapter } from "./types.js";
@@ -15,6 +16,7 @@ const adapters: Record<string, ChannelAdapter> = {
   push:     pushAdapter,
   in_app:   inAppAdapter,
   whatsapp: whatsAppAdapter,
+  webhook:  webhookAdapter,
 };
 
 export function getAdapter(type: string): ChannelAdapter | undefined {
@@ -27,4 +29,4 @@ export function getAdapterOrThrow(type: string): ChannelAdapter {
   return adapter;
 }
 
-export { emailAdapter, smsAdapter, pushAdapter, inAppAdapter, whatsAppAdapter };
+export { emailAdapter, smsAdapter, pushAdapter, inAppAdapter, whatsAppAdapter, webhookAdapter };
