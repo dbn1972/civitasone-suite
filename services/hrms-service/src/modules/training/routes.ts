@@ -7,7 +7,7 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
-import { createTrainingBody, createNominationBody, completeNominationBody } from "./validators.js";
+import { createTrainingBody, createNominationBody, completeNominationBody, myNominationsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -28,6 +28,15 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createTrainingBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createTraining(ctx, body));
+  });
+
+  // SVC-121/122 -- an employee's own nominations with approval state + linked
+  // training/session. Tenant-scoped + RLS-safe (read runs inside scopedRead).
+  app.get("/v1/hrms/nominations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const q = myNominationsQuery.parse(req.query);
+    return reply.send(await queries.listMyNominations(ctx.tenantId, q.employeeId, q.limit));
   });
 
   app.post("/v1/hrms/nominations", async (req, reply) => {

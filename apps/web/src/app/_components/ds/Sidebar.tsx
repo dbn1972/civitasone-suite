@@ -42,6 +42,17 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    group: "LEARNING",
+    items: [
+      { icon: "🎓", label: "Catalogue", href: "/learning", moduleKey: "hrms" },
+      { icon: "📚", label: "My Learning", href: "/learning/my-learning", moduleKey: "hrms" },
+      { icon: "📅", label: "Training Calendar", href: "/learning/calendar", moduleKey: "hrms" },
+      { icon: "🎯", label: "Competencies", href: "/learning/competency", moduleKey: "hrms" },
+      { icon: "📝", label: "Assessments", href: "/learning/assessments", moduleKey: "hrms" },
+      { icon: "🔖", label: "Verify Certificate", href: "/learning/assessments/verify", moduleKey: "hrms" },
+    ],
+  },
+  {
     group: "CITIZEN SERVICES",
     items: [
       { icon: "🤝", label: "CRM", href: "/crm", moduleKey: "crm" },

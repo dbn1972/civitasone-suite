@@ -86,3 +86,16 @@ export function verifyCertificate(token: string): Promise<LoaderResult<Certifica
     null, { telemetryKey: "learning.verify_certificate", revalidateSeconds: 0, mapResponse: (x) => (x ?? null) },
   );
 }
+
+export type MyNomination = {
+  id: string; employeeId: string; approvalState: string; status: string;
+  trainingId: string; trainingTitle?: string; startDate?: string; endDate?: string; venue?: string;
+  sessionId?: string; sessionTitle?: string; sessionDate?: string; waitlistPosition?: number;
+  result?: string; score?: number; completedDate?: string;
+};
+export function getMyNominations(employeeId: string): Promise<LoaderResult<MyNomination[]>> {
+  return fetchJson(`/api/v1/hrms/nominations?employeeId=${encodeURIComponent(employeeId)}`, [] as MyNomination[], {
+    telemetryKey: "learning.my_nominations", revalidateSeconds: 15,
+    mapResponse: (x) => (Array.isArray(x) ? (x as MyNomination[]) : []),
+  });
+}

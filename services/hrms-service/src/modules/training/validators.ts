@@ -23,3 +23,10 @@ export const completeNominationBody = z.object({
   certificateRef: z.string().max(256).optional(),
 });
 export type CompleteNominationBody = z.infer<typeof completeNominationBody>;
+
+// SVC-121/122 -- per-employee "my nominations" read query.
+export const myNominationsQuery = z.object({
+  employeeId: z.string().uuid(),
+  limit:      z.coerce.number().int().positive().max(200).default(100),
+});
+export type MyNominationsQuery = z.infer<typeof myNominationsQuery>;
