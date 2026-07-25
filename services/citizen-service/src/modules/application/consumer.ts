@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -9,7 +10,10 @@ import * as portalRepo from "../portal/repo.js";
 import * as analyticsRepo from "../analytics/repo.js";
 import { assertStatusTransition, assertRequiredDocuments, buildPresignedUploadUrl, computeDeadline, toDateString, isSlaBreached } from "./domain.js";
 
-export function registerApplicationConsumers(queue: Queue): void {
+export function registerApplicationConsumers(rawQueue: Queue): void {
+  // #146 NOBYPASSRLS: every handler must run inside the message's tenant
+  // context so wrapWithTenantGuc sets app.tenant_id (RLS) in db.transaction().
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.applicationSubmit, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string; serviceId: string;

@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, getCurrentTenantId, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -44,6 +44,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
+  // #146 NOBYPASSRLS repair: createTenantTxHook only honours the x-tenant-id
+  // header. Requests authenticated purely via a Bearer token (JWT `tid` claim,
+  // resolved into req.ctx by authPlugin above) previously ran with NO tenant
+  // ALS context, so wrapWithTenantGuc never set app.tenant_id — every RLS read
+  // returned 0 rows and writes were rejected once citizen_svc lost BYPASSRLS.
+  // Fall back to the authenticated context's tenantId (never overrides an
+  // explicit x-tenant-id, which the hook above has already entered).
+  app.addHook("onRequest", async (req) => {
+    if (!getCurrentTenantId()) {
+      const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+      if (tid) tenantStorage.enterWith({ tenantId: tid });
+    }
+  });
 
   registerOpsRoutes(app, { service: "citizen-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 

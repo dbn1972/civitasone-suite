@@ -71,14 +71,25 @@ async function waitReady(url: string, headers = ofH) {
   await waitFor(async () => (await get(url, headers)).statusCode === 200);
 }
 
+// Domain tables + _outbox.messages have FORCED RLS. Raw sqlClient access must
+// set the transaction-LOCAL app.tenant_id GUC (telephony sqlAsTenant pattern).
+async function sqlAsTenant<T>(tenantId: string, fn: (sql: typeof sqlClient) => Promise<T> | T): Promise<T> {
+  return sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${tenantId}, true)`;
+    return fn(sql as unknown as typeof sqlClient);
+  }) as Promise<T>;
+}
+
 afterAll(async () => {
   // Clean up rows created by this suite (additive, tenant-scoped).
   for (const t of [TENANT, TENANT2]) {
-    await sqlClient`delete from grievance.citizen_grievances where tenant_id = ${t}`.catch(() => {});
-    await sqlClient`delete from application.citizen_applications where tenant_id = ${t}`.catch(() => {});
-    await sqlClient`delete from rti.citizen_rti_requests where tenant_id = ${t}`.catch(() => {});
-    await sqlClient`delete from helpdesk.citizen_tickets where tenant_id = ${t}`.catch(() => {});
-    await sqlClient`delete from portal.citizen_profiles where tenant_id = ${t}`.catch(() => {});
+    await sqlAsTenant(t, async (sql) => {
+      await sql`delete from grievance.citizen_grievances where tenant_id = ${t}`;
+      await sql`delete from application.citizen_applications where tenant_id = ${t}`;
+      await sql`delete from rti.citizen_rti_requests where tenant_id = ${t}`;
+      await sql`delete from helpdesk.citizen_tickets where tenant_id = ${t}`;
+      await sql`delete from portal.citizen_profiles where tenant_id = ${t}`;
+    }).catch(() => {});
   }
   await app.close();
   await sqlClient.end();
@@ -293,10 +304,10 @@ describe("Portal profile PII — name ciphertext at rest (DPDP)", () => {
       { citizenId: OWNER, name: plaintextName, mobile: "9876543210", consentGranted: true }, ofH);
     expect(r.statusCode).toBe(202);
     await waitFor(async () => {
-      const rows = await sqlClient`select name from portal.citizen_profiles where id = ${OWNER} and tenant_id = ${TENANT}`;
+      const rows = await sqlAsTenant(TENANT, (sql) => sql`select name from portal.citizen_profiles where id = ${OWNER} and tenant_id = ${TENANT}`);
       return rows.length > 0;
     });
-    const rows = await sqlClient`select name, mobile from portal.citizen_profiles where id = ${OWNER} and tenant_id = ${TENANT}`;
+    const rows = await sqlAsTenant(TENANT, (sql) => sql`select name, mobile from portal.citizen_profiles where id = ${OWNER} and tenant_id = ${TENANT}`);
     expect(rows.length).toBe(1);
     // Ciphertext must NOT equal the plaintext, and must not contain it.
     expect(rows[0].name).not.toBe(plaintextName);
@@ -317,7 +328,7 @@ describe("Input sanitation rejected at the HTTP boundary", () => {
     expect(r.statusCode).toBe(202);
     const gid = JSON.parse(r.body).id;
     await waitReady(`/v1/citizen/grievances/${gid}`);
-    const rows = await sqlClient`select category from grievance.citizen_grievances where id = ${gid}`;
+    const rows = await sqlAsTenant(TENANT, (sql) => sql`select category from grievance.citizen_grievances where id = ${gid}`);
     expect(String(rows[0].category).startsWith("'=")).toBe(true);
   }, 20000);
 });
@@ -338,13 +349,13 @@ describe("Idempotency — replayed grievance.register does not duplicate", () =>
       { citizenId: OWNER, category: "sewage", subject: "idem", description: "once" }, ofH);
     const gid = JSON.parse(r.body).id;
     await waitReady(`/v1/citizen/grievances/${gid}`);
-    const before = await sqlClient`select count(*)::int as c from grievance.citizen_grievances where id = ${gid}`;
+    const before = await sqlAsTenant(TENANT, (sql) => sql`select count(*)::int as c from grievance.citizen_grievances where id = ${gid}`);
     expect(before[0].c).toBe(1);
     // Re-publishing assign twice with the same body — terminal row count stays 1.
     await patch(`/v1/citizen/grievances/${gid}/assign`, { assignedTo: ASSIGNEE }, ofH);
     await patch(`/v1/citizen/grievances/${gid}/assign`, { assignedTo: ASSIGNEE }, ofH);
     await new Promise((res) => setTimeout(res, 300));
-    const after = await sqlClient`select count(*)::int as c from grievance.citizen_grievances where id = ${gid}`;
+    const after = await sqlAsTenant(TENANT, (sql) => sql`select count(*)::int as c from grievance.citizen_grievances where id = ${gid}`);
     expect(after[0].c).toBe(1);
   }, 20000);
 });

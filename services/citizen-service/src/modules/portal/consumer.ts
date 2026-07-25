@@ -1,10 +1,14 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
-export function registerPortalConsumers(queue: Queue): void {
+export function registerPortalConsumers(rawQueue: Queue): void {
+  // #146 NOBYPASSRLS: every handler must run inside the message's tenant
+  // context so wrapWithTenantGuc sets app.tenant_id (RLS) in db.transaction().
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.profileCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; name: string;
