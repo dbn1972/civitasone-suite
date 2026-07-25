@@ -19,6 +19,7 @@ import { schema as securityModule }  from "../modules/security/schema.js";
 import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { schema as planningModule } from "../modules/planning/schema.js";
 import { scorecardSchema as vendorPerfModule } from "../modules/vendor/scorecard-schema.js";
+import { docsSchema as tenderDocsModule } from "../modules/tender/docs-schema.js";
 import { outboxSchema }             from "./outbox.js";
 import { docCountersSchema }         from "./numbering.js";
 
@@ -37,6 +38,7 @@ const SCHEMA = {
   ...resolutionIntakeModule,
   ...planningModule,
   ...vendorPerfModule,
+  ...tenderDocsModule,
   ...docCountersSchema,
   ...outboxSchema,
 };
