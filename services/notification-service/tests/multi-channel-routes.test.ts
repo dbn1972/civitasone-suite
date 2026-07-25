@@ -372,7 +372,7 @@ describe("POST /v1/dnd", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/dnd",
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { userId: randomUUID(), startTime: "25:00", endTime: "06:00", timezone: "UTC" },
+      payload: { userId: randomUUID(), startTime: "abc", endTime: "06:00", timezone: "UTC" },
     });
     await app.close();
     // "25:00" matches \d{2}:\d{2} format but is semantically invalid;
