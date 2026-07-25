@@ -5,7 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import {
-  computeResponseDeadline, computeTransferDeadline, computeAppealDeadline,
+  computeResponseDeadline, computeTransferDeadline, computeAppealDisposalDeadline,
   assertStatusTransition, assertAppealTierAllowed, assertDifferentActor,
   type RtiStatus, type AppealTier, type AppealOrder,
 } from "./domain.js";
@@ -171,7 +171,7 @@ export function registerRtiConsumers(queue: Queue): void {
       await repo.insertAppeal(tx, {
         id: p.appealId, tenantId: p.tenantId, applicationId: p.applicationId, tier: p.tier,
         appellateAuthority: p.appellateAuthority, grounds: p.grounds, filedAt,
-        deadlineAt: computeAppealDeadline(filedAt, p.tier),
+        deadlineAt: computeAppealDisposalDeadline(filedAt, p.tier),
         orderStatus: "pending", filedBy: msg.actorId,
       });
       await audit(tx, msg, "file_appeal", "rti_appeal", p.appealId, { tier: p.tier });

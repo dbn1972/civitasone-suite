@@ -39,7 +39,10 @@ export type CreateMitigationBody = z.infer<typeof createMitigationBody>;
 export const proposeAcceptanceBody = z.object({
   riskId:        z.string().uuid(),
   rationale:     z.string().min(1).max(4000),
-  residualScore: z.number().int().min(1).max(25),
+  // Non-authoritative client hint only: the residual score is ALWAYS recomputed
+  // server-side from the risk's likelihood/impact and its controls' tested
+  // effectiveness (see consumer). Accepted for backward-compat, never trusted.
+  residualScore: z.number().int().min(1).max(25).optional(),
   validUntil:    z.string().optional(),
 });
 export type ProposeAcceptanceBody = z.infer<typeof proposeAcceptanceBody>;

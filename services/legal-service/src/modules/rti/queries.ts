@@ -42,7 +42,7 @@ export async function getApplication(tenantId: string, id: string) {
     appeals: appeals.map((a) => ({
       id: a.id, tier: a.tier, appellateAuthority: a.appellateAuthority,
       orderStatus: a.orderStatus, filedAt: a.filedAt.toISOString(),
-      deadlineAt: a.deadlineAt.toISOString(),
+      deadlineAt: a.deadlineAt?.toISOString() ?? null,
       decidedAt: a.decidedAt?.toISOString(),
     })),
   };

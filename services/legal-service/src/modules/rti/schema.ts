@@ -84,7 +84,9 @@ export const rtiAppeals = rtiSchema.table("rti_appeals", {
   appellateAuthority:  text("appellate_authority").notNull(),
   grounds:             text("grounds").notNull(),
   filedAt:             timestamp("filed_at", { withTimezone: true }).notNull().defaultNow(),
-  deadlineAt:          timestamp("deadline_at", { withTimezone: true }).notNull(),
+  // Nullable: a second appeal has no statutory disposal deadline (§19(3) 90d is a
+  // filing window, not a disposal deadline); only a first appeal carries one (§19(6)).
+  deadlineAt:          timestamp("deadline_at", { withTimezone: true }),
   orderStatus:         varchar("order_status", { length: 16 }).notNull().default("pending"),
   orderText:           text("order_text"),
   filedBy:             uuid("filed_by").notNull(),

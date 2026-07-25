@@ -21,6 +21,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import {
   riskControls, riskAcceptances, riskReviews,
 } from "../src/modules/risk-register/schema.js";
+import { auditRisks } from "../src/modules/risk/schema.js";
 import { registerRiskRegisterConsumers } from "../src/modules/risk-register/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import {
@@ -76,13 +77,28 @@ const RISK_ID = randomUUID();
 const CONTROL_1 = randomUUID();
 const ACCEPT_1 = randomUUID();
 const REVIEW_1 = randomUUID();
+const HIGH_RISK_ID = randomUUID();
+const HIGH_CONTROL = randomUUID();
+const HIGH_ACCEPT = randomUUID();
 
 async function wipe(t: string): Promise<void> {
   await runWithTenant(t, () => db.transaction(async (tx) => {
     await tx.delete(riskReviews).where(eq(riskReviews.tenantId, t));
     await tx.delete(riskAcceptances).where(eq(riskAcceptances.tenantId, t));
     await tx.delete(riskControls).where(eq(riskControls.tenantId, t));
+    await tx.delete(auditRisks).where(eq(auditRisks.tenantId, t));
   }));
+}
+
+// Seed a real risk row so acceptance proposals can compute an authoritative
+// residual score from the risk's stored likelihood/impact.
+async function seedRisk(
+  t: string, id: string, riskCode: string, likelihood: string, impact: string, riskScore: number,
+): Promise<void> {
+  await runWithTenant(t, () => db.transaction((tx) => tx.insert(auditRisks).values({
+    id, tenantId: t, riskCode, title: riskCode, likelihood, impact, riskScore,
+    createdBy: REQUESTER, updatedBy: REQUESTER,
+  })));
 }
 
 async function pump(q: Queue, topic: string, actorId: string, tenantId: string, payload: Record<string, unknown>) {
@@ -103,6 +119,9 @@ describe("risk register — controls, acceptance maker-checker, review", () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     await wipe(TENANT_A); await wipe(TENANT_B);
+    // possible x major = 12 inherent; almost_certain x catastrophic = 25 inherent
+    await seedRisk(TENANT_A, RISK_ID, "R-1", "possible", "major", 12);
+    await seedRisk(TENANT_A, HIGH_RISK_ID, "R-HIGH", "almost_certain", "catastrophic", 25);
     app = await buildApp();
     q = wire(new MemoryQueue());
     registerRiskRegisterConsumers(q);
@@ -163,6 +182,21 @@ describe("risk register — controls, acceptance maker-checker, review", () => {
     rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(riskAcceptances).where(eq(riskAcceptances.id, ACCEPT_1))));
     expect(rows[0]!.status).toBe("approved");
     expect(rows[0]!.decidedBy).toBe(APPROVER);
+  });
+
+  it("residualScore is server-computed from the risk + controls, NOT the client value", async () => {
+    // A high-inherent risk (almost_certain x catastrophic = 25) whose only control
+    // tests INEFFECTIVE (no reduction) → authoritative residual must stay 25.
+    await pump(q, COMMANDS.riskControlCreate, REQUESTER, TENANT_A, { id: HIGH_CONTROL, riskId: HIGH_RISK_ID, controlCode: "C-HIGH", description: "weak review", controlType: "detective" });
+    await pump(q, COMMANDS.riskControlTest, REQUESTER, TENANT_A, { id: randomUUID(), controlId: HIGH_CONTROL, result: "fail" });
+    // Maker proposes acceptance self-declaring a bogus low residual score of 1.
+    await pump(q, COMMANDS.riskAcceptancePropose, REQUESTER, TENANT_A, { id: HIGH_ACCEPT, riskId: HIGH_RISK_ID, rationale: "gaming the residual", residualScore: 1 });
+    const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(riskAcceptances).where(eq(riskAcceptances.id, HIGH_ACCEPT))));
+    const expected = computeResidualScore("almost_certain", "catastrophic", "ineffective");
+    expect(expected).toBe(25);
+    // The persisted value is the SERVER-computed 25, never the client's 1.
+    expect(rows[0]!.residualScore).toBe(expected);
+    expect(rows[0]!.residualScore).not.toBe(1);
   });
 
   it("a periodic review records a row with a computed next_review_date", async () => {

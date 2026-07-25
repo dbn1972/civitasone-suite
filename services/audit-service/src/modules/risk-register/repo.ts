@@ -33,6 +33,12 @@ export async function insertControlTest(tx: Writer, row: typeof riskControlTests
   await tx.insert(riskControlTests).values(row);
 }
 
+/** All controls mitigating a risk (tenant-scoped), for authoritative residual scoring. */
+export async function listControlsForRiskTx(tx: Writer, riskId: string, tenantId: string): Promise<ControlRow[]> {
+  return (tx as typeof db).select().from(riskControls)
+    .where(and(eq(riskControls.tenantId, tenantId), eq(riskControls.riskId, riskId)));
+}
+
 // ── incidents ─────────────────────────────────────────────────────────────
 export async function insertIncident(tx: Writer, row: typeof riskIncidents.$inferInsert): Promise<void> {
   await tx.insert(riskIncidents).values(row);

@@ -36,6 +36,29 @@ export function computeResidualScore(likelihood: Likelihood, impact: Impact, eff
   return Math.max(1, Math.round(inherent * (1 - reduction)));
 }
 
+/**
+ * Ordinal rank of an effectiveness by how much it reduces residual risk.
+ * `not_tested` and `ineffective` both credit zero reduction.
+ */
+const EFFECTIVENESS_RANK: Record<Effectiveness, number> = {
+  not_tested: 0,
+  ineffective: 0,
+  partial: 1,
+  effective: 2,
+};
+
+/**
+ * The strongest (most risk-reducing) effectiveness among the controls on a risk.
+ * Defaults to `not_tested` (no reduction, so residual == inherent) when the risk
+ * has no controls, so an unmitigated high risk can never be understated.
+ */
+export function strongestEffectiveness(list: Effectiveness[]): Effectiveness {
+  return list.reduce<Effectiveness>(
+    (best, e) => (EFFECTIVENESS_RANK[e] > EFFECTIVENESS_RANK[best] ? e : best),
+    "not_tested",
+  );
+}
+
 /** Maker-checker guard for a risk acceptance decision. */
 export function assertDifferentActor(makerId: string, checkerId: string, subject = "risk acceptance"): void {
   if (!checkerId) {

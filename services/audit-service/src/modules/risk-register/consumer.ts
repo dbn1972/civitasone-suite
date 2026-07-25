@@ -4,7 +4,12 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUME_TOPICS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertDifferentActor, computeNextReviewDate, type ReviewCadence } from "./domain.js";
+import {
+  assertDifferentActor, computeNextReviewDate, computeResidualScore, strongestEffectiveness,
+  type ReviewCadence, type Effectiveness,
+} from "./domain.js";
+import type { Likelihood, Impact } from "../risk/domain.js";
+import * as riskRepo from "../risk/repo.js";
 
 const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
 
@@ -84,15 +89,28 @@ export function registerRiskRegisterConsumers(queue: Queue): void {
 
   // ── risk acceptance — maker (propose) ────────────────────────────────────
   queue.subscribe(COMMANDS.riskAcceptancePropose, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; riskId: string; rationale: string; residualScore: number; validUntil?: string };
+    const p = msg.payload as { id: string; tenantId: string; riskId: string; rationale: string; residualScore?: number; validUntil?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Authoritative residual score: NEVER trust the client-supplied value. Compute
+      // it from the risk's stored likelihood/impact and the strongest tested control
+      // effectiveness, so a requester cannot self-declare a low residual for a
+      // high-inherent risk protected only by an ineffective control.
+      const risk = await riskRepo.findByIdTx(tx, p.riskId, p.tenantId);
+      if (!risk) throw new Error(`risk ${p.riskId} not found`);
+      const controls = await repo.listControlsForRiskTx(tx, p.riskId, p.tenantId);
+      const effectiveness: Effectiveness = strongestEffectiveness(
+        controls.map((c) => c.effectiveness as Effectiveness),
+      );
+      const residualScore = computeResidualScore(
+        risk.likelihood as Likelihood, risk.impact as Impact, effectiveness,
+      );
       await repo.insertAcceptance(tx, {
         id: p.id, tenantId: p.tenantId, riskId: p.riskId, rationale: p.rationale,
-        residualScore: p.residualScore, status: "proposed", validUntil: p.validUntil ?? null,
+        residualScore, status: "proposed", validUntil: p.validUntil ?? null,
         requestedBy: msg.actorId,
       });
-      await audit(tx, msg, "propose", "risk_acceptance", p.id, { riskId: p.riskId });
+      await audit(tx, msg, "propose", "risk_acceptance", p.id, { riskId: p.riskId, residualScore });
     });
   });
 

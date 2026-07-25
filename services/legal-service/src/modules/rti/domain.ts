@@ -36,6 +36,9 @@ export const THIRD_PARTY_RESPONSE_DAYS = 40;
 export const FIRST_APPEAL_WINDOW_DAYS = 30;
 /** §19(3): second appeal must be filed within 90 days of the first-appeal order. */
 export const SECOND_APPEAL_WINDOW_DAYS = 90;
+/** §19(6): the first appellate authority must DISPOSE of a first appeal within
+ *  30 days of its receipt (extendable to 45 for recorded reasons). */
+export const FIRST_APPEAL_DISPOSAL_DAYS = 30;
 
 export interface DeadlineFactors {
   /** §7(1) proviso — request concerns the life or liberty of a person. */
@@ -74,13 +77,25 @@ export function computeTransferDeadline(transferredAt: Date): Date {
   return new Date(transferredAt.getTime() + NORMAL_RESPONSE_DAYS * DAY_MS);
 }
 
-/** Appeal filing deadline from the reference date (decision / order date). */
-export function computeAppealDeadline(referenceAt: Date, tier: AppealTier): Date {
-  if (Number.isNaN(referenceAt.getTime())) {
-    throw new DomainError("INVALID_DATE", "referenceAt is not a valid date");
+/**
+ * Statutory DISPOSAL deadline for an appeal, measured from the date it was filed.
+ *
+ * First appeal — §19(6): the first appellate authority must dispose of the
+ * appeal within 30 days of receipt (extendable to 45 for recorded reasons), so
+ * we surface `filedAt + 30d` as the disposal deadline.
+ *
+ * Second appeal — the RTI Act prescribes NO disposal deadline for the
+ * Information Commission. The 90-day figure in §19(3) is the FILING window for
+ * lodging the second appeal (measured from the first-appeal ORDER date), NOT a
+ * date by which the second appeal must be decided. We therefore return `null`
+ * rather than fabricate a "must be decided by filedAt + 90d" disposal deadline.
+ */
+export function computeAppealDisposalDeadline(filedAt: Date, tier: AppealTier): Date | null {
+  if (Number.isNaN(filedAt.getTime())) {
+    throw new DomainError("INVALID_DATE", "filedAt is not a valid date");
   }
-  const days = tier === "first" ? FIRST_APPEAL_WINDOW_DAYS : SECOND_APPEAL_WINDOW_DAYS;
-  return new Date(referenceAt.getTime() + days * DAY_MS);
+  if (tier !== "first") return null;
+  return new Date(filedAt.getTime() + FIRST_APPEAL_DISPOSAL_DAYS * DAY_MS);
 }
 
 /** True when `now` is strictly past the deadline. */

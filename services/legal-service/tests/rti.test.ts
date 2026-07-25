@@ -26,11 +26,11 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRtiConsumers } from "../src/modules/rti/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import {
-  computeResponseDeadline, computeTransferDeadline, computeAppealDeadline,
+  computeResponseDeadline, computeTransferDeadline, computeAppealDisposalDeadline,
   isOverdue, daysRemaining, assertAppealTierAllowed, assertDifferentActor,
   assertStatusTransition, DomainError,
-  NORMAL_RESPONSE_DAYS, THIRD_PARTY_RESPONSE_DAYS, FIRST_APPEAL_WINDOW_DAYS,
-  SECOND_APPEAL_WINDOW_DAYS, LIFE_LIBERTY_HOURS,
+  NORMAL_RESPONSE_DAYS, THIRD_PARTY_RESPONSE_DAYS, FIRST_APPEAL_DISPOSAL_DAYS,
+  LIFE_LIBERTY_HOURS,
 } from "../src/modules/rti/domain.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -74,9 +74,12 @@ describe("rti domain — statutory timeline (pure)", () => {
     expect(computeTransferDeadline(t).getTime()).toBe(t.getTime() + NORMAL_RESPONSE_DAYS * DAY);
   });
 
-  it("first appeal window is 30 days, second is 90 days", () => {
-    expect(computeAppealDeadline(base, "first").getTime()).toBe(base.getTime() + FIRST_APPEAL_WINDOW_DAYS * DAY);
-    expect(computeAppealDeadline(base, "second").getTime()).toBe(base.getTime() + SECOND_APPEAL_WINDOW_DAYS * DAY);
+  it("first appeal has a §19(6) 30-day disposal deadline; a second appeal has none", () => {
+    // §19(6): first appellate authority disposes within 30 days of filing.
+    expect(computeAppealDisposalDeadline(base, "first")!.getTime()).toBe(base.getTime() + FIRST_APPEAL_DISPOSAL_DAYS * DAY);
+    // §19(3)'s 90 days is a FILING window (from the first-appeal order), NOT a
+    // disposal deadline — so no disposal deadline is surfaced for a second appeal.
+    expect(computeAppealDisposalDeadline(base, "second")).toBeNull();
   });
 
   it("isOverdue / daysRemaining reflect the deadline", () => {
@@ -285,6 +288,32 @@ describe("RTI routes + consumer integration", () => {
     rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiAppeals).where(eq(rtiAppeals.id, APPEAL_1))));
     expect(rows[0]!.orderStatus).toBe("allowed");
     expect(rows[0]!.decidedBy).toBe(ACTOR_B);
+  });
+
+  it("second appeal carries NO disposal deadline; the first appeal keeps its §19(6) deadline", async () => {
+    // APP_APPEAL already has a DISPOSED first appeal (APPEAL_1 was decided above),
+    // so a second appeal is now competent.
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerRtiConsumers(q);
+    await q.start();
+    const appeal2 = randomUUID();
+    await q.publish(COMMANDS.rtiAppealFile, {
+      messageId: randomUUID(), type: COMMANDS.rtiAppealFile,
+      tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c3e", schemaVersion: "1.0",
+      payload: { appealId: appeal2, applicationId: APP_APPEAL, tenantId: TENANT_A, tier: "second", appellateAuthority: "SIC", grounds: "FAA delay" },
+    });
+    await new Promise<void>((r) => setTimeout(r, 300));
+    await q.stop();
+
+    const first = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiAppeals).where(eq(rtiAppeals.id, APPEAL_1))));
+    const second = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiAppeals).where(eq(rtiAppeals.id, appeal2))));
+    expect(second).toHaveLength(1);
+    expect(second[0]!.tier).toBe("second");
+    // The second appeal has no fabricated disposal deadline …
+    expect(second[0]!.deadlineAt).toBeNull();
+    // … while the first appeal retains its §19(6) 30-day disposal deadline.
+    expect(first[0]!.deadlineAt).not.toBeNull();
+    expect(new Date(first[0]!.deadlineAt!).getTime()).toBe(new Date(first[0]!.filedAt).getTime() + FIRST_APPEAL_DISPOSAL_DAYS * DAY);
   });
 
   it("RLS cross-tenant: tenant B does not see tenant A's application via the API", async () => {
