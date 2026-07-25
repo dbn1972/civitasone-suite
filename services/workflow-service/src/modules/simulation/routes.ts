@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as defRepo from "../definitions/repo.js";
+import { db } from "../../shared/db.js";
 import { simulateProcess } from "./domain.js";
+import { compareVersions } from "./compare.js";
 
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
@@ -32,6 +34,38 @@ export async function simulationRoutes(app: FastifyInstance): Promise<void> {
       ...(body.contextVariants !== undefined ? { contextVariants: body.contextVariants } : {}),
     });
 
+    return reply.send({ data: result });
+  });
+
+  // CAP-030 — compare two versions of a code by simulating both with identical
+  // inputs and reporting the behavioural deltas (path distribution, avg steps).
+  app.post("/v1/workflow/definitions/code/:code/simulate-compare", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
+    const body = z.object({
+      from: z.number().int().positive(),
+      to: z.number().int().positive(),
+      instances: z.number().int().min(1).max(10000).default(100),
+      contextVariants: z.array(z.record(z.unknown())).max(100).optional(),
+    }).parse(req.body ?? {});
+
+    const graphFor = async (version: number) => {
+      const def = await defRepo.findByCodeVersionTx(db, ctx.tenantId, code, version);
+      if (!def) return null;
+      const [nodes, edges] = await Promise.all([defRepo.listNodes(def.id), defRepo.listEdges(def.id)]);
+      return {
+        nodes: nodes.map((n) => ({ nodeKey: n.nodeKey, name: n.name, nodeType: n.nodeType, slaMinutes: n.slaMinutes })),
+        edges: edges.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
+      };
+    };
+    const [from, to] = await Promise.all([graphFor(body.from), graphFor(body.to)]);
+    if (!from || !to) throw new HttpError(404, "VERSION_NOT_FOUND", "one or both versions not found");
+
+    const result = compareVersions({
+      from, to, instances: body.instances,
+      ...(body.contextVariants !== undefined ? { contextVariants: body.contextVariants } : {}),
+    });
     return reply.send({ data: result });
   });
 

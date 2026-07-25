@@ -22,6 +22,13 @@ export const EVENTS = {
   signalDelivered: "workflow.signal.delivered",
   signalReceived: "workflow.signal.received",
   messageTimeout: "workflow.message.timeout",
+  // CAP-026 — a committee/quorum decision settled.
+  committeeDecided: "workflow.committee.decided",
+  // CAP-025 — a request exceeded the actor's authority and was escalated.
+  authorityEscalated: "workflow.authority.escalated",
+  // CAP-029 — instance finalization / reversal.
+  instanceFinalized: "workflow.instance.finalized",
+  instanceReversed: "workflow.instance.reversed",
 } as const;
 
 /** Cross-service commands dispatched when a workflow task completes. */
