@@ -9,6 +9,7 @@
  * registered on that same singleton so the route → command → consumer → DB
  * path runs in-process.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { type Queue, type Handler } from "@civitasone/queue";
@@ -27,6 +28,7 @@ const SECRET = process.env.JWT_SECRET as string;
 const T = "77777777-cafe-4000-8000-000000000010";
 const MAKER = "77777777-cafe-4000-8000-0000000000a1";
 const CHECKER = "77777777-cafe-4000-8000-0000000000b2";
+const CHECKER2 = "77777777-cafe-4000-8000-0000000000c3";
 
 function bearer(actorId: string, roles: string[] = ["super_admin"]) {
   return { authorization: `Bearer ${signToken({ sub: actorId, roles, tid: T } as never, SECRET)}` };
@@ -221,5 +223,99 @@ describe("CAP-054 secret rotation (maker-checker)", () => {
     expect(res.statusCode).toBe(200);
     const rows = (res.json() as { data: Array<{ status: string }> }).data;
     expect(rows.every((r) => r.status === "approved")).toBe(true);
+  });
+});
+
+
+/**
+ * CAP-054 TOCTOU: two DISTINCT decide messages (an approve + a reject, different
+ * messageIds) raced against the SAME pending rotation must not double-apply.
+ *
+ * This is a genuinely-concurrent test, not a serialized fake: the in-process
+ * MemoryQueue delivers each publish on its own `setTimeout(0)` tick, and the
+ * consumer opens a fresh `db.transaction` per message — so the two decisions run
+ * on two distinct pooled Postgres connections against the live DB. The FOR UPDATE
+ * row lock therefore actually blocks the second decider until the first commits;
+ * it then reads the now-decided status and is rejected NOT_PENDING. The inbox
+ * `markProcessed` does NOT help here because the two messageIds differ.
+ */
+async function requestPendingRotation(): Promise<{ id: string; oldSecret: string; rotationId: string }> {
+  const { id, secret: oldSecret } = await createWebhook();
+  const req = await app.inject({
+    method: "POST", url: `/v1/admin/webhooks/${id}/rotate-secret`, headers: bearer(MAKER),
+    payload: { reason: "toctou race" },
+  });
+  expect(req.statusCode).toBe(202);
+  const rotationId = (req.json() as { rotationId: string }).rotationId;
+  await waitFor(
+    () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(secretRotations).where(eq(secretRotations.id, rotationId)))),
+    (r) => r.length > 0 && r[0]!.status === "pending",
+  );
+  return { id, oldSecret, rotationId };
+}
+
+function publishDecide(rotationId: string, decision: "approve" | "reject", deciderId: string): string {
+  const messageId = randomUUID();
+  void sharedQueue.publish("admin.webhook.rotate.decide", {
+    messageId,
+    type: "admin.webhook.rotate.decide",
+    tenantId: T,
+    actorId: deciderId,
+    correlationId: randomUUID(),
+    schemaVersion: "1.0",
+    payload: { rotationId, tenantId: T, decision, deciderId },
+  });
+  return messageId;
+}
+
+// The MemoryQueue exposes its dead-letter sink; a NonRetryableError lands here.
+type Dlq = Array<{ topic: string; error: string; msg: { messageId: string; payload: { rotationId?: string } } }>;
+function dlqFor(rotationId: string): Dlq {
+  const dlq = (sharedQueue as unknown as { dlq: Dlq }).dlq;
+  return dlq.filter((e) => e.topic === "admin.webhook.rotate.decide" && e.msg.payload?.rotationId === rotationId);
+}
+
+describe("CAP-054 secret rotation — concurrent decide TOCTOU", () => {
+  it("two concurrent decides (approve + reject) apply EXACTLY ONCE; the loser is NOT_PENDING", async () => {
+    const { id, oldSecret, rotationId } = await requestPendingRotation();
+
+    // Race an approve (CHECKER) and a reject (CHECKER2) — both != requester(MAKER),
+    // distinct messageIds — dispatched together so both observe the pending row.
+    const approveMsgId = publishDecide(rotationId, "approve", CHECKER);
+    const rejectMsgId = publishDecide(rotationId, "reject", CHECKER2);
+
+    // Wait until the rotation is terminal AND exactly one decide has dead-lettered.
+    const rot = await waitFor(
+      () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(secretRotations).where(eq(secretRotations.id, rotationId)))),
+      (r) => r.length > 0 && r[0]!.status !== "pending",
+    );
+    const loser = await waitFor(async () => dlqFor(rotationId), (d) => d.length >= 1);
+
+    // Exactly ONE terminal status; the other decide was rejected, not applied.
+    const finalStatus = rot[0]!.status;
+    expect(["approved", "rejected"]).toContain(finalStatus);
+    expect(loser.length).toBe(1); // exactly one loser dead-lettered
+    expect(loser[0]!.error).toMatch(/NOT_PENDING/); // loser rejected: pending guard fired
+
+    // The winner is whichever decision matches the terminal status; the loser's
+    // messageId is the one that dead-lettered.
+    const winnerMsgId = finalStatus === "approved" ? approveMsgId : rejectMsgId;
+    const loserMsgId = finalStatus === "approved" ? rejectMsgId : approveMsgId;
+    expect(loser[0]!.msg.messageId).toBe(loserMsgId);
+    expect(rot[0]!.decidedBy).toBe(finalStatus === "approved" ? CHECKER : CHECKER2);
+
+    // The webhook secret was swapped AT MOST once, consistent with the single
+    // winning decision — never a double swap or an approve-after-reject.
+    const wh = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(webhooks).where(eq(webhooks.id, id))));
+    const row = wh[0]!;
+    if (finalStatus === "approved") {
+      expect(row.secret).not.toBe(oldSecret);
+      expect(row.previousSecret).toBe(oldSecret); // exactly one application: old -> grace slot
+    } else {
+      expect(row.secret).toBe(oldSecret); // reject won: secret untouched
+      expect(row.previousSecret).toBeNull();
+    }
+    // winnerMsgId did NOT dead-letter.
+    expect(dlqFor(rotationId).some((e) => e.msg.messageId === winnerMsgId)).toBe(false);
   });
 });
