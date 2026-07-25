@@ -1,6 +1,7 @@
 /** agents repo — Drizzle queries against the `telephony` schema ONLY. */
 import { eq, and, asc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { agents, type AgentRow, type AgentInsert, type AgentView, type AgentStatus } from "./schema.js";
 
 export function toView(r: AgentRow): AgentView {
@@ -16,38 +17,59 @@ export function toView(r: AgentRow): AgentView {
   };
 }
 
+
+/**
+ * Run a tenant-scoped READ inside a GUC transaction so forced RLS returns this
+ * tenant's rows (wrapWithTenantGuc only sets app.tenant_id inside db.transaction()
+ * and only when a tenant context is active). Without this a bare db.select() runs
+ * with no GUC and RLS returns zero rows.
+ */
+function readScoped<T>(tenantId: string, fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () =>
+    db.transaction(fn as Parameters<typeof db.transaction>[0]),
+  ) as Promise<T>;
+}
+
 export async function findById(id: string, tenantId: string): Promise<AgentView | null> {
-  const rows = await db.select().from(agents).where(and(eq(agents.id, id), eq(agents.tenantId, tenantId))).limit(1);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx.select().from(agents).where(and(eq(agents.id, id), eq(agents.tenantId, tenantId))).limit(1),
+  );
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function findByUser(userId: string, tenantId: string): Promise<AgentView | null> {
-  const rows = await db
-    .select()
-    .from(agents)
-    .where(and(eq(agents.userId, userId), eq(agents.tenantId, tenantId)))
-    .limit(1);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx
+      .select()
+      .from(agents)
+      .where(and(eq(agents.userId, userId), eq(agents.tenantId, tenantId)))
+      .limit(1),
+  );
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<AgentView[]> {
-  const rows = await db
-    .select()
-    .from(agents)
-    .where(eq(agents.tenantId, tenantId))
-    .orderBy(asc(agents.displayName))
-    .limit(limit)
-    .offset(offset);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx
+      .select()
+      .from(agents)
+      .where(eq(agents.tenantId, tenantId))
+      .orderBy(asc(agents.displayName))
+      .limit(limit)
+      .offset(offset),
+  );
   return rows.map(toView);
 }
 
 /** Tenant-scoped existence check (cross-tenant ref guard for call assignment). */
 export async function exists(tenantId: string, id: string): Promise<boolean> {
-  const rows = await db
-    .select({ one: sql`1` })
-    .from(agents)
-    .where(and(eq(agents.tenantId, tenantId), eq(agents.id, id)))
-    .limit(1);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx
+      .select({ one: sql`1` })
+      .from(agents)
+      .where(and(eq(agents.tenantId, tenantId), eq(agents.id, id)))
+      .limit(1),
+  );
   return rows.length > 0;
 }
 

@@ -20,6 +20,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 
 import { db, sqlClient } from "../src/shared/db.js";
 import { markProcessed, outboxMessages } from "../src/shared/outbox.js";
@@ -68,6 +69,18 @@ async function drive(cmd: Cmd, ready: () => Promise<boolean>): Promise<void> {
 async function processed(messageId: string): Promise<boolean> {
   const r = await sqlClient`select 1 from _inbox.processed where message_id = ${messageId} limit 1`;
   return r.length > 0;
+}
+
+// telephony domain tables and _outbox.messages have FORCED row-level security
+// (policy: tenant_id = current_tenant_id()). Direct DB inspection from a test must
+// therefore run with the app.tenant_id GUC set — exactly as sibling services' DB-
+// backed tests do. sqlAsTenant sets a transaction-LOCAL GUC on a single reserved
+// connection so raw reads see this tenant's rows. (_inbox.processed is not under RLS.)
+async function sqlAsTenant<T>(tenantId: string, fn: (sql: typeof sqlClient) => Promise<T> | T): Promise<T> {
+  return sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${tenantId}, true)`;
+    return fn(sql as unknown as typeof sqlClient);
+  }) as Promise<T>;
 }
 
 async function createCall(tenantId: string, payload: Partial<Record<string, unknown>> = {}): Promise<string> {
@@ -120,27 +133,33 @@ async function eventEmitted(tenantId: string, eventType: string, callId: string)
   // The shared outbox stores `payload` as a JSON-encoded string (platform-wide
   // artifact of @civitasone/outbox + drizzle), so match on the payload text —
   // the callId is a UUID, so a substring match is unambiguous.
-  const rows = await sqlClient`
+  const rows = await sqlAsTenant(tenantId, (sql) => sql`
     select 1 from _outbox.messages
     where tenant_id = ${tenantId} and event_type = ${eventType} and payload::text like ${"%" + callId + "%"}
-    limit 1`;
+    limit 1`);
   return rows.length > 0;
 }
 async function rejectionAudited(tenantId: string, callId: string, outcomePrefix: string): Promise<boolean> {
-  const rows = await sqlClient`
+  const rows = await sqlAsTenant(tenantId, (sql) => sql`
     select 1 from _outbox.messages
     where tenant_id = ${tenantId} and event_type = 'audit.event.record'
       and payload::text like ${"%" + callId + "%"} and payload::text like ${"%" + outcomePrefix + "%"}
-    limit 1`;
+    limit 1`);
   return rows.length > 0;
 }
 
 async function cleanup(): Promise<void> {
+  // Deletes run under the tenant GUC (RLS scopes DELETE too); wrap in
+  // runWithTenant + db.transaction so wrapWithTenantGuc injects app.tenant_id.
   for (const t of TENANTS) {
-    await db.delete(calls).where(eq(calls.tenantId, t));
-    await db.delete(agents).where(eq(agents.tenantId, t));
-    await db.delete(queues).where(eq(queues.tenantId, t));
-    await db.delete(outboxMessages).where(inArray(outboxMessages.tenantId, [t]));
+    await runWithTenant(t, () =>
+      db.transaction(async (tx) => {
+        await tx.delete(calls).where(eq(calls.tenantId, t));
+        await tx.delete(agents).where(eq(agents.tenantId, t));
+        await tx.delete(queues).where(eq(queues.tenantId, t));
+        await tx.delete(outboxMessages).where(inArray(outboxMessages.tenantId, [t]));
+      }),
+    );
   }
 }
 
@@ -154,7 +173,7 @@ describe("call create + PII at rest", () => {
   it("stores the caller number as ciphertext with a populated blind index", async () => {
     const id = await createCall(TENANT_A, { callerNumber: "9876500011", calleeNumber: "1800111222" });
 
-    const raw = await sqlClient`select caller_number, caller_number_idx, callee_number from telephony.calls where id = ${id}`;
+    const raw = await sqlAsTenant(TENANT_A, (sql) => sql`select caller_number, caller_number_idx, callee_number from telephony.calls where id = ${id}`);
     expect(raw.length).toBe(1);
     const r = raw[0]!;
     expect(isEncrypted(r.caller_number as string)).toBe(true);
@@ -297,7 +316,7 @@ describe("inbox idempotency", () => {
       const claimed = await markProcessed(tx, id);
       expect(claimed).toBe(false); // already claimed by the original delivery
     });
-    const rows = await sqlClient`select count(*)::int as n from telephony.calls where id = ${id}`;
+    const rows = await sqlAsTenant(TENANT_A, (sql) => sql`select count(*)::int as n from telephony.calls where id = ${id}`);
     expect(rows[0]?.n).toBe(1);
   });
 });

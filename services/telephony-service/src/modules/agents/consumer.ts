@@ -1,5 +1,6 @@
 /** agents consumer — only writer for the agent aggregate. */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { z } from "zod";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -19,7 +20,8 @@ const setStatusPayload = z.object({
   expectedVersion: z.number().int().min(1).optional(),
 });
 
-export function registerAgentConsumers(queue: Queue): void {
+export function registerAgentConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.upsertAgent, async (msg) => {
     const parsed = upsertAgentPayload.safeParse(msg.payload);
     if (!parsed.success) throw new Error(`invalid upsertAgent payload: ${parsed.error.message}`);

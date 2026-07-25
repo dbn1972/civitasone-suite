@@ -9,6 +9,7 @@
  */
 import { eq, and, desc, sql, type SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
 import { calls, type CallRow, type CallInsert, type CallView, type CallSummary, type IvrHit } from "./schema.js";
 import { queues } from "../queues/schema.js";
 import { blindIndex, maskPhone } from "../../shared/pii-crypto.js";
@@ -82,10 +83,26 @@ export function toSummary(r: CallRow, slaAnswerSeconds: number | null, opts: { u
   };
 }
 
+/**
+ * Run a tenant-scoped READ inside a GUC transaction so forced RLS (whose policy
+ * is `tenant_id = current_tenant_id()`) returns this tenant's rows. wrapWithTenantGuc
+ * only injects app.tenant_id inside db.transaction(), and only when a tenant
+ * context is active, so we enter runWithTenant(tenantId) from the caller-supplied
+ * tenantId. Without this a bare db.select() runs with no GUC and RLS returns zero
+ * rows (the read-path counterpart to the consumer/worker write-path context).
+ */
+function readScoped<T>(tenantId: string, fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () =>
+    db.transaction(fn as Parameters<typeof db.transaction>[0]),
+  ) as Promise<T>;
+}
+
 /** Tenant-scoped raw row — used by the consumer to make transition decisions. */
 export async function findRow(id: string, tenantId: string): Promise<CallRow | null> {
-  const rows = await db.select().from(calls).where(and(eq(calls.id, id), eq(calls.tenantId, tenantId))).limit(1);
-  return rows[0] ?? null;
+  return readScoped(tenantId, async (tx) => {
+    const rows = await tx.select().from(calls).where(and(eq(calls.id, id), eq(calls.tenantId, tenantId))).limit(1);
+    return rows[0] ?? null;
+  });
 }
 
 export async function findView(id: string, tenantId: string): Promise<CallView | null> {
@@ -116,14 +133,16 @@ export async function listByTenant(
   // Exact caller lookup via blind index — the ciphertext column is never matched.
   if (filters.callerNumber) conditions.push(eq(calls.callerNumberIdx, blindIndex(filters.callerNumber)));
 
-  const rows = await db
-    .select({ call: calls, slaAnswerSeconds: queues.slaAnswerSeconds })
-    .from(calls)
-    .leftJoin(queues, eq(calls.queueId, queues.id))
-    .where(and(...conditions))
-    .orderBy(desc(calls.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx
+      .select({ call: calls, slaAnswerSeconds: queues.slaAnswerSeconds })
+      .from(calls)
+      .leftJoin(queues, eq(calls.queueId, queues.id))
+      .where(and(...conditions))
+      .orderBy(desc(calls.createdAt))
+      .limit(limit)
+      .offset(offset),
+  );
   return rows.map((r) => toSummary(r.call, r.slaAnswerSeconds ?? null));
 }
 
@@ -200,19 +219,21 @@ export async function metricsByTenant(tenantId: string, queueId?: string): Promi
   const conditions: SQL[] = [eq(calls.tenantId, tenantId)];
   if (queueId) conditions.push(eq(calls.queueId, queueId));
 
-  const rows = await db
-    .select({
-      status: calls.status,
-      count: sql<number>`count(*)::int`,
-      answered: sql<number>`count(*) filter (where ${calls.answeredAt} is not null)::int`,
-      withinSla: sql<number>`count(*) filter (where ${calls.answeredAt} is not null and ${calls.waitSeconds} <= coalesce(${queues.slaAnswerSeconds}, ${DEFAULT_SLA_ANSWER_SECONDS}))::int`,
-      avgWait: sql<number | null>`avg(${calls.waitSeconds})`,
-      avgTalk: sql<number | null>`avg(${calls.talkSeconds})`,
-    })
-    .from(calls)
-    .leftJoin(queues, eq(calls.queueId, queues.id))
-    .where(and(...conditions))
-    .groupBy(calls.status);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx
+      .select({
+        status: calls.status,
+        count: sql<number>`count(*)::int`,
+        answered: sql<number>`count(*) filter (where ${calls.answeredAt} is not null)::int`,
+        withinSla: sql<number>`count(*) filter (where ${calls.answeredAt} is not null and ${calls.waitSeconds} <= coalesce(${queues.slaAnswerSeconds}, ${DEFAULT_SLA_ANSWER_SECONDS}))::int`,
+        avgWait: sql<number | null>`avg(${calls.waitSeconds})`,
+        avgTalk: sql<number | null>`avg(${calls.talkSeconds})`,
+      })
+      .from(calls)
+      .leftJoin(queues, eq(calls.queueId, queues.id))
+      .where(and(...conditions))
+      .groupBy(calls.status),
+  );
 
   const byStatus = { queued: 0, ringing: 0, answered: 0, completed: 0, missed: 0, abandoned: 0 } as Record<
     CallStatus,

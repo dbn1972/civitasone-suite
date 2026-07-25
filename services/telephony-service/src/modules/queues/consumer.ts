@@ -1,5 +1,6 @@
 /** queues consumer — only writer for the queue aggregate. */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -9,7 +10,8 @@ import { createQueuePayload } from "./validators.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerQueueConsumers(queue: Queue): void {
+export function registerQueueConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.createQueue, async (msg) => {
     const parsed = createQueuePayload.safeParse(msg.payload);
     if (!parsed.success) throw new Error(`invalid createQueue payload: ${parsed.error.message}`);

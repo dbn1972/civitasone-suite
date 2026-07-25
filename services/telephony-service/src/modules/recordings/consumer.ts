@@ -11,6 +11,7 @@
  * Uses exponential backoff for carrier download failures (handled by queue retry).
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { putObject } from "@civitasone/storage";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
@@ -66,7 +67,8 @@ function buildStorageKey(tenantId: string, callId: string, recordingId: string, 
   return `${tenantId}/recordings/${callId}/${recordingId}.${format}`;
 }
 
-export function registerRecordingConsumers(queue: Queue): void {
+export function registerRecordingConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(RECORDING_ATTACH_COMMAND, async (msg: CommandEnvelope) => {
     const p = msg.payload as RecordingAttachPayload;
     if (!p.id || !p.tenantId || !p.callId || !p.recordingUrl) {

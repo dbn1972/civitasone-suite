@@ -14,6 +14,7 @@
  * so a bad command does not get retried into the DLQ and state is left intact.
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -40,7 +41,8 @@ function secsBetween(from: Date | string | null | undefined, to: Date): number |
 
 type TxLike = Parameters<typeof markProcessed>[0];
 
-export function registerCallConsumers(queue: Queue): void {
+export function registerCallConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   // ---- create -------------------------------------------------------------
   queue.subscribe(COMMANDS.createCall, async (msg) => {
     const parsed = createCallPayload.safeParse(msg.payload);
