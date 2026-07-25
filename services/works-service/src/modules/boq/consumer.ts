@@ -3,6 +3,8 @@ import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { boqItems, recapitulation } from "./schema.js";
+import { measurements } from "../billing/schema.js";
+import { awards } from "../tender/schema.js";
 import { calculateBoqAmount, calculateRecapitulation } from "./domain.js";
 import { eq, and } from "drizzle-orm";
 
@@ -105,6 +107,14 @@ export function registerBoqConsumers(q: Queue): void {
       const current = rows[0];
       if (!current) return; // nothing to update — reject silently
 
+      // Do not allow the quantity of an already-billed BoQ item to change — a
+      // measurement references it as the billing ceiling.
+      if (p.quantity !== undefined && Number(p.quantity) !== Number(current.quantity)) {
+        const measRefs = await tx.select().from(measurements)
+          .where(and(eq(measurements.tenantId, msg.tenantId), eq(measurements.boqItemId, id)));
+        if (measRefs.length > 0) return; // referenced by a measurement — block quantity change
+      }
+
       const rate = p.rate !== undefined ? BigInt(p.rate as string | number) : current.rate;
       const quantity = p.quantity !== undefined ? (p.quantity as number) : Number(current.quantity);
       const amountMinor = calculateBoqAmount(rate, quantity);
@@ -137,6 +147,26 @@ export function registerBoqConsumers(q: Queue): void {
 
       const p = msg.payload as Record<string, unknown>;
       const id = p.id as string;
+
+      // Do not disable the billing ceiling: block the delete when the item is
+      // referenced by any measurement, or when the work already has an active
+      // award. (There is no lock field on boqItems — enforce via reference check.)
+      const measRefs = await tx.select().from(measurements)
+        .where(and(eq(measurements.tenantId, msg.tenantId), eq(measurements.boqItemId, id)));
+      if (measRefs.length > 0) return; // referenced by a measurement — block delete
+
+      const boqRows = await tx.select().from(boqItems)
+        .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, id)))
+        .limit(1);
+      const current = boqRows[0];
+      if (current) {
+        const awardRefs = await tx.select().from(awards)
+          .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.workId, current.workId)));
+        const hasActiveAward = awardRefs.some(
+          (a) => a.status === "dao_finalized" || a.status === "do_finalized",
+        );
+        if (hasActiveAward) return; // active award exists — block delete
+      }
 
       await tx.delete(boqItems)
         .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, id)));

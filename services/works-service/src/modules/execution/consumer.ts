@@ -209,9 +209,17 @@ export function registerExecutionConsumers(q: Queue): void {
         id: workId, status: "", hasAgreement, hasSplits, allSplitsClosed, hasPhysicalCompletion,
       });
 
+      // A pre-agreement work may be legitimately closed as EITHER "closed"
+      // (never tendered) or "dropped" (abandoned before physical completion).
+      // closureEligibility collapses that case to a single canonical value
+      // ("closed"), so widen the permitted set for pre-agreement only — without
+      // loosening the post-agreement rules, which must still match exactly.
+      const preAgreementClose =
+        !hasAgreement && (closureType === "closed" || closureType === "dropped");
+
       // Reject if the domain says this work is not eligible for the requested
       // closure, or a parent still has open splits.
-      if (eligibility === null || eligibility !== closureType) return;
+      if (eligibility === null || (eligibility !== closureType && !preAgreementClose)) return;
       if (!parentSplitConsistency("", splitRows.map((sp) => ({ id: sp.id, status: sp.status })), closureType)) return;
 
       await tx.insert(workClosures).values({

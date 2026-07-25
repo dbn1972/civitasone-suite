@@ -12,6 +12,7 @@ import { awards } from "../src/modules/tender/schema.js";
 import { workSplits, workProposals } from "../src/modules/proposal/schema.js";
 import { physicalCompletions } from "../src/modules/execution/schema.js";
 import { boqItems } from "../src/modules/boq/schema.js";
+import { measurements } from "../src/modules/billing/schema.js";
 import { vi } from "vitest";
 
 const mockInserted: unknown[] = [];
@@ -154,6 +155,21 @@ describe("BoQ orphan consumers", () => {
     await h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } });
     expect(mockDeleted).toHaveLength(0);
   });
+  it("boqDeleteItem is blocked when a measurement references the item (row stays)", async () => {
+    mockSelectMap.set(measurements, [{ id: "meas-1", boqItemId: "b-1" }]);
+    const h = await load();
+    await h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } });
+    expect(mockDeleted).toHaveLength(0);
+    expect(emitted(EVENTS.boqItemDeleted)).toBe(false);
+  });
+  it("boqDeleteItem is blocked when the work has an active award", async () => {
+    mockSelectMap.set(measurements, []);
+    mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1" }]);
+    mockSelectMap.set(awards, [{ status: "do_finalized", workId: "w-1" }]);
+    const h = await load();
+    await h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } });
+    expect(mockDeleted).toHaveLength(0);
+  });
 });
 
 // ── Tender: quotation / award dao+do finalize ────────────────────────────
@@ -242,14 +258,15 @@ describe("Execution orphan consumers", () => {
 describe("workClose closure enforcement + asset handover", () => {
   const load = () => handlers("registerExecutionConsumers", "../src/modules/execution/consumer.js");
 
-  it("rejects a 'dropped' close on a work with no agreement (eligibility=closed)", async () => {
+  it("allows a 'dropped' close on a pre-agreement work (before physical completion)", async () => {
     mockSelectMap.set(awards, []);
     mockSelectMap.set(physicalCompletions, []);
     mockSelectMap.set(workSplits, []);
     const h = await load();
     await h[COMMANDS.workClose]({ ...base, payload: { id: "cl-1", workId: "w-1", closureType: "dropped" } });
-    expect(mockInserted).toHaveLength(0);
-    expect(emitted(EVENTS.workClosed)).toBe(false);
+    expect(mockInserted).toHaveLength(1);
+    expect(emitted(EVENTS.workClosed)).toBe(true);
+    expect(emitted(EVENTS.assetHandover)).toBe(false);
   });
 
   it("allows a 'completion' close and emits works.asset.handover", async () => {
@@ -297,6 +314,24 @@ describe("Billing orphan consumers", () => {
     mockSelectMap.set(boqItems, [{ id: "b-1", quantity: "10" }]);
     const h = await load();
     await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 20 } });
+    expect(mockInserted).toHaveLength(0);
+  });
+  it("measurementRecord rejects the second when cumulative quantity exceeds BoQ qty", async () => {
+    mockSelectMap.set(boqItems, [{ id: "b-1", quantity: "100" }]);
+    const h = await load();
+    // first 80-unit measurement: no priors → cumulative 80 <= 100 → persists
+    mockSelectMap.set(measurements, []);
+    await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-1", mbId: "mb-1", boqItemId: "b-1", quantity: 80 } });
+    expect(mockInserted).toHaveLength(1);
+    // second 80-unit measurement: prior 80 + 80 = 160 > 100 → rejected
+    mockSelectMap.set(measurements, [{ quantity: "80" }]);
+    await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 80 } });
+    expect(mockInserted).toHaveLength(1); // still 1 — cumulative guard rejected the second
+  });
+  it("measurementRecord against a missing BoQ item is rejected (no insert)", async () => {
+    mockSelectMap.set(boqItems, []);
+    const h = await load();
+    await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-3", mbId: "mb-1", boqItemId: "nope", quantity: 1 } });
     expect(mockInserted).toHaveLength(0);
   });
   it("accountCompile persists compilation + emits account.compiled", async () => {

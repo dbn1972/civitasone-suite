@@ -128,8 +128,19 @@ export function registerBillingConsumers(q: Queue): void {
         .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, boqItemId)))
         .limit(1);
       const boq = boqRows[0];
-      if (boq && billedQuantityExceedsBoq(quantity, Number(boq.quantity))) {
-        return; // reject: measured quantity exceeds the approved BoQ quantity
+      if (!boq) {
+        return; // reject: a measurement against a non-existent BoQ item is invalid
+      }
+
+      // FR-BIL-011: enforce the CUMULATIVE billing ceiling. Sum every prior
+      // measurement recorded against this BoQ item, add the current quantity,
+      // and reject if the running total exceeds the approved BoQ quantity.
+      const priorMeasurements = await tx.select().from(measurements)
+        .where(and(eq(measurements.tenantId, msg.tenantId), eq(measurements.boqItemId, boqItemId)));
+      const priorBilled = priorMeasurements.reduce((sum, r) => sum + Number(r.quantity ?? 0), 0);
+      const cumulative = priorBilled + quantity;
+      if (billedQuantityExceedsBoq(cumulative, Number(boq.quantity))) {
+        return; // reject: cumulative measured quantity exceeds the approved BoQ quantity
       }
 
       await tx.insert(measurements).values({
