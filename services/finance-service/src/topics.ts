@@ -46,6 +46,8 @@ export const EVENTS = {
   proposalApproved:  "finance.budget.proposal_approved",
   /** SVC-033: an allocation slice has been distributed to a subordinate office. */
   allocationDistributed: "finance.budget.allocation_distributed",
+  /** SVC-035: a supplementary/additional grant has been approved (maker-checker). */
+  supplementaryApproved: "finance.budget.supplementary_approved",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching) */
