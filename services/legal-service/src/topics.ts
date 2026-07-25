@@ -24,6 +24,14 @@ export const COMMANDS = {
   limitationCreate:     "legal.limitation.create",
   limitationUpdate:     "legal.limitation.update",
   limitationDelete:     "legal.limitation.delete",
+  rtiApplicationCreate: "legal.rti.application.create",
+  rtiTransfer:          "legal.rti.transfer",
+  rtiThirdPartyConsult: "legal.rti.third_party_consult",
+  rtiAdditionalFee:     "legal.rti.additional_fee",
+  rtiRespond:           "legal.rti.respond",
+  rtiAppealFile:        "legal.rti.appeal.file",
+  rtiAppealOrder:       "legal.rti.appeal.order",
+  rtiDisclosureLog:     "legal.rti.disclosure.log",
 } as const;
 
 export const EVENTS = {
@@ -32,6 +40,8 @@ export const EVENTS = {
   opinionIssued:          "legal.opinion.issued",
   counselBriefAssigned:   "legal.counsel_brief.assigned",
   filingRecorded:         "legal.filing.recorded",
+  rtiTransferred:         "legal.rti.transferred",
+  rtiResponded:           "legal.rti.responded",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching) */

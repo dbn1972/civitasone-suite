@@ -18,6 +18,7 @@ import { checklistRoutes } from "./modules/compliance/checklist-routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { adminRoutes } from "./modules/admin/routes.js";
 import { riskRoutes } from "./modules/risk/routes.js";
+import { riskRegisterRoutes } from "./modules/risk-register/routes.js";
 import { vigilanceRoutes } from "./modules/vigilance/routes.js";
 import { investigationRoutes } from "./modules/investigation/routes.js";
 
@@ -64,6 +65,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(adminRoutes);
   await app.register(riskRoutes);
+  await app.register(riskRegisterRoutes);
   await app.register(vigilanceRoutes);
   await app.register(investigationRoutes);
   registerSchemaErrorHandler(app, HttpError);

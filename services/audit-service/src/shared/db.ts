@@ -13,6 +13,8 @@ import { schema as observationModule } from "../modules/observation/schema.js";
 import { schema as paraModule } from "../modules/para/schema.js";
 import { schema as complianceModule } from "../modules/compliance/schema.js";
 import { schema as riskModule } from "../modules/risk/schema.js";
+import { schema as vigilanceModule } from "../modules/vigilance/schema.js";
+import { schema as riskRegisterModule } from "../modules/risk-register/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -23,6 +25,8 @@ const SCHEMA = {
   ...paraModule,
   ...complianceModule,
   ...riskModule,
+  ...vigilanceModule,
+  ...riskRegisterModule,
   ...outboxSchema,
 };
 

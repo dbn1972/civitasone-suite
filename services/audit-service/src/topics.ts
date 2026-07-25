@@ -25,6 +25,20 @@ export const COMMANDS = {
   paraClose:             "audit.para.close",
   pendingRegisterCreate: "audit.pending_register.create",
   exportCreate:          "audit.export.create",
+  vigilanceIntake:        "audit.vigilance.intake",
+  vigilanceScreen:        "audit.vigilance.screen",
+  vigilanceAssignIo:      "audit.vigilance.assign_io",
+  vigilanceEvidence:      "audit.vigilance.evidence",
+  vigilanceFindings:      "audit.vigilance.findings",
+  vigilanceProposeAction: "audit.vigilance.propose_action",
+  vigilanceDecideAction:  "audit.vigilance.decide_action",
+  riskControlCreate:      "audit.risk_control.create",
+  riskControlTest:        "audit.risk_control.test",
+  riskIncidentCreate:     "audit.risk_incident.create",
+  riskMitigationCreate:   "audit.risk_mitigation.create",
+  riskAcceptancePropose:  "audit.risk_acceptance.propose",
+  riskAcceptanceDecide:   "audit.risk_acceptance.decide",
+  riskReview:             "audit.risk.review",
 } as const;
 
 export const EVENTS = {

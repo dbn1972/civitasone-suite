@@ -11,6 +11,8 @@ import { registerParaConsumers } from "./modules/para/consumer.js";
 import { registerComplianceConsumers } from "./modules/compliance/consumer.js";
 import { registerExportConsumers } from "./modules/exports/consumer.js";
 import { registerRiskConsumers } from "./modules/risk/consumer.js";
+import { registerVigilanceConsumers } from "./modules/vigilance/consumer.js";
+import { registerRiskRegisterConsumers } from "./modules/risk-register/consumer.js";
 import { startAgeingJob } from "./modules/compliance/jobs.js";
 
 const log = pino({ name: "audit-worker" });
@@ -21,6 +23,8 @@ registerParaConsumers(queue);
 registerComplianceConsumers(queue);
 registerExportConsumers(queue);
 registerRiskConsumers(queue);
+registerVigilanceConsumers(queue);
+registerRiskRegisterConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
