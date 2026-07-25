@@ -8,6 +8,10 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         "postgres://report_svc:report_dev_pw@localhost:5435/civitas_report",
+      // Cross-tenant scheduled cron reads through the BYPASSRLS scanner role (migration 0014).
+      REPORT_SCANNER_DATABASE_URL:
+        process.env.REPORT_SCANNER_DATABASE_URL ??
+        "postgres://report_scanner:report_scanner_dev_pw@localhost:5435/civitas_report",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

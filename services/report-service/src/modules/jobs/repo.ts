@@ -1,8 +1,8 @@
 /**
  * jobs repo — Drizzle queries against domain schema ONLY.
  */
-import { eq } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { and, eq } from "drizzle-orm";
+import { db, readScoped } from "../../shared/db.js";
 import { jobs, type JobRow, type JobInsert, type JobView } from "./schema.js";
 
 function toView(r: JobRow): JobView {
@@ -22,17 +22,18 @@ function toView(r: JobRow): JobView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<JobView | null> {
-  const rows = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx.select().from(jobs).where(and(eq(jobs.id, id), eq(jobs.tenantId, tenantId))).limit(1));
   const row = rows[0];
-  if (!row || row.tenantId !== tenantId) return null;
+  if (!row) return null;
   return toView(row);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<JobView[]> {
-  const rows = await db.select().from(jobs)
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(jobs)
     .where(eq(jobs.tenantId, tenantId))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 

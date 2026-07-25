@@ -4,7 +4,7 @@
  * Reviewed for correctness (schema wiring), not style, per this service's PR.
  * See packages/db/src/create-tenant-db.ts for the createTenantDb() contract.
  */
-import { createTenantDb } from "@civitasone/db";
+import { createTenantDb, runWithTenant } from "@civitasone/db";
 import { schema as jobsModule } from "../modules/jobs/schema.js";
 import { schema as kpisModule } from "../modules/kpis/schema.js";
 import { schema as templatesModule } from "../modules/templates/schema.js";
@@ -23,3 +23,18 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
+
+/**
+ * Tenant-scoped standalone READ (telephony PR #152 pattern): establishes the
+ * tenant context (runWithTenant) and opens a GUC transaction so PostgreSQL RLS
+ * is enforced on the read path. Under the NOBYPASSRLS report_svc role (#146) a
+ * bare `db.select()` runs on a pooled connection with no `app.tenant_id` GUC
+ * set, so the fail-closed policy errors/returns ZERO rows. Nesting inside an
+ * existing identical context is harmless.
+ */
+type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export function readScoped<T>(tenantId: string, fn: (tx: ScopedTx) => PromiseLike<T>): Promise<T> {
+  return runWithTenant(tenantId, () =>
+    db.transaction(fn as (tx: ScopedTx) => Promise<T>),
+  ) as Promise<T>;
+}
