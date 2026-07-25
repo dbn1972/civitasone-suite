@@ -42,3 +42,31 @@ export async function publishSplit(ctx: RequestContext, payload: Record<string, 
   });
   return id;
 }
+
+export async function publishMapCoa(ctx: RequestContext, payload: Record<string, unknown>): Promise<string> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.proposalMapCoa, {
+    messageId: randomUUID(),
+    type: COMMANDS.proposalMapCoa,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, ...payload },
+  });
+  return id;
+}
+
+export async function publishMapOffice(ctx: RequestContext, payload: Record<string, unknown>): Promise<string> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.proposalMapOffice, {
+    messageId: randomUUID(),
+    type: COMMANDS.proposalMapOffice,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, ...payload },
+  });
+  return id;
+}

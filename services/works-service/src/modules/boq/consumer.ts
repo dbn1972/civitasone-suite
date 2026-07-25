@@ -4,6 +4,7 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { boqItems, recapitulation } from "./schema.js";
 import { calculateBoqAmount, calculateRecapitulation } from "./domain.js";
+import { eq, and } from "drizzle-orm";
 
 export function registerBoqConsumers(q: Queue): void {
   q.subscribe(COMMANDS.boqAddItem, async (msg) => {
@@ -85,6 +86,68 @@ export function registerBoqConsumers(q: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { workId: p.workId, grandTotal: grandTotal.toString() },
+      });
+    });
+  });
+
+  // ORPHAN FIX: update a BoQ item — recompute amount when rate/quantity change.
+  q.subscribe(COMMANDS.boqUpdateItem, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const p = msg.payload as Record<string, unknown>;
+      const id = p.id as string;
+
+      const rows = await tx.select().from(boqItems)
+        .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, id)))
+        .limit(1);
+      const current = rows[0];
+      if (!current) return; // nothing to update — reject silently
+
+      const rate = p.rate !== undefined ? BigInt(p.rate as string | number) : current.rate;
+      const quantity = p.quantity !== undefined ? (p.quantity as number) : Number(current.quantity);
+      const amountMinor = calculateBoqAmount(rate, quantity);
+
+      const patch: Record<string, unknown> = { rate, quantity: String(quantity), amountMinor };
+      if (p.itemDescription !== undefined) patch.itemDescription = p.itemDescription as string;
+      if (p.unit !== undefined) patch.unit = p.unit as string;
+      if (p.remarks !== undefined) patch.remarks = p.remarks as string;
+
+      await tx.update(boqItems)
+        .set(patch)
+        .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, id)));
+
+      await enqueue(tx, {
+        topic: EVENTS.boqItemUpdated,
+        eventType: EVENTS.boqItemUpdated,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id, workId: current.workId, amountMinor: amountMinor.toString() },
+      });
+    });
+  });
+
+  // ORPHAN FIX: delete a BoQ item.
+  q.subscribe(COMMANDS.boqDeleteItem, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const p = msg.payload as Record<string, unknown>;
+      const id = p.id as string;
+
+      await tx.delete(boqItems)
+        .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, id)));
+
+      await enqueue(tx, {
+        topic: EVENTS.boqItemDeleted,
+        eventType: EVENTS.boqItemDeleted,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id },
       });
     });
   });

@@ -25,3 +25,16 @@ export const recapitulateSchema = z.object({
   centagePercent: z.number().min(0).max(100),
   otherCharges: z.string().or(z.number()).optional(),
 });
+
+export const updateBoqItemSchema = z.object({
+  id: z.string().uuid(),
+  rate: z.string().or(z.number()).optional(),
+  quantity: z.number().optional(),
+  itemDescription: z.string().max(1024).optional(),
+  unit: z.string().max(64).optional(),
+  remarks: z.string().max(2048).optional(),
+});
+
+export const deleteBoqItemSchema = z.object({
+  id: z.string().uuid(),
+});

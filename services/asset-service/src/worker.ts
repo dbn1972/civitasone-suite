@@ -4,6 +4,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerRegisterConsumers }     from "./modules/register/consumer.js";
+import { registerWorksHandoverConsumers } from "./modules/register/handover-consumer.js";
 import { registerLifecycleConsumers }    from "./modules/lifecycle/consumer.js";
 import { registerDisposalEOfficeDecisionConsumers } from "./modules/lifecycle/eoffice-consumer.js";
 import { registerDepreciationConsumers } from "./modules/depreciation/consumer.js";
@@ -16,6 +17,7 @@ import { startDepScheduler }            from "./modules/depreciation/scheduler.j
 const log = pino({ name: "asset-worker" });
 
 registerRegisterConsumers(queue);
+registerWorksHandoverConsumers(queue);
 registerLifecycleConsumers(queue);
 registerDisposalEOfficeDecisionConsumers(queue);
 registerDepreciationConsumers(queue);

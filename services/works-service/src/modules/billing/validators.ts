@@ -36,3 +36,9 @@ export const finalizeBillSchema = z.object({
   id: z.string().uuid(),
   nextStatus: z.string().min(1),
 });
+
+export const compileAccountSchema = z.object({
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2000).max(2100),
+  submittedTo: z.string().max(256).optional(),
+});
