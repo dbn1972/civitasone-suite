@@ -45,11 +45,11 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = projectIdParam.parse(req.params);
-    const rows = await db.execute(sql`
+    const rows = await db.transaction((tx) => tx.execute(sql`
       SELECT * FROM project.project_risks
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY created_at DESC
-    `);
+    `));
     return reply.send({ data: rows });
   });
 
@@ -81,19 +81,19 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     const { id } = projectIdParam.parse(req.params);
 
     // Check if a baseline exists in new baselines table (Req 11.5)
-    const baselineCheck = await db.execute(sql`
+    const baselineCheck = await db.transaction((tx) => tx.execute(sql`
       SELECT id, label FROM project.baselines
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY created_at DESC LIMIT 1
-    `);
+    `));
 
     // Also check legacy project_baselines for backward compat
     if (baselineCheck.length === 0) {
-      const legacyCheck = await db.execute(sql`
+      const legacyCheck = await db.transaction((tx) => tx.execute(sql`
         SELECT id FROM project.project_baselines
         WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
         LIMIT 1
-      `);
+      `));
       if (legacyCheck.length === 0) {
         throw new HttpError(422, "BASELINE_REQUIRED", "a baseline snapshot is required before EVM metrics can be computed");
       }
@@ -122,11 +122,11 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     }
 
     // Fallback: return historical EVM records
-    const rows = await db.execute(sql`
+    const rows = await db.transaction((tx) => tx.execute(sql`
       SELECT * FROM project.project_evm
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY period DESC
-    `);
+    `));
     return reply.send({ data: rows });
   });
 
@@ -176,11 +176,11 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = projectIdParam.parse(req.params);
-    const rows = await db.execute(sql`
+    const rows = await db.transaction((tx) => tx.execute(sql`
       SELECT * FROM project.project_ra_bills
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY bill_date DESC
-    `);
+    `));
     return reply.send({ data: rows });
   });
 
@@ -244,11 +244,11 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = projectIdParam.parse(req.params);
-    const rows = await db.execute(sql`
+    const rows = await db.transaction((tx) => tx.execute(sql`
       SELECT * FROM project.project_time_extensions
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY created_at DESC
-    `);
+    `));
     return reply.send({ data: rows });
   });
 
@@ -308,11 +308,11 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = projectIdParam.parse(req.params);
-    const rows = await db.execute(sql`
+    const rows = await db.transaction((tx) => tx.execute(sql`
       SELECT * FROM project.project_penalties
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY created_at DESC
-    `);
+    `));
     return reply.send({ data: rows });
   });
 
@@ -344,11 +344,11 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = projectIdParam.parse(req.params);
-    const rows = await db.execute(sql`
+    const rows = await db.transaction((tx) => tx.execute(sql`
       SELECT * FROM project.project_resources
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY created_at DESC
-    `);
+    `));
     return reply.send({ data: rows });
   });
 

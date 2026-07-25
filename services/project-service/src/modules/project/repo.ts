@@ -1,4 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { db } from "../../shared/db.js";
 import {
   projectProjects, projectTasks, projectMilestones,
@@ -115,13 +116,14 @@ export async function updateProjectProgressTx(
 
 // P0-2/P0-4: list active projects (RAG scheduler scope) and persist RAG/status.
 //
-// INTENTIONAL EXCEPTION — bare db.select(), NOT wrapped in db.transaction():
-// this is the RAG scheduler's sweep (rag.ts runRagTick) and deliberately polls
-// active projects across ALL tenants in one query. Scoping this to a single
-// tenant's GUC would defeat its purpose; per-project writes derived from this
-// scan are applied later, per project, inside their own db.transaction().
+// INTENTIONAL cross-tenant sweep — the RAG scheduler (rag.ts runRagTick)
+// polls active projects across ALL tenants in one query. Under the NOBYPASSRLS
+// project_svc role (#146) a bare db.select() returns ZERO rows, so the sweep
+// reads through the BYPASSRLS scanner pool (read-only; migration 0019).
+// Per-project writes derived from this scan are still applied later, per
+// project, inside runWithTenant + db.transaction() as project_svc.
 export async function listActiveProjects(limit: number): Promise<ProjectRow[]> {
-  return db.select().from(projectProjects)
+  return scannerDb.select().from(projectProjects)
     .where(eq(projectProjects.status, "active"))
     .limit(limit);
 }

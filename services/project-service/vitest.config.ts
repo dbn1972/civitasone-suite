@@ -6,6 +6,10 @@ export default defineConfig({
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL:  process.env.DATABASE_URL ?? "postgres://project_svc:project_dev_pw@localhost:5435/civitas_project",
+      // Cross-tenant RAG sweep reads through the BYPASSRLS scanner role (migration 0019).
+      PROJECT_SCANNER_DATABASE_URL:
+        process.env.PROJECT_SCANNER_DATABASE_URL ??
+        "postgres://project_scanner:project_scanner_dev_pw@localhost:5435/civitas_project",
       QUEUE_DRIVER:  "memory",
       CACHE_DRIVER:  "memory",
       FINANCE_SERVICE_URL: "http://localhost:3007",

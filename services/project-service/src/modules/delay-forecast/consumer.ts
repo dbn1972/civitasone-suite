@@ -21,6 +21,7 @@ import {
   getHighRiskTasks,
   type TaskData,
 } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const log = pino({ name: "project-delay-forecast-consumer" });
 const TASK_HIGH_RISK_EVENT = "ml.prediction.task_high_risk";
@@ -35,6 +36,8 @@ interface TaskUpdatedPayload {
 }
 
 export function registerDelayForecastConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   queue.subscribe<TaskUpdatedPayload>(
     EVENTS.taskUpdated,
     async (msg) => {
