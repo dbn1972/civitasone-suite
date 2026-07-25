@@ -67,6 +67,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(vendorScorecardRoutes);
   const { tenderDocsRoutes } = await import("./modules/tender/docs-routes.js");
   await app.register(tenderDocsRoutes);
+  const { gemReconcileRoutes } = await import("./modules/gem/reconcile-routes.js");
+  await app.register(gemReconcileRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

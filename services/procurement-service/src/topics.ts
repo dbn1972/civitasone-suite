@@ -57,6 +57,7 @@ export const COMMANDS = {
   prebidQueryAnswer:         "procurement.prebid_query.answer",
   prebidQueryPublish:        "procurement.prebid_query.publish",
   // SVC-050 GeM/CPPP integration reconciliation
+  gemExchange:              "procurement.gem_integration.exchange",
   gemReconcile:             "procurement.gem_integration.reconcile",
 } as const;
 
