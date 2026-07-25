@@ -27,6 +27,7 @@ import { recordsRoutes } from "./modules/records/routes.js";
 import { esignRoutes } from "./modules/esign/routes.js";
 import { quartersRoutes } from "./modules/quarters/routes.js";
 import { fleetRoutes } from "./modules/fleet/routes.js";
+import { spacesRoutes } from "./modules/spaces/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -70,6 +71,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(esignRoutes);
   await app.register(quartersRoutes);
   await app.register(fleetRoutes);
+  await app.register(spacesRoutes);
 
   return app;
 }
