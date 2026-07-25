@@ -40,6 +40,20 @@ const id = (s: string): string => {
 let q: MemoryQueue;
 const settle = () => new Promise((r) => setTimeout(r, 250));
 
+/**
+ * #146: billing_svc is NOBYPASSRLS and the domain tables + outbox carry FORCE
+ * RLS (`tenant_id = current_tenant_id()`), so raw test reads/cleanup and
+ * standalone repo reads (scopedRead relies on AsyncLocalStorage) must run
+ * inside runWithTenant — mirrors telephony's sqlAsTenant test plumbing (#152).
+ */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+function asTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction(fn)) as Promise<T>;
+}
+function inTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, fn) as Promise<T>;
+}
+
 async function wipe() {
   const tenants = [T1, T2];
   for (const tenantId of tenants) {
@@ -115,12 +129,12 @@ describe("bill lifecycle (consumer → DB)", () => {
       taxMinor: totals.taxMinor.toString(), chargesMinor: "0", totalMinor: totals.totalMinor.toString(),
     }));
     await settle();
-    const rows = await db.select().from(billingInvoices).where(eq(billingInvoices.id, invId));
+    const rows = await asTenant(T1, (tx) => tx.select().from(billingInvoices).where(eq(billingInvoices.id, invId)));
     expect(rows).toHaveLength(1);
     expect(rows[0]!.status).toBe("draft");
     expect(rows[0]!.totalMinor).toBe(826000n);
     expect(rows[0]!.taxMinor).toBe(126000n);
-    const items = await db.select().from(billingInvoiceItems).where(eq(billingInvoiceItems.invoiceId, invId));
+    const items = await asTenant(T1, (tx) => tx.select().from(billingInvoiceItems).where(eq(billingInvoiceItems.invoiceId, invId)));
     expect(items).toHaveLength(2);
   });
 
@@ -128,10 +142,10 @@ describe("bill lifecycle (consumer → DB)", () => {
     const invId = id("inv1");
     await q.publish(COMMANDS.invoiceIssue, envelope(id("iss1"), COMMANDS.invoiceIssue, T1, { id: invId }));
     await settle();
-    const inv = await invoiceRepo.findById(invId);
+    const inv = await inTenant(T1, () => invoiceRepo.findById(invId));
     expect(inv!.status).toBe("issued");
     expect(inv!.issuedBy).toBe(ACTOR);
-    const ob = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1));
+    const ob = await asTenant(T1, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T1)));
     expect(ob.map((r) => r.eventType)).toContain("billing.invoice.issued");
   });
 
@@ -141,7 +155,7 @@ describe("bill lifecycle (consumer → DB)", () => {
       id: id("pay1"), tenantId: T1, invoiceId: invId, amountMinor: 300000, method: "neft", gateway: "razorpay",
     }));
     await settle();
-    let inv = await invoiceRepo.findById(invId);
+    let inv = await inTenant(T1, () => invoiceRepo.findById(invId));
     expect(inv!.status).toBe("partially_paid");
     expect(inv!.paidMinor).toBe(300000n);
     expect(outstandingMinor(inv!.totalMinor, inv!.paidMinor)).toBe(526000n);
@@ -150,24 +164,24 @@ describe("bill lifecycle (consumer → DB)", () => {
       id: id("pay2"), tenantId: T1, invoiceId: invId, amountMinor: 526000, method: "neft", gateway: "razorpay",
     }));
     await settle();
-    inv = await invoiceRepo.findById(invId);
+    inv = await inTenant(T1, () => invoiceRepo.findById(invId));
     expect(inv!.status).toBe("paid");
     expect(inv!.paidMinor).toBe(826000n);
     expect(inv!.paidAt).not.toBeNull();
-    const receipts = await db.select().from(billingPayments).where(eq(billingPayments.invoiceId, invId));
+    const receipts = await asTenant(T1, (tx) => tx.select().from(billingPayments).where(eq(billingPayments.invoiceId, invId)));
     expect(receipts).toHaveLength(2);
   });
 
   it("over-payment is rejected: no row, paid_minor unchanged", async () => {
     const invId = id("inv1"); // already fully paid
-    const before = await invoiceRepo.findById(invId);
+    const before = await inTenant(T1, () => invoiceRepo.findById(invId));
     await q.publish(COMMANDS.paymentRecord, envelope(id("payX"), COMMANDS.paymentRecord, T1, {
       id: id("payX"), tenantId: T1, invoiceId: invId, amountMinor: 100, method: "neft", gateway: "razorpay",
     }));
     await settle();
-    const after = await invoiceRepo.findById(invId);
+    const after = await inTenant(T1, () => invoiceRepo.findById(invId));
     expect(after!.paidMinor).toBe(before!.paidMinor);
-    const overpaid = await db.select().from(billingPayments).where(eq(billingPayments.id, id("payX")));
+    const overpaid = await asTenant(T1, (tx) => tx.select().from(billingPayments).where(eq(billingPayments.id, id("payX"))));
     expect(overpaid).toHaveLength(0);
   });
 
@@ -181,7 +195,7 @@ describe("bill lifecycle (consumer → DB)", () => {
     await settle();
     await q.publish(COMMANDS.invoiceCancel, envelope(id("can1"), COMMANDS.invoiceCancel, T1, { id: invId, reason: "duplicate bill" }));
     await settle();
-    const inv = await invoiceRepo.findById(invId);
+    const inv = await inTenant(T1, () => invoiceRepo.findById(invId));
     expect(inv!.status).toBe("cancelled");
     expect(inv!.cancelReason).toBe("duplicate bill");
     expect(inv!.cancelledBy).toBe(ACTOR);
@@ -209,7 +223,7 @@ describe("idempotency (markProcessed)", () => {
     await settle();
     await q.publish(COMMANDS.paymentRecord, env); // redelivery, same messageId
     await settle();
-    const inv = await invoiceRepo.findById(invId);
+    const inv = await inTenant(T1, () => invoiceRepo.findById(invId));
     expect(inv!.paidMinor).toBe(200000n); // applied exactly once
     const receipts = await runWithTenant(T1, () => db.transaction((tx) => tx.select().from(billingPayments).where(eq(billingPayments.invoiceId, invId))));
     expect(receipts).toHaveLength(1);
@@ -228,7 +242,7 @@ describe("maker-checker (issue approval)", () => {
   const apId = "66666666-6666-4000-8000-0000000000b1";
 
   it("request creates a pending approval; bill stays draft", async () => {
-    await db.delete(processed).where(inArray(processed.messageId, [id("req1"), id("dec1"), id("decB"), apId]));
+    await asTenant(T1, (tx) => tx.delete(processed).where(inArray(processed.messageId, [id("req1"), id("dec1"), id("decB"), apId])));
     await q.publish(COMMANDS.invoiceCreate, envelope(id("reqC"), COMMANDS.invoiceCreate, T1, {
       id: invId, tenantId: T1, periodMonth: "2026-09",
       items: [{ description: "big", amountMinor: 15000000, kind: "line", quantity: 1 }],
@@ -239,10 +253,10 @@ describe("maker-checker (issue approval)", () => {
       approvalId: apId, invoiceId: invId, action: "issue", amountMinor: "15000000",
     }, ACTOR));
     await settle();
-    const aps = await db.select().from(billingInvoiceApprovals).where(eq(billingInvoiceApprovals.invoiceId, invId));
+    const aps = await asTenant(T1, (tx) => tx.select().from(billingInvoiceApprovals).where(eq(billingInvoiceApprovals.invoiceId, invId)));
     expect(aps).toHaveLength(1);
     expect(aps[0]!.status).toBe("pending");
-    expect((await invoiceRepo.findById(invId))!.status).toBe("draft");
+    expect((await inTenant(T1, () => invoiceRepo.findById(invId)))!.status).toBe("draft");
   });
 
   it("self-approval (checker == maker) is rejected; approval stays pending", async () => {
@@ -250,9 +264,9 @@ describe("maker-checker (issue approval)", () => {
       approvalId: apId, approve: true,
     }, ACTOR)); // same actor as requester
     await settle();
-    const ap = await invoiceRepo.findApprovalByIdTx(db as never, apId);
+    const ap = await asTenant(T1, (tx) => invoiceRepo.findApprovalByIdTx(tx as never, apId));
     expect(ap!.status).toBe("pending");
-    expect((await invoiceRepo.findById(invId))!.status).toBe("draft");
+    expect((await inTenant(T1, () => invoiceRepo.findById(invId)))!.status).toBe("draft");
   });
 
   it("approval by a DIFFERENT actor issues the bill", async () => {
@@ -260,10 +274,10 @@ describe("maker-checker (issue approval)", () => {
       approvalId: apId, approve: true,
     }, CHECKER)); // distinct checker
     await settle();
-    const ap = await invoiceRepo.findApprovalByIdTx(db as never, apId);
+    const ap = await asTenant(T1, (tx) => invoiceRepo.findApprovalByIdTx(tx as never, apId));
     expect(ap!.status).toBe("approved");
     expect(ap!.decidedBy).toBe(CHECKER);
-    expect((await invoiceRepo.findById(invId))!.status).toBe("issued");
+    expect((await inTenant(T1, () => invoiceRepo.findById(invId)))!.status).toBe("issued");
   });
 });
 
@@ -272,7 +286,7 @@ describe("maker-checker (issue approval)", () => {
 describe("tenant isolation + outstanding aggregate", () => {
   it("a bill created for T1 is invisible to T2 reads and aggregate", async () => {
     const invId = id("isol");
-    await db.delete(processed).where(eq(processed.messageId, id("isol")));
+    await asTenant(T1, (tx) => tx.delete(processed).where(eq(processed.messageId, id("isol"))));
     await q.publish(COMMANDS.invoiceCreate, envelope(id("isol"), COMMANDS.invoiceCreate, T1, {
       id: invId, tenantId: T1, periodMonth: "2026-10",
       items: [{ description: "y", amountMinor: 40000, kind: "line", quantity: 1 }],
@@ -280,20 +294,20 @@ describe("tenant isolation + outstanding aggregate", () => {
     }));
     await settle();
     // cross-tenant detail lookup must be empty
-    const wrongTenant = await invoiceRepo.findById(invId);
+    const wrongTenant = await inTenant(T1, () => invoiceRepo.findById(invId));
     expect(wrongTenant!.tenantId).toBe(T1);
     // outstanding aggregate is per-tenant
-    const aggT2 = await invoiceRepo.outstandingByTenant(T2);
+    const aggT2 = await inTenant(T2, () => invoiceRepo.outstandingByTenant(T2));
     expect(aggT2.outstandingMinor).toBe(0n);
     expect(aggT2.openCount).toBe(0);
   });
 
   it("issued bills contribute to T1 outstanding in paise", async () => {
     // issue the isolation bill, then assert aggregate
-    await db.delete(processed).where(eq(processed.messageId, "77777777-7777-4000-8000-0000000000b1"));
+    await asTenant(T1, (tx) => tx.delete(processed).where(eq(processed.messageId, "77777777-7777-4000-8000-0000000000b1")));
     await q.publish(COMMANDS.invoiceIssue, envelope("77777777-7777-4000-8000-0000000000b1", COMMANDS.invoiceIssue, T1, { id: id("isol") }));
     await settle();
-    const aggT1 = await invoiceRepo.outstandingByTenant(T1);
+    const aggT1 = await inTenant(T1, () => invoiceRepo.outstandingByTenant(T1));
     expect(aggT1.outstandingMinor).toBeGreaterThanOrEqual(40000n);
   });
 });

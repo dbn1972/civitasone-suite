@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -13,7 +14,10 @@ const AUDIT_TOPIC = "audit.event.record";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export function registerEInvoiceConsumers(queue: Queue): void {
+export function registerEInvoiceConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   // ── Generate IRN ────────────────────────────────────────────────
   queue.subscribe<{ id: string; invoiceId: string; tenantId: string }>(
     COMMANDS.einvoiceGenerate,
