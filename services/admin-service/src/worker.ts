@@ -25,6 +25,8 @@ registerWebhookConsumers(queue);
 registerDataExportConsumers(queue);
 registerFeatureFlagConsumers(queue);
 
+import { registerReconciliationConsumers } from "./modules/reconciliation-consumer.js";
+registerReconciliationConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
