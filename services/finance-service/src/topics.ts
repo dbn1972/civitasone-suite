@@ -40,6 +40,8 @@ export const EVENTS = {
   ucReconciled:     "finance.uc.reconciled",
   /** Transaction posted (journal entry committed) — consumed by ml-service for anomaly detection. */
   transactionPosted: "finance.transaction.posted",
+  /** SVC-040: a budget outcome has been evaluated (maker-checker). */
+  outcomeEvaluated:  "finance.budget.outcome_evaluated",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching) */

@@ -17,6 +17,7 @@ import { schema as bankReconModule } from "../modules/bank-recon/schema.js";
 import { schema as simplifiedModule } from "../modules/simplified/schema.js";
 import { schema as anomalyModule }    from "../modules/anomaly/schema.js";
 import { allocationSchema } from "../modules/budget/allocation-schema.js";
+import { outcomeSchema } from "../modules/budget/outcome-schema.js";
 import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
@@ -33,6 +34,7 @@ const SCHEMA = {
   ...simplifiedModule,
   ...anomalyModule,
   ...allocationSchema,
+  ...outcomeSchema,
   ...resolutionIntakeModule,
   ...outboxSchema,
 };
