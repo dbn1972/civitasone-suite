@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -8,7 +9,10 @@ import * as repo from "./repo.js";
 import { computeSlaDueAt, computeSlaStatus } from "./sla.js";
 import type { TicketRow } from "./schema.js";
 
-export function registerHelpdeskConsumers(queue: Queue): void {
+export function registerHelpdeskConsumers(rawQueue: Queue): void {
+  // #146 NOBYPASSRLS: every handler must run inside the message's tenant
+  // context so wrapWithTenantGuc sets app.tenant_id (RLS) in db.transaction().
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.ticketCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string; subject: string; description: string;

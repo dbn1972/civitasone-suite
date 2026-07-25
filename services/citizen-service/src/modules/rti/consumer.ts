@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -7,7 +8,10 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeRtiDeadline, toDateString } from "./domain.js";
 
-export function registerRtiConsumers(queue: Queue): void {
+export function registerRtiConsumers(rawQueue: Queue): void {
+  // #146 NOBYPASSRLS: every handler must run inside the message's tenant
+  // context so wrapWithTenantGuc sets app.tenant_id (RLS) in db.transaction().
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.rtiFile, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; rtiNo: string; subject: string;

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -11,7 +12,10 @@ import {
   shouldAutoEscalate, GRIEVANCE_ESCALATION_SLA_DAYS,
 } from "./domain.js";
 
-export function registerGrievanceConsumers(queue: Queue): void {
+export function registerGrievanceConsumers(rawQueue: Queue): void {
+  // #146 NOBYPASSRLS: every handler must run inside the message's tenant
+  // context so wrapWithTenantGuc sets app.tenant_id (RLS) in db.transaction().
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.grievanceRegister, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string;

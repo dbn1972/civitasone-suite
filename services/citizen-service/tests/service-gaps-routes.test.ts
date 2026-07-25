@@ -23,7 +23,11 @@ function tok(tenant: string, actor: string, roles = ["citizen_admin", "citizen_o
 function hdr(t: string) { return { authorization: `Bearer ${t}`, "content-type": "application/json", "x-tenant-id": TENANT_A }; }
 
 async function outboxTopics(): Promise<string[]> {
-  const rows = await sqlClient`SELECT topic FROM _outbox.messages WHERE tenant_id = ${TENANT_A}`;
+  // _outbox.messages has FORCED RLS — read under the transaction-LOCAL tenant GUC.
+  const rows = await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT_A}, true)`;
+    return sql`SELECT topic FROM _outbox.messages WHERE tenant_id = ${TENANT_A}`;
+  });
   return rows.map((r: { topic: string }) => r.topic);
 }
 

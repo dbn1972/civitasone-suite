@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -39,16 +40,28 @@ const MSG_ACTION = "44444444-aaaa-4000-8000-000000000004";
 const MSG_RESOLVE = "55555555-bbbb-4000-8000-000000000005";
 const OFFICER = "66666666-cccc-4000-8000-000000000006";
 
+// citizen domain tables and _outbox.messages have FORCED RLS (policy:
+// tenant_id = current_tenant_id()). Direct DB access from a test must run with
+// the app.tenant_id GUC set — wrap in runWithTenant + db.transaction so
+// wrapWithTenantGuc injects it (same pattern as telephony-service tests).
+function asTenant<T>(fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  return runWithTenant(TENANT, () =>
+    db.transaction(fn as Parameters<typeof db.transaction>[0]),
+  ) as Promise<T>;
+}
+
 async function wipe() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(citizenGrievanceActions).where(eq(citizenGrievanceActions.tenantId, TENANT));
-  await db.delete(citizenGrievances).where(eq(citizenGrievances.tenantId, TENANT));
-  await db.delete(citizenApplications).where(eq(citizenApplications.tenantId, TENANT));
-  await db.delete(citizenRtiRequests).where(eq(citizenRtiRequests.tenantId, TENANT));
-  await db.delete(citizenSlaConfigs).where(eq(citizenSlaConfigs.tenantId, TENANT));
-  for (const id of [MSG_RTI_1, MSG_APP_1, MSG_SLA_1, MSG_GRIEV_1, MSG_ASSIGN, MSG_ACTION, MSG_RESOLVE]) {
-    await db.delete(processed).where(eq(processed.messageId, id));
-  }
+  await asTenant(async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(citizenGrievanceActions).where(eq(citizenGrievanceActions.tenantId, TENANT));
+    await tx.delete(citizenGrievances).where(eq(citizenGrievances.tenantId, TENANT));
+    await tx.delete(citizenApplications).where(eq(citizenApplications.tenantId, TENANT));
+    await tx.delete(citizenRtiRequests).where(eq(citizenRtiRequests.tenantId, TENANT));
+    await tx.delete(citizenSlaConfigs).where(eq(citizenSlaConfigs.tenantId, TENANT));
+    for (const id of [MSG_RTI_1, MSG_APP_1, MSG_SLA_1, MSG_GRIEV_1, MSG_ASSIGN, MSG_ACTION, MSG_RESOLVE]) {
+      await tx.delete(processed).where(eq(processed.messageId, id));
+    }
+  });
 }
 
 // ── 1. RTI deadline — pure ────────────────────────────────────────────────
@@ -83,7 +96,7 @@ describe("RTI CQRS — file wiring (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.id, RTI_1));
+    const rows = await asTenant((tx) => tx.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.id, RTI_1)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("filed");
 
@@ -93,7 +106,7 @@ describe("RTI CQRS — file wiring (integration)", () => {
     expect(diff).toBeGreaterThanOrEqual(29);
     expect(diff).toBeLessThanOrEqual(30);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await asTenant((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
     expect(outbox.map((r) => r.eventType)).toContain(EVENTS.rtiFiled);
   });
 });
@@ -112,19 +125,19 @@ describe("Application domain — SLA breach (pure)", () => {
 describe("Application CQRS — SLA breach event (integration)", () => {
   beforeAll(async () => {
     await wipe();
-    await db.insert(citizenSlaConfigs).values({
+    await asTenant((tx) => tx.insert(citizenSlaConfigs).values({
       id: SLA_CFG, tenantId: TENANT, serviceType: "certificate", maxDays: 7,
       createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    }));
     const old = new Date();
     old.setDate(old.getDate() - 10);
-    await db.insert(citizenApplications).values({
+    await asTenant((tx) => tx.insert(citizenApplications).values({
       id: APP_1, tenantId: TENANT, citizenId: CITIZEN,
       serviceId: "99999999-9999-4000-8000-000000000099",
       refNo: "APP-TEST-001", status: "submitted",
       submittedAt: old, createdAt: old, updatedAt: old,
       createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    }));
   });
   afterAll(async () => { await wipe(); });
 
@@ -142,7 +155,7 @@ describe("Application CQRS — SLA breach event (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await asTenant((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
     expect(outbox.map((r) => r.eventType)).toContain(EVENTS.applicationSlaBreached);
   });
 });
@@ -183,7 +196,7 @@ describe("Grievance CQRS — register → assign → action → resolve", () => 
     });
     await new Promise<void>((r) => setTimeout(r, 500));
 
-    let rows = await db.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1));
+    let rows = await asTenant((tx) => tx.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("assigned");
     expect(rows[0]?.priority).toBe("high");
@@ -201,7 +214,7 @@ describe("Grievance CQRS — register → assign → action → resolve", () => 
     });
     await new Promise<void>((r) => setTimeout(r, 500));
 
-    rows = await db.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1));
+    rows = await asTenant((tx) => tx.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1)));
     expect(rows[0]?.status).toBe("in_progress");
 
     await q.publish(COMMANDS.grievanceResolve, {
@@ -213,13 +226,13 @@ describe("Grievance CQRS — register → assign → action → resolve", () => 
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    rows = await db.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1));
+    rows = await asTenant((tx) => tx.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1)));
     expect(rows[0]?.status).toBe("resolved");
 
-    const actions = await db.select().from(citizenGrievanceActions).where(eq(citizenGrievanceActions.grievanceId, GRIEV_1));
+    const actions = await asTenant((tx) => tx.select().from(citizenGrievanceActions).where(eq(citizenGrievanceActions.grievanceId, GRIEV_1)));
     expect(actions.length).toBeGreaterThanOrEqual(3);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await asTenant((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
     expect(outbox.map((r) => r.eventType)).toContain(EVENTS.grievanceResolved);
   });
 });

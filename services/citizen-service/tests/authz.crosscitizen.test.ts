@@ -90,16 +90,19 @@ beforeAll(async () => {
 }, 30000);
 
 afterAll(async () => {
-  // cleanup seeded rows
-  await sqlClient`DELETE FROM grievance.citizen_grievance_actions WHERE grievance_id = ${grievanceId}`.catch(() => {});
-  await sqlClient`DELETE FROM grievance.citizen_grievances WHERE id = ${grievanceId}`.catch(() => {});
-  await sqlClient`DELETE FROM rti.citizen_rti_appeals WHERE rti_id = ${rtiId}`.catch(() => {});
-  await sqlClient`DELETE FROM rti.citizen_rti_requests WHERE id = ${rtiId}`.catch(() => {});
-  await sqlClient`DELETE FROM helpdesk.citizen_ticket_notes WHERE ticket_id = ${ticketId}`.catch(() => {});
-  await sqlClient`DELETE FROM helpdesk.citizen_tickets WHERE id = ${ticketId}`.catch(() => {});
-  await sqlClient`DELETE FROM application.citizen_app_documents WHERE application_id = ${applicationId}`.catch(() => {});
-  await sqlClient`DELETE FROM application.citizen_status_history WHERE application_id = ${applicationId}`.catch(() => {});
-  await sqlClient`DELETE FROM application.citizen_applications WHERE id = ${applicationId}`.catch(() => {});
+  // cleanup seeded rows — FORCED RLS requires the transaction-LOCAL tenant GUC
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`DELETE FROM grievance.citizen_grievance_actions WHERE grievance_id = ${grievanceId}`;
+    await sql`DELETE FROM grievance.citizen_grievances WHERE id = ${grievanceId}`;
+    await sql`DELETE FROM rti.citizen_rti_appeals WHERE rti_id = ${rtiId}`;
+    await sql`DELETE FROM rti.citizen_rti_requests WHERE id = ${rtiId}`;
+    await sql`DELETE FROM helpdesk.citizen_ticket_notes WHERE ticket_id = ${ticketId}`;
+    await sql`DELETE FROM helpdesk.citizen_tickets WHERE id = ${ticketId}`;
+    await sql`DELETE FROM application.citizen_app_documents WHERE application_id = ${applicationId}`;
+    await sql`DELETE FROM application.citizen_status_history WHERE application_id = ${applicationId}`;
+    await sql`DELETE FROM application.citizen_applications WHERE id = ${applicationId}`;
+  }).catch(() => {});
   await app.close();
   await sqlClient.end();
 });
