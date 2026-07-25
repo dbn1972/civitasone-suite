@@ -71,6 +71,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { adminGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(adminGapRoutes);
 
+  const { securityComplianceRoutes } = await import("./modules/security-compliance/routes.js");
+  await app.register(securityComplianceRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

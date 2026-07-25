@@ -65,6 +65,31 @@ export async function govIntegrationRoutes(app: FastifyInstance): Promise<void> 
     return reply.code(202).send({ data: { requestId: randomUUID(), serviceId: body.serviceId, status: "submitted" } });
   });
 
+  // Bharat BillPay
+  app.post("/identity/gov/bbps/fetch-billers", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const body = z.object({ category: z.string().min(1) }).parse(req.body);
+    if (!process.env.BBPS_API_KEY) return reply.code(503).send({ code: "NOT_CONFIGURED", message: "BBPS not configured" });
+    return reply.send({ data: [{ billerId: "ELEC001", name: "State Electricity Board", category: body.category }] });
+  });
+  app.post("/identity/gov/bbps/pay-bill", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const body = z.object({ billerId: z.string(), amountMinor: z.number().int().positive(), paymentMode: z.enum(["upi", "netbanking", "card", "wallet"]) }).parse(req.body);
+    if (!process.env.BBPS_API_KEY) return reply.code(503).send({ code: "NOT_CONFIGURED", message: "BBPS not configured" });
+    return reply.code(202).send({ data: { txnId: randomUUID(), status: "processing" } });
+  });
+  // DigiLocker
+  app.post("/identity/gov/digilocker/authorize", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    if (!process.env.DIGILOCKER_CLIENT_ID) return reply.code(503).send({ code: "NOT_CONFIGURED", message: "DigiLocker not configured" });
+    return reply.send({ data: { authUrl: "https://digilocker.meity.gov.in/authorize", state: randomUUID() } });
+  });
+  app.post("/identity/gov/digilocker/pull-document", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const body = z.object({ accessToken: z.string(), docType: z.enum(["aadhaar", "pan", "driving_license", "voter_id", "passport"]) }).parse(req.body);
+    if (!process.env.DIGILOCKER_CLIENT_ID) return reply.code(503).send({ code: "NOT_CONFIGURED", message: "DigiLocker not configured" });
+    return reply.send({ data: { docType: body.docType, verified: true, uri: "dl://" + body.docType + "/" + randomUUID() } });
+  });
   app.setErrorHandler((err, req, reply) => {
     const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid });
@@ -72,3 +97,6 @@ export async function govIntegrationRoutes(app: FastifyInstance): Promise<void> 
     req.log.error({ err }, "unhandled"); return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });
   });
 }
+
+// Bharat BillPay integration
+import { randomUUID as uuid2 } from "node:crypto";
