@@ -27,11 +27,24 @@ export interface InspectorAssignPayload {
   conflictCheckBypass?: boolean;
 }
 
+/** A geo-located inspection site to schedule into a tour plan (SVC-109). */
+export interface TourPlanSite {
+  entityId: string;
+  inspectionId: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface TourPlanGeneratePayload {
   inspectorId: string;
   periodStart: string;
   periodEnd: string;
   maxDailyInspections?: number;
+  /** Optional pool of sites to route by geo-proximity (SVC-109). */
+  sites?: TourPlanSite[];
+  /** Optional route start point (inspector depot). Defaults to the first site. */
+  startLatitude?: number;
+  startLongitude?: number;
 }
 
 export interface GeoAttendanceMarkPayload {

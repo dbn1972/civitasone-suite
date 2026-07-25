@@ -8,8 +8,14 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-/** Result of integrity verification comparing stored vs computed hash. */
-export type IntegrityStatus = "valid" | "tampered";
+/**
+ * Result of integrity verification comparing stored vs computed hash.
+ * - `valid`      — recomputed hash matches the stored hash.
+ * - `tampered`   — recomputed hash differs from the stored hash.
+ * - `unverified` — the object could not be recomputed (storage unconfigured or
+ *                  object not retrievable); status is deliberately NOT asserted valid.
+ */
+export type IntegrityStatus = "valid" | "tampered" | "unverified";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -110,5 +116,32 @@ export function verifyIntegrity(
   storedHash: string,
   computedHash: string,
 ): IntegrityStatus {
+  return storedHash === computedHash ? "valid" : "tampered";
+}
+
+
+/**
+ * Decide the integrity status of an evidence artifact from its stored hash and a
+ * freshly recomputed hash.
+ *
+ * Unlike {@link verifyIntegrity}, this accepts `null` for the recomputed hash to
+ * model the case where the object could not be recomputed from storage (storage
+ * unconfigured, missing key, or access error). In that case the result is
+ * `"unverified"` — the function NEVER reports `"valid"` without proof.
+ *
+ * @param storedHash - The SHA-256 hash recorded at upload time.
+ * @param computedHash - The SHA-256 recomputed from storage, or `null` if unavailable.
+ * @returns `"valid"` on match, `"tampered"` on mismatch, `"unverified"` when no
+ *          recomputed hash is available.
+ *
+ * _Validates: Requirement 7.4 (integrity mismatch → tampered, never always-valid)_
+ */
+export function decideIntegrity(
+  storedHash: string,
+  computedHash: string | null | undefined,
+): IntegrityStatus {
+  if (computedHash == null || computedHash.length === 0) {
+    return "unverified";
+  }
   return storedHash === computedHash ? "valid" : "tampered";
 }

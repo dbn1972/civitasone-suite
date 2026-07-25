@@ -111,7 +111,7 @@ export async function updateEvidenceIntegrity(
   tx: Tx,
   id: string,
   tenantId: string,
-  integrityStatus: "valid" | "tampered",
+  integrityStatus: "valid" | "tampered" | "unverified",
 ): Promise<EvidenceArtifactRow> {
   const rows = await tx.update(evidenceArtifacts)
     .set({
