@@ -64,14 +64,27 @@ export async function findActiveSeatAllotments(tx: Writer, tenantId: string, sea
     inArray(estabSpaceAllotments.status, [...ACTIVE_ALLOTMENT_STATUSES]),
   ));
 }
+export async function findActiveRoomAllotments(tx: Writer, tenantId: string, roomId: string): Promise<SpaceAllotmentRow[]> {
+  return tx.select().from(estabSpaceAllotments).where(and(
+    eq(estabSpaceAllotments.tenantId, tenantId),
+    eq(estabSpaceAllotments.targetType, "room"),
+    eq(estabSpaceAllotments.targetId, roomId),
+    inArray(estabSpaceAllotments.status, [...ACTIVE_ALLOTMENT_STATUSES]),
+  ));
+}
 
 // ── Updates (optimistic on version) ─────────────────────────────────────────
+// Versioned UPDATEs RETURNING the id so callers can detect lost updates:
+// a matched-0-rows result means a concurrent writer bumped `version` and the
+// command layer must abort (VERSION_CONFLICT) before firing side effects.
 export async function updateAllotment(
   tx: Writer, id: string, expectedVersion: number, patch: Partial<SpaceAllotmentInsert>,
-): Promise<void> {
-  await tx.update(estabSpaceAllotments)
+): Promise<number> {
+  const rows = await tx.update(estabSpaceAllotments)
     .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(estabSpaceAllotments.id, id), eq(estabSpaceAllotments.version, expectedVersion)));
+    .where(and(eq(estabSpaceAllotments.id, id), eq(estabSpaceAllotments.version, expectedVersion)))
+    .returning({ id: estabSpaceAllotments.id });
+  return rows.length;
 }
 export async function updateSeatStatus(tx: Writer, id: string, status: string, updatedBy: string): Promise<void> {
   await tx.update(estabSeats)
@@ -80,10 +93,12 @@ export async function updateSeatStatus(tx: Writer, id: string, status: string, u
 }
 export async function updateMaintenance(
   tx: Writer, id: string, expectedVersion: number, patch: Partial<MaintenanceInsert>,
-): Promise<void> {
-  await tx.update(estabMaintenanceRequests)
+): Promise<number> {
+  const rows = await tx.update(estabMaintenanceRequests)
     .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(estabMaintenanceRequests.id, id), eq(estabMaintenanceRequests.version, expectedVersion)));
+    .where(and(eq(estabMaintenanceRequests.id, id), eq(estabMaintenanceRequests.version, expectedVersion)))
+    .returning({ id: estabMaintenanceRequests.id });
+  return rows.length;
 }
 
 // ── Tenant-scoped transaction ────────────────────────────────────────────────

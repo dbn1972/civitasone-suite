@@ -49,6 +49,28 @@ export function assertSeatAllottable(existing: Array<{ status: string }>): void 
   }
 }
 
+/**
+ * A room may hold at most `capacity` concurrent active (allotted/occupied)
+ * allotments. Rejects the (capacity+1)-th allotment. `activeCount` is the
+ * number of *other* active room allotments already in place.
+ */
+export function assertRoomHasCapacity(activeCount: number, capacity: number): void {
+  if (activeCount >= capacity) {
+    throw new DomainError("ROOM_AT_CAPACITY", `room is at capacity (${activeCount}/${capacity} allotted)`);
+  }
+}
+
+/**
+ * A versioned UPDATE that matched zero rows means a concurrent writer bumped
+ * the row's version between our read and our write (lost update). Reject before
+ * any dependent side-effect runs.
+ */
+export function assertRowUpdated(rowCount: number): void {
+  if (rowCount === 0) {
+    throw new DomainError("VERSION_CONFLICT", "stale version — the record was modified concurrently");
+  }
+}
+
 /** Seat status transition helpers — releasing a seat always frees it. */
 export function seatStatusOnAllot(): string { return "allotted"; }
 export function seatStatusOnRelease(): string { return "available"; }

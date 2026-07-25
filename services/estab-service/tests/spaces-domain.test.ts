@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   assertValidAllotmentTransition, assertMakerChecker, assertSeatAllottable,
+  assertRoomHasCapacity, assertRowUpdated,
   computeOccupancy, availableSeats, computeProratedLicenceFee,
   seatStatusOnAllot, seatStatusOnRelease, DomainError, ACTIVE_ALLOTMENT_STATUSES,
 } from "../src/modules/spaces/domain.js";
@@ -63,6 +64,33 @@ describe("Spaces — no double-allot", () => {
   });
   it("ACTIVE_ALLOTMENT_STATUSES covers allotted + occupied", () => {
     expect([...ACTIVE_ALLOTMENT_STATUSES]).toEqual(["allotted", "occupied"]);
+  });
+});
+
+describe("Spaces — room capacity enforcement", () => {
+  it("permits allotment below capacity", () => {
+    expect(() => assertRoomHasCapacity(0, 4)).not.toThrow();
+    expect(() => assertRoomHasCapacity(3, 4)).not.toThrow();
+  });
+  it("rejects allotment at capacity (boundary)", () => {
+    expect(() => assertRoomHasCapacity(4, 4)).toThrow(DomainError);
+    expect(() => assertRoomHasCapacity(4, 4)).toThrow("room is at capacity");
+  });
+  it("rejects allotment beyond capacity", () => {
+    expect(() => assertRoomHasCapacity(5, 4)).toThrow(DomainError);
+  });
+  it("a zero-capacity room admits nothing", () => {
+    expect(() => assertRoomHasCapacity(0, 0)).toThrow(DomainError);
+  });
+});
+
+describe("Spaces — versioned-update lost-update guard", () => {
+  it("passes when a row was updated", () => {
+    expect(() => assertRowUpdated(1)).not.toThrow();
+  });
+  it("throws VERSION_CONFLICT when zero rows matched", () => {
+    expect(() => assertRowUpdated(0)).toThrow(DomainError);
+    try { assertRowUpdated(0); } catch (e) { expect((e as DomainError).code).toBe("VERSION_CONFLICT"); }
   });
 });
 

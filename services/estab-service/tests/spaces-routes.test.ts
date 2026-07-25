@@ -164,6 +164,78 @@ describe("Spaces — maintenance requests", () => {
   });
 });
 
+describe("Spaces — room allotment capacity enforcement", () => {
+  const EMP2 = "33333333-cccc-4000-8000-0000000000a2";
+  const EMP3 = "33333333-cccc-4000-8000-0000000000a3";
+
+  it("allots up to room capacity (boundary OK), rejects overflow -> 409 ROOM_AT_CAPACITY", async () => {
+    const b = await post("/v1/estab/spaces/buildings", hdr(ACTOR_A), { code: `BLD-RC-${Date.now()}`, name: "RoomCap Block" });
+    const f = await post("/v1/estab/spaces/floors", hdr(ACTOR_A), { buildingId: b.json().data.id, floorNo: 3 });
+    const r = await post("/v1/estab/spaces/rooms", hdr(ACTOR_A),
+      { floorId: f.json().data.id, roomNo: `RC-${Date.now()}`, roomType: "office", capacity: 2 });
+    const roomId = r.json().data.id;
+
+    async function allotRoom(employeeRef: string) {
+      const req = await post("/v1/estab/spaces/allotments", hdr(ACTOR_A),
+        { targetType: "room", targetId: roomId, employeeRef });
+      return patch(`/v1/estab/spaces/allotments/${req.json().data.id}/allot`, hdr(ACTOR_B), { version: 1 });
+    }
+
+    const a1 = await allotRoom(EMPLOYEE);
+    expect(a1.statusCode).toBe(200);
+    const a2 = await allotRoom(EMP2); // brings room exactly to capacity (2/2)
+    expect(a2.statusCode).toBe(200);
+    const a3 = await allotRoom(EMP3); // over capacity
+    expect(a3.statusCode).toBe(409);
+    expect(a3.json().code).toBe("ROOM_AT_CAPACITY");
+  });
+});
+
+describe("Spaces — optimistic-lock lost-update guard", () => {
+  async function seatFixture() {
+    const b = await post("/v1/estab/spaces/buildings", hdr(ACTOR_A), { code: `BLD-VC-${Date.now()}`, name: "VerConf Block" });
+    const f = await post("/v1/estab/spaces/floors", hdr(ACTOR_A), { buildingId: b.json().data.id, floorNo: 4 });
+    const r = await post("/v1/estab/spaces/rooms", hdr(ACTOR_A), { floorId: f.json().data.id, roomNo: `VC-${Date.now()}`, capacity: 4 });
+    const roomId = r.json().data.id;
+    const s = await post("/v1/estab/spaces/seats", hdr(ACTOR_A), { roomId, seatNo: `VC-${Date.now()}-1` });
+    return { roomId, seatId: s.json().data.id as string };
+  }
+
+  it("concurrent release of the same allotment: one 200, the loser 409 VERSION_CONFLICT, seat freed once", async () => {
+    const { roomId, seatId } = await seatFixture();
+    const req = await post("/v1/estab/spaces/allotments", hdr(ACTOR_A), { targetType: "seat", targetId: seatId, employeeRef: EMPLOYEE });
+    const al = await patch(`/v1/estab/spaces/allotments/${req.json().data.id}/allot`, hdr(ACTOR_B), { version: 1 });
+    expect(al.statusCode).toBe(200);
+    const allotmentId = req.json().data.id;
+    // both callers hold the same (currently-correct) version 2
+    const [r1, r2] = await Promise.all([
+      patch(`/v1/estab/spaces/allotments/${allotmentId}/release`, hdr(ACTOR_B), { version: 2, reason: "first" }),
+      patch(`/v1/estab/spaces/allotments/${allotmentId}/release`, hdr(ACTOR_B), { version: 2, reason: "second" }),
+    ]);
+    const codes = [r1.statusCode, r2.statusCode].sort();
+    expect(codes).toEqual([200, 409]);
+    const loser = r1.statusCode === 409 ? r1 : r2;
+    expect(loser.json().code).toBe("VERSION_CONFLICT");
+    // seat released exactly once and is available again (loser fired no side effect)
+    const av = await app.inject({ method: "GET", url: `/v1/estab/spaces/availability?roomId=${roomId}`, headers: hdr(ACTOR_A) });
+    expect(av.json().data.available.some((x: { id: string }) => x.id === seatId)).toBe(true);
+  });
+
+  it("concurrent double-allot of the same seat: one 200, the loser 409 SEAT_ALREADY_ALLOTTED", async () => {
+    const { seatId } = await seatFixture();
+    const req1 = await post("/v1/estab/spaces/allotments", hdr(ACTOR_A), { targetType: "seat", targetId: seatId, employeeRef: EMPLOYEE });
+    const req2 = await post("/v1/estab/spaces/allotments", hdr(ACTOR_A), { targetType: "seat", targetId: seatId, employeeRef: EMPLOYEE });
+    const [a1, a2] = await Promise.all([
+      patch(`/v1/estab/spaces/allotments/${req1.json().data.id}/allot`, hdr(ACTOR_B), { version: 1 }),
+      patch(`/v1/estab/spaces/allotments/${req2.json().data.id}/allot`, hdr(ACTOR_B), { version: 1 }),
+    ]);
+    const codes = [a1.statusCode, a2.statusCode].sort();
+    expect(codes).toEqual([200, 409]);
+    const loser = a1.statusCode === 409 ? a1 : a2;
+    expect(loser.json().code).toBe("SEAT_ALREADY_ALLOTTED");
+  });
+});
+
 describe("Spaces — cross-tenant RLS isolation", () => {
   let buildingId: string;
   it("Tenant A creates a building", async () => {

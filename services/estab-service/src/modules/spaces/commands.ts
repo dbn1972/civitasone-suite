@@ -14,7 +14,8 @@ import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import {
   DomainError, assertValidAllotmentTransition, assertMakerChecker,
-  assertSeatAllottable, seatStatusOnAllot, seatStatusOnRelease,
+  assertSeatAllottable, assertRoomHasCapacity, assertRowUpdated,
+  seatStatusOnAllot, seatStatusOnRelease,
 } from "./domain.js";
 import type {
   CreateBuildingBody, CreateFloorBody, CreateRoomBody, CreateSeatBody,
@@ -34,13 +35,32 @@ async function audit(tx: any, ctx: RequestContext, action: string, resourceType:
   });
 }
 
+// Postgres unique-violation for the partial index that backstops one active
+// allotment per seat. Surfaced when two concurrent allots both pass the in-tx
+// availability check and race to write.
+const PG_UNIQUE_VIOLATION = "23505";
+const SEAT_ALLOT_UNIQUE = "uq_estab_active_seat_allotment";
+const ROOM_CAPACITY_CONSTRAINT = "chk_room_allotment_capacity";
+
 function toHttp(err: unknown): never {
   if (err instanceof DomainError) {
     const status = err.code === "MAKER_CHECKER_VIOLATION" ? 403
       : err.code === "SEAT_ALREADY_ALLOTTED" ? 409
       : err.code === "INVALID_TRANSITION" ? 409
+      : err.code === "VERSION_CONFLICT" ? 409
+      : err.code === "ROOM_AT_CAPACITY" ? 409
       : 400;
     throw new HttpError(status, err.code, err.message);
+  }
+  // Translate DB backstop violations (concurrent races that slipped past the
+  // in-tx guards) into the same 409s the domain guards would have produced.
+  const e = err as { code?: string; constraint_name?: string; message?: string };
+  if (e && e.code === PG_UNIQUE_VIOLATION
+      && (e.constraint_name === SEAT_ALLOT_UNIQUE || (e.message ?? "").includes(SEAT_ALLOT_UNIQUE))) {
+    throw new HttpError(409, "SEAT_ALREADY_ALLOTTED", "seat already has an active allotment");
+  }
+  if (e && (e.constraint_name === ROOM_CAPACITY_CONSTRAINT || (e.message ?? "").includes(ROOM_CAPACITY_CONSTRAINT))) {
+    throw new HttpError(409, "ROOM_AT_CAPACITY", "room is at capacity");
   }
   throw err;
 }
@@ -133,13 +153,26 @@ export async function allot(ctx: RequestContext, allotmentId: string, body: Allo
         const active = (await repo.findActiveSeatAllotments(tx, ctx.tenantId, a.targetId))
           .filter((x) => x.id !== allotmentId);
         assertSeatAllottable(active);
-        await repo.updateSeatStatus(tx, a.targetId, seatStatusOnAllot(), ctx.actorId);
+      } else {
+        // Room allotments are capacity-bounded: at most `capacity` concurrent
+        // active allotments per room (mirrors the seat single-active guard).
+        const room = await repo.findRoomById(tx, ctx.tenantId, a.targetId);
+        if (!room) throw new HttpError(404, "ROOM_NOT_FOUND", "room not found");
+        const activeCount = (await repo.findActiveRoomAllotments(tx, ctx.tenantId, a.targetId))
+          .filter((x) => x.id !== allotmentId).length;
+        assertRoomHasCapacity(activeCount, room.capacity);
       }
-      await repo.updateAllotment(tx, allotmentId, body.version, {
+      // Commit the versioned state change FIRST and confirm it matched a row —
+      // a lost update (0 rows) must abort before seat status / event side effects.
+      const updated = await repo.updateAllotment(tx, allotmentId, body.version, {
         status: "allotted", allottedBy: ctx.actorId, allottedAt: new Date(),
         licenceFeeMinor: BigInt(body.licenceFeeMinor), currency: body.currency,
         updatedBy: ctx.actorId, version: body.version + 1,
       });
+      assertRowUpdated(updated);
+      if (a.targetType === "seat") {
+        await repo.updateSeatStatus(tx, a.targetId, seatStatusOnAllot(), ctx.actorId);
+      }
       await enqueue(tx, {
         topic: EVENTS.spaceSeatAllotted, eventType: EVENTS.spaceSeatAllotted,
         tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
@@ -163,9 +196,10 @@ export async function occupy(ctx: RequestContext, allotmentId: string, body: Ver
       if (!a) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "allotment not found");
       if (a.version !== body.version) throw new HttpError(409, "VERSION_CONFLICT", "stale version");
       assertValidAllotmentTransition(a.status, "occupied");
-      await repo.updateAllotment(tx, allotmentId, body.version, {
+      const updated = await repo.updateAllotment(tx, allotmentId, body.version, {
         status: "occupied", occupiedAt: new Date(), updatedBy: ctx.actorId, version: body.version + 1,
       });
+      assertRowUpdated(updated);
       await audit(tx, ctx, "allotment_occupied", "space_allotment", allotmentId);
     });
   } catch (err) { toHttp(err); }
@@ -179,10 +213,11 @@ export async function release(ctx: RequestContext, allotmentId: string, body: Re
       if (!a) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "allotment not found");
       if (a.version !== body.version) throw new HttpError(409, "VERSION_CONFLICT", "stale version");
       assertValidAllotmentTransition(a.status, "released");
-      await repo.updateAllotment(tx, allotmentId, body.version, {
+      const updated = await repo.updateAllotment(tx, allotmentId, body.version, {
         status: "released", releasedAt: new Date(), releaseReason: body.reason ?? null,
         updatedBy: ctx.actorId, version: body.version + 1,
       });
+      assertRowUpdated(updated);
       if (a.targetType === "seat") {
         await repo.updateSeatStatus(tx, a.targetId, seatStatusOnRelease(), ctx.actorId);
       }
@@ -206,10 +241,11 @@ export async function cancelAllotment(ctx: RequestContext, allotmentId: string, 
       if (a.version !== body.version) throw new HttpError(409, "VERSION_CONFLICT", "stale version");
       assertValidAllotmentTransition(a.status, "cancelled");
       const wasAllotted = a.status === "allotted";
-      await repo.updateAllotment(tx, allotmentId, body.version, {
+      const updated = await repo.updateAllotment(tx, allotmentId, body.version, {
         status: "cancelled", cancelledAt: new Date(), cancelReason: body.reason ?? null,
         updatedBy: ctx.actorId, version: body.version + 1,
       });
+      assertRowUpdated(updated);
       if (wasAllotted && a.targetType === "seat") {
         await repo.updateSeatStatus(tx, a.targetId, seatStatusOnRelease(), ctx.actorId);
       }
@@ -241,14 +277,17 @@ export async function createMaintenance(ctx: RequestContext, body: CreateMainten
 export async function updateMaintenanceStatus(
   ctx: RequestContext, id: string, body: MaintenanceStatusBody,
 ): Promise<Created> {
-  await repo.scopedTx(ctx.tenantId, async (tx) => {
-    const patch: Record<string, unknown> = {
-      status: body.status, assignedTo: body.assignedTo ?? undefined,
-      resolutionNotes: body.resolutionNotes ?? undefined, updatedBy: ctx.actorId, version: body.version + 1,
-    };
-    if (body.status === "resolved" || body.status === "closed") patch.resolvedAt = new Date();
-    await repo.updateMaintenance(tx, id, body.version, patch);
-    await audit(tx, ctx, "maintenance_status_" + body.status, "maintenance_request", id);
-  });
+  try {
+    await repo.scopedTx(ctx.tenantId, async (tx) => {
+      const patch: Record<string, unknown> = {
+        status: body.status, assignedTo: body.assignedTo ?? undefined,
+        resolutionNotes: body.resolutionNotes ?? undefined, updatedBy: ctx.actorId, version: body.version + 1,
+      };
+      if (body.status === "resolved" || body.status === "closed") patch.resolvedAt = new Date();
+      const updated = await repo.updateMaintenance(tx, id, body.version, patch);
+      assertRowUpdated(updated);
+      await audit(tx, ctx, "maintenance_status_" + body.status, "maintenance_request", id);
+    });
+  } catch (err) { toHttp(err); }
   return { id };
 }
