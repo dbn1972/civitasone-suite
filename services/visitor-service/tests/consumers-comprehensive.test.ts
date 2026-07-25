@@ -120,12 +120,22 @@ vi.mock("../src/modules/blacklist/screening-store.js", () => ({
   loadWatchlistHashes: async () => new Set<string>(),
   addToBlacklistHashSet: vi.fn(async () => undefined),
   addToWatchlistHashSet: vi.fn(async () => undefined),
+  // group-visit/consumer imports isBlacklisted for per-member screening; the
+  // factory replaces the whole module, so it must be provided or the handler
+  // calls undefined(...) and throws before markProcessed ever runs.
+  isBlacklisted: async () => false,
+  isWatchlisted: async () => false,
 }));
 
 const { COMMANDS } = await import("../src/topics.js");
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const ACTOR = "22222222-2222-2222-2222-222222222222";
+
+// group-visit/consumer calls getQrPrivateKey() at handler entry (before
+// markProcessed) and throws if this env var is unset. signPassQr is mocked in
+// this file, so a dummy non-empty value is sufficient and never reaches crypto.
+process.env.VISITOR_QR_PRIVATE_KEY ??= "test-qr-private-key";
 
 function makeMsg(topic: string, payload: unknown) {
   return {
@@ -138,9 +148,17 @@ function makeMsg(topic: string, payload: unknown) {
   };
 }
 
-async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unknown, waitMs = 20): Promise<void> {
+// MemoryQueue.publish schedules delivery fire-and-forget (setTimeout(0), plus
+// real retry-backoff timers on failure), so a fixed wall-clock sleep races the
+// async handler chain: the assertion can run before the handler finishes
+// (spy "not called"), and — worse — a delivery still in flight when the test
+// ends leaks into the next test and bumps the shared selectIdx cursor, making a
+// later handler read the wrong rows, throw "not found", and skip its outbox
+// enqueue. queue.drain() awaits actual delivery completion (including retries),
+// which is deterministic and guarantees each test fully settles before the next.
+async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unknown): Promise<void> {
   await queue.publish(topic, makeMsg(topic, payload));
-  await new Promise((r) => setTimeout(r, waitMs));
+  await queue.drain();
 }
 
 beforeEach(() => {
