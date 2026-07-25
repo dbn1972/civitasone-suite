@@ -76,7 +76,7 @@ const generateTourPlanSchema = z.object({
   periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodEnd must be YYYY-MM-DD"),
   maxDailyInspections: z.number().int().positive().max(20).optional(),
   // SVC-109: optional geo-located site pool for proximity route optimization.
-  sites: z.array(tourSiteSchema).optional(),
+  sites: z.array(tourSiteSchema).max(500, "sites cannot exceed 500 per tour plan").optional(),
   startLatitude: z.number().min(-90).max(90).optional(),
   startLongitude: z.number().min(-180).max(180).optional(),
 });
