@@ -19,6 +19,7 @@ import { schema as anomalyModule }    from "../modules/anomaly/schema.js";
 import { allocationSchema } from "../modules/budget/allocation-schema.js";
 import { outcomeSchema } from "../modules/budget/outcome-schema.js";
 import { formulationSchema } from "../modules/budget/formulation-schema.js";
+import { distributionSchema } from "../modules/budget/distribution-schema.js";
 import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
@@ -37,6 +38,7 @@ const SCHEMA = {
   ...allocationSchema,
   ...outcomeSchema,
   ...formulationSchema,
+  ...distributionSchema,
   ...resolutionIntakeModule,
   ...outboxSchema,
 };

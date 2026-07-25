@@ -44,6 +44,8 @@ export const EVENTS = {
   outcomeEvaluated:  "finance.budget.outcome_evaluated",
   /** SVC-031: a departmental budget proposal has been approved (maker-checker). */
   proposalApproved:  "finance.budget.proposal_approved",
+  /** SVC-033: an allocation slice has been distributed to a subordinate office. */
+  allocationDistributed: "finance.budget.allocation_distributed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching) */
