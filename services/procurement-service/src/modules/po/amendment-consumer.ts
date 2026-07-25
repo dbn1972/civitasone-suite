@@ -60,15 +60,37 @@ export function registerPoAmendmentConsumers(queue: Queue): void {
       // Maker-checker defense-in-depth.
       assertDistinctMakerChecker(amendment.requestedBy, msg.actorId);
       assertAmendmentTransition(amendment.status, "approved");
-      const po = await poRepo.findPoByIdTx(tx, p.poId, p.tenantId);
+      // Re-read the PO under a FOR UPDATE row lock so concurrent amendment
+      // approvals serialise on this row — we never write a request-time snapshot.
+      const po = await poRepo.lockPoByIdTx(tx, p.poId, p.tenantId);
       if (!po) throw new Error(`PO ${p.poId} not found`);
+      // STALENESS GUARD (SVC-046 lost-update fix): if the PO total moved since
+      // this amendment was requested, another amendment was applied in between
+      // and this amendment's snapshot (prev/newTotalMinor) is stale. Blindly
+      // writing it would silently erase the interleaved delta (a lost update:
+      // 1000 -> A(+100)=1100, then approving a stale B snapshot of 1050 loses A).
+      // Semantics chosen: REJECT-STALE — supersede this amendment as rejected
+      // with a clear reason so it must be re-raised against the current total.
+      // We never silently mutate a financial total from a stale base.
+      if (BigInt(amendment.prevTotalMinor) !== BigInt(po.totalMinor)) {
+        await amendRepo.updateAmendment(tx, p.amendmentId, {
+          status: "rejected",
+          rejectedReason: `AMENDMENT_STALE_BASE: PO total changed from ${amendment.prevTotalMinor} to ${po.totalMinor} since this amendment was requested; re-raise against the current total`,
+          updatedBy: msg.actorId, version: (amendment.version ?? 1) + 1,
+        });
+        await audit(tx, msg, "reject_stale", "procurement_po_amendment", p.amendmentId);
+        return;
+      }
       await amendRepo.updateAmendment(tx, p.amendmentId, {
         status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
         updatedBy: msg.actorId, version: (amendment.version ?? 1) + 1,
       });
-      // Apply the change-order value delta to the PO total.
-      await poRepo.updatePo(tx, p.poId, {
-        totalMinor: BigInt(amendment.newTotalMinor), updatedBy: msg.actorId, version: (po.version ?? 1) + 1,
+      // Recompute the new total from the freshly-locked current value (defence
+      // in depth — equals the snapshot on the non-stale path) and write it via
+      // the optimistic-locked update keyed on the locked version.
+      const newTotalMinor = BigInt(po.totalMinor) + BigInt(amendment.deltaMinor);
+      await poRepo.updatePoVersioned(tx, p.poId, po.version ?? 1, {
+        totalMinor: newTotalMinor, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
         topic: EVENTS.poAmended, eventType: EVENTS.poAmended,
@@ -76,7 +98,7 @@ export function registerPoAmendmentConsumers(queue: Queue): void {
         payload: {
           poId: p.poId, tenantId: p.tenantId, amendmentId: p.amendmentId,
           amendmentNo: amendment.amendmentNo, amendmentType: amendment.amendmentType,
-          deltaMinor: amendment.deltaMinor.toString(), newTotalMinor: amendment.newTotalMinor.toString(),
+          deltaMinor: amendment.deltaMinor.toString(), newTotalMinor: newTotalMinor.toString(),
         },
       });
       await audit(tx, msg, "approve", "procurement_po_amendment", p.amendmentId);

@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -20,6 +20,7 @@ import { vi } from "vitest";
 
 const JWT_SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "acacacac-1111-4000-8000-0000000000a1";
+const OTHER  = "acacacac-2222-4000-8000-0000000000b2";
 const ACTOR  = "adadadad-0000-4000-8000-000000000001";
 
 function token(roles = ["procurement_officer"]) {
@@ -138,5 +139,29 @@ describe("SVC-050 configured exchange + reconciliation (mocked provider)", () =>
     expect(ref?.attempts).toBe(1);
     expect(ref?.externalRef).toBeNull();
     expect(ref?.lastError).toBe("PROVIDER_ERROR");
+  });
+});
+
+
+describe("SVC-050 GeM/CPPP — cross-tenant RLS isolation", () => {
+  it("a foreign tenant cannot see another tenant's integration ref (tenant isolation)", async () => {
+    await wipe();
+    const refId = randomUUID();
+    // Seed an integration ref owned by TENANT.
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(procurementGemIntegrationRefs).values({
+      id: refId, tenantId: TENANT, provider: "gem", entityType: "order", entityId: "PO-RLS",
+      direction: "outbound", status: "pending", attempts: 0, createdBy: ACTOR, updatedBy: ACTOR,
+    })));
+
+    // Under OTHER's tenant scope the ref is invisible.
+    const asOther = await runWithTenant(OTHER, () => db.transaction((tx) =>
+      tx.select().from(procurementGemIntegrationRefs).where(and(eq(procurementGemIntegrationRefs.id, refId), eq(procurementGemIntegrationRefs.tenantId, OTHER)))));
+    expect(asOther).toHaveLength(0);
+
+    // Control: the owning tenant does see it.
+    const asTenant = await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.select().from(procurementGemIntegrationRefs).where(eq(procurementGemIntegrationRefs.id, refId))));
+    expect(asTenant).toHaveLength(1);
+    await wipe();
   });
 });

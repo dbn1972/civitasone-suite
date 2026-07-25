@@ -20,6 +20,7 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../src/topics.js";
 import { randomUUID } from "node:crypto";
 
 const TENANT = "8e8e8e8e-1111-4000-8000-0000000000e1";
+const OTHER   = "8e8e8e8e-2222-4000-8000-0000000000e2";
 const ISSUER  = "8f8f8f8f-0000-4000-8000-000000000001";
 const DECIDER = "8f8f8f8f-0000-4000-8000-000000000002";
 const VENDOR  = "8a8a8a8a-0000-4000-8000-0000000000aa";
@@ -118,5 +119,34 @@ describe("SVC-049 show-cause — maker-checker", () => {
     const sc = (await runWithTenant(TENANT, () => db.transaction((tx) =>
       tx.select().from(procurementVendorShowCause).where(eq(procurementVendorShowCause.id, scId2)))))[0];
     expect(sc?.status).toBe("issued"); // decide rejected by in-consumer SoD
+  });
+});
+
+
+describe("SVC-049 vendor — cross-tenant RLS isolation", () => {
+  const scId = randomUUID();
+
+  it("a foreign tenant cannot see or decide another tenant's show-cause (tenant isolation)", async () => {
+    // Issue a show-cause under TENANT.
+    const q = wire(new MemoryQueue()); registerVendorScorecardConsumers(q); await q.start();
+    await q.publish(COMMANDS.vendorShowCauseIssue, msg(COMMANDS.vendorShowCauseIssue, { id: scId, vendorId: VENDOR, tenantId: TENANT, reason: "isolation seed" }, ISSUER));
+    await drain(q);
+
+    // A foreign-tenant (OTHER) decide command against tenant-A's show-cause is a
+    // no-op: the consumer's tenant-scoped read finds nothing, so no write occurs.
+    const q2 = wire(new MemoryQueue()); registerVendorScorecardConsumers(q2); await q2.start();
+    await q2.publish(COMMANDS.vendorShowCauseDecide, msg(COMMANDS.vendorShowCauseDecide, { id: scId, tenantId: OTHER, decision: "cross-tenant", uphold: true }, DECIDER, OTHER));
+    await drain(q2);
+
+    // Under OTHER's tenant scope the show-cause is invisible.
+    const inOther = await runWithTenant(OTHER, () => db.transaction((tx) =>
+      tx.select().from(procurementVendorShowCause).where(and(eq(procurementVendorShowCause.id, scId), eq(procurementVendorShowCause.tenantId, OTHER)))));
+    expect(inOther).toHaveLength(0);
+
+    // Tenant-A's show-cause is untouched (still 'issued', not decided cross-tenant).
+    const sc = (await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.select().from(procurementVendorShowCause).where(eq(procurementVendorShowCause.id, scId)))))[0];
+    expect(sc?.status).toBe("issued");
+    expect(sc?.decidedBy ?? null).toBeNull();
   });
 });

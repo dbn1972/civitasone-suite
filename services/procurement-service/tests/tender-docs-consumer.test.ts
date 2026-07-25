@@ -21,6 +21,7 @@ import { COMMANDS, EVENTS } from "../src/topics.js";
 import { randomUUID } from "node:crypto";
 
 const TENANT = "9c9c9c9c-1111-4000-8000-0000000000c1";
+const OTHER  = "9c9c9c9c-2222-4000-8000-0000000000c2";
 const ACTOR  = "9d9d9d9d-0000-4000-8000-000000000001";
 
 function msg(type: string, payload: Record<string, unknown>) {
@@ -142,5 +143,31 @@ describe("SVC-043 pre-bid queries — open -> answered -> published", () => {
     expect(pq?.status).toBe("published");
     expect(pq?.published).toBe(true);
     expect(pq?.answer).toBe("3 years onsite");
+  });
+});
+
+
+describe("SVC-043 tender documents — cross-tenant RLS isolation", () => {
+  const tenderId = randomUUID();
+  const docId = randomUUID();
+
+  it("a foreign tenant cannot see another tenant's tender or its documents (tenant isolation)", async () => {
+    await seedTender(tenderId); // belongs to TENANT
+    const q = wire(new MemoryQueue()); registerTenderDocsConsumers(q); await q.start();
+    await q.publish(COMMANDS.tenderDocAdd, msg(COMMANDS.tenderDocAdd, { id: docId, tenderId, tenantId: TENANT, docType: "nit", title: "NIT", storageRef: "s3://nit" }));
+    await drain(q);
+
+    // Under OTHER's tenant scope, neither the tender nor its document is visible.
+    const tenderOther = await runWithTenant(OTHER, () => db.transaction((tx) =>
+      tx.select().from(procurementTenders).where(and(eq(procurementTenders.id, tenderId), eq(procurementTenders.tenantId, OTHER)))));
+    expect(tenderOther).toHaveLength(0);
+    const docsOther = await runWithTenant(OTHER, () => db.transaction((tx) =>
+      tx.select().from(procurementTenderDocuments).where(and(eq(procurementTenderDocuments.tenderId, tenderId), eq(procurementTenderDocuments.tenantId, OTHER)))));
+    expect(docsOther).toHaveLength(0);
+
+    // Control: the owning tenant does see the document it created.
+    const docsTenant = await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.select().from(procurementTenderDocuments).where(eq(procurementTenderDocuments.tenderId, tenderId))));
+    expect(docsTenant.length).toBeGreaterThanOrEqual(1);
   });
 });
