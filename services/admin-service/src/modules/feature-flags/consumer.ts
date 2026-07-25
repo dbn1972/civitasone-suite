@@ -21,6 +21,7 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
   queue.subscribe<{
     id: string; tenantId: string; key: string; name: string;
     description: string; enabled: boolean; rolloutPercent: number; targetSegments: string[];
+    owner?: string; expiresAt?: string | null;
   }>(COMMANDS.featureFlagManageCreate, async (msg) => {
     try {
       await db.transaction(async (tx) => {
@@ -36,6 +37,8 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
           rolloutPercent: p.rolloutPercent,
           targetSegments: p.targetSegments,
           killSwitch: false,
+          owner: p.owner ?? "",
+          expiresAt: p.expiresAt ? new Date(p.expiresAt) : null,
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
           version: 1,
@@ -51,6 +54,7 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
   queue.subscribe<{
     flagId: string; tenantId: string; name?: string; description?: string;
     enabled?: boolean; rolloutPercent?: number; targetSegments?: string[];
+    owner?: string; expiresAt?: string | null;
   }>("admin.feature_flag.update", async (msg) => {
     try {
       await db.transaction(async (tx) => {
@@ -62,6 +66,8 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
         if (p.enabled !== undefined) updates.enabled = p.enabled;
         if (p.rolloutPercent !== undefined) updates.rolloutPercent = p.rolloutPercent;
         if (p.targetSegments !== undefined) updates.targetSegments = p.targetSegments;
+        if (p.owner !== undefined) updates.owner = p.owner;
+        if (p.expiresAt !== undefined) updates.expiresAt = p.expiresAt ? new Date(p.expiresAt) : null;
         await (tx as any).update(featureFlags).set(updates)
           .where(and(eq(featureFlags.id, p.flagId), eq(featureFlags.tenantId, p.tenantId)));
         await emit(tx, msg, "admin.feature_flag.updated", p, "update", p.flagId);

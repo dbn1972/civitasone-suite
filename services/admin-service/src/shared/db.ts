@@ -18,6 +18,7 @@ import { schema as dataExportModule } from "../modules/data-export/schema.js";
 import { schema as scheduledJobsModule } from "../modules/scheduled-jobs/schema.js";
 import { schema as featureFlagsModule } from "../modules/feature-flags/schema.js";
 import { schema as changeModule } from "../modules/change/schema.js";
+import { schema as centralConfigModule } from "../modules/central-config/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 // NOTE (Phase 4 coverage-gap closure): custom-domains, webhooks, data-export,
@@ -39,6 +40,7 @@ const SCHEMA = {
   ...scheduledJobsModule,
   ...featureFlagsModule,
   ...changeModule,
+  ...centralConfigModule,
   ...outboxSchema,
 };
 
