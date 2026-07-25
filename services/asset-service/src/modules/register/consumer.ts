@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -25,7 +26,10 @@ function makeBarcode(code: string): string {
   return `AST-${code.replace(/\//g, "-")}`;
 }
 
-export function registerRegisterConsumers(queue: Queue): void {
+export function registerRegisterConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.assetCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; name: string; code: string; categoryId: string;

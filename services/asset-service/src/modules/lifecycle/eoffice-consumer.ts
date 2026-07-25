@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { parseDecisionCallback } from "@civitasone/eoffice-sdk";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -29,7 +30,10 @@ const GL_TOPIC    = "finance.gl.post";
  * Without this, the file was approved in eOffice but the asset was never
  * disposed — the integration loop was open.
  */
-export function registerDisposalEOfficeDecisionConsumers(queue: Queue): void {
+export function registerDisposalEOfficeDecisionConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(CONSUMED_EVENTS.disposalFileDecided, async (msg) => {
     const parsed = parseDecisionCallback(msg.payload);
     if (!parsed.ok) {

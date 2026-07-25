@@ -9,6 +9,7 @@
  */
 import { and, desc, eq, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import {
   catalogueOfferings,
   catalogueOlas,
@@ -205,15 +206,16 @@ export async function listStageEvents(tenantId: string, requestId: string): Prom
  * Candidate requests for the breach sweeper: still open (not terminal), with a
  * resolution deadline that has passed as of `now`, and not yet escalated.
  *
- * INTENTIONAL cross-tenant scan (bare scopedRead / no per-tenant GUC): the
- * sweeper polls all tenants in one query then groups by tenantId — same class of
- * platform-scoped sweeper as tickets/repo.ts findOpenForSla(). Per-tenant writes
- * derived from these candidates ARE tenant-scoped (see ./sweeper.ts, which wraps
- * each tenant's batch in runWithTenant()).
+ * CROSS-TENANT SCAN — runs on the BYPASSRLS helpdesk_scanner pool
+ * (shared/scanner-db.ts, migration 0016): the sweeper polls all tenants in one
+ * query then groups by tenantId — same class of platform-scoped sweeper as
+ * tickets/repo.ts findOpenForSla(). Under the NOBYPASSRLS helpdesk_svc role
+ * (#146) a bare cross-tenant SELECT returns zero rows, hence scannerDb.
+ * Per-tenant writes derived from these candidates ARE tenant-scoped (see
+ * ./sweeper.ts, which wraps each tenant's batch in runWithTenant()).
  */
 export async function findOverdueOpenRequests(now: Date, batch = 200): Promise<ServiceRequestRow[]> {
-  return scopedRead((tx) =>
-    tx
+  return scannerDb
       .select()
       .from(serviceRequests)
       .where(
@@ -223,8 +225,7 @@ export async function findOverdueOpenRequests(now: Date, batch = 200): Promise<S
           lte(serviceRequests.resolutionDeadline, now),
         ),
       )
-      .limit(batch),
-  );
+      .limit(batch);
 }
 
 /**

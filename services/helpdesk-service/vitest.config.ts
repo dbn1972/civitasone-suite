@@ -8,6 +8,11 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         "postgres://helpdesk_svc:helpdesk_dev_pw@localhost:5435/civitas_helpdesk",
+      // Cross-tenant sweepers read through the BYPASSRLS scanner role
+      // (migration 0016). Integration tests exercise the real cross-tenant scan.
+      HELPDESK_SCANNER_DATABASE_URL:
+        process.env.HELPDESK_SCANNER_DATABASE_URL ??
+        "postgres://helpdesk_scanner:helpdesk_scanner_dev_pw@localhost:5435/civitas_helpdesk",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

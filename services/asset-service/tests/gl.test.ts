@@ -27,6 +27,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq, inArray } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { assetAssets } from "../src/modules/register/schema.js";
 import { assetDepSchedules, assetDepEntries } from "../src/modules/depreciation/schema.js";
@@ -74,8 +75,21 @@ function envelope(type: string, tenantId: string, label: string, payload: Record
 
 async function drain(ms = 400): Promise<void> { await new Promise<void>((r) => setTimeout(r, ms)); }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * #146: the asset_svc role is NOBYPASSRLS and every domain table (and the
+ * outbox) has FORCE RLS with policy `tenant_id = current_tenant_id()`. Raw
+ * test reads/seeds/cleanup must therefore run inside a tenant-GUC transaction
+ * — the drizzle-side mirror of telephony's sqlAsTenant test helper (PR #152).
+ */
+function asTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction(fn)) as Promise<T>;
+}
+
 async function glMessages(tenantId: string): Promise<GlPayload[]> {
-  const rows = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
+  const rows = await asTenant(tenantId, (tx) =>
+    tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, tenantId)));
   return rows.filter((r) => r.eventType === GL_TOPIC).map((r) => r.payload as GlPayload);
 }
 
@@ -87,7 +101,8 @@ async function glMessages(tenantId: string): Promise<GlPayload[]> {
  * Republishes pending rows of `topics` for `tenantId`, then marks them published.
  */
 async function relayOutbox(q: MemoryQueue, tenantId: string, topics: string[]): Promise<void> {
-  const rows = (await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, tenantId)))
+  const rows = (await asTenant(tenantId, (tx) =>
+    tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, tenantId))))
     .filter((r) => topics.includes(r.topic));
   for (const row of rows) {
     await q.publish(row.topic, {
@@ -112,20 +127,22 @@ async function cleanupTenant(tenantId: string, assetIds: string[]): Promise<void
   // collect entry ids BEFORE deleting the entries.
   const outerIds = LABELS.filter(([t]) => t === tenantId).map(([t, l]) => msgId(t, l));
   const processedIds = [...outerIds];
-  if (assetIds.length) {
-    const entries = await db.select().from(assetDepEntries).where(inArray(assetDepEntries.assetId, assetIds));
-    for (const e of entries) for (const oid of outerIds) processedIds.push(uuidV5(`${oid}:${e.id}`));
-  }
-  if (processedIds.length) {
-    await db.delete(processed).where(inArray(processed.messageId, processedIds));
-  }
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
-  if (assetIds.length) {
-    await db.delete(assetDepEntries).where(inArray(assetDepEntries.assetId, assetIds));
-    await db.delete(assetDepSchedules).where(inArray(assetDepSchedules.assetId, assetIds));
-    await db.delete(assetWorkOrders).where(inArray(assetWorkOrders.assetId, assetIds));
-    await db.delete(assetAssets).where(inArray(assetAssets.id, assetIds));
-  }
+  await asTenant(tenantId, async (tx) => {
+    if (assetIds.length) {
+      const entries = await tx.select().from(assetDepEntries).where(inArray(assetDepEntries.assetId, assetIds));
+      for (const e of entries) for (const oid of outerIds) processedIds.push(uuidV5(`${oid}:${e.id}`));
+    }
+    if (processedIds.length) {
+      await tx.delete(processed).where(inArray(processed.messageId, processedIds));
+    }
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
+    if (assetIds.length) {
+      await tx.delete(assetDepEntries).where(inArray(assetDepEntries.assetId, assetIds));
+      await tx.delete(assetDepSchedules).where(inArray(assetDepSchedules.assetId, assetIds));
+      await tx.delete(assetWorkOrders).where(inArray(assetWorkOrders.assetId, assetIds));
+      await tx.delete(assetAssets).where(inArray(assetAssets.id, assetIds));
+    }
+  });
 }
 
 const LABELS: Array<[string, string]> = [
@@ -224,14 +241,15 @@ describe("Dual-book schedules — company SLM + statutory WDV", () => {
     await drain(700);
     await q.stop();
 
-    const schedules = await db.select().from(assetDepSchedules).where(eq(assetDepSchedules.assetId, A_DEP_A));
+    const schedules = await asTenant(TENANT_A, (tx) =>
+      tx.select().from(assetDepSchedules).where(eq(assetDepSchedules.assetId, A_DEP_A)));
     const books = schedules.map((s) => `${s.depBook}:${s.method}`).sort();
     expect(books).toEqual(["company:SLM", "statutory:WDV"]);
 
     // SLM entries reconcile to (cost - salvage); last book value lands on salvage.
     const companySched = schedules.find((s) => s.depBook === "company")!;
-    const entries = await db.select().from(assetDepEntries)
-      .where(eq(assetDepEntries.scheduleId, companySched.id));
+    const entries = await asTenant(TENANT_A, (tx) => tx.select().from(assetDepEntries)
+      .where(eq(assetDepEntries.scheduleId, companySched.id)));
     const total = entries.reduce((a, e) => a + e.amountMinor, 0n);
     expect(total).toBe(1200000n); // sum(monthly) == cost - salvage exactly (rounding true-up)
     const last = entries.find((e) => e.bookValueAfterMinor === 0n);
@@ -247,8 +265,8 @@ describe("Depreciation run — posts GL and advances company book value", () => 
     registerDepreciationConsumers(q);
     await q.start();
 
-    const firstEntry = (await db.select().from(assetDepEntries)
-      .where(eq(assetDepEntries.assetId, A_DEP_A)))
+    const firstEntry = (await asTenant(TENANT_A, (tx) => tx.select().from(assetDepEntries)
+      .where(eq(assetDepEntries.assetId, A_DEP_A))))
       .filter((e) => e.depBook === "company")
       .sort((a, b) => a.period.localeCompare(b.period))[0]!;
     const period = firstEntry.period;
@@ -267,11 +285,13 @@ describe("Depreciation run — posts GL and advances company book value", () => 
     expect(BigInt(dep[0]!.depAmountMinor!)).toBe(firstEntry.amountMinor);
 
     // entry marked posted
-    const posted = (await db.select().from(assetDepEntries).where(eq(assetDepEntries.id, firstEntry.id)))[0]!;
+    const posted = (await asTenant(TENANT_A, (tx) =>
+      tx.select().from(assetDepEntries).where(eq(assetDepEntries.id, firstEntry.id))))[0]!;
     expect(posted.postedAt).not.toBeNull();
 
     // company book value advanced on the asset
-    const asset = (await db.select().from(assetAssets).where(eq(assetAssets.id, A_DEP_A)))[0]!;
+    const asset = (await asTenant(TENANT_A, (tx) =>
+      tx.select().from(assetAssets).where(eq(assetAssets.id, A_DEP_A))))[0]!;
     expect(asset.bookValue).toBe(firstEntry.bookValueAfterMinor);
     expect(asset.accumulatedDep).toBe(firstEntry.amountMinor);
   });
@@ -296,7 +316,8 @@ describe("Tenant isolation — depRun is tenant-scoped", () => {
     await relayOutbox(q, TENANT_B, [COMMANDS.depSchedule]); // pump B's dep-schedule commands
     await drain(700);
 
-    const bEntry = (await db.select().from(assetDepEntries).where(eq(assetDepEntries.assetId, A_DEP_B)))
+    const bEntry = (await asTenant(TENANT_B, (tx) =>
+      tx.select().from(assetDepEntries).where(eq(assetDepEntries.assetId, A_DEP_B))))
       .filter((e) => e.depBook === "company")
       .sort((a, b) => a.period.localeCompare(b.period))[0]!;
 
@@ -307,7 +328,8 @@ describe("Tenant isolation — depRun is tenant-scoped", () => {
     await drain(700);
     await q.stop();
 
-    const bEntryAfter = (await db.select().from(assetDepEntries).where(eq(assetDepEntries.id, bEntry.id)))[0]!;
+    const bEntryAfter = (await asTenant(TENANT_B, (tx) =>
+      tx.select().from(assetDepEntries).where(eq(assetDepEntries.id, bEntry.id))))[0]!;
     expect(bEntryAfter.postedAt).toBeNull(); // B untouched by A's run
 
     // no GL posted under tenant B by tenant A's run
@@ -329,7 +351,7 @@ describe("Impairment & Revaluation GL", () => {
     bearer = signToken({ sub: ACTOR, tid: TENANT_A, roles: ["asset_admin", "super_admin"] } as never, SECRET);
 
     // seed the asset directly so the route can load it (book value 1,000,000)
-    await db.insert(assetAssets).values({
+    await asTenant(TENANT_A, (tx) => tx.insert(assetAssets).values({
       id: A_IMP, tenantId: TENANT_A, name: "Imp Asset", code: "IMP-001",
       categoryId: "77777777-0001-0000-0000-000000000001", assetType: "fixed",
       barcode: "AST-IMP-001", status: "active",
@@ -337,7 +359,7 @@ describe("Impairment & Revaluation GL", () => {
       depRate: "20", depMethod: "SLM", currency: "INR",
       bookValue: 1000000n, accumulatedDep: 0n, acquisitionDate: "2024-01-01",
       createdBy: ACTOR, updatedBy: ACTOR,
-    });
+    }));
   });
 
   afterAll(async () => { await app.close(); });
@@ -361,7 +383,8 @@ describe("Impairment & Revaluation GL", () => {
     expect(dr.debitMinor).toBe("300000");
     expect(cr.accountCode).toBe("1200");
 
-    const asset = (await db.select().from(assetAssets).where(eq(assetAssets.id, A_IMP)))[0]!;
+    const asset = (await asTenant(TENANT_A, (tx) =>
+      tx.select().from(assetAssets).where(eq(assetAssets.id, A_IMP))))[0]!;
     expect(asset.bookValue).toBe(700000n);      // dropped by impairment
     expect(asset.accumulatedDep).toBe(0n);      // UNCHANGED — impairment is not depreciation
   });
@@ -437,7 +460,8 @@ describe("Maintenance GL + cross-tenant work-order rejection", () => {
     expect(bMnt).toHaveLength(0);
 
     // The tenant-A work order was NOT mutated by the cross-tenant completion.
-    const wo = (await db.select().from(assetWorkOrders).where(eq(assetWorkOrders.id, WO_ID)))[0]!;
+    const wo = (await asTenant(TENANT_A, (tx) =>
+      tx.select().from(assetWorkOrders).where(eq(assetWorkOrders.id, WO_ID))))[0]!;
     expect(wo.tenantId).toBe(TENANT_A);
     expect(wo.costMinor).toBe(45000n);          // still the legitimate tenant-A cost
   });

@@ -1,5 +1,6 @@
 import { eq, asc, and, notInArray, isNull, or, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { tickets, type TicketRow, type TicketInsert, type TicketView } from "./schema.js";
 import { slaPolicies } from "../sla/schema.js";
 import { evaluateSlaStatus, resolvePolicy, DEFAULT_SLA_POLICIES, type SlaPolicy, type SlaEvalStatus } from "../sla/domain.js";
@@ -167,26 +168,23 @@ export async function insert(tx: Writer, row: TicketInsert): Promise<void> {
  * and missing at least one SLA notification marker. Whether each is actually
  * at-risk/breached is decided in-process by computeSla() against `now`.
  *
- * INTENTIONAL EXCEPTION — bare db.select(), NOT wrapped in db.transaction():
- * this is a background sweeper that deliberately polls across ALL tenants in
- * one query (sweepSlaBreaches() then groups the results by tenantId). Scoping
- * this to a single tenant's GUC would defeat its purpose. A bypass-RLS-role
- * design (dedicated sweeper role with row access across tenants) would be the
- * correct long-term fix; left untouched pending that design decision.
- * Same class of exception as dueTimers() in
- * services/workflow-service/src/modules/tasks/repo.ts, which is the precedent
- * for platform-scoped sweeper queries not being wrapped with a tenant GUC.
- * Per-tenant writes derived from these candidates ARE tenant-scoped — see
+ * CROSS-TENANT SCAN — runs on the BYPASSRLS helpdesk_scanner pool
+ * (shared/scanner-db.ts, migration 0016): this background sweeper deliberately
+ * polls across ALL tenants in one query (sweepSlaBreaches() then groups the
+ * results by tenantId). Under the NOBYPASSRLS helpdesk_svc role (#146) a bare
+ * cross-tenant SELECT returns zero rows, so the scan uses scannerDb — the
+ * bypass-RLS-role design this comment previously called the correct long-term
+ * fix. Per-tenant writes derived from these candidates ARE tenant-scoped — see
  * sweepSlaBreaches() in ./sweeper.ts, which wraps each tenant's batch in
  * runWithTenant(tenantId, ...) before writing.
  */
 export async function findOpenForSla(batch = 200): Promise<TicketRow[]> {
-  return scopedRead((tx) => tx.select().from(tickets)
+  return scannerDb.select().from(tickets)
     .where(and(
       notInArray(tickets.status, ["closed", "resolved"]),
       or(isNull(tickets.slaAtRiskNotifiedAt), isNull(tickets.slaBreachedNotifiedAt)),
     ))
-    .limit(batch));
+    .limit(batch);
 }
 
 /**

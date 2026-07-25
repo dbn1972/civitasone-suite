@@ -11,6 +11,7 @@
  */
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -25,7 +26,10 @@ const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC = "finance.gl.post";
 const FINANCE_RECEIPT_TOPIC = "finance.receipt.create";
 
-export function registerCondemnationConsumers(queue: Queue): void {
+export function registerCondemnationConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   // ── Survey Create ──────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.condemnationSurveyCreate, async (msg) => {
     try {

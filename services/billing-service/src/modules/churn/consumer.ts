@@ -10,6 +10,7 @@
  */
 
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { EVENTS } from "../../topics.js";
@@ -27,7 +28,10 @@ interface SubscriptionUpdatedPayload {
   updatedFields?: string[];
 }
 
-export function registerChurnConsumers(queue: Queue): void {
+export function registerChurnConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<SubscriptionUpdatedPayload>(
     EVENTS.subscriptionUpdated,
     async (msg) => {

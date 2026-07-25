@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
@@ -13,7 +14,10 @@ const GL_TOPIC = "finance.gl.post";
 const MAINTENANCE_EXPENSE_CODE = process.env.ASSET_MAINTENANCE_EXPENSE_CODE ?? "5300";
 const AP_CONTROL_CODE = process.env.ASSET_AP_CONTROL_CODE ?? "2050";
 
-export function registerMaintenanceConsumers(queue: Queue): void {
+export function registerMaintenanceConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.maintenancePlan, async (msg) => {
     try {
       const p = msg.payload as {

@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -16,7 +17,10 @@ const NOTIFICATION_TOPIC = "notification.alert.send";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export function registerInvoicesConsumers(queue: Queue): void {
+export function registerInvoicesConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   // ── legacy usage-based generation (govt-exempt skip) ────────────
   queue.subscribe<{ id: string; tenantId: string; periodMonth: string; govtExempt: boolean; totalMinor: number }>(
     COMMANDS.invoiceGenerate,

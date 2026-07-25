@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -12,7 +13,10 @@ import { uuidV5 } from "../../shared/ids.js";
 const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC    = "finance.gl.post";
 
-export function registerDepreciationConsumers(queue: Queue): void {
+export function registerDepreciationConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.depSchedule, async (msg) => {
     const p = msg.payload as {
       id: string; assetId: string; tenantId: string; method: string; startDate: string;
