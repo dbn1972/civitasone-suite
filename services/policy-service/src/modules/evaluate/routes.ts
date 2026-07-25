@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, HttpError } from "../../shared/context.js";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
@@ -53,6 +54,11 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
 
     // Resolve the granted permissions for the subject from the binding store
     // (scoped to actor.tenantId), never from client-asserted permissions.
+    // RLS (#146): resolution + audit run inside the EVALUATED actor's tenant
+    // context so the GUC transaction admits the reads and the outbox write —
+    // for external callers actor.tenantId IS ctx.tenantId; trusted internal
+    // callers may evaluate a principal of another tenant.
+    return runWithTenant(actor.tenantId, async () => {
     const granted = await repo.findGrantedPermissions(actor.tenantId, actor.userId, actor.roles);
 
     // EPIC-2 (G-09/G-10): run RBAC then ABAC. Subject org attributes come from
@@ -102,6 +108,7 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send(result);
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {

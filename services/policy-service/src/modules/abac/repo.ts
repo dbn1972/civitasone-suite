@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, readScoped } from "../../shared/db.js";
 import { abacRules, type AbacRuleRow, type AbacRuleInsert } from "./schema.js";
 import { parseExpression, type CompiledRule, type RuleExpression } from "./domain.js";
 
@@ -29,20 +29,20 @@ function toCompiled(r: AbacRuleRow): CompiledRule {
 
 // ── reads (tenant-scoped) ─────────────────────────────────────────────
 export async function findRuleById(tenantId: string, id: string): Promise<RuleView | null> {
-  const rows = await db.select().from(abacRules)
-    .where(and(eq(abacRules.tenantId, tenantId), eq(abacRules.id, id))).limit(1);
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(abacRules)
+    .where(and(eq(abacRules.tenantId, tenantId), eq(abacRules.id, id))).limit(1));
   return rows[0] ? toRuleView(rows[0]) : null;
 }
 
 export async function findRulesByTenant(tenantId: string, limit = 500): Promise<RuleView[]> {
-  return (await db.select().from(abacRules)
-    .where(eq(abacRules.tenantId, tenantId)).limit(limit)).map(toRuleView);
+  return (await readScoped(tenantId, (tx) => tx.select().from(abacRules)
+    .where(eq(abacRules.tenantId, tenantId)).limit(limit))).map(toRuleView);
 }
 
 // Compiled, enabled rules for a tenant — the input to the evaluation engine.
 export async function loadCompiledRules(tenantId: string, limit = 1000): Promise<CompiledRule[]> {
-  return (await db.select().from(abacRules)
-    .where(and(eq(abacRules.tenantId, tenantId), eq(abacRules.enabled, true))).limit(limit))
+  return (await readScoped(tenantId, (tx) => tx.select().from(abacRules)
+    .where(and(eq(abacRules.tenantId, tenantId), eq(abacRules.enabled, true))).limit(limit)))
     .map(toCompiled);
 }
 

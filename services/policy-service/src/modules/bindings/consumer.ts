@@ -3,10 +3,13 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerBindingConsumers(q: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  q = tenantScoped(q);
   q.subscribe<{ id: string; tenantId: string; userId: string; roleId: string }>(COMMANDS.createBinding, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

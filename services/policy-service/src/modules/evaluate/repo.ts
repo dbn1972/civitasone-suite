@@ -1,5 +1,5 @@
 import { eq, and, inArray } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { readScoped } from "../../shared/db.js";
 import { roles, permissions } from "../roles/schema.js";
 import { roleBindings } from "../bindings/schema.js";
 
@@ -13,7 +13,9 @@ export async function resolveRoleIds(
   userId: string,
   jwtRoleNames: string[],
 ): Promise<string[]> {
-  const bindingRows = await db.select({ roleId: roleBindings.roleId })
+  // RLS (#146): reads run inside the tenant GUC transaction (readScoped).
+  return readScoped(tenantId, async (tx) => {
+  const bindingRows = await tx.select({ roleId: roleBindings.roleId })
     .from(roleBindings)
     .where(and(
       eq(roleBindings.tenantId, tenantId),
@@ -21,7 +23,7 @@ export async function resolveRoleIds(
       eq(roleBindings.status, "active"),
     ));
   const namedRoles = jwtRoleNames.length
-    ? await db.select({ id: roles.id }).from(roles).where(and(
+    ? await tx.select({ id: roles.id }).from(roles).where(and(
         eq(roles.tenantId, tenantId),
         eq(roles.status, "active"),
         inArray(roles.name, jwtRoleNames),
@@ -31,6 +33,7 @@ export async function resolveRoleIds(
     ...bindingRows.map((r: { roleId: string }) => r.roleId),
     ...namedRoles.map((r: { id: string }) => r.id),
   ])];
+  });
 }
 
 export async function findGrantedPermissions(
@@ -38,7 +41,9 @@ export async function findGrantedPermissions(
   userId: string,
   jwtRoleNames: string[],
 ): Promise<Array<{ resource: string; action: string; effect: string; roleName: string }>> {
-  const bindingRows = await db.select({ roleId: roleBindings.roleId })
+  // RLS (#146): reads run inside the tenant GUC transaction (readScoped).
+  return readScoped(tenantId, async (tx) => {
+  const bindingRows = await tx.select({ roleId: roleBindings.roleId })
     .from(roleBindings)
     .where(and(
       eq(roleBindings.tenantId, tenantId),
@@ -48,7 +53,7 @@ export async function findGrantedPermissions(
 
   const boundRoleIds = bindingRows.map((r) => r.roleId);
   const namedRoles = jwtRoleNames.length
-    ? await db.select().from(roles).where(and(
+    ? await tx.select().from(roles).where(and(
         eq(roles.tenantId, tenantId),
         eq(roles.status, "active"),
         inArray(roles.name, jwtRoleNames),
@@ -58,10 +63,10 @@ export async function findGrantedPermissions(
   const roleIds = [...new Set([...boundRoleIds, ...namedRoles.map((r) => r.id)])];
   if (roleIds.length === 0) return [];
 
-  const roleRows = await db.select().from(roles).where(inArray(roles.id, roleIds));
+  const roleRows = await tx.select().from(roles).where(inArray(roles.id, roleIds));
   const roleNameById = new Map(roleRows.map((r) => [r.id, r.name]));
 
-  const permRows = await db.select().from(permissions).where(and(
+  const permRows = await tx.select().from(permissions).where(and(
     eq(permissions.tenantId, tenantId),
     inArray(permissions.roleId, roleIds),
   ));
@@ -72,4 +77,5 @@ export async function findGrantedPermissions(
     effect: p.effect,
     roleName: roleNameById.get(p.roleId) ?? "unknown",
   }));
+  });
 }
