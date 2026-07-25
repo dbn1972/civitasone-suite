@@ -57,7 +57,7 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
     if (!validation.valid) {
       throw new HttpError(400, "INVALID_COA", validation.errors.join("; "));
     }
-    const id = await commands.publishProposalCreate(ctx, { ...body, type: "coa_map" });
+    const id = await commands.publishMapCoa(ctx, body);
     return reply.status(202).send({ id, status: "accepted" });
   });
 
@@ -66,7 +66,7 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.mapOfficeSchema.parse(req.body);
-    const id = await commands.publishProposalCreate(ctx, { ...body, type: "office_map" });
+    const id = await commands.publishMapOffice(ctx, body);
     return reply.status(202).send({ id, status: "accepted" });
   });
 

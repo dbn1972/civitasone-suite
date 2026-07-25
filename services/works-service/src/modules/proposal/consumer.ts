@@ -2,8 +2,9 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { workProposals } from "./schema.js";
-import { generateWorkNumber } from "./domain.js";
+import { workProposals, workSplits, workCoaMappings, workOfficeMappings } from "./schema.js";
+import { generateWorkNumber, generateSplitNumber } from "./domain.js";
+import { eq, and } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 
 export function registerProposalConsumers(q: Queue): void {
@@ -79,6 +80,98 @@ export function registerProposalConsumers(q: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { workId },
+      });
+    });
+  });
+
+  // ORPHAN FIX: proposal split — persist a child split of a parent work.
+  q.subscribe(COMMANDS.proposalSplit, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const p = msg.payload as Record<string, unknown>;
+      const parentWorkId = p.parentWorkId as string;
+
+      const existing = await tx.select().from(workSplits)
+        .where(and(eq(workSplits.tenantId, msg.tenantId), eq(workSplits.parentWorkId, parentWorkId)));
+      const splitNumber = generateSplitNumber(parentWorkId, existing.length + 1);
+
+      await tx.insert(workSplits).values({
+        id: p.id as string,
+        tenantId: msg.tenantId,
+        parentWorkId,
+        splitNumber,
+        description: (p.description as string) ?? undefined,
+        status: "active",
+        createdBy: msg.actorId,
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.proposalSplit,
+        eventType: EVENTS.proposalSplit,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id: p.id, parentWorkId, splitNumber },
+      });
+    });
+  });
+
+  // ORPHAN FIX: COA mapping — persist chart-of-account heads for a work.
+  q.subscribe(COMMANDS.proposalMapCoa, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const p = msg.payload as Record<string, unknown>;
+      await tx.insert(workCoaMappings).values({
+        id: p.id as string,
+        tenantId: msg.tenantId,
+        workId: p.workId as string,
+        majorHead: p.majorHead as string,
+        subMajorHead: (p.subMajorHead as string) ?? undefined,
+        minorHead: (p.minorHead as string) ?? undefined,
+        subHead: (p.subHead as string) ?? undefined,
+        detailHead: (p.detailHead as string) ?? undefined,
+        objectHead: (p.objectHead as string) ?? undefined,
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.proposalCoaMapped,
+        eventType: EVENTS.proposalCoaMapped,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id: p.id, workId: p.workId, majorHead: p.majorHead },
+      });
+    });
+  });
+
+  // ORPHAN FIX: office mapping — persist executing office assignment for a work.
+  q.subscribe(COMMANDS.proposalMapOffice, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const p = msg.payload as Record<string, unknown>;
+      await tx.insert(workOfficeMappings).values({
+        id: p.id as string,
+        tenantId: msg.tenantId,
+        workId: p.workId as string,
+        divisionId: p.divisionId as string,
+        subDivisionId: (p.subDivisionId as string) ?? undefined,
+        sectionId: (p.sectionId as string) ?? undefined,
+        isNodal: (p.isNodal as boolean) ?? false,
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.proposalOfficeMapped,
+        eventType: EVENTS.proposalOfficeMapped,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id: p.id, workId: p.workId, divisionId: p.divisionId, isNodal: (p.isNodal as boolean) ?? false },
       });
     });
   });

@@ -108,3 +108,12 @@ export function canDeleteSplit(split: WorkSplit, hasDependents: boolean): boolea
 export function isNodalOffice(mapping: OfficeMapping): boolean {
   return mapping.isNodal;
 }
+
+/**
+ * Generate a deterministic-ish split number for a child split of a parent work.
+ * Format: <parentWorkNumber-or-id-prefix>/SPLIT/<seq>
+ */
+export function generateSplitNumber(parentRef: string, sequence: number): string {
+  const prefix = parentRef.slice(0, 8);
+  return `${prefix}/SPLIT/${String(sequence).padStart(3, "0")}`;
+}

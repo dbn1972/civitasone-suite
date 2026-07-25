@@ -40,6 +40,9 @@ export const CONSUMED = {
 export const CONSUMED_EVENTS = {
   // eOffice (estab-service) emits the asset disposal decision back on this topic.
   disposalFileDecided: "asset.disposal.file_decided",
+  // works-service emits this on a completion-type work closure so the newly
+  // built public asset is registered here (closes the asset-handover loop).
+  worksAssetHandover: "works.asset.handover",
 } as const;
 
 export const SERVICE = "asset";

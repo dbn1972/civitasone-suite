@@ -67,4 +67,40 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     });
     return reply.status(202).send({ id, status: "accepted" });
   });
+
+  // Update BoQ item
+  app.patch("/v1/works/boq/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = v.updateBoqItemSchema.parse({ ...(req.body as object), id: (req.params as { id: string }).id });
+
+    await queue.publish(COMMANDS.boqUpdateItem, {
+      messageId: randomUUID(),
+      type: COMMANDS.boqUpdateItem,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { ...body },
+    });
+    return reply.status(202).send({ id: body.id, status: "accepted" });
+  });
+
+  // Delete BoQ item
+  app.delete("/v1/works/boq/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = v.deleteBoqItemSchema.parse({ id: (req.params as { id: string }).id });
+
+    await queue.publish(COMMANDS.boqDeleteItem, {
+      messageId: randomUUID(),
+      type: COMMANDS.boqDeleteItem,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { id: body.id },
+    });
+    return reply.status(202).send({ id: body.id, status: "accepted" });
+  });
 }

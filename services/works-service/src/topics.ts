@@ -54,6 +54,8 @@ export const EVENTS = {
   proposalUpdated:             "works.proposal.updated",
   proposalDaoFinalized:        "works.proposal.dao_finalized",
   proposalSplit:               "works.proposal.split_created",
+  proposalCoaMapped:           "works.proposal.coa_mapped",
+  proposalOfficeMapped:        "works.proposal.office_mapped",
 
   // Approval
   aaCreated:                   "works.aa.created",
@@ -63,22 +65,33 @@ export const EVENTS = {
 
   // BoQ
   boqItemAdded:                "works.boq.item_added",
+  boqItemUpdated:              "works.boq.item_updated",
+  boqItemDeleted:              "works.boq.item_deleted",
   boqRecapitulated:            "works.boq.recapitulated",
 
   // Tender
   preTenderCreated:            "works.pre_tender.created",
   tenderCreated:               "works.tender.created",
   awardCreated:                "works.award.created",
+  quotationAdded:              "works.quotation.added",
+  awardDaoFinalized:           "works.award.dao_finalized",
+  awardDoFinalized:            "works.award.do_finalized",
   awardFinalized:              "works.award.finalized",
 
   // Execution
+  scopeAdded:                  "works.scope.added",
   progressRecorded:            "works.progress.recorded",
+  photoUploaded:               "works.photo.uploaded",
   issueCreated:                "works.issue.created",
   workClosed:                  "works.work.closed",
   physicalCompleted:           "works.physical.completed",
+  // Cross-service: emitted on a completion-type closure so asset-service
+  // registers the newly-created public asset (closes the handover loop).
+  assetHandover:               "works.asset.handover",
 
   // Billing
   mbIssued:                    "works.mb.issued",
+  measurementRecorded:         "works.measurement.recorded",
   mbFinalized:                 "works.mb.finalized",
   billCreated:                 "works.bill.created",
   billFinalized:               "works.bill.finalized",

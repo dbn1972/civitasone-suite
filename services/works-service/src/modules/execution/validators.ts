@@ -39,3 +39,9 @@ export const closeWorkSchema = z.object({
   closureType: z.enum(["closed", "dropped", "completion"]),
   remarks: z.string().max(2048).optional(),
 });
+
+export const physicalCompleteSchema = z.object({
+  workId: z.string().uuid(),
+  completionDate: z.string().datetime().optional(),
+  certificateFileKey: z.string().max(512).optional(),
+});

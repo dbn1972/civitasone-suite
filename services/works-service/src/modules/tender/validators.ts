@@ -36,3 +36,7 @@ export const createAwardSchema = z.object({
   billMode: z.enum(["abstract", "e_mb"]).optional(),
   acceptedAmountMinor: z.string().or(z.number()),
 });
+
+export const finalizeAwardSchema = z.object({
+  id: z.string().uuid(),
+});

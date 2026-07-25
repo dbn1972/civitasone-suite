@@ -25,3 +25,12 @@ export async function listQuotations(tenantId: string, tenderId: string) {
       .where(and(eq(quotations.tenantId, tenantId), eq(quotations.tenderId, tenderId)));
   });
 }
+
+export async function getAwardById(tenantId: string, id: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(awards)
+      .where(and(eq(awards.tenantId, tenantId), eq(awards.id, id)))
+      .limit(1);
+    return rows[0] ?? null;
+  });
+}

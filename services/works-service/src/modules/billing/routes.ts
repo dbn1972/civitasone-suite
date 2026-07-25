@@ -107,4 +107,42 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     });
     return reply.status(202).send({ status: "accepted" });
   });
+
+  // Record a measurement against an MB
+  app.post("/v1/works/billing/measurements", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = v.recordMeasurementSchema.parse(req.body);
+    const id = randomUUID();
+
+    await queue.publish(COMMANDS.measurementRecord, {
+      messageId: randomUUID(),
+      type: COMMANDS.measurementRecord,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { id, ...body },
+    });
+    return reply.status(202).send({ id, status: "accepted" });
+  });
+
+  // Compile monthly account
+  app.post("/v1/works/billing/account-compile", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["dao", "do", "works_admin", "super_admin"]);
+    const body = v.compileAccountSchema.parse(req.body);
+    const id = randomUUID();
+
+    await queue.publish(COMMANDS.accountCompile, {
+      messageId: randomUUID(),
+      type: COMMANDS.accountCompile,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { id, ...body },
+    });
+    return reply.status(202).send({ id, status: "accepted" });
+  });
 }

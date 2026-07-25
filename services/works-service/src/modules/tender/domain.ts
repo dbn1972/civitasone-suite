@@ -37,3 +37,21 @@ export function canFinalizePreTender(status: string): { allowed: boolean; reason
   }
   return { allowed: true };
 }
+
+/**
+ * Two-level agreement finalization (BR: award must pass DAO then DO).
+ * draft -> dao_finalized -> do_finalized.
+ */
+export function canDaoFinalizeAward(status: string): { allowed: boolean; reason?: string } {
+  if (status !== "draft") {
+    return { allowed: false, reason: `Cannot DAO-finalize: current status is '${status}', must be 'draft'` };
+  }
+  return { allowed: true };
+}
+
+export function canDoFinalizeAward(status: string): { allowed: boolean; reason?: string } {
+  if (status !== "dao_finalized") {
+    return { allowed: false, reason: `Cannot DO-finalize: current status is '${status}', must be 'dao_finalized'` };
+  }
+  return { allowed: true };
+}
