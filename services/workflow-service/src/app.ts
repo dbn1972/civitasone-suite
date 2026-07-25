@@ -70,6 +70,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(quorumRoutes);
   await app.register(slaRoutes);
   await app.register(finalizationRoutes);
+  const { caseRegistryRoutes } = await import("./modules/case-registry/routes.js"); await app.register(caseRegistryRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

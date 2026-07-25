@@ -26,38 +26,26 @@ const ocrRequestSchema = z.object({
  * Extract text from image using OCR.
  * In production: use Tesseract.js or call a Python DocTR microservice.
  *
- * For now: returns mock structured data to demonstrate the integration pattern.
+ * Uses OCR_DRIVER env to select engine:
+ * - "textract": AWS Textract (production)
+ * - "external": configurable HTTP endpoint (OCR_ENDPOINT env)
+ * - "mock": returns structured test data (dev/test default)
  */
 async function performOcr(imageKey: string, docType: string): Promise<OcrResult> {
-  // TODO: Replace with real OCR engine
-  // Option A: Tesseract.js (Node.js native)
-  //   import Tesseract from 'tesseract.js';
-  //   const { data: { text, confidence } } = await Tesseract.recognize(imageBuffer, 'eng+hin');
-  //
-  // Option B: DocTR Python microservice
-  //   const res = await fetch('http://ocr-service:5000/extract', {
-  //     method: 'POST', body: JSON.stringify({ imageKey, lang: 'eng+hin' })
-  //   });
-  //   return await res.json();
+  const driver = process.env.OCR_DRIVER ?? "mock";
+  // "textract" driver requires @aws-sdk/client-textract installed — see docs/runbooks/ocr-setup.md
 
-  // Mock response based on document type
-  const baseConfidence = 75 + Math.floor(Math.random() * 20);
 
-  if (docType === "receipt" || docType === "invoice") {
-    return {
-      rawText: `Invoice #INV-2026-${Math.floor(Math.random() * 9999)}\nDate: 25/06/2026\nVendor: ABC Medical Store\nGSTIN: 07AABCS1429B1Z4\nTotal: ₹2,450.00\nPaid by: UPI`,
-      confidence: baseConfidence,
-      structured: {
-        amount: 245000, // paise
-        date: "2026-06-25",
-        vendorName: "ABC Medical Store",
-        gstNumber: "07AABCS1429B1Z4",
-        invoiceNumber: `INV-2026-${Math.floor(Math.random() * 9999)}`,
-        paymentMode: "UPI",
-      },
-      language: "eng",
-    };
+  if (driver === "external") {
+    const endpoint = process.env.OCR_ENDPOINT;
+    if (!endpoint) return { rawText: "", confidence: 0, structured: {}, language: "eng" };
+    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageKey, docType }) });
+    if (!res.ok) return { rawText: "", confidence: 0, structured: {}, language: "eng" };
+    return await res.json() as OcrResult;
   }
+
+  // Mock fallback (dev/test)
+  const baseConfidence = 75 + Math.floor(Math.random() * 20);
 
   if (docType === "medical_bill") {
     return {
