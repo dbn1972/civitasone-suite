@@ -1,6 +1,7 @@
-import { eq, and, asc, desc, ne } from "drizzle-orm";
+import { eq, and, asc, desc, ne, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { definitions, definitionNodes, definitionEdges, type DefinitionEdgeRow } from "./schema.js";
+import { instances } from "../instances/schema.js";
 import { evaluateCondition } from "../../shared/condition.js";
 
 export type Writer = Pick<typeof db, "select" | "insert" | "update">;
@@ -272,4 +273,65 @@ export async function listNodeRows(definitionId: string) {
   return scopedRead((tx) => tx.select().from(definitionNodes)
     .where(eq(definitionNodes.definitionId, definitionId))
     .orderBy(asc(definitionNodes.sortOrder)));
+}
+
+// ---------------------------------------------------------------------------
+// CAP-030 — versioning: list versions, in-flight impact, rollback.
+// ---------------------------------------------------------------------------
+
+/** All versions of a definition code (any status), newest version first. */
+export async function listVersionsByCode(tenantId: string, code: string) {
+  return scopedRead((tx) => tx.select().from(definitions)
+    .where(and(eq(definitions.tenantId, tenantId), eq(definitions.code, code)))
+    .orderBy(desc(definitions.version)));
+}
+
+/**
+ * CAP-030 in-flight impact: how many RUNNING (active|suspended) instances are
+ * pinned to each version of a definition code. Proves version pinning — the
+ * counts stay put when a new version is published, so a deploy/rollback never
+ * silently re-routes live cases onto a different graph.
+ */
+export async function inflightByVersion(
+  tenantId: string, code: string,
+): Promise<Array<{ definitionId: string; version: number | null; status: string; count: number }>> {
+  const defs = await listVersionsByCode(tenantId, code);
+  const ids = defs.map((d) => d.id);
+  if (ids.length === 0) return [];
+  const rows = await scopedRead((tx) => tx.select({
+    definitionId: instances.definitionId,
+    version: instances.definitionVersion,
+    n: sql<number>`count(*)::int`,
+  }).from(instances)
+    .where(and(
+      eq(instances.tenantId, tenantId),
+      inArray(instances.definitionId, ids),
+      inArray(instances.status, ["active", "suspended"]),
+    ))
+    .groupBy(instances.definitionId, instances.definitionVersion));
+  const byId = new Map(rows.map((r) => [r.definitionId, r]));
+  return defs.map((d) => ({
+    definitionId: d.id,
+    version: d.version,
+    status: d.status,
+    count: byId.get(d.id)?.n ?? 0,
+  }));
+}
+
+/**
+ * CAP-030 rollback: re-activate a specific (archived/draft) version of a code
+ * and archive all others. In-flight instances are UNAFFECTED — they remain
+ * pinned to their own definition_id — so rollback only changes which version
+ * NEW instances start on. Returns the activated row, or null if not found.
+ */
+export async function rollbackToVersionTx(
+  tx: Writer, tenantId: string, code: string, version: number, actorId: string,
+) {
+  const target = await findByCodeVersionTx(tx, tenantId, code, version);
+  if (!target) return null;
+  await (tx as typeof db).update(definitions)
+    .set({ status: "active", updatedBy: actorId, updatedAt: new Date() })
+    .where(eq(definitions.id, target.id));
+  await archiveOtherVersionsTx(tx, tenantId, code, target.id);
+  return { ...target, status: "active" };
 }
