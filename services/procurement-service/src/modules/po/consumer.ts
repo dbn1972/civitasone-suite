@@ -132,6 +132,7 @@ export function registerPoConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, poNo, vendorId: p.vendorId,
         indentRef: p.indentRef, sanctionRef: p.sanctionRef ?? null,
         rateContractRef: p.rateContractRef ?? null, gemOrderNo: null,
+        orderType: (p as { orderType?: string }).orderType ?? "supply",
         totalMinor, currency: "INR", status: "draft",
         deliveryDate: p.deliveryDate ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });

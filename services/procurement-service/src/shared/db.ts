@@ -17,6 +17,10 @@ import { schema as blacklistModule } from "../modules/vendor-blacklist/schema.js
 import { schema as threeWayModule }  from "../modules/three-way-match/schema.js";
 import { schema as securityModule }  from "../modules/security/schema.js";
 import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
+import { schema as planningModule } from "../modules/planning/schema.js";
+import { scorecardSchema as vendorPerfModule } from "../modules/vendor/scorecard-schema.js";
+import { docsSchema as tenderDocsModule } from "../modules/tender/docs-schema.js";
+import { schema as gemModule }      from "../modules/gem/schema.js";
 import { outboxSchema }             from "./outbox.js";
 import { docCountersSchema }         from "./numbering.js";
 
@@ -33,6 +37,10 @@ const SCHEMA = {
   ...threeWayModule,
   ...securityModule,
   ...resolutionIntakeModule,
+  ...planningModule,
+  ...vendorPerfModule,
+  ...tenderDocsModule,
+  ...gemModule,
   ...docCountersSchema,
   ...outboxSchema,
 };

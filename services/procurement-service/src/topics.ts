@@ -30,6 +30,35 @@ export const COMMANDS = {
   pbgCollect:  "procurement.pbg.collect",
   pbgForfeit:  "procurement.pbg.forfeit",
   pbgRelease:  "procurement.pbg.release",
+  // SVC-041 Annual procurement planning
+  planCreate:     "procurement.plan.create",
+  planSubmit:     "procurement.plan.submit",
+  planApprove:    "procurement.plan.approve",
+  planReject:     "procurement.plan.reject",
+  planLinkTender: "procurement.plan.link_tender",
+  // SVC-046 PO / Work-order amendment + milestone + closure
+  poAmendmentRequest: "procurement.po_amendment.request",
+  poAmendmentApprove: "procurement.po_amendment.approve",
+  poAmendmentReject:  "procurement.po_amendment.reject",
+  poMilestoneAdd:     "procurement.po_milestone.add",
+  poMilestoneUpdate:  "procurement.po_milestone.update",
+  poClose:            "procurement.po.close",
+  // SVC-049 Vendor performance
+  vendorScorecardRecompute: "procurement.vendor_scorecard.recompute",
+  vendorShowCauseIssue:     "procurement.vendor_show_cause.issue",
+  vendorShowCauseRespond:   "procurement.vendor_show_cause.respond",
+  vendorShowCauseAppeal:    "procurement.vendor_show_cause.appeal",
+  vendorShowCauseDecide:    "procurement.vendor_show_cause.decide",
+  // SVC-043 Tender document management
+  tenderDocAdd:              "procurement.tender_doc.add",
+  tenderCorrigendumCreate:   "procurement.tender_corrigendum.create",
+  tenderCorrigendumRepublish:"procurement.tender_corrigendum.republish",
+  prebidQueryCreate:         "procurement.prebid_query.create",
+  prebidQueryAnswer:         "procurement.prebid_query.answer",
+  prebidQueryPublish:        "procurement.prebid_query.publish",
+  // SVC-050 GeM/CPPP integration reconciliation
+  gemExchange:              "procurement.gem_integration.exchange",
+  gemReconcile:             "procurement.gem_integration.reconcile",
 } as const;
 
 export const EVENTS = {
@@ -59,6 +88,17 @@ export const EVENTS = {
   // Three-way match (PO ↔ GRN ↔ Invoice) outcome events emitted by finance-service consumer
   threeWayMatchPassed: "procurement.three_way_match.passed",
   threeWayMatchFailed: "procurement.three_way_match.failed",
+  // SVC-041 planning
+  planApproved:          "procurement.plan.approved",
+  // SVC-046 PO/WO
+  poAmended:             "procurement.po.amended",
+  poClosed:              "procurement.po.closed",
+  // SVC-049 vendor performance
+  vendorScorecardComputed: "procurement.vendor_scorecard.computed",
+  vendorShowCauseIssued:   "procurement.vendor.show_cause_issued",
+  vendorDebarmentProposed: "procurement.vendor.debarment_proposed",
+  // SVC-043 tender documents
+  tenderCorrigendumPublished: "procurement.tender.corrigendum_published",
 } as const;
 
 /** Finance accounting (GL) post — paise as strings. */
@@ -77,6 +117,12 @@ export const CONSUMED_EVENTS = {
    * Action: open a PENDING REVIEW indent-intake item (no auto-indent; GFR maker-checker).
    */
   meetingDecisionProcurement: "meeting.decision.procurement",
+  /**
+   * Owner: contract-service. Fires when a contract is terminated (breach/default).
+   * SVC-049: the vendor-performance scorecard consumer records this as an SLA breach
+   * performance event for the counterparty vendor, feeding the objective rating.
+   */
+  contractTerminated: "contract.contract.terminated",
 } as const;
 
 export const SERVICE = "procurement";

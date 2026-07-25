@@ -15,6 +15,8 @@ export const createPoBody = z.object({
   indentRef:       z.string().min(1),
   sanctionRef:     z.string().optional(),
   rateContractRef: z.string().optional(),
+  // SVC-046: supply Purchase Order (default) vs service / work order.
+  orderType:       z.enum(["supply", "service", "work"]).default("supply"),
   deliveryDate:    z.string().optional(),
   items:           z.array(poItemSchema).min(1),
 });
