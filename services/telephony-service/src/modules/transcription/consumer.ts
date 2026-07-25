@@ -13,6 +13,7 @@
  * Validates: Requirements 15.5, 15.6, 15.7
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { presignedGetUrl } from "@civitasone/storage";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
@@ -37,7 +38,8 @@ export interface RecordingStoredPayload {
 
 type TxLike = Parameters<typeof markProcessed>[0];
 
-export function registerTranscriptionConsumers(queue: Queue): void {
+export function registerTranscriptionConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   // Listen for the recording-attached event (same topic used by recording consumer).
   queue.subscribe(EVENTS.callRecordingAttached, async (msg: CommandEnvelope) => {
     const p = msg.payload as RecordingStoredPayload;
