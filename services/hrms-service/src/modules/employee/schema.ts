@@ -54,7 +54,7 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   hraCityClass:     varchar("hra_city_class", { length: 1 }).notNull().default("X"),
   taxRegime:        varchar("tax_regime", { length: 4 }).notNull().default("new"),
   aadhaarRef:       encryptedText("aadhaar_ref"),
-  mobile:           varchar("mobile", { length: 20 }),
+  mobile:           encryptedText("mobile"),
   email:            text("email"),
   bankAccountNo:    encryptedText("bank_account_no"),
   bankIfsc:         encryptedText("bank_ifsc"),

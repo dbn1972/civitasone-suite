@@ -1,3 +1,4 @@
+import { encryptedText } from "../../shared/pii-crypto.js";
 import {
   pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, jsonb,
 } from "drizzle-orm/pg-core";
@@ -34,7 +35,7 @@ export const hrmsApplications = recruitmentSchema.table("hrms_applications", {
   jobOpeningId:  uuid("job_opening_id").notNull(),
   applicantName: text("applicant_name").notNull(),
   email:         text("email"),
-  mobile:        varchar("mobile", { length: 20 }),
+  mobile:        encryptedText("mobile"),
   resumeRef:     text("resume_ref"),
   resumeFileKey: text("resume_file_key"),
   skills:        text("skills").array(),

@@ -29,6 +29,8 @@ export const CONSUMES = {
   crmCaseOpened: "crm.case.opened",
   /** ml-service emits breach risk high when ticket breach probability > 0.70. */
   mlBreachRiskHigh: "ml.prediction.breach_risk_high",
+  /** citizen-service request creates a linked helpdesk ticket for department handling. */
+  citizenRequestCreated: "citizen.request.created",
 } as const;
 
 /** source tag stamped on tickets auto-opened from a foreign event. */
@@ -37,6 +39,7 @@ export const SOURCE = {
   crm: "crm",
   // LOOP 1 — knowledge-service assistant escalate-to-ticket handoff.
   assistant: "knowledge_assistant",
+  citizen: "citizen",
 } as const;
 
 export const SERVICE = "helpdesk";
