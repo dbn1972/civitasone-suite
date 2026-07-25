@@ -23,6 +23,10 @@ import { simulationRoutes } from "./modules/simulation/routes.js";
 import { externalTaskRoutes } from "./modules/external-tasks/routes.js";
 import { designerRoutes } from "./modules/designer/routes.js";
 import { dmnRoutes } from "./modules/dmn/routes.js";
+import { authorityRoutes } from "./modules/authority/routes.js";
+import { quorumRoutes } from "./modules/quorum/routes.js";
+import { slaRoutes } from "./modules/sla/routes.js";
+import { finalizationRoutes } from "./modules/finalization/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -62,6 +66,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(externalTaskRoutes);
   await app.register(designerRoutes);
   await app.register(dmnRoutes);
+  await app.register(authorityRoutes);
+  await app.register(quorumRoutes);
+  await app.register(slaRoutes);
+  await app.register(finalizationRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

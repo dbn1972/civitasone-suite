@@ -7,6 +7,7 @@ import { db } from "../../shared/db.js";
 import { definitions } from "./schema.js";
 import * as repo from "./repo.js";
 import { validateGraph } from "./graph.js";
+import { diffVersions, type VersionGraph } from "./version-diff.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
@@ -250,6 +251,69 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({
       data: { id: newId, code, name: body.name ?? tpl.name, version: result.version, status: "draft", clonedFrom: tpl.id },
     });
+  });
+
+  // CAP-030 — list all versions of a definition code.
+  app.get("/v1/workflow/definitions/code/:code/versions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
+    const rows = await repo.listVersionsByCode(ctx.tenantId, code);
+    return reply.send({ data: rows.map((r) => ({ id: r.id, code: r.code, name: r.name, version: r.version, status: r.status })) });
+  });
+
+  // CAP-030 — structural diff between two versions of a code (breaking flag).
+  app.get("/v1/workflow/definitions/code/:code/diff", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
+    const q = z.object({ from: z.coerce.number().int().positive(), to: z.coerce.number().int().positive() }).parse(req.query);
+    const graphFor = async (version: number): Promise<VersionGraph | null> => {
+      const def = await repo.findByCodeVersionTx(db, ctx.tenantId, code, version);
+      if (!def) return null;
+      const [nodes, edges] = await Promise.all([repo.listNodes(def.id), repo.listEdges(def.id)]);
+      return {
+        version,
+        nodes: nodes.map((n) => ({ nodeKey: n.nodeKey, name: n.name, nodeType: n.nodeType, roleRef: n.roleRef, slaMinutes: n.slaMinutes })),
+        edges: edges.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition })),
+      };
+    };
+    const [a, b] = await Promise.all([graphFor(q.from), graphFor(q.to)]);
+    if (!a || !b) throw new HttpError(404, "VERSION_NOT_FOUND", "one or both versions not found");
+    return reply.send({ data: diffVersions(a, b) });
+  });
+
+  // CAP-030 — in-flight impact: instance counts pinned per version (proves that
+  // publishing/rolling back a version does not break running cases).
+  app.get("/v1/workflow/definitions/code/:code/in-flight", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
+    const impact = await repo.inflightByVersion(ctx.tenantId, code);
+    return reply.send({ data: impact });
+  });
+
+  // CAP-030 — rollback: re-activate an older version. In-flight instances keep
+  // their pinned version; only NEW instances start on the rolled-back version.
+  app.post("/v1/workflow/definitions/code/:code/rollback", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
+    const body = z.object({ version: z.number().int().positive() }).parse(req.body);
+    const result = await db.transaction(async (tx) => {
+      const target = await repo.findByCodeVersionTx(tx, ctx.tenantId, code, body.version);
+      if (!target) throw new HttpError(404, "VERSION_NOT_FOUND", `version ${body.version} of '${code}' not found`);
+      if (target.status === "active") throw new HttpError(409, "ALREADY_ACTIVE", "target version is already active");
+      // re-validate the target graph before making it live again
+      const [nodeRows, edgeRows] = await Promise.all([repo.listNodes(target.id), repo.listEdges(target.id)]);
+      const v = validateGraph(
+        nodeRows.map((n) => ({ nodeKey: n.nodeKey, name: n.name, nodeType: n.nodeType, timerMinutes: n.timerMinutes, deemedApproval: n.deemedApproval, callDefinitionCode: n.callDefinitionCode, assignStrategy: n.assignStrategy, sortOrder: n.sortOrder })),
+        edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
+      );
+      if (!v.valid) throw new HttpError(409, "TARGET_INVALID_GRAPH", `cannot roll back to an invalid graph: ${v.errors.join("; ")}`);
+      return repo.rollbackToVersionTx(tx, ctx.tenantId, code, body.version, ctx.actorId);
+    });
+    return reply.send({ data: result ? { id: result.id, code: result.code, version: result.version, status: result.status } : null, message: "rolled back" });
   });
 
   app.setErrorHandler((err, req, reply) => {
