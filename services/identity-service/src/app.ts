@@ -61,6 +61,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(scimRoutes);
   await app.register(webauthnRoutes);
 
+  const { govIntegrationRoutes } = await import("./modules/gov-integrations/routes.js");
+  await app.register(govIntegrationRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
