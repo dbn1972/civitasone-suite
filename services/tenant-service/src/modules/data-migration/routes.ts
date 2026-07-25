@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { queue } from "../../shared/infra.js";
+import { queue, cache } from "../../shared/infra.js";
 const ADMIN = ["super_admin", "platform_admin"];
 export async function dataMigrationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/org/migrations", async (req, reply) => {
@@ -14,12 +14,14 @@ export async function dataMigrationRoutes(app: FastifyInstance): Promise<void> {
   });
   app.get("/v1/org/migrations", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
-    return reply.send({ data: [], meta: { total: 0 } });
+    const data = await cache.getOrLoad(cache.makeKey(ctx.tenantId, "migrations", "list"), async () => []);
+    return reply.send({ data, meta: { total: Array.isArray(data) ? data.length : 0 } });
   });
   app.get("/v1/org/migrations/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    return reply.send({ data: { id, status: "pending", entities: [], recordsMigrated: 0 } });
+    const data = await cache.getOrLoad(cache.makeKey(ctx.tenantId, "migration", id), async () => ({ id, status: "pending", entities: [], recordsMigrated: 0 }));
+    return reply.send({ data });
   });
   app.post("/v1/org/reconciliation", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
@@ -30,7 +32,9 @@ export async function dataMigrationRoutes(app: FastifyInstance): Promise<void> {
   });
   app.get("/v1/org/reconciliation/:id/breaks", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
-    return reply.send({ data: [], meta: { total: 0 } });
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const data = await cache.getOrLoad(cache.makeKey(ctx.tenantId, "recon_breaks", id), async () => []);
+    return reply.send({ data, meta: { total: Array.isArray(data) ? data.length : 0 } });
   });
   app.setErrorHandler((err, req, reply) => {
     const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
