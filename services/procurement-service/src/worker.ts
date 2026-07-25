@@ -16,6 +16,7 @@ import { registerTenderConsumers }   from "./modules/tender/consumer.js";
 import { registerSecurityConsumers } from "./modules/security/consumer.js";
 import { registerResolutionIntakeConsumers } from "./modules/resolution-intake/consumer.js";
 import { registerPlanningConsumers } from "./modules/planning/consumer.js";
+import { registerPoAmendmentConsumers } from "./modules/po/amendment-consumer.js";
 
 const log = pino({ name: "procurement-worker" });
 
@@ -32,6 +33,7 @@ registerTenderConsumers(queue);
 registerSecurityConsumers(queue);
 registerResolutionIntakeConsumers(queue);
 registerPlanningConsumers(queue);
+registerPoAmendmentConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

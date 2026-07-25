@@ -61,6 +61,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(procurementGapRoutes);
   const { planningRoutes } = await import("./modules/planning/routes.js");
   await app.register(planningRoutes);
+  const { poAmendmentRoutes } = await import("./modules/po/amendment-routes.js");
+  await app.register(poAmendmentRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
