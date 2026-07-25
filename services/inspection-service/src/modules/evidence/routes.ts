@@ -26,6 +26,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { validateMimeType, validateFileSize, DomainError } from "./domain.js";
+import { resolveStorageConfig, generatePresignedPutUrl } from "./storage.js";
 import {
   publishEvidenceRegister,
   publishEvidenceVerifyIntegrity,
@@ -122,19 +123,37 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       throw err;
     }
 
-    // Generate presigned PUT URL (Req 7.8)
-    // In production this calls the S3/MinIO adapter; here we build the key and
-    // return a placeholder URL structure that the adapter would make real.
+    // Build the deterministic object key + evidence id up front so the client can
+    // correlate the subsequent register call regardless of storage availability.
     const evidenceId = randomUUID();
     const s3Key = `evidence/${ctx.tenantId}/${body.inspectionId}/${evidenceId}/${body.fileName}`;
-    const expiresAt = new Date(Date.now() + PRESIGN_EXPIRY_SECONDS * 1000).toISOString();
 
-    // NOTE: actual presigned URL generation would be:
-    // const uploadUrl = await s3Adapter.generatePresignedPut(s3Key, body.mimeType, PRESIGN_EXPIRY_SECONDS);
-    const uploadUrl = `${process.env.S3_ENDPOINT ?? "https://s3.amazonaws.com"}/${process.env.S3_BUCKET_NAME ?? "civitasone-evidence"}/${s3Key}?X-Amz-Expires=${PRESIGN_EXPIRY_SECONDS}`;
+    // Env-gated: only mint a REAL presigned URL when bucket + region + creds exist.
+    const storageConfig = resolveStorageConfig();
+    if (!storageConfig) {
+      // Explicit "not configured" — never a fabricated success URL (Req 7.8).
+      return reply.code(200).send({
+        data: {
+          status: "not_configured",
+          reason: "S3 storage is not configured (missing bucket/region/credentials)",
+          evidenceId,
+          s3Key,
+        },
+      });
+    }
+
+    // Generate a REAL AWS SigV4 presigned PUT URL (Req 7.8).
+    const uploadUrl = await generatePresignedPutUrl(
+      storageConfig,
+      s3Key,
+      body.mimeType,
+      PRESIGN_EXPIRY_SECONDS,
+    );
+    const expiresAt = new Date(Date.now() + PRESIGN_EXPIRY_SECONDS * 1000).toISOString();
 
     return reply.code(200).send({
       data: {
+        status: "ready",
         uploadUrl,
         evidenceId,
         s3Key,

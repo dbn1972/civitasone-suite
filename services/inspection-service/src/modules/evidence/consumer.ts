@@ -19,7 +19,8 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { verifyIntegrity } from "./domain.js";
+import { decideIntegrity } from "./domain.js";
+import { resolveStorageConfig, fetchObjectSha256 } from "./storage.js";
 import {
   insertEvidence,
   insertCustodyEntry,
@@ -143,14 +144,17 @@ export function registerEvidenceConsumers(queue: Queue): void {
         return;
       }
 
-      // In production, the consumer would download the file from S3 and recompute
-      // the SHA-256. For now, we verify the stored hash against itself (valid) or
-      // a provided computed hash. The domain function handles comparison.
-      // NOTE: The actual S3 content hash recomputation would be done by an adapter.
-      // Here we simulate by re-checking the stored hash (always valid unless externally changed).
-      const computedHash = evidence.sha256Hash; // Placeholder: S3 adapter would compute this
+      // Recompute the SHA-256 from the object actually stored in S3 and compare it
+      // against the hash the client declared at upload. Env-gated: when storage is
+      // unconfigured or the object is not retrievable, `computedHash` is null and the
+      // artifact is marked `unverified` — we NEVER assert `valid` without proof.
+      const storageConfig = resolveStorageConfig();
+      let computedHash: string | null = null;
+      if (storageConfig) {
+        computedHash = await fetchObjectSha256(storageConfig, evidence.s3Key);
+      }
 
-      const integrityStatus = verifyIntegrity(evidence.sha256Hash, computedHash);
+      const integrityStatus = decideIntegrity(evidence.sha256Hash, computedHash);
 
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -167,7 +171,7 @@ export function registerEvidenceConsumers(queue: Queue): void {
           details: {
             integrityStatus,
             storedHash: evidence.sha256Hash,
-            computedHash,
+            computedHash: computedHash ?? "unavailable",
           },
         });
 
@@ -183,7 +187,7 @@ export function registerEvidenceConsumers(queue: Queue): void {
               evidenceId: p.evidenceId,
               inspectionId: evidence.inspectionId,
               expectedHash: evidence.sha256Hash,
-              actualHash: computedHash,
+              actualHash: computedHash ?? "unavailable",
             },
           });
         }
@@ -202,7 +206,7 @@ export function registerEvidenceConsumers(queue: Queue): void {
             details: {
               integrityStatus,
               storedHash: evidence.sha256Hash,
-              computedHash,
+              computedHash: computedHash ?? "unavailable",
             },
           },
         });

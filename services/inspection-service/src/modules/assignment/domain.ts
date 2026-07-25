@@ -268,3 +268,141 @@ export function assertMakerCheckerApproval(creatorId: string, approverId: string
 
   return true;
 }
+
+
+// ── Field Route Optimization (SVC-109) ───────────────────────────────────────
+
+/** A geo-located inspection site to be visited during a tour. */
+export interface TourSite {
+  entityId: string;
+  inspectionId: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** A geographic start point for route sequencing (e.g. the inspector's depot). */
+export interface GeoPoint {
+  latitude: number;
+  longitude: number;
+}
+
+/** A single sequenced visit within an optimized day route. */
+export interface RoutedSite extends TourSite {
+  /** Zero-based visit order within the day. */
+  seq: number;
+  /** Great-circle distance in metres from the previous stop (start point for seq 0). */
+  legMeters: number;
+}
+
+/** One day of the tour plan: a date plus its proximity-ordered sequence of sites. */
+export interface RoutedDay {
+  date: string;
+  sites: RoutedSite[];
+}
+
+/**
+ * Order a set of inspection sites into an efficient visit sequence using the
+ * nearest-neighbour heuristic seeded from a start point.
+ *
+ * Greedy nearest-neighbour: from the current position, repeatedly pick the closest
+ * unvisited site (by {@link haversineDistance}), append it, and move there. This is
+ * deterministic and typically far shorter than the arbitrary input order. Ties are
+ * broken by input order, keeping the result stable.
+ *
+ * PURE — no I/O, no mutation of the input array.
+ *
+ * @param start - The starting position (inspector depot / first-of-day origin).
+ * @param sites - Candidate sites to sequence.
+ * @returns The sites in visit order, each annotated with its `seq` and `legMeters`.
+ *
+ * _Validates: SVC-109 (geo-proximity route optimization)_
+ */
+export function sequenceByNearestNeighbour(
+  start: GeoPoint,
+  sites: TourSite[],
+): RoutedSite[] {
+  const remaining = sites.slice();
+  const ordered: RoutedSite[] = [];
+  let cursor: GeoPoint = { latitude: start.latitude, longitude: start.longitude };
+
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < remaining.length; i++) {
+      const site = remaining[i]!;
+      const d = haversineDistance(cursor.latitude, cursor.longitude, site.latitude, site.longitude);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    const [next] = remaining.splice(bestIdx, 1);
+    ordered.push({ ...next!, seq: ordered.length, legMeters: Math.round(bestDist) });
+    cursor = { latitude: next!.latitude, longitude: next!.longitude };
+  }
+
+  return ordered;
+}
+
+/**
+ * Total great-circle travel distance (in metres) of visiting `sites` in the given
+ * order, starting from `start`. Used to compare route quality (and by tests to
+ * prove the optimized order beats the naive input order).
+ *
+ * PURE.
+ *
+ * @param start - Starting position.
+ * @param sites - Sites in the order they will be visited.
+ * @returns Sum of consecutive leg distances, rounded to whole metres.
+ */
+export function routeDistanceMeters(start: GeoPoint, sites: TourSite[]): number {
+  let total = 0;
+  let cursor: GeoPoint = { latitude: start.latitude, longitude: start.longitude };
+  for (const site of sites) {
+    total += haversineDistance(cursor.latitude, cursor.longitude, site.latitude, site.longitude);
+    cursor = { latitude: site.latitude, longitude: site.longitude };
+  }
+  return Math.round(total);
+}
+
+/**
+ * Build a sequenced multi-day tour plan from a pool of inspection sites.
+ *
+ * The whole pool is first ordered by nearest-neighbour from `start`, then packed
+ * into the available dates `maxDailyInspections` at a time, preserving the
+ * proximity order within each day. The result is a real, sequenced visit plan —
+ * not one arbitrary slot per date.
+ *
+ * PURE.
+ *
+ * @param start - Starting position for the sweep.
+ * @param sites - All inspection sites to schedule.
+ * @param availableDates - Working dates (already leave-filtered), in order.
+ * @param maxDailyInspections - Max visits packed into a single day.
+ * @returns One {@link RoutedDay} per date that received sites (empty tail days omitted).
+ *
+ * _Validates: SVC-109 (geo-proximity route optimization across a tour period)_
+ */
+export function planTourRoute(
+  start: GeoPoint,
+  sites: TourSite[],
+  availableDates: string[],
+  maxDailyInspections: number,
+): RoutedDay[] {
+  const perDay = Math.max(1, Math.floor(maxDailyInspections));
+  const sequenced = sequenceByNearestNeighbour(start, sites);
+  const days: RoutedDay[] = [];
+
+  let idx = 0;
+  for (const date of availableDates) {
+    if (idx >= sequenced.length) break;
+    const daySites = sequenced.slice(idx, idx + perDay).map((site, i) => ({
+      ...site,
+      seq: i, // re-index sequence within the day
+    }));
+    days.push({ date, sites: daySites });
+    idx += perDay;
+  }
+
+  return days;
+}

@@ -63,11 +63,22 @@ const assignInspectorSchema = z.object({
 });
 
 /** POST /v1/inspection/tour-plans/generate — generate tour plan (Req 4.4). */
+const tourSiteSchema = z.object({
+  entityId: z.string().uuid("site.entityId must be a valid UUID"),
+  inspectionId: z.string().uuid("site.inspectionId must be a valid UUID"),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
 const generateTourPlanSchema = z.object({
   inspectorId: z.string().uuid("inspectorId must be a valid UUID"),
   periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodStart must be YYYY-MM-DD"),
   periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodEnd must be YYYY-MM-DD"),
   maxDailyInspections: z.number().int().positive().max(20).optional(),
+  // SVC-109: optional geo-located site pool for proximity route optimization.
+  sites: z.array(tourSiteSchema).optional(),
+  startLatitude: z.number().min(-90).max(90).optional(),
+  startLongitude: z.number().min(-180).max(180).optional(),
 });
 
 /** POST /v1/inspection/geo-attendance — mark geo-attendance (Req 4.5, 4.6). */

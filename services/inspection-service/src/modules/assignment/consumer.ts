@@ -29,7 +29,9 @@ import {
   checkConflictOfInterest,
   validateDailyCapacity,
   validateGeofence,
+  planTourRoute,
   DomainError,
+  type GeoPoint,
 } from "./domain.js";
 import * as repo from "./repo.js";
 import type {
@@ -306,14 +308,40 @@ export function registerAssignmentConsumers(queue: Queue): void {
       const allDates = getDateRange(p.periodStart, p.periodEnd);
       const availableDates = allDates.filter((d) => !isLeaveDay(d, leavePeriods));
 
-      // Group inspections by geo proximity for slot creation.
-      // For now, create one slot per available date up to max daily inspections.
       const maxDaily = p.maxDailyInspections ?? 4;
-      const slots: Array<{ date: string; slotIndex: number }> = [];
 
-      for (const date of availableDates) {
-        for (let i = 0; i < maxDaily; i++) {
-          slots.push({ date, slotIndex: i });
+      // SVC-109: when a geo-located site pool is supplied, build a REAL sequenced
+      // visit plan — order every site by nearest-neighbour proximity from the start
+      // point and pack them across the available dates. Falls back to the legacy
+      // empty-slot-per-date shape when no sites are given (backward compatible).
+      let slots: Array<Record<string, unknown>>;
+      if (p.sites && p.sites.length > 0) {
+        const start: GeoPoint =
+          p.startLatitude != null && p.startLongitude != null
+            ? { latitude: p.startLatitude, longitude: p.startLongitude }
+            : { latitude: p.sites[0]!.latitude, longitude: p.sites[0]!.longitude };
+
+        const routedDays = planTourRoute(start, p.sites, availableDates, maxDaily);
+
+        // Flatten routed days into persisted tour slots, preserving visit order.
+        slots = routedDays.flatMap((day) =>
+          day.sites.map((site) => ({
+            date: day.date,
+            seq: site.seq,
+            entityId: site.entityId,
+            inspectionId: site.inspectionId,
+            latitude: site.latitude,
+            longitude: site.longitude,
+            legMeters: site.legMeters,
+          })),
+        );
+      } else {
+        // Legacy shape: reserve empty capacity slots per available date.
+        slots = [];
+        for (const date of availableDates) {
+          for (let i = 0; i < maxDaily; i++) {
+            slots.push({ date, slotIndex: i });
+          }
         }
       }
 
