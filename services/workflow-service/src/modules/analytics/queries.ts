@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedExecute } from "../../shared/db.js";
 
 /**
  * P0-3 — read-only workflow analytics / SLA reporting. Aggregates over
@@ -20,7 +20,7 @@ export interface AnalyticsSummary {
 
 export async function summary(tenantId: string): Promise<AnalyticsSummary> {
   // instances grouped by status
-  const statusRows = (await db.execute(sql`
+  const statusRows = (await scopedExecute(sql`
     SELECT status, COUNT(*)::int AS count
     FROM workflow.instances
     WHERE tenant_id = ${tenantId}
@@ -35,7 +35,7 @@ export async function summary(tenantId: string): Promise<AnalyticsSummary> {
   }
 
   // avg cycle time for completed instances (updated_at - created_at)
-  const cycleRows = (await db.execute(sql`
+  const cycleRows = (await scopedExecute(sql`
     SELECT
       AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8 AS avg_seconds,
       COUNT(*)::int AS completed_count
@@ -48,7 +48,7 @@ export async function summary(tenantId: string): Promise<AnalyticsSummary> {
   // SLA breach: among resolved (completed) tasks that had a due_at, how many
   // were completed after their due date. Breach is measured via the task's
   // completion transition timestamp in transition_history.
-  const slaRows = (await db.execute(sql`
+  const slaRows = (await scopedExecute(sql`
     SELECT
       COUNT(*) FILTER (WHERE t.due_at IS NOT NULL)::int AS tracked,
       COUNT(*) FILTER (WHERE t.due_at IS NOT NULL AND t.updated_at > t.due_at)::int AS breached
@@ -60,7 +60,7 @@ export async function summary(tenantId: string): Promise<AnalyticsSummary> {
   const slaBreachRate = slaTrackedTasks > 0 ? slaBreachedTasks / slaTrackedTasks : 0;
 
   // escalations: total escalation events across tasks
-  const escRows = (await db.execute(sql`
+  const escRows = (await scopedExecute(sql`
     SELECT COALESCE(SUM(escalation_count), 0)::int AS escalations
     FROM workflow.tasks
     WHERE tenant_id = ${tenantId}
@@ -100,7 +100,7 @@ export async function bottlenecks(tenantId: string): Promise<BottlenecksReport> 
   // avg dwell time per node: for completed tasks, time from task creation to
   // completion (updated_at - created_at), grouped by node_key. Also surface
   // current pending count per node.
-  const nodeRows = (await db.execute(sql`
+  const nodeRows = (await scopedExecute(sql`
     SELECT
       node_key,
       AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) FILTER (WHERE status = 'completed')::float8 AS avg_dwell_seconds,
@@ -124,7 +124,7 @@ export async function bottlenecks(tenantId: string): Promise<BottlenecksReport> 
     pendingTasks: Number(r.pending_tasks),
   }));
 
-  const roleRows = (await db.execute(sql`
+  const roleRows = (await scopedExecute(sql`
     SELECT role_ref, COUNT(*)::int AS pending_tasks
     FROM workflow.tasks
     WHERE tenant_id = ${tenantId} AND status = 'pending'
@@ -150,7 +150,7 @@ export interface CycleTimeMetric {
 }
 
 export async function cycleTimeByDefinition(tenantId: string, limit: number): Promise<CycleTimeMetric[]> {
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     SELECT
       d.code AS definition_code,
       d.name AS definition_name,
@@ -191,7 +191,7 @@ export interface AutomationRate {
 }
 
 export async function automationRate(tenantId: string): Promise<AutomationRate> {
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     SELECT
       COUNT(*)::int AS total_completed,
       COUNT(*) FILTER (WHERE is_call = true OR fire_at IS NOT NULL OR sod_override = true)::int AS auto_completed
@@ -220,7 +220,7 @@ export interface SlaComplianceMetric {
 }
 
 export async function slaCompliance(tenantId: string, limit: number): Promise<SlaComplianceMetric[]> {
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     SELECT
       node_key,
       role_ref,
@@ -261,7 +261,7 @@ export interface VersionComparison {
 }
 
 export async function versionComparison(tenantId: string, definitionCode: string): Promise<VersionComparison[]> {
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     SELECT
       d.version,
       d.id AS definition_id,
@@ -287,7 +287,7 @@ export async function versionComparison(tenantId: string, definitionCode: string
   for (const r of rows) {
     const total = Number(r.completed_count) + Number(r.rejected_count);
     // avg tasks per instance for this version
-    const taskRows = (await db.execute(sql`
+    const taskRows = (await scopedExecute(sql`
       SELECT AVG(task_count)::float8 AS avg_tasks FROM (
         SELECT i.id, COUNT(t.id)::int AS task_count
         FROM workflow.instances i
@@ -321,7 +321,7 @@ export interface AssignmentRecommendation {
 export async function assignmentRecommendations(tenantId: string, roleRef: string, limit: number): Promise<AssignmentRecommendation[]> {
   // Score = f(avg_completion_time, approval_rate, current_load)
   // Lower completion time, higher approval rate, lower load = better
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     WITH user_stats AS (
       SELECT
         completed_by AS user_id,

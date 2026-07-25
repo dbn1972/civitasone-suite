@@ -15,7 +15,7 @@ import {
   startTimerSweeper,
   SYSTEM_ACTOR_ID,
 } from "../src/modules/tasks/sweeper.js";
-import { TestQueue, cleanup, seedDefinition } from "./helpers/engine-harness.js";
+import { TestQueue, cleanup, seedDefinition, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -54,7 +54,7 @@ describe("sweeper — sweepOverdueTasks", () => {
 
     // Set due_at to the past
     const pastDate = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // 2 hours ago
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       UPDATE workflow.tasks SET due_at = ${pastDate}::timestamptz
       WHERE instance_id = ${instanceId} AND status = 'pending'
     `);
@@ -64,7 +64,7 @@ describe("sweeper — sweepOverdueTasks", () => {
     expect(count).toBeGreaterThanOrEqual(1);
 
     // Verify escalation_count was bumped
-    const task = await db.execute(
+    const task = await sqlAsTenant(tenantId, 
       sql`SELECT escalation_count, escalated_at FROM workflow.tasks WHERE instance_id = ${instanceId}`,
     ) as unknown as Array<{ escalation_count: number; escalated_at: Date | null }>;
     expect(task[0]!.escalation_count).toBeGreaterThanOrEqual(1);
@@ -92,7 +92,7 @@ describe("sweeper — sweepOverdueTasks", () => {
     // Set due_at to the past and escalated_at to very recently (within cooldown)
     const pastDue = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const recentEscalation = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       UPDATE workflow.tasks
       SET due_at = ${pastDue}::timestamptz, escalated_at = ${recentEscalation}::timestamptz, escalation_count = 1
       WHERE instance_id = ${instanceId} AND status = 'pending'
@@ -101,7 +101,7 @@ describe("sweeper — sweepOverdueTasks", () => {
     // Sweep with a 1-hour cooldown — should not re-escalate since last was 5 min ago
     const count = await sweepOverdueTasks(new Date(), 100, 60 * 60 * 1000);
     // The task should NOT be escalated again
-    const task = await db.execute(
+    const task = await sqlAsTenant(tenantId, 
       sql`SELECT escalation_count FROM workflow.tasks WHERE instance_id = ${instanceId}`,
     ) as unknown as Array<{ escalation_count: number }>;
     expect(task[0]!.escalation_count).toBe(1);
@@ -136,7 +136,7 @@ describe("sweeper — sweepReminders", () => {
     // Set created_at to 6 hours ago, due_at to 4 hours from now (so 60% elapsed)
     const createdAt = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
     const dueAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       UPDATE workflow.tasks
       SET created_at = ${createdAt}::timestamptz, due_at = ${dueAt}::timestamptz, reminder_count = 0, is_call = false
       WHERE instance_id = ${instanceId} AND status = 'pending'
@@ -147,7 +147,7 @@ describe("sweeper — sweepReminders", () => {
     expect(count).toBeGreaterThanOrEqual(1);
 
     // Verify reminder_count was incremented
-    const task = await db.execute(
+    const task = await sqlAsTenant(tenantId, 
       sql`SELECT reminder_count FROM workflow.tasks WHERE instance_id = ${instanceId}`,
     ) as unknown as Array<{ reminder_count: number }>;
     expect(task[0]!.reminder_count).toBe(1);
@@ -173,7 +173,7 @@ describe("sweeper — sweepReminders", () => {
 
     // Set created_at to just now, due_at far in the future (so ~0% elapsed)
     const dueAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h from now
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       UPDATE workflow.tasks
       SET due_at = ${dueAt}::timestamptz, reminder_count = 0, is_call = false
       WHERE instance_id = ${instanceId} AND status = 'pending'
@@ -181,7 +181,7 @@ describe("sweeper — sweepReminders", () => {
 
     const count = await sweepReminders(new Date(), 100);
     // Should not have sent reminders for this task (threshold not met)
-    const task = await db.execute(
+    const task = await sqlAsTenant(tenantId, 
       sql`SELECT reminder_count FROM workflow.tasks WHERE instance_id = ${instanceId}`,
     ) as unknown as Array<{ reminder_count: number }>;
     expect(task[0]!.reminder_count).toBe(0);
@@ -201,18 +201,18 @@ describe("sweeper — sweepTimerTasks", () => {
 
     // Create definition with a timer node (deemed_approval=true)
     const defId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definitions (id, tenant_id, code, name, version, status, created_by, updated_by)
       VALUES (${defId}, ${tenantId}, ${"timer_" + defId.slice(0, 8)}, 'Timer Def', 1, 'active', ${actorId}, ${actorId})
     `);
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order, deemed_approval)
       VALUES (${randomUUID()}, ${defId}, 'wait_node', 'Wait', 'timer', 1, true)
     `);
 
     // Create instance
     const instanceId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.instances (id, tenant_id, name, status, definition_id, created_by, updated_by)
       VALUES (${instanceId}, ${tenantId}, 'timer-inst', 'active', ${defId}, ${actorId}, ${actorId})
     `);
@@ -220,7 +220,7 @@ describe("sweeper — sweepTimerTasks", () => {
     // Create a timer task with fire_at in the past
     const taskId = randomUUID();
     const pastFire = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30 min ago
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, node_key, fire_at, created_by, updated_by)
       VALUES (${taskId}, ${tenantId}, ${instanceId}, 'Timer Wait', 'pending', 'wait_node', ${pastFire}::timestamptz, ${actorId}, ${actorId})
     `);
@@ -229,7 +229,7 @@ describe("sweeper — sweepTimerTasks", () => {
     expect(count).toBeGreaterThanOrEqual(1);
 
     // Verify fire_at was nulled out (claimed)
-    const task = await db.execute(
+    const task = await sqlAsTenant(tenantId, 
       sql`SELECT fire_at FROM workflow.tasks WHERE id = ${taskId}`,
     ) as unknown as Array<{ fire_at: Date | null }>;
     expect(task[0]!.fire_at).toBeNull();

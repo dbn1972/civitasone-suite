@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { messageSubscriptions, signalSubscriptions } from "../src/modules/messages/schema.js";
 import * as repo from "../src/modules/messages/repo.js";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000088";
 const cleanupMsgs: string[] = [];
@@ -15,10 +16,10 @@ const cleanupSigs: string[] = [];
 
 afterEach(async () => {
   for (const id of cleanupMsgs) {
-    await db.delete(messageSubscriptions).where(eq(messageSubscriptions.id, id)).catch(() => undefined);
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.delete(messageSubscriptions).where(eq(messageSubscriptions.id, id)).catch(() => undefined)));
   }
   for (const id of cleanupSigs) {
-    await db.delete(signalSubscriptions).where(eq(signalSubscriptions.id, id)).catch(() => undefined);
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.delete(signalSubscriptions).where(eq(signalSubscriptions.id, id)).catch(() => undefined)));
   }
   cleanupMsgs.length = 0;
   cleanupSigs.length = 0;
@@ -31,7 +32,7 @@ describe("messages/repo — insertMessageSubscription", () => {
     const id = randomUUID();
     cleanupMsgs.push(id);
 
-    await repo.insertMessageSubscription(db, {
+    await asTenant(TENANT, () => db.transaction(async (tx) => repo.insertMessageSubscription(tx as unknown as typeof db, {
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -40,9 +41,9 @@ describe("messages/repo — insertMessageSubscription", () => {
       correlationKey: "KEY-001",
       nodeKey: "catch_node",
       status: "active",
-    });
+    })));
 
-    const row = await repo.findActiveMessageSubscription(TENANT, "test.msg", "KEY-001");
+    const row = await asTenant(TENANT, () => repo.findActiveMessageSubscription(TENANT, "test.msg", "KEY-001"));
     expect(row).not.toBeNull();
     expect(row!.id).toBe(id);
   });
@@ -53,7 +54,7 @@ describe("messages/repo — insertSignalSubscription", () => {
     const id = randomUUID();
     cleanupSigs.push(id);
 
-    await repo.insertSignalSubscription(db, {
+    await asTenant(TENANT, () => db.transaction(async (tx) => repo.insertSignalSubscription(tx as unknown as typeof db, {
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -61,9 +62,9 @@ describe("messages/repo — insertSignalSubscription", () => {
       signalName: "test.signal",
       nodeKey: "catch_sig",
       status: "active",
-    });
+    })));
 
-    const rows = await repo.findActiveSignalSubscriptions(TENANT, "test.signal");
+    const rows = await asTenant(TENANT, () => repo.findActiveSignalSubscriptions(TENANT, "test.signal"));
     expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows.find((r) => r.id === id)).toBeDefined();
   });
@@ -71,7 +72,7 @@ describe("messages/repo — insertSignalSubscription", () => {
 
 describe("messages/repo — findActiveMessageSubscription", () => {
   it("returns null when no matching subscription", async () => {
-    const result = await repo.findActiveMessageSubscription(TENANT, "no.such.msg", "NO-KEY");
+    const result = await asTenant(TENANT, () => repo.findActiveMessageSubscription(TENANT, "no.such.msg", "NO-KEY"));
     expect(result).toBeNull();
   });
 
@@ -79,7 +80,7 @@ describe("messages/repo — findActiveMessageSubscription", () => {
     const id = randomUUID();
     cleanupMsgs.push(id);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -89,16 +90,16 @@ describe("messages/repo — findActiveMessageSubscription", () => {
       nodeKey: "node1",
       status: "matched",
       matchedAt: new Date(),
-    });
+    })));
 
-    const result = await repo.findActiveMessageSubscription(TENANT, "matched.msg", "MATCHED-KEY");
+    const result = await asTenant(TENANT, () => repo.findActiveMessageSubscription(TENANT, "matched.msg", "MATCHED-KEY"));
     expect(result).toBeNull();
   });
 });
 
 describe("messages/repo — findActiveSignalSubscriptions", () => {
   it("returns empty array when no matching subscriptions", async () => {
-    const result = await repo.findActiveSignalSubscriptions(TENANT, "ghost.signal");
+    const result = await asTenant(TENANT, () => repo.findActiveSignalSubscriptions(TENANT, "ghost.signal"));
     expect(result).toEqual([]);
   });
 
@@ -107,12 +108,12 @@ describe("messages/repo — findActiveSignalSubscriptions", () => {
     const matchedId = randomUUID();
     cleanupSigs.push(activeId, matchedId);
 
-    await db.insert(signalSubscriptions).values([
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values([
       { id: activeId, tenantId: TENANT, instanceId: randomUUID(), taskId: randomUUID(), signalName: "multi.sig", nodeKey: "n1", status: "active" },
       { id: matchedId, tenantId: TENANT, instanceId: randomUUID(), taskId: randomUUID(), signalName: "multi.sig", nodeKey: "n1", status: "matched", matchedAt: new Date() },
-    ]);
+    ])));
 
-    const result = await repo.findActiveSignalSubscriptions(TENANT, "multi.sig");
+    const result = await asTenant(TENANT, () => repo.findActiveSignalSubscriptions(TENANT, "multi.sig"));
     expect(result.find((r) => r.id === activeId)).toBeDefined();
     expect(result.find((r) => r.id === matchedId)).toBeUndefined();
   });
@@ -123,7 +124,7 @@ describe("messages/repo — markMessageMatched", () => {
     const id = randomUUID();
     cleanupMsgs.push(id);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -132,11 +133,11 @@ describe("messages/repo — markMessageMatched", () => {
       correlationKey: "MARK-001",
       nodeKey: "node1",
       status: "active",
-    });
+    })));
 
-    await repo.markMessageMatched(db, id, { result: "approved" });
+    await asTenant(TENANT, () => db.transaction(async (tx) => repo.markMessageMatched(tx as unknown as typeof db, id, { result: "approved" })));
 
-    const rows = await db.select().from(messageSubscriptions).where(eq(messageSubscriptions.id, id));
+    const rows = await asTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(messageSubscriptions).where(eq(messageSubscriptions.id, id))));
     expect(rows[0]!.status).toBe("matched");
     expect(rows[0]!.matchedAt).not.toBeNull();
     expect((rows[0]!.matchedPayload as Record<string, unknown>)?.result).toBe("approved");
@@ -148,7 +149,7 @@ describe("messages/repo — markSignalMatched", () => {
     const id = randomUUID();
     cleanupSigs.push(id);
 
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -156,11 +157,11 @@ describe("messages/repo — markSignalMatched", () => {
       signalName: "sig.mark",
       nodeKey: "node1",
       status: "active",
-    });
+    })));
 
-    await repo.markSignalMatched(db, id);
+    await asTenant(TENANT, () => db.transaction(async (tx) => repo.markSignalMatched(tx as unknown as typeof db, id)));
 
-    const rows = await db.select().from(signalSubscriptions).where(eq(signalSubscriptions.id, id));
+    const rows = await asTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(signalSubscriptions).where(eq(signalSubscriptions.id, id))));
     expect(rows[0]!.status).toBe("matched");
     expect(rows[0]!.matchedAt).not.toBeNull();
   });
@@ -171,7 +172,7 @@ describe("messages/repo — expireSubscription", () => {
     const id = randomUUID();
     cleanupMsgs.push(id);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -180,11 +181,11 @@ describe("messages/repo — expireSubscription", () => {
       correlationKey: "EXP-001",
       nodeKey: "node1",
       status: "active",
-    });
+    })));
 
-    await repo.expireSubscription(db, id);
+    await asTenant(TENANT, () => db.transaction(async (tx) => repo.expireSubscription(tx as unknown as typeof db, id)));
 
-    const rows = await db.select().from(messageSubscriptions).where(eq(messageSubscriptions.id, id));
+    const rows = await asTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(messageSubscriptions).where(eq(messageSubscriptions.id, id))));
     expect(rows[0]!.status).toBe("expired");
   });
 });
@@ -195,7 +196,7 @@ describe("messages/repo — findExpiredSubscriptions", () => {
     cleanupMsgs.push(id);
 
     const pastTimeout = new Date(Date.now() - 60 * 1000); // 1 min ago
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -205,9 +206,9 @@ describe("messages/repo — findExpiredSubscriptions", () => {
       nodeKey: "node1",
       status: "active",
       timeoutAt: pastTimeout,
-    });
+    })));
 
-    const results = await repo.findExpiredSubscriptions(new Date(), 100);
+    const results = await asTenant(TENANT, () => repo.findExpiredSubscriptions(new Date(), 100));
     expect(results.find((r) => r.id === id)).toBeDefined();
   });
 
@@ -216,7 +217,7 @@ describe("messages/repo — findExpiredSubscriptions", () => {
     cleanupMsgs.push(id);
 
     const futureTimeout = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -226,9 +227,9 @@ describe("messages/repo — findExpiredSubscriptions", () => {
       nodeKey: "node1",
       status: "active",
       timeoutAt: futureTimeout,
-    });
+    })));
 
-    const results = await repo.findExpiredSubscriptions(new Date(), 100);
+    const results = await asTenant(TENANT, () => repo.findExpiredSubscriptions(new Date(), 100));
     expect(results.find((r) => r.id === id)).toBeUndefined();
   });
 });
@@ -241,7 +242,7 @@ describe("messages/repo — findSubscriptionsByInstance", () => {
     cleanupMsgs.push(msgId);
     cleanupSigs.push(sigId);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: msgId,
       tenantId: TENANT,
       instanceId,
@@ -250,9 +251,9 @@ describe("messages/repo — findSubscriptionsByInstance", () => {
       correlationKey: "IM-001",
       nodeKey: "node1",
       status: "active",
-    });
+    })));
 
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sigId,
       tenantId: TENANT,
       instanceId,
@@ -260,15 +261,15 @@ describe("messages/repo — findSubscriptionsByInstance", () => {
       signalName: "inst.sig",
       nodeKey: "node1",
       status: "active",
-    });
+    })));
 
-    const result = await repo.findSubscriptionsByInstance(instanceId);
+    const result = await asTenant(TENANT, () => repo.findSubscriptionsByInstance(instanceId));
     expect(result.messages.length).toBeGreaterThanOrEqual(1);
     expect(result.signals.length).toBeGreaterThanOrEqual(1);
   });
 
   it("returns empty arrays for instance with no subscriptions", async () => {
-    const result = await repo.findSubscriptionsByInstance(randomUUID());
+    const result = await asTenant(TENANT, () => repo.findSubscriptionsByInstance(randomUUID()));
     expect(result.messages).toEqual([]);
     expect(result.signals).toEqual([]);
   });
@@ -282,7 +283,7 @@ describe("messages/repo — cancelSubscriptionsForInstance", () => {
     cleanupMsgs.push(msgId);
     cleanupSigs.push(sigId);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: msgId,
       tenantId: TENANT,
       instanceId,
@@ -291,9 +292,9 @@ describe("messages/repo — cancelSubscriptionsForInstance", () => {
       correlationKey: "CL-001",
       nodeKey: "node1",
       status: "active",
-    });
+    })));
 
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sigId,
       tenantId: TENANT,
       instanceId,
@@ -301,12 +302,12 @@ describe("messages/repo — cancelSubscriptionsForInstance", () => {
       signalName: "cancel.sig",
       nodeKey: "node1",
       status: "active",
-    });
+    })));
 
-    await repo.cancelSubscriptionsForInstance(db, instanceId);
+    await asTenant(TENANT, () => db.transaction(async (tx) => repo.cancelSubscriptionsForInstance(tx as unknown as typeof db, instanceId)));
 
-    const msgs = await db.select().from(messageSubscriptions).where(eq(messageSubscriptions.id, msgId));
-    const sigs = await db.select().from(signalSubscriptions).where(eq(signalSubscriptions.id, sigId));
+    const msgs = await asTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(messageSubscriptions).where(eq(messageSubscriptions.id, msgId))));
+    const sigs = await asTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(signalSubscriptions).where(eq(signalSubscriptions.id, sigId))));
     expect(msgs[0]!.status).toBe("expired");
     expect(sigs[0]!.status).toBe("expired");
   });
@@ -318,17 +319,17 @@ describe("messages/repo — listSubscriptions", () => {
     const id2 = randomUUID();
     cleanupMsgs.push(id1, id2);
 
-    await db.insert(messageSubscriptions).values([
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values([
       { id: id1, tenantId: TENANT, instanceId: randomUUID(), taskId: randomUUID(), messageName: "list.1", correlationKey: "L1", nodeKey: "n1", status: "active" },
       { id: id2, tenantId: TENANT, instanceId: randomUUID(), taskId: randomUUID(), messageName: "list.2", correlationKey: "L2", nodeKey: "n1", status: "matched", matchedAt: new Date() },
-    ]);
+    ])));
 
     // List all
-    const all = await repo.listSubscriptions(TENANT, 100, 0);
+    const all = await asTenant(TENANT, () => repo.listSubscriptions(TENANT, 100, 0));
     expect(all.length).toBeGreaterThanOrEqual(2);
 
     // Filter by status
-    const active = await repo.listSubscriptions(TENANT, 100, 0, "active");
+    const active = await asTenant(TENANT, () => repo.listSubscriptions(TENANT, 100, 0, "active"));
     expect(active.find((r) => r.id === id1)).toBeDefined();
     expect(active.find((r) => r.id === id2)).toBeUndefined();
   });

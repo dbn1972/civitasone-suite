@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-bbb000000001";
@@ -21,8 +22,8 @@ function userToken() {
 }
 
 afterEach(async () => {
-  await db.execute(sql`DELETE FROM workflow.dead_letters WHERE tenant_id = ${TENANT}`).catch(() => undefined);
-  await db.execute(sql`DELETE FROM workflow.role_members WHERE tenant_id = ${TENANT}`).catch(() => undefined);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.dead_letters WHERE tenant_id = ${TENANT}`).catch(() => undefined);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.role_members WHERE tenant_id = ${TENANT}`).catch(() => undefined);
 });
 afterAll(async () => { await sqlClient.end(); });
 
@@ -68,7 +69,7 @@ describe("POST /v1/workflow/dlq/:id/requeue", () => {
     const dlId = randomUUID();
     const msgId = randomUUID();
     // Insert a dead letter directly
-    await db.execute(sql`
+    await sqlAsTenant(TENANT, sql`
       INSERT INTO workflow.dead_letters (id, tenant_id, topic, message_id, envelope, error, attempt_count, status)
       VALUES (${dlId}, ${TENANT}, 'workflow.task.complete', ${msgId},
               ${JSON.stringify({ type: "workflow.task.complete", tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0", payload: {} })}::jsonb,
@@ -99,7 +100,7 @@ describe("POST /v1/workflow/dlq/:id/requeue", () => {
 
   it("returns 409 if already requeued", async () => {
     const dlId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(TENANT, sql`
       INSERT INTO workflow.dead_letters (id, tenant_id, topic, message_id, envelope, error, attempt_count, status, requeued_at)
       VALUES (${dlId}, ${TENANT}, 'workflow.task.complete', ${randomUUID()},
               ${JSON.stringify({ type: "workflow.task.complete", payload: {} })}::jsonb,

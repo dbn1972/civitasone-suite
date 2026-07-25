@@ -38,16 +38,16 @@ describe("R13 — unknown approval-chain definition is rejected (no rubber-stamp
     const tenant = newTenant();
     const id = await createInstance(tenant, "nonexistent_eoffice_chain", randomUUID());
 
-    const inst = await getInstance(id);
+    const inst = await getInstance(tenant, id);
     expect(inst?.status).toBe("rejected");
     expect(inst?.definition_id).toBeNull();
     expect(inst?.current_node).toBeNull();
 
     // The crucial guarantee: no actionable task exists to one-click approve.
-    const ts = await tasksFor(id);
+    const ts = await tasksFor(tenant, id);
     expect(ts).toHaveLength(0);
 
-    const actions = await historyActions(id);
+    const actions = await historyActions(tenant, id);
     expect(actions).toContain("rejected");
   });
 
@@ -63,10 +63,10 @@ describe("R13 — unknown approval-chain definition is rejected (no rubber-stamp
     ]);
     const id = await createInstance(tenant, def.code, randomUUID());
 
-    const inst = await getInstance(id);
+    const inst = await getInstance(tenant, id);
     expect(inst?.status).toBe("active");
     expect(inst?.definition_id).toBe(def.id);
-    const ts = await tasksFor(id);
+    const ts = await tasksFor(tenant, id);
     expect(ts).toHaveLength(1);
   });
 });

@@ -16,6 +16,7 @@ import * as defRepo from "../definitions/repo.js";
 import * as historyRepo from "../history/repo.js";
 import { resolveAssignee } from "../assignment/resolver.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { SYSTEM_ACTOR_ID } from "./sweeper.js";
 import { insertMessageSubscription, insertSignalSubscription } from "../messages/repo.js";
 import { evaluateDecisionTable } from "../decisions/domain.js";
@@ -44,6 +45,9 @@ type Tx = Parameters<typeof repo.insert>[0] & Parameters<typeof defRepo.findNode
 type CompletePayload = TaskView & { decision?: string; sodOverride?: boolean };
 
 export function registerTasksConsumers(queue: Queue): void {
+  // RLS (#146): run every handler inside the message's tenant context so
+  // db.transaction() sets the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
+  queue = tenantScoped(queue);
   // Gap 3 — wrap with the consumer-side DLQ policy: transient failures retry,
   // a poison message is dead-lettered after WORKFLOW_DLQ_MAX_ATTEMPTS attempts.
   subscribeWithDlq<CompletePayload>(queue, COMMANDS.completeTask, async (msg) => {

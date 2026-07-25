@@ -41,14 +41,18 @@ export type DeadLetterRow = typeof deadLetters.$inferSelect;
  * so concurrent redeliveries don't lose increments.
  */
 export async function bumpAttempt(topic: string, messageId: string, tenantId: string, error: string): Promise<number> {
-  const res = await db.execute(sql`
+  // RLS (#146): consumer_attempts has a FORCED fail-closed policy and a bare
+  // db.execute() never carries the app.tenant_id GUC — run inside
+  // db.transaction() so wrapWithTenantGuc sets it from the consumer's tenant
+  // context (established by tenantScoped()).
+  const res = await db.transaction((tx) => tx.execute(sql`
     INSERT INTO workflow.consumer_attempts (topic, message_id, tenant_id, attempt_count, last_error, updated_at)
     VALUES (${topic}, ${messageId}, ${tenantId}, 1, ${error}, now())
     ON CONFLICT (topic, message_id)
     DO UPDATE SET attempt_count = workflow.consumer_attempts.attempt_count + 1,
                   last_error = ${error}, updated_at = now()
     RETURNING attempt_count
-  `);
+  `));
   const rows = res as unknown as Array<{ attempt_count: number }>;
   return rows[0]?.attempt_count ?? 1;
 }
@@ -62,11 +66,12 @@ export async function deadLetter(
   error: string,
   attemptCount: number,
 ): Promise<void> {
-  await db.execute(sql`
+  // RLS (#146): tenant-scoped transaction so the GUC is set (see bumpAttempt).
+  await db.transaction((tx) => tx.execute(sql`
     INSERT INTO workflow.dead_letters (tenant_id, topic, message_id, envelope, error, attempt_count, status)
     VALUES (${tenantId}, ${topic}, ${messageId}, ${JSON.stringify(envelope)}::jsonb, ${error}, ${attemptCount}, 'dead')
     ON CONFLICT (topic, message_id) DO NOTHING
-  `);
+  `));
 }
 
 /** Clear the attempt counter once a message processes successfully. */

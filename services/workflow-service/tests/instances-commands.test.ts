@@ -10,7 +10,7 @@ import { registerInstancesConsumers } from "../src/modules/instances/consumer.js
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { cancelInstance, suspendInstance, resumeInstance, createInstance, migrateInstanceVersion } from "../src/modules/instances/commands.js";
 import { COMMANDS } from "../src/topics.js";
-import { TestQueue, seedDefinition, cleanup, getInstance } from "./helpers/engine-harness.js";
+import { TestQueue, seedDefinition, cleanup, getInstance, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 import type { RequestContext } from "@civitasone/types";
 
 const tenants: string[] = [];
@@ -49,7 +49,7 @@ describe("instances/commands — lifecycle", () => {
     const instanceId = await setupInstance(tenantId, actorId, def.code);
 
     const ctx = makeCtx(tenantId, actorId);
-    const result = await cancelInstance(ctx, instanceId, "no longer needed");
+    const result = await asTenant(tenantId, () => cancelInstance(ctx, instanceId, "no longer needed"));
     expect(result.status).toBe("accepted");
     expect(result.id).toBe(instanceId);
   });
@@ -67,7 +67,7 @@ describe("instances/commands — lifecycle", () => {
     const instanceId = await setupInstance(tenantId, actorId, def.code);
 
     const ctx = makeCtx(tenantId, actorId);
-    const result = await suspendInstance(ctx, instanceId, "audit hold");
+    const result = await asTenant(tenantId, () => suspendInstance(ctx, instanceId, "audit hold"));
     expect(result.status).toBe("accepted");
   });
 
@@ -84,13 +84,13 @@ describe("instances/commands — lifecycle", () => {
     const instanceId = await setupInstance(tenantId, actorId, def.code);
 
     const ctx = makeCtx(tenantId, actorId);
-    await expect(resumeInstance(ctx, instanceId)).rejects.toMatchObject({ status: 409, code: "INVALID_TRANSITION" });
+    await expect(asTenant(tenantId, () => resumeInstance(ctx, instanceId))).rejects.toMatchObject({ status: 409, code: "INVALID_TRANSITION" });
   });
 
   it("cancelInstance on a non-existent instance returns 404", async () => {
     const tenantId = newTenant();
     const ctx = makeCtx(tenantId);
-    await expect(cancelInstance(ctx, randomUUID())).rejects.toMatchObject({ status: 404 });
+    await expect(asTenant(tenantId, () => cancelInstance(ctx, randomUUID()))).rejects.toMatchObject({ status: 404 });
   });
 
   it("suspendInstance on a completed instance returns 409 INSTANCE_TERMINAL", async () => {
@@ -107,7 +107,7 @@ describe("instances/commands — lifecycle", () => {
     const instanceId = await setupInstance(tenantId, actorId, def.code);
 
     // Complete the only task to mark instance completed
-    const taskRows = await db.execute(
+    const taskRows = await sqlAsTenant(tenantId, 
       sql`SELECT id, version FROM workflow.tasks WHERE instance_id = ${instanceId} AND status = 'pending' LIMIT 1`,
     ) as unknown as Array<{ id: string; version: number }>;
     if (taskRows.length > 0) {
@@ -117,10 +117,10 @@ describe("instances/commands — lifecycle", () => {
       }, { tenantId, actorId });
     }
 
-    const inst = await getInstance(instanceId);
+    const inst = await getInstance(tenantId, instanceId);
     if (inst && inst.status === "completed") {
       const ctx = makeCtx(tenantId, actorId);
-      await expect(suspendInstance(ctx, instanceId)).rejects.toMatchObject({ status: 409, code: "INSTANCE_TERMINAL" });
+      await expect(asTenant(tenantId, () => suspendInstance(ctx, instanceId))).rejects.toMatchObject({ status: 409, code: "INSTANCE_TERMINAL" });
     }
   });
 });
@@ -137,12 +137,12 @@ describe("instances/commands — createInstance", () => {
     ], []);
 
     const ctx = makeCtx(tenantId, actorId);
-    const result = await createInstance(ctx, {
+    const result = await asTenant(tenantId, () => createInstance(ctx, {
       name: "Test Workflow",
       definitionCode: def.code,
       refType: "estab_file",
       refId: randomUUID(),
-    });
+    }));
 
     expect(result.status).toBe("accepted");
     expect(result.id).toBeDefined();
@@ -155,7 +155,7 @@ describe("instances/commands — createInstance", () => {
 
     const tenantId = newTenant();
     const ctx = makeCtx(tenantId);
-    const result = await createInstance(ctx, { name: "Minimal" });
+    const result = await asTenant(tenantId, () => createInstance(ctx, { name: "Minimal" }));
     expect(result.status).toBe("accepted");
   });
 });
@@ -182,12 +182,12 @@ describe("instances/commands — migrateInstanceVersion", () => {
 
     // Create v2 of same code - insert with explicit version 2
     const def2Id = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definitions (id, tenant_id, code, name, version, status, created_by, updated_by)
       VALUES (${def2Id}, ${tenantId}, ${code}, ${code + ' v2'}, 2, 'active', ${actorId}, ${actorId})
     `);
     // Insert nodes for v2 (same node keys so migration is valid)
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (definition_id, node_key, name, node_type, sort_order)
       VALUES
         (${def2Id}, 'step1', 'Step 1 v2', 'task', 1),
@@ -195,7 +195,7 @@ describe("instances/commands — migrateInstanceVersion", () => {
         (${def2Id}, 'step3', 'Step 3 v2', 'task', 3),
         (${def2Id}, 'step4', 'Step 4 v2', 'task', 4)
     `);
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_edges (definition_id, from_node, to_node, sort_order)
       VALUES
         (${def2Id}, 'step1', 'step2', 1),
@@ -207,7 +207,7 @@ describe("instances/commands — migrateInstanceVersion", () => {
     const instanceId = await setupInstance(tenantId, actorId, code);
 
     const ctx = makeCtx(tenantId, actorId);
-    const result = await migrateInstanceVersion(ctx, instanceId, 2);
+    const result = await asTenant(tenantId, () => migrateInstanceVersion(ctx, instanceId, 2));
     expect(result.toVersion).toBe(2);
     expect(result.id).toBe(instanceId);
   });
@@ -225,13 +225,13 @@ describe("instances/commands — migrateInstanceVersion", () => {
     const instanceId = await setupInstance(tenantId, actorId, def.code);
 
     const ctx = makeCtx(tenantId, actorId);
-    await expect(migrateInstanceVersion(ctx, instanceId, 99)).rejects.toMatchObject({ status: 404, code: "VERSION_NOT_FOUND" });
+    await expect(asTenant(tenantId, () => migrateInstanceVersion(ctx, instanceId, 99))).rejects.toMatchObject({ status: 404, code: "VERSION_NOT_FOUND" });
   });
 
   it("rejects migration of a non-existent instance", async () => {
     const tenantId = newTenant();
     const ctx = makeCtx(tenantId);
-    await expect(migrateInstanceVersion(ctx, randomUUID(), 2)).rejects.toMatchObject({ status: 404 });
+    await expect(asTenant(tenantId, () => migrateInstanceVersion(ctx, randomUUID(), 2))).rejects.toMatchObject({ status: 404 });
   });
 
   it("rejects migration to the same version", async () => {
@@ -248,6 +248,6 @@ describe("instances/commands — migrateInstanceVersion", () => {
 
     const ctx = makeCtx(tenantId, actorId);
     // Migrating to version 1 (same version) should fail
-    await expect(migrateInstanceVersion(ctx, instanceId, 1)).rejects.toMatchObject({ status: 409, code: "SAME_VERSION" });
+    await expect(asTenant(tenantId, () => migrateInstanceVersion(ctx, instanceId, 1))).rejects.toMatchObject({ status: 409, code: "SAME_VERSION" });
   });
 });

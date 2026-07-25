@@ -10,7 +10,7 @@ import { registerInstancesConsumers } from "../src/modules/instances/consumer.js
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { completeTask, claimTask, assignTask, bulkComplete } from "../src/modules/tasks/commands.js";
 import { COMMANDS } from "../src/topics.js";
-import { TestQueue, seedDefinition, cleanup } from "./helpers/engine-harness.js";
+import { TestQueue, seedDefinition, cleanup, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 import type { RequestContext } from "@civitasone/types";
 
 const tenants: string[] = [];
@@ -38,7 +38,7 @@ async function setupTask(tenantId: string, actorId: string, opts: { roleRef?: st
     initialTaskName: "Review", definitionCode: def.code,
   }, { tenantId, actorId, messageId: instanceId });
 
-  const rows = await db.execute(
+  const rows = await sqlAsTenant(tenantId, 
     sql`SELECT id FROM workflow.tasks WHERE instance_id = ${instanceId} AND status = 'pending' LIMIT 1`,
   ) as unknown as Array<{ id: string }>;
 
@@ -58,7 +58,7 @@ describe("tasks/commands — completeTask", () => {
     // Use a different actor (not the submitter) who is super_admin
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["super_admin"]);
-    const result = await completeTask(ctx, taskId, "approve");
+    const result = await asTenant(tenantId, () => completeTask(ctx, taskId, "approve"));
     expect(result.status).toBe("accepted");
     expect(result.id).toBe(taskId);
   });
@@ -70,7 +70,7 @@ describe("tasks/commands — completeTask", () => {
 
     const tenantId = newTenant();
     const ctx = makeCtx(tenantId);
-    await expect(completeTask(ctx, randomUUID(), "approve")).rejects.toMatchObject({ status: 404 });
+    await expect(asTenant(tenantId, () => completeTask(ctx, randomUUID(), "approve"))).rejects.toMatchObject({ status: 404 });
   });
 
   it("returns 403 ROLE_NOT_AUTHORIZED if user lacks the task roleRef", async () => {
@@ -85,7 +85,7 @@ describe("tasks/commands — completeTask", () => {
     const completor = randomUUID();
     // Actor does NOT have 'special_reviewer' and is NOT super_admin
     const ctx = makeCtx(tenantId, completor, ["workflow_user"]);
-    await expect(completeTask(ctx, taskId, "approve")).rejects.toMatchObject({ status: 403, code: "ROLE_NOT_AUTHORIZED" });
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 403, code: "ROLE_NOT_AUTHORIZED" });
   });
 
   it("returns 403 SELF_APPROVAL_DENIED if actor is the submitter", async () => {
@@ -99,7 +99,7 @@ describe("tasks/commands — completeTask", () => {
 
     // Same actorId who created the instance tries to complete the task (non-super_admin)
     const ctx = makeCtx(tenantId, actorId, ["workflow_user"]);
-    await expect(completeTask(ctx, taskId, "approve")).rejects.toMatchObject({ status: 403, code: "SELF_APPROVAL_DENIED" });
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 403, code: "SELF_APPROVAL_DENIED" });
   });
 
   it("returns 409 for already-completed task", async () => {
@@ -112,11 +112,11 @@ describe("tasks/commands — completeTask", () => {
     const { taskId } = await setupTask(tenantId, actorId);
 
     // Mark task as completed directly
-    await db.execute(sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${taskId}`);
 
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["super_admin"]);
-    await expect(completeTask(ctx, taskId, "approve")).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
   });
 
   it("returns 409 CALL_TASK for a call task", async () => {
@@ -129,11 +129,11 @@ describe("tasks/commands — completeTask", () => {
     const { taskId } = await setupTask(tenantId, actorId);
 
     // Mark task as a call task
-    await db.execute(sql`UPDATE workflow.tasks SET is_call = true WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET is_call = true WHERE id = ${taskId}`);
 
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["super_admin"]);
-    await expect(completeTask(ctx, taskId, "approve")).rejects.toMatchObject({ status: 409, code: "CALL_TASK" });
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 409, code: "CALL_TASK" });
   });
 
   it("returns 403 NOT_ASSIGNEE when task is assigned to another user", async () => {
@@ -146,12 +146,12 @@ describe("tasks/commands — completeTask", () => {
     const { taskId } = await setupTask(tenantId, actorId);
 
     const assignedTo = randomUUID();
-    await db.execute(sql`UPDATE workflow.tasks SET assignee_id = ${assignedTo} WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET assignee_id = ${assignedTo} WHERE id = ${taskId}`);
 
     // A different non-admin actor tries to complete
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["workflow_user"]);
-    await expect(completeTask(ctx, taskId, "approve")).rejects.toMatchObject({ status: 403, code: "NOT_ASSIGNEE" });
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 403, code: "NOT_ASSIGNEE" });
   });
 
   it("returns 409 INSTANCE_NOT_ACTIVE when instance is suspended", async () => {
@@ -164,11 +164,11 @@ describe("tasks/commands — completeTask", () => {
     const { taskId, instanceId } = await setupTask(tenantId, actorId);
 
     // Suspend the instance directly
-    await db.execute(sql`UPDATE workflow.instances SET status = 'suspended' WHERE id = ${instanceId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.instances SET status = 'suspended' WHERE id = ${instanceId}`);
 
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["super_admin"]);
-    await expect(completeTask(ctx, taskId, "approve")).rejects.toMatchObject({ status: 409, code: "INSTANCE_NOT_ACTIVE" });
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 409, code: "INSTANCE_NOT_ACTIVE" });
   });
 });
 
@@ -184,7 +184,7 @@ describe("tasks/commands — claimTask", () => {
 
     const claimer = randomUUID();
     const ctx = makeCtx(tenantId, claimer, ["super_admin"]);
-    const result = await claimTask(ctx, taskId);
+    const result = await asTenant(tenantId, () => claimTask(ctx, taskId));
     expect(result.assigneeId).toBe(claimer);
   });
 
@@ -199,10 +199,10 @@ describe("tasks/commands — claimTask", () => {
 
     const claimer = randomUUID();
     // Assign manually to simulate already-claimed
-    await db.execute(sql`UPDATE workflow.tasks SET assignee_id = ${claimer} WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET assignee_id = ${claimer} WHERE id = ${taskId}`);
 
     const ctx = makeCtx(tenantId, claimer, ["super_admin"]);
-    const result = await claimTask(ctx, taskId);
+    const result = await asTenant(tenantId, () => claimTask(ctx, taskId));
     expect(result.assigneeId).toBe(claimer);
   });
 
@@ -216,17 +216,17 @@ describe("tasks/commands — claimTask", () => {
     const { taskId } = await setupTask(tenantId, actorId);
 
     const other = randomUUID();
-    await db.execute(sql`UPDATE workflow.tasks SET assignee_id = ${other} WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET assignee_id = ${other} WHERE id = ${taskId}`);
 
     const claimer = randomUUID();
     const ctx = makeCtx(tenantId, claimer, ["super_admin"]);
-    await expect(claimTask(ctx, taskId)).rejects.toMatchObject({ status: 409, code: "ALREADY_CLAIMED" });
+    await expect(asTenant(tenantId, () => claimTask(ctx, taskId))).rejects.toMatchObject({ status: 409, code: "ALREADY_CLAIMED" });
   });
 
   it("returns 404 for non-existent task", async () => {
     const tenantId = newTenant();
     const ctx = makeCtx(tenantId);
-    await expect(claimTask(ctx, randomUUID())).rejects.toMatchObject({ status: 404 });
+    await expect(asTenant(tenantId, () => claimTask(ctx, randomUUID()))).rejects.toMatchObject({ status: 404 });
   });
 
   it("returns 409 CONFLICT for non-pending task", async () => {
@@ -238,10 +238,10 @@ describe("tasks/commands — claimTask", () => {
     const actorId = randomUUID();
     const { taskId } = await setupTask(tenantId, actorId);
 
-    await db.execute(sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${taskId}`);
 
     const ctx = makeCtx(tenantId, randomUUID(), ["super_admin"]);
-    await expect(claimTask(ctx, taskId)).rejects.toMatchObject({ status: 409 });
+    await expect(asTenant(tenantId, () => claimTask(ctx, taskId))).rejects.toMatchObject({ status: 409 });
   });
 
   it("returns 403 ROLE_NOT_AUTHORIZED without proper role", async () => {
@@ -254,7 +254,7 @@ describe("tasks/commands — claimTask", () => {
     const { taskId } = await setupTask(tenantId, actorId, { roleRef: "special_role" });
 
     const ctx = makeCtx(tenantId, randomUUID(), ["workflow_user"]);
-    await expect(claimTask(ctx, taskId)).rejects.toMatchObject({ status: 403, code: "ROLE_NOT_AUTHORIZED" });
+    await expect(asTenant(tenantId, () => claimTask(ctx, taskId))).rejects.toMatchObject({ status: 403, code: "ROLE_NOT_AUTHORIZED" });
   });
 });
 
@@ -270,14 +270,14 @@ describe("tasks/commands — assignTask", () => {
 
     const assignee = randomUUID();
     const ctx = makeCtx(tenantId, actorId, ["workflow_admin"]);
-    const result = await assignTask(ctx, taskId, assignee);
+    const result = await asTenant(tenantId, () => assignTask(ctx, taskId, assignee));
     expect(result.assigneeId).toBe(assignee);
   });
 
   it("returns 404 for non-existent task", async () => {
     const tenantId = newTenant();
     const ctx = makeCtx(tenantId);
-    await expect(assignTask(ctx, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 404 });
+    await expect(asTenant(tenantId, () => assignTask(ctx, randomUUID(), randomUUID()))).rejects.toMatchObject({ status: 404 });
   });
 
   it("returns 409 CONFLICT for non-pending task", async () => {
@@ -289,10 +289,10 @@ describe("tasks/commands — assignTask", () => {
     const actorId = randomUUID();
     const { taskId } = await setupTask(tenantId, actorId);
 
-    await db.execute(sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${taskId}`);
 
     const ctx = makeCtx(tenantId, actorId, ["workflow_admin"]);
-    await expect(assignTask(ctx, taskId, randomUUID())).rejects.toMatchObject({ status: 409 });
+    await expect(asTenant(tenantId, () => assignTask(ctx, taskId, randomUUID()))).rejects.toMatchObject({ status: 409 });
   });
 
   it("returns 409 ALREADY_ASSIGNED if already assigned to another without reassign", async () => {
@@ -305,11 +305,11 @@ describe("tasks/commands — assignTask", () => {
     const { taskId } = await setupTask(tenantId, actorId);
 
     const first = randomUUID();
-    await db.execute(sql`UPDATE workflow.tasks SET assignee_id = ${first} WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET assignee_id = ${first} WHERE id = ${taskId}`);
 
     const ctx = makeCtx(tenantId, actorId, ["workflow_admin"]);
     const second = randomUUID();
-    await expect(assignTask(ctx, taskId, second, false)).rejects.toMatchObject({ status: 409, code: "ALREADY_ASSIGNED" });
+    await expect(asTenant(tenantId, () => assignTask(ctx, taskId, second, false))).rejects.toMatchObject({ status: 409, code: "ALREADY_ASSIGNED" });
   });
 
   it("allows reassignment with reassign=true", async () => {
@@ -322,11 +322,11 @@ describe("tasks/commands — assignTask", () => {
     const { taskId } = await setupTask(tenantId, actorId);
 
     const first = randomUUID();
-    await db.execute(sql`UPDATE workflow.tasks SET assignee_id = ${first} WHERE id = ${taskId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET assignee_id = ${first} WHERE id = ${taskId}`);
 
     const ctx = makeCtx(tenantId, actorId, ["workflow_admin"]);
     const second = randomUUID();
-    const result = await assignTask(ctx, taskId, second, true);
+    const result = await asTenant(tenantId, () => assignTask(ctx, taskId, second, true));
     expect(result.assigneeId).toBe(second);
   });
 });
@@ -344,7 +344,7 @@ describe("tasks/commands — bulkComplete", () => {
 
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["super_admin"]);
-    const results = await bulkComplete(ctx, [t1, t2], "approve");
+    const results = await asTenant(tenantId, () => bulkComplete(ctx, [t1, t2], "approve"));
     expect(results.length).toBe(2);
     expect(results.every((r) => r.ok)).toBe(true);
   });
@@ -361,7 +361,7 @@ describe("tasks/commands — bulkComplete", () => {
 
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["super_admin"]);
-    const results = await bulkComplete(ctx, [t1, fakeId], "approve");
+    const results = await asTenant(tenantId, () => bulkComplete(ctx, [t1, fakeId], "approve"));
     expect(results.length).toBe(2);
     expect(results[0]!.ok).toBe(true);
     expect(results[1]!.ok).toBe(false);

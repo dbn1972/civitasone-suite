@@ -1,9 +1,9 @@
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
-import { startRelay } from "./shared/outbox.js";
-import { startOutboxPurge } from "@civitasone/outbox";
+import { relayOnce } from "./shared/outbox.js";
 import { registerInstancesConsumers } from "./modules/instances/consumer.js";
 import { registerTasksConsumers } from "./modules/tasks/consumer.js";
 import { registerProvisioningConsumers } from "./modules/provisioning/consumer.js";
@@ -17,13 +17,67 @@ registerTasksConsumers(queue);
 registerProvisioningConsumers(queue);
 registerMessagesConsumers(queue);
 await queue.start();
-const relay = startRelay(db, queue);
-// G7: scheduled outbox purge — remove published messages older than 7 days.
-const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
-  intervalMs: 60 * 60_000,
-  batchSize: 1000,
-  logger: log,
-});
+
+// RLS (#146): workflow_svc is NOBYPASSRLS and _outbox.messages is fail-closed
+// (tenant_id = workflow.current_tenant_id()), so the shared startRelay/
+// startOutboxPurge — whose bare cross-tenant reads/deletes carry no GUC — see
+// zero rows. Enumerate the tenants with pending/purgeable rows via the
+// SECURITY DEFINER helpers (migration 0029 — tenant ids only) and run each
+// tenant's relay/purge inside runWithTenant + db.transaction so the GUC is set.
+type RelayTx = Parameters<typeof relayOnce>[0];
+async function relayAllTenantsOnce(): Promise<void> {
+  const rows = (await db.execute(
+    sql`SELECT workflow.outbox_pending_tenants() AS tenant_id`,
+  )) as unknown as Array<{ tenant_id: string }>;
+  for (const { tenant_id } of rows) {
+    await runWithTenant(tenant_id, () =>
+      db.transaction((tx) => relayOnce(tx as unknown as RelayTx, queue, 100, "workflow")),
+    );
+  }
+}
+const relay = setInterval(() => {
+  relayAllTenantsOnce().catch((err) => log.error({ err }, "outbox relay cycle failed"));
+}, 500);
+
+// G7: scheduled outbox purge — remove published messages older than 7 days
+// (per tenant, for the same RLS reason), plus GUC-free _inbox.processed rows.
+const PURGE_RETENTION_DAYS = 7;
+const PURGE_BATCH = 1000;
+async function purgeAllTenantsOnce(): Promise<void> {
+  const cutoff = sql`now() - interval '${sql.raw(String(PURGE_RETENTION_DAYS))} days'`;
+  const rows = (await db.execute(
+    sql`SELECT workflow.outbox_purgeable_tenants(interval '${sql.raw(String(PURGE_RETENTION_DAYS))} days') AS tenant_id`,
+  )) as unknown as Array<{ tenant_id: string }>;
+  for (const { tenant_id } of rows) {
+    await runWithTenant(tenant_id, async () => {
+      let deleted: number;
+      do {
+        const res = await db.transaction((tx) => tx.execute(sql`
+          DELETE FROM _outbox.messages
+          WHERE id IN (
+            SELECT id FROM _outbox.messages
+            WHERE published_at IS NOT NULL AND published_at < ${cutoff}
+            LIMIT ${sql.raw(String(PURGE_BATCH))}
+          )
+        `));
+        deleted = (res as unknown as { count?: number }).count ?? (res as unknown as unknown[]).length ?? 0;
+      } while (deleted >= PURGE_BATCH);
+    });
+  }
+  // _inbox.processed carries no tenant column and no RLS policy — bare delete is fine.
+  await db.execute(sql`
+    DELETE FROM _inbox.processed
+    WHERE message_id IN (
+      SELECT message_id FROM _inbox.processed
+      WHERE processed_at < ${cutoff}
+      LIMIT ${sql.raw(String(PURGE_BATCH))}
+    )
+  `);
+}
+const purge = setInterval(() => {
+  purgeAllTenantsOnce().catch((err) => log.warn({ err }, "outbox purge cycle failed"));
+}, 60 * 60_000);
+purge.unref();
 const slaSweeper = startSlaSweeper(Number(process.env.SLA_SWEEP_MS ?? 30_000));
 // P1-2 — deemed-approval timer sweeper.
 const timerSweeper = startTimerSweeper(Number(process.env.TIMER_SWEEP_MS ?? 15_000));

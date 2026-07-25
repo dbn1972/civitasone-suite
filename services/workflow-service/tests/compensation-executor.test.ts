@@ -9,7 +9,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { runCompensation, appendCompletedNode, SYSTEM_ACTOR_ID } from "../src/modules/compensation/executor.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
-import { TestQueue, cleanup, seedDefinition } from "./helpers/engine-harness.js";
+import { TestQueue, cleanup, seedDefinition, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 import { COMMANDS } from "../src/topics.js";
 
 const tenants: string[] = [];
@@ -33,7 +33,7 @@ describe("compensation/executor — runCompensation", () => {
     const instanceId = randomUUID();
 
     // Insert a raw instance without a definition
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.instances (id, tenant_id, name, status, created_by, updated_by)
       VALUES (${instanceId}, ${tenantId}, 'no-def', 'active', ${actorId}, ${actorId})
     `);
@@ -87,7 +87,7 @@ describe("compensation/executor — runCompensation", () => {
     }, { tenantId, actorId, messageId: instanceId });
 
     // Mark step1 as completed
-    await appendCompletedNode(db, instanceId, "step1");
+    await asTenant(tenantId, () => db.transaction(async (tx) => appendCompletedNode(tx as unknown as typeof db, instanceId, "step1")));
 
     const result = await runCompensation(instanceId, tenantId, actorId);
     // No compensation handlers → all skipped
@@ -114,7 +114,7 @@ describe("compensation/executor — runCompensation", () => {
     }, { tenantId, actorId, messageId: instanceId });
 
     // Manually add a non-existent node key to completed_nodes
-    await appendCompletedNode(db, instanceId, "ghost_node");
+    await asTenant(tenantId, () => db.transaction(async (tx) => appendCompletedNode(tx as unknown as typeof db, instanceId, "ghost_node")));
 
     const result = await runCompensation(instanceId, tenantId, actorId);
     expect(result.skipped).toBeGreaterThan(0);
@@ -134,22 +134,22 @@ describe("compensation/executor — runCompensation", () => {
 
     // Create a definition with a compensation handler that has a message_topic
     const defId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definitions (id, tenant_id, code, name, version, status, created_by, updated_by)
       VALUES (${defId}, ${tenantId}, ${"comp_msg_" + defId.slice(0, 8)}, 'Comp Message', 1, 'active', ${actorId}, ${actorId})
     `);
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order, compensation_handler_key)
       VALUES (${randomUUID()}, ${defId}, 'pay_step', 'Payment Step', 'task', 1, 'undo_pay')
     `);
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order, message_topic)
       VALUES (${randomUUID()}, ${defId}, 'undo_pay', 'Undo Payment', 'message_throw', 2, 'finance.payment.reverse')
     `);
 
     // Create instance linked to that definition
     const instanceId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.instances (id, tenant_id, name, status, definition_id, completed_nodes, context, created_by, updated_by)
       VALUES (${instanceId}, ${tenantId}, 'comp-msg-inst', 'cancelled', ${defId}, '["pay_step"]'::jsonb, '{"orderId":"ORD-1"}'::jsonb, ${actorId}, ${actorId})
     `);
@@ -165,21 +165,21 @@ describe("compensation/executor — runCompensation", () => {
     const actorId = randomUUID();
 
     const defId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definitions (id, tenant_id, code, name, version, status, created_by, updated_by)
       VALUES (${defId}, ${tenantId}, ${"comp_noted_" + defId.slice(0, 8)}, 'Comp Noted', 1, 'active', ${actorId}, ${actorId})
     `);
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order, compensation_handler_key)
       VALUES (${randomUUID()}, ${defId}, 'approval', 'Approval', 'task', 1, 'note_undo')
     `);
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order)
       VALUES (${randomUUID()}, ${defId}, 'note_undo', 'Undo Note', 'task', 2)
     `);
 
     const instanceId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.instances (id, tenant_id, name, status, definition_id, completed_nodes, context, created_by, updated_by)
       VALUES (${instanceId}, ${tenantId}, 'comp-noted-inst', 'cancelled', ${defId}, '["approval"]'::jsonb, '{}'::jsonb, ${actorId}, ${actorId})
     `);
@@ -194,28 +194,28 @@ describe("compensation/executor — runCompensation", () => {
     const actorId = randomUUID();
 
     const defId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definitions (id, tenant_id, code, name, version, status, created_by, updated_by)
       VALUES (${defId}, ${tenantId}, ${"comp_mix_" + defId.slice(0, 8)}, 'Mix', 1, 'active', ${actorId}, ${actorId})
     `);
     // Node with handler
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order, compensation_handler_key)
       VALUES (${randomUUID()}, ${defId}, 'with_handler', 'Has Handler', 'task', 1, 'handler_node')
     `);
     // The handler node
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order)
       VALUES (${randomUUID()}, ${defId}, 'handler_node', 'Handler', 'task', 2)
     `);
     // Node without handler
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order)
       VALUES (${randomUUID()}, ${defId}, 'no_handler', 'No Handler', 'task', 3)
     `);
 
     const instanceId = randomUUID();
-    await db.execute(sql`
+    await sqlAsTenant(tenantId, sql`
       INSERT INTO workflow.instances (id, tenant_id, name, status, definition_id, completed_nodes, context, created_by, updated_by)
       VALUES (${instanceId}, ${tenantId}, 'mixed', 'cancelled', ${defId}, '["with_handler","no_handler"]'::jsonb, '{}'::jsonb, ${actorId}, ${actorId})
     `);
@@ -246,10 +246,10 @@ describe("compensation/executor — appendCompletedNode", () => {
       initialTaskName: "Start", definitionCode: def.code,
     }, { tenantId, actorId, messageId: instanceId });
 
-    await appendCompletedNode(db, instanceId, "start");
-    await appendCompletedNode(db, instanceId, "review");
+    await asTenant(tenantId, () => db.transaction(async (tx) => appendCompletedNode(tx as unknown as typeof db, instanceId, "start")));
+    await asTenant(tenantId, () => db.transaction(async (tx) => appendCompletedNode(tx as unknown as typeof db, instanceId, "review")));
 
-    const row = await db.execute(
+    const row = await sqlAsTenant(tenantId, 
       sql`SELECT completed_nodes FROM workflow.instances WHERE id = ${instanceId}`,
     ) as unknown as Array<{ completed_nodes: string[] }>;
     expect(row[0]!.completed_nodes).toContain("start");

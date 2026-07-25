@@ -63,3 +63,14 @@ type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export function scopedRead<T>(fn: (tx: ScopedTx) => PromiseLike<T>): Promise<T> {
   return db.transaction(fn as (tx: ScopedTx) => Promise<T>);
 }
+
+/**
+ * Run a single raw-SQL statement inside the tenant transaction so the
+ * `app.tenant_id` GUC is set (RLS, #146: workflow_svc is NOBYPASSRLS). A bare
+ * `db.execute()` runs on a pooled connection with NO GUC — fail-closed RLS
+ * then returns zero rows on reads and rejects writes. Drop-in replacement for
+ * `db.execute(...)` at every standalone raw-SQL call site.
+ */
+export function scopedExecute(query: Parameters<Db["execute"]>[0]): ReturnType<Db["execute"]> {
+  return db.transaction(async (tx) => tx.execute(query)) as unknown as ReturnType<Db["execute"]>;
+}
