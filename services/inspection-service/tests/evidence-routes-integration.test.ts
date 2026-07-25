@@ -166,10 +166,13 @@ describe("POST /v1/inspection/evidence/presign", () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.data.uploadUrl).toBeDefined();
+    // Presign is env-gated: a REAL SigV4 URL is only minted when S3 is configured.
+    // In the integration test env (no S3), it honestly returns not_configured with a
+    // stable evidenceId + s3Key; the real signed-URL path is proven in
+    // evidence-presign-storage.test.ts.
+    expect(body.data.status).toBe("not_configured");
     expect(body.data.evidenceId).toBeDefined();
     expect(body.data.s3Key).toContain("evidence/");
-    expect(body.data.expiresAt).toBeDefined();
   });
 
   it("returns 200 for valid PNG mime type (Req 7.3)", async () => {
@@ -222,7 +225,7 @@ describe("POST /v1/inspection/evidence/presign", () => {
 
     expect(res.statusCode).toBe(400);
     const body = res.json();
-    expect(body.error.code).toBe("INVALID_MIME_TYPE");
+    expect(body.code).toBe("INVALID_MIME_TYPE");
   });
 
   it("returns 400 for file exceeding 25MB limit (Req 7.7)", async () => {
@@ -235,7 +238,7 @@ describe("POST /v1/inspection/evidence/presign", () => {
 
     expect(res.statusCode).toBe(400);
     const body = res.json();
-    expect(body.error.code).toBe("FILE_TOO_LARGE");
+    expect(body.code).toBe("FILE_TOO_LARGE");
   });
 
   it("returns 400 for file exactly at limit boundary (25MB is ok)", async () => {
@@ -257,7 +260,7 @@ describe("POST /v1/inspection/evidence/presign", () => {
       payload: { ...VALID_PRESIGN_BODY, fileSizeBytes: 25 * 1024 * 1024 + 1 },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe("FILE_TOO_LARGE");
+    expect(res.json().code).toBe("FILE_TOO_LARGE");
   });
 
   it("returns 400 with missing fileName", async () => {
@@ -361,3 +364,4 @@ describe("POST /v1/inspection/evidence", () => {
     expect(res.statusCode).toBe(202);
     expect(res.json().data.accepted).toBe(true);
   });
+});
