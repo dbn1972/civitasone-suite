@@ -16,6 +16,8 @@ registerInstancesConsumers(queue);
 registerTasksConsumers(queue);
 registerProvisioningConsumers(queue);
 registerMessagesConsumers(queue);
+import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
+registerCaseRegistryConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
