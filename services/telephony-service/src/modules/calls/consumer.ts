@@ -52,11 +52,11 @@ export function registerCallConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Cross-tenant ref guards: a referenced queue/agent must live in this tenant.
-      if (p.queueId && !(await queueRepo.exists(p.tenantId, p.queueId))) {
+      if (p.queueId && !(await queueRepo.exists(p.tenantId, p.queueId, tx))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_queue");
         return;
       }
-      if (p.agentId && !(await agentRepo.exists(p.tenantId, p.agentId))) {
+      if (p.agentId && !(await agentRepo.exists(p.tenantId, p.agentId, tx))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_agent");
         return;
       }
@@ -148,11 +148,11 @@ export function registerCallConsumers(rawQueue: Queue): void {
     const p = parsed.data;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.findRow(p.id, p.tenantId);
+      const row = await repo.findRow(p.id, p.tenantId, tx);
       if (!row) return void (await emitAudit(tx, msg, "assign", p.id, "rejected_not_found"));
-      if (p.queueId && !(await queueRepo.exists(p.tenantId, p.queueId)))
+      if (p.queueId && !(await queueRepo.exists(p.tenantId, p.queueId, tx)))
         return void (await emitAudit(tx, msg, "assign", p.id, "rejected_cross_tenant_queue"));
-      if (p.agentId && !(await agentRepo.exists(p.tenantId, p.agentId)))
+      if (p.agentId && !(await agentRepo.exists(p.tenantId, p.agentId, tx)))
         return void (await emitAudit(tx, msg, "assign", p.id, "rejected_cross_tenant_agent"));
       if (versionConflict(row, p.expectedVersion))
         return void (await emitAudit(tx, msg, "assign", p.id, "rejected_version_conflict"));
@@ -173,7 +173,7 @@ export function registerCallConsumers(rawQueue: Queue): void {
     const hit = { menuKey: parsed.data.menuKey, digit: parsed.data.digit, at: new Date().toISOString() };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.findRow(id, msg.tenantId);
+      const row = await repo.findRow(id, msg.tenantId, tx);
       if (!row) return void (await emitAudit(tx, msg, "ivr_hit", id, "rejected_not_found"));
       await repo.appendIvrHit(tx, id, msg.tenantId, hit, msg.actorId);
       await emit(tx, msg, EVENTS.callIvrRecorded, { callId: id, menuKey: hit.menuKey, digit: hit.digit }, "ivr_hit", id);
@@ -187,7 +187,7 @@ export function registerCallConsumers(rawQueue: Queue): void {
     if (!parsed.success || !id) throw new Error("invalid link payload");
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.findRow(id, msg.tenantId);
+      const row = await repo.findRow(id, msg.tenantId, tx);
       if (!row) return void (await emitAudit(tx, msg, "link", id, "rejected_not_found"));
       await repo.applyUpdate(
         tx,
@@ -208,7 +208,7 @@ export function registerCallConsumers(rawQueue: Queue): void {
     if (!parsed.success || !id) throw new Error("invalid recording payload");
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.findRow(id, msg.tenantId);
+      const row = await repo.findRow(id, msg.tenantId, tx);
       if (!row) return void (await emitAudit(tx, msg, "recording", id, "rejected_not_found"));
       await repo.applyUpdate(
         tx,
@@ -244,7 +244,7 @@ async function handleTransition(
   const now = new Date();
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
-    const row = await repo.findRow(p.id, p.tenantId);
+    const row = await repo.findRow(p.id, p.tenantId, tx);
     if (!row) return void (await emitAudit(tx, msg, action, p.id, "rejected_not_found"));
 
     // State machine: reject illegal moves (audited, not thrown).
@@ -267,7 +267,7 @@ async function handleTransition(
       return void (await emitAudit(tx, msg, action, p.id, "rejected_version_conflict"));
 
     // Cross-tenant agent guard on answer/route.
-    if (p.agentId && !(await agentRepo.exists(p.tenantId, p.agentId)))
+    if (p.agentId && !(await agentRepo.exists(p.tenantId, p.agentId, tx)))
       return void (await emitAudit(tx, msg, action, p.id, "rejected_cross_tenant_agent"));
 
     const n = await repo.applyUpdate(tx, p.id, p.tenantId, p.expectedVersion ?? row.version, buildPatch(row, p, now), msg.actorId);

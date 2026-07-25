@@ -97,12 +97,18 @@ function readScoped<T>(tenantId: string, fn: (tx: typeof db) => Promise<T>): Pro
   ) as Promise<T>;
 }
 
-/** Tenant-scoped raw row — used by the consumer to make transition decisions. */
-export async function findRow(id: string, tenantId: string): Promise<CallRow | null> {
-  return readScoped(tenantId, async (tx) => {
-    const rows = await tx.select().from(calls).where(and(eq(calls.id, id), eq(calls.tenantId, tenantId))).limit(1);
+/**
+ * Tenant-scoped raw row — used by the consumer to make transition decisions.
+ * When `tx` is supplied the SELECT runs on the caller's already-open,
+ * tenant-scoped transaction (no nested transaction / extra pooled connection);
+ * when omitted (standalone reads) it opens its own scoped transaction as before.
+ */
+export async function findRow(id: string, tenantId: string, tx?: Writer): Promise<CallRow | null> {
+  const run = async (ex: typeof db): Promise<CallRow | null> => {
+    const rows = await ex.select().from(calls).where(and(eq(calls.id, id), eq(calls.tenantId, tenantId))).limit(1);
     return rows[0] ?? null;
-  });
+  };
+  return tx ? run(tx as typeof db) : readScoped(tenantId, run);
 }
 
 export async function findView(id: string, tenantId: string): Promise<CallView | null> {

@@ -61,15 +61,20 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   return rows.map(toView);
 }
 
-/** Tenant-scoped existence check (cross-tenant ref guard for call assignment). */
-export async function exists(tenantId: string, id: string): Promise<boolean> {
-  const rows = await readScoped(tenantId, (tx) =>
-    tx
+/**
+ * Tenant-scoped existence check (cross-tenant ref guard for call assignment).
+ * When `tx` is supplied the SELECT runs on the caller's already-open,
+ * tenant-scoped transaction (no nested transaction); when omitted it opens its
+ * own scoped transaction as before.
+ */
+export async function exists(tenantId: string, id: string, tx?: Writer): Promise<boolean> {
+  const run = (ex: typeof db) =>
+    ex
       .select({ one: sql`1` })
       .from(agents)
       .where(and(eq(agents.tenantId, tenantId), eq(agents.id, id)))
-      .limit(1),
-  );
+      .limit(1);
+  const rows = tx ? await run(tx as typeof db) : await readScoped(tenantId, run);
   return rows.length > 0;
 }
 
