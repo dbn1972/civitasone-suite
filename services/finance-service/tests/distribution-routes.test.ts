@@ -119,6 +119,40 @@ describe("SVC-033 allocation distribution — flow", () => {
     } finally { await app.close(); }
   });
 
+  // SVC-033 over-distribution TOCTOU regression. Two distributions that each fit
+  // the remaining headroom individually (600 + 600) but jointly exceed the 1000
+  // allocation are fired concurrently via Promise.all. With the FOR UPDATE row
+  // lock on the parent allocation, the two POST transactions serialise: exactly
+  // one commits (201) and the other, seeing the first's committed distribution
+  // in its sum, is rejected with 409 DISTRIBUTION_EXCEEDS_ALLOCATION. The
+  // harness runs on a postgres-js connection pool, so these injects genuinely
+  // race on separate connections. The final persisted sum must never exceed the
+  // allocated amount.
+  it("concurrent distributions cannot jointly overdraw the allocation (TOCTOU race)", async () => {
+    await cleanup();
+    const app = await buildApp();
+    try {
+      const allocationId = await makeAllocation(app, TENANT_A, ISSUER);
+      const mk = (toOfficeId: string) => app.inject({
+        method: "POST", url: "/v1/finance/allocation-distributions", headers: officer(),
+        payload: { allocationId, fromOfficeId: OFFICE_HQ, toOfficeId, amountMinor: 600000000 },
+      });
+      // 600M + 600M = 1200M > 1000M allocated: at most one may succeed.
+      const [r1, r2] = await Promise.all([mk(OFFICE_A), mk(OFFICE_B)]);
+      const codes = [r1.statusCode, r2.statusCode].sort();
+      expect(codes).toEqual([201, 409]);
+      const rejected = r1.statusCode === 409 ? r1 : r2;
+      expect(rejected.json().code).toBe("DISTRIBUTION_EXCEEDS_ALLOCATION");
+
+      // Persisted, committed sum must be within the allocation (exactly one 600M row).
+      const rows = await scoped(TENANT_A, (tx) => tx.select().from(financeAllocationDistributions)
+        .where(eq(financeAllocationDistributions.allocationId, allocationId)));
+      expect(rows.length).toBe(1);
+      const persisted = rows.reduce((acc, r) => acc + BigInt(r.amountMinor as unknown as string), 0n);
+      expect(persisted <= 1000000000n).toBe(true);
+    } finally { await app.close(); }
+  });
+
   it("RLS: tenant B cannot see tenant A distributions", async () => {
     await cleanup();
     const app = await buildApp();

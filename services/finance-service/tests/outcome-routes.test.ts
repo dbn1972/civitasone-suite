@@ -95,6 +95,58 @@ describe("SVC-040 outcome budgeting — full flow", () => {
     }
   });
 
+  // SVC-040 integrity: once an outcome is evaluated its achievement reading is a
+  // certified record and must not be silently mutated. A post-evaluation
+  // achievement PATCH must be rejected with 409 OUTCOME_ALREADY_EVALUATED.
+  it("blocks an achievement edit after the outcome has been evaluated (409)", async () => {
+    await cleanup();
+    const app = await buildApp();
+    try {
+      const created = await app.inject({
+        method: "POST", url: "/v1/finance/budget-outcomes",
+        headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], MAKER)}` },
+        payload: createBody,
+      });
+      expect(created.statusCode).toBe(201);
+      const id = created.json().data.id as string;
+
+      // record an initial achievement while still active
+      const ach = await app.inject({
+        method: "PATCH", url: `/v1/finance/budget-outcomes/${id}/achievement`,
+        headers: { authorization: `Bearer ${token(TENANT_A, ["finance_officer"], MAKER)}` },
+        payload: { achievedValue: 1000 },
+      });
+      expect(ach.statusCode).toBe(200);
+
+      // checker evaluates → status becomes 'evaluated'
+      const evalRes = await app.inject({
+        method: "PATCH", url: `/v1/finance/budget-outcomes/${id}/evaluate`,
+        headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], CHECKER)}` },
+        payload: { note: "verified, target met" },
+      });
+      expect(evalRes.statusCode).toBe(200);
+      expect(evalRes.json().data.status).toBe("evaluated");
+
+      // any further achievement edit is now blocked
+      const blocked = await app.inject({
+        method: "PATCH", url: `/v1/finance/budget-outcomes/${id}/achievement`,
+        headers: { authorization: `Bearer ${token(TENANT_A, ["finance_officer"], MAKER)}` },
+        payload: { achievedValue: 250 },
+      });
+      expect(blocked.statusCode).toBe(409);
+      expect(blocked.json().code).toBe("OUTCOME_ALREADY_EVALUATED");
+
+      // the certified value is unchanged
+      const fetched = await app.inject({
+        method: "GET", url: `/v1/finance/budget-outcomes/${id}`,
+        headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], CHECKER)}` },
+      });
+      expect(fetched.json().data.achievedValue).toBe("1000");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("RLS: a second tenant cannot see the first tenant's outcome", async () => {
     await cleanup();
     const app = await buildApp();

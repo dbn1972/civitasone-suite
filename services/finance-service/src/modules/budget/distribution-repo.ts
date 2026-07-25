@@ -7,6 +7,8 @@ import {
 import { financeBudgetAllocation, type BudgetAllocationRow } from "./allocation-schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+/** Executor surface for raw guarded SQL (FOR UPDATE row locks). */
+type Executor = { execute: (query: ReturnType<typeof sql>) => Promise<unknown> };
 
 export async function insertDistribution(tx: Writer, row: AllocationDistributionInsert): Promise<void> {
   await tx.insert(financeAllocationDistributions).values(row);
@@ -47,6 +49,39 @@ export async function findAllocationByIdTx(tx: Writer, id: string, tenantId: str
   const rows = await (tx as typeof db).select().from(financeBudgetAllocation)
     .where(and(eq(financeBudgetAllocation.id, id), eq(financeBudgetAllocation.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Parent allocation lookup that takes a FOR UPDATE row lock on the allocation
+ * (tenant-scoped). Closes the over-distribution TOCTOU race: concurrent
+ * POST /allocation-distributions requests must each acquire this same row lock
+ * before reading the distributed sum, so they serialise -- the second txn blocks
+ * until the first commits, then sees the first's inserted distribution in its
+ * sumDistributedTx read and the in-app assertWithinAllocation guard rejects the
+ * overdraw. Caller MUST run inside a transaction. Mirrors the treasury
+ * findDepositByIdForUpdateTx pattern (raw SELECT ... FOR UPDATE mapped back onto
+ * the drizzle row shape).
+ */
+export async function lockAllocationByIdTx(tx: Writer, id: string, tenantId: string): Promise<BudgetAllocationRow | null> {
+  const res = await (tx as unknown as Executor).execute(sql`
+    SELECT * FROM budget.finance_budget_allocation
+     WHERE id = ${id}::uuid AND tenant_id = ${tenantId}::uuid FOR UPDATE
+  `);
+  const raw = (res as { rows?: unknown[] }).rows ?? (res as unknown[]);
+  const arr = raw as Array<Record<string, unknown>>;
+  if (!arr[0]) return null;
+  const r = arr[0];
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, headId: r.head_id as string,
+    fy: r.fy as string,
+    allocatedMinor: BigInt(r.allocated_minor as string),
+    committedMinor: BigInt(r.committed_minor as string),
+    actualMinor: BigInt(r.actual_minor as string),
+    enforce: r.enforce as boolean, currency: r.currency as string,
+    createdAt: r.created_at as Date, updatedAt: r.updated_at as Date,
+    createdBy: r.created_by as string, updatedBy: r.updated_by as string,
+    version: r.version as number,
+  } as BudgetAllocationRow;
 }
 
 /**

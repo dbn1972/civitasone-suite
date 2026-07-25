@@ -39,7 +39,12 @@ export async function allocationDistributionRoutes(app: FastifyInstance): Promis
     } catch (err) { toDomain(err); }
     const id = randomUUID();
     await db.transaction(async (tx) => {
-      const alloc = await repo.findAllocationByIdTx(tx, body.allocationId, ctx.tenantId);
+      // Lock the parent allocation row FIRST (SELECT ... FOR UPDATE). This
+      // serialises concurrent distributions against the same allocation so the
+      // distributed-sum read + assertWithinAllocation guard below are race-safe:
+      // the second txn blocks here until the first commits, then observes its
+      // inserted distribution and is correctly rejected (over-distribution race).
+      const alloc = await repo.lockAllocationByIdTx(tx, body.allocationId, ctx.tenantId);
       if (!alloc) throw new HttpError(404, "NOT_FOUND", "parent allocation not found");
       const distributed = await repo.sumDistributedTx(tx, body.allocationId, ctx.tenantId);
       try {

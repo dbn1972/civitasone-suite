@@ -87,6 +87,13 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
     await db.transaction(async (tx) => {
       const row = await repo.findOutcomeByIdTx(tx, id, ctx.tenantId);
       if (!row) throw new HttpError(404, "NOT_FOUND", "outcome not found");
+      // An outcome that has been evaluated (or closed) is a certified record --
+      // its achievement reading is frozen. Silently mutating it here would let a
+      // maker overwrite the value the checker rated against, breaking the
+      // maker-checker integrity of the evaluation. Block the edit post-evaluation.
+      if (row.status === "evaluated" || row.status === "closed") {
+        throw new HttpError(409, "OUTCOME_ALREADY_EVALUATED", `achievement is locked once the outcome is ${row.status}`);
+      }
       await repo.updateOutcome(tx, id, { achievedValue: achieved, updatedBy: ctx.actorId });
       await audit(tx, ctx, "record_achievement", id);
     });
