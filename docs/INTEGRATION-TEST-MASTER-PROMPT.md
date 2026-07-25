@@ -488,3 +488,170 @@ For EACH test scenario, verify:
 - **< 200ms p95 response time** for all read endpoints
 - **Zero unhandled 500 errors** (all errors mapped to proper HTTP codes)
 
+
+---
+
+## WORLD-CLASS ADDITIONS (10/10 Level)
+
+### A. Edge Cases & Boundary Testing (per module, 20 additional scenarios each)
+
+**For EVERY module, additionally test:**
+1. Maximum payload size (request body at 1MB limit → 413)
+2. Empty string fields where min(1) expected → 400
+3. UUID format violations → 400
+4. SQL injection attempt in string fields → 400 (zod blocks)
+5. XSS in text fields → sanitized on output
+6. Integer overflow: amount = 2^53 + 1 → rejected (bigint safety)
+7. Concurrent writes to same resource → optimistic lock conflict → 409
+8. Duplicate idempotency key → no double-write (consumer skips)
+9. Extremely long strings (10,000 chars) → 400 or truncated
+10. Null bytes in strings → 400
+11. Future date where past required → 400
+12. Negative amounts where positive required → 400
+13. Unicode edge cases (emoji, RTL markers, zero-width chars) → accepted
+14. Request without Content-Type header → 415 or 400
+15. Request with invalid JSON body → 400
+16. Pagination: page=0, pageSize=0, offset=-1 → 400
+17. Pagination: pageSize=999 (exceeds max 200) → capped at 200
+18. Sort by non-existent field → 400 or ignored
+19. Filter with injection in query params → 400
+20. Request body with extra unknown fields → stripped (strict schema)
+
+### B. Data Integrity & Financial Correctness
+
+**Finance-specific (MANDATORY for government ERP):**
+1. Double-entry: every debit has matching credit (sum = 0 per voucher)
+2. Money stored as bigint paise — verify no floating-point anywhere
+3. Budget utilisation: spent NEVER exceeds sanctioned
+4. Period-close: no entries after close date → 422
+5. Bank reconciliation: statement balance = book balance after reconcile
+6. GST: output tax - input tax = net liability (verify arithmetic)
+7. TDS: verify percentage applied matches IT Act slabs
+8. Concurrent payroll runs for same month → second one blocked (409)
+9. Partial payment: verify outstanding balance updates correctly
+10. Write-off: verify GL impact + approval chain enforced
+
+**HR/Payroll-specific:**
+11. Leave balance: never negative after deduction
+12. Salary calculation: gross - deductions = net (to the paise)
+13. Attendance: cannot mark future date
+14. Overtime: verify rate multiplier (1.5x/2x) applied correctly
+15. FnF: verify all pending dues included (leave encashment, gratuity)
+
+### C. Performance & Load Testing (k6 scripts)
+
+**Per-service performance gates:**
+```
+Target: 1,000 TPS sustained for 5 minutes
+p50 < 50ms | p95 < 200ms | p99 < 500ms
+Error rate < 0.1%
+Zero 500 errors under load
+```
+
+**k6 Scenarios:**
+1. Read-heavy: 80% GET / 20% POST on finance voucher list
+2. Write-heavy: 100% POST on notification send (1000/min)
+3. Mixed CRUD: employee lifecycle (create → update → leave → attendance)
+4. Spike: 0 → 5000 RPS in 10 seconds → graceful degradation
+5. Soak: 500 RPS for 30 minutes → no memory leak, no pool exhaustion
+
+### D. Resilience & Chaos Testing
+
+**Failure injection scenarios:**
+1. Redis DOWN → reads fall through to DB (WARN logged, not 500)
+2. Queue DOWN → writes return 500 with clear error (not hang)
+3. DB pool exhausted (20/20 connections) → 503 with backpressure
+4. Upstream service timeout (10s) → circuit breaker opens → 503
+5. Outbox relay stopped → messages accumulate but don't lose
+6. Network partition between services → graceful degradation
+7. Clock skew (5 min) → JWT still validates within tolerance
+8. Disk full → log rotation kicks in, service stays up
+9. OOM kill → graceful shutdown drains in-flight, restarts clean
+10. Certificate expiry → fail-closed, alert fired
+
+### E. Compliance Proof Testing
+
+**DPDP Act 2023:**
+1. PII encryption: SELECT raw from DB → verify ciphertext (not plaintext)
+2. Consent: access PII without consent flag → 403
+3. Right to erasure: soft-delete → verify purge job removes after retention
+4. Data portability: export user's data in machine-readable format
+5. Breach notification: detect leak → log within 6 hours (CERT-In)
+
+**GFR 2017:**
+6. Every payment has sanction reference → reject orphan payment
+7. Three-way match: PO + GRN + Invoice must match before bill pass
+8. Maker-checker: same person cannot create AND approve
+9. Budget check: overspend → 422 with clear budget exhaustion message
+10. Audit trail: immutable, hash-chained, exportable for CAG audit
+
+**GIGW 3.0:**
+11. Bilingual: every page available in Hindi + English
+12. Accessibility: all forms keyboard-navigable
+13. Responsive: all pages render at 1024px+ without horizontal scroll
+14. Performance: first contentful paint < 2s on 3G
+
+### F. Cross-Service Choreography Verification
+
+**End-to-end business flows (span multiple services):**
+
+1. **Leave Flow:** hrms(apply) → workflow(approve) → hrms(deduct balance) → notification(inform employee) → audit(log)
+2. **Payment Flow:** finance(sanction) → finance(bill) → procurement(3-way-match) → finance(payment) → pfms(sign) → notification(receipt)
+3. **Citizen Request:** citizen(submit) → workflow(assign) → helpdesk(track) → notification(status update) → citizen(resolve)
+4. **Employee Onboarding:** hrms(create) → identity(create-user) → policy(assign-role) → notification(welcome) → payroll(add-to-run)
+5. **Contract Renewal:** contract(expiry-detect) → notification(alert) → hrms(renewal-decision) → contract(renew|terminate) → audit(log)
+6. **Audit Para:** audit(observation) → workflow(approve-para) → notification(department-head) → legal(if-escalated) → audit(close)
+7. **Project Fund Release:** grant(approve) → finance(sanction) → finance(payment) → project(utilisation) → grant(UC-submit)
+8. **Visitor Security:** visitor(scan) → blacklist(match) → notification(security-alert) → audit(incident) → visitor(deny-entry)
+9. **Payroll Disbursement:** payroll(run) → finance(GL-entry) → payroll(bank-file) → billing(NACH) → notification(payslip)
+10. **Procurement Cycle:** procurement(indent) → workflow(approve) → procurement(tender) → procurement(PO) → inventory(GRN) → finance(bill) → finance(payment)
+
+### G. Regression & Dependency Chain Testing
+
+**After EACH mutation, verify downstream dependencies still work:**
+1. Update employee designation → payroll still calculates correct HRA
+2. Change tenant plan → quotas adjusted → new limits enforced
+3. Modify workflow definition → existing running instances unaffected
+4. Update template → existing scheduled notifications use OLD version
+5. Deactivate user → all sessions revoked → active tasks reassigned
+6. Archive department → sub-units reassigned → reports updated
+7. Merge two vendors → PO history consolidated → no orphan references
+8. Split a budget head → child allocations sum to parent
+9. Rollback a migration → service still boots → no data loss
+10. Disable a plugin → hooks stop firing → no 500 errors in host service
+
+---
+
+## Scoring Rubric (World-Class 10/10)
+
+| Dimension | Weight | Criteria for 10/10 |
+|-----------|--------|-------------------|
+| Functional coverage | 25% | All 270 base scenarios pass |
+| Edge cases & validation | 15% | All 20 boundary tests pass per module |
+| Data integrity | 15% | Zero arithmetic errors, double-entry balanced |
+| Performance | 15% | 1000 TPS, p95 < 200ms, 0 errors under load |
+| Resilience | 10% | Graceful degradation on all 10 chaos scenarios |
+| Compliance | 10% | DPDP + GFR + GIGW proofs documented |
+| Choreography | 5% | All 10 end-to-end flows verified |
+| Regression | 5% | All 10 dependency chains verified |
+
+**Total scenarios: 270 (base) + 540 (edge) + 15 (finance) + 5 (k6) + 10 (chaos) + 14 (compliance) + 10 (choreography) + 10 (regression) = 874 test scenarios**
+
+---
+
+## Execution Command for Claude Agent
+
+```
+You are testing CivitasOne ERP. Follow this master prompt exactly.
+
+1. Start Docker infrastructure (PostgreSQL, Redis, LocalStack, Keycloak)
+2. Run all 651 migrations across 41 services
+3. Seed 3 tenants with 7 actors each using signToken()
+4. Execute ALL 874 scenarios in order (modules 1-27, then cross-cutting)
+5. For each scenario: log HTTP method, URL, status code, response time, pass/fail
+6. Report: total pass/fail, p95 latency, any tenant isolation violations
+7. Flag any 500 errors as CRITICAL (these indicate unhandled exceptions)
+8. Verify audit trail completeness (every write has corresponding audit event)
+9. Generate final report: MODULE | PASS | FAIL | SKIP | NOTES
+```
+
