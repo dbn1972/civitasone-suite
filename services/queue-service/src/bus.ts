@@ -107,6 +107,8 @@ function envelope<T>(input: PublishInput<T>): CommandEnvelope<T> {
 export class MemoryQueue implements Queue {
   private handlers = new Map<string, Handler[]>();
   private seen = new Set<string>();
+  /** In-flight delivery promises, tracked so tests can await async fan-out. */
+  private inflight = new Set<Promise<unknown>>();
   readonly dlq: Array<{ topic: string; msg: CommandEnvelope; error: string }> = [];
   private maxAttempts: number;
 
@@ -117,10 +119,37 @@ export class MemoryQueue implements Queue {
   async publish<T>(topic: string, input: PublishInput<T>, _options?: PublishOptions): Promise<string> {
     const msg = envelope(input);
     const handlers = this.handlers.get(topic) ?? [];
-    setTimeout(() => {
-      for (const h of handlers) void this.deliver(topic, h, msg);
-    }, 0);
+    // Delivery stays fire-and-forget (publish returns the id immediately), but we
+    // retain a promise that settles once every handler for this message has fully
+    // run (including retry backoffs) so drain() can await it. deliver() never
+    // rejects — it captures errors to the DLQ internally.
+    const settled = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void Promise.allSettled(handlers.map((h) => this.deliver(topic, h, msg))).then(() => resolve());
+      }, 0);
+    });
+    this.track(settled);
     return msg.messageId;
+  }
+
+  private track(p: Promise<unknown>): void {
+    this.inflight.add(p);
+    void p.then(
+      () => this.inflight.delete(p),
+      () => this.inflight.delete(p),
+    );
+  }
+
+  /**
+   * Test aid: resolve once every in-flight delivery has fully settled, including
+   * retry backoffs and any deliveries a handler cascades by publishing again.
+   * Production consumers are push-based and never need this; it exists so tests
+   * can await async fan-out deterministically instead of racing a fixed sleep.
+   */
+  async drain(): Promise<void> {
+    while (this.inflight.size > 0) {
+      await Promise.allSettled([...this.inflight]);
+    }
   }
 
   subscribe<T>(topic: string, handler: Handler<T>): void {
