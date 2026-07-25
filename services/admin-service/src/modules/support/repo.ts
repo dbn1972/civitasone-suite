@@ -1,6 +1,6 @@
 import { and, eq, isNull, lte } from "drizzle-orm";
 import { db, scopedRead, scopedPlatformRead } from "../../shared/db.js";
-import { adminBreakGlassLog, type AdminBreakGlassLogInsert } from "./schema.js";
+import { adminBreakGlassLog, adminDataCorrections, type AdminBreakGlassLogInsert, type AdminDataCorrectionRow, type AdminDataCorrectionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -87,4 +87,35 @@ export async function listBreakGlass(limit: number, tenantId?: string) {
   }
   return scopedPlatformRead((tx) => tx.select().from(adminBreakGlassLog)
     .limit(limit).orderBy(adminBreakGlassLog.openedAt));
+}
+
+
+// ── data corrections (maker-checker governance) ──────────────────────────────
+
+export async function insertCorrection(tx: Writer, row: AdminDataCorrectionInsert): Promise<AdminDataCorrectionRow> {
+  const rows = await (tx.insert(adminDataCorrections).values(row) as unknown as { returning: () => Promise<AdminDataCorrectionRow[]> }).returning();
+  const created = rows[0];
+  if (!created) throw new Error("insertCorrection: no row returned");
+  return created;
+}
+
+export async function listCorrections(tenantId: string, limit: number, status?: string): Promise<AdminDataCorrectionRow[]> {
+  return scopedRead((tx) => tx.select().from(adminDataCorrections)
+    .where(status
+      ? and(eq(adminDataCorrections.tenantId, tenantId), eq(adminDataCorrections.status, status))
+      : eq(adminDataCorrections.tenantId, tenantId))
+    .orderBy(adminDataCorrections.createdAt)
+    .limit(limit));
+}
+
+export async function findCorrectionByIdTx(tx: Writer, id: string, tenantId: string): Promise<AdminDataCorrectionRow | undefined> {
+  const rows = await tx.select().from(adminDataCorrections)
+    .where(and(eq(adminDataCorrections.id, id), eq(adminDataCorrections.tenantId, tenantId))).limit(1);
+  return rows[0];
+}
+
+export async function updateCorrection(tx: Writer, id: string, tenantId: string, patch: Partial<AdminDataCorrectionInsert>): Promise<void> {
+  await tx.update(adminDataCorrections)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(adminDataCorrections.id, id), eq(adminDataCorrections.tenantId, tenantId)));
 }

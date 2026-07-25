@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export const supportSchema = pgSchema("support");
 
@@ -33,4 +33,28 @@ export const adminSupportTickets = supportSchema.table("admin_support_tickets", 
 });
 
 export type AdminBreakGlassLogInsert = typeof adminBreakGlassLog.$inferInsert;
-export const schema = { adminBreakGlassLog, adminSupportTickets };
+export const adminDataCorrections = supportSchema.table("admin_data_corrections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  targetTable: varchar("target_table", { length: 160 }).notNull(),
+  targetId: varchar("target_id", { length: 160 }).notNull(),
+  justification: text("justification").notNull(),
+  proposedChange: jsonb("proposed_change").notNull(),
+  ticketId: uuid("ticket_id"),
+  // pending | approved | rejected
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  proposedBy: uuid("proposed_by").notNull(),
+  approvedBy: uuid("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  rejectedReason: text("rejected_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export type AdminDataCorrectionRow = typeof adminDataCorrections.$inferSelect;
+export type AdminDataCorrectionInsert = typeof adminDataCorrections.$inferInsert;
+
+export const schema = { adminBreakGlassLog, adminSupportTickets, adminDataCorrections };

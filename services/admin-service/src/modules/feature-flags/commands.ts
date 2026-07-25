@@ -16,6 +16,8 @@ export interface FlagCreatePayload {
   enabled: boolean;
   rolloutPercent: number;
   targetSegments: string[];
+  owner?: string | undefined;
+  expiresAt?: string | null | undefined;
 }
 
 export interface FlagUpdatePayload {
@@ -24,6 +26,8 @@ export interface FlagUpdatePayload {
   enabled?: boolean;
   rolloutPercent?: number;
   targetSegments?: string[];
+  owner?: string | undefined;
+  expiresAt?: string | null | undefined;
 }
 
 export async function flagCreate(ctx: RequestContext, payload: FlagCreatePayload): Promise<Accepted> {
