@@ -1,4 +1,5 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -60,7 +61,10 @@ function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
 
-export function registerTicketConsumers(queue: Queue): void {
+export function registerTicketConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   // ---- create -------------------------------------------------------------
   queue.subscribe<CreatePayload>(COMMANDS.createTicket, async (msg) => {
     const p = msg.payload;
@@ -267,7 +271,10 @@ async function emit(
 
 // P1-③: Auto-create helpdesk ticket from citizen service request
 
-export function registerCitizenRequestConsumer(q: Queue): void {
+export function registerCitizenRequestConsumer(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const q = tenantScoped(rawQueue);
   q.subscribe(CONSUMES.citizenRequestCreated, async (msg) => {
     const p = msg.payload as { requestId: string; subject?: string; citizenId?: string; tenantId: string };
     await db.transaction(async (tx) => {
