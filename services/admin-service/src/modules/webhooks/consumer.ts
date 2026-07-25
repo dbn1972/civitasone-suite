@@ -210,7 +210,8 @@ export function registerWebhookConsumers(queue: Queue): void {
         const p = msg.payload;
         const rot = await (tx as any).select().from(secretRotations)
           .where(and(eq(secretRotations.id, p.rotationId), eq(secretRotations.tenantId, p.tenantId)))
-          .limit(1);
+          .limit(1)
+          .for("update");
         const request = rot[0];
         if (!request) throw new NonRetryableError("NOT_FOUND", "rotation not found");
 
@@ -223,9 +224,25 @@ export function registerWebhookConsumers(queue: Queue): void {
 
         const now = new Date();
         const status = decidedStatus(p.decision);
-        await (tx as any).update(secretRotations)
+        // CAP-054 TOCTOU guard: only transition a still-pending row. Under READ
+        // COMMITTED two DISTINCT decide messages (e.g. an approve + a reject with
+        // different messageIds) could both read status="pending" and both apply a
+        // secret swap / approve-after-reject. The FOR UPDATE row lock on the SELECT
+        // above serializes concurrent deciders so the loser observes the decided
+        // status and assertCanDecide throws NOT_PENDING. This status-guarded UPDATE
+        // is a second line of defense: if it matches 0 rows the row was already
+        // decided, so we bail out BEFORE running the approve side-effects.
+        const decided = await (tx as any).update(secretRotations)
           .set({ status, decidedBy: p.deciderId, decidedAt: now })
-          .where(and(eq(secretRotations.id, p.rotationId), eq(secretRotations.tenantId, p.tenantId)));
+          .where(and(
+            eq(secretRotations.id, p.rotationId),
+            eq(secretRotations.tenantId, p.tenantId),
+            eq(secretRotations.status, "pending"),
+          ))
+          .returning();
+        if (decided.length === 0) {
+          throw new NonRetryableError("NOT_PENDING", "rotation is already decided");
+        }
 
         if (p.decision === "approve") {
           const wh = await (tx as any).select().from(webhooks)
