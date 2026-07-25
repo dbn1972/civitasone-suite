@@ -51,6 +51,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(pincodeRoutes);
   await app.register(geocodingRoutes);
   await app.register(routingRoutes);
+  const { landRecordRoutes } = await import("./modules/land-records/routes.js");
+  await app.register(landRecordRoutes);
+  const { spatialRoutes } = await import("./modules/spatial/routes.js");
+  await app.register(spatialRoutes);
+  const { infrastructureRoutes } = await import("./modules/infrastructure/routes.js");
+  await app.register(infrastructureRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

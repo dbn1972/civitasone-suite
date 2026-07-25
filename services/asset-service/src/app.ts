@@ -45,6 +45,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(enterpriseRoutes);
   await app.register(condemnationRoutes);
 
+  const { fleetRoutes } = await import("./modules/fleet/routes.js");
+  await app.register(fleetRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

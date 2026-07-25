@@ -36,6 +36,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(subscriptionRoutes);
   await app.register(quotaRoutes);
   await app.register(settingRoutes);
+  const { orgHierarchyRoutes } = await import("./modules/org-hierarchy/routes.js");
+  await app.register(orgHierarchyRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
