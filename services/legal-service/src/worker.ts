@@ -16,6 +16,7 @@ import { registerReminderConsumers } from "./modules/reminders/consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerLimitationConsumers } from "./modules/limitations/consumer.js";
 import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
+import { registerRtiConsumers } from "./modules/rti/consumer.js";
 import { startCauseListSync } from "./modules/ecourts/sync-consumer.js";
 
 const log = pino({ name: "legal-worker" });
@@ -34,6 +35,7 @@ registerDocumentConsumers(queue);
 registerLimitationConsumers(queue);
 // Cross-service choreography: board decision → legal intake (for-review).
 registerBoardIntakeConsumers(queue);
+registerRtiConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

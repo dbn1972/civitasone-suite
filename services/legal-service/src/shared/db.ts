@@ -18,6 +18,7 @@ import { syncSchema } from "../modules/ecourts/sync-schema.js";
 import { schema as documentsModule } from "../modules/documents/schema.js";
 import { schema as limitationsModule } from "../modules/limitations/schema.js";
 import { schema as boardIntakeModule } from "../modules/board-intake/schema.js";
+import { schema as rtiModule } from "../modules/rti/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -34,6 +35,7 @@ const SCHEMA = {
   ...documentsModule,
   ...limitationsModule,
   ...boardIntakeModule,
+  ...rtiModule,
   ...outboxSchema,
 };
 

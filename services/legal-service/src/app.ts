@@ -23,6 +23,7 @@ import { documentRoutes } from "./modules/documents/routes.js";
 import { limitationRoutes } from "./modules/limitations/routes.js";
 import { intelligenceRoutes } from "./modules/intelligence/routes.js";
 import { boardIntakeRoutes } from "./modules/board-intake/routes.js";
+import { rtiRoutes } from "./modules/rti/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -56,6 +57,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(limitationRoutes);
   await app.register(intelligenceRoutes);
   await app.register(boardIntakeRoutes);
+  await app.register(rtiRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
