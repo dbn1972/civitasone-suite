@@ -3,11 +3,19 @@
  * the whitelisted query executes (tenant-scoped, parameterised) and the result
  * is persisted to query_runs. A bad spec produces a recorded 'failed' run rather
  * than crashing or running raw SQL.
+ *
+ * civitas_analytics runs under the NOBYPASSRLS analytics_svc role, so every
+ * fact_events / query_runs access is gated by the tenant_isolation RLS policy
+ * (tenant_id = current_setting('app.tenant_id')). In production worker.ts wraps
+ * every subscription handler in runWithTenant(msg.tenantId); here we wrap the
+ * in-memory queue the same way so the consumer's scopedRead / db.transaction set
+ * the GUC exactly as they do at runtime.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { factEvents } from "../src/modules/facts/schema.js";
 import { queryRuns } from "../src/modules/queries/schema.js";
@@ -17,7 +25,27 @@ import { registerQueriesConsumers } from "../src/modules/queries/consumer.js";
 
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
-const queue = new MemoryQueue();
+
+// Wrap the in-memory queue so every delivered message runs inside its tenant's
+// AsyncLocalStorage context — the same thing worker.ts does in production, which
+// is what makes the consumer's scopedRead / db.transaction set app.tenant_id.
+const base = new MemoryQueue();
+const queue = {
+  subscribe(topic: string, handler: (msg: { tenantId: string }) => Promise<void> | void) {
+    return base.subscribe(topic, (msg: { tenantId: string }) =>
+      runWithTenant(msg.tenantId, () => handler(msg)),
+    );
+  },
+  publish(topic: string, msg: unknown) {
+    return base.publish(topic, msg);
+  },
+  start() {
+    return base.start();
+  },
+  stop() {
+    return base.stop();
+  },
+} as unknown as MemoryQueue;
 
 function publishRun(id: string, spec: Record<string, unknown>) {
   return queue.publish("analytics.query.run", {
@@ -34,26 +62,44 @@ function publishRun(id: string, spec: Record<string, unknown>) {
 async function waitForRun(id: string, timeoutMs = 4000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const run = await queriesRepo.findById(id, TENANT);
+    const run = await runWithTenant(TENANT, () => queriesRepo.findById(id, TENANT));
     if (run && run.status !== "running") return run;
     await new Promise((r) => setTimeout(r, 40));
   }
-  return queriesRepo.findById(id, TENANT);
+  return runWithTenant(TENANT, () => queriesRepo.findById(id, TENANT));
 }
 
 beforeAll(async () => {
   registerQueriesConsumers(queue);
   await queue.start();
-  await factsRepo.ingest(db, {
-    tenantId: TENANT, source: "finance", eventType: "payment.released", category: "general",
-    status: "recorded", amount: "250.00", occurredAt: new Date(), dedupeKey: randomUUID(),
-  });
+  // amount is a minor-unit BIGINT (never a decimal string). Seed inside the
+  // tenant's GUC context + a write tx, mirroring the facts consumer.
+  await runWithTenant(TENANT, () =>
+    db.transaction((tx) =>
+      factsRepo.ingest(tx, {
+        tenantId: TENANT,
+        source: "finance",
+        eventType: "payment.released",
+        category: "general",
+        status: "recorded",
+        amount: 250n,
+        occurredAt: new Date(),
+        dedupeKey: randomUUID(),
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      }),
+    ),
+  );
 });
 
 afterAll(async () => {
   await queue.stop();
-  await db.delete(queryRuns).where(eq(queryRuns.tenantId, TENANT));
-  await db.delete(factEvents).where(eq(factEvents.tenantId, TENANT));
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(queryRuns).where(eq(queryRuns.tenantId, TENANT));
+      await tx.delete(factEvents).where(eq(factEvents.tenantId, TENANT));
+    }),
+  );
   await sqlClient.end();
 });
 
