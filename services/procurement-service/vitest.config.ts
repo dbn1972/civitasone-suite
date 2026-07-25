@@ -25,6 +25,11 @@ export default defineConfig({
         "src/modules/payments/consumer.ts",
         "src/modules/security/consumer.ts",
         "src/modules/vendor/consumer.ts",
+        "src/modules/planning/consumer.ts",
+        "src/modules/po/amendment-consumer.ts",
+        "src/modules/vendor/scorecard-consumer.ts",
+        "src/modules/tender/docs-consumer.ts",
+        "src/modules/gem/reconcile-consumer.ts",
       ],
       thresholds: {
         lines: 80,

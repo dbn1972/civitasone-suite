@@ -23,6 +23,9 @@ const PREFIX: Record<string, string> = {
   bid: "BID",
   emd: "EMD",
   pbg: "PBG",
+  plan: "APP",
+  amendment: "AMD",
+  corrigendum: "COR",
 };
 
 /**
