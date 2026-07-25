@@ -63,6 +63,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(planningRoutes);
   const { poAmendmentRoutes } = await import("./modules/po/amendment-routes.js");
   await app.register(poAmendmentRoutes);
+  const { vendorScorecardRoutes } = await import("./modules/vendor/scorecard-routes.js");
+  await app.register(vendorScorecardRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

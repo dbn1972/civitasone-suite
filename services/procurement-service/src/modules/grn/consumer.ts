@@ -120,7 +120,7 @@ export function registerGrnConsumers(queue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.grnRejected, eventType: EVENTS.grnRejected,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { grnId: p.id, poRef: p.poRef, reason: "qty_mismatch_or_inspection_failed" },
+          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, reason: "qty_mismatch_or_inspection_failed" },
         });
       }
       await audit(tx, msg, "create", "grn", p.id);
