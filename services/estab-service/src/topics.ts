@@ -104,6 +104,9 @@ export const EVENTS = {
   courtCaseDateSet:     "estab.court_case.date_set",
   roomConflict:         "estab.room.conflict",
   vehicleConflict:      "estab.vehicle.conflict",
+  spaceSeatAllotted:    "estab.space.seat.allotted",
+  spaceSeatReleased:    "estab.space.seat.released",
+  spaceMaintenanceRaised: "estab.space.maintenance.raised",
 } as const;
 
 /** Topics consumed from other services */
