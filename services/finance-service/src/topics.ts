@@ -42,6 +42,8 @@ export const EVENTS = {
   transactionPosted: "finance.transaction.posted",
   /** SVC-040: a budget outcome has been evaluated (maker-checker). */
   outcomeEvaluated:  "finance.budget.outcome_evaluated",
+  /** SVC-031: a departmental budget proposal has been approved (maker-checker). */
+  proposalApproved:  "finance.budget.proposal_approved",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching) */

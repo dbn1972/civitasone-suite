@@ -58,6 +58,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(budgetAllocationRoutes);
   const { budgetOutcomeRoutes } = await import("./modules/budget/outcome-routes.js");
   await app.register(budgetOutcomeRoutes);
+  const { budgetFormulationRoutes } = await import("./modules/budget/formulation-routes.js");
+  await app.register(budgetFormulationRoutes);
   const { pfmsRoutes } = await import("./modules/pfms/routes.js");
   await app.register(pfmsRoutes);
   const { voucherPrintRoutes } = await import("./modules/voucher-print/routes.js");
