@@ -1,13 +1,15 @@
 /**
  * Webhooks module HTTP routes (Fastify plugin).
  * CRUD for outbound webhooks + delivery log + test endpoint.
+ * CAP-054: delivery replay + maker-checker HMAC secret rotation.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as commands from "./commands.js";
-import { webhooks, webhookDeliveries } from "./schema.js";
+import { webhooks, webhookDeliveries, secretRotations } from "./schema.js";
+import { canReplay, type DeliveryStatus } from "./delivery.js";
 import { scopedRead } from "../../shared/db.js";
 import { eq, and, desc } from "drizzle-orm";
 
@@ -115,6 +117,11 @@ const updateBody = z.object({
 });
 
 const idParam = z.object({ id: z.string().uuid() });
+const replayParam = z.object({ id: z.string().uuid(), deliveryId: z.string().uuid() });
+const rotationIdParam = z.object({ rotationId: z.string().uuid() });
+const rotateBody = z.object({ reason: z.string().max(500).optional() });
+const decisionBody = z.object({ decision: z.enum(["approve", "reject"]) });
+const rotationListQuery = z.object({ status: z.enum(["pending", "approved", "rejected"]).optional() });
 
 // See custom-domains/routes.ts safeParse for why Input is widened to `any`
 // instead of using z.ZodSchema<T> (Input=T): schemas with `.default(...)`
@@ -141,7 +148,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       async () => scopedRead((tx) => tx.select().from(webhooks).where(eq(webhooks.tenantId, ctx.tenantId))),
     )) ?? [];
     // Strip secret from list response
-    const sanitized = rows.map(({ secret, ...rest }) => ({ ...rest, secretMasked: `${secret.slice(0, 10)}...` }));
+    const sanitized = rows.map(({ secret, previousSecret, ...rest }) => ({ ...rest, secretMasked: `${secret.slice(0, 10)}...` }));
     return reply.send({ data: sanitized });
   });
 
@@ -173,21 +180,11 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     if (Object.keys(body).length === 0) {
       throw new HttpError(400, "EMPTY_BODY", "at least one field must be provided");
     }
-    // SSRF FIX: the create route re-checks the URL with DNS resolution
-    // (isBlockedAfterResolve, which defeats rebinding — a hostname that
-    // resolves to a public IP at registration time but a private/metadata
-    // IP later) via `isBlockedAfterResolve`. This update route previously
-    // only ran the synchronous, string-based `isBlockedUrl` (via the zod
-    // `.refine()` on `updateBody`), never the DNS-resolution check — so an
-    // attacker could register a webhook with a benign public URL, then
-    // PUT-update it to a hostname whose DNS resolves to
-    // 169.254.169.254/private ranges, bypassing rebinding protection
-    // entirely on the update path. Re-check here whenever `url` changes.
+    // SSRF FIX: re-check with DNS resolution whenever `url` changes (defeats
+    // register-benign-then-rebind-to-metadata attacks on the update path).
     if (body.url !== undefined && (await isBlockedAfterResolve(body.url))) {
       throw new HttpError(422, "SSRF_BLOCKED", "URL resolves to a private/loopback/link-local address");
     }
-    // exactOptionalPropertyTypes: strip undefined keys so the payload only
-    // ever carries defined values for WebhookUpdatePayload's optional fields.
     const patch = Object.fromEntries(
       Object.entries(body).filter(([, v]) => v !== undefined),
     ) as commands.WebhookUpdatePayload;
@@ -229,6 +226,74 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
     const { id } = safeParse(idParam, req.params);
     const result = await commands.webhookTest(ctx, id);
+    return reply.code(202).send(result);
+  });
+
+  // CAP-054 REPLAY a past delivery
+  app.post("/v1/admin/webhooks/:id/deliveries/:deliveryId/replay", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    const { id, deliveryId } = safeParse(replayParam, req.params);
+    const rows = await scopedRead((tx) => tx.select().from(webhookDeliveries)
+      .where(and(eq(webhookDeliveries.id, deliveryId), eq(webhookDeliveries.tenantId, ctx.tenantId)))
+      .limit(1));
+    const row = rows[0];
+    if (!row || row.webhookId !== id) throw new HttpError(404, "NOT_FOUND", "delivery not found");
+    if (!canReplay(row.status as DeliveryStatus)) {
+      throw new HttpError(409, "NOT_REPLAYABLE", `delivery in status ${row.status} cannot be replayed`);
+    }
+    const result = await commands.webhookReplay(ctx, id, deliveryId);
+    return reply.code(202).send(result);
+  });
+
+  // CAP-054 secret rotation — MAKER: request a rotation
+  app.post("/v1/admin/webhooks/:id/rotate-secret", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    const { id } = safeParse(idParam, req.params);
+    const body = safeParse(rotateBody, req.body ?? {});
+    const wh = await scopedRead((tx) => tx.select().from(webhooks)
+      .where(and(eq(webhooks.id, id), eq(webhooks.tenantId, ctx.tenantId))).limit(1));
+    if (!wh[0]) throw new HttpError(404, "NOT_FOUND", "webhook not found");
+    const result = await commands.webhookRotateRequest(ctx, id, body.reason);
+    return reply.code(202).send(result);
+  });
+
+  // CAP-054 secret rotation — list rotation requests
+  app.get("/v1/admin/webhooks/rotations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    const q = safeParse(rotationListQuery, req.query ?? {});
+    const rows = await scopedRead((tx) => {
+      const base = tx.select({
+        id: secretRotations.id, webhookId: secretRotations.webhookId,
+        status: secretRotations.status, reason: secretRotations.reason,
+        requestedBy: secretRotations.requestedBy, requestedAt: secretRotations.requestedAt,
+        decidedBy: secretRotations.decidedBy, decidedAt: secretRotations.decidedAt,
+      }).from(secretRotations);
+      return q.status
+        ? base.where(and(eq(secretRotations.tenantId, ctx.tenantId), eq(secretRotations.status, q.status)))
+        : base.where(eq(secretRotations.tenantId, ctx.tenantId));
+    });
+    return reply.send({ data: rows });
+  });
+
+  // CAP-054 secret rotation — CHECKER: approve/reject (maker != checker enforced)
+  app.post("/v1/admin/webhooks/rotations/:rotationId/decision", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    const { rotationId } = safeParse(rotationIdParam, req.params);
+    const body = safeParse(decisionBody, req.body);
+    const rows = await scopedRead((tx) => tx.select().from(secretRotations)
+      .where(and(eq(secretRotations.id, rotationId), eq(secretRotations.tenantId, ctx.tenantId))).limit(1));
+    const rot = rows[0];
+    if (!rot) throw new HttpError(404, "NOT_FOUND", "rotation not found");
+    if (rot.status !== "pending") throw new HttpError(409, "NOT_PENDING", `rotation is already ${rot.status}`);
+    // Maker-checker: the approver must differ from the requester.
+    if (rot.requestedBy === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER", "the approver must be different from the requester");
+    }
+    const result = await commands.webhookRotateDecide(ctx, rotationId, body.decision);
     return reply.code(202).send(result);
   });
 }

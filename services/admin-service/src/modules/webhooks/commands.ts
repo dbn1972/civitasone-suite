@@ -25,6 +25,9 @@ const CMD_CREATE = "admin.webhook.create";
 const CMD_UPDATE = "admin.webhook.update";
 const CMD_DELETE = "admin.webhook.delete";
 const CMD_TEST = "admin.webhook.test";
+const CMD_REPLAY = "admin.webhook.replay";
+const CMD_ROTATE_REQUEST = "admin.webhook.rotate.request";
+const CMD_ROTATE_DECIDE = "admin.webhook.rotate.decide";
 
 /**
  * Generate a cryptographically secure webhook secret.
@@ -108,6 +111,69 @@ export async function webhookTest(ctx: RequestContext, webhookId: string): Promi
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
     payload: { webhookId, tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * CAP-054 replay: re-deliver a past delivery. A NEW delivery row is created
+ * (replay_of = original) so the dedup index does not block it.
+ */
+export async function webhookReplay(ctx: RequestContext, webhookId: string, deliveryId: string): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(CMD_REPLAY, {
+    messageId: id,
+    type: CMD_REPLAY,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, webhookId, deliveryId, tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * CAP-054 secret rotation — MAKER step. Generates a fresh secret held pending
+ * until a different admin approves it (maker-checker).
+ */
+export async function webhookRotateRequest(
+  ctx: RequestContext,
+  webhookId: string,
+  reason?: string,
+): Promise<Accepted & { rotationId: string }> {
+  const rotationId = randomUUID();
+  const newSecret = generateSecret();
+  await queue.publish(CMD_ROTATE_REQUEST, {
+    messageId: rotationId,
+    type: CMD_ROTATE_REQUEST,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { rotationId, webhookId, tenantId: ctx.tenantId, newSecret, reason: reason ?? null },
+  });
+  return { id: rotationId, rotationId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * CAP-054 secret rotation — CHECKER step. Approve or reject a pending rotation.
+ * The consumer enforces requester != decider.
+ */
+export async function webhookRotateDecide(
+  ctx: RequestContext,
+  rotationId: string,
+  decision: "approve" | "reject",
+): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(CMD_ROTATE_DECIDE, {
+    messageId: id,
+    type: CMD_ROTATE_DECIDE,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { rotationId, tenantId: ctx.tenantId, decision, deciderId: ctx.actorId },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
