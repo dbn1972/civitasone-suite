@@ -107,6 +107,17 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         payload: { employeeId: p.employeeId, employeeNo: p.employeeNo, tenantId: p.tenantId },
       });
 
+      // SVC-003: close the manpower plan -> requisition -> hire loop. The
+      // manpower-planning consumer maps jobOpeningId -> requisition -> plan and
+      // bumps filled_strength. No-op for openings not born from a plan.
+      if (application?.jobOpeningId) {
+        await enqueue(tx, {
+          topic: EVENTS.positionFilled, eventType: EVENTS.positionFilled,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { jobOpeningId: application.jobOpeningId, employeeId: p.employeeId, tenantId: p.tenantId },
+        });
+      }
+
       await audit(tx, msg, "hire", "application", p.applicationId);
     });
 
