@@ -365,3 +365,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   return app;
 }
+
+// API Catalogue — lists all registered service routes for developer portal
+import { REGISTRY } from "./registry.js";
+app.get("/api/catalogue", async (req, reply) => {
+  const services = Object.entries(REGISTRY).map(([prefix, config]) => ({
+    prefix, upstream: (config as any).upstream ?? "unknown", routes: (config as any).routes ?? [],
+  }));
+  return reply.send({ data: services, meta: { total: services.length } });
+});
