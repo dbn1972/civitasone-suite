@@ -9,7 +9,8 @@ import { cache } from "../../shared/infra.js";
 import * as commands from "./commands.js";
 import { featureFlags } from "./schema.js";
 import { scopedRead } from "../../shared/db.js";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { evaluateFlag } from "./domain.js";
 
 const ADMIN_ROLES = ["platform_admin", "super_admin"];
 const RESOURCE = "feature_flag";
@@ -21,6 +22,8 @@ const createBody = z.object({
   enabled: z.boolean().default(false),
   rolloutPercent: z.number().int().min(0).max(100).default(0),
   targetSegments: z.array(z.string().min(1).max(100)).default([]),
+  owner: z.string().max(160).default(""),
+  expiresAt: z.string().datetime().nullable().optional(),
 });
 
 const updateBody = z.object({
@@ -29,9 +32,17 @@ const updateBody = z.object({
   enabled: z.boolean().optional(),
   rolloutPercent: z.number().int().min(0).max(100).optional(),
   targetSegments: z.array(z.string().min(1).max(100)).optional(),
+  owner: z.string().max(160).optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });
+
+const evalQuery = z.object({
+  subjectId: z.string().min(1).max(200),
+  segments: z.string().max(2000).optional(),
+});
+
 
 // See custom-domains/routes.ts safeParse for why Input is widened to `any`
 // instead of using z.ZodSchema<T> (Input=T): schemas with `.default(...)`
@@ -102,4 +113,30 @@ export async function featureFlagRoutes(app: FastifyInstance): Promise<void> {
     const result = await commands.flagKill(ctx, id);
     return reply.code(202).send(result);
   });
+
+  // EVALUATE — deterministic rollout decision for a subject (CAP-094 safe rollout).
+  app.get("/v1/admin/feature-flags/manage/:id/evaluate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = safeParse(idParam, req.params);
+    const q = safeParse(evalQuery, req.query);
+    const rows = await scopedRead((tx) => tx.select().from(featureFlags)
+      .where(and(eq(featureFlags.id, id), eq(featureFlags.tenantId, ctx.tenantId))).limit(1));
+    const flag = rows[0];
+    if (!flag) throw new HttpError(404, "NOT_FOUND", "feature flag not found");
+    const segments = q.segments ? q.segments.split(",").map((x) => x.trim()).filter(Boolean) : [];
+    const decision = evaluateFlag(
+      {
+        key: flag.key,
+        enabled: flag.enabled,
+        rolloutPercent: flag.rolloutPercent,
+        targetSegments: flag.targetSegments,
+        killSwitch: flag.killSwitch,
+        expiresAt: flag.expiresAt,
+      },
+      { subjectId: q.subjectId, segments },
+    );
+    return reply.send({ flag: flag.key, subjectId: q.subjectId, ...decision });
+  });
 }
+
