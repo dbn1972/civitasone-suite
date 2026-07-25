@@ -108,6 +108,9 @@ export const EVENTS = {
   leaveApplied:      "hrms.leave.applied",
   leaveApproved:     "hrms.leave.approved",
   attendanceMarked:  "hrms.attendance.marked",
+  // SVC-003: a recruitment hire filled a position for an auto-generated
+  // manpower-plan requisition (consumed by modules/manpower-planning).
+  positionFilled:    "hrms.recruitment.position_filled",
 
   // contracts
   contractCreated:    "hrms.contract.created",

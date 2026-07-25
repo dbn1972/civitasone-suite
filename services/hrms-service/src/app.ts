@@ -134,6 +134,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(competencyRoutes);
   await app.register(contractRoutes);
   await app.register(integrationRoutes);
+  const { manpowerPlanningRoutes } = await import("./modules/manpower-planning/routes.js");
+  await app.register(manpowerPlanningRoutes);
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
   await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);

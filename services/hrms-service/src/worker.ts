@@ -52,6 +52,7 @@ import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js
 import { registerCompetencyConsumers } from "./modules/competency/consumer.js";
 import { registerContractConsumers } from "./modules/contracts/consumer.js";
 import { registerContractExpiryConsumers } from "./modules/contracts/expiry-consumer.js";
+import { registerManpowerConsumers } from "./modules/manpower-planning/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 
 const log = pino({ name: "hrms-worker" });
@@ -107,6 +108,8 @@ registerCompetencyConsumers(queue);
 // Contract renewal workflow consumers.
 registerContractConsumers(queue);
 registerContractExpiryConsumers(queue);
+// SVC-003: recruitment hire -> manpower plan fill-loop.
+registerManpowerConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
