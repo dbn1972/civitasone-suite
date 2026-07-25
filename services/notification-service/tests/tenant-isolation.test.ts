@@ -24,6 +24,21 @@ vi.mock("../src/shared/db.js", () => ({
   },
   // scopedRead wraps reads in the tenant tx; the mock passes a tx exposing the
   // same select chain so RLS-scoped reads exercise the identical assertions.
+  // readScoped additionally establishes the tenant context itself (PR #152
+  // pattern); for the mock both expose the same select chain.
+  readScoped: (_tenantId: string, fn: (tx: unknown) => unknown) =>
+    fn({
+      select: () => ({
+        from: () => ({
+          where: (...args: unknown[]) => {
+            whereCalled = true;
+            capturedArgs = args;
+            return { limit: () => Promise.resolve([]) };
+          },
+          limit: () => Promise.resolve([{ tenantId: "tenant-B", id: "other-tenant-row" }]),
+        }),
+      }),
+    }),
   scopedRead: (fn: (tx: unknown) => unknown) =>
     fn({
       select: () => ({

@@ -56,3 +56,17 @@ export function scopedRead<T>(fn: (tx: ScopedTx) => PromiseLike<T>): Promise<T> 
   // drizzle row types flow back to callers with no per-callsite annotations.
   return db.transaction(fn as (tx: ScopedTx) => Promise<T>);
 }
+
+/**
+ * Tenant-scoped standalone READ (telephony PR #152 pattern): establishes the
+ * tenant context itself (runWithTenant) before opening the GUC transaction, so
+ * repo reads work even when no ambient request/consumer context is active
+ * (direct repo calls, tests). Nesting inside an existing identical context is
+ * harmless. Prefer this over scopedRead when the caller passes tenantId.
+ */
+import { runWithTenant } from "@civitasone/db";
+export function readScoped<T>(tenantId: string, fn: (tx: ScopedTx) => PromiseLike<T>): Promise<T> {
+  return runWithTenant(tenantId, () =>
+    db.transaction(fn as (tx: ScopedTx) => Promise<T>),
+  ) as Promise<T>;
+}

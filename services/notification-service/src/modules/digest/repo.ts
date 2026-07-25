@@ -1,4 +1,5 @@
 import { eq, and, lte, sql } from "drizzle-orm";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { digestRules, digestBuckets } from "./schema.js";
 
@@ -8,14 +9,14 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export async function findExpiredBuckets(
   now: Date = new Date(), limit = 100,
 ): Promise<typeof digestBuckets.$inferSelect[]> {
-  return scopedRead((tx) =>
-    tx.select().from(digestBuckets)
-      .where(and(
-        eq(digestBuckets.status, "accumulating"),
-        lte(digestBuckets.openedAt, now),
-      ))
-      .limit(limit),
-  );
+  // Cross-tenant discovery via the BYPASSRLS scanner pool (see scanner-db.ts):
+  // a scopedRead with no tenant context returns ZERO rows under NOBYPASSRLS (#146).
+  return scannerDb.select().from(digestBuckets)
+    .where(and(
+      eq(digestBuckets.status, "accumulating"),
+      lte(digestBuckets.openedAt, now),
+    ))
+    .limit(limit);
 }
 
 /** Accumulate an item into an existing digest bucket (append to items JSONB array). */

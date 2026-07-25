@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { COMMANDS } from "../../topics.js";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 
@@ -16,12 +17,13 @@ export async function sweepHeldNotifications(queue: Queue, now = new Date()): Pr
   const held = await repo.findHeldNotifications(now);
   let released = 0;
 
-  const writer = { update: db.update.bind(db), insert: db.insert.bind(db), select: db.select.bind(db) };
-
   for (const notification of held) {
     try {
-      // Transition from held to released
-      await repo.releaseHeld(writer, notification.id);
+      // Transition from held to released — inside the row's tenant context so
+      // RLS admits the UPDATE under the NOBYPASSRLS role (#146).
+      await runWithTenant(notification.tenantId, () =>
+        db.transaction((tx) => repo.releaseHeld(tx, notification.id)),
+      );
 
       // Re-enqueue the original delivery payload
       const payload = notification.deliveryPayload as Record<string, unknown>;

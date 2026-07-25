@@ -21,7 +21,7 @@ export async function sweepDueRetries(queue: Queue, now = new Date()): Promise<n
   const due = await repo.findDueRetries(now);
   let republished = 0;
   for (const row of due) {
-    const claimed = await repo.claimDueRetry(row.id, row.version, now);
+    const claimed = await repo.claimDueRetry(row.id, row.tenantId, row.version, now);
     if (!claimed) continue; // another sweeper instance won the race
     try {
       await queue.publish(COMMANDS.sendNotification, {

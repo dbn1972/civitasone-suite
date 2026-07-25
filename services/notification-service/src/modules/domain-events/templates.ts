@@ -227,6 +227,17 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
     },
   },
   {
+    eventType: "contract.expiry.alert",
+    push: {
+      title: "Contract Expiring Soon",
+      body: "Contract {{contractNo}} expires on {{endDate}} ({{daysRemaining}} days remaining). Review renewal.",
+    },
+    email: {
+      title: "Contract Expiry Alert — {{contractNo}}",
+      body: "Dear Officer,\n\nContract {{contractNo}}{{contractTitle}} is due to expire on {{endDate}} ({{daysRemaining}} days remaining).\n\nPlease review and initiate renewal or closure action.\n\nRegards,\nContract Management System",
+    },
+  },
+  {
     eventType: "notification.broadcast.send",
     push: {
       title: "New Release \u2014 {{title}}",

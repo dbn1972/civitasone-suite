@@ -10,6 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { notificationPrefs } from "../src/modules/templates/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -31,16 +32,25 @@ function token(roles: string[], tid: string): string {
 const bearer = (roles: string[], tid: string) => ({ authorization: `Bearer ${token(roles, tid)}` });
 
 async function seedPref(id: string, tenantId: string) {
-  await db.insert(notificationPrefs).values({
-    id, tenantId, userId: USER, eventType: "finance.payment.released",
-    inApp: true, email: true, push: false, createdBy: ACTOR, updatedBy: ACTOR,
-  }).onConflictDoNothing();
+  // Seed inside the tenant's GUC transaction — the service role is NOBYPASSRLS
+  // (#146) so a bare INSERT is rejected by the FORCE RLS policy.
+  await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    await tx.insert(notificationPrefs).values({
+      id, tenantId, userId: USER, eventType: "finance.payment.released",
+      inApp: true, email: true, push: false, createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing();
+  }));
 }
 
 async function cleanup() {
-  await db.delete(notificationPrefs).where(eq(notificationPrefs.id, PREF_T1));
-  await db.delete(notificationPrefs).where(eq(notificationPrefs.id, PREF_T2));
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
+  await runWithTenant(T1, () => db.transaction(async (tx) => {
+    await tx.delete(notificationPrefs).where(eq(notificationPrefs.id, PREF_T1));
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
+  }));
+  await runWithTenant(T2, () => db.transaction(async (tx) => {
+    await tx.delete(notificationPrefs).where(eq(notificationPrefs.id, PREF_T2));
+  }));
+  // _inbox.processed is not under RLS.
   await db.delete(processed).where(eq(processed.messageId, MSG_1));
 }
 
@@ -101,15 +111,20 @@ describe("template consumer — prefs update (integration)", () => {
     await new Promise((r) => setTimeout(r, 500));
     await q.stop();
 
-    const t1 = await db.select().from(notificationPrefs).where(eq(notificationPrefs.id, PREF_T1));
+    // Direct DB inspection must run inside each tenant's GUC transaction —
+    // bare selects return zero rows under the NOBYPASSRLS role (#146).
+    const t1 = await runWithTenant(T1, () => db.transaction((tx) =>
+      tx.select().from(notificationPrefs).where(eq(notificationPrefs.id, PREF_T1))));
     expect(t1[0]?.email).toBe(false);
     expect(t1[0]?.inApp).toBe(false);
 
     // the other tenant's pref (same shape) must be untouched
-    const t2 = await db.select().from(notificationPrefs).where(eq(notificationPrefs.id, PREF_T2));
+    const t2 = await runWithTenant(T2, () => db.transaction((tx) =>
+      tx.select().from(notificationPrefs).where(eq(notificationPrefs.id, PREF_T2))));
     expect(t2[0]?.email).toBe(true);
 
-    const audit = await db.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record")));
+    const audit = await runWithTenant(T1, () => db.transaction((tx) =>
+      tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record")))));
     expect(audit.map((r) => (r.payload as { action?: string }).action)).toContain("update_prefs");
   });
 });

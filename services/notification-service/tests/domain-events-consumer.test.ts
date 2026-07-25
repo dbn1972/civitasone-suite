@@ -67,9 +67,11 @@ describe("domain-events templates", () => {
     }
   });
 
-  it("getRegisteredEventTypes returns all 20 event types", () => {
+  it("getRegisteredEventTypes returns all 21 event types", () => {
     const types = getRegisteredEventTypes();
-    expect(types).toHaveLength(20);
+    expect(types).toHaveLength(21);
+    // #146 wired contract-service expiry alerts into the choreography.
+    expect(types).toContain("contract.expiry.alert");
     expect(types).toContain("hrms.leave.approved");
     expect(types).toContain("audit.para.issued");
     // Visitor security/safety events wired into the notification choreography.

@@ -8,10 +8,13 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { shouldFlushBySize } from "./domain.js";
 import { digestRules, digestBuckets } from "./schema.js";
 import * as repo from "./repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerDigestConsumers(q: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  q = tenantScoped(q);
   // Create a new digest rule
   q.subscribe<{
     id: string; tenantId: string; eventType: string; channel: string;

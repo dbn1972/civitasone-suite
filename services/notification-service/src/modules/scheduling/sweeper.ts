@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { COMMANDS } from "../../topics.js";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 
@@ -16,10 +17,11 @@ export async function sweepDueSchedules(queue: Queue, now = new Date()): Promise
   const due = await repo.findDueSchedules(now);
   let dispatched = 0;
 
-  const writer = { update: db.update.bind(db), insert: db.insert.bind(db), select: db.select.bind(db) };
-
   for (const row of due) {
-    const claimed = await repo.claimSchedule(writer, row.id, row.version);
+    // Claim under the row's tenant context so RLS admits the UPDATE (#146).
+    const claimed = await runWithTenant(row.tenantId, () =>
+      db.transaction((tx) => repo.claimSchedule(tx, row.id, row.version)),
+    );
     if (!claimed) continue; // another instance won the race
 
     try {

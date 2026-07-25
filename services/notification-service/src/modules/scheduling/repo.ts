@@ -1,4 +1,5 @@
 import { eq, and, lte, desc } from "drizzle-orm";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { scheduledNotifications } from "./schema.js";
 
@@ -8,14 +9,14 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export async function findDueSchedules(
   now: Date = new Date(), limit = 100,
 ): Promise<typeof scheduledNotifications.$inferSelect[]> {
-  return scopedRead((tx) =>
-    tx.select().from(scheduledNotifications)
-      .where(and(
-        eq(scheduledNotifications.status, "scheduled"),
-        lte(scheduledNotifications.scheduledAt, now),
-      ))
-      .limit(limit),
-  );
+  // Cross-tenant discovery via the BYPASSRLS scanner pool (see scanner-db.ts):
+  // a scopedRead with no tenant context returns ZERO rows under NOBYPASSRLS (#146).
+  return scannerDb.select().from(scheduledNotifications)
+    .where(and(
+      eq(scheduledNotifications.status, "scheduled"),
+      lte(scheduledNotifications.scheduledAt, now),
+    ))
+    .limit(limit);
 }
 
 /**

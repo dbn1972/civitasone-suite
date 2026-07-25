@@ -6,10 +6,13 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import { transitionState, validateMakerChecker } from "./domain.js";
 import * as templateRepo from "../templates/repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerApprovalConsumers(q: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  q = tenantScoped(q);
   // Submit template for review: draft → in_review
   q.subscribe<{ templateId: string; tenantId: string; submittedBy: string }>(
     COMMANDS.submitTemplate, async (msg) => {

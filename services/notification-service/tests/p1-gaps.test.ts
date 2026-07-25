@@ -22,6 +22,17 @@ import { smsAdapter, whatsAppAdapter, pushAdapter } from "../src/adapters/index.
 import type { PrefView } from "../src/modules/templates/domain.js";
 
 const TENANT = "dddddddd-1111-4000-8000-0000000000aa";
+
+// Domain tables have FORCED row-level security (policy: tenant_id = current_tenant_id())
+// and the service role is NOBYPASSRLS (#146). Direct DB seeding/inspection from a test
+// must therefore run with the app.tenant_id GUC set — same sqlAsTenant convention as
+// telephony-service tests (PR #152). Transaction-LOCAL GUC on a reserved connection.
+async function sqlAsTenant<T>(tenantId: string, fn: (sql: typeof sqlClient) => Promise<T> | T): Promise<T> {
+  return sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${tenantId}, true)`;
+    return fn(sql as unknown as typeof sqlClient);
+  }) as Promise<T>;
+}
 const TEMPLATE = "dddddddd-2222-4000-8000-0000000000bb";
 
 function pref(over: Partial<PrefView>): PrefView {
@@ -36,17 +47,17 @@ async function insertRow(row: {
   status: string; retryCount?: number; nextRetryAt?: Date | null;
 }): Promise<void> {
   const nextRetryAt = row.nextRetryAt ? row.nextRetryAt.toISOString() : null;
-  await sqlClient`
+  await sqlAsTenant(TENANT, (sql) => sql`
     INSERT INTO deliveries.deliveries
       (id, tenant_id, template_id, recipient, recipient_id, channel, status, retry_count, next_retry_at, created_by, updated_by, version)
     VALUES
       (${row.id}, ${TENANT}, ${TEMPLATE}, ${row.recipient}, ${row.recipientId},
        ${row.channel}, ${row.status}, ${row.retryCount ?? 0}, ${nextRetryAt}::timestamptz,
-       ${TENANT}, ${TENANT}, 1)`;
+       ${TENANT}, ${TENANT}, 1)`);
 }
 
 async function cleanup(): Promise<void> {
-  await sqlClient`DELETE FROM deliveries.deliveries WHERE tenant_id = ${TENANT}`;
+  await sqlAsTenant(TENANT, (sql) => sql`DELETE FROM deliveries.deliveries WHERE tenant_id = ${TENANT}`);
 }
 
 afterAll(async () => { await sqlClient.end(); });
@@ -84,18 +95,22 @@ describe("P1-1 opt-out enforcement (DB + real consumer end-to-end)", () => {
   beforeEach(cleanup);
   afterEach(async () => {
     await cleanup();
-    await sqlClient`DELETE FROM templates.prefs WHERE tenant_id = ${TENANT}`;
-    await sqlClient`DELETE FROM templates.templates WHERE tenant_id = ${TENANT}`;
+    await sqlAsTenant(TENANT, async (sql) => {
+      await sql`DELETE FROM templates.prefs WHERE tenant_id = ${TENANT}`;
+      await sql`DELETE FROM templates.templates WHERE tenant_id = ${TENANT}`;
+    });
   });
 
   it("opted-out recipient → consumer records status=skipped channel=none and sends nothing (even with an email template)", async () => {
     const { registerDeliveryConsumers } = await import("../src/modules/deliveries/consumer.js");
     const recipientId = randomUUID();
     // An email template — proves the template's default channel does NOT override opt-out.
-    await sqlClient`INSERT INTO templates.templates (id, tenant_id, channel, name, subject, body, created_by, updated_by)
-      VALUES (${TEMPLATE}, ${TENANT}, 'email', 'OptOut', 'Hi', 'Hello', ${TENANT}, ${TENANT})`;
-    await sqlClient`INSERT INTO templates.prefs (id, tenant_id, user_id, event_type, in_app, email, push, created_by, updated_by)
-      VALUES (${randomUUID()}, ${TENANT}, ${recipientId}, 'optout.evt', false, false, false, ${TENANT}, ${TENANT})`;
+    await sqlAsTenant(TENANT, async (sql) => {
+      await sql`INSERT INTO templates.templates (id, tenant_id, channel, name, subject, body, created_by, updated_by)
+        VALUES (${TEMPLATE}, ${TENANT}, 'email', 'OptOut', 'Hi', 'Hello', ${TENANT}, ${TENANT})`;
+      await sql`INSERT INTO templates.prefs (id, tenant_id, user_id, event_type, in_app, email, push, created_by, updated_by)
+        VALUES (${randomUUID()}, ${TENANT}, ${recipientId}, 'optout.evt', false, false, false, ${TENANT}, ${TENANT})`;
+    });
 
     const q = new MemoryQueue();
     registerDeliveryConsumers(q);
@@ -107,7 +122,7 @@ describe("P1-1 opt-out enforcement (DB + real consumer end-to-end)", () => {
     });
     await new Promise((r) => setTimeout(r, 250));
 
-    const rows = await sqlClient`SELECT status, channel FROM deliveries.deliveries WHERE recipient_id = ${recipientId}`;
+    const rows = await sqlAsTenant(TENANT, (sql) => sql`SELECT status, channel FROM deliveries.deliveries WHERE recipient_id = ${recipientId}`);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("skipped");
     expect(rows[0]?.channel).toBe("none");
@@ -136,7 +151,7 @@ describe("P1-2 durable retry sweep (DB — survives restart)", () => {
     expect(published).toContain(id);
 
     // Row was claimed out of `queued` → second sweep does nothing (no double-send).
-    const rows = await sqlClient`SELECT status FROM deliveries.deliveries WHERE id = ${id}`;
+    const rows = await sqlAsTenant(TENANT, (sql) => sql`SELECT status FROM deliveries.deliveries WHERE id = ${id}`);
     expect(rows[0]?.status).not.toBe("queued");
     const swept2 = await sweepDueRetries(q);
     expect(swept2).toBe(0);
@@ -148,7 +163,7 @@ describe("P1-2 durable retry sweep (DB — survives restart)", () => {
     await insertRow({ id, recipient: "a@b.gov.in", recipientId: randomUUID(), channel: "email", status: "queued", retryCount: 1, nextRetryAt: future });
     const q = new MemoryQueue();
     expect(await sweepDueRetries(q)).toBe(0);
-    const rows = await sqlClient`SELECT status FROM deliveries.deliveries WHERE id = ${id}`;
+    const rows = await sqlAsTenant(TENANT, (sql) => sql`SELECT status FROM deliveries.deliveries WHERE id = ${id}`);
     expect(rows[0]?.status).toBe("queued");
   });
 });
@@ -251,8 +266,8 @@ describe("P1-6 idempotent claim (DB)", () => {
     await insertRow({ id, recipient: "x@d.gov.in", recipientId: randomUUID(), channel: "email", status: "queued", retryCount: 1, nextRetryAt: past });
 
     const [a, b] = await Promise.all([
-      repo.claimDueRetry(id, 1, new Date()),
-      repo.claimDueRetry(id, 1, new Date()),
+      repo.claimDueRetry(id, TENANT, 1, new Date()),
+      repo.claimDueRetry(id, TENANT, 1, new Date()),
     ]);
     // Exactly one caller wins the claim — the other sees the row already moved.
     expect([a, b].filter(Boolean)).toHaveLength(1);

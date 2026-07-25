@@ -14,6 +14,7 @@ import {
 } from "./channel.js";
 import { notificationTemplates, notificationPrefs } from "../templates/schema.js";
 import { eq } from "drizzle-orm";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -36,6 +37,8 @@ type SendPayload = {
 };
 
 export function registerDeliveryConsumers(q: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  q = tenantScoped(q);
   q.subscribe<SendPayload>(COMMANDS.sendNotification, async (msg) => {
     await processSend(msg);
   });

@@ -3,8 +3,11 @@ import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 export function registerAnalyticsConsumers(q: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  q = tenantScoped(q);
   q.subscribe<{ tenantId: string; deliveryId: string }>(
     COMMANDS.recordOpen, async (msg) => {
       await db.transaction(async (tx) => {
