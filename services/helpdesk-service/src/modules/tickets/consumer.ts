@@ -4,6 +4,8 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMES, SOURCE, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { randomUUID } from "node:crypto";
+import { tickets } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -260,5 +262,25 @@ async function emit(
     actorId: msg.actorId,
     correlationId: msg.correlationId,
     payload: { service: "helpdesk", action, resourceType: "ticket", resourceId, outcome: "success" },
+  });
+}
+
+// P1-③: Auto-create helpdesk ticket from citizen service request
+
+export function registerCitizenRequestConsumer(q: Queue): void {
+  q.subscribe(CONSUMES.citizenRequestCreated, async (msg) => {
+    const p = msg.payload as { requestId: string; subject?: string; citizenId?: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const id = randomUUID();
+      await tx.insert(tickets).values({
+        id,
+        tenantId: p.tenantId,
+        subject: p.subject ?? "Citizen Service Request",
+        createdBy: p.citizenId ?? msg.actorId,
+        updatedBy: msg.actorId,
+      });
+      await enqueue(tx, { topic: EVENTS.ticketCreated, eventType: EVENTS.ticketCreated, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { ticketId: id, source: "citizen", requestId: p.requestId } });
+    });
   });
 }

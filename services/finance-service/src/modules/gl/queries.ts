@@ -6,8 +6,8 @@ import type { LedgerQueryParams } from "./validators.js";
 function normalizeLine(raw: Record<string, unknown>): JournalLine {
   return {
     accountCode: String(raw.accountCode ?? raw.account ?? ""),
-    debitMinor: Number(raw.debitMinor ?? raw.debit ?? 0),
-    creditMinor: Number(raw.creditMinor ?? raw.credit ?? 0),
+    debitMinor: String(raw.debitMinor ?? raw.debit ?? 0n),
+    creditMinor: String(raw.creditMinor ?? raw.credit ?? 0n),
   };
 }
 
@@ -36,9 +36,9 @@ export async function getTrialBalanceBalanced(tenantId: string, period?: string)
     const credit = r.totalCredit ?? 0n;
     return {
       period: r.period,
-      totalDebitMinor: Number(debit),
-      totalCreditMinor: Number(credit),
-      differenceMinor: Number(debit - credit),
+      totalDebitMinor: String(debit),
+      totalCreditMinor: String(credit),
+      differenceMinor: String(debit - credit),
       isBalanced: debit === credit,
     };
   });

@@ -52,6 +52,7 @@ export const EVENTS = {
   esignSigned:          "contract.esign.signed",
   esignCompleted:       "contract.esign.completed",
   esignEscalated:       "contract.esign.escalated",
+  contractExpiryAlert: "contract.expiry.alert",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
