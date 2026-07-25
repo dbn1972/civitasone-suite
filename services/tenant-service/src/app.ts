@@ -38,6 +38,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(settingRoutes);
   const { orgHierarchyRoutes } = await import("./modules/org-hierarchy/routes.js");
   await app.register(orgHierarchyRoutes);
+  const { dataMigrationRoutes } = await import("./modules/data-migration/routes.js");
+  await app.register(dataMigrationRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

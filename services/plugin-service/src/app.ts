@@ -25,6 +25,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registryRoutes);
   await app.register(hooksRoutes);
   await app.register(storeRoutes);
+  const { marketplaceRoutes } = await import("./modules/marketplace/routes.js");
+  await app.register(marketplaceRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

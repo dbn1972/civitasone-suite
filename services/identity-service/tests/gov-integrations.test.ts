@@ -33,3 +33,11 @@ describe("NIC", () => {
 describe("UMANG", () => {
   it("POST service-request → 202|503", async () => { expect([202, 503]).toContain(await hit("POST", "/identity/gov/umang/service-request", admin, { serviceId: "rti-status", userId: randomUUID() })); });
 });
+describe("Bharat BillPay", () => {
+  it("POST fetch-billers → 200|503", async () => { expect([200, 503]).toContain(await hit("POST", "/identity/gov/bbps/fetch-billers", admin, { category: "electricity" })); });
+  it("POST pay-bill → 202|503", async () => { expect([202, 503]).toContain(await hit("POST", "/identity/gov/bbps/pay-bill", admin, { billerId: "ELEC001", amountMinor: 150000, paymentMode: "upi" })); });
+});
+describe("DigiLocker", () => {
+  it("POST authorize → 200|503", async () => { expect([200, 503]).toContain(await hit("POST", "/identity/gov/digilocker/authorize", admin)); });
+  it("POST pull-document → 200|503", async () => { expect([200, 503]).toContain(await hit("POST", "/identity/gov/digilocker/pull-document", admin, { accessToken: "tok", docType: "pan" })); });
+});

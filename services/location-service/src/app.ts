@@ -57,6 +57,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(spatialRoutes);
   const { infrastructureRoutes } = await import("./modules/infrastructure/routes.js");
   await app.register(infrastructureRoutes);
+  const { cadastralRoutes } = await import("./modules/cadastral/routes.js");
+  await app.register(cadastralRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
