@@ -23,7 +23,7 @@ export function AuthShell({ children }: AuthShellProps) {
               repeat: Infinity,
               ease: "linear"
             }}
-            className="absolute -top-40 -left-40 size-96 bg-white/20 rounded-full blur-3xl"
+            className="absolute -top-40 -start-40 size-96 bg-white/20 rounded-full blur-3xl"
           />
           <motion.div
             animate={{
@@ -36,7 +36,7 @@ export function AuthShell({ children }: AuthShellProps) {
               repeat: Infinity,
               ease: "linear"
             }}
-            className="absolute -bottom-40 -right-40 size-96 bg-white/20 rounded-full blur-3xl"
+            className="absolute -bottom-40 -end-40 size-96 bg-white/20 rounded-full blur-3xl"
           />
           <motion.div
             animate={{
@@ -48,7 +48,7 @@ export function AuthShell({ children }: AuthShellProps) {
               repeat: Infinity,
               ease: "easeInOut"
             }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[600px] bg-white/10 rounded-full blur-3xl"
+            className="absolute top-1/2 start-1/2 -translate-x-1/2 -translate-y-1/2 size-[600px] bg-white/10 rounded-full blur-3xl"
           />
         </div>
 

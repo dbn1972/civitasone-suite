@@ -108,8 +108,8 @@ export function APIReference() {
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="max-w-2xl mx-auto">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
-              <Input type="text" placeholder="Search endpoints..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-12 py-4 text-base" />
+              <Search className="absolute start-4 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Input type="text" placeholder="Search endpoints..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ps-12 py-4 text-base" />
             </div>
           </motion.div>
         </div>
@@ -155,7 +155,7 @@ export function APIReference() {
                             </Badge>
                             <code className="text-body-sm text-text-primary flex-1">{endpoint.path}</code>
                           </div>
-                          <p className="text-caption text-text-muted ml-14">{endpoint.description}</p>
+                          <p className="text-caption text-text-muted ms-14">{endpoint.description}</p>
                         </div>
                       ))}
                     </div>

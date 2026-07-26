@@ -202,13 +202,13 @@ export function LeaveApprovals() {
             {/* Search */}
             <div className="flex-1 min-w-[250px] max-w-md">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
                 <Input
                   id="search-approvals"
                   placeholder="Search by employee or reason..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="ps-10"
                 />
               </div>
             </div>
@@ -397,7 +397,7 @@ export function LeaveApprovals() {
                         >
                           Reassign
                         </Button>
-                        <div className="ml-auto text-caption text-text-muted">
+                        <div className="ms-auto text-caption text-text-muted">
                           Applied {new Date(approval.appliedOn).toLocaleDateString('en-IN')}
                         </div>
                       </div>
@@ -430,7 +430,7 @@ export function LeaveApprovals() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md z-50"
+              className="fixed top-1/2 start-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md z-50"
             >
               <Card>
                 <h3 className="text-h3 mb-4">

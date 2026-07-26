@@ -93,13 +93,13 @@ export function PurchaseOrderList() {
             {/* Search */}
             <div className="flex-1 min-w-[250px] max-w-md">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
                 <Input
                   id="search-pos"
                   placeholder="Search by PO number or vendor..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="ps-10"
                 />
               </div>
             </div>
@@ -168,13 +168,13 @@ export function PurchaseOrderList() {
                     className="size-4 text-intent-primary border-border-default rounded"
                   />
                 </th>
-                <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">PO Number</th>
-                <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Vendor</th>
-                <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Date</th>
-                <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Status</th>
-                <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Total</th>
-                <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Approver</th>
-                <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Actions</th>
+                <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">PO Number</th>
+                <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Vendor</th>
+                <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Date</th>
+                <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Status</th>
+                <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Total</th>
+                <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Approver</th>
+                <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle">
@@ -222,7 +222,7 @@ export function PurchaseOrderList() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-right">
+                    <td className="px-4 py-4 text-end">
                       <span className="font-mono text-text-primary">
                         {po.total.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
                       </span>

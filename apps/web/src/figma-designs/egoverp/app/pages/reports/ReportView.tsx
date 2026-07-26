@@ -142,7 +142,7 @@ export function ReportView() {
             </Select>
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2 ms-auto">
             <button
               onClick={() => setViewMode('chart')}
               className={`p-2 rounded-lg transition-colors ${
@@ -286,11 +286,11 @@ export function ReportView() {
                 <table className="w-full">
                   <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                     <tr>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Department</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Budget</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Actual</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Variance</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">% Variance</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Department</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Budget</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Actual</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Variance</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">% Variance</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-subtle">
@@ -299,17 +299,17 @@ export function ReportView() {
                       return (
                         <tr key={index} className="hover:bg-surface-sunken transition-colors">
                           <td className="px-4 py-4 text-text-primary font-medium">{row.department}</td>
-                          <td className="px-4 py-4 text-right font-mono text-text-primary">
+                          <td className="px-4 py-4 text-end font-mono text-text-primary">
                             {row.budget.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                           </td>
-                          <td className="px-4 py-4 text-right font-mono text-text-primary">
+                          <td className="px-4 py-4 text-end font-mono text-text-primary">
                             {row.actual.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                           </td>
-                          <td className={`px-4 py-4 text-right font-mono font-semibold ${row.variance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
+                          <td className={`px-4 py-4 text-end font-mono font-semibold ${row.variance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
                             {row.variance < 0 ? '' : '+'}
                             {row.variance.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                           </td>
-                          <td className={`px-4 py-4 text-right font-mono ${row.variance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
+                          <td className={`px-4 py-4 text-end font-mono ${row.variance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
                             {row.variance < 0 ? '' : '+'}{variancePct}%
                           </td>
                         </tr>
@@ -318,18 +318,18 @@ export function ReportView() {
                   </tbody>
                   <tfoot className="bg-surface-sunken border-t-2 border-border-default">
                     <tr>
-                      <td className="px-4 py-4 text-left font-bold text-text-primary">Total</td>
-                      <td className="px-4 py-4 text-right font-mono font-bold text-text-primary">
+                      <td className="px-4 py-4 text-start font-bold text-text-primary">Total</td>
+                      <td className="px-4 py-4 text-end font-mono font-bold text-text-primary">
                         {totalBudget.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                       </td>
-                      <td className="px-4 py-4 text-right font-mono font-bold text-text-primary">
+                      <td className="px-4 py-4 text-end font-mono font-bold text-text-primary">
                         {totalActual.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                       </td>
-                      <td className={`px-4 py-4 text-right font-mono font-bold ${totalVariance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
+                      <td className={`px-4 py-4 text-end font-mono font-bold ${totalVariance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
                         {totalVariance < 0 ? '' : '+'}
                         {totalVariance.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                       </td>
-                      <td className={`px-4 py-4 text-right font-mono font-bold ${totalVariance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
+                      <td className={`px-4 py-4 text-end font-mono font-bold ${totalVariance < 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
                         {totalVariance < 0 ? '' : '+'}{variancePercent}%
                       </td>
                     </tr>

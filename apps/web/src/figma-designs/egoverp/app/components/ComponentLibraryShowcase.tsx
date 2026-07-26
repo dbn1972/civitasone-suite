@@ -285,7 +285,7 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 
 function ComponentGroup({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <div className="border-l-4 border-intent-primary pl-8">
+    <div className="border-s-4 border-intent-primary ps-8">
       <div className="mb-6">
         <h3 className="text-h3 mb-2">{title}</h3>
         <p className="text-body-sm text-text-muted">{description}</p>

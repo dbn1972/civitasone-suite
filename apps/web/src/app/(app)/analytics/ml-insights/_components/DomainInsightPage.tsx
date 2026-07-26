@@ -41,7 +41,7 @@ export function DomainInsightPage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/analytics/ml-insights">ML Insights</a>
+        ← <a href="/analytics/ms-insights">ML Insights</a>
       </nav>
       <PageHeader title={title} subtitle={subtitle} />
       {source === "error" && <DataSourceBadge source="error" />}

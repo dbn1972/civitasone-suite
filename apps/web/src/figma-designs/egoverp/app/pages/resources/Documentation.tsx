@@ -171,13 +171,13 @@ export function Documentation() {
             className="max-w-2xl mx-auto"
           >
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-4 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 type="text"
                 placeholder="Search documentation..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 py-4 text-base"
+                className="ps-12 py-4 text-base"
               />
             </div>
           </motion.div>
@@ -246,7 +246,7 @@ export function Documentation() {
                         <p className="text-caption text-text-muted">{article.category}</p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-end">
                       <p className="text-caption text-text-muted">{article.views} views</p>
                     </div>
                   </div>

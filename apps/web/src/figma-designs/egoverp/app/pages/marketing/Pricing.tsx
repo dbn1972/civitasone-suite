@@ -254,7 +254,7 @@ export function Pricing() {
             >
               Annual Billing
               {billingCycle === 'annual' ? (
-                <Badge variant="success" className="ml-1">Save 20%</Badge>
+                <Badge variant="success" className="ms-1">Save 20%</Badge>
               ) : (
                 <span className="text-intent-success text-caption font-bold">(Save 20%)</span>
               )}
@@ -290,9 +290,9 @@ export function Pricing() {
                 }`}>
                   {tier.highlighted && (
                     <>
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-intent-primary to-brand-accent opacity-10 rounded-full -mr-16 -mt-16" />
+                      <div className="absolute top-0 end-0 w-32 h-32 bg-gradient-to-br from-intent-primary to-brand-accent opacity-10 rounded-full -me-16 -mt-16" />
                       <Badge variant="primary" className="mb-4 self-start z-10">
-                        <Star className="size-3 mr-1" />
+                        <Star className="size-3 me-1" />
                         Most Popular
                       </Badge>
                     </>
@@ -394,7 +394,7 @@ export function Pricing() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b-2 border-border-subtle">
-                  <th className="text-left py-4 px-4 text-h4 text-text-primary">Feature</th>
+                  <th className="text-start py-4 px-4 text-h4 text-text-primary">Feature</th>
                   <th className="text-center py-4 px-4 text-h4 text-text-primary">Small Office</th>
                   <th className="text-center py-4 px-4 text-h4 text-text-primary bg-intent-primary-bg">PSU Edition</th>
                   <th className="text-center py-4 px-4 text-h4 text-text-primary">Government</th>
@@ -587,8 +587,8 @@ export function Pricing() {
         >
           <Card className="p-16 bg-gradient-to-br from-brand-primary via-intent-primary to-brand-accent text-white text-center relative overflow-hidden">
             {/* Decorative Elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-32 -mt-32" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-5 rounded-full -ml-24 -mb-24" />
+            <div className="absolute top-0 end-0 w-64 h-64 bg-white opacity-5 rounded-full -me-32 -mt-32" />
+            <div className="absolute bottom-0 start-0 w-48 h-48 bg-white opacity-5 rounded-full -ms-24 -mb-24" />
 
             <div className="relative z-10">
               <div className="size-20 bg-white bg-opacity-20 rounded-2xl mx-auto mb-6 flex items-center justify-center backdrop-blur-sm">

@@ -269,13 +269,13 @@ export function HelpdeskTickets() {
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 type="text"
                 placeholder="Search by ticket number, subject, or requester..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -348,19 +348,19 @@ export function HelpdeskTickets() {
           <table className="w-full">
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
-                <th className="text-left p-4 w-12">
+                <th className="text-start p-4 w-12">
                   <Checkbox
                     checked={selectedTickets.size === filteredTickets.length && filteredTickets.length > 0}
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Ticket</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Requester</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Assignee</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Category</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Priority</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">SLA</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Ticket</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Requester</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Assignee</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Category</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Priority</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">SLA</th>
                 <th className="text-center p-4 text-caption font-semibold text-text-secondary uppercase w-12">Actions</th>
               </tr>
             </thead>

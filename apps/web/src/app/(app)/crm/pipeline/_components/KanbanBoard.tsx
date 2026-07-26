@@ -210,7 +210,7 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
           {moveError.message}
           <button
             type="button"
-            className="ml-2 underline"
+            className="ms-2 underline"
             onClick={() => setMoveError(null)}
           >
             Dismiss

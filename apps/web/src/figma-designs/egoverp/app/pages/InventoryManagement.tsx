@@ -231,13 +231,13 @@ export function InventoryManagement() {
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 type="text"
                 placeholder="Search by SKU, name, or supplier..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -279,14 +279,14 @@ export function InventoryManagement() {
           <table className="w-full">
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Item</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Category</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Warehouse</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Quantity</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Reorder Point</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Unit Cost</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Total Value</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Item</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Category</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Warehouse</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Quantity</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Reorder Point</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Unit Cost</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Total Value</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
                 <th className="text-center p-4 text-caption font-semibold text-text-secondary uppercase">Actions</th>
               </tr>
             </thead>
@@ -318,18 +318,18 @@ export function InventoryManagement() {
                         <p className="text-body-sm text-text-primary">{item.warehouse}</p>
                       </div>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className={`text-body-sm font-semibold ${needsReorder ? 'text-intent-danger' : 'text-text-primary'}`}>
                         {item.quantity}
                       </p>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm text-text-muted">{item.reorderPoint}</p>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm text-text-primary">₹{item.unitCost.toLocaleString('en-IN')}</p>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm font-semibold text-text-primary">₹{item.totalValue.toLocaleString('en-IN')}</p>
                     </td>
                     <td className="p-4">

@@ -62,7 +62,7 @@ export function PredictionBadge({
       <span>{label}</span>
       {isFallback && (
         <span
-          className="ml-0.5 text-[10px] opacity-70"
+          className="ms-0.5 text-[10px] opacity-70"
           aria-hidden="true"
           title="Fallback model used"
         >
@@ -70,7 +70,7 @@ export function PredictionBadge({
         </span>
       )}
       {staleness && (
-        <span className="ml-0.5 text-[10px] opacity-60" aria-hidden="true">
+        <span className="ms-0.5 text-[10px] opacity-60" aria-hidden="true">
           {staleness}
         </span>
       )}

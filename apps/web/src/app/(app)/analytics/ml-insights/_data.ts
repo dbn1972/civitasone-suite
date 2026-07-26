@@ -1,5 +1,5 @@
 /**
- * ML Insights data loaders. Fetches from the ml-service evaluation and
+ * ML Insights data loaders. Fetches from the ms-service evaluation and
  * prediction endpoints to power the ML Insights dashboard pages.
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";

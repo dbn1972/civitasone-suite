@@ -220,13 +220,13 @@ export function ChartOfAccounts() {
             {/* Search */}
             <div className="flex-1 min-w-[250px] max-w-md">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
                 <Input
                   id="search-accounts"
                   placeholder="Search by code or name..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="ps-10"
                 />
               </div>
             </div>
@@ -289,25 +289,25 @@ export function ChartOfAccounts() {
           <table className="w-full" role="treegrid">
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
-                <th className={`px-4 text-left text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
+                <th className={`px-4 text-start text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
                   Code
                 </th>
-                <th className={`px-4 text-left text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
+                <th className={`px-4 text-start text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
                   Name
                 </th>
-                <th className={`px-4 text-left text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
+                <th className={`px-4 text-start text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
                   Type
                 </th>
-                <th className={`px-4 text-left text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
+                <th className={`px-4 text-start text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
                   Currency
                 </th>
-                <th className={`px-4 text-right text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
+                <th className={`px-4 text-end text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
                   Balance
                 </th>
-                <th className={`px-4 text-left text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
+                <th className={`px-4 text-start text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
                   Status
                 </th>
-                <th className={`px-4 text-left text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
+                <th className={`px-4 text-start text-body-sm font-semibold text-text-primary ${density === 'comfortable' ? 'py-4' : 'py-2'}`}>
                   Actions
                 </th>
               </tr>
@@ -369,7 +369,7 @@ function AccountRow({
               onClick={onToggle}
               variant="ghost"
               size="icon"
-              className="mr-2 size-6 p-0"
+              className="me-2 size-6 p-0"
               aria-label={isExpanded ? 'Collapse' : 'Expand'}
             >
               {isExpanded ? (
@@ -397,7 +397,7 @@ function AccountRow({
       <td className={`px-4 ${padding}`}>
         <span className="font-mono text-text-secondary text-body-sm">{account.currency}</span>
       </td>
-      <td className={`px-4 ${padding} text-right`}>
+      <td className={`px-4 ${padding} text-end`}>
         <span className="font-mono text-text-primary">
           {account.balance.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
         </span>
@@ -463,7 +463,7 @@ function AccountDetailDrawer({ account, onClose }: { account: Account; onClose: 
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25 }}
-        className="fixed top-0 right-0 bottom-0 w-full max-w-2xl bg-surface-raised shadow-2xl z-50 overflow-y-auto"
+        className="fixed top-0 end-0 bottom-0 w-full max-w-2xl bg-surface-raised shadow-2xl z-50 overflow-y-auto"
       >
         <div className="sticky top-0 bg-surface-raised border-b-2 border-border-subtle p-6 flex items-center justify-between">
           <div>

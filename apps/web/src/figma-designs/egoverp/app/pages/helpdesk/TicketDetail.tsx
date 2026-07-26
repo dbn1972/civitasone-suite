@@ -343,7 +343,7 @@ export function TicketDetail() {
             <Button variant="secondary">
               Resolve
             </Button>
-            <div className="relative ml-auto">
+            <div className="relative ms-auto">
               <Button variant="secondary" size="sm" leadingIcon={<MoreVertical />}>
                 More
               </Button>
@@ -391,7 +391,7 @@ export function TicketDetail() {
                           Canned Responses
                         </button>
                         {showCannedResponses && (
-                          <div className="absolute top-full left-0 mt-2 w-64 bg-surface-raised border-2 border-border-default rounded-lg shadow-lg p-2 z-10">
+                          <div className="absolute top-full start-0 mt-2 w-64 bg-surface-raised border-2 border-border-default rounded-lg shadow-lg p-2 z-10">
                             {CANNED_RESPONSES.map((response) => (
                               <button
                                 key={response.id}
@@ -399,7 +399,7 @@ export function TicketDetail() {
                                   setReplyText(response.body);
                                   setShowCannedResponses(false);
                                 }}
-                                className="w-full text-left px-3 py-2 text-body-sm text-text-primary hover:bg-surface-sunken rounded transition-colors"
+                                className="w-full text-start px-3 py-2 text-body-sm text-text-primary hover:bg-surface-sunken rounded transition-colors"
                               >
                                 {response.title}
                               </button>
@@ -449,7 +449,7 @@ export function TicketDetail() {
                         </Badge>
                         {message.isInternal && (
                           <Badge intent="warning" size="sm">
-                            <Lock className="size-3 mr-1" />
+                            <Lock className="size-3 me-1" />
                             Internal
                           </Badge>
                         )}
@@ -469,7 +469,7 @@ export function TicketDetail() {
       </div>
 
       {/* Right Sidebar - Metadata */}
-      <div className="flex-shrink-0 w-full md:w-[400px] bg-surface-raised border-l-2 border-border-subtle overflow-y-auto p-6 space-y-6">
+      <div className="flex-shrink-0 w-full md:w-[400px] bg-surface-raised border-s-2 border-border-subtle overflow-y-auto p-6 space-y-6">
         {/* Requester */}
         <Card>
           <h3 className="text-h4 mb-4">Requester</h3>
@@ -483,7 +483,7 @@ export function TicketDetail() {
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Star key={i} className={`size-3 ${i < Math.floor(requester.avgCSAT) ? 'fill-current' : ''}`} />
                 ))}
-                <span className="ml-1">{requester.avgCSAT}/5</span>
+                <span className="ms-1">{requester.avgCSAT}/5</span>
               </div>
             </div>
           </div>

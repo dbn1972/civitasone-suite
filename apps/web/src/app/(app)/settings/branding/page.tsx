@@ -112,7 +112,7 @@ function PresetCard({ preset, isActive, onSelect }: { preset: Preset; isActive: 
   return (
     <button
       onClick={onSelect}
-      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all w-full text-left ${
+      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all w-full text-start ${
         isActive ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300 bg-white"
       }`}
     >
@@ -159,7 +159,7 @@ function LivePreview({ config }: { config: BrandConfig }) {
 
       <div className="flex h-[400px]">
         {/* Sidebar */}
-        <div className="w-48 border-r p-3 space-y-2" style={{ backgroundColor: config.colorSurface, borderColor: config.colorBorder }}>
+        <div className="w-48 border-e p-3 space-y-2" style={{ backgroundColor: config.colorSurface, borderColor: config.colorBorder }}>
           {["Dashboard", "Finance", "HR & Payroll", "Procurement", "Reports"].map((item, i) => (
             <div
               key={item}
@@ -320,7 +320,7 @@ export default function BrandingPage() {
   return (
     <div className="flex h-screen">
       {/* Left: Editor Panel */}
-      <div className="w-[420px] border-r overflow-y-auto p-6 space-y-6 bg-white">
+      <div className="w-[420px] border-e overflow-y-auto p-6 space-y-6 bg-white">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Brand & Theme</h1>
           <p className="text-sm text-gray-500 mt-1">Customize how your portal looks. Changes preview instantly on the right.</p>

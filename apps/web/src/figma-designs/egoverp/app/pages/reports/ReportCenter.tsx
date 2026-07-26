@@ -237,13 +237,13 @@ export function ReportCenter() {
           {/* Search */}
           <div className="flex-1 min-w-[250px] max-w-md">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 id="search-reports"
                 placeholder="Search reports..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -317,7 +317,7 @@ export function ReportCenter() {
                       e.stopPropagation();
                       toggleFavorite(report.id);
                     }}
-                    className="absolute top-4 right-4 size-8 flex items-center justify-center rounded-lg hover:bg-surface-sunken transition-colors"
+                    className="absolute top-4 end-4 size-8 flex items-center justify-center rounded-lg hover:bg-surface-sunken transition-colors"
                     aria-label={favorites.has(report.id) ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     <Star
@@ -335,7 +335,7 @@ export function ReportCenter() {
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-h4 text-text-primary mb-2 pr-8 line-clamp-2">
+                  <h3 className="text-h4 text-text-primary mb-2 pe-8 line-clamp-2">
                     {report.name}
                   </h3>
 
@@ -345,7 +345,7 @@ export function ReportCenter() {
                     <Badge intent="neutral" size="sm">{getCategoryLabel(report.category)}</Badge>
                     {report.scheduled && (
                       <Badge intent="primary" size="sm">
-                        <Clock className="size-3 mr-1" />
+                        <Clock className="size-3 me-1" />
                         Scheduled
                       </Badge>
                     )}

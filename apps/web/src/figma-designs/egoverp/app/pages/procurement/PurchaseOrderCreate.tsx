@@ -232,13 +232,13 @@ export function PurchaseOrderCreate() {
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
                 <th className="w-12"></th>
-                <th className="px-4 py-3 text-left text-body-sm font-semibold text-text-primary">Item</th>
-                <th className="px-4 py-3 text-left text-body-sm font-semibold text-text-primary">Description</th>
-                <th className="px-4 py-3 text-right text-body-sm font-semibold text-text-primary">Qty</th>
-                <th className="px-4 py-3 text-left text-body-sm font-semibold text-text-primary">UOM</th>
-                <th className="px-4 py-3 text-right text-body-sm font-semibold text-text-primary">Unit Price</th>
-                <th className="px-4 py-3 text-left text-body-sm font-semibold text-text-primary">Tax</th>
-                <th className="px-4 py-3 text-right text-body-sm font-semibold text-text-primary">Line Total</th>
+                <th className="px-4 py-3 text-start text-body-sm font-semibold text-text-primary">Item</th>
+                <th className="px-4 py-3 text-start text-body-sm font-semibold text-text-primary">Description</th>
+                <th className="px-4 py-3 text-end text-body-sm font-semibold text-text-primary">Qty</th>
+                <th className="px-4 py-3 text-start text-body-sm font-semibold text-text-primary">UOM</th>
+                <th className="px-4 py-3 text-end text-body-sm font-semibold text-text-primary">Unit Price</th>
+                <th className="px-4 py-3 text-start text-body-sm font-semibold text-text-primary">Tax</th>
+                <th className="px-4 py-3 text-end text-body-sm font-semibold text-text-primary">Line Total</th>
                 <th className="w-12"></th>
               </tr>
             </thead>
@@ -282,7 +282,7 @@ export function PurchaseOrderCreate() {
                       value={line.qty || ''}
                       onChange={(e) => updateLine(line.id, 'qty', parseFloat(e.target.value) || 0)}
                       placeholder="0"
-                      className="w-24 text-body-sm text-right"
+                      className="w-24 text-body-sm text-end"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -307,7 +307,7 @@ export function PurchaseOrderCreate() {
                       value={line.unitPrice || ''}
                       onChange={(e) => updateLine(line.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                       placeholder="0.00"
-                      className="w-32 text-body-sm text-right font-mono"
+                      className="w-32 text-body-sm text-end font-mono"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -326,7 +326,7 @@ export function PurchaseOrderCreate() {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-end">
                     <span className="font-mono font-semibold text-text-primary">
                       ₹{line.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
@@ -345,28 +345,28 @@ export function PurchaseOrderCreate() {
             </tbody>
             <tfoot className="bg-surface-sunken border-t-2 border-border-subtle">
               <tr>
-                <td colSpan={7} className="px-4 py-4 text-right font-semibold text-text-primary">
+                <td colSpan={7} className="px-4 py-4 text-end font-semibold text-text-primary">
                   Subtotal
                 </td>
-                <td className="px-4 py-4 text-right font-mono font-semibold text-text-primary">
+                <td className="px-4 py-4 text-end font-mono font-semibold text-text-primary">
                   ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td></td>
               </tr>
               <tr>
-                <td colSpan={7} className="px-4 py-2 text-right font-semibold text-text-primary">
+                <td colSpan={7} className="px-4 py-2 text-end font-semibold text-text-primary">
                   Tax Total
                 </td>
-                <td className="px-4 py-2 text-right font-mono font-semibold text-text-primary">
+                <td className="px-4 py-2 text-end font-mono font-semibold text-text-primary">
                   ₹{taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td></td>
               </tr>
               <tr className="border-t-2 border-border-subtle">
-                <td colSpan={7} className="px-4 py-4 text-right font-bold text-text-primary text-base">
+                <td colSpan={7} className="px-4 py-4 text-end font-bold text-text-primary text-base">
                   Grand Total
                 </td>
-                <td className="px-4 py-4 text-right font-mono font-bold text-text-primary text-base">
+                <td className="px-4 py-4 text-end font-mono font-bold text-text-primary text-base">
                   ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td></td>
@@ -378,7 +378,7 @@ export function PurchaseOrderCreate() {
 
       {/* Sticky Save Bar */}
       <motion.div
-        className="fixed bottom-0 left-0 right-0 bg-surface-raised border-t-2 border-border-subtle shadow-lg z-30"
+        className="fixed bottom-0 start-0 end-0 bg-surface-raised border-t-2 border-border-subtle shadow-lg z-30"
         initial={{ y: 100 }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', damping: 20 }}

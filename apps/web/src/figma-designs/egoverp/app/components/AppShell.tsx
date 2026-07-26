@@ -152,7 +152,7 @@ export function AppShell({ children }: AppShellProps) {
             animate={{ width: 280, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="hidden lg:flex flex-col bg-surface-raised border-r-2 border-border-subtle overflow-hidden"
+            className="hidden lg:flex flex-col bg-surface-raised border-e-2 border-border-subtle overflow-hidden"
           >
             <SidebarContent location={location} onNavigate={() => {}} />
           </motion.aside>
@@ -175,7 +175,7 @@ export function AppShell({ children }: AppShellProps) {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25 }}
-              className="fixed top-0 left-0 bottom-0 w-[280px] bg-surface-raised z-50 lg:hidden flex flex-col shadow-lg"
+              className="fixed top-0 start-0 bottom-0 w-[280px] bg-surface-raised z-50 lg:hidden flex flex-col shadow-lg"
             >
               <SidebarContent location={location} onNavigate={() => setMobileMenuOpen(false)} />
             </motion.aside>
@@ -209,8 +209,8 @@ export function AppShell({ children }: AppShellProps) {
             <button className="size-10 rounded-lg hover:bg-surface-sunken transition-colors flex items-center justify-center">
               <Settings className="size-5 text-text-secondary" />
             </button>
-            <div className="flex items-center gap-3 pl-3 border-l-2 border-border-subtle">
-              <div className="hidden md:block text-right">
+            <div className="flex items-center gap-3 ps-3 border-s-2 border-border-subtle">
+              <div className="hidden md:block text-end">
                 <div className="text-body-sm font-medium text-text-primary">Admin User</div>
                 <div className="text-caption text-text-muted">administrator@gov.in</div>
               </div>
@@ -336,7 +336,7 @@ function NavItemComponent({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden ml-8 mt-1 space-y-1"
+            className="overflow-hidden ms-8 mt-1 space-y-1"
           >
             {item.children!.map((child) => {
               const isChildActive = location.pathname === child.path;

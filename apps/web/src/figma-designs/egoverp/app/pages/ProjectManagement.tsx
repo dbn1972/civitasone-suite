@@ -280,13 +280,13 @@ export function ProjectManagement() {
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 type="text"
                 placeholder="Search by project code, name, or manager..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>

@@ -350,7 +350,7 @@ export function PurchaseOrderView() {
                     </span>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <div className="text-body-sm text-text-muted mb-1">Grand Total</div>
                   <div className="text-h2 font-bold font-mono text-intent-primary">
                     {po.total.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
@@ -368,14 +368,14 @@ export function PurchaseOrderView() {
               <table className="w-full">
                 <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                   <tr>
-                    <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Item Code</th>
-                    <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Description</th>
-                    <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Ordered</th>
-                    <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Received</th>
+                    <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Item Code</th>
+                    <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Description</th>
+                    <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Ordered</th>
+                    <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Received</th>
                     <th className="px-4 py-4 text-center text-body-sm font-semibold text-text-primary">UOM</th>
-                    <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Unit Price</th>
+                    <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Unit Price</th>
                     <th className="px-4 py-4 text-center text-body-sm font-semibold text-text-primary">Tax</th>
-                    <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Line Total</th>
+                    <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Line Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
@@ -387,12 +387,12 @@ export function PurchaseOrderView() {
                           <span className="font-mono text-text-primary font-medium">{line.item}</span>
                         </td>
                         <td className="px-4 py-4 text-text-primary">{line.description}</td>
-                        <td className="px-4 py-4 text-right font-mono text-text-primary">{line.qty}</td>
-                        <td className="px-4 py-4 text-right">
+                        <td className="px-4 py-4 text-end font-mono text-text-primary">{line.qty}</td>
+                        <td className="px-4 py-4 text-end">
                           <div className="space-y-1">
                             <span className="font-mono text-text-primary">{line.receivedQty}</span>
                             {line.receivedQty < line.qty && (
-                              <div className="w-24 ml-auto">
+                              <div className="w-24 ms-auto">
                                 <div className="h-1.5 bg-surface-sunken rounded-full overflow-hidden">
                                   <div
                                     className="h-full bg-intent-info rounded-full"
@@ -404,13 +404,13 @@ export function PurchaseOrderView() {
                           </div>
                         </td>
                         <td className="px-4 py-4 text-center text-text-secondary">{line.uom}</td>
-                        <td className="px-4 py-4 text-right font-mono text-text-primary">
+                        <td className="px-4 py-4 text-end font-mono text-text-primary">
                           {line.unitPrice.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
                         </td>
                         <td className="px-4 py-4 text-center">
                           <span className="text-caption font-mono text-text-secondary">{line.taxCode}</span>
                         </td>
-                        <td className="px-4 py-4 text-right font-mono text-text-primary font-medium">
+                        <td className="px-4 py-4 text-end font-mono text-text-primary font-medium">
                           {line.lineTotal.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
                         </td>
                       </tr>
@@ -419,26 +419,26 @@ export function PurchaseOrderView() {
                 </tbody>
                 <tfoot className="bg-surface-sunken border-t-2 border-border-default">
                   <tr>
-                    <td colSpan={7} className="px-4 py-4 text-right font-semibold text-text-primary">
+                    <td colSpan={7} className="px-4 py-4 text-end font-semibold text-text-primary">
                       Subtotal:
                     </td>
-                    <td className="px-4 py-4 text-right font-mono font-bold text-text-primary">
+                    <td className="px-4 py-4 text-end font-mono font-bold text-text-primary">
                       {po.subtotal.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={7} className="px-4 py-3 text-right font-semibold text-text-primary">
+                    <td colSpan={7} className="px-4 py-3 text-end font-semibold text-text-primary">
                       Tax Total:
                     </td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-text-primary">
+                    <td className="px-4 py-3 text-end font-mono font-bold text-text-primary">
                       {po.taxTotal.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={7} className="px-4 py-4 text-right font-bold text-h4 text-text-primary">
+                    <td colSpan={7} className="px-4 py-4 text-end font-bold text-h4 text-text-primary">
                       Grand Total:
                     </td>
-                    <td className="px-4 py-4 text-right font-mono font-bold text-h3 text-intent-primary">
+                    <td className="px-4 py-4 text-end font-mono font-bold text-h3 text-intent-primary">
                       {po.total.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
                     </td>
                   </tr>
@@ -469,13 +469,13 @@ export function PurchaseOrderView() {
                 <table className="w-full">
                   <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                     <tr>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">GRN Number</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Date</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Received By</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Items</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Total Qty</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Status</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Actions</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">GRN Number</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Date</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Received By</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Items</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Total Qty</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Status</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-subtle">
@@ -487,8 +487,8 @@ export function PurchaseOrderView() {
                         </td>
                         <td className="px-4 py-4 text-text-secondary">{new Date(grn.date).toLocaleDateString('en-IN')}</td>
                         <td className="px-4 py-4 text-text-primary">{grn.receivedBy}</td>
-                        <td className="px-4 py-4 text-right font-mono text-text-primary">{grn.items}</td>
-                        <td className="px-4 py-4 text-right font-mono text-text-primary">{grn.totalQty}</td>
+                        <td className="px-4 py-4 text-end font-mono text-text-primary">{grn.items}</td>
+                        <td className="px-4 py-4 text-end font-mono text-text-primary">{grn.totalQty}</td>
                         <td className="px-4 py-4">
                           <Badge intent={grn.status === 'posted' ? 'success' : 'neutral'}>
                             {grn.status === 'posted' ? 'Posted' : 'Draft'}
@@ -528,13 +528,13 @@ export function PurchaseOrderView() {
                 <table className="w-full">
                   <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                     <tr>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Invoice Number</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Invoice Date</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Due Date</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Amount</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Match Status</th>
-                      <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Variance</th>
-                      <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Actions</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Invoice Number</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Invoice Date</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Due Date</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Amount</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Match Status</th>
+                      <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Variance</th>
+                      <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-subtle">
@@ -549,7 +549,7 @@ export function PurchaseOrderView() {
                           </td>
                           <td className="px-4 py-4 text-text-secondary">{new Date(invoice.invoiceDate).toLocaleDateString('en-IN')}</td>
                           <td className="px-4 py-4 text-text-secondary">{new Date(invoice.dueDate).toLocaleDateString('en-IN')}</td>
-                          <td className="px-4 py-4 text-right font-mono text-text-primary">
+                          <td className="px-4 py-4 text-end font-mono text-text-primary">
                             {invoice.amount.toLocaleString('en-IN', { style: 'currency', currency: po.currency })}
                           </td>
                           <td className="px-4 py-4">
@@ -558,7 +558,7 @@ export function PurchaseOrderView() {
                               <Badge intent={matchConfig.intent}>{matchConfig.label}</Badge>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-right">
+                          <td className="px-4 py-4 text-end">
                             {invoice.varianceAmount ? (
                               <span className={`font-mono font-medium ${invoice.varianceAmount > 0 ? 'text-intent-danger' : 'text-intent-success'}`}>
                                 {invoice.varianceAmount > 0 ? '+' : ''}

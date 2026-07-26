@@ -7,7 +7,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
     <RouteError
       error={error}
       reset={reset}
-      backHref="/analytics/ml-insights"
+      backHref="/analytics/ms-insights"
       backLabel="Back to ML Insights"
       area="ML Insights page"
     />

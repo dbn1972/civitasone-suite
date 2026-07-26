@@ -302,13 +302,13 @@ export function Integrations() {
             className="max-w-2xl mx-auto"
           >
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-text-muted pointer-events-none" />
+              <Search className="absolute start-4 top-1/2 -translate-y-1/2 size-5 text-text-muted pointer-events-none" />
               <Input
                 type="text"
                 placeholder="Search integrations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 pr-4 py-4"
+                className="ps-12 pe-4 py-4"
               />
             </div>
           </motion.div>
@@ -361,7 +361,7 @@ export function Integrations() {
                   }`}
                 >
                   {category}
-                  <span className={`ml-2 text-caption ${
+                  <span className={`ms-2 text-caption ${
                     selectedCategory === category ? 'opacity-90' : 'opacity-60'
                   }`}>
                     ({count})
@@ -425,7 +425,7 @@ export function Integrations() {
                             </div>
                           ))}
                           {integration.features.length > 3 && (
-                            <p className="text-caption text-intent-primary font-medium ml-6">
+                            <p className="text-caption text-intent-primary font-medium ms-6">
                               +{integration.features.length - 3} more features
                             </p>
                           )}
@@ -504,7 +504,7 @@ export function Integrations() {
                     <div className="size-3 rounded-full bg-intent-warning" />
                     <div className="size-3 rounded-full bg-intent-success" />
                   </div>
-                  <span className="text-caption text-text-muted ml-2">example.js</span>
+                  <span className="text-caption text-text-muted ms-2">example.js</span>
                 </div>
                 <pre className="text-caption text-text-primary font-mono overflow-x-auto">
                   <code>{`// Initialize CivitasOne API
@@ -554,7 +554,7 @@ console.log(\`Invoice created: \${invoice.id}\`);`}</code>
               <Card key={idx} className="p-6 hover:shadow-[var(--shadow-lg)] transition-shadow cursor-pointer group">
                 <div className="aspect-video bg-gradient-to-br from-brand-primary to-brand-accent rounded-lg mb-4 flex items-center justify-center group-hover:shadow-[0_8px_16px_rgba(59,130,246,0.3)] transition-shadow">
                   <div className="size-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                    <Play className="size-8 text-white ml-1" />
+                    <Play className="size-8 text-white ms-1" />
                   </div>
                 </div>
                 <h4 className="text-h4 mb-2">{video.title}</h4>
@@ -571,8 +571,8 @@ console.log(\`Invoice created: \${invoice.id}\`);`}</code>
           transition={{ delay: 1.2 }}
         >
           <Card className="p-16 bg-gradient-to-br from-brand-primary via-intent-primary to-brand-accent text-white text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-32 -mt-32" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-5 rounded-full -ml-24 -mb-24" />
+            <div className="absolute top-0 end-0 w-64 h-64 bg-white opacity-5 rounded-full -me-32 -mt-32" />
+            <div className="absolute bottom-0 start-0 w-48 h-48 bg-white opacity-5 rounded-full -ms-24 -mb-24" />
 
             <div className="relative z-10">
               <div className="size-20 bg-white bg-opacity-20 rounded-2xl mx-auto mb-6 flex items-center justify-center backdrop-blur-sm">

@@ -291,7 +291,7 @@ export function ApprovalInbox() {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25 }}
-              className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-surface-canvas rounded-t-2xl z-50 overflow-y-auto shadow-2xl"
+              className="fixed bottom-0 start-0 end-0 max-h-[85vh] bg-surface-canvas rounded-t-2xl z-50 overflow-y-auto shadow-2xl"
             >
               <div className="sticky top-0 bg-surface-raised p-6 border-b-2 border-border-subtle">
                 <div className="flex items-start justify-between gap-4">
@@ -408,7 +408,7 @@ export function ApprovalInbox() {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25 }}
-              className="fixed bottom-0 left-0 right-0 bg-surface-canvas rounded-t-2xl z-50 shadow-2xl"
+              className="fixed bottom-0 start-0 end-0 bg-surface-canvas rounded-t-2xl z-50 shadow-2xl"
             >
               <div className="p-6">
                 <h3 className="text-h3 mb-4">Reject Approval</h3>

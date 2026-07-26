@@ -276,10 +276,10 @@ export function HelpdeskReports() {
           <table className="w-full">
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Agent/Team</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Tickets Resolved</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Avg Resolution Time</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Satisfaction</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Agent/Team</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Tickets Resolved</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Avg Resolution Time</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Satisfaction</th>
               </tr>
             </thead>
             <tbody>
@@ -299,13 +299,13 @@ export function HelpdeskReports() {
                       <p className="text-body-sm font-medium text-text-primary">{agent.agent}</p>
                     </div>
                   </td>
-                  <td className="p-4 text-right">
+                  <td className="p-4 text-end">
                     <p className="text-body-sm font-semibold text-text-primary">{agent.resolved}</p>
                   </td>
-                  <td className="p-4 text-right">
+                  <td className="p-4 text-end">
                     <p className="text-body-sm text-text-primary">{agent.avgTime}h</p>
                   </td>
-                  <td className="p-4 text-right">
+                  <td className="p-4 text-end">
                     <Badge variant={agent.satisfaction >= 4.5 ? 'success' : agent.satisfaction >= 4.0 ? 'info' : 'warning'}>
                       {agent.satisfaction}/5
                     </Badge>

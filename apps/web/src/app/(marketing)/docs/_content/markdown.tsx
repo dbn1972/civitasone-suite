@@ -79,7 +79,7 @@ export function MarkdownContent({ content }: { content: string }) {
         i++;
       }
       elements.push(
-        <blockquote key={key++} className="my-4 border-l-4 border-blue-200 bg-blue-50 py-3 pl-4 pr-3 text-sm text-blue-900 rounded-r-lg">
+        <blockquote key={key++} className="my-4 border-s-4 border-blue-200 bg-blue-50 py-3 ps-4 pe-3 text-sm text-blue-900 rounded-e-lg">
           {quoteLines.map((ql, qi) => <p key={qi}>{inline(ql)}</p>)}
         </blockquote>
       );
@@ -94,7 +94,7 @@ export function MarkdownContent({ content }: { content: string }) {
         i++;
       }
       elements.push(
-        <ol key={key++} className="my-4 list-decimal space-y-1 pl-6 text-gray-700">
+        <ol key={key++} className="my-4 list-decimal space-y-1 ps-6 text-gray-700">
           {listItems.map((item, li) => <li key={li}>{inline(item)}</li>)}
         </ol>
       );
@@ -109,7 +109,7 @@ export function MarkdownContent({ content }: { content: string }) {
         i++;
       }
       elements.push(
-        <ul key={key++} className="my-4 list-disc space-y-1 pl-6 text-gray-700">
+        <ul key={key++} className="my-4 list-disc space-y-1 ps-6 text-gray-700">
           {listItems.map((item, li) => <li key={li}>{inline(item)}</li>)}
         </ul>
       );
@@ -183,11 +183,11 @@ function renderTable(tableLines: string[], key: number): React.ReactNode {
 
   return (
     <div key={key} className="my-4 overflow-x-auto">
-      <table className="w-full text-left text-sm border-collapse">
+      <table className="w-full text-start text-sm border-collapse">
         <thead>
           <tr className="border-b border-gray-200">
             {header.map((cell, ci) => (
-              <th key={ci} className="py-2 pr-4 font-semibold text-gray-900">{inline(cell)}</th>
+              <th key={ci} className="py-2 pe-4 font-semibold text-gray-900">{inline(cell)}</th>
             ))}
           </tr>
         </thead>
@@ -195,7 +195,7 @@ function renderTable(tableLines: string[], key: number): React.ReactNode {
           {body.map((row, ri) => (
             <tr key={ri} className="border-b border-gray-100">
               {row.map((cell, ci) => (
-                <td key={ci} className="py-2 pr-4 text-gray-700">{inline(cell)}</td>
+                <td key={ci} className="py-2 pe-4 text-gray-700">{inline(cell)}</td>
               ))}
             </tr>
           ))}

@@ -339,14 +339,14 @@ export function HRMSAttendance() {
             <table className="w-full">
               <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                 <tr>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Employee</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Department</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Shift</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Clock In</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Clock Out</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Employee</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Department</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Shift</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Clock In</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Clock Out</th>
                   <th className="text-center p-4 text-caption font-semibold text-text-secondary uppercase">Hours</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Location</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Location</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>

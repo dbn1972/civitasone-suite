@@ -18,7 +18,7 @@ export function InstallerShell({ steps, currentStep, children }: InstallerShellP
   return (
     <div className="size-full min-h-screen bg-surface-canvas flex flex-col lg:flex-row">
       {/* Left Rail - Stepper (Desktop) */}
-      <aside className="hidden lg:flex lg:w-80 bg-surface-raised border-r-2 border-border-subtle flex-col">
+      <aside className="hidden lg:flex lg:w-80 bg-surface-raised border-e-2 border-border-subtle flex-col">
         <div className="p-6 border-b-2 border-border-subtle">
           <div className="flex items-center gap-3 mb-2">
             <div className="size-10 bg-gradient-to-br from-brand-primary to-brand-accent rounded-lg flex items-center justify-center">

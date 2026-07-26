@@ -204,21 +204,21 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">How we compare</h2>
           <p className="mt-4 text-lg text-gray-500">CivitasOne vs legacy ERPs — no contest.</p>
           <div className="mt-12 overflow-x-auto">
-            <table className="w-full min-w-[600px] text-left text-sm" data-testid="comparison-table">
+            <table className="w-full min-w-[600px] text-start text-sm" data-testid="comparison-table">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="py-3 pr-4 font-semibold text-gray-900">Feature</th>
-                  <th className="py-3 pr-4 font-semibold text-gray-900">CivitasOne</th>
-                  <th className="py-3 pr-4 font-semibold text-gray-500">SAP</th>
+                  <th className="py-3 pe-4 font-semibold text-gray-900">Feature</th>
+                  <th className="py-3 pe-4 font-semibold text-gray-900">CivitasOne</th>
+                  <th className="py-3 pe-4 font-semibold text-gray-500">SAP</th>
                   <th className="py-3 font-semibold text-gray-500">Oracle</th>
                 </tr>
               </thead>
               <tbody>
                 {comparison.map((row) => (
                   <tr key={row.feature} className="border-b border-gray-100">
-                    <td className="py-3 pr-4 font-medium text-gray-700">{row.feature}</td>
-                    <td className="py-3 pr-4 text-gray-900">{row.c1}</td>
-                    <td className="py-3 pr-4 text-gray-500">{row.sap}</td>
+                    <td className="py-3 pe-4 font-medium text-gray-700">{row.feature}</td>
+                    <td className="py-3 pe-4 text-gray-900">{row.c1}</td>
+                    <td className="py-3 pe-4 text-gray-500">{row.sap}</td>
                     <td className="py-3 text-gray-500">{row.oracle}</td>
                   </tr>
                 ))}

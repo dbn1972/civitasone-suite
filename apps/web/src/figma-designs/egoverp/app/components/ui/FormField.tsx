@@ -15,7 +15,7 @@ export function FormField({ label, htmlFor, error, helperText, required, childre
     <div className="w-full">
       <label htmlFor={htmlFor} className="block text-body-sm font-medium text-text-primary mb-2">
         {label}
-        {required && <span className="text-intent-danger ml-1">*</span>}
+        {required && <span className="text-intent-danger ms-1">*</span>}
       </label>
       {children}
       {(error || helperText) && (

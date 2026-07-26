@@ -284,11 +284,11 @@ export function JournalEntry({ mode = 'create' }: { mode?: 'create' | 'view' }) 
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
                 {!isReadOnly && <th className="w-12"></th>}
-                <th className="px-4 py-3 text-left text-body-sm font-semibold text-text-primary">Account</th>
-                <th className="px-4 py-3 text-left text-body-sm font-semibold text-text-primary">Description</th>
-                <th className="px-4 py-3 text-right text-body-sm font-semibold text-text-primary">Debit (₹)</th>
-                <th className="px-4 py-3 text-right text-body-sm font-semibold text-text-primary">Credit (₹)</th>
-                <th className="px-4 py-3 text-left text-body-sm font-semibold text-text-primary">Tax Code</th>
+                <th className="px-4 py-3 text-start text-body-sm font-semibold text-text-primary">Account</th>
+                <th className="px-4 py-3 text-start text-body-sm font-semibold text-text-primary">Description</th>
+                <th className="px-4 py-3 text-end text-body-sm font-semibold text-text-primary">Debit (₹)</th>
+                <th className="px-4 py-3 text-end text-body-sm font-semibold text-text-primary">Credit (₹)</th>
+                <th className="px-4 py-3 text-start text-body-sm font-semibold text-text-primary">Tax Code</th>
                 {!isReadOnly && <th className="w-12"></th>}
               </tr>
             </thead>
@@ -337,7 +337,7 @@ export function JournalEntry({ mode = 'create' }: { mode?: 'create' | 'view' }) 
                       onChange={(e) => updateLine(line.id, 'debit', parseFloat(e.target.value) || 0)}
                       disabled={isReadOnly}
                       placeholder="0.00"
-                      className="text-body-sm text-right font-mono"
+                      className="text-body-sm text-end font-mono"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -347,7 +347,7 @@ export function JournalEntry({ mode = 'create' }: { mode?: 'create' | 'view' }) 
                       onChange={(e) => updateLine(line.id, 'credit', parseFloat(e.target.value) || 0)}
                       disabled={isReadOnly}
                       placeholder="0.00"
-                      className="text-body-sm text-right font-mono"
+                      className="text-body-sm text-end font-mono"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -387,10 +387,10 @@ export function JournalEntry({ mode = 'create' }: { mode?: 'create' | 'view' }) 
                 <td colSpan={2} className="px-4 py-4 font-semibold text-text-primary">
                   Totals
                 </td>
-                <td className="px-4 py-4 text-right font-mono font-semibold text-text-primary">
+                <td className="px-4 py-4 text-end font-mono font-semibold text-text-primary">
                   ₹{totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
-                <td className="px-4 py-4 text-right font-mono font-semibold text-text-primary">
+                <td className="px-4 py-4 text-end font-mono font-semibold text-text-primary">
                   ₹{totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td colSpan={2} className="px-4 py-4">
@@ -417,7 +417,7 @@ export function JournalEntry({ mode = 'create' }: { mode?: 'create' | 'view' }) 
       {/* Sticky Save Bar */}
       {!isReadOnly && (
         <motion.div
-          className="fixed bottom-0 left-0 right-0 bg-surface-raised border-t-2 border-border-subtle shadow-lg z-30"
+          className="fixed bottom-0 start-0 end-0 bg-surface-raised border-t-2 border-border-subtle shadow-lg z-30"
           initial={{ y: 100 }}
           animate={{ y: 0 }}
           transition={{ type: 'spring', damping: 20 }}

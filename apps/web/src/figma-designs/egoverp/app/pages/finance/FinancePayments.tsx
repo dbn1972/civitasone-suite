@@ -283,13 +283,13 @@ export function FinancePayments() {
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 type="text"
                 placeholder="Search by payment number, vendor, or description..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -360,28 +360,28 @@ export function FinancePayments() {
           <table className="w-full">
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
-                <th className="text-left p-4 w-12">
+                <th className="text-start p-4 w-12">
                   <Checkbox
                     checked={selectedPayments.size === filteredPayments.length && filteredPayments.length > 0}
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
                   Payment
                 </th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
                   Vendor
                 </th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
                   Amount
                 </th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
                   Method
                 </th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
                   Due Date
                 </th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide">
                   Status
                 </th>
                 <th className="text-center p-4 text-caption font-semibold text-text-secondary uppercase tracking-wide w-12">
@@ -421,7 +421,7 @@ export function FinancePayments() {
                         <p className="text-caption text-text-muted">{payment.vendorId}</p>
                       </div>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm font-semibold text-text-primary">
                         ₹{payment.amount.toLocaleString('en-IN')}
                       </p>

@@ -22,7 +22,7 @@ export function BpmnPalette() {
           <li key={item.type}>
             <button
               type="button"
-              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-grab active:cursor-grabbing transition-colors"
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-grab active:cursor-grabbing transition-colors"
               draggable
               onDragStart={(e) => onDragStart(e, item.type)}
               aria-label={`Drag ${item.label} onto canvas`}

@@ -332,7 +332,7 @@ export function LandingPage() {
   return (
     <div className="min-h-screen bg-surface-canvas">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-surface-raised/80 border-b border-border-subtle backdrop-blur-xl">
+      <header className="fixed top-0 start-0 end-0 z-50 bg-surface-raised/80 border-b border-border-subtle backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
@@ -389,8 +389,8 @@ export function LandingPage() {
         {/* Animated Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 via-brand-accent/10 to-transparent" />
         <div className="absolute inset-0">
-          <div className="absolute top-20 left-10 size-72 bg-brand-primary/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-20 right-10 size-96 bg-brand-accent/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-20 start-10 size-72 bg-brand-primary/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-20 end-10 size-96 bg-brand-accent/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
         </div>
 
         <motion.div style={{ opacity: heroOpacity, scale: heroScale, y: heroY }} className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -593,7 +593,7 @@ export function LandingPage() {
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 3, repeat: Infinity }}
-              className="absolute -top-8 -right-8 p-4 bg-white shadow-2xl rounded-xl border-2 border-intent-success hidden lg:block"
+              className="absolute -top-8 -end-8 p-4 bg-white shadow-2xl rounded-xl border-2 border-intent-success hidden lg:block"
             >
               <div className="flex items-center gap-3">
                 <div className="size-12 bg-intent-success-bg rounded-lg flex items-center justify-center">
@@ -609,7 +609,7 @@ export function LandingPage() {
             <motion.div
               animate={{ y: [0, 10, 0] }}
               transition={{ duration: 2.5, repeat: Infinity, delay: 0.5 }}
-              className="absolute -bottom-8 -left-8 p-4 bg-white shadow-2xl rounded-xl border-2 border-intent-primary hidden lg:block"
+              className="absolute -bottom-8 -start-8 p-4 bg-white shadow-2xl rounded-xl border-2 border-intent-primary hidden lg:block"
             >
               <div className="flex items-center gap-3">
                 <div className="size-12 bg-intent-primary-bg rounded-lg flex items-center justify-center">
@@ -757,7 +757,7 @@ export function LandingPage() {
                       ₹{calculateROI().savings.toLocaleString('en-IN')}
                     </div>
                     <Badge variant="success" className="text-base">
-                      <TrendingDown className="size-4 mr-1" />
+                      <TrendingDown className="size-4 me-1" />
                       {calculateROI().savingsPercent}% reduction
                     </Badge>
                   </div>
@@ -915,8 +915,8 @@ export function LandingPage() {
       <section className="py-20 bg-gradient-to-br from-brand-primary to-brand-accent relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 left-0 size-96 bg-white rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-0 size-96 bg-white rounded-full blur-3xl" />
+          <div className="absolute top-0 start-0 size-96 bg-white rounded-full blur-3xl" />
+          <div className="absolute bottom-0 end-0 size-96 bg-white rounded-full blur-3xl" />
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -960,7 +960,7 @@ export function LandingPage() {
                             className="h-full bg-white/40"
                           />
                         </div>
-                        <span className="text-xl font-bold text-white/60 line-through min-w-[80px] text-right">
+                        <span className="text-xl font-bold text-white/60 line-through min-w-[80px] text-end">
                           {metric.before}
                         </span>
                       </div>
@@ -974,7 +974,7 @@ export function LandingPage() {
                             className="h-full bg-white rounded-full shadow-lg"
                           />
                         </div>
-                        <span className="text-2xl font-bold text-white min-w-[80px] text-right">
+                        <span className="text-2xl font-bold text-white min-w-[80px] text-end">
                           {metric.after}
                         </span>
                       </div>
@@ -982,7 +982,7 @@ export function LandingPage() {
 
                     <div className="text-base text-white/90 mb-3 font-medium">{metric.label}</div>
                     <Badge variant="success" className="bg-white/20 text-white border-white/30">
-                      <TrendingDown className="size-3 mr-1" />
+                      <TrendingDown className="size-3 me-1" />
                       {metric.reduction} reduction
                     </Badge>
                   </Card>
@@ -1035,7 +1035,7 @@ export function LandingPage() {
           <div className="max-w-5xl mx-auto">
             <div className="relative">
               {/* Timeline Line */}
-              <div className="absolute left-8 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-primary via-brand-accent to-intent-success hidden md:block" />
+              <div className="absolute start-8 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-primary via-brand-accent to-intent-success hidden md:block" />
 
               {/* Steps */}
               <div className="space-y-12">
@@ -1133,7 +1133,7 @@ export function LandingPage() {
             >
               <Card className="p-8 bg-gradient-to-br from-intent-success-bg to-surface-raised border-2 border-intent-success">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                  <div className="text-left">
+                  <div className="text-start">
                     <h4 className="text-h3 mb-2">Ready to Start Your Journey?</h4>
                     <p className="text-base text-text-secondary">
                       Schedule a discovery call and get your custom implementation timeline
@@ -1445,7 +1445,7 @@ export function LandingPage() {
           >
             <Card className="p-8 max-w-3xl mx-auto bg-gradient-to-br from-intent-primary-bg to-surface-raised">
               <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="text-left">
+                <div className="text-start">
                   <h4 className="text-h3 mb-2">Want a Custom Case Study?</h4>
                   <p className="text-base text-text-secondary">
                     We can create a tailored analysis showing exactly how CivitasOne would work for your organization
@@ -1479,7 +1479,7 @@ export function LandingPage() {
               <motion.div key={idx} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.1 }}>
                 <Card className={`p-8 h-full flex flex-col ${tier.popular ? 'border-4 border-brand-primary shadow-2xl scale-105 relative' : ''}`}>
                   {tier.popular && (
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2">
+                    <div className="absolute -top-5 start-1/2 -translate-x-1/2">
                       <Badge variant="primary" className="px-6 py-2 text-base shadow-lg">Most Popular</Badge>
                     </div>
                   )}
@@ -1523,12 +1523,12 @@ export function LandingPage() {
                 <table className="w-full">
                   <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                     <tr>
-                      <th className="px-6 py-4 text-left text-body-sm font-semibold text-text-primary">Feature</th>
+                      <th className="px-6 py-4 text-start text-body-sm font-semibold text-text-primary">Feature</th>
                       {PRICING_TIERS.map((tier, idx) => (
                         <th key={idx} className={`px-6 py-4 text-center text-body-sm font-semibold ${tier.popular ? 'text-intent-primary' : 'text-text-primary'}`}>
                           {tier.name}
                           {tier.popular && (
-                            <Badge variant="primary" className="ml-2 text-xs">Popular</Badge>
+                            <Badge variant="primary" className="ms-2 text-xs">Popular</Badge>
                           )}
                         </th>
                       ))}
@@ -1960,7 +1960,7 @@ export function LandingPage() {
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-brand-primary to-brand-accent border-t-4 border-white/20 shadow-2xl backdrop-blur-lg"
+            className="fixed bottom-0 start-0 end-0 z-50 bg-gradient-to-r from-brand-primary to-brand-accent border-t-4 border-white/20 shadow-2xl backdrop-blur-lg"
           >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1998,7 +1998,7 @@ export function LandingPage() {
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 2, type: 'spring' }}
-        className="fixed bottom-6 right-6 z-40"
+        className="fixed bottom-6 end-6 z-40"
       >
         <Button
           onClick={() => navigate('/company/contact')}
@@ -2010,9 +2010,9 @@ export function LandingPage() {
           <motion.div
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="absolute -top-1 -right-1 size-4 bg-intent-danger rounded-full border-2 border-white pointer-events-none"
+            className="absolute -top-1 -end-1 size-4 bg-intent-danger rounded-full border-2 border-white pointer-events-none"
           />
-          <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block pointer-events-none">
+          <div className="absolute bottom-full end-0 mb-2 hidden group-hover:block pointer-events-none">
             <div className="bg-surface-canvas text-text-primary px-4 py-2 rounded-lg shadow-lg whitespace-nowrap text-body-sm">
               Chat with us! We're online →
             </div>
@@ -2077,7 +2077,7 @@ export function LandingPage() {
                     return (
                       <button
                         key={idx}
-                        className="p-4 bg-surface-sunken hover:bg-surface-canvas rounded-lg text-left transition-colors group"
+                        className="p-4 bg-surface-sunken hover:bg-surface-canvas rounded-lg text-start transition-colors group"
                       >
                         <div className="flex items-center gap-3 mb-2">
                           <Icon className="size-5 text-intent-primary" />

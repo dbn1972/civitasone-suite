@@ -439,12 +439,12 @@ function Stage6InitialAdmin({
                 value={formData.adminPassword}
                 onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
                 placeholder="••••••••••••"
-                className="pr-12"
+                className="pe-12"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
               >
                 {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
               </button>
@@ -792,7 +792,7 @@ function DeploymentOption({
   return (
     <button
       onClick={onSelect}
-      className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+      className={`w-full p-4 rounded-lg border-2 text-start transition-all ${
         selected
           ? 'border-intent-primary bg-intent-primary-bg'
           : 'border-border-default hover:border-intent-primary'
@@ -807,7 +807,7 @@ function DeploymentOption({
           <p className="text-body-sm text-text-secondary">{description}</p>
         </div>
         <div
-          className={`size-5 rounded-full border-2 flex-shrink-0 ml-3 mt-1 ${
+          className={`size-5 rounded-full border-2 flex-shrink-0 ms-3 mt-1 ${
             selected ? 'border-intent-primary bg-intent-primary' : 'border-border-default'
           }`}
         >
@@ -838,7 +838,7 @@ function SizingCard({
   return (
     <button
       onClick={onSelect}
-      className={`p-6 rounded-lg border-2 text-left transition-all ${
+      className={`p-6 rounded-lg border-2 text-start transition-all ${
         selected
           ? 'border-intent-primary bg-intent-primary-bg'
           : 'border-border-default hover:border-intent-primary'
@@ -894,7 +894,7 @@ function AdapterOption({ label, selected = false, badge }: { label: string; sele
 
 function DownloadButton({ title, description, filename }: { title: string; description: string; filename: string }) {
   return (
-    <button className="w-full p-4 bg-surface-sunken hover:bg-surface-canvas border-2 border-border-subtle hover:border-intent-primary rounded-lg transition-all text-left group">
+    <button className="w-full p-4 bg-surface-sunken hover:bg-surface-canvas border-2 border-border-subtle hover:border-intent-primary rounded-lg transition-all text-start group">
       <div className="flex items-start gap-4">
         <div className="size-10 bg-intent-primary-bg text-intent-primary rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-intent-primary group-hover:text-white transition-colors">
           <FileDown className="size-5" />

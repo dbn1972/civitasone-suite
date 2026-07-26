@@ -67,7 +67,7 @@ export function ExplainabilityTooltip({ factors, children }: ExplainabilityToolt
         <span
           id={id}
           role="tooltip"
-          className="absolute top-full left-0 z-50 mt-2 w-64 rounded-lg bg-gray-900 p-3 text-white shadow-lg dark:bg-gray-800"
+          className="absolute top-full start-0 z-50 mt-2 w-64 rounded-lg bg-gray-900 p-3 text-white shadow-lg dark:bg-gray-800"
         >
           <span className="mb-2 block text-xs font-semibold text-gray-300">
             Key Factors

@@ -347,8 +347,8 @@ export function Changelog() {
                       </div>
                     </div>
                     {index === 0 && (
-                      <Badge variant="success" className="ml-4">
-                        <Sparkles className="size-3 mr-1" />
+                      <Badge variant="success" className="ms-4">
+                        <Sparkles className="size-3 me-1" />
                         Latest
                       </Badge>
                     )}
@@ -379,7 +379,7 @@ export function Changelog() {
                             <h3 className="text-h4">{config.label}</h3>
                             <Badge variant="default">{category.items.length}</Badge>
                           </div>
-                          <ul className="space-y-3 ml-13">
+                          <ul className="space-y-3 ms-13">
                             {category.items.map((item, itemIndex) => (
                               <li key={itemIndex} className="flex items-start gap-3 p-3 bg-surface-sunken rounded-lg hover:bg-surface-raised transition-colors">
                                 <CheckCircle2 className="size-4 text-intent-success flex-shrink-0 mt-0.5" />
@@ -432,8 +432,8 @@ export function Changelog() {
           className="mt-12"
         >
           <Card className="p-16 bg-gradient-to-br from-brand-primary via-intent-primary to-brand-accent text-white text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-32 -mt-32" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-5 rounded-full -ml-24 -mb-24" />
+            <div className="absolute top-0 end-0 w-64 h-64 bg-white opacity-5 rounded-full -me-32 -mt-32" />
+            <div className="absolute bottom-0 start-0 w-48 h-48 bg-white opacity-5 rounded-full -ms-24 -mb-24" />
 
             <div className="relative z-10">
               <div className="size-20 bg-white bg-opacity-20 rounded-2xl mx-auto mb-6 flex items-center justify-center backdrop-blur-sm">

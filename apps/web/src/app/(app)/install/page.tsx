@@ -113,7 +113,7 @@ export default async function Page() {
                         <p className="font-medium text-slate-900">
                           <span className="text-slate-500">Step {step.stepNo}:</span> {step.title}
                           {step.isRequired ? null : (
-                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                            <span className="ms-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
                               Optional
                             </span>
                           )}

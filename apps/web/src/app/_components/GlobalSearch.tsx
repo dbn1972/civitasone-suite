@@ -429,7 +429,7 @@ export function GlobalSearch() {
             close
           </span>
           {hasQuery && !loading && total > 0 && (
-            <span className="ml-auto">{total} result{total !== 1 ? "s" : ""}</span>
+            <span className="ms-auto">{total} result{total !== 1 ? "s" : ""}</span>
           )}
         </div>
       </div>

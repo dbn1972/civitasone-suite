@@ -84,7 +84,7 @@ export function CookiePolicy() {
                   <p className="text-body-sm text-text-secondary mb-2">{type.purpose}</p>
                   <p className="text-caption text-text-muted">Duration: {type.duration}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   {type.canDisable ? (
                     <span className="text-caption text-intent-warning">Optional</span>
                   ) : (

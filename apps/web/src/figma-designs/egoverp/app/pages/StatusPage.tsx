@@ -101,11 +101,11 @@ export function StatusPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-8">
-                      <div className="text-right">
+                      <div className="text-end">
                         <p className="text-caption text-text-muted mb-1">Uptime</p>
                         <p className="text-body-sm font-semibold text-text-primary">{service.uptime}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-end">
                         <p className="text-caption text-text-muted mb-1">Response Time</p>
                         <p className="text-body-sm font-semibold text-text-primary">{service.responseTime}</p>
                       </div>

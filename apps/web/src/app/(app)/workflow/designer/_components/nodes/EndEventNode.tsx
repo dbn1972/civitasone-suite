@@ -20,7 +20,7 @@ function EndEventNodeBase({ data, selected }: NodeProps) {
         aria-label="Connect to end event"
       />
       {data.label && data.label !== "End" && (
-        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-slate-600 whitespace-nowrap font-medium">
+        <div className="absolute -bottom-5 start-1/2 -translate-x-1/2 text-[10px] text-slate-600 whitespace-nowrap font-medium">
           {data.label}
         </div>
       )}

@@ -270,13 +270,13 @@ export function HRMSPayroll() {
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 type="text"
                 placeholder="Search by name, employee ID, or department..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -307,14 +307,14 @@ export function HRMSPayroll() {
           <table className="w-full">
             <thead className="bg-surface-sunken border-b-2 border-border-subtle">
               <tr>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Employee</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Department</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Basic</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Allowances</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Deductions</th>
-                <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Net Salary</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Payment Date</th>
-                <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Employee</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Department</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Basic</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Allowances</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Deductions</th>
+                <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Net Salary</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Payment Date</th>
+                <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
                 <th className="text-center p-4 text-caption font-semibold text-text-secondary uppercase">Actions</th>
               </tr>
             </thead>
@@ -340,16 +340,16 @@ export function HRMSPayroll() {
                     <td className="p-4">
                       <p className="text-body-sm text-text-primary">{record.department}</p>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm text-text-primary">₹{record.basicSalary.toLocaleString('en-IN')}</p>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm text-intent-success">+₹{record.allowances.toLocaleString('en-IN')}</p>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm text-intent-danger">-₹{record.deductions.toLocaleString('en-IN')}</p>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-end">
                       <p className="text-body-sm font-semibold text-text-primary">₹{record.netSalary.toLocaleString('en-IN')}</p>
                     </td>
                     <td className="p-4">

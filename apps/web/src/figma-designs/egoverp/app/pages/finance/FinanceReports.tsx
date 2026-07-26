@@ -366,7 +366,7 @@ export function FinanceReports() {
                   <span>→ {schedule.recipients}</span>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-end">
                 <p className="text-caption text-text-muted mb-1">Next Run</p>
                 <p className="text-body-sm font-medium text-text-primary">
                   {new Date(schedule.nextRun).toLocaleDateString('en-IN', {

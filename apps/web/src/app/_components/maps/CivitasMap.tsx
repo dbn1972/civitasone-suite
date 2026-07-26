@@ -260,7 +260,7 @@ export function CivitasMap({
       {/* Marker count indicator */}
       {markers.length > maxMarkers && (
         <div
-          className="absolute bottom-2 left-2 bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded"
+          className="absolute bottom-2 start-2 bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded"
           role="status"
           aria-live="polite"
         >

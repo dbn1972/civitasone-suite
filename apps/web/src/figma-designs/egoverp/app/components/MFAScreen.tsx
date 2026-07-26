@@ -348,7 +348,7 @@ export function MFAScreen({ prefilledError = null }: MFAScreenProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 100 }}
               transition={{ type: 'spring', damping: 25 }}
-              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl z-50 max-w-md mx-auto"
+              className="fixed bottom-0 start-0 end-0 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl z-50 max-w-md mx-auto"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -387,7 +387,7 @@ export function MFAScreen({ prefilledError = null }: MFAScreenProps) {
                       }`}>
                         {getMethodIcon(method)}
                       </div>
-                      <div className="flex-1 text-left">
+                      <div className="flex-1 text-start">
                         <p className="font-medium text-gray-900 dark:text-white">
                           {getMethodLabel(method)}
                         </p>

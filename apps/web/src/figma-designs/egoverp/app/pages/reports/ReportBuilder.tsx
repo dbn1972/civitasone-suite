@@ -512,7 +512,7 @@ export function ReportBuilder() {
 
         {/* Right Pane - Live Preview */}
         {showPreview && (
-          <div className="flex-shrink-0 w-full md:w-[500px] lg:w-[600px] bg-surface-raised border-l-2 border-border-subtle overflow-y-auto p-6">
+          <div className="flex-shrink-0 w-full md:w-[500px] lg:w-[600px] bg-surface-raised border-s-2 border-border-subtle overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-h3">Preview</h3>
               <div className="flex items-center gap-2">

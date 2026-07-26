@@ -34,8 +34,8 @@ export function HRMSEmployees() {
           <div className="flex items-center gap-4">
             <div className="flex-1 max-w-md">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
-                <Input id="search-employees" placeholder="Search employees..." className="pl-10" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+                <Input id="search-employees" placeholder="Search employees..." className="ps-10" />
               </div>
             </div>
             <Button variant="secondary" leadingIcon={<Download />}>Export</Button>

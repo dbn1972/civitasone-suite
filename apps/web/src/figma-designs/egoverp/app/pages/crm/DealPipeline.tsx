@@ -375,13 +375,13 @@ function DealPipelineInner() {
           {/* Search */}
           <div className="flex-1 min-w-[250px] max-w-md">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 id="search-deals"
                 placeholder="Search deals or organizations..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -443,12 +443,12 @@ function DealPipelineInner() {
               <table className="w-full">
                 <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                   <tr>
-                    <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Deal Name</th>
-                    <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Organization</th>
-                    <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Stage</th>
-                    <th className="px-4 py-4 text-right text-body-sm font-semibold text-text-primary">Value</th>
-                    <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Owner</th>
-                    <th className="px-4 py-4 text-left text-body-sm font-semibold text-text-primary">Close Date</th>
+                    <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Deal Name</th>
+                    <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Organization</th>
+                    <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Stage</th>
+                    <th className="px-4 py-4 text-end text-body-sm font-semibold text-text-primary">Value</th>
+                    <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Owner</th>
+                    <th className="px-4 py-4 text-start text-body-sm font-semibold text-text-primary">Close Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
@@ -463,7 +463,7 @@ function DealPipelineInner() {
                       <td className="px-4 py-4">
                         <Badge intent="primary">{STAGES.find((s) => s.id === deal.stageId)?.name}</Badge>
                       </td>
-                      <td className="px-4 py-4 text-right font-mono text-text-primary">
+                      <td className="px-4 py-4 text-end font-mono text-text-primary">
                         {deal.value.toLocaleString('en-IN', { style: 'currency', currency: deal.currency })}
                       </td>
                       <td className="px-4 py-4 text-text-secondary">{deal.owner}</td>
@@ -495,7 +495,7 @@ function DealPipelineInner() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25 }}
-              className="fixed top-0 right-0 bottom-0 w-full md:w-[600px] bg-surface-canvas z-50 overflow-y-auto shadow-2xl"
+              className="fixed top-0 end-0 bottom-0 w-full md:w-[600px] bg-surface-canvas z-50 overflow-y-auto shadow-2xl"
             >
               <div className="sticky top-0 bg-surface-raised border-b-2 border-border-subtle p-6 flex items-start justify-between gap-4 z-10">
                 <div className="flex-1">

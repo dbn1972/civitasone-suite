@@ -181,7 +181,7 @@ export function LoginScreen({
                   Tenant Identifier
                 </Label>
                 <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400 pointer-events-none" />
+                  <Building2 className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-gray-400 pointer-events-none" />
                   <Input
                     ref={tenantInputRef}
                     id="tenant"
@@ -194,7 +194,7 @@ export function LoginScreen({
                     placeholder="organization-id"
                     aria-invalid={!!errors.tenant}
                     aria-describedby={errors.tenant ? 'tenant-error' : undefined}
-                    className="pl-11"
+                    className="ps-11"
                   />
                 </div>
                 {errors.tenant && (
@@ -212,7 +212,7 @@ export function LoginScreen({
                 Email or Username
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400 pointer-events-none" />
+                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-gray-400 pointer-events-none" />
                 <Input
                   ref={emailInputRef}
                   id="email"
@@ -226,7 +226,7 @@ export function LoginScreen({
                   placeholder="you@example.com"
                   aria-invalid={!!errors.email}
                   aria-describedby={errors.email ? 'email-error' : undefined}
-                  className="pl-11"
+                  className="ps-11"
                 />
               </div>
               {errors.email && (
@@ -243,7 +243,7 @@ export function LoginScreen({
                 Password
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400 pointer-events-none" />
+                <Lock className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-gray-400 pointer-events-none" />
                 <Input
                   ref={passwordInputRef}
                   id="password"
@@ -257,7 +257,7 @@ export function LoginScreen({
                   placeholder="••••••••"
                   aria-invalid={!!errors.password}
                   aria-describedby={errors.password ? 'password-error' : undefined}
-                  className="pl-11 pr-12"
+                  className="ps-11 pe-12"
                 />
                 <Button
                   type="button"
@@ -266,7 +266,7 @@ export function LoginScreen({
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   aria-pressed={showPassword}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 size-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="absolute end-1 top-1/2 -translate-y-1/2 size-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </Button>

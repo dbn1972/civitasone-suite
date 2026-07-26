@@ -98,7 +98,7 @@ export default function ChapterPage({ params }: Props) {
             {next ? (
               <Link
                 href={`/docs/${next.slug}`}
-                className="group flex items-center gap-2 text-right text-sm text-gray-500 hover:text-gray-900"
+                className="group flex items-center gap-2 text-end text-sm text-gray-500 hover:text-gray-900"
               >
                 <span>
                   <span className="block text-xs text-gray-400">Next</span>

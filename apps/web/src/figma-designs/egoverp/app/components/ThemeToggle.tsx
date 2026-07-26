@@ -47,7 +47,7 @@ export function ThemeToggle() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-40 bg-surface-raised border-2 border-border-subtle rounded-xl shadow-[var(--shadow-lg)] overflow-hidden z-50"
+            className="absolute end-0 mt-2 w-40 bg-surface-raised border-2 border-border-subtle rounded-xl shadow-[var(--shadow-lg)] overflow-hidden z-50"
             role="menu"
             aria-orientation="vertical"
           >
@@ -75,7 +75,7 @@ export function ThemeToggle() {
                   {isActive && (
                     <motion.div
                       layoutId="active-theme"
-                      className="ml-auto size-2 rounded-full bg-white"
+                      className="ms-auto size-2 rounded-full bg-white"
                     />
                   )}
                 </button>

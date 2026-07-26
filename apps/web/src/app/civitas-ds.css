@@ -27,7 +27,7 @@ a{color:inherit;text-decoration:none}
 
 /* ---------------- WEB SHELL ---------------- */
 .app{display:flex;min-height:100vh}
-.sb{width:256px;flex:0 0 256px;background:var(--panel);border-right:1px solid var(--line);
+.sb{width:256px;flex:0 0 256px;background:var(--panel);border-inline-end:1px solid var(--line);
   display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
 .sb-brand{display:flex;align-items:center;gap:11px;padding:18px 18px 12px}
 .sb-logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:#fff;font-size:18px;
@@ -53,7 +53,7 @@ a{color:inherit;text-decoration:none}
   border-radius:10px;padding:9px 13px;color:var(--mut)}
 .tb-search input{border:0;background:transparent;width:100%;font-size:13.5px;color:var(--ink)}
 .tb-search input:focus{outline:none}
-.tb-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+.tb-actions{margin-inline-start:auto;display:flex;align-items:center;gap:10px}
 .iconbtn{position:relative;width:40px;height:40px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-size:16px}
 .iconbtn .dot{position:absolute;top:9px;right:10px;width:8px;height:8px;background:var(--rose);border-radius:50%;border:2px solid #fff}
 
@@ -150,7 +150,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 
 /* timeline / stepper */
 .tl{list-style:none}
-.tl li{position:relative;padding:0 0 18px 26px;border-left:2px solid var(--line);margin-left:6px}
+.tl li{position:relative;padding:0 0 18px 26px;border-inline-start:2px solid var(--line);margin-inline-start:6px}
 .tl li:last-child{border-color:transparent;padding-bottom:0}
 .tl li::before{content:"";position:absolute;left:-7px;top:1px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--mut)}
 .tl li.done::before{background:var(--primary);border-color:var(--primary)}
@@ -321,7 +321,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
    ============================================================ */
 .tbl th.sortable{cursor:pointer;user-select:none}
 .tbl th.sortable:hover{color:var(--ink)}
-.tbl th.sortable .sort-ind{margin-left:5px;opacity:.55;font-size:10px}
+.tbl th.sortable .sort-ind{margin-inline-start:5px;opacity:.55;font-size:10px}
 .tbl th[aria-sort="ascending"] .sort-ind,
 .tbl th[aria-sort="descending"] .sort-ind{opacity:1;color:var(--primary-d)}
 .tbl tbody tr.row-link:focus-visible{

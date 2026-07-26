@@ -110,14 +110,14 @@ export default function PricingPage() {
                 }`}
               >
                 {plan.highlight && (
-                  <span className="absolute -top-3 left-6 rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
+                  <span className="absolute -top-3 start-6 rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
                     Most Popular
                   </span>
                 )}
                 <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
                 <div className="mt-4">
                   <span className="text-3xl font-bold text-gray-900">{plan.price}</span>
-                  <span className="ml-2 text-sm text-gray-500">{plan.priceSub}</span>
+                  <span className="ms-2 text-sm text-gray-500">{plan.priceSub}</span>
                 </div>
                 <ul className="mt-8 space-y-4 text-sm text-gray-600">
                   <li className="flex items-start gap-2">

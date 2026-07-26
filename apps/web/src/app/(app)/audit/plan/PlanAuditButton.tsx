@@ -59,24 +59,24 @@ export function PlanAuditButton() {
           <div className="card" style={{ width: "min(520px,100%)", maxHeight: "90vh", overflowY: "auto" }}>
             <div className="card-h"><h3 id={titleId}>Plan audit engagement</h3></div>
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label className="lbl" htmlFor="pl-no">Plan no.</label>
-              <input id="pl-no" className="inp" value={planNo} onChange={(e) => setPlanNo(e.target.value)} placeholder="PLAN-FY26-03" />
-              <label className="lbl" htmlFor="pl-title">Title</label>
-              <input id="pl-title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Procurement compliance audit" />
-              <label className="lbl" htmlFor="pl-area">Audit area / unit</label>
-              <input id="pl-area" className="inp" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Procurement Wing" />
+              <label className="lbl" htmlFor="ps-no">Plan no.</label>
+              <input id="ps-no" className="inp" value={planNo} onChange={(e) => setPlanNo(e.target.value)} placeholder="PLAN-FY26-03" />
+              <label className="lbl" htmlFor="ps-title">Title</label>
+              <input id="ps-title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Procurement compliance audit" />
+              <label className="lbl" htmlFor="ps-area">Audit area / unit</label>
+              <input id="ps-area" className="inp" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Procurement Wing" />
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label className="lbl" htmlFor="pl-from">Planned from</label>
-                  <input id="pl-from" type="date" className="inp" value={periodFrom} max={periodTo || undefined} onChange={(e) => setPeriodFrom(e.target.value)} />
+                  <label className="lbl" htmlFor="ps-from">Planned from</label>
+                  <input id="ps-from" type="date" className="inp" value={periodFrom} max={periodTo || undefined} onChange={(e) => setPeriodFrom(e.target.value)} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label className="lbl" htmlFor="pl-to">Planned to</label>
-                  <input id="pl-to" type="date" className="inp" value={periodTo} min={periodFrom || undefined} onChange={(e) => setPeriodTo(e.target.value)} />
+                  <label className="lbl" htmlFor="ps-to">Planned to</label>
+                  <input id="ps-to" type="date" className="inp" value={periodTo} min={periodFrom || undefined} onChange={(e) => setPeriodTo(e.target.value)} />
                 </div>
               </div>
-              <label className="lbl" htmlFor="pl-risk">Risk level</label>
-              <select id="pl-risk" className="inp" value={riskLevel} onChange={(e) => setRiskLevel(e.target.value as typeof riskLevel)}>
+              <label className="lbl" htmlFor="ps-risk">Risk level</label>
+              <select id="ps-risk" className="inp" value={riskLevel} onChange={(e) => setRiskLevel(e.target.value as typeof riskLevel)}>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>

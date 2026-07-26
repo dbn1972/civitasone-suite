@@ -264,7 +264,7 @@ export function TenantAdminHome() {
               <button
                 key={event.id}
                 onClick={() => setSelectedAudit(event)}
-                className="w-full p-4 hover:bg-surface-sunken transition-colors text-left"
+                className="w-full p-4 hover:bg-surface-sunken transition-colors text-start"
               >
                 <div className="flex items-start gap-4">
                   <div className="size-10 rounded-full bg-gradient-to-br from-brand-primary to-brand-accent flex items-center justify-center text-white font-semibold text-body-sm flex-shrink-0">
@@ -434,7 +434,7 @@ function AuditDetailDrawer({ event, onClose }: { event: any; onClose: () => void
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25 }}
-        className="fixed top-0 right-0 bottom-0 w-full max-w-2xl bg-surface-raised shadow-2xl z-50 overflow-y-auto"
+        className="fixed top-0 end-0 bottom-0 w-full max-w-2xl bg-surface-raised shadow-2xl z-50 overflow-y-auto"
       >
         <div className="sticky top-0 bg-surface-raised border-b-2 border-border-subtle p-6 flex items-center justify-between">
           <h2 className="text-h3">Audit Event Details</h2>

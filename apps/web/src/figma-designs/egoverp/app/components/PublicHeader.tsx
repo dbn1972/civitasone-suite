@@ -10,7 +10,7 @@ export function PublicHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-surface-raised/80 border-b border-border-subtle backdrop-blur-xl">
+    <header className="fixed top-0 start-0 end-0 z-50 bg-surface-raised/80 border-b border-border-subtle backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>

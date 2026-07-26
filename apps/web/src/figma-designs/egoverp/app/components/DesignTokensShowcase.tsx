@@ -244,7 +244,7 @@ function BrandSwatch({ name, value, label }: { name: string; value: string; labe
 
 function TypeSample({ token, size, text, mono = false }: { token: string; size: string; text: string; mono?: boolean }) {
   return (
-    <div className="border-l-2 border-intent-primary pl-4">
+    <div className="border-s-2 border-intent-primary ps-4">
       <div className="flex items-baseline gap-4 mb-2">
         <code className="text-caption font-mono text-text-muted min-w-[80px]">text.{token}</code>
         <span className="text-caption text-text-muted">{size}px</span>

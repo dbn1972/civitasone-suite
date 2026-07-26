@@ -272,13 +272,13 @@ export function CRMContacts() {
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 type="text"
                 placeholder="Search by name, email, or company..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -410,13 +410,13 @@ export function CRMContacts() {
             <table className="w-full">
               <thead className="bg-surface-sunken border-b-2 border-border-subtle">
                 <tr>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Contact</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Company</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Email</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Phone</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Rating</th>
-                  <th className="text-right p-4 text-caption font-semibold text-text-secondary uppercase">Deal Value</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Contact</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Company</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Email</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Phone</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Status</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Rating</th>
+                  <th className="text-end p-4 text-caption font-semibold text-text-secondary uppercase">Deal Value</th>
                   <th className="text-center p-4 text-caption font-semibold text-text-secondary uppercase">Actions</th>
                 </tr>
               </thead>
@@ -461,7 +461,7 @@ export function CRMContacts() {
                           {getRatingStars(contact.rating)}
                         </div>
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-end">
                         <p className="text-body-sm font-semibold text-text-primary">
                           {contact.dealValue > 0 ? `₹${(contact.dealValue / 100000).toFixed(1)}L` : '—'}
                         </p>

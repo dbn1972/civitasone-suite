@@ -64,7 +64,7 @@ export function RecentPredictionsTable({ predictions, source, rowLinkPrefix }: R
       filterPlaceholder="Filter predictions…"
       pageSize={15}
       exportable
-      exportFilename="ml-predictions"
+      exportFilename="ms-predictions"
       emptyIcon="🤖"
       emptyTitle="No predictions yet"
       emptyMessage="Predictions will appear here once the ML model is active and producing results."

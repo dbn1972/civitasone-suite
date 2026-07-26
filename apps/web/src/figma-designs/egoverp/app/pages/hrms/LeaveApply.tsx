@@ -202,7 +202,7 @@ export function LeaveApply() {
                     onChange={(e) => setFromDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
                   />
-                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 size-5 text-text-muted pointer-events-none" />
+                  <Calendar className="absolute end-3 top-1/2 -translate-y-1/2 size-5 text-text-muted pointer-events-none" />
                 </div>
                 {fromDate && (
                   <div className="mt-2">
@@ -231,7 +231,7 @@ export function LeaveApply() {
                     onChange={(e) => setToDate(e.target.value)}
                     min={fromDate || new Date().toISOString().split('T')[0]}
                   />
-                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 size-5 text-text-muted pointer-events-none" />
+                  <Calendar className="absolute end-3 top-1/2 -translate-y-1/2 size-5 text-text-muted pointer-events-none" />
                 </div>
                 {toDate && fromDate !== toDate && (
                   <div className="mt-2">
@@ -402,7 +402,7 @@ export function LeaveApply() {
       </div>
 
       {/* Sticky Save Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-surface-raised border-t-2 border-border-subtle p-4 shadow-lg z-40">
+      <div className="fixed bottom-0 start-0 end-0 bg-surface-raised border-t-2 border-border-subtle p-4 shadow-lg z-40">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="text-body-sm text-text-secondary">
             {fromDate && toDate ? (

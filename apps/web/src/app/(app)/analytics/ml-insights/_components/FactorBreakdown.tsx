@@ -37,7 +37,7 @@ export function FactorBreakdown({ factors }: FactorBreakdownProps) {
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-center mb-1">
                 <span className="text-sm font-medium truncate">{factor.feature}</span>
-                <span className="text-xs text-gray-500 ml-2">
+                <span className="text-xs text-gray-500 ms-2">
                   {Math.round(factor.avgContribution * 100)}% · {factor.frequency}×
                 </span>
               </div>

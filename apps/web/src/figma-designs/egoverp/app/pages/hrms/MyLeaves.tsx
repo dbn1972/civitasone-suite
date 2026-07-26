@@ -185,13 +185,13 @@ export function MyLeaves() {
           {/* Search */}
           <div className="flex-1 min-w-[250px] max-w-md">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
               <Input
                 id="search-leaves"
                 placeholder="Search by type or reason..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="ps-10"
               />
             </div>
           </div>
@@ -303,7 +303,7 @@ export function MyLeaves() {
                       </div>
                       <p className="text-body-sm text-text-primary line-clamp-2">{leave.reason}</p>
                     </div>
-                    <div className="text-right flex-shrink-0">
+                    <div className="text-end flex-shrink-0">
                       <div className="text-caption text-text-muted">Applied on</div>
                       <div className="text-body-sm text-text-primary">
                         {new Date(leave.appliedOn).toLocaleDateString('en-IN')}
@@ -346,7 +346,7 @@ export function MyLeaves() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25 }}
-              className="fixed top-0 right-0 bottom-0 w-full md:w-[600px] bg-surface-canvas z-50 overflow-y-auto shadow-2xl"
+              className="fixed top-0 end-0 bottom-0 w-full md:w-[600px] bg-surface-canvas z-50 overflow-y-auto shadow-2xl"
             >
               <div className="sticky top-0 bg-surface-raised border-b-2 border-border-subtle p-6 flex items-start justify-between gap-4 z-10">
                 <div>

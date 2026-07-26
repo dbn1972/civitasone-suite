@@ -48,14 +48,14 @@ export function MoleculesShowcase() {
           <Card>
             <div className="max-w-md">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 size-5 text-text-muted" />
                 <Input
                   id="search"
                   type="search"
                   placeholder="Search..."
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
-                  className="pl-10"
+                  className="ps-10"
                 />
               </div>
             </div>
@@ -116,7 +116,7 @@ export function MoleculesShowcase() {
                 <FilterChip label="Department: Finance" onRemove={() => {}} />
                 <FilterChip label="Date: Last 30 days" onRemove={() => {}} />
               </div>
-              <button className="text-body-sm text-intent-primary hover:underline ml-auto">
+              <button className="text-body-sm text-intent-primary hover:underline ms-auto">
                 Clear all
               </button>
             </div>

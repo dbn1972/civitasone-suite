@@ -145,7 +145,7 @@ export function Privacy() {
                     </div>
                     <h2 className="text-h3">{section.title}</h2>
                   </div>
-                  <p className="text-body-sm text-text-secondary leading-relaxed ml-14">{section.content}</p>
+                  <p className="text-body-sm text-text-secondary leading-relaxed ms-14">{section.content}</p>
                 </Card>
               </motion.div>
             );

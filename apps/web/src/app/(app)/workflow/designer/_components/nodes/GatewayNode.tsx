@@ -22,13 +22,13 @@ function GatewayNodeBase({ data, selected, type }: NodeProps) {
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2.5 !h-2.5 !bg-amber-500 !border-white !border-2 !-left-[7px] !-rotate-45"
+        className="!w-2.5 !h-2.5 !bg-amber-500 !border-white !border-2 !-start-[7px] !-rotate-45"
         aria-label="Incoming connection"
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2.5 !h-2.5 !bg-amber-500 !border-white !border-2 !-right-[7px] !-rotate-45"
+        className="!w-2.5 !h-2.5 !bg-amber-500 !border-white !border-2 !-end-[7px] !-rotate-45"
         aria-label="Outgoing connection"
       />
       <Handle
@@ -39,7 +39,7 @@ function GatewayNodeBase({ data, selected, type }: NodeProps) {
         aria-label="Outgoing connection (bottom)"
       />
       {data.label && (
-        <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 -rotate-45 text-[10px] text-slate-600 whitespace-nowrap font-medium">
+        <div className="absolute -bottom-7 start-1/2 -translate-x-1/2 -rotate-45 text-[10px] text-slate-600 whitespace-nowrap font-medium">
           {data.label}
         </div>
       )}

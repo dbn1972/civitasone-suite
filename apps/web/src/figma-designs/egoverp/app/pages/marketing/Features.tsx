@@ -334,7 +334,7 @@ export function Features() {
             <table className="w-full">
               <thead className="bg-surface-sunken">
                 <tr>
-                  <th className="text-left p-4 text-caption font-semibold text-text-secondary uppercase">Feature</th>
+                  <th className="text-start p-4 text-caption font-semibold text-text-secondary uppercase">Feature</th>
                   <th className="text-center p-4 text-caption font-semibold text-intent-success uppercase">CivitasOne Suite</th>
                   <th className="text-center p-4 text-caption font-semibold text-text-secondary uppercase">Legacy Systems</th>
                 </tr>
