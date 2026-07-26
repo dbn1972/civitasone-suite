@@ -4,7 +4,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { markProcessed } from "../../shared/outbox.js";
-import { CONSUME_TOPICS } from "../../topics.js";
+import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeHash, type IngestPayload } from "./domain.js";
 
@@ -65,11 +65,11 @@ export function registerAuditConsumers(q: Queue): void {
     });
   };
 
-  q.subscribe<IngestPayload>(CONSUME_TOPICS.auditEventIngest, async (msg) => {
+  q.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventIngest, async (msg) => {
     await handleAuditEvent(msg);
   });
 
-  q.subscribe<IngestPayload>(CONSUME_TOPICS.auditEventRecord, async (msg) => {
+  q.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventRecord, async (msg) => {
     await handleAuditEvent(msg);
   });
 }

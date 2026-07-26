@@ -4,10 +4,10 @@ import { runWithTenant } from "@civitasone/db";
 import { db, scopedPlatformRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
-import { CONSUME_TOPICS } from "../../topics.js";
+import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
-const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
+const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
 
 // M3: bound each transaction. Flips + their audit events are written together per batch.

@@ -31,12 +31,26 @@ const CONSUMED_EXPORTS = new Set([
   "CONSUMES",
   "INBOUND",
 ]);
+/**
+ * Export names that mean "topics in ANOTHER service's namespace that we publish
+ * into" — cross-service command dispatch. workflow-service's `DISPATCH` sends
+ * approval decisions to hrms/procurement/estab/asset command topics; a target
+ * that does not handle the command silently drops the approval.
+ */
+const DISPATCH_EXPORTS = new Set(["DISPATCH", "INTEGRATION", "OUTBOUND"]);
 
 export type TopicRef = {
   /** Property key inside the object literal, e.g. `sanctionApproved`. */
   key: string;
   /** Literal topic string, e.g. `finance.sanction.approved`. */
   topic: string;
+  /**
+   * Export name this ref came from. Carried per-ref (not per-service) because a
+   * service can declare several consumed maps — asset-service has both
+   * `CONSUMED` and `CONSUMED_EVENTS`, and a single per-service `mapName` meant
+   * one of them could never resolve its wiring lookup.
+   */
+  mapName: string;
 };
 
 export type ServiceContract = {
@@ -44,10 +58,20 @@ export type ServiceContract = {
   produced: TopicRef[];
   commands: TopicRef[];
   consumed: TopicRef[];
-  /** Export name the produced topics came from (usually `EVENTS`). */
-  producedMapName: string;
-  /** Export name the consumed topics came from (varies across services). */
-  consumedMapName: string;
+  /** Topics in another service's namespace that this service publishes into. */
+  dispatched: TopicRef[];
+  /**
+   * Local aliases the service uses when importing its own topic maps, e.g.
+   * `import { COMMANDS as IDENTITY_COMMANDS }`. Needed so wiring lookups
+   * resolve without falling back to bare keys.
+   */
+  importAliases: Set<string>;
+  /** Exported topic-shaped maps whose export name the gate does not classify. */
+  unclassifiedMaps: string[];
+  /** Recognised exports whose initializer was not an object literal. */
+  unresolvedMaps: string[];
+  /** Topic-ish values the parser could not read (spread/template/computed). */
+  skippedEntries: { exportName: string; key: string }[];
   /** Topic strings the service source actually passes to a subscribe call. */
   subscribedInCode: Set<string>;
   /** Topic strings the service source actually enqueues/publishes. */
@@ -60,16 +84,26 @@ export type ServiceContract = {
   referencedSymbols: Set<string>;
 };
 
-/** True when a declared topic is wired into the service's code at all. */
+/**
+ * True when a declared topic is wired into the service's code at all.
+ *
+ * The bare-key fallback was deliberately REMOVED: `scanSymbolReferences` records
+ * the bare name of every property access in the service (`id`, `status`,
+ * `payload`, every Drizzle column), so matching on it made the check
+ * near-vacuous. Measured across the fleet, 0 of 788 declared refs resolved via
+ * bare key alone — it bought nothing and risked everything. Aliased imports are
+ * handled by `ref.mapName` plus the alias index instead.
+ */
 export function isWired(
   c: ServiceContract,
-  mapName: string,
   ref: TopicRef,
   directSet: Set<string>,
 ): boolean {
   if (directSet.has(ref.topic)) return true;
-  if (c.referencedSymbols.has(`${mapName}.${ref.key}`)) return true;
-  if (c.referencedSymbols.has(ref.key)) return true;
+  if (c.referencedSymbols.has(`${ref.mapName}.${ref.key}`)) return true;
+  for (const alias of c.importAliases) {
+    if (c.referencedSymbols.has(`${alias}.${ref.key}`)) return true;
+  }
   return false;
 }
 
@@ -100,13 +134,31 @@ function collectTsFiles(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
+/**
+ * Parse a TS file, failing LOUDLY on syntax errors.
+ *
+ * `ts.createSourceFile` never throws — a malformed topics.ts silently yields an
+ * empty/partial AST, which would erase a service's whole contract and turn this
+ * gate green. Reading `parseDiagnostics` is what makes that impossible.
+ */
 function parse(file: string): ts.SourceFile {
-  return ts.createSourceFile(
+  const sf = ts.createSourceFile(
     file,
     readFileSync(file, "utf8"),
     ts.ScriptTarget.ES2022,
     true,
   );
+  const diags = (sf as unknown as { parseDiagnostics?: ts.Diagnostic[] })
+    .parseDiagnostics;
+  if (diags && diags.length > 0) {
+    const first = ts.flattenDiagnosticMessageText(diags[0]!.messageText, " ");
+    throw new Error(
+      `Cannot parse ${file}: ${first}. The contract gate refuses to run on an ` +
+        `unparseable source file — a partial AST would silently erase this ` +
+        `service's event contract and report a false pass.`,
+    );
+  }
+  return sf;
 }
 
 /**
@@ -118,9 +170,12 @@ function parse(file: string): ts.SourceFile {
 function extractTopicMaps(sf: ts.SourceFile): {
   maps: Map<string, TopicRef[]>;
   skipped: { exportName: string; key: string }[];
+  unresolved: string[];
 } {
   const maps = new Map<string, TopicRef[]>();
   const skipped: { exportName: string; key: string }[] = [];
+  /** Recognised export names whose initializer was not an object literal. */
+  const unresolved: string[] = [];
 
   for (const stmt of sf.statements) {
     if (!ts.isVariableStatement(stmt)) continue;
@@ -133,10 +188,31 @@ function extractTopicMaps(sf: ts.SourceFile): {
       if (!ts.isIdentifier(decl.name) || !decl.initializer) continue;
       const exportName = decl.name.text;
 
-      // Unwrap `{...} as const`
+      // Unwrap `as const`, `satisfies X`, and parentheses — repeatedly, because
+      // they compose (`({...} satisfies T) as const`). Handling only
+      // `as const` made a `satisfies` map invisible, erasing the contract.
       let init: ts.Expression = decl.initializer;
-      if (ts.isAsExpression(init)) init = init.expression;
-      if (!ts.isObjectLiteralExpression(init)) continue;
+      for (;;) {
+        if (ts.isAsExpression(init) || ts.isSatisfiesExpression(init)) {
+          init = init.expression;
+        } else if (ts.isParenthesizedExpression(init)) {
+          init = init.expression;
+        } else break;
+      }
+      if (!ts.isObjectLiteralExpression(init)) {
+        // Only a RECOGNISED contract export failing to resolve is a blind spot.
+        // Plain string exports (`SERVICE = "audit"`, `RESOURCE = "call"`) are
+        // not contracts and must not be reported.
+        if (
+          PRODUCED_EXPORTS.has(exportName) ||
+          COMMAND_EXPORTS.has(exportName) ||
+          CONSUMED_EXPORTS.has(exportName) ||
+          DISPATCH_EXPORTS.has(exportName)
+        ) {
+          unresolved.push(exportName);
+        }
+        continue;
+      }
 
       const refs: TopicRef[] = [];
       for (const prop of init.properties) {
@@ -148,7 +224,7 @@ function extractTopicMaps(sf: ts.SourceFile): {
             : null;
         if (!key) continue;
         if (ts.isStringLiteral(prop.initializer)) {
-          refs.push({ key, topic: prop.initializer.text });
+          refs.push({ key, topic: prop.initializer.text, mapName: exportName });
         } else {
           skipped.push({ exportName, key });
         }
@@ -156,7 +232,30 @@ function extractTopicMaps(sf: ts.SourceFile): {
       if (refs.length > 0) maps.set(exportName, refs);
     }
   }
-  return { maps, skipped };
+  return { maps, skipped, unresolved };
+}
+
+/**
+ * Any exported map whose values are dotted topic strings but whose export name
+ * is not in one of the recognised sets. These are contracts the gate would
+ * otherwise ignore entirely (audit-service's `CONSUME_TOPICS` was exactly this
+ * — two live subscriptions invisible to the gate, one of them dead).
+ */
+function unclassifiedTopicMaps(maps: Map<string, TopicRef[]>): string[] {
+  const known = new Set([
+    ...PRODUCED_EXPORTS,
+    ...COMMAND_EXPORTS,
+    ...CONSUMED_EXPORTS,
+    ...DISPATCH_EXPORTS,
+  ]);
+  const out: string[] = [];
+  for (const [exportName, refs] of maps) {
+    if (known.has(exportName)) continue;
+    // A map is "topic-shaped" if most of its values look like a.b or a.b.c
+    const dotted = refs.filter((r) => /^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/.test(r.topic));
+    if (dotted.length > 0 && dotted.length === refs.length) out.push(exportName);
+  }
+  return out;
 }
 
 /**
@@ -177,7 +276,15 @@ function buildAliasIndex(maps: Map<string, TopicRef[]>): Map<string, string> {
   return index;
 }
 
-const SUBSCRIBE_FNS = new Set(["subscribe", "subscribeWithDlq", "sub", "on"]);
+const SUBSCRIBE_FNS = new Set(["subscribe", "subscribeWithDlq"]);
+/**
+ * Publish/emit call sites. The repo's route pattern is
+ * `queue.publish("admin.vapt.scan", { type: ... })` — arg 0 is the topic — while
+ * consumers use `enqueue(tx, { topic, eventType })`. Scanning only `enqueue`
+ * missed every route-published topic, which is why the orphan count was
+ * fleet-wide noise.
+ */
+const PUBLISH_FNS = new Set(["publish", "enqueue", "emit", "send"]);
 
 /**
  * Reference-count every `<MAP>.<key>` member access across a service's source
@@ -215,6 +322,30 @@ function scanSymbolReferences(serviceDir: string): Set<string> {
     visit(sf);
   }
   return referenced;
+}
+
+/**
+ * Collect local aliases used when importing this service's own topic maps.
+ * `import { COMMANDS as IDENTITY_COMMANDS } from "../../topics.js"` is live in
+ * identity-service, so wiring lookups must know about `IDENTITY_COMMANDS`.
+ */
+function scanImportAliases(serviceDir: string): Set<string> {
+  const aliases = new Set<string>();
+  for (const file of collectTsFiles(join(serviceDir, "src"))) {
+    const sf = parse(file);
+    for (const stmt of sf.statements) {
+      if (!ts.isImportDeclaration(stmt)) continue;
+      const spec = stmt.moduleSpecifier;
+      if (!ts.isStringLiteral(spec) || !spec.text.includes("topics")) continue;
+      const bindings = stmt.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) continue;
+      for (const el of bindings.elements) {
+        // `{ EVENTS as E }` → propertyName=EVENTS, name=E
+        if (el.propertyName) aliases.add(el.name.text);
+      }
+    }
+  }
+  return aliases;
 }
 
 /** Resolve a call argument expression to a topic string, if possible. */
@@ -260,11 +391,21 @@ function scanCallSites(
             }
           }
         }
+        // queue.publish(TOPIC, envelope) — topic is arg 0
+        if (PUBLISH_FNS.has(fnName)) {
+          for (const arg of node.arguments) {
+            const topic = resolveTopicArg(arg, alias);
+            if (topic && topic.includes(".")) {
+              emitted.add(topic);
+              break;
+            }
+          }
+        }
       }
-      // enqueue(tx, { topic: X, ... }) — find `topic:` properties anywhere
+      // enqueue(tx, { topic: X }) / publish(t, { type: X }) — property forms
       if (ts.isPropertyAssignment(node)) {
         const name = ts.isIdentifier(node.name) ? node.name.text : null;
-        if (name === "topic" || name === "eventType") {
+        if (name === "topic" || name === "eventType" || name === "type") {
           const topic = resolveTopicArg(node.initializer, alias);
           if (topic && topic.includes(".")) emitted.add(topic);
         }
@@ -285,7 +426,7 @@ export function loadContracts(): ServiceContract[] {
   for (const service of listServiceDirs()) {
     const serviceDir = join(SERVICES_DIR, service);
     const sf = parse(join(serviceDir, "src", "topics.ts"));
-    const { maps } = extractTopicMaps(sf);
+    const { maps, skipped, unresolved } = extractTopicMaps(sf);
     const alias = buildAliasIndex(maps);
 
     const pick = (names: Set<string>): TopicRef[] => {
@@ -298,19 +439,18 @@ export function loadContracts(): ServiceContract[] {
 
     const { subscribed, emitted } = scanCallSites(serviceDir, alias);
     const referencedSymbols = scanSymbolReferences(serviceDir);
-
-    // Record which export name each ref came from so wiring checks can look up
-    // `<MAP>.<key>` symbol references.
-    const nameOf = (names: Set<string>): string =>
-      [...maps.keys()].find((k) => names.has(k)) ?? [...names][0]!;
+    const importAliases = scanImportAliases(serviceDir);
 
     contracts.push({
       service,
       produced: pick(PRODUCED_EXPORTS),
       commands: pick(COMMAND_EXPORTS),
       consumed: pick(CONSUMED_EXPORTS),
-      producedMapName: nameOf(PRODUCED_EXPORTS),
-      consumedMapName: nameOf(CONSUMED_EXPORTS),
+      dispatched: pick(DISPATCH_EXPORTS),
+      importAliases,
+      unclassifiedMaps: unclassifiedTopicMaps(maps),
+      unresolvedMaps: unresolved,
+      skippedEntries: skipped,
       subscribedInCode: subscribed,
       emittedInCode: emitted,
       referencedSymbols,

@@ -4,12 +4,12 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
-import { CONSUME_TOPICS } from "../../topics.js";
+import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { ChecklistRow } from "./schema.js";
 
 const AUDIT_ROLES = ["audit_officer", "audit_admin", "super_admin"];
-const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
+const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 
 const createBody = z.object({
   title: z.string().min(1).max(255),
