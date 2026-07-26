@@ -49,7 +49,7 @@ importers:
         version: link:../../packages/ui-kit
       next:
         specifier: ^14.2.0
-        version: 14.2.35(@babel/core@7.29.7)(@playwright/test@1.61.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 14.2.35(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react:
         specifier: ^18.3.0
         version: 18.3.1
@@ -219,7 +219,7 @@ importers:
         version: link:../types
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify-plugin:
         specifier: ^4.5.0
         version: 4.5.1
@@ -323,7 +323,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
     devDependencies:
       '@vitest/coverage-v8':
         specifier: ^2.0.0
@@ -363,7 +363,7 @@ importers:
         version: link:../queue
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -480,7 +480,7 @@ importers:
         version: 2.13.0
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       pino:
         specifier: ^8.21.0
         version: 8.21.0
@@ -581,7 +581,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -648,7 +648,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -715,7 +715,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -782,7 +782,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -849,7 +849,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -928,7 +928,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -998,7 +998,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1080,7 +1080,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: 0.30.10
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: 4.29.1
         version: 4.29.1
@@ -1159,7 +1159,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1229,7 +1229,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1311,7 +1311,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1384,13 +1384,16 @@ importers:
         version: 9.1.0
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
       pino:
         specifier: ^8.21.0
         version: 8.21.0
+      prom-client:
+        specifier: ^15.1.3
+        version: 15.1.3
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -1448,7 +1451,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1521,7 +1524,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1597,7 +1600,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1664,7 +1667,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1737,7 +1740,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: 0.30.10
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: 4.29.1
         version: 4.29.1
@@ -1807,7 +1810,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1874,7 +1877,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -1950,7 +1953,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2026,7 +2029,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2099,7 +2102,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2178,7 +2181,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: 0.30.10
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: 4.29.1
         version: 4.29.1
@@ -2245,7 +2248,7 @@ importers:
         version: link:../../packages/types
       drizzle-orm:
         specifier: 0.30.10
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1)
       fastify:
         specifier: 4.28.1
         version: 4.28.1
@@ -2312,7 +2315,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2382,7 +2385,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2467,7 +2470,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2537,7 +2540,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2601,7 +2604,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2677,7 +2680,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2753,7 +2756,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2875,7 +2878,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -2939,7 +2942,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -3006,7 +3009,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -3079,7 +3082,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -3143,7 +3146,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -3210,7 +3213,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -3280,7 +3283,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: 4.29.1
         version: 4.29.1
@@ -3356,7 +3359,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
@@ -3423,7 +3426,7 @@ importers:
         version: 9.0.1
       drizzle-orm:
         specifier: ^0.30.0
-        version: 0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
@@ -4865,6 +4868,10 @@ packages:
     resolution: {integrity: sha512-Bu3jJ7pKzumbMMeefu7/npAWAvFu5W9SlbBow1ulhluqUpqc7QoXe0KidDrMy7Dy3BQrkI6llR3cWL4lQTZOFw==}
     engines: {node: '>=10', yarn: ^1.22.10}
 
+  '@opentelemetry/api@1.9.1':
+    resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
+    engines: {node: '>=8.0.0'}
+
   '@pdf-lib/standard-fonts@1.0.0':
     resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
 
@@ -6003,6 +6010,9 @@ packages:
 
   binary@0.3.0:
     resolution: {integrity: sha512-D4H1y5KYwpJgK8wk1Cue5LLPgmwHKYSChkbspQg5JtVuR5ulGckxfR62H3AE9UDkdMC8yyXlqYihuz3Aqg2XZg==}
+
+  bintrees@1.0.2:
+    resolution: {integrity: sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw==}
 
   bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
@@ -8474,6 +8484,10 @@ packages:
     resolution: {integrity: sha512-cdGef/drWFoydD1JsMzuFf8100nZl+GT+yacc2bEced5f9Rjk4z+WtFUTBu9PhOi9j/jfmBPu0mMEY4wIdAF8A==}
     engines: {node: '>= 0.6.0'}
 
+  prom-client@15.1.3:
+    resolution: {integrity: sha512-6ZiOBfCywsD4k1BN9IX0uZhF+tJkV8q8llP64G5Hajs4JOeVLPCwpPVcpXy3BwYiUGgyJzsJJQeOIv7+hDSq8g==}
+    engines: {node: ^16 || ^18 || >=20}
+
   promise-retry@2.0.1:
     resolution: {integrity: sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g==}
     engines: {node: '>=10'}
@@ -8933,6 +8947,9 @@ packages:
   tar-stream@2.2.0:
     resolution: {integrity: sha512-ujeqbceABgwMZxEJnk2HDY2DlnUZ+9oEcb1KzTVfYHio0UE6dG71n60d8D2I4qNvleWrrXpmjpt7vZeF1LnMZQ==}
     engines: {node: '>=6'}
+
+  tdigest@0.1.2:
+    resolution: {integrity: sha512-+G0LLgjjo9BZX2MfdvPfH+MKLCrxlXSYec5DaPYP1fe6Iyhf0/fSmJ0bFiZ1F8BT6cGXl2LpltQptzjXKWEkKA==}
 
   tesseract.js-core@5.1.1:
     resolution: {integrity: sha512-KX3bYSU5iGcO1XJa+QGPbi+Zjo2qq6eBhNjSGR5E5q0JtzkoipJKOUQD7ph8kFyteCEfEQ0maWLu8MCXtvX5uQ==}
@@ -11019,6 +11036,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@opentelemetry/api@1.9.1': {}
+
   '@pdf-lib/standard-fonts@1.0.0':
     dependencies:
       pako: 1.0.11
@@ -12366,6 +12385,8 @@ snapshots:
       buffers: 0.1.1
       chainsaw: 0.1.0
 
+  bintrees@1.0.2: {}
+
   bl@4.1.0:
     dependencies:
       buffer: 5.7.1
@@ -12958,14 +12979,16 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.30.10(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1):
+  drizzle-orm@0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.4)(react@18.3.1):
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
       '@types/react': 18.3.31
       postgres: 3.4.4
       react: 18.3.1
 
-  drizzle-orm@0.30.10(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1):
+  drizzle-orm@0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1):
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
       '@types/react': 18.3.31
       postgres: 3.4.9
       react: 18.3.1
@@ -15037,7 +15060,7 @@ snapshots:
 
   next-tick@1.1.0: {}
 
-  next@14.2.35(@babel/core@7.29.7)(@playwright/test@1.61.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  next@14.2.35(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@next/env': 14.2.35
       '@swc/helpers': 0.5.5
@@ -15058,6 +15081,7 @@ snapshots:
       '@next/swc-win32-arm64-msvc': 14.2.33
       '@next/swc-win32-ia32-msvc': 14.2.33
       '@next/swc-win32-x64-msvc': 14.2.33
+      '@opentelemetry/api': 1.9.1
       '@playwright/test': 1.61.0
     transitivePeerDependencies:
       - '@babel/core'
@@ -15554,6 +15578,11 @@ snapshots:
   process-warning@4.0.1: {}
 
   process@0.11.10: {}
+
+  prom-client@15.1.3:
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      tdigest: 0.1.2
 
   promise-retry@2.0.1:
     dependencies:
@@ -16117,6 +16146,10 @@ snapshots:
       fs-constants: 1.0.0
       inherits: 2.0.4
       readable-stream: 3.6.2
+
+  tdigest@0.1.2:
+    dependencies:
+      bintrees: 1.0.2
 
   tesseract.js-core@5.1.1: {}
 
