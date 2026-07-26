@@ -49,7 +49,7 @@ export function validateSerialUnique(serialNumber: string, existingSerials: Set<
 }
 
 /** Batch status lifecycle. */
-export type BatchStatus = "active" | "expired" | "depleted" | "quarantine";
+export type BatchStatus = "active" | "expired" | "depleted" | "quarantine" | "recalled";
 
 /** Serial number status lifecycle. */
 export type SerialStatus = "available" | "issued" | "returned" | "scrapped";

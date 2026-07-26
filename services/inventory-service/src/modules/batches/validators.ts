@@ -73,3 +73,20 @@ export const createSerialPayload = createSerialBody.extend({
   id:       z.string().uuid(),
   tenantId: z.string().uuid(),
 });
+
+// ── Consumer payload schemas for quarantine / recall (SVC-055) ──────────────
+// The route publishes { id: batchId, tenantId, reason } for quarantine and
+// { id: recallId, batchId, tenantId, reason, severity } for recall.
+export const quarantinePayload = z.object({
+  id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+  reason:   z.string().min(1).max(500),
+});
+
+export const recallPayload = z.object({
+  id:       z.string().uuid(),
+  batchId:  z.string().uuid(),
+  tenantId: z.string().uuid(),
+  reason:   z.string().min(1).max(500),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+});
