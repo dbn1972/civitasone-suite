@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -222,5 +222,39 @@ describe("org-hierarchy — real persistence + integrity (RLS)", () => {
   it("HTTP: 401 without auth, 400 on bad payload", async () => {
     expect((await inject("GET", "/v1/org/hierarchy")).status).toBe(401);
     expect((await inject("POST", "/v1/org/hierarchy", T1, { name: "", type: "bogus" })).status).toBe(400);
+  });
+
+  // FINDING 2 (MEDIUM): even if a cycle slips into the data (e.g. legacy
+  // corruption, or a race that predates the advisory lock), the recursive
+  // subtree/ancestor walks must stay BOUNDED and terminate rather than hang.
+  it("recursive subtree + cycle guard stay bounded when a cycle exists in the data", async () => {
+    const q = new MemoryQueue(); registerOrgHierarchyConsumers(q); await q.start();
+    const a = uuid("00dd01"); const b = uuid("00dd02");
+    await publishCreate(q, T1, a, "CycA", "department");
+    await publishCreate(q, T1, b, "CycB", "division", a); // b under a (valid so far)
+    await q.stop();
+
+    // Force a 2-node cycle DIRECTLY in the data, bypassing the consumer's guard.
+    await runWithTenant(T1, () => db.transaction(async (tx) => {
+      await repo.updateOrgUnit(tx, a, T1, { parentId: b }); // now a<->b cycle
+    }));
+
+    // Subtree walk terminates and returns a bounded row count (depth-capped).
+    const subtree = await repo.getSubtree(T1, a);
+    expect(subtree.length).toBeGreaterThan(0);
+    expect(subtree.length).toBeLessThanOrEqual(1000);
+
+    // Ancestor-walk cycle guard also terminates (bounded) instead of hanging.
+    await expect(repo.wouldCreateCycle(T1, a, b)).resolves.toBeTypeOf("boolean");
+  }, 20000);
+
+  it("reparent path takes a per-tenant advisory transaction lock", async () => {
+    const held = await runWithTenant(T1, () => db.transaction(async (tx) => {
+      await repo.lockTenantForReparent(tx, T1);
+      const res = await tx.execute(sql`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()`);
+      const rows = (res as { rows?: { n: number }[] }).rows ?? (res as unknown as { n: number }[]);
+      return Number(rows[0]?.n ?? 0);
+    }));
+    expect(held).toBeGreaterThanOrEqual(1);
   });
 });

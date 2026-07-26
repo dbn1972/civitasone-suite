@@ -6,6 +6,11 @@
  * hierarchy-integrity reads (level computation, cycle guard) see the tenant's
  * rows. Idempotent via _inbox.processed. Cycle-creating reparents are rejected
  * (defense-in-depth alongside the synchronous route-level 409).
+ *
+ * Reparents additionally take a per-tenant advisory lock so that concurrent
+ * reparents on multiple worker replicas serialize — without it, "X under Y" and
+ * "Y under X" could each pass an independent cycle check under READ COMMITTED
+ * and both commit, forming a 2-node cycle.
  */
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
@@ -44,6 +49,12 @@ export function registerOrgHierarchyConsumers(q: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; name?: string; type?: string; parentId?: string | null; headUserId?: string | null; code?: string | null };
     await runWithTenant(msg.tenantId, () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Reparent path: serialize per-tenant before the cycle check so two
+      // concurrent reparents can't each pass the check on a stale snapshot and
+      // both commit into a cycle. Transaction-scoped; auto-released at commit.
+      const isReparent = p.parentId !== undefined;
+      if (isReparent) await repo.lockTenantForReparent(tx, p.tenantId);
+
       const existing = await repo.findByIdTx(tx, p.tenantId, p.id);
       if (!existing) { log.warn({ id: p.id }, "org_unit.update: not found"); return; }
 

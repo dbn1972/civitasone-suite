@@ -2,10 +2,12 @@
  * data-migration + bulk master-data consumers.
  *
  * CAP-020: import/export are now REAL. The import consumer validates every
- * record, persists the valid ones (transactionally) and records a per-record
- * error report on the batch; the export consumer materialises the tenant's rows
- * into a stored payload with a real record count. All handlers run inside
- * runWithTenant so FORCED RLS accepts writes and reads see the tenant's rows.
+ * record, persists the valid ones (each behind a SAVEPOINT so one bad row can
+ * never roll back the batch header or the already-inserted rows) and records a
+ * per-record error report on the batch; the export consumer materialises the
+ * tenant's rows into a stored payload with a real record count. All handlers run
+ * inside runWithTenant so FORCED RLS accepts writes and reads see the tenant's
+ * rows.
  */
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
@@ -20,6 +22,11 @@ import { orgUnits } from "../org-hierarchy/schema.js";
 const log = pino({ name: "data-migration-consumer" });
 const UNIT_TYPES = new Set(["department", "division", "section", "unit", "branch"]);
 const ORG_ENTITIES = new Set(["org_unit", "org_units", "orgUnit", "orgUnits"]);
+// DB column bounds (tenant.org_units): name varchar(200), code varchar(32). A
+// record exceeding these is rejected into the error report — never handed to the
+// insert, where an oversized value would raise a PostgresError.
+const MAX_NAME_LEN = 200;
+const MAX_CODE_LEN = 32;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 interface ImportError { index: number; error: string }
@@ -53,6 +60,13 @@ export function registerDataMigrationConsumers(q: Queue): void {
   });
 
   // CAP-020 — REAL bulk import: validate + persist + per-record error report.
+  // The batch header is inserted first and the final status/error-report update
+  // runs in the SAME outer transaction, but every per-record insert is isolated
+  // behind its own SAVEPOINT (tx.transaction). A row that still raises at the DB
+  // (e.g. an unforeseen constraint) rolls back only that savepoint, so the
+  // header always COMMITS and the client can always poll status + error report
+  // (never a permanent 404). CAP-020 guarantee: rejected-with-report, never
+  // silently dropped.
   q.subscribe("tenant.master_data.import", async (msg) => {
     const p = msg.payload as { batchId: string; tenantId?: string; entityType: string; records: Record<string, unknown>[] };
     await runWithTenant(msg.tenantId, () => db.transaction(async (tx) => {
@@ -76,7 +90,13 @@ export function registerDataMigrationConsumers(q: Queue): void {
           const type = typeof r.type === "string" ? r.type : "";
           const code = typeof r.code === "string" && r.code.length > 0 ? r.code : undefined;
           if (!name) { errors.push({ index: i, error: "name is required" }); continue; }
+          if (name.length > MAX_NAME_LEN) {
+            errors.push({ index: i, error: `name exceeds ${MAX_NAME_LEN} characters (got ${name.length})` }); continue;
+          }
           if (!UNIT_TYPES.has(type)) { errors.push({ index: i, error: `invalid type: ${type || "(empty)"}` }); continue; }
+          if (code && code.length > MAX_CODE_LEN) {
+            errors.push({ index: i, error: `code exceeds ${MAX_CODE_LEN} characters (got ${code.length})` }); continue;
+          }
           if (code && (existingCodes.has(code) || seenCodes.has(code))) {
             errors.push({ index: i, error: `duplicate code: ${code}` }); continue;
           }
@@ -88,12 +108,20 @@ export function registerDataMigrationConsumers(q: Queue): void {
             if (!parent[0]) { errors.push({ index: i, error: `parent not found: ${parentId}` }); continue; }
             level = parent[0].level + 1;
           }
-          await tx.insert(orgUnits).values({
-            id: randomUUID(), tenantId: msg.tenantId, name, type,
-            parentId: parentId ?? null, code: code ?? null, level, createdBy: msg.actorId, version: 1,
-          });
-          if (code) seenCodes.add(code);
-          inserted++;
+          // SAVEPOINT per row: an unexpected DB-level failure rolls back only
+          // this row, never the batch header or the rows already inserted.
+          try {
+            await tx.transaction(async (sp) => {
+              await sp.insert(orgUnits).values({
+                id: randomUUID(), tenantId: msg.tenantId, name, type,
+                parentId: parentId ?? null, code: code ?? null, level, createdBy: msg.actorId, version: 1,
+              });
+            });
+            if (code) seenCodes.add(code);
+            inserted++;
+          } catch (err) {
+            errors.push({ index: i, error: `insert failed: ${err instanceof Error ? err.message : String(err)}` });
+          }
         }
       } else {
         for (let i = 0; i < records.length; i++) errors.push({ index: i, error: `unsupported entity_type: ${p.entityType}` });

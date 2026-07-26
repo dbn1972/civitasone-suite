@@ -137,4 +137,43 @@ describe("data-migration + bulk master-data — real persistence (CAP-020)", () 
     expect((await inject("GET", "/v1/org/migrations")).status).toBe(401);
     expect((await inject("POST", "/v1/org/migrations", TA, { entities: [] })).status).toBe(400);
   });
+
+  // FINDING 1 (HIGH): an oversized field must NOT discard the whole batch. The
+  // valid rows persist, the batch header COMMITS (status retrievable, never a
+  // permanent 404), and the error report names the offending row with a reason.
+  it("oversized name is reported (not silently dropped) and the batch is NOT discarded", async () => {
+    const q = new MemoryQueue(); registerDataMigrationConsumers(q); await q.start();
+    const batchId = randomUUID();
+    const longName = "Z".repeat(201); // > varchar(200)
+    const records = [
+      { name: "OversizeValidA", type: "department" }, // valid
+      { name: longName, type: "department" },         // invalid: name too long
+      { name: "OversizeValidB", type: "unit" },       // valid
+    ];
+    await publish(q, "tenant.master_data.import", TA, { batchId, entityType: "org_unit", records });
+    await q.stop();
+
+    // Batch header COMMITTED and retrievable (the whole batch was NOT rolled back).
+    const batch = await repo.findImportBatch(TA, batchId);
+    expect(batch).toBeDefined();
+    expect(batch?.status).toBe("completed"); // valid rows inserted → not "failed"
+    expect(batch?.total).toBe(3);
+    expect(batch?.inserted).toBe(2);
+    expect(batch?.failed).toBe(1);
+    const errs = batch?.errors as { index: number; error: string }[];
+    expect(errs.map((e) => e.index)).toEqual([1]);
+    expect(errs[0]?.error).toMatch(/exceeds 200/);
+
+    // The two valid rows really persisted alongside the rejected one.
+    const units = await runWithTenant(TA, () => db.transaction((tx) => tx.select().from(orgUnits).where(eq(orgUnits.tenantId, TA))));
+    const names = units.map((u) => u.name);
+    expect(names).toContain("OversizeValidA");
+    expect(names).toContain("OversizeValidB");
+    expect(names).not.toContain(longName);
+
+    // Status route returns 200 (not 404-forever) with the error report.
+    const got = await inject("GET", `/v1/org/master-data/import/${batchId}`, TA);
+    expect(got.status).toBe(200);
+    expect((got.body as { data: { failed: number } }).data.failed).toBe(1);
+  });
 });
