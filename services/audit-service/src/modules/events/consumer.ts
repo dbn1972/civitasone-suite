@@ -65,10 +65,6 @@ export function registerAuditConsumers(q: Queue): void {
     });
   };
 
-  q.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventIngest, async (msg) => {
-    await handleAuditEvent(msg);
-  });
-
   q.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventRecord, async (msg) => {
     await handleAuditEvent(msg);
   });
