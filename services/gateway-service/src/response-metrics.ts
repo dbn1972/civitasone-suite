@@ -123,8 +123,9 @@ export function registerResponseMetrics(app: FastifyInstance): void {
     done();
   });
 
-  // ── Prometheus text format endpoint (primary) ───────────────────────────────
-  app.get("/metrics", async (_req, reply) => {
+  // ── Prometheus text format endpoint (moved off /metrics to avoid colliding
+  //    with the guarded fleet-wide /metrics from @civitasone/observability) ────
+  app.get("/metrics/prom", async (_req, reply) => {
     reply.header("content-type", metricsRegistry.contentType);
     return reply.send(await metricsRegistry.metrics());
   });
