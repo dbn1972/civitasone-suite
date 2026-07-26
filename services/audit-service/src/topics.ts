@@ -1,4 +1,8 @@
-export const CONSUME_TOPICS = {
+/**
+ * Topics owned by audit-service's namespace that OTHER services publish into.
+ * Every service emits `audit.event.record` via its outbox; audit ingests them.
+ */
+export const CONSUMED_EVENTS = {
   auditEventIngest: "audit.event.ingest",
   auditEventRecord: "audit.event.record",
 } as const;

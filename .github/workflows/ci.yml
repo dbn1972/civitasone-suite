@@ -258,6 +258,13 @@ jobs:
       - run: pnpm turbo build --filter='./packages/*' --filter='./services/gateway-service'
       - name: Run gateway contract tests (Vitest)
         run: pnpm exec vitest run tests/contract/gateway.contract.test.ts
+
+      # Gate #3 — consumer-driven cross-service event contract.
+      # BLOCKING. Fails on any NEW dead subscription, phantom consumption,
+      # unemitted event, or orphan event vs tests/contract/known-defects.json.
+      # See docs/QA-GATES.md for the tracked-debt inventory and burn-down.
+      - name: Run cross-service event contract tests (Vitest)
+        run: pnpm exec vitest run tests/contract/cross-service-events.contract.test.ts
         env:
           QUEUE_DRIVER: memory
           JWT_SECRET: ci-test-secret-min-32-chars-long

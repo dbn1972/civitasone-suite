@@ -2,10 +2,10 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, CONSUME_TOPICS } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
-const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
+const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 
 export function registerComplianceConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.pendingRegisterCreate, async (msg) => {

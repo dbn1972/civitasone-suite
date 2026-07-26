@@ -2,11 +2,11 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, CONSUME_TOPICS } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeRiskScore, type Likelihood, type Impact } from "./domain.js";
 
-const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
+const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 
 /** Raised when an optimistic-locked update affects 0 rows (stale version / cross-tenant). */
 class StaleWriteError extends Error {

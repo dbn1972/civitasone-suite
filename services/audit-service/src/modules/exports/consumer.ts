@@ -5,13 +5,13 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, CONSUME_TOPICS, EVENTS, RESOURCE } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS, EVENTS, RESOURCE } from "../../topics.js";
 import * as eventsRepo from "../events/repo.js";
 import * as repo from "./repo.js";
 import { MAX_EXPORT_ROWS, PII_EXPORT_ROLES } from "./validators.js";
 import { contentDigest, signManifest, signingKeyId, SIGNATURE_ALG, type ExportManifest } from "./signing.js";
 
-const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
+const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 
 // P1-5: where artifacts land. Tenant-scoped subdir; download served via tenant-scoped token route.
 const EXPORT_DIR = process.env.EXPORT_DIR ?? "/tmp/audit-exports";

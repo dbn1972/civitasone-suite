@@ -460,7 +460,7 @@ describe("consumer registration", () => {
     registerHierarchyConsumers(queue);
     expect(subscribedTopics).toContain("location.hierarchy.unit.create");
     expect(subscribedTopics).toContain("location.hierarchy.unit.update");
-    expect(subscribedTopics).toContain("location.hierarchy.unit.bulkSync");
+    expect(subscribedTopics).toContain("location.hierarchy.unit.bulk_sync");
   });
 
   it("jurisdiction consumer subscribes to expected topics", () => {
@@ -478,6 +478,6 @@ describe("consumer registration", () => {
 
   it("pincode consumer subscribes to expected topic", () => {
     registerPincodeConsumers(queue);
-    expect(subscribedTopics).toContain("location.pincode.bulkImport");
+    expect(subscribedTopics).toContain("location.pincode.bulk_import");
   });
 });

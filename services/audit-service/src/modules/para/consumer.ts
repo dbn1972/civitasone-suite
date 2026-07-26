@@ -4,14 +4,14 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, CONSUME_TOPICS, EVENTS } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import * as obsRepo from "../observation/repo.js";
 import { assertCanDraftPara } from "../observation/domain.js";
 import * as repo from "./repo.js";
 import { assertCanTransition, assertBodyMutable } from "./domain.js";
 import type { ParaStatus } from "./schema.js";
 
-const AUDIT_TOPIC = CONSUME_TOPICS.auditEventRecord;
+const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 
 /** Raised when an optimistic-locked update affects 0 rows (stale version / cross-tenant). */
 class StaleWriteError extends Error {

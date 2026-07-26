@@ -5,7 +5,7 @@ export const COMMANDS = {
   // hierarchy
   unitCreate: "location.hierarchy.unit.create",
   unitUpdate: "location.hierarchy.unit.update",
-  unitBulkSync: "location.hierarchy.unit.bulkSync",
+  unitBulkSync: "location.hierarchy.unit.bulk_sync",
   // jurisdiction
   jurisdictionAssign: "location.jurisdiction.assign",
   jurisdictionRevoke: "location.jurisdiction.revoke",
@@ -14,7 +14,7 @@ export const COMMANDS = {
   geofenceUpdate: "location.geofence.update",
   geofenceCheck: "location.geofence.check",
   // pincode
-  pincodeBulkImport: "location.pincode.bulkImport",
+  pincodeBulkImport: "location.pincode.bulk_import",
 } as const;
 
 export const EVENTS = {
@@ -23,7 +23,7 @@ export const EVENTS = {
   // hierarchy
   unitCreated: "location.hierarchy.unit.created",
   unitUpdated: "location.hierarchy.unit.updated",
-  unitBulkSynced: "location.hierarchy.unit.bulkSynced",
+  unitBulkSynced: "location.hierarchy.unit.bulk_synced",
   // jurisdiction
   jurisdictionAssigned: "location.jurisdiction.assigned",
   jurisdictionRevoked: "location.jurisdiction.revoked",
@@ -32,7 +32,7 @@ export const EVENTS = {
   geofenceUpdated: "location.geofence.updated",
   geofenceChecked: "location.geofence.checked",
   // pincode
-  pincodeBulkImported: "location.pincode.bulkImported",
+  pincodeBulkImported: "location.pincode.bulk_imported",
 } as const;
 
 export const SERVICE = "location";
