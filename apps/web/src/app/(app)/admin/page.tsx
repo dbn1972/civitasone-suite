@@ -1,6 +1,7 @@
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
+import { serverT } from "@/lib/i18n/server";
 
 const adminTiles: NavTile[] = [
   { title: "SA Dashboard", href: "/admin/sa-dashboard", description: "Platform health, revenue and growth" },
@@ -21,9 +22,10 @@ const adminTiles: NavTile[] = [
 ];
 
 export default function AdminPage() {
+  const t = serverT();
   return (
     <main className="page-main" aria-labelledby="page-heading">
-      <PageHeader title="Platform Administration" subtitle="Super admin tools for tenant management, billing, and platform operations." />
+      <PageHeader title={t("admin.title")} subtitle={t("admin.subtitle")} />
       <LinkTiles tiles={adminTiles} columns="four" />
     </main>
   );

@@ -297,29 +297,6 @@ describe("Route 500 error handlers", () => {
   });
 });
 
-describe("GET /v1/revenue/assessees/:id/bills", () => {
-  it("returns 200 with paginated response", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: `/v1/revenue/assessees/a2222222-2222-2222-2222-222222222222/bills`,
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json).toHaveProperty("data");
-    expect(json).toHaveProperty("meta");
-  });
-
-  it("returns 401 without auth", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: `/v1/revenue/assessees/a2222222-2222-2222-2222-222222222222/bills`,
-    });
-    expect(res.statusCode).toBe(401);
-  });
-});
-
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Billing GET /assessees/:id/bills (previously uncovered)
 // ═══════════════════════════════════════════════════════════════════════════════

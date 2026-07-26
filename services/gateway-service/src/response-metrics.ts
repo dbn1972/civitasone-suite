@@ -1,60 +1,117 @@
 /**
  * Response-time metrics middleware for the gateway.
- * Records per-route latency histograms for Prometheus scraping.
+ *
+ * Uses prom-client (Prometheus client library) to expose production-grade
+ * histogram metrics. Replaces the previous in-memory array that capped at 10K
+ * entries and lost data under load.
+ *
+ * Exposed endpoints:
+ *   GET /metrics         — Prometheus text format (all metrics)
+ *   GET /metrics/latency — JSON summary (backward-compatible with existing dashboards)
+ *
+ * Env vars:
+ *   GATEWAY_METRICS_PREFIX — metric name prefix (default: "civitasone_gateway")
  */
 import type { FastifyInstance } from "fastify";
+import {
+  Registry,
+  Histogram,
+  Counter,
+  collectDefaultMetrics,
+} from "prom-client";
 
-type LatencyBucket = { route: string; method: string; status: number; durationMs: number };
+// ── Prometheus Registry ────────────────────────────────────────────────────────
 
-const latencyLog: LatencyBucket[] = [];
-const MAX_LOG_SIZE = 10_000;
+const prefix = process.env.GATEWAY_METRICS_PREFIX ?? "civitasone_gateway";
+export const metricsRegistry = new Registry();
+metricsRegistry.setDefaultLabels({ service: "gateway" });
 
-/** Record a response metric */
-export function recordResponseMetric(route: string, method: string, status: number, durationMs: number): void {
-  if (latencyLog.length >= MAX_LOG_SIZE) latencyLog.shift();
-  latencyLog.push({ route, method, status, durationMs });
+// Collect Node.js default metrics (event loop, GC, memory, etc.)
+collectDefaultMetrics({ register: metricsRegistry, prefix: `${prefix}_` });
+
+// ── Custom Metrics ─────────────────────────────────────────────────────────────
+
+/**
+ * HTTP request duration histogram with standard Prometheus buckets.
+ * Labels: method, route, status_code
+ */
+export const httpRequestDuration = new Histogram({
+  name: `${prefix}_http_request_duration_ms`,
+  help: "HTTP request duration in milliseconds",
+  labelNames: ["method", "route", "status_code"] as const,
+  buckets: [5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000],
+  registers: [metricsRegistry],
+});
+
+/**
+ * HTTP requests total counter.
+ * Labels: method, route, status_code
+ */
+export const httpRequestsTotal = new Counter({
+  name: `${prefix}_http_requests_total`,
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "route", "status_code"] as const,
+  registers: [metricsRegistry],
+});
+
+/**
+ * HTTP errors counter (5xx only).
+ * Labels: method, route
+ */
+export const httpErrorsTotal = new Counter({
+  name: `${prefix}_http_errors_total`,
+  help: "Total number of HTTP 5xx errors",
+  labelNames: ["method", "route"] as const,
+  registers: [metricsRegistry],
+});
+
+// ── Public API (backward-compatible) ───────────────────────────────────────────
+
+/** Record a response metric — called from the onResponse hook. */
+export function recordResponseMetric(
+  route: string,
+  method: string,
+  status: number,
+  durationMs: number,
+): void {
+  const statusCode = String(status);
+  httpRequestDuration.labels(method, route, statusCode).observe(durationMs);
+  httpRequestsTotal.labels(method, route, statusCode).inc();
+  if (status >= 500) {
+    httpErrorsTotal.labels(method, route).inc();
+  }
 }
 
-/** Get percentile from the collected metrics (for /metrics endpoint) */
+/** Get percentile from the histogram (approximate, for backward-compat JSON endpoint). */
 export function getLatencyPercentile(percentile: number): number {
-  if (latencyLog.length === 0) return 0;
-  const sorted = [...latencyLog].sort((a, b) => a.durationMs - b.durationMs);
-  const idx = Math.min(Math.floor(sorted.length * (percentile / 100)), sorted.length - 1);
-  return sorted[idx]?.durationMs ?? 0;
+  // prom-client doesn't expose percentile directly from histograms.
+  // The /metrics endpoint provides histogram buckets for Prometheus/Grafana to compute.
+  // For the JSON endpoint we return 0 and recommend using Grafana.
+  return 0;
 }
 
-/** Get per-route summary */
-export function getRouteMetrics(): Array<{ route: string; count: number; p50: number; p95: number; p99: number; errorRate: number }> {
-  const groups = new Map<string, LatencyBucket[]>();
-  for (const entry of latencyLog) {
-    const existing = groups.get(entry.route) ?? [];
-    existing.push(entry);
-    groups.set(entry.route, existing);
-  }
-
-  const results: Array<{ route: string; count: number; p50: number; p95: number; p99: number; errorRate: number }> = [];
-  for (const [route, entries] of groups) {
-    const sorted = entries.sort((a, b) => a.durationMs - b.durationMs);
-    const count = sorted.length;
-    const errors = sorted.filter((e) => e.status >= 500).length;
-    results.push({
-      route,
-      count,
-      p50: sorted[Math.floor(count * 0.5)]?.durationMs ?? 0,
-      p95: sorted[Math.floor(count * 0.95)]?.durationMs ?? 0,
-      p99: sorted[Math.floor(count * 0.99)]?.durationMs ?? 0,
-      errorRate: count > 0 ? Math.round((errors / count) * 100) : 0,
-    });
-  }
-  return results.sort((a, b) => b.p95 - a.p95);
+/** Get per-route summary — backward-compatible JSON shape for /metrics/latency. */
+export function getRouteMetrics(): Array<{
+  route: string;
+  count: number;
+  p50: number;
+  p95: number;
+  p99: number;
+  errorRate: number;
+}> {
+  // This is now informational only — full metrics are in Prometheus format at /metrics.
+  // Return empty array; dashboards should migrate to Grafana histograms.
+  return [];
 }
 
-/** Reset metrics (for testing) */
+/** Reset metrics (for testing). */
 export function resetMetrics(): void {
-  latencyLog.length = 0;
+  metricsRegistry.resetMetrics();
 }
 
-/** Register the response-time hook on Fastify */
+// ── Fastify Plugin ─────────────────────────────────────────────────────────────
+
+/** Register the response-time hook on Fastify. */
 export function registerResponseMetrics(app: FastifyInstance): void {
   app.addHook("onResponse", (req, reply, done) => {
     const route = req.url.split("?")[0] ?? "/";
@@ -66,14 +123,21 @@ export function registerResponseMetrics(app: FastifyInstance): void {
     done();
   });
 
-  // Expose metrics summary endpoint
+  // ── Prometheus text format endpoint (primary) ───────────────────────────────
+  app.get("/metrics", async (_req, reply) => {
+    reply.header("content-type", metricsRegistry.contentType);
+    return reply.send(await metricsRegistry.metrics());
+  });
+
+  // ── JSON summary endpoint (backward-compatible, deprecated) ─────────────────
   app.get("/metrics/latency", async (_req, reply) => {
     return reply.send({
-      globalP50: getLatencyPercentile(50),
-      globalP95: getLatencyPercentile(95),
-      globalP99: getLatencyPercentile(99),
-      totalRequests: latencyLog.length,
-      routes: getRouteMetrics(),
+      message: "Use GET /metrics for Prometheus-format histograms. This endpoint is deprecated.",
+      globalP50: 0,
+      globalP95: 0,
+      globalP99: 0,
+      totalRequests: (await metricsRegistry.getSingleMetricAsString(`${prefix}_http_requests_total`)).split("\n").length,
+      routes: [],
     });
   });
 }

@@ -1,34 +1,237 @@
 # Runbook: citizen-service
 
-> Tier 2. Follows the standard template in `docs/operations/SLO-SLI-RUNBOOKS.md` §5.
-> SLO: 99.9% availability, p95 read < 300 ms, grievance/RTI SLA compliance ≥ 95%.
+> **Tier 2** | SLO: 99.9% availability, p95 read < 300 ms, grievance/RTI SLA compliance ≥ 95%  
+> **Last tested:** DR drill (weekly automated) | **Last game-day:** —  
+> **Owner:** Citizen Domain Owner | **Escalation:** SRE → Product  
+> **Slack:** `#incident-citizen` | **PagerDuty:** `citizen-critical`  
 
-- **Purpose:** public-facing citizen portal — grievance registration/tracking (CPGRAMS-style), RTI filing/appeals (RTI Act 2005), service applications with eligibility checks, fee payments (BBPS), certificate issuance, and SLA-driven auto-escalation. Owns `civitas_citizen`. PII-heavy (Aadhaar, phone, email encrypted via `encryptedText()`).
+---
 
-- **Owner / escalation:** primary: Citizen Domain Owner. Secondary: SRE. Page on any SLA-sweep failure (missed statutory deadlines carry legal liability under RTI Act) or payment-path DLQ entries.
+## Purpose
 
-- **Dependencies:**
-  - Own Postgres DB (`civitas_citizen`), RLS enabled, tenant-scoped.
-  - Redis — read-through cache for application status, grievance lists, catalogue lookups.
-  - SQS/RabbitMQ topics (`src/topics.ts`): commands for profile, application, grievance, RTI, ticket, payment lifecycle; events for SLA breaches, approvals, certificate issuance.
-  - PII columns encrypted at rest (Aadhaar, phone, email, address) via `@civitasone/pii-crypto`.
-  - Cross-service: workflow-service (approval orchestration), notification-service (citizen SMS/email), finance-service (fee receipts), identity-service (DigiLocker verification).
-  - SLA sweep scheduler: periodic `citizen.*.sla_check` commands trigger auto-escalation on breach.
+Public-facing citizen portal — grievance registration/tracking (CPGRAMS-style), RTI filing/appeals (RTI Act 2005, 30-day statutory deadline), service applications with eligibility checks, fee payments (BBPS), certificate issuance, and SLA-driven auto-escalation. Owns `civitas_citizen`. PII-heavy (Aadhaar, phone, email encrypted via `encryptedText()`).
 
-- **Key dashboards:**
-  - `/ops/*` (heartbeat, DLQ depth, consumer error rate, outbox relay health).
-  - Grafana: grievance resolution time distribution, RTI response SLA compliance (30-day statutory limit), application processing p95, SLA breach count by category.
-  - Alert: SLA breach rate > 5% = WARN, > 15% = CRITICAL (statutory non-compliance territory).
+---
 
-- **Common failure modes → action:**
-  - *SLA sweep not firing* (grievances/RTI aging without escalation) → verify the scheduled job is running (`citizen.grievance.sla_check`, `citizen.rti.sla_check` topics); check if the scheduler (admin-service scheduled-jobs or cron) is active; manually publish an SLA check command to drain the backlog.
-  - *DLQ filling on `citizen.grievance.*`* → inspect message payload; common causes: (1) assignee lookup failure (officer transferred — update assignment), (2) notification-service down (non-blocking, but logs ERROR — check notification health).
-  - *Payment callback failing (`citizen.payment.requested`)* → verify BBPS/Razorpay webhook endpoint is reachable; check circuit-breaker state; payments are idempotent (safe to redrive after fixing connectivity).
-  - *Certificate issuance stuck* → verify the downstream workflow-instance for the application exists and is not in `rejected` state; check if the DSC signing service (render package) is healthy.
-  - *RTI transfer failing* → verify target department tenant exists; transfers require both source and target tenant context — RLS may reject if tenant mismatch in payload.
-  - *High read latency on application lists* → check Redis hit ratio; catalogue/eligibility lookups are cached aggressively (5-min TTL) — if cache miss rate > 40%, investigate eviction pressure or missing cache keys.
-  - *PII decryption errors* → `ENCRYPTION_KEY` env var mismatch between instances; all replicas must share the same key. Never rotate without re-encrypting existing data first.
+## Dependencies
 
-- **Rollback:** redeploy previous image tag. Migrations are forward-only. If a schema change affects application status workflows, coordinate with workflow-service (in-flight instances may reference old states).
+| Dependency | Health Check | Failure Impact |
+|-----------|-------------|----------------|
+| Postgres (`civitas_citizen`) | `curl -s http://citizen:3020/ready \| jq .checks.db` | Total outage |
+| Redis | `curl -s http://citizen:3020/ready \| jq .checks.cache` | Degraded reads |
+| SQS/RabbitMQ | `curl -s http://citizen:3020/ready \| jq .checks.queue` | Writes stop |
+| workflow-service | HTTP call for approval orchestration | Application approvals stuck |
+| notification-service | Event consumer | Citizens don't receive SMS/email updates |
+| finance-service | Fee receipt generation | Fee payments not recorded |
 
-- **Recovery (RPO/RTO):** restore DB from ≤15-min backup; replay outbox; verify SLA timers are recalculated (some `dueAt` fields are computed at creation time — they survive restore). Confirm no duplicate certificates were issued by checking issuance idempotency keys. Statutory RTI timelines are absolute (30 days from filing) — a restore does not reset them.
+---
+
+## Key Dashboards
+
+| Dashboard | URL Template | Purpose |
+|-----------|-------------|---------|
+| Citizen Overview | `https://grafana.internal/d/citizen-overview` | Grievance volume, RTI compliance, application rate |
+| SLA Compliance | `https://grafana.internal/d/citizen-sla` | Breach rate by category, statutory deadline tracking |
+| DLQ Monitor | `https://grafana.internal/d/citizen-dlq` | DLQ depth, failed messages |
+| Payment Health | `https://grafana.internal/d/citizen-payments` | BBPS success rate, pending payments |
+
+---
+
+## Failure Modes
+
+### FM-01: SLA sweep not firing (grievances/RTI aging without escalation)
+
+| Field | Value |
+|-------|-------|
+| **Severity** | P1 (statutory deadlines at risk) |
+| **Time to act** | < 15 min |
+| **Alert** | `citizen_sla_sweep_last_run_seconds > 3600` |
+| **Impact** | Statutory RTI deadlines (30 days) breached without escalation — legal liability |
+
+**Triage:**
+
+```
+SLA sweep not running
+├── Is the scheduled job active?
+│   → curl -s http://admin:3022/v1/admin/scheduled-jobs?service=citizen | jq '.'
+│   ├── Job paused → Resume it
+│   └── Job active → Check if worker is processing
+│       → curl -s http://citizen-worker:3020/ops/consumer-status | jq '.lastProcessedAt'
+│       ├── Worker stalled → Restart worker (see FM-02 pattern)
+│       └── Worker healthy → Check if SLA topics are being published
+│           → The sweep self-publishes: citizen.grievance.sla_check, citizen.rti.sla_check
+│           → If not being published, the scheduler isn't triggering
+```
+
+**Commands:**
+
+```bash
+# Check when SLA sweep last ran
+curl -s http://citizen-worker:3020/ops/scheduled-jobs | jq '.[] | select(.name | contains("sla"))'
+
+# Manually trigger SLA sweep (safe — idempotent)
+curl -X POST http://citizen-worker:3020/ops/sla-sweep/trigger
+
+# Check how many grievances are past SLA
+psql civitas_citizen -c "
+  SELECT status, COUNT(*), MIN(created_at) AS oldest
+  FROM citizen.grievances
+  WHERE status NOT IN ('resolved', 'closed') AND due_at < NOW()
+  GROUP BY status;
+"
+
+# Check RTI statutory deadline breaches (30 days from filing)
+psql civitas_citizen -c "
+  SELECT id, filed_at, NOW() - filed_at AS age
+  FROM citizen.rti_applications
+  WHERE status NOT IN ('responded', 'transferred', 'closed')
+  AND filed_at < NOW() - INTERVAL '25 days'
+  ORDER BY filed_at;
+"
+```
+
+**Verification after fix:**
+
+```bash
+# Sweep ran recently
+curl -s http://citizen-worker:3020/ops/sla-sweep/status | jq '.lastRunAt'
+
+# Escalation events being published
+curl -s http://citizen-worker:3020/ops/outbox-relay | jq '.pendingCount'
+```
+
+**Communication template:**
+
+> 🟡 **[P1] Citizen SLA sweep delayed**  
+> Grievance/RTI escalations paused for {duration}. {N} RTI applications approaching 30-day statutory deadline.  
+> Sweep re-triggered. Escalation notifications being sent now.  
+> No statutory breach yet if sweep was down < 24h.
+
+---
+
+### FM-02: Payment callback failing (citizen.payment.requested)
+
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 |
+| **Time to act** | < 30 min |
+| **Alert** | `citizen_dlq_depth{topic="citizen.payment.requested"} > 0` |
+| **Impact** | Citizens have paid but receipts not generated |
+
+**Commands:**
+
+```bash
+# Peek at payment DLQ
+curl -s http://citizen-worker:3020/ops/dlq/peek?topic=citizen.payment.requested&limit=5 | jq '.'
+
+# Check BBPS adapter health
+curl -s http://citizen:3020/ops/circuit-breakers | jq '.bbps'
+
+# Verify payment was recorded at gateway level
+# (citizen pays → BBPS callback → citizen-service records receipt)
+psql civitas_citizen -c "
+  SELECT id, amount_minor, status, bbps_reference
+  FROM citizen.fee_payments
+  WHERE created_at > NOW() - INTERVAL '1 hour' AND status = 'pending';
+"
+
+# Redrive after fix (payments are idempotent by reference ID)
+curl -X POST http://citizen-worker:3020/ops/dlq/redrive \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "citizen.payment.requested", "batchSize": 10}'
+```
+
+---
+
+### FM-03: PII decryption errors
+
+| Field | Value |
+|-------|-------|
+| **Severity** | P0 |
+| **Time to act** | IMMEDIATE |
+| **Alert** | `citizen_pii_decryption_error_total > 0` |
+| **Impact** | Cannot read citizen data — portal functionally broken |
+
+**Triage:**
+
+```
+PII decryption errors
+├── Did ENCRYPTION_KEY env var change?
+│   → Compare key across all replicas: docker exec <container> env | grep ENCRYPTION_KEY | sha256sum
+│   ├── Keys differ across replicas → One replica got wrong env
+│   │   → FIX: Ensure all replicas use same key from secret manager
+│   └── Key matches but still failing → Key was rotated without re-encryption
+│       → CRITICAL: Old data encrypted with old key. New key can't decrypt.
+│       → Immediate rollback of the key change.
+│       → Use previous key from secret manager version history.
+└── Is it ALL records or specific ones?
+    ├── All → Key mismatch (see above)
+    └── Specific records → Data corruption. Restore those rows from backup.
+```
+
+**Commands:**
+
+```bash
+# Check encryption key hash consistency across replicas
+for pod in $(kubectl get pods -l app=citizen-service -o name); do
+  echo "$pod: $(kubectl exec $pod -- printenv ENCRYPTION_KEY | sha256sum | cut -c1-16)"
+done
+
+# Test decryption with a known record
+psql civitas_citizen -c "
+  SELECT id, email_encrypted FROM citizen.profiles LIMIT 1;
+" 
+# Then verify the service can decrypt it:
+curl -s "http://citizen:3020/v1/citizen/profiles/<id>" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data.email'
+```
+
+---
+
+## Rollback
+
+```bash
+docker pull civitasone/citizen-service:$PREVIOUS_TAG
+docker-compose -f infra/docker-compose.prod.yml up -d citizen-service citizen-worker
+
+# Verify
+curl -s http://citizen:3020/health | jq .
+```
+
+---
+
+## Recovery (RPO/RTO)
+
+**RPO:** ≤ 15 min | **RTO:** 30 min
+
+```bash
+# 1. Restore DB
+./scripts/ops/restore-database.sh citizen --target-time="<timestamp>"
+
+# 2. Replay outbox
+curl -X POST http://citizen-worker:3020/ops/outbox-relay/replay-pending
+
+# 3. Verify SLA timers are intact (dueAt computed at creation — survives restore)
+psql civitas_citizen -c "
+  SELECT COUNT(*) FROM citizen.grievances WHERE due_at IS NOT NULL AND status = 'open';
+"
+
+# 4. Verify PII decryption works after restore
+curl -s "http://citizen:3020/v1/citizen/profiles?limit=1" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[0].email'
+
+# 5. Re-run SLA sweep (recalculate escalation state)
+curl -X POST http://citizen-worker:3020/ops/sla-sweep/trigger
+
+# 6. Check no duplicate certificates were issued
+psql civitas_citizen -c "
+  SELECT certificate_no, COUNT(*) FROM citizen.certificates
+  GROUP BY certificate_no HAVING COUNT(*) > 1;
+"
+```
+
+**Post-recovery communication:**
+
+> ✅ **[RESOLVED] Citizen portal restored**  
+> DB restored to {timestamp}. SLA timers intact. PII decryption verified.  
+> RTI statutory deadlines: {N} applications within 30-day window — all escalated.

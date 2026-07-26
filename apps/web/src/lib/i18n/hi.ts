@@ -219,4 +219,65 @@ export const hi: Record<string, string> = {
   "misc.helpCentre": "सहायता केंद्र",
   "misc.whatsNew": "नया क्या है",
   "misc.shortcuts": "कीबोर्ड शॉर्टकट",
+
+  // ─── Page: Dashboard ──────────────────────────────────────────────────
+  "dashboard.title": "कमांड सेंटर",
+  "dashboard.subtitle": "क्या हो रहा है, किस पर कार्रवाई चाहिए, और अगला कदम — आपकी भूमिका के अनुसार।",
+  "dashboard.myApprovals": "मेरे अनुमोदन",
+  "dashboard.setupBannerTitle": "नए हैं? अपना कार्यक्षेत्र सेट करें",
+  "dashboard.setupBannerDesc": "कुछ आसान कदमों से अपना कार्यालय तैयार करें — जहाँ छोड़ा था वहीं से शुरू करें।",
+  "dashboard.yourModules": "आपके मॉड्यूल",
+  "dashboard.noModules": "कोई मॉड्यूल असाइन नहीं",
+  "dashboard.noModulesMsg": "आपके खाते में कोई मॉड्यूल सक्षम नहीं है। एक्सेस के लिए अपने टेनेंट प्रशासक से संपर्क करें।",
+
+  // ─── Page: Finance ────────────────────────────────────────────────────
+  "finance.title": "वित्तीय प्रबंधन",
+  "finance.subtitle": "बजट, व्यय, प्राप्तियाँ और कोषागार — एक शासित दृश्य।",
+  "finance.budgetUtilisation": "बजट उपयोग (वित्त वर्ष)",
+  "finance.expenditureYtd": "व्यय (वर्ष-से-अब)",
+  "finance.paymentsMtd": "भुगतान (माह-से-अब)",
+  "finance.pendingApprovals": "लंबित अनुमोदन",
+  "finance.budgetChart": "बजट उपयोग",
+  "finance.modules": "वित्त मॉड्यूल",
+  "finance.exportMis": "MIS निर्यात",
+  "finance.paymentsThisMonth": "इस माह भुगतान",
+
+  // ─── Page: Grievances ─────────────────────────────────────────────────
+  "grievances.title": "शिकायतें",
+  "grievances.subtitle": "30-दिन जीवनचक्र के साथ CPGRAMS-शैली शिकायत पंजिका।",
+  "grievances.register": "+ शिकायत दर्ज करें",
+  "grievances.total": "कुल",
+  "grievances.pending": "लंबित",
+  "grievances.escalated": "बढ़ाई गई",
+  "grievances.resolved": "समाधित",
+  "grievances.tableTitle": "शिकायत पंजिका",
+  "grievances.emptyTitle": "कोई शिकायत दर्ज नहीं",
+  "grievances.emptyMsg": "CPGRAMS-शैली प्रणाली में दर्ज शिकायतें यहाँ दिखाई देंगी।",
+
+  // ─── Page: Leave ──────────────────────────────────────────────────────
+  "leave.title": "अवकाश प्रबंधन",
+  "leave.subtitle": "कर्मचारी अवकाश आवेदनों की समीक्षा और प्रसंस्करण।",
+  "leave.approvals": "अनुमोदन",
+  "leave.newLeave": "+ नया अवकाश",
+  "leave.total": "कुल",
+  "leave.pending": "लंबित",
+  "leave.approved": "स्वीकृत",
+  "leave.rejected": "अस्वीकृत",
+  "leave.requests": "अवकाश आवेदन",
+
+  // ─── Page: Admin ──────────────────────────────────────────────────────
+  "admin.title": "प्लेटफ़ॉर्म प्रशासन",
+  "admin.subtitle": "टेनेंट प्रबंधन, बिलिंग और प्लेटफ़ॉर्म संचालन के लिए सुपर एडमिन उपकरण।",
+
+  // ─── Page: Analytics ──────────────────────────────────────────────────
+  "analytics.title": "डेटा एवं विश्लेषण",
+  "analytics.subtitle": "सहेजे गए डैशबोर्ड और एनालिटिक्स सेवा के डेटा पर सुरक्षित क्वेरी।",
+
+  // ─── Stat Labels (Shared) ─────────────────────────────────────────────
+  "stat.total": "कुल",
+  "stat.pending": "लंबित",
+  "stat.approved": "स्वीकृत",
+  "stat.rejected": "अस्वीकृत",
+  "stat.escalated": "बढ़ाई गई",
+  "stat.resolved": "समाधित",
 };

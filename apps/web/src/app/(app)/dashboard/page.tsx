@@ -4,6 +4,7 @@ import { RoleCommandCenter } from "./RoleCommandCenter";
 import { FirstRunTour } from "./FirstRunTour";
 import { ActivationTracker } from "../../_components/ActivationTracker";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { serverT } from "@/lib/i18n/server";
 
 const MODULES = [
   { icon: "🏦", label: "Finance", href: "/finance", desc: "Budgets, bills, payments, GL", bg: "#eef2ff", roles: ["finance"] },
@@ -31,6 +32,7 @@ function visibleModules(roles: string[]) {
 }
 
 export default function DashboardPage() {
+  const t = serverT();
   const roles = getSessionRoles();
   const modules = visibleModules(roles);
 
@@ -39,13 +41,13 @@ export default function DashboardPage() {
       <FirstRunTour />
       <ActivationTracker steps={["signin"]} />
       <PageHeader
-        title="Command Center"
-        subtitle="What is happening, what needs action, and what to do next — filtered to your role."
-        actions={<Link href="/workflow" className="btn primary">My approvals</Link>}
+        title={t("dashboard.title")}
+        subtitle={t("dashboard.subtitle")}
+        actions={<Link href="/workflow" className="btn primary">{t("dashboard.myApprovals")}</Link>}
       />
       <Link
         href="/setup"
-        aria-label="New here? Finish setting up your workspace"
+        aria-label={t("dashboard.setupBannerTitle")}
         style={{ textDecoration: "none", display: "block", marginBottom: 18 }}
       >
         <div
@@ -62,8 +64,8 @@ export default function DashboardPage() {
         >
           <span aria-hidden="true" style={{ fontSize: 22 }}>🚀</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, color: "var(--ink)" }}>New here? Finish setting up your workspace</div>
-            <div style={{ fontSize: 13, color: "var(--ink2)" }}>A few quick steps to get your office ready — pick up where you left off.</div>
+            <div style={{ fontWeight: 700, color: "var(--ink)" }}>{t("dashboard.setupBannerTitle")}</div>
+            <div style={{ fontSize: 13, color: "var(--ink2)" }}>{t("dashboard.setupBannerDesc")}</div>
           </div>
           <span aria-hidden="true" style={{ color: "var(--primary-d)", fontWeight: 700 }}>→</span>
         </div>
@@ -71,20 +73,20 @@ export default function DashboardPage() {
       <RoleCommandCenter />
       <section aria-labelledby="dash-modules-h">
         <div className="card-h" style={{ marginBottom: 12 }}>
-          <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>Your modules</h2>
+          <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>{t("dashboard.yourModules")}</h2>
         </div>
         {modules.length === 0 ? (
           <div className="card">
             <div className="pad">
               <EmptyState
                 icon="🧭"
-                title="No modules assigned yet"
-                message="Your account does not have any modules enabled. Contact your tenant administrator to request access."
+                title={t("dashboard.noModules")}
+                message={t("dashboard.noModulesMsg")}
               />
             </div>
           </div>
         ) : (
-          <nav aria-label="Modules" className="grid g-4">
+          <nav aria-label={t("dashboard.yourModules")} className="grid g-4">
             {modules.map(({ icon, label, href, desc, bg }) => (
               <Link key={href} href={href} aria-label={label} style={{ textDecoration: "none", display: "block" }}>
                 <div className="stat" style={{ cursor: "pointer", height: "100%" }}>
