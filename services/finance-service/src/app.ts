@@ -108,6 +108,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(anomalyRoutes);
   const { resolutionIntakeRoutes } = await import("./modules/resolution-intake/routes.js");
   await app.register(resolutionIntakeRoutes);
+  const { reconRoutes } = await import("./modules/recon/routes.js");
+  await app.register(reconRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
