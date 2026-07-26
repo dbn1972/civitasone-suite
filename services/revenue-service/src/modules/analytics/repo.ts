@@ -2,14 +2,18 @@
  * Analytics module — read models over the DCB (demand/collection/balance) ledger.
  *
  * Reads are tenant-scoped: every query carries an explicit `tenant_id = $1`
- * predicate AND runs inside the per-request tenant transaction whose
+ * predicate AND runs inside a per-request tenant transaction whose
  * `app.tenant_id` GUC is enforced by RLS as a defense-in-depth backstop.
+ * The GUC is set via `tenantTransaction(db, tenantId, …)` — the same helper the
+ * write path (commands.ts) uses — so the FORCE ROW LEVEL SECURITY backstop is
+ * live on these reads and not just the app-layer `eq(*.tenantId, …)` predicate.
  *
  * All transformation is delegated to pure, exported helpers so the analytics
  * math is unit-testable without a live database.
  *
  * _Requirements: SVC-140_
  */
+import { tenantTransaction } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { dcbEntries, demands } from "../assessment/schema.js";
@@ -85,14 +89,17 @@ export function outstandingByAssessee(
 // ── DB reads ────────────────────────────────────────────────────────────────────
 
 async function loadDcbRows(tenantId: string): Promise<RawDcbRow[]> {
-  const rows = await db
-    .select({
-      createdAt: dcbEntries.createdAt,
-      entryType: dcbEntries.entryType,
-      amountMinor: dcbEntries.amountMinor,
-    })
-    .from(dcbEntries)
-    .where(eq(dcbEntries.tenantId, tenantId));
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select({
+        createdAt: dcbEntries.createdAt,
+        entryType: dcbEntries.entryType,
+        amountMinor: dcbEntries.amountMinor,
+      })
+      .from(dcbEntries)
+      .where(eq(dcbEntries.tenantId, tenantId));
+  });
   return rows as RawDcbRow[];
 }
 
@@ -148,14 +155,18 @@ export async function getEfficiency(tenantId: string, granularity: Granularity):
 /** Arrears aging buckets (0-30 / 31-60 / 61-90 / 90+) as of a date. */
 export async function getArrearsAging(tenantId: string, asOfDate: string) {
   const cached = await cache.getOrLoad(`${SERVICE}:${tenantId}:analytics:aging:${asOfDate}`, async () => {
-    const demandRows = await db
-      .select({ id: demands.id, dueDate: demands.dueDate })
-      .from(demands)
-      .where(eq(demands.tenantId, tenantId));
-    const dcbRows = await db
-      .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor })
-      .from(dcbEntries)
-      .where(eq(dcbEntries.tenantId, tenantId));
+    const { demandRows, dcbRows } = await tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      const demandRows = await t
+        .select({ id: demands.id, dueDate: demands.dueDate })
+        .from(demands)
+        .where(eq(demands.tenantId, tenantId));
+      const dcbRows = await t
+        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor })
+        .from(dcbEntries)
+        .where(eq(dcbEntries.tenantId, tenantId));
+      return { demandRows, dcbRows };
+    });
 
     const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint }>);
     const aged = ageIntoBuckets(
@@ -178,14 +189,18 @@ export async function getArrearsAging(tenantId: string, asOfDate: string) {
 /** Top-N defaulters by outstanding balance. */
 export async function getDefaulters(tenantId: string, limit: number): Promise<RankedDefaulter[]> {
   const cached = await cache.getOrLoad(`${SERVICE}:${tenantId}:analytics:defaulters:${limit}`, async () => {
-    const demandRows = await db
-      .select({ id: demands.id, assesseeId: demands.assesseeId })
-      .from(demands)
-      .where(eq(demands.tenantId, tenantId));
-    const dcbRows = await db
-      .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor })
-      .from(dcbEntries)
-      .where(eq(dcbEntries.tenantId, tenantId));
+    const { demandRows, dcbRows } = await tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      const demandRows = await t
+        .select({ id: demands.id, assesseeId: demands.assesseeId })
+        .from(demands)
+        .where(eq(demands.tenantId, tenantId));
+      const dcbRows = await t
+        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor })
+        .from(dcbEntries)
+        .where(eq(dcbEntries.tenantId, tenantId));
+      return { demandRows, dcbRows };
+    });
 
     const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint }>);
     const outstanding = outstandingByAssessee(

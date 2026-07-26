@@ -23,8 +23,15 @@ vi.mock("../src/shared/db.js", () => {
       }),
     }),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+      // Reads now run inside the tenant transaction (GUC backstop). The tx must
+      // therefore expose the same select() surface as the top-level db.
       const tx = {
         execute: async () => undefined,
+        select: (proj: Record<string, unknown>) => ({
+          from: () => ({
+            where: async () => (proj && "entryType" in proj ? rows.dcb : rows.demands),
+          }),
+        }),
         insert: () => ({ values: () => ({ returning: async () => [{ id: "run-1" }] }) }),
       };
       return fn(tx);
