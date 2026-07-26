@@ -22,6 +22,7 @@
     "test:contract:events": "vitest run tests/contract/cross-service-events.contract.test.ts",
     "test:contract:strict": "CONTRACT_STRICT=1 vitest run tests/contract/cross-service-events.contract.test.ts",
     "test:e2e:personas": "playwright test --config tests/e2e-personas/playwright.config.ts",
+    "test:mutation": "npx stryker run",
     "contract:baseline": "BASELINE_WRITE=1 vitest run tests/contract/lib/baseline.test.ts",
     "test:integration": "vitest run tests/integration/",
     "test:screens": "vitest run tests/contract/screens.contract.test.ts",
@@ -35,12 +36,15 @@
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "8.6.0",
+    "@stryker-mutator/typescript-checker": "8.6.0",
+    "@stryker-mutator/vitest-runner": "8.6.0",
     "@types/node": "^20.0.0",
     "eslint": "^9.0.0",
+    "fast-check": "4.8.0",
     "prettier": "^3.3.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^2.1.9",
-    "fast-check": "4.8.0"
+    "vitest": "^2.1.9"
   }
 }
