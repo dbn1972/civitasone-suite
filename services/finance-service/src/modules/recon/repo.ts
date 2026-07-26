@@ -2,7 +2,7 @@
  * CAP-059 — reconciliation repository. Writes run inside db.transaction (GUC set
  * by the request tenant hook); reads use scopedRead so RLS is enforced.
  */
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { reconRun, reconBreak } from "./schema.js";
 import type { ReconRunRow, ReconRunInsert, ReconBreakRow, ReconBreakInsert } from "./schema.js";
@@ -16,7 +16,17 @@ export async function insertRun(tx: Writer, row: ReconRunInsert): Promise<ReconR
 
 export async function insertBreaks(tx: Writer, rows: ReconBreakInsert[]): Promise<void> {
   if (rows.length === 0) return;
-  await (tx as typeof db).insert(reconBreak).values(rows);
+  // Idempotent replay: the partial unique index (migration 0050) permits at most
+  // one ACTIVE (open/investigating) break per (tenant, provider, break_key,
+  // break_type, field). Re-running recon while the same mismatch persists hits
+  // the conflict and is skipped instead of piling up duplicate open breaks.
+  await (tx as typeof db)
+    .insert(reconBreak)
+    .values(rows)
+    .onConflictDoNothing({
+      target: [reconBreak.tenantId, reconBreak.provider, reconBreak.breakKey, reconBreak.breakType, reconBreak.field],
+      where: sql`${reconBreak.status} IN ('open','investigating')`,
+    });
 }
 
 export async function listRuns(tenantId: string, limit = 50): Promise<ReconRunRow[]> {

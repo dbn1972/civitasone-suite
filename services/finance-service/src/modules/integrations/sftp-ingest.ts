@@ -18,7 +18,7 @@
 import { mkdir } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { pino } from "pino";
 import {
   defaultSftpClientFactory,
@@ -81,6 +81,19 @@ function matches(name: string, pattern?: RegExp | string): boolean {
 }
 
 /**
+ * A remote listing entry name is attacker-influenced (a hostile or compromised
+ * SFTP server controls it). Reject anything that could escape the local download
+ * directory via path traversal: empty/dot names, path separators, NUL, or a `..`
+ * segment. Callers skip unsafe entries rather than writing them.
+ */
+function isSafeRemoteName(name: string): boolean {
+  if (!name || name === "." || name === "..") return false;
+  if (name.includes("/") || name.includes("\\") || name.includes("\0")) return false;
+  if (name.split(/[\\/]/).some((seg) => seg === "..")) return false;
+  return true;
+}
+
+/**
  * Fetch matching files from the inbound SFTP directory into a local dir.
  * Returns the list of downloaded files (empty when SFTP_HOST is not set).
  * Does NOT delete remote files — a caller decides archival after successful
@@ -107,9 +120,21 @@ export async function fetchInboundFiles(opts: FetchInboundOptions = {}): Promise
     const entries = await client.list(cfg.inboundDir);
     const files = entries.filter((e) => e.type === "-" && matches(e.name, opts.pattern)).slice(0, limit);
 
+    const localRoot = resolve(localDir);
     for (const f of files) {
+      // The remote server controls f.name; never let it escape localDir.
+      if (!isSafeRemoteName(f.name)) {
+        log.warn({ name: f.name }, "Skipping unsafe inbound SFTP file name (path traversal)");
+        continue;
+      }
       const remotePath = `${cfg.inboundDir.replace(/\/$/, "")}/${f.name}`;
       const localPath = join(localDir, f.name);
+      // Belt-and-braces: assert the resolved destination is still under localRoot.
+      const resolvedLocal = resolve(localPath);
+      if (resolvedLocal !== localRoot && !resolvedLocal.startsWith(localRoot + sep)) {
+        log.warn({ name: f.name, resolvedLocal }, "Skipping inbound SFTP file — resolves outside localDir");
+        continue;
+      }
       log.info({ remotePath, localPath }, "Downloading inbound SFTP file");
       await client.get(remotePath, localPath);
       fetched.push({ remoteName: f.name, localPath, size: f.size });

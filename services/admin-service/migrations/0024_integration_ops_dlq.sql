@@ -1,4 +1,4 @@
--- Migration: 0022_integration_ops_dlq.sql
+-- Migration: 0024_integration_ops_dlq.sql
 -- Purpose: CAP-060 — integration observability / replay. A generic dead-letter
 --          store + action log so operators can list, inspect, requeue/replay,
 --          and discard messages that failed terminal delivery on any topic.
@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS integration_ops.dead_letter (
   error          text,
   retry_count    integer NOT NULL DEFAULT 0,
   status         varchar(16) NOT NULL DEFAULT 'pending'
-                   CHECK (status IN ('pending','requeued','discarded')),
+                   CONSTRAINT dead_letter_status_chk
+                   CHECK (status IN ('pending','requeuing','requeued','discarded')),
   first_failed_at timestamptz NOT NULL DEFAULT now(),
   last_error_at  timestamptz NOT NULL DEFAULT now(),
   requeued_at    timestamptz,
@@ -43,6 +44,13 @@ CREATE TABLE IF NOT EXISTS integration_ops.dead_letter (
   updated_at     timestamptz NOT NULL DEFAULT now(),
   version        integer NOT NULL DEFAULT 1
 );
+
+-- Reconcile the status CHECK on pre-existing tables (created before the
+-- 'requeuing' interim state existed) so concurrency-safe requeue can claim rows.
+ALTER TABLE integration_ops.dead_letter DROP CONSTRAINT IF EXISTS dead_letter_status_check;
+ALTER TABLE integration_ops.dead_letter DROP CONSTRAINT IF EXISTS dead_letter_status_chk;
+ALTER TABLE integration_ops.dead_letter ADD CONSTRAINT dead_letter_status_chk
+  CHECK (status IN ('pending','requeuing','requeued','discarded'));
 
 -- Idempotent ingestion: a replayed failure for the same (topic,message_id) per
 -- tenant updates the existing row rather than duplicating it.

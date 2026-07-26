@@ -57,6 +57,7 @@ export async function runReconciliation(
     const breakRows: ReconBreakInsert[] = breaks.map((b) => ({
       tenantId: ctx.tenantId,
       runId: run.id,
+      provider: provider.key,
       breakKey: b.key,
       breakType: b.type,
       severity: b.severity,

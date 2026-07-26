@@ -2,10 +2,12 @@
  * CAP-060 — dead-letter service: ingestion + requeue(replay)/discard.
  *
  * Requeue republishes the original payload to its topic through the configured
- * queue driver, then marks the row requeued + writes an audit action. Publish
- * happens BEFORE the status flip so a queue outage leaves the row `pending`
- * (fail-closed) rather than silently "requeued" with nothing sent — an honest
- * 503 is surfaced instead of fabricated success.
+ * queue driver. To make replay concurrency-safe, it CLAIMS the row first —
+ * atomically flipping pending->requeuing (CAS) BEFORE publishing — so two
+ * concurrent requeues can never both publish (double-delivery). Only the claim
+ * winner publishes; the loser is a no-op/409. A failed publish reverts the claim
+ * to `pending` (fail-closed, message not lost) and surfaces an honest 503
+ * instead of fabricated success.
  */
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
@@ -64,7 +66,13 @@ async function publishToTopic(row: DeadLetterRow, actorId: string): Promise<void
   }
 }
 
-/** Requeue (replay) one dead letter. Publish first, then mark requeued + audit. */
+/**
+ * Requeue (replay) one dead letter. Claim-before-publish:
+ *   1. validate it's actionable (404/409),
+ *   2. CAS pending->requeuing to claim it — loser returns 409, never publishes,
+ *   3. publish to the bus (winner only); on failure revert to pending + 503,
+ *   4. finalize requeuing->requeued + write the audit action.
+ */
 export async function requeueOne(
   ctx: Pick<RequestContext, "tenantId" | "actorId">,
   id: string,
@@ -74,11 +82,30 @@ export async function requeueOne(
   if (!row) throw new ReplayError(404, "NOT_FOUND", "dead letter not found");
   assertActionable(row.status as DlqStatus, "requeue");
 
-  await publishToTopic(row, ctx.actorId);
+  // Claim BEFORE publishing. Only one concurrent caller wins the CAS.
+  const claimed = await db.transaction((tx) => repo.claimForRequeue(tx, ctx.tenantId, id));
+  if (!claimed) {
+    // A concurrent requeue already claimed/actioned this row — do NOT publish.
+    const current = await repo.getDeadLetter(ctx.tenantId, id);
+    throw new ReplayError(
+      409,
+      "ALREADY_CLAIMED",
+      `dead letter ${id} is already being requeued (status ${current?.status ?? "unknown"})`,
+    );
+  }
+
+  // We own the claim. Publish; on failure release the claim so nothing is lost.
+  try {
+    await publishToTopic(claimed, ctx.actorId);
+  } catch (err) {
+    await db.transaction((tx) => repo.revertToPending(tx, ctx.tenantId, id));
+    throw err; // ReplayError(503, REPLAY_UNAVAILABLE, ...) from publishToTopic
+  }
 
   const updated = await db.transaction(async (tx) => {
     const u = await repo.updateStatus(tx, ctx.tenantId, id, {
       status: "requeued",
+      expectStatus: "requeuing",
       requeuedAt: new Date(),
       actionedBy: ctx.actorId,
     });
@@ -93,7 +120,6 @@ export async function requeueOne(
     }
     return u;
   });
-  // If a concurrent requeue already claimed it, return the current row.
   return updated ?? (await repo.getDeadLetter(ctx.tenantId, id))!;
 }
 

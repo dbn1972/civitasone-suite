@@ -50,7 +50,8 @@
         "budget",
         "gl",
         "treasury",
-        "payments"
+        "payments",
+        "recon"
       ]
     },
     {

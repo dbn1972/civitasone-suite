@@ -147,6 +147,50 @@ describe("CAP-060 dead-letter routes", () => {
     expect(rq2.statusCode).toBe(409);
   });
 
+  it("two concurrent requeues of the same dead-letter publish exactly once (claim-before-publish)", async () => {
+    const messageId = randomUUID();
+    const rec = await app.inject({
+      method: "POST",
+      url: "/v1/admin/integration-ops/dead-letters",
+      headers: h(token()),
+      payload: { topic: "race.requeue.topic", messageId, payload: { race: true } },
+    });
+    const id = rec.json().data.id;
+
+    // Observe every republish on the shared memory bus.
+    const received: any[] = [];
+    queue.subscribe("race.requeue.topic", async (msg) => {
+      received.push(msg);
+    });
+
+    // Fire two requeues of the SAME row concurrently.
+    const [a, b] = await Promise.all([
+      app.inject({ method: "POST", url: `/v1/admin/integration-ops/dead-letters/${id}/requeue`, headers: h(token()) }),
+      app.inject({ method: "POST", url: `/v1/admin/integration-ops/dead-letters/${id}/requeue`, headers: h(token()) }),
+    ]);
+
+    await (queue as any).drain?.();
+
+    // Exactly one winner (200 requeued), one loser (409, no publish).
+    const statuses = [a.statusCode, b.statusCode].sort();
+    expect(statuses).toEqual([200, 409]);
+    const winner = a.statusCode === 200 ? a : b;
+    expect(winner.json().data.status).toBe("requeued");
+
+    // The message was published to the bus EXACTLY ONCE — no double delivery.
+    expect(received.length).toBe(1);
+    expect(received[0].messageId).toBe(messageId);
+
+    // Row settled to requeued with a single requeue audit action.
+    const detail = await app.inject({
+      method: "GET",
+      url: `/v1/admin/integration-ops/dead-letters/${id}`,
+      headers: h(token()),
+    });
+    expect(detail.json().data.status).toBe("requeued");
+    expect(detail.json().actions.filter((x: any) => x.action === "requeue").length).toBe(1);
+  });
+
   it("discards a dead letter", async () => {
     const rec = await app.inject({
       method: "POST",

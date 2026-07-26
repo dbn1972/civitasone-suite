@@ -30,6 +30,9 @@ export const reconBreak = reconSchema.table("recon_break", {
   id:             uuid("id").primaryKey().defaultRandom(),
   tenantId:       uuid("tenant_id").notNull(),
   runId:          uuid("run_id").notNull(),
+  // Denormalised from recon_run so it can anchor the active-break dedup index
+  // (migration 0050). Always set by the writer from the run's provider.
+  provider:       varchar("provider", { length: 64 }).notNull(),
   breakKey:       text("break_key").notNull(),
   breakType:      varchar("break_type", { length: 24 }).notNull(),
   field:          text("field"),

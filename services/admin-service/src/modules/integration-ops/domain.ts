@@ -3,7 +3,11 @@
  * requeues (replays) it or discards it; both are terminal for that row. A
  * requeued message that fails again is re-ingested as its own new dead letter.
  */
-export type DlqStatus = "pending" | "requeued" | "discarded";
+// `requeuing` is a short-lived interim state: a requeue has claimed the row
+// (CAS pending->requeuing) but not yet finished publishing. It is not operator-
+// actionable; a failed publish reverts it to `pending`, a successful one to
+// `requeued`. It exists so two concurrent requeues cannot both publish.
+export type DlqStatus = "pending" | "requeuing" | "requeued" | "discarded";
 export type DlqAction = "requeue" | "discard";
 
 export class DlqError extends Error {
@@ -15,6 +19,8 @@ export class DlqError extends Error {
 
 const TRANSITIONS: Record<DlqStatus, Partial<Record<DlqAction, DlqStatus>>> = {
   pending: { requeue: "requeued", discard: "discarded" },
+  // A row mid-requeue is claimed — no operator action is valid until it settles.
+  requeuing: {},
   requeued: {},
   discarded: {},
 };

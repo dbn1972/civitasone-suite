@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import {
   uploadBankFile,
   buildRemotePath,
@@ -123,5 +123,27 @@ describe("CAP-057 SFTP inbound ingestion", () => {
     expect(files[0]?.size).toBe(120);
     expect(fake.gets).toHaveLength(2);
     expect(fake.calls).toContain("end");
+  });
+
+  it("skips path-traversal listing entries — nothing escapes localDir (SEC)", async () => {
+    setInboundEnv();
+    const localDir = await mkdtemp(join(tmpdir(), "sftp-inbound-"));
+    const fake = new FakeSftp([
+      { name: "../../etc/passwd", size: 10, type: "-" },
+      { name: "../escape.txt", size: 10, type: "-" },
+      { name: "sub/dir/file.txt", size: 10, type: "-" },
+      { name: "..", size: 0, type: "-" },
+      { name: "GOOD_ACK_20260701.txt", size: 42, type: "-" },
+    ]);
+    const files = await fetchInboundFiles({ localDir, clientFactory: async () => fake });
+    // Only the benign flat filename is fetched; every traversal entry is skipped.
+    expect(files.map((f) => f.remoteName)).toEqual(["GOOD_ACK_20260701.txt"]);
+    expect(fake.gets).toHaveLength(1);
+    // No download target resolves outside the sandboxed localDir.
+    const root = resolve(localDir);
+    for (const g of fake.gets) {
+      const dest = resolve(g.local);
+      expect(dest === root || dest.startsWith(root + sep)).toBe(true);
+    }
   });
 });
