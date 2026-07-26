@@ -3,7 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 
 const log = pino({ name: "claims-consumer" });
 const AUDIT = "audit.event.record";
@@ -52,6 +52,19 @@ export function registerClaimsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // TODO: Update claim status to approved, set approved amount (cap enforcement)
+      await enqueue(tx, {
+        topic: EVENTS.claimApproved,
+        eventType: EVENTS.claimApproved,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          claimId: p.claimId,
+          claimType: p.claimType,
+          approvedAmountMinor: p.approvedAmountMinor,
+          tenantId: p.tenantId,
+        },
+      });
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,

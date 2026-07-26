@@ -32,8 +32,8 @@ export const EVENTS = {
  */
 export const INBOUND = {
   // finance / grants / procurement (money facts)
-  financePaymentReleased: "finance.payment.released",
-  grantReleaseProcessed: "grants.release.processed",
+  financePaymentMade: "finance.payment.made",
+  grantDisbursementCompleted: "grant.disbursement.completed",
   procurementPoApproved: "procurement.po.approved",
   // governance (meeting-service) — attendance / voting / completion facts
   meetingAttendanceMarked: "meeting.attendance.marked",

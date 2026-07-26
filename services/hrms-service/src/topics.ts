@@ -104,10 +104,12 @@ export const COMMANDS = {
 export const EVENTS = {
   certificateIssued: "assessment.certificate.issued",
   employeeCreated:   "hrms.employee.created",
+  employeeUpdated:   "hrms.employee.updated",
   employeeSeparated: "hrms.employee.separated",
   leaveApplied:      "hrms.leave.applied",
   leaveApproved:     "hrms.leave.approved",
   attendanceMarked:  "hrms.attendance.marked",
+  claimApproved:     "hrms.claim.approved",
   // SVC-003: a recruitment hire filled a position for an auto-generated
   // manpower-plan requisition (consumed by modules/manpower-planning).
   positionFilled:    "hrms.recruitment.position_filled",

@@ -14,6 +14,16 @@ import { enqueue } from "../../shared/outbox.js";
 const AUDIT = "audit.event.record";
 
 export function registerIntegrationConsumers(queue: Queue): void {
+  queue.subscribe(CONSUMED_EVENTS.employeeCreated, async (msg) => {
+    // Acknowledged: warm-cache for future payroll run input resolution.
+    // Currently a no-op (data fetched via hrms-client at run time), but the
+    // subscription is registered so the queue contract holds and messages don't
+    // dead-letter.
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+    });
+  });
+
   queue.subscribe(CONSUMED_EVENTS.leaveApproved, async (msg) => {
     const p = msg.payload as { employeeId: string; daysApplied: number; fromDate: string };
     const month = p.fromDate.slice(0, 7);
