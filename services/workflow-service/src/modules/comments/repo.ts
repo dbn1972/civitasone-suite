@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, asc, isNull, sql } from "drizzle-orm";
+import { and, eq, asc, isNull } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { entityComments, type CommentRow } from "./schema.js";
 

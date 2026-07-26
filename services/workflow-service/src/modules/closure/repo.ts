@@ -54,7 +54,7 @@ export async function close(input: CloseInput): Promise<ClosureRow | null> {
   });
 }
 
-export interface ReopenInput extends CloseInput {}
+export type ReopenInput = CloseInput;
 
 /** Reopen: only from closed; increments reopen_count. */
 export async function reopen(input: ReopenInput): Promise<ClosureRow | null> {
