@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { validateLink, planSplit, planMerge, type LinkType } from "./domain.js";
+import { planSplit, planMerge, type LinkType } from "./domain.js";
 
 const ADMIN = ["super_admin", "workflow_admin", "case_manager", "tenant_admin"];
 
@@ -28,17 +28,18 @@ export async function caseLinksRoutes(app: FastifyInstance): Promise<void> {
     if (!(await repo.caseExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "from case not found");
     if (!(await repo.caseExists(ctx.tenantId, body.toCaseId))) throw new HttpError(404, "NOT_FOUND", "to case not found");
 
-    const existing = await repo.allLinks(ctx.tenantId);
-    const guard = validateLink({ fromCaseId: id, toCaseId: body.toCaseId, type: body.linkType as LinkType, existing });
-    if (!guard.allowed) {
-      const status = guard.errors.includes("CYCLE_DETECTED") || guard.errors.includes("DUPLICATE_LINK") ? 409 : 400;
-      throw new HttpError(status, "LINK_REJECTED", `link rejected: ${guard.errors.join(", ")}`);
-    }
-    const row = await repo.createLink({
+    // PR #169 (HIGH): read-existing + cycle-check + insert happen atomically in
+    // one tx (with FOR UPDATE row locks on the two cases) inside createLinkChecked,
+    // so concurrent A->B / B->A creates serialize and cannot both pass the check.
+    const result = await repo.createLinkChecked({
       tenantId: ctx.tenantId, fromCaseId: id, toCaseId: body.toCaseId,
       linkType: body.linkType as LinkType, reason: body.reason, actorId: ctx.actorId, correlationId: ctx.correlationId,
     });
-    return reply.code(201).send({ data: row });
+    if (!result.ok) {
+      const status = result.errors.includes("CYCLE_DETECTED") || result.errors.includes("DUPLICATE_LINK") ? 409 : 400;
+      throw new HttpError(status, "LINK_REJECTED", `link rejected: ${result.errors.join(", ")}`);
+    }
+    return reply.code(201).send({ data: result.row });
   });
 
   // CAP-033 — split a case into >= 2 children with optional allocation (sum 100).

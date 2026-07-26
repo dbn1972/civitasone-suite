@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { caseLinks, type CaseLinkRow } from "./schema.js";
 import { cases } from "../case-registry/schema.js";
-import type { CaseLink, LinkType } from "./domain.js";
+import { validateLink, type CaseLink, type LinkType } from "./domain.js";
+import { HttpError } from "../../shared/context.js";
 
 /** All links for a tenant as domain-shaped edges (for cycle checks). */
 export async function allLinks(tenantId: string): Promise<CaseLink[]> {
@@ -64,6 +65,58 @@ export async function createLink(input: CreateLinkInput): Promise<CaseLinkRow> {
   });
 }
 
+export type CreateLinkResult =
+  | { ok: true; row: CaseLinkRow }
+  | { ok: false; errors: string[] };
+
+/**
+ * PR #169 (HIGH) -- atomic, race-free link creation.
+ *
+ * The previous flow read existing links in one tx, ran the pure cycle check,
+ * then INSERTed in a SEPARATE tx. Two concurrent requests A->B and B->A both
+ * read existing=[], both passed wouldCreateCycle(), and both committed -> a
+ * cycle, which the unique index (tenant,from,to,type) cannot stop (reverse
+ * edge differs). Here we do everything in ONE db.transaction:
+ *  1. Lock BOTH case rows FOR UPDATE, ordered by id ascending, so concurrent
+ *     creations on the same pair acquire locks in the same order (no deadlock)
+ *     and serialize -- the second txn blocks until the first commits.
+ *  2. Re-read the tenant's links INSIDE the tx (post-lock) so the cycle check
+ *     sees the link the first txn just committed.
+ *  3. validateLink() -> on any failure return the guard errors (caller maps to
+ *     4xx; CYCLE_DETECTED/DUPLICATE_LINK -> 409) and the tx rolls back.
+ *  4. Otherwise INSERT + audit.
+ */
+export async function createLinkChecked(input: CreateLinkInput): Promise<CreateLinkResult> {
+  const id = randomUUID();
+  const lockIds = Array.from(new Set([input.fromCaseId, input.toCaseId]));
+  return db.transaction(async (tx) => {
+    await tx.select({ id: cases.id }).from(cases)
+      .where(and(eq(cases.tenantId, input.tenantId), inArray(cases.id, lockIds)))
+      .orderBy(asc(cases.id))
+      .for("update");
+    const rows = await tx.select().from(caseLinks).where(eq(caseLinks.tenantId, input.tenantId));
+    const existing: CaseLink[] = rows.map((r) => ({ fromCaseId: r.fromCaseId, toCaseId: r.toCaseId, type: r.linkType as LinkType }));
+    const guard = validateLink({ fromCaseId: input.fromCaseId, toCaseId: input.toCaseId, type: input.linkType, existing });
+    if (!guard.allowed) return { ok: false, errors: guard.errors };
+    const ins = await tx.insert(caseLinks).values({
+      id,
+      tenantId: input.tenantId,
+      fromCaseId: input.fromCaseId,
+      toCaseId: input.toCaseId,
+      linkType: input.linkType,
+      allocation: input.allocation !== undefined ? String(input.allocation) : null,
+      reason: input.reason ?? null,
+      createdBy: input.actorId,
+    }).returning();
+    await enqueue(tx, {
+      topic: "audit.event.record", eventType: "audit.event.record",
+      tenantId: input.tenantId, actorId: input.actorId, correlationId: input.correlationId,
+      payload: { service: "workflow", action: "link_case", resourceType: "case", resourceId: input.fromCaseId, outcome: "success", detail: { toCaseId: input.toCaseId, linkType: input.linkType } },
+    });
+    return { ok: true, row: ins[0]! };
+  });
+}
+
 export interface SplitPersistInput {
   tenantId: string;
   parentCaseId: string;
@@ -79,8 +132,15 @@ export interface SplitPersistInput {
  */
 export async function persistSplit(input: SplitPersistInput): Promise<string[]> {
   return db.transaction(async (tx) => {
-    const parent = (await tx.select().from(cases).where(and(eq(cases.tenantId, input.tenantId), eq(cases.id, input.parentCaseId))).limit(1))[0];
-    if (!parent) throw new Error("PARENT_NOT_FOUND");
+    // PR #169 (MEDIUM) -- lock the parent row FIRST, then assert it is still
+    // 'open'. Without this a second split (or two concurrent splits) on the
+    // same parent would each create a full child set -> duplicate children /
+    // 200% allocation. FOR UPDATE serializes concurrent splits on this parent.
+    const parent = (await tx.select().from(cases)
+      .where(and(eq(cases.tenantId, input.tenantId), eq(cases.id, input.parentCaseId)))
+      .limit(1).for("update"))[0];
+    if (!parent) throw new HttpError(404, "NOT_FOUND", "case not found");
+    if (parent.status !== "open") throw new HttpError(409, "CASE_NOT_OPEN", `case not open for split (status=${parent.status})`);
     const childIds: string[] = [];
     for (const c of input.children) {
       const childId = randomUUID();
@@ -100,8 +160,12 @@ export async function persistSplit(input: SplitPersistInput): Promise<string[]> 
         createdBy: input.actorId,
       });
     }
-    await tx.update(cases).set({ status: "split", updatedAt: new Date() })
-      .where(and(eq(cases.tenantId, input.tenantId), eq(cases.id, input.parentCaseId)));
+    // Conditional flip: WHERE status='open' so 0 rows affected == lost the race
+    // (a concurrent split already moved the parent) -> conflict, rolls back.
+    const flipped = await tx.update(cases).set({ status: "split", updatedAt: new Date() })
+      .where(and(eq(cases.tenantId, input.tenantId), eq(cases.id, input.parentCaseId), eq(cases.status, "open")))
+      .returning({ id: cases.id });
+    if (flipped.length === 0) throw new HttpError(409, "CASE_NOT_OPEN", "case not open for split");
     await enqueue(tx, {
       topic: "audit.event.record", eventType: "audit.event.record",
       tenantId: input.tenantId, actorId: input.actorId, correlationId: input.correlationId,
@@ -127,14 +191,29 @@ export interface MergePersistInput {
  */
 export async function persistMerge(input: MergePersistInput): Promise<number> {
   return db.transaction(async (tx) => {
-    const target = (await tx.select().from(cases).where(and(eq(cases.tenantId, input.tenantId), eq(cases.id, input.targetId))).limit(1))[0];
-    if (!target) throw new Error("TARGET_NOT_FOUND");
+    // PR #169 (MEDIUM) -- lock target + all sources FOR UPDATE up front, in
+    // ascending id order (deadlock-safe), then enforce that every case that
+    // participates is still 'open'. Without this a merge could consume an
+    // already split/merged case as source or target, or two concurrent merges
+    // could both claim the same source.
+    const lockIds = Array.from(new Set([input.targetId, ...input.sourceIds]));
+    const locked = await tx.select().from(cases)
+      .where(and(eq(cases.tenantId, input.tenantId), inArray(cases.id, lockIds)))
+      .orderBy(asc(cases.id))
+      .for("update");
+    const byId = new Map(locked.map((r) => [r.id, r]));
+    const target = byId.get(input.targetId);
+    if (!target) throw new HttpError(404, "NOT_FOUND", "target case not found");
+    if (target.status !== "open") throw new HttpError(409, "CASE_NOT_OPEN", `target case not open for merge (status=${target.status})`);
     let merged = 0;
     for (const sourceId of input.sourceIds) {
       if (sourceId === input.targetId) continue;
+      const src = byId.get(sourceId);
+      if (!src) continue; // non-existent source: skip (unchanged tolerance)
+      if (src.status !== "open") throw new HttpError(409, "CASE_NOT_OPEN", `source case not open for merge (id=${sourceId}, status=${src.status})`);
       const res = await tx.update(cases)
         .set({ mergedIntoCaseId: input.targetId, status: "merged", updatedAt: new Date() })
-        .where(and(eq(cases.tenantId, input.tenantId), eq(cases.id, sourceId)))
+        .where(and(eq(cases.tenantId, input.tenantId), eq(cases.id, sourceId), eq(cases.status, "open")))
         .returning({ id: cases.id });
       if (res.length === 0) continue;
       merged += 1;
