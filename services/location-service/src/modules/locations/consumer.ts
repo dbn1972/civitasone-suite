@@ -27,6 +27,8 @@ export function registerLocationConsumers(queue: Queue): void {
         parentId: p.parentId,
         type: p.type,
         lgdCode: p.lgdCode,
+        latitude: p.latitude,
+        longitude: p.longitude,
         status: p.status,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,

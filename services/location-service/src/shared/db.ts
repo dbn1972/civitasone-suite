@@ -10,6 +10,13 @@ import { schema as hierarchyModule } from "../modules/hierarchy/schema.js";
 import { schema as jurisdictionModule } from "../modules/jurisdiction/schema.js";
 import { schema as geofenceModule } from "../modules/geofence/schema.js";
 import { schema as pincodeModule } from "../modules/pincode/schema.js";
+import { schema as landRecordsModule } from "../modules/land-records/schema.js";
+import { schema as cadastralModule } from "../modules/cadastral/schema.js";
+import { schema as infrastructureModule } from "../modules/infrastructure/schema.js";
+import { schema as spatialExchangeModule } from "../modules/spatial-exchange/schema.js";
+import { schema as roadNetworkModule } from "../modules/road-network/schema.js";
+import { schema as mapLayersModule } from "../modules/map-layers/schema.js";
+import { schema as geoPointsModule } from "../modules/map-markers/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -18,6 +25,13 @@ const SCHEMA = {
   ...jurisdictionModule,
   ...geofenceModule,
   ...pincodeModule,
+  ...landRecordsModule,
+  ...cadastralModule,
+  ...infrastructureModule,
+  ...spatialExchangeModule,
+  ...roadNetworkModule,
+  ...mapLayersModule,
+  ...geoPointsModule,
   ...outboxSchema,
 };
 
