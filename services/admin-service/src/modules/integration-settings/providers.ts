@@ -15,6 +15,7 @@
 import { z } from "zod";
 import net from "node:net";
 import tls from "node:tls";
+import { isBlockedAfterResolve, isBlockedHost } from "../../shared/ssrf-guard.js";
 
 export const PROVIDERS = [
   "ai_anthropic",
@@ -60,6 +61,14 @@ async function httpProbe(url: string, opts: { headers?: Record<string, string>; 
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 8000);
   try {
+    // SSRF guard: only http(s) schemes, and reject destinations that resolve
+    // to private/loopback/link-local/metadata addresses (incl. post-DNS
+    // re-check to defeat rebinding). Fixed error string — never echoes the
+    // upstream body or any secret.
+    if (await isBlockedAfterResolve(url)) {
+      clearTimeout(t);
+      return { status: "failed", ok: false, error: "SSRF_BLOCKED: destination not allowed" };
+    }
     const init: RequestInit = { method: opts.method ?? "GET", signal: ctrl.signal };
     if (opts.headers) init.headers = opts.headers;
     const res = await fetch(url, init);
@@ -76,7 +85,13 @@ async function httpProbe(url: string, opts: { headers?: Record<string, string>; 
 }
 
 /** Open a raw TCP (optionally TLS) socket and read the server's greeting line. */
-function tcpGreeting(host: string, port: number, useTls: boolean, timeoutMs = 8000): Promise<TestResult> {
+async function tcpGreeting(host: string, port: number, useTls: boolean, timeoutMs = 8000): Promise<TestResult> {
+  // SSRF guard for the raw-socket path (SMTP/SFTP): resolve the host and
+  // block if it maps to a private/loopback/link-local/metadata IP before we
+  // open any socket. Fixed error string — never leaks a banner.
+  if (await isBlockedHost(host)) {
+    return { status: "failed", ok: false, error: "SSRF_BLOCKED: destination not allowed" };
+  }
   return new Promise((resolve) => {
     let settled = false;
     const done = (r: TestResult) => { if (!settled) { settled = true; try { socket.destroy(); } catch { /* */ } resolve(r); } };

@@ -17,90 +17,13 @@ const RESOURCE = "webhook";
 
 /**
  * SSRF guard: block private, loopback, and link-local IP ranges in webhook URLs.
- * H6 FIX: Now resolves hostnames via DNS to detect rebinding attacks.
- * Checks both string-based patterns AND resolved A/AAAA records.
+ * H6 FIX: resolves hostnames via DNS to detect rebinding attacks.
+ * Extracted into shared/ssrf-guard.ts so there is ONE implementation shared with
+ * integration-settings. Re-exported here for the delivery consumer and tests.
  */
-import { resolve4, resolve6 } from "node:dns/promises";
+import { isBlockedAfterResolve, isBlockedUrl, isPrivateIp } from "../../shared/ssrf-guard.js";
 
-function isPrivateIp(ip: string): boolean {
-  // IPv4 checks
-  const ipv4 = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (ipv4) {
-    const [, a, b] = ipv4.map(Number);
-    if (a === 10) return true;                            // 10.0.0.0/8
-    if (a === 172 && b! >= 16 && b! <= 31) return true;  // 172.16.0.0/12
-    if (a === 192 && b === 168) return true;              // 192.168.0.0/16
-    if (a === 169 && b === 254) return true;              // link-local
-    if (a === 127) return true;                           // loopback
-    if (a === 0) return true;                             // 0.0.0.0/8
-  }
-  // IPv6 checks
-  if (ip === "::1" || ip === "::") return true;
-  if (ip.startsWith("fe80:")) return true;  // link-local
-  if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // unique local
-  return false;
-}
-
-function isBlockedUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    // Block every non-http(s) scheme unconditionally (file://, gopher://,
-    // ftp://, javascript:, data:, etc.). This was previously gated behind
-    // `NODE_ENV === "production"` only — zod's `.url()` accepts any scheme,
-    // so in dev/test/staging a webhook URL like `file:///etc/passwd` or
-    // `gopher://internal-host` passed validation untouched (its hostname is
-    // empty or arbitrary, so it never matched the private-IP checks below
-    // either). There is no legitimate use case for a non-http(s) webhook
-    // target in any environment, so this check no longer depends on
-    // NODE_ENV.
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true;
-    const host = parsed.hostname.toLowerCase();
-    // Block explicit loopback
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]") return true;
-    // Block 0.0.0.0
-    if (host === "0.0.0.0") return true;
-    // Block metadata endpoints (cloud providers)
-    if (host === "169.254.169.254" || host === "metadata.google.internal") return true;
-    // Block private IPv4 ranges (string-based first check)
-    if (isPrivateIp(host)) return true;
-    // Additionally require https specifically (not just http) in production.
-    if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") return true;
-    return false;
-  } catch {
-    return true; // malformed → block
-  }
-}
-
-/**
- * H6 FIX: Resolve hostname via DNS and check if ANY resolved address is private.
- * This defeats DNS rebinding attacks where a hostname initially resolves to a
- * public IP but later resolves to 169.254.169.254 (metadata) or 127.0.0.1.
- * Must be called at BOTH registration AND delivery time.
- */
-async function isBlockedAfterResolve(url: string): Promise<boolean> {
-  if (isBlockedUrl(url)) return true;
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    // If it's already an IP, the string check above handles it
-    if (/^[\d.]+$/.test(host) || host.includes(":")) return false;
-    // Resolve A and AAAA records
-    const [ipv4s, ipv6s] = await Promise.allSettled([
-      resolve4(host),
-      resolve6(host),
-    ]);
-    const allIps: string[] = [];
-    if (ipv4s.status === "fulfilled") allIps.push(...ipv4s.value);
-    if (ipv6s.status === "fulfilled") allIps.push(...ipv6s.value);
-    // If ANY resolved IP is private, block it
-    return allIps.some(isPrivateIp);
-  } catch {
-    // DNS resolution failure — block by default (fail-closed)
-    return true;
-  }
-}
-
-// Export for use in delivery consumer (re-check at send time)
+// Re-export for the delivery consumer (re-check at send time) and tests.
 export { isBlockedAfterResolve, isBlockedUrl, isPrivateIp };
 
 const createBody = z.object({
