@@ -15,6 +15,8 @@ import { schema as cadastralModule } from "../modules/cadastral/schema.js";
 import { schema as infrastructureModule } from "../modules/infrastructure/schema.js";
 import { schema as spatialExchangeModule } from "../modules/spatial-exchange/schema.js";
 import { schema as roadNetworkModule } from "../modules/road-network/schema.js";
+import { schema as mapLayersModule } from "../modules/map-layers/schema.js";
+import { schema as geoPointsModule } from "../modules/map-markers/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -28,6 +30,8 @@ const SCHEMA = {
   ...infrastructureModule,
   ...spatialExchangeModule,
   ...roadNetworkModule,
+  ...mapLayersModule,
+  ...geoPointsModule,
   ...outboxSchema,
 };
 

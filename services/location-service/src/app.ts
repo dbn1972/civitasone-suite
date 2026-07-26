@@ -63,6 +63,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(spatialExchangeRoutes);
   const { roadNetworkRoutes } = await import("./modules/road-network/routes.js");
   await app.register(roadNetworkRoutes);
+  const { mapLayerRoutes } = await import("./modules/map-layers/routes.js");
+  await app.register(mapLayerRoutes);
+  const { mapMarkerRoutes } = await import("./modules/map-markers/routes.js");
+  await app.register(mapMarkerRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
