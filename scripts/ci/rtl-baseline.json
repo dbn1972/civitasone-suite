@@ -1,0 +1,7 @@
+{
+  "$comment": "RTL-safety ratchet baseline. This is TRACKED DEBT, not an approved state: physical direction properties do not mirror under dir=rtl and break RTL locales. The gate fails if `physical` grows. Regenerate only after reducing it: node scripts/ci/rtl-check.mjs --write-baseline",
+  "generatedAt": "2026-07-26",
+  "physical": 606,
+  "logical": 6,
+  "logicalPct": 1
+}

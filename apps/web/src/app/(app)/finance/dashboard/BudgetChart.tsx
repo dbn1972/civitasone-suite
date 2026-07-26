@@ -10,7 +10,15 @@ interface BudgetChartProps {
 
 export function BudgetChart({ utilisationPct, expenditure }: BudgetChartProps) {
   const utilized = expenditure;
-  const remaining = Math.round(utilized * ((100 - utilisationPct) / utilisationPct)) || 0;
+  // Guard the division: when utilisationPct is 0 (nothing spent yet, a normal
+  // state at the start of a financial year) the old expression evaluated
+  // `utilized * (100 / 0)` = Infinity. `|| 0` does NOT catch that, because
+  // Infinity is truthy — so the dashboard rendered "Remaining: Infinity" to
+  // finance officers. Surfaced by the WCAG gate reading the rendered DOM.
+  const remaining =
+    utilisationPct > 0 && utilisationPct <= 100 && Number.isFinite(utilized)
+      ? Math.round(utilized * ((100 - utilisationPct) / utilisationPct))
+      : 0;
 
   const donutData = [
     { label: `Utilized (${formatMoney(utilized)})`, value: utilized, color: "#4f46e5" },

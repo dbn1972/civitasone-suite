@@ -5,7 +5,12 @@
 :root{
   --primary:#0e9f6e; --primary-d:#0b815a; --primary-soft:#e6f7f0;
   --indigo:#6366f1; --violet:#8b5cf6; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --cyan:#06b6d4;
-  --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#98a2b3;
+  /* --mut was #98a2b3, which is 2.58:1 on --panel/#ffffff and fails WCAG 2.2 AA
+     (SC 1.4.3 requires 4.5:1 for body text). It is used by the sidebar brand
+     subtitle, group headings and role label, which appear on EVERY page, so a
+     single token failed accessibility on ~50 of 52 audited routes. #667085 is
+     4.97:1 on white. Verified by tests/a11y/design-tokens.spec.ts. */
+  --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#667085;
   --line:#eaecf0; --line2:#f2f4f7;
   --good:#067647; --goodbg:#ecfdf3; --goodbd:#abefc6;
   --warn:#b54708; --warnbg:#fffaeb; --warnbd:#fedf89;

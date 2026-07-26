@@ -1,0 +1,11 @@
+{
+  "$comment": "GENERATED WCAG 2.2 AA DEFECT BASELINE — these are KNOWN VIOLATIONS, not approved exceptions. GIGW 3.0 requires them fixed. The gate fails on any NEW (route|rule) pair. Regenerate only after a real fix: A11Y_BASELINE_WRITE=1 pnpm --filter @civitasone/web test:a11y",
+  "generatedAt": "2026-07-26",
+  "mode": "curated",
+  "counts": {
+    "blocking": 0,
+    "advisory": 0
+  },
+  "blocking": [],
+  "advisory": []
+}

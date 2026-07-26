@@ -259,6 +259,18 @@ jobs:
       - name: Run gateway contract tests (Vitest)
         run: pnpm exec vitest run tests/contract/gateway.contract.test.ts
 
+      # Gate #9 (part 1) — design-token contrast. Runs in the unit suite (no
+      # browser) so the single most common root cause of a fleet-wide WCAG
+      # failure (someone lightening a text token) is caught in seconds.
+      - name: Design-token contrast (WCAG 2.2 AA SC 1.4.3)
+        run: pnpm --filter @civitasone/web exec vitest run tests/a11y/design-tokens.test.ts
+
+      # Gate #9 (part 2) — RTL safety ratchet. NOTE: the previous rtl-check.mjs
+      # was a no-op (its failure condition `logicalRatio < 0` is impossible) and
+      # was not wired into CI at all. It is now a real ratchet.
+      - name: RTL safety ratchet
+        run: node scripts/ci/rtl-check.mjs
+
       # Gate #3 — consumer-driven cross-service event contract.
       # BLOCKING. Fails on any NEW dead subscription, phantom consumption,
       # unemitted event, or orphan event vs tests/contract/known-defects.json.
@@ -383,6 +395,57 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Gate #9 — REAL accessibility (WCAG 2.2 AA) via axe-core in a real browser.
+  #
+  # This replaces scripts/ci/wcag-audit.mjs, which regex-scans page.tsx source
+  # and therefore cannot see violations coming from client components, shared DS
+  # primitives, or runtime states. That script was also never wired into any
+  # workflow, so accessibility was effectively ungated.
+  #
+  # BLOCKING on NEW critical/serious violations vs apps/web/tests/a11y/a11y-baseline.json.
+  # GIGW 3.0 makes WCAG 2.2 AA mandatory for government deployments.
+  # ─────────────────────────────────────────────
+  accessibility:
+    name: Accessibility (WCAG 2.2 AA, axe-core)
+    runs-on: ubuntu-latest
+    needs: [web-build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm turbo build --filter='./packages/*'
+      - name: Build web (production build — dev mode renders differently)
+        run: pnpm --filter @civitasone/web run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Install Playwright chromium
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
+      - name: Start web
+        run: |
+          pnpm --filter @civitasone/web run start &
+          npx --yes wait-on http://localhost:3000/auth/login --timeout 120000
+        env:
+          # Dev login must be enabled for persona cookies to be accepted.
+          NEXT_PUBLIC_DEV_LOGIN: 'true'
+          JWT_SECRET: civitasone-dev-secret
+      - name: Run axe-core WCAG 2.2 AA gate
+        run: pnpm --filter @civitasone/web run test:a11y
+        env:
+          CI: true
+          JWT_SECRET: civitasone-dev-secret
+      - name: Upload a11y traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-traces
           path: apps/web/test-results/
           retention-days: 7
 
