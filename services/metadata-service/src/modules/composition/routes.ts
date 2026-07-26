@@ -93,6 +93,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
       const existing = await tx.select().from(moduleCompositions)
         .where(and(eq(moduleCompositions.id, id), eq(moduleCompositions.tenantId, ctx.tenantId))).limit(1);
       if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "Composition not found");
+      if (existing[0].publishedAt) throw new HttpError(409, "ALREADY_PUBLISHED", "Composition is already published");
 
       // Maker-checker: the creator may not publish their own composition.
       if (existing[0].createdBy === ctx.actorId) {

@@ -229,8 +229,13 @@ export function evaluateFormula(expression: string, context: Record<string, unkn
 
   function parseUnary(): FormulaValue {
     const t = peek();
-    if (t?.type === "op" && t.value === "-") { next(); return -toNum(parseUnary()); }
-    if (t?.type === "op" && t.value === "NOT") { next(); return !truthy(parseUnary()); }
+    if (t?.type === "op" && (t.value === "-" || t.value === "NOT")) {
+      guard();
+      next();
+      const operand = parseUnary();
+      depth--;
+      return t.value === "-" ? -toNum(operand) : !truthy(operand);
+    }
     return parsePrimary();
   }
 

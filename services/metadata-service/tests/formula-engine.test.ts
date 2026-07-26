@@ -90,6 +90,9 @@ describe("evaluateFormula — safety / errors", () => {
   it("rejects over-long expressions", () => {
     expect(() => evaluateFormula("1+".repeat(1100) + "1")).toThrow(FormulaError);
   });
+  it("rejects deeply chained unary operators (depth cap)", () => {
+    expect(() => evaluateFormula("-".repeat(200) + "1")).toThrow(/too deeply nested/);
+  });
 });
 
 describe("validateFormula", () => {

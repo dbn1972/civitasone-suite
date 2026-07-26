@@ -185,6 +185,29 @@ describe("maker-checker on publish", () => {
     expect(checker.json().data.status).toBe("published");
   });
 
+  it("re-publishing an already-published composition returns 409 and does not change publishedAt/publishedBy", async () => {
+    const entApi = `compent_${Math.floor(Math.random() * 1e6)}`;
+    const entityId = await seedEntity(A_TENANT, entApi, MAKER);
+    const layout = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/layouts`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ sections: [{ label: "S", fields: [] }] }) });
+    const layoutId = layout.json().data.id;
+
+    const create = await app.inject({ method: "POST", url: "/v1/metadata/compositions", headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName: `mod_${Math.floor(Math.random() * 1e6)}`, label: "Fleet", definition: { entities: [entApi], layouts: [{ entity: entApi, layoutId }] } }) });
+    const compId = create.json().data.id;
+
+    const first = await app.inject({ method: "POST", url: `/v1/metadata/compositions/${compId}/publish`, headers: hdr(A_TENANT, CHECKER), body: "{}" });
+    expect(first.statusCode).toBe(200);
+    const publishedAt = first.json().data.publishedAt;
+    const publishedBy = first.json().data.publishedBy;
+
+    const second = await app.inject({ method: "POST", url: `/v1/metadata/compositions/${compId}/publish`, headers: hdr(A_TENANT, CHECKER), body: "{}" });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().code).toBe("ALREADY_PUBLISHED");
+
+    const after = await app.inject({ method: "GET", url: `/v1/metadata/compositions/${compId}`, headers: hdr(A_TENANT, CHECKER) });
+    expect(after.json().data.publishedAt).toBe(publishedAt);
+    expect(after.json().data.publishedBy).toBe(publishedBy);
+  });
+
   it("rejects a composition referencing an unknown entity", async () => {
     const create = await app.inject({ method: "POST", url: "/v1/metadata/compositions", headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName: `bad_${Math.floor(Math.random() * 1e6)}`, label: "Bad", definition: { entities: ["does_not_exist"] } }) });
     expect(create.statusCode).toBe(422);
