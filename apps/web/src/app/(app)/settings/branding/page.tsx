@@ -13,6 +13,39 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+/**
+ * Pick black or white text for a given background so the pair meets WCAG 2.2 AA
+ * (SC 1.4.3, 4.5:1) whatever colour a tenant chooses.
+ *
+ * Uses the WCAG relative-luminance formula rather than a naive brightness
+ * average, because the two disagree near mid-tones — and mid-tones (amber,
+ * teal) are exactly where a hardcoded white foreground fails.
+ */
+function readableForeground(background: string): string {
+  const hex = background.replace("#", "");
+  const full =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : hex;
+  const n = Number.parseInt(full, 16);
+  if (!Number.isFinite(n) || full.length !== 6) return "#111827";
+  const channel = (c: number): number => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const luminance =
+    0.2126 * channel((n >> 16) & 255) +
+    0.7152 * channel((n >> 8) & 255) +
+    0.0722 * channel(n & 255);
+  // Contrast against white vs against near-black; pick the stronger one.
+  const againstWhite = 1.05 / (luminance + 0.05);
+  const againstBlack = (luminance + 0.05) / 0.05;
+  return againstWhite >= againstBlack ? "#ffffff" : "#111827";
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type BrandConfig = {
@@ -67,7 +100,7 @@ function ColorPicker({ label, value, onChange }: { label: string; value: string;
       />
       <div className="flex-1">
         <p className="text-sm font-medium text-gray-700">{label}</p>
-        <p className="text-xs text-gray-400 font-mono">{value}</p>
+        <p className="text-xs text-gray-500 font-mono">{value}</p>
       </div>
     </div>
   );
@@ -180,7 +213,16 @@ function LivePreview({ config }: { config: BrandConfig }) {
             </button>
             <button
               className="px-4 py-2 text-sm font-medium rounded-lg"
-              style={{ backgroundColor: config.colorAccent, color: "#fff", borderRadius: config.borderRadius }}
+              style={{
+                backgroundColor: config.colorAccent,
+                // Was hardcoded "#fff", which gave 2.14:1 on the default amber
+                // accent (#f59e0b) and failed WCAG 2.2 AA SC 1.4.3. The
+                // foreground is now derived from the chosen accent's luminance,
+                // so the preview stays readable for ANY tenant accent colour and
+                // demonstrates an accessible pairing rather than a broken one.
+                color: readableForeground(config.colorAccent),
+                borderRadius: config.borderRadius,
+              }}
             >
               Accent
             </button>
@@ -305,7 +347,7 @@ export default function BrandingPage() {
             ) : (
               <div>
                 <p className="text-sm text-gray-500">Drag & drop logo here</p>
-                <p className="text-xs text-gray-400 mt-1">SVG or PNG, max 200KB</p>
+                <p className="text-xs text-gray-500 mt-1">SVG or PNG, max 200KB</p>
               </div>
             )}
             <input
@@ -351,16 +393,28 @@ export default function BrandingPage() {
 
         {/* Border Radius */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Corner Roundness</label>
+          {/* The visible label was not associated with the input (no htmlFor/id),
+              so axe reported a CRITICAL `label` violation — screen readers
+              announced an unlabelled slider. WCAG 2.2 AA SC 1.3.1 / 4.1.2. */}
+          <label
+            htmlFor="branding-border-radius"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Corner Roundness
+          </label>
           <input
+            id="branding-border-radius"
             type="range"
             min="0"
             max="20"
             value={parseFloat(config.borderRadius) * 16}
             onChange={(e) => updateColor("borderRadius", `${Number(e.target.value) / 16}rem`)}
             className="w-full"
+            aria-describedby="branding-border-radius-value"
           />
-          <p className="text-xs text-gray-400 mt-1">{config.borderRadius}</p>
+          <p id="branding-border-radius-value" className="text-xs text-gray-500 mt-1">
+            {config.borderRadius}
+          </p>
         </div>
 
         {/* Save Button */}
@@ -373,7 +427,7 @@ export default function BrandingPage() {
                 ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg"
                 : saved
                   ? "bg-green-100 text-green-700"
-                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-gray-100 text-gray-500 cursor-not-allowed"
             }`}
           >
             {saving ? "Saving..." : saved ? "✓ Saved!" : dirty ? "Save Changes" : "No Changes"}

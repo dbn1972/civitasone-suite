@@ -138,7 +138,10 @@ function DonutChart({ data, height }: { data: ChartDataPoint[]; height: number }
               }}
             />
             <span style={{ color: "#334155" }}>{d.label}</span>
-            <span style={{ color: "#94a3b8", marginLeft: 4 }}>{d.value}</span>
+            {/* #94a3b8 is 2.56:1 on white and fails WCAG 2.2 AA SC 1.4.3.
+                #667085 is 4.97:1. This legend renders on every chart, so the
+                old value failed accessibility on every dashboard. */}
+            <span style={{ color: "#667085", marginLeft: 4 }}>{d.value}</span>
           </div>
         ))}
       </div>
