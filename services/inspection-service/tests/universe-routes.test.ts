@@ -139,8 +139,6 @@ beforeAll(async () => {
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
 
-  const { registerUniverseRoutes } = await import("../src/modules/universe/routes.js");
-  await registerUniverseRoutes(app);
   await app.ready();
 });
 

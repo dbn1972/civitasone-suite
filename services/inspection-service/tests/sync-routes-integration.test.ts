@@ -93,8 +93,6 @@ beforeAll(async () => {
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
 
-  const { registerSyncRoutes } = await import("../src/modules/sync/routes.js");
-  await registerSyncRoutes(app);
   await app.ready();
 });
 

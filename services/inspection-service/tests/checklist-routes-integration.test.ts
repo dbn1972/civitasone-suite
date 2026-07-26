@@ -157,8 +157,6 @@ beforeAll(async () => {
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
 
-  const { registerChecklistRoutes } = await import("../src/modules/checklist/routes.js");
-  await registerChecklistRoutes(app);
   await app.ready();
 });
 

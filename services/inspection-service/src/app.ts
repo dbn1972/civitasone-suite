@@ -2,7 +2,9 @@
  * Fastify application factory for inspection-service.
  * Registers auth plugin, CORS, health/metrics routes, error handler, and RLS hooks.
  *
- * Module routes are NOT registered here — they are added in later tasks.
+ * All module routes (capa, enforcement, licence, survey, telemetry, findings,
+ * universe, risk, planning, assignment, checklist, sync, evidence, execution) are
+ * registered below so their HTTP create/read paths are reachable in production.
  *
  * _Requirements: 1.1, 1.2, 1.5, 1.6, 1.9_
  */
@@ -81,6 +83,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { registerSurveyRoutes } = await import("./modules/survey/routes.js");
   const { registerTelemetryRoutes } = await import("./modules/telemetry/routes.js");
   const { registerFindingsRoutes } = await import("./modules/findings/routes.js");
+  const { registerUniverseRoutes } = await import("./modules/universe/routes.js");
+  const { registerRiskRoutes } = await import("./modules/risk/routes.js");
+  const { registerPlanningRoutes } = await import("./modules/planning/routes.js");
+  const { registerAssignmentRoutes } = await import("./modules/assignment/routes.js");
+  const { registerChecklistRoutes } = await import("./modules/checklist/routes.js");
+  const { registerSyncRoutes } = await import("./modules/sync/routes.js");
+  const { registerEvidenceRoutes } = await import("./modules/evidence/routes.js");
+  const { registerExecutionRoutes } = await import("./modules/execution/routes.js");
 
   await app.register(registerCapaRoutes);
   await app.register(registerEnforcementRoutes);
@@ -88,6 +98,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerSurveyRoutes);
   await app.register(registerTelemetryRoutes);
   await app.register(registerFindingsRoutes);
+  await app.register(registerUniverseRoutes);
+  await app.register(registerRiskRoutes);
+  await app.register(registerPlanningRoutes);
+  await app.register(registerAssignmentRoutes);
+  await app.register(registerChecklistRoutes);
+  await app.register(registerSyncRoutes);
+  await app.register(registerEvidenceRoutes);
+  await app.register(registerExecutionRoutes);
 
   return app;
 }
