@@ -2225,6 +2225,9 @@ importers:
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@civitasone/numbering':
+        specifier: workspace:*
+        version: link:../../packages/numbering
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability

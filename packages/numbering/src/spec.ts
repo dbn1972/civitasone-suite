@@ -23,7 +23,14 @@ export interface NumberFormatSpec {
   resetPolicy: ResetPolicy;
 }
 
-export type NumberFormatSpecInput = Partial<NumberFormatSpec> & { prefix?: string };
+export interface NumberFormatSpecInput {
+  prefix?: string | undefined;
+  embedFinancialYear?: boolean | undefined;
+  fyStartMonth?: number | undefined;
+  counterWidth?: number | undefined;
+  separator?: string | undefined;
+  resetPolicy?: ResetPolicy | undefined;
+}
 
 export const DEFAULT_SPEC: NumberFormatSpec = {
   prefix: "",
