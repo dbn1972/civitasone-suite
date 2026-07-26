@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
 import { pgSchema, uuid, varchar, bigint, timestamp } from "drizzle-orm/pg-core";
+import {
+  allocateGaplessSeq,
+  formatReference,
+  normalizeSpec,
+  type GaplessSeqConfig,
+} from "@civitasone/numbering";
 
 export const procurementSchema = pgSchema("procurement");
 
@@ -29,10 +35,32 @@ const PREFIX: Record<string, string> = {
 };
 
 /**
+ * Physical layout of procurement's legacy counter table, expressed as config
+ * for the shared gapless allocator. Adopting `@civitasone/numbering` means the
+ * tx-safe increment + formatting now come from the platform capability
+ * (CAP-032) rather than SQL copy-pasted into this service.
+ */
+const DOC_COUNTER_CONFIG: GaplessSeqConfig = {
+  schema: "procurement",
+  table: "doc_counters",
+  tenantCol: "tenant_id",
+  keyCol: "doc_type",
+  bucketCol: "period",
+  valueCol: "last_seq",
+};
+
+// `sql` is re-exported so existing imports of this module keep resolving even
+// though the counter SQL now lives in the shared package.
+export { sql };
+
+/**
  * Allocate the next gapless per-tenant document number INSIDE the caller's
- * transaction. The UPDATE ... RETURNING (with an INSERT-on-conflict seed) takes
- * a row lock so concurrent allocations serialize; a rolled-back tx releases the
- * lock and does NOT consume the number (the increment rolls back with it).
+ * transaction, delegating to the shared numbering capability. Output format is
+ * preserved exactly: `PREFIX/<period>/<0001>` (e.g. `PO/2026/0001`).
+ *
+ * Gapless guarantee is unchanged: the shared allocator issues the same
+ * `INSERT ... ON CONFLICT DO UPDATE ... RETURNING` row-locked increment, so a
+ * rolled-back tx does not consume the number.
  */
 export async function allocateDocNo(
   tx: any,
@@ -40,15 +68,8 @@ export async function allocateDocNo(
   docType: keyof typeof PREFIX,
   period: string = String(new Date().getUTCFullYear()),
 ): Promise<string> {
-  const rows = await tx.execute(sql`
-    INSERT INTO procurement.doc_counters (tenant_id, doc_type, period, last_seq)
-    VALUES (${tenantId}::uuid, ${docType}, ${period}, 1)
-    ON CONFLICT (tenant_id, doc_type, period)
-    DO UPDATE SET last_seq = procurement.doc_counters.last_seq + 1, updated_at = NOW()
-    RETURNING last_seq
-  `);
-  const arr = rows as unknown as Array<{ last_seq: string | number | bigint }>;
-  const seq = BigInt(arr[0]?.last_seq ?? 1);
-  const prefix = PREFIX[docType] ?? docType.toUpperCase();
-  return `${prefix}/${period}/${seq.toString().padStart(4, "0")}`;
+  const seq = await allocateGaplessSeq(tx, DOC_COUNTER_CONFIG, tenantId, docType, period);
+  const prefix = PREFIX[docType] ?? String(docType).toUpperCase();
+  const spec = normalizeSpec({ prefix, embedFinancialYear: false, counterWidth: 4, separator: "/" });
+  return formatReference(spec, seq, { segments: [period] });
 }
