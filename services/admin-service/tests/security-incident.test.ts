@@ -5,6 +5,7 @@
  *   maker-checker on close, breach-notification deadline + submit, tenant RLS.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -15,10 +16,11 @@ import {
 } from "../src/modules/security-incident/service.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const TENANT = "aaaaaaaa-9090-4000-8000-000000000001";
-const OTHER_TENANT = "bbbbbbbb-9090-4000-8000-000000000002";
-const REPORTER = "11111111-9090-4000-8000-000000000001";
-const CHECKER = "22222222-9090-4000-8000-000000000002";
+// Per-run random ids keep these DB-backed tests isolated on the shared Postgres.
+const TENANT = randomUUID();
+const OTHER_TENANT = randomUUID();
+const REPORTER = randomUUID();
+const CHECKER = randomUUID();
 
 function token(actorId: string, tenantId = TENANT, roles = ["security_admin"]): string {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-sec" }, SECRET, 3600);
