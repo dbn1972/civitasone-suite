@@ -13,6 +13,9 @@ import { registerPlanConsumers } from "./modules/plans/consumer.js";
 import { registerSubscriptionConsumers } from "./modules/subscriptions/consumer.js";
 import { registerQuotaConsumers } from "./modules/quotas/consumer.js";
 import { registerSettingConsumers } from "./modules/settings/consumer.js";
+import { registerOrgHierarchyConsumers } from "./modules/org-hierarchy/consumer.js";
+import { registerDataMigrationConsumers } from "./modules/data-migration/consumer.js";
+import { registerStewardshipConsumers } from "./modules/stewardship/consumer.js";
 
 const log = pino({ name: "tenant-worker" });
 
@@ -21,10 +24,9 @@ registerPlanConsumers(queue);
 registerSubscriptionConsumers(queue);
 registerQuotaConsumers(queue);
 registerSettingConsumers(queue);
-import { registerOrgHierarchyConsumers } from "./modules/org-hierarchy/consumer.js";
 registerOrgHierarchyConsumers(queue);
-import { registerDataMigrationConsumers } from "./modules/data-migration/consumer.js";
 registerDataMigrationConsumers(queue);
+registerStewardshipConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
