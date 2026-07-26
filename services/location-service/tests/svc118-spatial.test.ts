@@ -8,6 +8,10 @@ import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import type { MemoryQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
+import { isPostGISAvailable } from "./setup.js";
+
+const HAS_POSTGIS = await isPostGISAvailable();
+const describePostGIS = HAS_POSTGIS ? describe : describe.skip;
 import { queue } from "../src/shared/infra.js";
 import { sqlClient } from "../src/shared/db.js";
 import { registerLocationConsumers } from "../src/modules/locations/consumer.js";
@@ -45,7 +49,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await app.close(); await sqlClient.end(); });
 
-describe("SVC-118 within-radius", () => {
+describePostGIS("SVC-118 within-radius", () => {
   it("returns only points inside the radius", async () => {
     const res = await post("/v1/locations/spatial/within-radius", TENANT_A, { lat: 28.61, lng: 77.20, radiusKm: 10 });
     expect(res.statusCode).toBe(200);
@@ -64,7 +68,7 @@ describe("SVC-118 within-radius", () => {
   });
 });
 
-describe("SVC-118 within-polygon", () => {
+describePostGIS("SVC-118 within-polygon", () => {
   it("returns points inside the polygon only", async () => {
     // tight box around Delhi cluster
     const res = await post("/v1/locations/spatial/within-polygon", TENANT_A, {
@@ -77,7 +81,7 @@ describe("SVC-118 within-polygon", () => {
   });
 });
 
-describe("SVC-118 clusters", () => {
+describePostGIS("SVC-118 clusters", () => {
   it("returns k-means clusters with counts summing to the tenant's geolocated points", async () => {
     const res = await get("/v1/locations/spatial/clusters?k=2", TENANT_A);
     expect(res.statusCode).toBe(200);

@@ -8,6 +8,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import type { MemoryQueue } from "@civitasone/queue";
+import { isPostGISAvailable } from "./setup.js";
+
+const HAS_POSTGIS = await isPostGISAvailable();
+const describePostGIS = HAS_POSTGIS ? describe : describe.skip;
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -39,7 +43,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await app.close(); await sqlClient.end(); });
 
-describe("SVC-119 geo-points registry + markers feed", () => {
+describePostGIS("SVC-119 geo-points registry + markers feed", () => {
   const refId = `sensor-${Date.now()}`;
 
   it("registers a geo-point (HTTP) and it appears in the feed", async () => {

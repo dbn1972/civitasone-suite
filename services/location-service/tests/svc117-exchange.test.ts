@@ -8,6 +8,10 @@ import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { isPostGISAvailable } from "./setup.js";
+
+const HAS_POSTGIS = await isPostGISAvailable();
+const describePostGIS = HAS_POSTGIS ? describe : describe.skip;
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -33,7 +37,7 @@ const FC = {
   ],
 };
 
-describe("SVC-117 GeoJSON round-trip", () => {
+describePostGIS("SVC-117 GeoJSON round-trip", () => {
   const dataset = `gj-${Date.now()}`;
 
   it("imports a FeatureCollection", async () => {
@@ -72,7 +76,7 @@ describe("SVC-117 GeoJSON round-trip", () => {
   });
 });
 
-describe("SVC-117 KML import", () => {
+describePostGIS("SVC-117 KML import", () => {
   const dataset = `kml-${Date.now()}`;
   const KML = `<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
     <Placemark><name>pt-a</name><Point><coordinates>77.25,28.65,0</coordinates></Point></Placemark>
