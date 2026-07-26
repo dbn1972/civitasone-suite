@@ -37,6 +37,8 @@ import { pensionRoutes } from "./modules/pension/routes.js";
 import { aparRoutes } from "./modules/apar/routes.js";
 import { seniorityRoutes } from "./modules/seniority/routes.js";
 import { gpfRoutes } from "./modules/gpf/routes.js";
+import { npsRoutes } from "./modules/nps/routes.js";
+import { cpfRoutes } from "./modules/cpf/routes.js";
 import { deputationRoutes } from "./modules/deputation/routes.js";
 import { claimsRoutes } from "./modules/claims/routes.js";
 import { schedulerRoutes } from "./modules/scheduler/routes.js";
@@ -116,6 +118,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(aparRoutes);
   await app.register(seniorityRoutes);
   await app.register(gpfRoutes);
+  await app.register(npsRoutes);
+  await app.register(cpfRoutes);
   await app.register(deputationRoutes);
   await app.register(claimsRoutes);
   await app.register(schedulerRoutes);
