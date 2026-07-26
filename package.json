@@ -21,6 +21,7 @@
     "test:contract": "vitest run tests/contract/gateway.contract.test.ts tests/contract/cross-service-events.contract.test.ts",
     "test:contract:events": "vitest run tests/contract/cross-service-events.contract.test.ts",
     "test:contract:strict": "CONTRACT_STRICT=1 vitest run tests/contract/cross-service-events.contract.test.ts",
+    "test:e2e:personas": "playwright test --config tests/e2e-personas/playwright.config.ts",
     "contract:baseline": "BASELINE_WRITE=1 vitest run tests/contract/lib/baseline.test.ts",
     "test:integration": "vitest run tests/integration/",
     "test:screens": "vitest run tests/contract/screens.contract.test.ts",
