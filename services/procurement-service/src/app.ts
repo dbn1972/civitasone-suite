@@ -69,6 +69,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(tenderDocsRoutes);
   const { gemReconcileRoutes } = await import("./modules/gem/reconcile-routes.js");
   await app.register(gemReconcileRoutes);
+  const { cpppRoutes } = await import("./modules/cppp/routes.js");
+  await app.register(cpppRoutes);
+  const { gepnicRoutes } = await import("./modules/gepnic/routes.js");
+  await app.register(gepnicRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

@@ -6,6 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./reconcile-repo.js";
 import { isIntegrationConfigured } from "./integration-adapter.js";
+import type { Provider } from "./reconcile-domain.js";
 import type { ExchangeBody } from "./reconcile-validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -39,7 +40,7 @@ export async function exchange(ctx: RequestContext, body: ExchangeBody): Promise
 export async function reconcileRef(ctx: RequestContext, id: string): Promise<Accepted> {
   const ref = await repo.findRefById(id, ctx.tenantId);
   if (!ref) throw new HttpError(404, "NOT_FOUND", "integration ref not found");
-  if (!isIntegrationConfigured(ref.provider as "gem" | "cppp")) {
+  if (!isIntegrationConfigured(ref.provider as Provider)) {
     throw new HttpError(503, "INTEGRATION_NOT_CONFIGURED", `${ref.provider} integration is not configured`);
   }
   await queue.publish(COMMANDS.gemReconcile, {

@@ -53,7 +53,7 @@ describe("SVC-050 honest not-configured fallback", () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/procurement/gem/integration/config", headers: { authorization: `Bearer ${token()}` } });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.providers).toEqual({ gem: false, cppp: false });
+    expect(res.json().data.providers).toEqual({ gem: false, cppp: false, gepnic: false });
     await app.close();
   });
 

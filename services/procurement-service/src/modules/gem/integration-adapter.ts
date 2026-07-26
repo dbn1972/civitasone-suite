@@ -32,6 +32,13 @@ function configFor(provider: Provider): ProviderConfig {
       apiKey: process.env.CPPP_API_KEY ?? "",
     };
   }
+  if (provider === "gepnic") {
+    return {
+      enabled: process.env.GEPNIC_ENABLED === "true",
+      baseUrl: process.env.GEPNIC_BASE_URL ?? "",
+      apiKey: process.env.GEPNIC_API_KEY ?? "",
+    };
+  }
   return {
     enabled: process.env.GEM_ENABLED === "true",
     baseUrl: process.env.GEM_BASE_URL ?? "",
