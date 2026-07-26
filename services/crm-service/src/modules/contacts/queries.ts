@@ -3,11 +3,12 @@ import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { ContactView, ContactDetailView } from "./schema.js";
 import type { ListFilters } from "./repo.js";
-import { maskEmail, maskPhone } from "../../shared/pii-crypto.js";
+import { maskContactRecord } from "../../shared/data-governance.js";
 
-/** Mask PII (email/phone) on a single contact view for non-admin callers. */
+/** Mask PII (email/phone) on a single contact view for non-admin callers.
+ *  Uses the shared @civitasone/data-governance masking engine (CAP-085). */
 function maskView(v: ContactView): ContactView {
-  return { ...v, email: maskEmail(v.email), phone: maskPhone(v.phone) };
+  return maskContactRecord(v as unknown as Record<string, unknown>, []) as unknown as ContactView;
 }
 
 export async function getContact(id: string, tenantId: string, isAdmin = false): Promise<ContactView | null> {
@@ -22,10 +23,7 @@ export async function getContact(id: string, tenantId: string, isAdmin = false):
 export async function getContactDetail(id: string, tenantId: string, isAdmin = false): Promise<ContactDetailView | null> {
   const d = await repo.findDetail(id, tenantId);
   if (!d || isAdmin) return d;
-  const out: ContactDetailView = { ...d };
-  if (d.email) out.email = maskEmail(d.email) as string;
-  if (d.phone) out.phone = maskPhone(d.phone) as string;
-  return out;
+  return maskContactRecord(d as unknown as Record<string, unknown>, []) as unknown as ContactDetailView;
 }
 
 export async function listContacts(

@@ -1,19 +1,197 @@
-import { describe, it, expect, afterAll } from "vitest";
+/**
+ * CAP-089 — compliance control library + evidence + computed posture.
+ * Proves the posture score is DERIVED from persisted control pass/fail, not
+ * hardcoded, and that VAPT reports are honestly persisted (not fabricated).
+ */
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { computePosture } from "../src/modules/security-compliance/posture.js";
+
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const T = "aaaaaaaa-1111-4000-8000-000000000063"; const A = "cccccccc-3333-4000-8000-000000000063";
-const admin = signToken({ sub: A, tid: T, roles: ["security_admin", "super_admin"], sid: "s1" }, SECRET);
-afterAll(async () => { await sqlClient.end(); });
-async function hit(m: string, u: string, a?: string, p?: unknown) { const app = await buildApp(); const o: any = { method: m, url: u }; if (a) o.headers = { authorization: `Bearer ${a}` }; if (p !== undefined) o.payload = p; const r = await app.inject(o); await app.close(); return r.statusCode; }
-describe("VAPT + SOC2", () => {
-  it("POST vapt/scan → 202", async () => { expect(await hit("POST", "/v1/admin/security/vapt/scan", admin, { targetServices: ["finance-service"], scanType: "quick" })).toBe(202); });
-  it("GET vapt/reports → 200", async () => { expect([200, 500]).toContain(await hit("GET", "/v1/admin/security/vapt/reports", admin)); });
-  it("GET soc2/controls → 200", async () => { expect(await hit("GET", "/v1/admin/security/soc2/controls", admin)).toBe(200); });
-  it("POST soc2/evidence/export → 202", async () => { expect(await hit("POST", "/v1/admin/security/soc2/evidence/export", admin, { controlIds: ["CC6.1"], format: "pdf", period: { from: "2026-01-01T00:00:00Z", to: "2026-07-01T00:00:00Z" } })).toBe(202); });
-  it("GET posture → 200", async () => { expect([200, 500]).toContain(await hit("GET", "/v1/admin/security/posture", admin)); });
-  it("401 without auth", async () => { expect(await hit("GET", "/v1/admin/security/posture")).toBe(401); });
-  it("400 bad payload", async () => { expect(await hit("POST", "/v1/admin/security/vapt/scan", admin, { targetServices: [] })).toBe(400); });
+// Per-run random tenants keep these DB-backed tests isolated from prior runs
+// and from other test files sharing this Postgres (the suite is not safe to run
+// against a single shared DB with fixed tenant ids).
+const TENANT = randomUUID();
+const OTHER = randomUUID();
+const ACTOR = randomUUID();
+
+function token(actorId = ACTOR, tenantId = TENANT, roles = ["security_admin"]) {
+  return signToken({ sub: actorId, tid: tenantId, roles, sid: "s89" }, SECRET, 3600);
+}
+function auth(tenantId?: string, roles?: string[]) {
+  return { authorization: `Bearer ${token(ACTOR, tenantId, roles)}`, "x-tenant-id": tenantId ?? TENANT };
+}
+
+let app: FastifyInstance;
+beforeAll(async () => { app = await buildApp(); });
+afterAll(async () => { await app.close(); await sqlClient.end(); });
+
+describe("posture (pure)", () => {
+  it("returns null score when nothing is testable", () => {
+    expect(computePosture([]).overallScore).toBeNull();
+    expect(computePosture([{ framework: "SOC2", status: "not_tested" }]).overallScore).toBeNull();
+    expect(computePosture([{ framework: "SOC2", status: "not_applicable" }]).overallScore).toBeNull();
+  });
+  it("derives score from pass/fail ratio and excludes N/A + not_tested from denominator", () => {
+    const r = computePosture([
+      { framework: "SOC2", status: "pass" },
+      { framework: "SOC2", status: "pass" },
+      { framework: "SOC2", status: "fail" },
+      { framework: "SOC2", status: "not_tested" },
+      { framework: "DPDP", status: "not_applicable" },
+    ]);
+    expect(r.overallScore).toBe(67); // 2/3
+    expect(r.passed).toBe(2); expect(r.failed).toBe(1); expect(r.notTested).toBe(1);
+    expect(r.complete).toBe(false);
+    expect(r.byFramework.SOC2.score).toBe(67);
+  });
+});
+
+describe("control library (integration)", () => {
+  let controlId: string;
+
+  it("seeds a baseline catalogue as not_tested", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/security/compliance/controls/seed", headers: auth() });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.seeded).toBeGreaterThan(0);
+    // re-seed is idempotent (no duplicates)
+    const again = await app.inject({ method: "POST", url: "/v1/admin/security/compliance/controls/seed", headers: auth() });
+    expect(again.json().data.seeded).toBe(0);
+  });
+
+  it("lists controls and filters by framework; soc2 view serves real data", async () => {
+    const all = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls", headers: auth() });
+    expect(all.statusCode).toBe(200);
+    expect(all.json().data.length).toBeGreaterThan(0);
+    const dpdp = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls?framework=DPDP", headers: auth() });
+    expect(dpdp.json().data.every((c: { framework: string }) => c.framework === "DPDP")).toBe(true);
+    const soc2 = await app.inject({ method: "GET", url: "/v1/admin/security/soc2/controls", headers: auth() });
+    expect(soc2.json().meta.note).toMatch(/not hardcoded/);
+    controlId = soc2.json().data[0].id;
+  });
+
+  it("posture starts null (all seeded controls untested)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.overallScore).toBeNull();
+    expect(res.json().data.complete).toBe(false);
+  });
+
+  it("recording a pass moves the posture off null (proves it is computed)", async () => {
+    const patch = await app.inject({
+      method: "PATCH", url: `/v1/admin/security/compliance/controls/${controlId}`,
+      headers: auth(), payload: { status: "pass", owner: "ciso@gov.in" },
+    });
+    expect(patch.statusCode).toBe(200);
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers: auth() });
+    expect(res.json().data.overallScore).toBe(100); // 1 pass / 1 tested
+    expect(res.json().data.passed).toBe(1);
+  });
+
+  it("recording a fail lowers the computed score", async () => {
+    const all = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls?framework=SOC2", headers: auth() });
+    const other = all.json().data.find((c: { id: string }) => c.id !== controlId).id;
+    await app.inject({ method: "PATCH", url: `/v1/admin/security/compliance/controls/${other}`, headers: auth(), payload: { status: "fail" } });
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers: auth() });
+    expect(res.json().data.overallScore).toBe(50); // 1 pass / 2 tested
+  });
+
+  it("attaches and lists evidence", async () => {
+    const add = await app.inject({
+      method: "POST", url: `/v1/admin/security/compliance/controls/${controlId}/evidence`,
+      headers: auth(), payload: { kind: "audit_event", reference: "evt-123", note: "RLS enforcement verified" },
+    });
+    expect(add.statusCode).toBe(201);
+    const list = await app.inject({ method: "GET", url: `/v1/admin/security/compliance/controls/${controlId}/evidence`, headers: auth() });
+    expect(list.json().data.length).toBe(1);
+    expect(list.json().data[0].kind).toBe("audit_event");
+  });
+
+  it("evidence on a missing control 404s", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/admin/security/compliance/controls/00000000-0000-4000-8000-000000000000/evidence`,
+      headers: auth(), payload: { kind: "note", note: "x" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("VAPT ingestion (integration)", () => {
+  it("honestly persists an uploaded external report", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/admin/security/vapt/reports", headers: auth(),
+      payload: { targetServices: ["finance-service"], scanType: "full", critical: 1, high: 2, medium: 3, low: 4 },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.findingsCount).toBe(10);
+    const list = await app.inject({ method: "GET", url: "/v1/admin/security/vapt/reports", headers: auth() });
+    expect(list.json().data.length).toBeGreaterThan(0);
+    const one = await app.inject({ method: "GET", url: `/v1/admin/security/vapt/reports/${res.json().data.id}`, headers: auth() });
+    expect(one.json().data.critical).toBe(1);
+  });
+});
+
+// Finding 2 (PR #171 review) — posture.openIncidents must reflect the live
+// admin.sec_incidents table (CAP-090), not the dead legacy admin.security_incidents.
+describe("posture openIncidents reflects live sec_incidents", () => {
+  const CHECKER = randomUUID();
+  function authAs(actorId: string) {
+    return { authorization: `Bearer ${token(actorId, TENANT, ["security_admin"])}`, "x-tenant-id": TENANT };
+  }
+  async function openCount(): Promise<number> {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers: auth() });
+    return res.json().data.openIncidents as number;
+  }
+
+  it("counts an open incident and drops it on close", async () => {
+    const before = await openCount();
+
+    const create = await app.inject({
+      method: "POST", url: "/v1/admin/security-incidents", headers: auth(),
+      payload: { title: "posture open incident", severity: "high" },
+    });
+    expect(create.statusCode).toBe(201);
+    const incidentId = create.json().data.id;
+
+    expect(await openCount()).toBe(before + 1);
+
+    // walk to resolved, then a different admin closes it (maker-checker)
+    for (const toStatus of ["triaged", "contained", "resolved"]) {
+      const t = await app.inject({
+        method: "POST", url: `/v1/admin/security-incidents/${incidentId}/transition`,
+        headers: auth(), payload: { toStatus },
+      });
+      expect(t.statusCode).toBe(200);
+    }
+    const close = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${incidentId}/close`,
+      headers: authAs(CHECKER), payload: { note: "closed" },
+    });
+    expect(close.statusCode).toBe(200);
+
+    expect(await openCount()).toBe(before);
+  });
+});
+
+describe("access + isolation", () => {
+  it("401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture" });
+    expect(res.statusCode).toBe(401);
+  });
+  it("403 without an admin role", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls", headers: auth(TENANT, ["viewer"]) });
+    expect(res.statusCode).toBe(403);
+  });
+  it("400 on bad vapt payload", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/security/vapt/scan", headers: auth(), payload: { targetServices: [] } });
+    expect(res.statusCode).toBe(400);
+  });
+  it("does not leak controls across tenants (RLS)", async () => {
+    const other = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls", headers: auth(OTHER) });
+    expect(other.json().data.length).toBe(0);
+  });
 });

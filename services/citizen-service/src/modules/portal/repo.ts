@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { citizenProfiles, citizenServices } from "./schema.js";
 import type { ProfileInsert, ProfileRow, ServiceRow } from "./schema.js";
+import { CITIZEN_PROFILE_ERASURE_SET } from "../../shared/data-governance.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -17,11 +18,9 @@ export async function insertProfile(tx: Writer, row: ProfileInsert): Promise<voi
 export async function anonymiseProfile(tx: Writer, id: string, tenantId: string, updatedBy: string): Promise<number> {
   const updated = await (tx as typeof db).update(citizenProfiles)
     .set({
-      name:            "[DELETED]",
-      email:           null,
-      mobile:          null,
-      digilockerToken: null,
-      address:         null,
+      // CAP-086: erasure values sourced from the shared data-governance policy
+      // so the write path and any object-level erasure stay in lock-step.
+      ...CITIZEN_PROFILE_ERASURE_SET,
       updatedAt:       new Date(),
       updatedBy,
     })
