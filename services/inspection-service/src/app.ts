@@ -80,12 +80,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { registerLicenceRoutes } = await import("./modules/licence/routes.js");
   const { registerSurveyRoutes } = await import("./modules/survey/routes.js");
   const { registerTelemetryRoutes } = await import("./modules/telemetry/routes.js");
+  const { registerFindingsRoutes } = await import("./modules/findings/routes.js");
 
   await app.register(registerCapaRoutes);
   await app.register(registerEnforcementRoutes);
   await app.register(registerLicenceRoutes);
   await app.register(registerSurveyRoutes);
   await app.register(registerTelemetryRoutes);
+  await app.register(registerFindingsRoutes);
 
   return app;
 }
