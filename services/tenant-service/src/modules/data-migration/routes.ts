@@ -16,7 +16,6 @@ export async function dataMigrationRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: { migrationId: id, status: "queued", dryRun: body.dryRun } });
   });
 
-  // Real DB read
   app.get("/v1/org/migrations", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const data = await repo.listMigrations(ctx.tenantId);
@@ -45,6 +44,24 @@ export async function dataMigrationRoutes(app: FastifyInstance): Promise<void> {
     const result = await repo.listReconciliationBreaks(ctx.tenantId, id);
     if (!result) throw new HttpError(404, "NOT_FOUND", "Reconciliation not found");
     return reply.send({ data: result.breaks, meta: { total: result.breakCount } });
+  });
+
+  // CAP-020 — import batch status + per-record error report (real persisted outcome).
+  app.get("/v1/org/master-data/import/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const batch = await repo.findImportBatch(ctx.tenantId, id);
+    if (!batch) throw new HttpError(404, "NOT_FOUND", "Import batch not found");
+    return reply.send({ data: batch });
+  });
+
+  // CAP-020 — export job status + materialised payload.
+  app.get("/v1/org/master-data/export/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const job = await repo.findExportJob(ctx.tenantId, id);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "Export job not found");
+    return reply.send({ data: job });
   });
 
   app.setErrorHandler((err, req, reply) => {
