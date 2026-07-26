@@ -17,6 +17,7 @@ import { registerOrgHierarchyConsumers } from "./modules/org-hierarchy/consumer.
 import { registerDataMigrationConsumers } from "./modules/data-migration/consumer.js";
 import { registerStewardshipConsumers } from "./modules/stewardship/consumer.js";
 import { registerCodeListConsumers } from "./modules/code-lists/consumer.js";
+import { registerPositionConsumers } from "./modules/positions/consumer.js";
 
 const log = pino({ name: "tenant-worker" });
 
@@ -29,6 +30,7 @@ registerOrgHierarchyConsumers(queue);
 registerDataMigrationConsumers(queue);
 registerStewardshipConsumers(queue);
 registerCodeListConsumers(queue);
+registerPositionConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

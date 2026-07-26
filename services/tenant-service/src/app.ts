@@ -44,6 +44,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(stewardshipRoutes);
   const { codeListRoutes } = await import("./modules/code-lists/routes.js");
   await app.register(codeListRoutes);
+  const { positionRoutes } = await import("./modules/positions/routes.js");
+  await app.register(positionRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
