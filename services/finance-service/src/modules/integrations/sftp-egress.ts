@@ -1,20 +1,16 @@
 /**
- * SFTP Egress Adapter — transmits government payment files (NACH/NEFT/PFMS)
- * to the PFMS SFTP gateway.
+ * SFTP Egress Adapter — transmits government payment files (NACH/NEFT/PFMS) to
+ * the PFMS SFTP gateway. CAP-057: `ssh2-sftp-client` is now a real prod
+ * dependency, so the egress path is compiled AND runnable in production. It
+ * stays env-gated on SFTP_HOST and fail-closed: no host → skip (dev/test);
+ * host but incomplete config → throw.
  *
- * Environment variables (all required in production):
+ * Environment variables (all required together in production):
  *   SFTP_HOST        — hostname of the PFMS SFTP gateway (e.g. sftp.pfms.gov.in)
  *   SFTP_PORT        — port number (default: 22)
  *   SFTP_USER        — SSH username
  *   SFTP_KEY_PATH    — absolute path to PEM private key file
  *   SFTP_REMOTE_DIR  — base remote directory (e.g. /upload/agency/AG001)
- *
- * When SFTP_HOST is not set the upload is skipped with a warning — safe for
- * local dev/test environments.
- *
- * // SFTP_STUB — real ssh2-sftp-client upload is compiled-in but only executed
- * when SFTP_HOST is present. Add ssh2-sftp-client to dependencies and run
- * `npm install` to enable production egress.
  */
 
 import { readFile } from "node:fs/promises";
@@ -24,9 +20,7 @@ const log = pino({ name: "finance:sftp-egress" });
 
 /** Options controlling a single SFTP upload. */
 export interface SftpUploadOptions {
-  /** Absolute local path to the file to upload. */
   localPath: string;
-  /** Destination filename on the remote host (basename only, no directory). */
   remoteFileName: string;
 }
 
@@ -38,6 +32,35 @@ export interface SftpConfig {
   privateKeyPath: string;
   remoteBaseDir: string;
 }
+
+/**
+ * Minimal surface of `ssh2-sftp-client` we depend on. Declaring it here lets the
+ * upload/ingest paths be unit-tested with an injected fake — no live SFTP server
+ * and no real `ssh2-sftp-client` import required in tests.
+ */
+export interface SftpClientLike {
+  connect(opts: { host: string; port: number; username: string; privateKey: Buffer }): Promise<unknown>;
+  mkdir(remoteDir: string, recursive?: boolean): Promise<unknown>;
+  put(localPath: string, remotePath: string): Promise<unknown>;
+  list(remoteDir: string): Promise<Array<{ name: string; size: number; type: string }>>;
+  get(remotePath: string, localPath: string): Promise<unknown>;
+  delete(remotePath: string): Promise<unknown>;
+  end(): Promise<unknown>;
+}
+
+export type SftpClientFactory = () => Promise<SftpClientLike>;
+
+/** Default factory: lazily import the real ssh2-sftp-client (prod path). */
+export const defaultSftpClientFactory: SftpClientFactory = async () => {
+  try {
+    const mod = (await import("ssh2-sftp-client")) as { default: new () => SftpClientLike };
+    return new mod.default();
+  } catch {
+    throw new Error(
+      "ssh2-sftp-client is not installed. It is a declared dependency; run the package install before enabling SFTP egress.",
+    );
+  }
+};
 
 /**
  * Build the remote path: `<SFTP_REMOTE_DIR>/<YYYY-MM-DD>/<remoteFileName>`.
@@ -76,65 +99,40 @@ export function readSftpConfig(): SftpConfig | null {
  * Path on remote: `<SFTP_REMOTE_DIR>/<YYYY-MM-DD>/<remoteFileName>`
  *
  * Behaviour:
- *  - If `SFTP_HOST` is not set: logs a warning and resolves immediately
- *    (safe no-op for dev/test).
- *  - If `SFTP_HOST` is set but `ssh2-sftp-client` is absent from node_modules:
- *    throws a clear `MODULE_NOT_FOUND` error so CI catches the missing dep.
- *  - Otherwise: connects, mkdirs the date-prefixed path, puts the file, closes.
+ *  - `SFTP_HOST` not set → logs a warning and resolves immediately (dev/test no-op).
+ *  - `SFTP_HOST` set → connects, mkdirs the date-prefixed path, puts the file.
  *
- * @param localPath     Absolute path to the file on the local filesystem.
- * @param remoteFileName  Basename for the remote file (e.g. `NACH_20240701.txt`).
+ * @param clientFactory  Injectable for tests; defaults to the real client.
+ * @returns the remote path written, or null when skipped (no SFTP_HOST).
  */
-export async function uploadBankFile(localPath: string, remoteFileName: string): Promise<void> {
+export async function uploadBankFile(
+  localPath: string,
+  remoteFileName: string,
+  clientFactory: SftpClientFactory = defaultSftpClientFactory,
+): Promise<string | null> {
   const cfg = readSftpConfig();
   if (!cfg) {
     log.warn({ localPath, remoteFileName }, "SFTP_HOST not set — skipping SFTP upload (dev/test mode)");
-    return;
-  }
-
-  // Dynamic import so the stub compiles even when ssh2-sftp-client is absent.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let SftpClient: new () => any;
-  try {
-    // SFTP_STUB: replace the dynamic import below with a real ssh2-sftp-client
-    // once it is added to dependencies and installed.
-    const mod = await import("ssh2-sftp-client" as string);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    SftpClient = (mod as { default: new () => unknown }).default;
-  } catch {
-    throw new Error(
-      "ssh2-sftp-client is not installed. " +
-        "Add it to dependencies (`npm add ssh2-sftp-client`) and reinstall before enabling SFTP egress.",
-    );
+    return null;
   }
 
   const remotePath = buildRemotePath(cfg.remoteBaseDir, remoteFileName);
   const privateKey = await readFile(cfg.privateKeyPath);
+  const client = await clientFactory();
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-  const client = new SftpClient();
   try {
     log.info({ host: cfg.host, remotePath }, "Connecting to SFTP gateway");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    await client.connect({
-      host: cfg.host,
-      port: cfg.port,
-      username: cfg.username,
-      privateKey,
-    });
+    await client.connect({ host: cfg.host, port: cfg.port, username: cfg.username, privateKey });
 
-    // Ensure the date-prefixed remote directory exists.
     const remoteDir = remotePath.slice(0, remotePath.lastIndexOf("/"));
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await client.mkdir(remoteDir, true /* recursive */);
 
     log.info({ localPath, remotePath }, "Uploading bank file via SFTP");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await client.put(localPath, remotePath);
 
     log.info({ remotePath }, "Bank file uploaded successfully");
+    return remotePath;
   } finally {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await client.end();
   }
 }
