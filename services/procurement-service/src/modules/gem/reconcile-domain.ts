@@ -10,10 +10,10 @@ export class GemIntegrationError extends Error {
   }
 }
 
-export const PROVIDERS = ["gem", "cppp"] as const;
+export const PROVIDERS = ["gem", "cppp", "gepnic"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
-export const ENTITY_TYPES = ["tender", "order", "aoc"] as const;
+export const ENTITY_TYPES = ["tender", "order", "aoc", "award", "bid"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 export const DIRECTIONS = ["outbound", "inbound"] as const;
