@@ -32,6 +32,7 @@ let app: FastifyInstance;
 const deptId = randomUUID();
 const desigId = randomUUID();
 const empCpf = randomUUID();
+const empCpf2 = randomUUID();
 const empNps = randomUUID();
 
 async function seedEmployee(id: string, scheme: string): Promise<void> {
@@ -52,6 +53,7 @@ beforeAll(async () => {
     await tx.insert(hrmsDesignations).values({ id: desigId, tenantId: TENANT, code: "JR", name: "Junior", level: 10, createdBy: ACTOR, updatedBy: ACTOR });
   }));
   await seedEmployee(empCpf, "CPF");
+  await seedEmployee(empCpf2, "CPF");
   await seedEmployee(empNps, "NPS");
 });
 
@@ -80,6 +82,20 @@ describe("CPF contributory provident fund", () => {
     expect(res.statusCode).toBe(201);
     const get = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empCpf}/cpf`, headers: HR });
     expect(get.json().runningBalanceMinor).toBe("400000");
+  });
+
+  it("rejects a second CPF account with a cpf_number already taken in the tenant (409, not 500)", async () => {
+    const res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empCpf2}/cpf`, headers: HR,
+      payload: { cpfNumber: "CPF-1001" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("CPF_NUMBER_TAKEN");
+  });
+
+  it("rejects a duplicate CPF account for the same employee with 409, not 500", async () => {
+    const res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empCpf}/cpf`, headers: HR,
+      payload: { cpfNumber: "CPF-9999" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("CPF_EXISTS");
   });
 
   it("posts monthly subscription crediting both legs, idempotent per period", async () => {

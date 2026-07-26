@@ -76,23 +76,36 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const acctId = randomUUID();
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
-    await db.transaction(async (tx) => {
-      await repo.insertAccount(tx, {
-        id: acctId, tenantId: ctx.tenantId, employeeId: id, cpfNumber: body.cpfNumber,
-        openingEmpMinor: openEmp, openingErMinor: openEr,
-        monthlySubscriptionMinor: BigInt(body.monthlySubscriptionMinor),
-        interestRatePct: String(body.interestRatePct),
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      if (openEmp > 0n || openEr > 0n) {
-        await repo.insertLedger(tx, {
-          id: randomUUID(), tenantId: ctx.tenantId, accountId: acctId, employeeId: id,
-          entryType: "opening", empAmountMinor: openEmp, erAmountMinor: openEr,
-          deltaMinor: openEmp + openEr, empBalanceMinor: openEmp, erBalanceMinor: openEr,
-          balanceMinor: openEmp + openEr, narrative: "opening balance", createdBy: ctx.actorId,
+    try {
+      await db.transaction(async (tx) => {
+        await repo.insertAccount(tx, {
+          id: acctId, tenantId: ctx.tenantId, employeeId: id, cpfNumber: body.cpfNumber,
+          openingEmpMinor: openEmp, openingErMinor: openEr,
+          monthlySubscriptionMinor: BigInt(body.monthlySubscriptionMinor),
+          interestRatePct: String(body.interestRatePct),
+          createdBy: ctx.actorId, updatedBy: ctx.actorId,
         });
+        if (openEmp > 0n || openEr > 0n) {
+          await repo.insertLedger(tx, {
+            id: randomUUID(), tenantId: ctx.tenantId, accountId: acctId, employeeId: id,
+            entryType: "opening", empAmountMinor: openEmp, erAmountMinor: openEr,
+            deltaMinor: openEmp + openEr, empBalanceMinor: openEmp, erBalanceMinor: openEr,
+            balanceMinor: openEmp + openEr, narrative: "opening balance", createdBy: ctx.actorId,
+          });
+        }
+      });
+    } catch (err) {
+      // A concurrent open (same employee, or a duplicate government CPF number) races
+      // past the pre-checks and surfaces as a 23505; map it to a clean 409 like NPS.
+      if (isUniqueViolation(err)) {
+        const constraint = (err as { constraint_name?: string }).constraint_name ?? "";
+        if (constraint === "hrms_cpf_accounts_cpf_number_uq") {
+          throw new HttpError(409, "CPF_NUMBER_TAKEN", "CPF number already allocated");
+        }
+        throw new HttpError(409, "CPF_EXISTS", "CPF account already exists");
       }
-    });
+      throw err;
+    }
     return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, cpfNumber: body.cpfNumber }));
   });
 
@@ -238,7 +251,14 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const ledgerId = randomUUID();
     const { interest, next } = await db.transaction(async (tx) => {
       const prev = await repo.lockedBalance(tx, ctx.tenantId, acct);
-      const interestMinor = BigInt(Math.round(Number(prev.total) * (ratePct / 100) * (body.months / 12)));
+      // No float on money: keep the corpus in bigint paise. Convert the rate percent
+      // (bounded config, <=2 decimals) to integer basis points, then
+      //   interest = corpus_paise * rate_bps * months / (10000 * 12)
+      // in BigInt throughout, rounded half-up via (num + den/2) / den.
+      const rateBps = BigInt(Math.round(ratePct * 100));
+      const num = prev.total * rateBps * BigInt(body.months);
+      const den = 120000n; // 10000 (bps -> fraction) * 12 (months per year)
+      const interestMinor = (num + den / 2n) / den;
       const n = { emp: prev.emp + interestMinor, er: prev.er, total: prev.total + interestMinor };
       await repo.insertLedger(tx, {
         id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
