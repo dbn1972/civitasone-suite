@@ -32,6 +32,12 @@ export interface GaplessSeqConfig {
   keyCol: string;     // e.g. "format_key" or "doc_type"
   bucketCol: string;  // e.g. "bucket" or "period"
   valueCol: string;   // e.g. "current_value" or "last_seq"
+  /**
+   * Freshness timestamp column refreshed to `now()` on every increment.
+   * Defaults to "updated_at" (both known counter tables have it). Set to
+   * `null` to skip the refresh for a table that lacks such a column.
+   */
+  updatedAtCol?: string | null; // default "updated_at"
 }
 
 const IDENT_RE = /^[a-z_][a-z0-9_]*$/i;
@@ -59,11 +65,19 @@ export async function allocateGaplessSeq(
   const schema = ident(cfg.schema);
   const table = ident(cfg.table);
 
+  // Refresh the freshness timestamp on every increment so ops/ETL staleness
+  // checks stay meaningful. `updatedAtCol` is hardcoded config (never user
+  // input) and is validated via `ident()`, so no injection surface is added.
+  // `undefined` => default "updated_at"; `null` => skip the refresh entirely.
+  const updatedAtColName = cfg.updatedAtCol === undefined ? "updated_at" : cfg.updatedAtCol;
+  const touchUpdatedAt =
+    updatedAtColName == null ? sql`` : sql`, ${ident(updatedAtColName)} = now()`;
+
   const query = sql`
     INSERT INTO ${schema}.${table} (${tenantCol}, ${keyCol}, ${bucketCol}, ${valueCol})
     VALUES (${tenantId}::uuid, ${key}, ${bucket}, 1)
     ON CONFLICT (${tenantCol}, ${keyCol}, ${bucketCol})
-    DO UPDATE SET ${valueCol} = ${schema}.${table}.${valueCol} + 1
+    DO UPDATE SET ${valueCol} = ${schema}.${table}.${valueCol} + 1${touchUpdatedAt}
     RETURNING ${valueCol} AS value
   `;
   const res = await tx.execute(query);

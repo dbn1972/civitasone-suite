@@ -179,3 +179,35 @@ describe("allocation RBAC", () => {
     expect(res.statusCode).toBe(201);
   });
 });
+
+describe("updated_at freshness", () => {
+  // Reads the counter row's freshness timestamp under the tenant's RLS context.
+  async function readUpdatedAt(tid: string, formatKey: string, bucket: string): Promise<Date> {
+    return sqlClient.begin(async (sql) => {
+      await sql`SELECT set_config('app.tenant_id', ${tid}, true)`;
+      const rows = await sql`
+        SELECT updated_at FROM metadata.number_sequences
+        WHERE tenant_id = ${tid} AND format_key = ${formatKey} AND bucket = ${bucket}
+      `;
+      return new Date(rows[0].updated_at as string);
+    });
+  }
+
+  it("refreshes updated_at on every increment (no stale timestamp after 1st alloc)", async () => {
+    await definePublished(A, "test.touch", { prefix: "TC", counterWidth: 4, resetPolicy: "yearly", embedFinancialYear: true });
+    const at = "2026-07-01T00:00:00.000Z";
+    const a1 = await app.inject({ method: "POST", url: "/v1/metadata/numbers/allocate", headers: hdr(A, MAKER), body: JSON.stringify({ formatKey: "test.touch", at }) });
+    expect(a1.statusCode).toBe(201);
+    const bucket = a1.json().data.bucket as string;
+    const t1 = await readUpdatedAt(A, "test.touch", bucket);
+
+    await new Promise((r) => setTimeout(r, 25)); // ensure the wall clock advances
+
+    const a2 = await app.inject({ method: "POST", url: "/v1/metadata/numbers/allocate", headers: hdr(A, MAKER), body: JSON.stringify({ formatKey: "test.touch", at }) });
+    expect(a2.statusCode).toBe(201);
+    expect(a2.json().data.sequence).toBe("2"); // same bucket, incremented
+    const t2 = await readUpdatedAt(A, "test.touch", bucket);
+
+    expect(t2.getTime()).toBeGreaterThan(t1.getTime()); // updated_at moved forward
+  });
+});
