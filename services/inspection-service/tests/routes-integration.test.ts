@@ -313,7 +313,6 @@ beforeAll(async () => {
   const { registerSyncRoutes } = await import("../src/modules/sync/routes.js");
   const { registerEvidenceRoutes } = await import("../src/modules/evidence/routes.js");
   const { registerExecutionRoutes } = await import("../src/modules/execution/routes.js");
-  const { registerFindingsRoutes } = await import("../src/modules/findings/routes.js");
 
   await registerUniverseRoutes(app);
   await registerRiskRoutes(app);
@@ -323,7 +322,7 @@ beforeAll(async () => {
   await registerSyncRoutes(app);
   await registerEvidenceRoutes(app);
   await registerExecutionRoutes(app);
-  await registerFindingsRoutes(app);
+  // findings routes are now registered by buildApp() (app.ts) — do not double-register
 
   await app.ready();
 });
