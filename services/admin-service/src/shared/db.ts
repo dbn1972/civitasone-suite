@@ -20,6 +20,7 @@ import { schema as featureFlagsModule } from "../modules/feature-flags/schema.js
 import { schema as changeModule } from "../modules/change/schema.js";
 import { schema as centralConfigModule } from "../modules/central-config/schema.js";
 import { schema as integrationSettingsModule } from "../modules/integration-settings/schema.js";
+import { schema as integrationOpsModule } from "../modules/integration-ops/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 // NOTE (Phase 4 coverage-gap closure): custom-domains, webhooks, data-export,
@@ -43,6 +44,7 @@ const SCHEMA = {
   ...changeModule,
   ...centralConfigModule,
   ...integrationSettingsModule,
+  ...integrationOpsModule,
   ...outboxSchema,
 };
 
