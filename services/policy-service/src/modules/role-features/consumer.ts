@@ -9,6 +9,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { roleFeatureGrants } from "./schema.js";
 import { eq, and } from "drizzle-orm";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "role_feature_grant";
@@ -16,6 +17,8 @@ const RESOURCE = "role_feature_grant";
 function listKey(tenantId: string) { return cache.makeKey(tenantId, RESOURCE, "list"); }
 
 export function registerRoleFeatureConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   queue.subscribe<{
     id: string; tenantId: string; roleName: string; featureKey: string;
     granted: boolean; grantedBy: string;

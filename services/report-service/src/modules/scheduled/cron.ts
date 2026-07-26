@@ -14,7 +14,9 @@
 import { pino } from "pino";
 import { eq, and, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { queue } from "../../shared/infra.js";
 import { scheduledReports } from "./schema.js";
 import { computeNextRunAt, GENERATION_TIMEOUT_MS, MAX_DELIVERY_RETRIES } from "./domain.js";
@@ -56,8 +58,12 @@ export async function tick(): Promise<number> {
   const now = new Date();
   let dispatched = 0;
 
-  // Find all enabled scheduled reports where nextRunAt <= now
-  const dueReports = await db
+  // Find all enabled scheduled reports where nextRunAt <= now.
+  // Cross-tenant discovery via the BYPASSRLS scanner pool: under report_svc
+  // (NOBYPASSRLS, #146) a bare select with no tenant GUC returns ZERO rows and
+  // the cron silently no-ops. Read-only; the per-row update below re-runs
+  // under the row's tenant so RLS re-checks the write.
+  const dueReports = await scannerDb
     .select()
     .from(scheduledReports)
     .where(and(
@@ -100,15 +106,23 @@ export async function tick(): Promise<number> {
       // Compute next run time and update
       const nextRunAt = computeNextRunAt(now, scheduled.cadence as ScheduledReportCadence);
 
-      await db
-        .update(scheduledReports)
-        .set({
-          lastRunAt: now,
-          nextRunAt,
-          updatedAt: now,
-          updatedBy: SYSTEM_ACTOR,
-        })
-        .where(eq(scheduledReports.id, scheduled.id));
+      // RLS (#146): per-tenant context per iteration — the UPDATE runs inside
+      // the row's tenant GUC transaction as report_svc.
+      await runWithTenant(scheduled.tenantId, () =>
+        db.transaction((tx) =>
+          tx.update(scheduledReports)
+            .set({
+              lastRunAt: now,
+              nextRunAt,
+              updatedAt: now,
+              updatedBy: SYSTEM_ACTOR,
+            })
+            .where(and(
+              eq(scheduledReports.id, scheduled.id),
+              eq(scheduledReports.tenantId, scheduled.tenantId),
+            )),
+        ),
+      );
 
       dispatched++;
 

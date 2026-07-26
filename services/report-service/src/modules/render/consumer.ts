@@ -14,6 +14,7 @@ import { renderPdf } from "@civitasone/render/pdf";
 import { renderXlsx, renderCsv } from "@civitasone/render/xlsx";
 import { putObject, presignedGetUrl } from "@civitasone/storage";
 import { pino } from "pino";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const log = pino({ name: "render-consumer" });
 
@@ -28,6 +29,8 @@ interface RenderPayload {
 }
 
 export function registerRenderConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   queue.subscribe<RenderPayload>(COMMANDS.renderJob, async (msg) => {
     const p = msg.payload;
 
@@ -116,9 +119,13 @@ export function registerRenderConsumers(queue: Queue): void {
       log.info({ jobId: p.jobId, format: ext, sizeBytes: buffer.length }, "report rendered + uploaded");
     } catch (err) {
       log.error({ err, jobId: p.jobId }, "render failed");
-      await db.update(jobs)
-        .set({ status: "failed", updatedAt: new Date(), updatedBy: msg.actorId })
-        .where(and(eq(jobs.id, p.jobId), eq(jobs.tenantId, p.tenantId)));
+      // RLS (#146): a bare db.update() runs outside the GUC transaction and is
+      // rejected under NOBYPASSRLS — mark-failed must also run inside a tx.
+      await db.transaction((tx) =>
+        tx.update(jobs)
+          .set({ status: "failed", updatedAt: new Date(), updatedBy: msg.actorId })
+          .where(and(eq(jobs.id, p.jobId), eq(jobs.tenantId, p.tenantId))),
+      );
       await cache.invalidate(cache.makeKey(p.tenantId, RESOURCE, p.jobId));
     }
   });

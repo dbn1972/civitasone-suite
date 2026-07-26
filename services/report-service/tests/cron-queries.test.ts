@@ -45,6 +45,24 @@ vi.mock("../src/shared/db.js", () => {
   };
 });
 
+// ─── Scanner DB Mock for cron discovery ───────────────────────────
+// tick() discovers due reports through the BYPASSRLS scanner pool (RLS #146);
+// this unit suite is fully DB-mocked, so the scanner select serves the same
+// mockState.selectResult the primary db mock does.
+vi.mock("../src/shared/scanner-db.js", () => {
+  const chain = {
+    from: () => chain,
+    where: () => chain,
+    orderBy: () => chain,
+    limit: (n: number) => mockState.selectResult.slice(0, n),
+    offset: () => mockState.selectResult,
+  };
+  return {
+    scannerDb: { select: () => chain },
+    scannerSqlClient: { end: async () => {} },
+  };
+});
+
 // ─── Infra Mock ────────────────────────────────────────────────────
 vi.mock("../src/shared/infra.js", () => ({
   cache: {

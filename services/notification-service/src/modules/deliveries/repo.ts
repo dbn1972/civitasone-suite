@@ -1,5 +1,7 @@
 import { eq, and, lte, desc } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { runWithTenant } from "@civitasone/db";
+import { db, scopedRead, readScoped } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { notificationDeliveries, type DeliveryInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -11,7 +13,7 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export async function findByRecipient(
   tenantId: string, recipientId: string, limit = 50, offset = 0,
 ): Promise<typeof notificationDeliveries.$inferSelect[]> {
-  return scopedRead((tx) => tx.select().from(notificationDeliveries)
+  return readScoped(tenantId, (tx) => tx.select().from(notificationDeliveries)
     .where(and(
       eq(notificationDeliveries.tenantId, tenantId),
       eq(notificationDeliveries.recipientId, recipientId),
@@ -28,16 +30,20 @@ export async function findByRecipient(
 export async function findDueRetries(
   now = new Date(), limit = 100,
 ): Promise<typeof notificationDeliveries.$inferSelect[]> {
-  return scopedRead((tx) => tx.select().from(notificationDeliveries)
+  // Cross-tenant discovery via the BYPASSRLS scanner pool: under notification_svc
+  // (NOBYPASSRLS, #146) a scopedRead with no tenant context returns ZERO rows and
+  // the durable retry sweep silently no-ops. Read-only; the claim below re-runs
+  // under the row's tenant so RLS re-checks the write.
+  return scannerDb.select().from(notificationDeliveries)
     .where(and(
       eq(notificationDeliveries.status, "queued"),
       lte(notificationDeliveries.nextRetryAt, now),
     ))
-    .limit(limit));
+    .limit(limit);
 }
 
 export async function findByUser(tenantId: string, userId: string, limit = 50): Promise<typeof notificationDeliveries.$inferSelect[]> {
-  return scopedRead((tx) => tx.select().from(notificationDeliveries)
+  return readScoped(tenantId, (tx) => tx.select().from(notificationDeliveries)
     .where(and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.createdBy, userId)))
     .limit(limit));
 }
@@ -46,7 +52,7 @@ export async function findByTenant(tenantId: string, limit = 50, offset = 0, act
   const conditions = actorId
     ? and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.createdBy, actorId))
     : eq(notificationDeliveries.tenantId, tenantId);
-  return scopedRead((tx) => tx.select().from(notificationDeliveries)
+  return readScoped(tenantId, (tx) => tx.select().from(notificationDeliveries)
     .where(conditions)
     .limit(limit).offset(offset));
 }
@@ -54,7 +60,7 @@ export async function findByTenant(tenantId: string, limit = 50, offset = 0, act
 export async function findById(tenantId: string, id: string): Promise<typeof notificationDeliveries.$inferSelect | null> {
   // SEC P0-1: scope the read to the tenant so a delivery id from another tenant 404s
   // instead of leaking another tenant's notification (callers always know the tenant).
-  const rows = await scopedRead((tx) => tx.select().from(notificationDeliveries)
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(notificationDeliveries)
     .where(and(eq(notificationDeliveries.tenantId, tenantId), eq(notificationDeliveries.id, id))).limit(1));
   return rows[0] ?? null;
 }
@@ -69,18 +75,25 @@ export async function insertDelivery(tx: Writer, row: DeliveryInsert): Promise<v
  * expected version. Returns true if this caller won the claim.
  */
 export async function claimDueRetry(
-  id: string, version: number, now = new Date(),
+  id: string, tenantId: string, version: number, now = new Date(),
 ): Promise<boolean> {
   // Transition to `sending` (an allowed status) so the row leaves the `queued`
-  // due-set and won't be picked up by a concurrent sweep.
-  const updated = await db.update(notificationDeliveries).set({
-    status: "sending", updatedAt: new Date(), version: version + 1,
-  }).where(and(
-    eq(notificationDeliveries.id, id),
-    eq(notificationDeliveries.version, version),
-    eq(notificationDeliveries.status, "queued"),
-    lte(notificationDeliveries.nextRetryAt, now),
-  )).returning({ id: notificationDeliveries.id });
+  // due-set and won't be picked up by a concurrent sweep. The UPDATE runs inside
+  // the row's tenant context (runWithTenant + tx sets the app.tenant_id GUC) so
+  // RLS admits it under the NOBYPASSRLS notification_svc role (#146).
+  const updated = await (runWithTenant(tenantId, () =>
+    db.transaction((tx) =>
+      tx.update(notificationDeliveries).set({
+        status: "sending", updatedAt: new Date(), version: version + 1,
+      }).where(and(
+        eq(notificationDeliveries.id, id),
+        eq(notificationDeliveries.tenantId, tenantId),
+        eq(notificationDeliveries.version, version),
+        eq(notificationDeliveries.status, "queued"),
+        lte(notificationDeliveries.nextRetryAt, now),
+      )).returning({ id: notificationDeliveries.id }),
+    ),
+  ) as Promise<{ id: string }[]>);
   return updated.length > 0;
 }
 

@@ -7,10 +7,13 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as schemeRepo from "../scheme/repo.js";
 import { assertUcExpenditureWithinReleased } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerUcConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   queue.subscribe(COMMANDS.ucSubmit, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; schemeId: string; ucNo: string;

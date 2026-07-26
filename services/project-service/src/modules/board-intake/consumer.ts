@@ -6,6 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -23,6 +24,8 @@ const AUDIT_TOPIC = "audit.event.record";
  * decisions arriving under a fresh messageId.
  */
 export function registerBoardIntakeConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   queue.subscribe(CONSUMED_EVENTS.boardDecisionProject, async (msg) => {
     const p = msg.payload as {
       decisionId?: string; meetingId?: string; text?: string; projectRef?: string;

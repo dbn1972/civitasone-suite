@@ -21,6 +21,7 @@ import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import * as repo from "../stream/repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const log = pino({ name: "ml-predictions-consumer" });
 
@@ -144,6 +145,8 @@ function exceedsRiskThreshold(eventType: string, payload: MLPredictionEventPaylo
  * 3. Publish via Redis pub/sub for real-time SSE delivery (within 2s)
  */
 export function registerMLPredictionConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   const allTopics = Object.values(ML_PREDICTION_EVENTS);
 
   for (const topic of allTopics) {

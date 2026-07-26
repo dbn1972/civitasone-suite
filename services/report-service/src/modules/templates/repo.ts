@@ -2,7 +2,7 @@
  * templates repo — Drizzle queries against reports.report_templates.
  */
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, readScoped } from "../../shared/db.js";
 import { reportTemplates, type TemplateRow, type TemplateInsert, type TemplateView } from "./schema.js";
 import type { TemplateFilter, TemplateGroup, TemplateAggregation, TemplateParameter } from "./schema.js";
 
@@ -28,32 +28,32 @@ function toView(r: TemplateRow): TemplateView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<TemplateView | null> {
-  const rows = await db.select().from(reportTemplates)
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(reportTemplates)
     .where(and(eq(reportTemplates.id, id), eq(reportTemplates.tenantId, tenantId)))
-    .limit(1);
+    .limit(1));
   const row = rows[0];
   if (!row) return null;
   return toView(row);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TemplateView[]> {
-  const rows = await db.select().from(reportTemplates)
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(reportTemplates)
     .where(and(
       eq(reportTemplates.tenantId, tenantId),
       sql`${reportTemplates.status} != 'archived'`,
     ))
     .limit(limit)
-    .offset(offset);
+    .offset(offset));
   return rows.map(toView);
 }
 
 export async function countByTenant(tenantId: string): Promise<number> {
-  const result = await db.select({ count: sql<number>`count(*)::int` })
+  const result = await readScoped(tenantId, (tx) => tx.select({ count: sql<number>`count(*)::int` })
     .from(reportTemplates)
     .where(and(
       eq(reportTemplates.tenantId, tenantId),
       sql`${reportTemplates.status} != 'archived'`,
-    ));
+    )));
   return result[0]?.count ?? 0;
 }
 

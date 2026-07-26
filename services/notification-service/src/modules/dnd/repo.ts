@@ -1,4 +1,5 @@
 import { eq, and, lte } from "drizzle-orm";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { dndWindows, heldNotifications } from "./schema.js";
 
@@ -22,14 +23,14 @@ export async function findActiveWindows(
 export async function findHeldNotifications(
   now: Date = new Date(), limit = 100,
 ): Promise<typeof heldNotifications.$inferSelect[]> {
-  return scopedRead((tx) =>
-    tx.select().from(heldNotifications)
-      .where(and(
-        eq(heldNotifications.status, "held"),
-        lte(heldNotifications.holdUntil, now),
-      ))
-      .limit(limit),
-  );
+  // Cross-tenant discovery via the BYPASSRLS scanner pool (see scanner-db.ts):
+  // a scopedRead with no tenant context returns ZERO rows under NOBYPASSRLS (#146).
+  return scannerDb.select().from(heldNotifications)
+    .where(and(
+      eq(heldNotifications.status, "held"),
+      lte(heldNotifications.holdUntil, now),
+    ))
+    .limit(limit);
 }
 
 /**

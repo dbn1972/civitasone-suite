@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { db, readScoped } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import { grantFeatureBody, roleParam, grantIdParam, evaluateQuery } from "./validators.js";
 import { roleFeatureGrants } from "./schema.js";
@@ -31,7 +31,7 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const rows = await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, "list"),
-      async () => db.select().from(roleFeatureGrants).where(eq(roleFeatureGrants.tenantId, ctx.tenantId)),
+      async () => readScoped(ctx.tenantId, (tx) => tx.select().from(roleFeatureGrants).where(eq(roleFeatureGrants.tenantId, ctx.tenantId))),
     );
     return reply.send({ data: rows });
   });
@@ -41,8 +41,8 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { role } = safeParse(roleParam, req.params);
-    const rows = await db.select().from(roleFeatureGrants)
-      .where(and(eq(roleFeatureGrants.tenantId, ctx.tenantId), eq(roleFeatureGrants.roleName, role)));
+    const rows = await readScoped(ctx.tenantId, (tx) => tx.select().from(roleFeatureGrants)
+      .where(and(eq(roleFeatureGrants.tenantId, ctx.tenantId), eq(roleFeatureGrants.roleName, role))));
     return reply.send({ data: rows });
   });
 
@@ -69,12 +69,12 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { roles } = safeParse(evaluateQuery, req.query);
-    const rows = await db.select().from(roleFeatureGrants)
+    const rows = await readScoped(ctx.tenantId, (tx) => tx.select().from(roleFeatureGrants)
       .where(and(
         eq(roleFeatureGrants.tenantId, ctx.tenantId),
         inArray(roleFeatureGrants.roleName, roles),
         eq(roleFeatureGrants.granted, true),
-      ));
+      )));
     const featureKeys = [...new Set(rows.map((r) => r.featureKey))];
     return reply.send({ data: featureKeys, roles });
   });

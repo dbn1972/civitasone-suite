@@ -24,7 +24,15 @@ const { mockTx, dbTransactionFn, enqueuedMessages, insertMock, markProcessedMock
 });
 
 vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
-vi.mock("@civitasone/db", () => ({ runWithTenant: (...a: any[]) => (runWithTenantMock as any)(...a) }));
+vi.mock("@civitasone/db", () => ({
+  runWithTenant: (...a: any[]) => (runWithTenantMock as any)(...a),
+  // tenantScoped(queue) wraps every subscribed handler in withTenantConsumer
+  // (RLS #146); the mock preserves the handler and threads tenant context
+  // through the same runWithTenant spy this suite already asserts on.
+  withTenantConsumer: (handler: (msg: { tenantId?: string }) => Promise<void>) =>
+    (msg: { tenantId?: string }) =>
+      msg?.tenantId ? (runWithTenantMock as any)(msg.tenantId, () => handler(msg)) : handler(msg),
+}));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => { enqueuedMessages.push({ topic: msg.topic, payload: msg.payload }); }),
   markProcessed: (...a: any[]) => markProcessedMock(...a),

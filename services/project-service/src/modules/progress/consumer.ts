@@ -6,12 +6,15 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as projectRepo from "../project/repo.js";
 import { assertDprDateUnique } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 void assertDprDateUnique;
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerProgressConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   queue.subscribe(COMMANDS.physicalProgressRecord, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; projectId: string; componentId?: string;

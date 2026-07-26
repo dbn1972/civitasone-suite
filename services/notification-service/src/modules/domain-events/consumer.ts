@@ -15,6 +15,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import { getTemplateForEvent, interpolate } from "./templates.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const log = pino({ name: "domain-events-consumer" });
 
@@ -137,6 +138,8 @@ const SECURITY_DESK = "security_control_room";
  * note reaches the tenant's user audience rather than any single person id.
  */
 const BROADCAST_AUDIENCE = "all_users";
+/** Role recipient for contract lifecycle alerts — resolved per tenant by the delivery pipeline. */
+const CONTRACT_DESK = "contract_management_desk";
 
 type VisitorSecurityIncidentPayload = {
   incidentType?: string;
@@ -191,6 +194,14 @@ type BroadcastSendPayload = {
   title?: string;
   releaseNotes?: string;
   affectedServices?: string[];
+};
+
+type ContractExpiryAlertPayload = {
+  contractId?: string;
+  contractNo?: string;
+  title?: string;
+  endDate?: string;
+  daysRemaining?: number;
 };
 
 // ─── Recipient resolution ────────────────────────────────────────────────────
@@ -433,6 +444,20 @@ function resolveRecipients(eventType: string, payload: Record<string, unknown>):
       }];
     }
 
+    case CONSUMED_EVENTS.contractExpiryAlert: {
+      const p = payload as ContractExpiryAlertPayload;
+      return [{
+        recipientId: CONTRACT_DESK,
+        recipient: CONTRACT_DESK,
+        variables: {
+          contractNo: p.contractNo ?? p.contractId ?? "",
+          contractTitle: p.title ? ` (${p.title})` : "",
+          endDate: p.endDate ?? "",
+          daysRemaining: String(p.daysRemaining ?? ""),
+        },
+      }];
+    }
+
     default:
       return [];
   }
@@ -486,6 +511,8 @@ async function handleDomainEvent(msg: CommandEnvelope): Promise<void> {
 // ─── Registration ────────────────────────────────────────────────────────────
 
 export function registerDomainEventConsumers(queue: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  queue = tenantScoped(queue);
   const eventTopics = Object.values(CONSUMED_EVENTS);
 
   for (const topic of eventTopics) {

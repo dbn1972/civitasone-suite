@@ -6,10 +6,13 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { validateCriteria, type SegmentCriteria } from "./domain.js";
 import * as repo from "./repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerSegmentConsumers(q: Queue): void {
+  // RLS (#146): every handler must run inside the message's tenant context.
+  q = tenantScoped(q);
   q.subscribe<{
     id: string; tenantId: string; name: string;
     description?: string; criteria: SegmentCriteria;
