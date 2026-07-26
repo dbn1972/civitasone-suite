@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, getCurrentTenantId, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -35,6 +35,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
+  // Fallback: requests authenticated purely via Bearer token (no x-tenant-id
+  // header) carry the tenant in the JWT tid claim (resolved into req.ctx by
+  // authPlugin). Enter it so RLS reads work for direct-to-service calls too.
+  app.addHook("onRequest", async (req) => {
+    if (!getCurrentTenantId()) {
+      const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+      if (tid) tenantStorage.enterWith({ tenantId: tid });
+    }
+  });
 
   registerOpsRoutes(app, { service: "procurement-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
