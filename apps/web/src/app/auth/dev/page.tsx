@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 const wrap: CSSProperties = {
   minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
   padding: "24px", fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-  background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #312e81 100%)",
+  background: "#0f172a",
+  backgroundImage: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #312e81 100%)",
 };
 const card: CSSProperties = {
   width: "100%", maxWidth: "400px", background: "#ffffff", borderRadius: "16px",
@@ -15,7 +16,8 @@ const card: CSSProperties = {
 };
 const badge: CSSProperties = {
   width: "52px", height: "52px", margin: "0 auto 14px", borderRadius: "14px",
-  background: "linear-gradient(135deg,#6366f1,#4338ca)", color: "#fff",
+  background: "#6366f1",
+  backgroundImage: "linear-gradient(135deg,#6366f1,#4338ca)", color: "#fff",
   display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px",
 };
 const h1: CSSProperties = { margin: 0, textAlign: "center", fontSize: "22px", fontWeight: 700, color: "#0f172a" };

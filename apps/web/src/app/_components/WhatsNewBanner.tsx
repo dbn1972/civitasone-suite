@@ -50,7 +50,8 @@ export function WhatsNewBanner() {
         justifyContent: "space-between",
         gap: 12,
         padding: "8px 16px",
-        background: "linear-gradient(90deg, #eff6ff, #f0fdf4)",
+        background: "#eff6ff",
+        backgroundImage: "linear-gradient(90deg, #eff6ff, #f0fdf4)",
         borderBottom: "1px solid #e0e7ff",
         fontSize: 14,
       }}

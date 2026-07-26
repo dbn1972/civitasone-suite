@@ -9,7 +9,7 @@ export default function LoginClient() {
   const error = params.get("error");
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-950 text-white">
+    <main className="min-h-screen bg-slate-900 bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-950 text-white">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-12">
         <section className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-8 text-slate-900 shadow-2xl backdrop-blur">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-700">CivitasOne Suite</p>

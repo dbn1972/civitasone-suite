@@ -128,7 +128,7 @@ export function Sidebar({ enabledModules }: SidebarProps = {}) {
   return (
     <aside className="sb">
       <div className="sb-brand">
-        <div className="sb-logo">◈</div>
+        <div className="sb-logo" aria-hidden="true">◈</div>
         <div>
           <div className="sb-bn">CivitasOne</div>
           <div className="sb-bs">Enterprise Suite</div>

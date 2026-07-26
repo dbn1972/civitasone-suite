@@ -49,7 +49,7 @@ export default function LandingPage() {
   return (
     <>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-white to-gray-50">
+      <section className="relative overflow-hidden bg-white bg-gradient-to-b from-white to-gray-50">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8 lg:py-36">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
@@ -76,7 +76,7 @@ export default function LandingPage() {
             </div>
             {/* Hero visual */}
             <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-              <div className="rounded-2xl bg-gradient-to-br from-gray-900 to-gray-700 p-8 text-white shadow-2xl">
+              <div className="rounded-2xl bg-gray-900 bg-gradient-to-br from-gray-900 to-gray-700 p-8 text-white shadow-2xl">
                 <div className="mb-4 flex items-center gap-2 text-sm text-gray-300">
                   <span className="inline-block h-2 w-2 rounded-full bg-green-400" />
                   Live System Stats
@@ -229,7 +229,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Sandbox CTA ──────────────────────────────────────────────────── */}
-      <section className="bg-gradient-to-b from-gray-50 to-white py-20 sm:py-28">
+      <section className="bg-gray-50 bg-gradient-to-b from-gray-50 to-white py-20 sm:py-28">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
             See it yourself. No sign-up required.

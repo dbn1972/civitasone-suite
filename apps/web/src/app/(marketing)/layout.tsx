@@ -13,7 +13,7 @@ function NavBar() {
     <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold text-gray-900">
-          <span className="text-2xl">◈</span> CivitasOne
+          <span className="text-2xl" aria-hidden="true">◈</span> CivitasOne
         </Link>
 
         <div className="hidden items-center gap-6 md:flex">
@@ -54,7 +54,7 @@ function Footer() {
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-6">
           <div className="col-span-2">
             <Link href="/" className="flex items-center gap-2 text-lg font-bold text-gray-900">
-              <span className="text-2xl">◈</span> CivitasOne
+              <span className="text-2xl" aria-hidden="true">◈</span> CivitasOne
             </Link>
             <p className="mt-3 text-sm text-gray-500">
               Made in India 🇮🇳 for India

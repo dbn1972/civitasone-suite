@@ -53,7 +53,7 @@ const roles = [
 
 export default function SandboxPage() {
   return (
-    <section className="bg-gradient-to-b from-white to-gray-50 py-20 sm:py-28">
+    <section className="bg-white bg-gradient-to-b from-white to-gray-50 py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center">
