@@ -71,6 +71,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(slaRoutes);
   await app.register(finalizationRoutes);
   const { caseRegistryRoutes } = await import("./modules/case-registry/routes.js"); await app.register(caseRegistryRoutes);
+  const { caseLinksRoutes } = await import("./modules/case-links/routes.js"); await app.register(caseLinksRoutes);
+  const { deviationsRoutes } = await import("./modules/deviations/routes.js"); await app.register(deviationsRoutes);
+  const { commentsRoutes } = await import("./modules/comments/routes.js"); await app.register(commentsRoutes);
+  const { timelineRoutes } = await import("./modules/timeline/routes.js"); await app.register(timelineRoutes);
+  const { workbasketsRoutes } = await import("./modules/workbaskets/routes.js"); await app.register(workbasketsRoutes);
+  const { checklistsRoutes } = await import("./modules/checklists/routes.js"); await app.register(checklistsRoutes);
+  const { closureRoutes } = await import("./modules/closure/routes.js"); await app.register(closureRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }
