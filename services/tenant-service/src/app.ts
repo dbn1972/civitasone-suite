@@ -42,6 +42,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dataMigrationRoutes);
   const { stewardshipRoutes } = await import("./modules/stewardship/routes.js");
   await app.register(stewardshipRoutes);
+  const { consentExchangeRoutes } = await import("./modules/consent-exchange/routes.js");
+  await app.register(consentExchangeRoutes);
   const { codeListRoutes } = await import("./modules/code-lists/routes.js");
   await app.register(codeListRoutes);
   const { positionRoutes } = await import("./modules/positions/routes.js");
