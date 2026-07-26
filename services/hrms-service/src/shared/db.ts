@@ -15,6 +15,8 @@ import { schema as serviceBookModule } from "../modules/service-book/schema.js";
 import { schema as appraisalModule }   from "../modules/appraisals/schema.js";
 import { aparSchema as aparModule }            from "../modules/apar/schema.js";
 import { gpfModuleSchema as gpfModule }        from "../modules/gpf/schema.js";
+import { npsModuleSchema as npsModule }        from "../modules/nps/schema.js";
+import { cpfModuleSchema as cpfModule }        from "../modules/cpf/schema.js";
 import { schema as deputationModule }  from "../modules/deputation/schema.js";
 import { schema as claimsModule }      from "../modules/claims/schema.js";
 import { schema as schedulerModule }   from "../modules/scheduler/schema.js";
@@ -41,6 +43,8 @@ const SCHEMA = {
   ...appraisalModule,
   ...aparModule,
   ...gpfModule,
+  ...npsModule,
+  ...cpfModule,
   ...deputationModule,
   ...claimsModule,
   ...schedulerModule,
