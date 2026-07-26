@@ -1,7 +1,7 @@
 /** zod validators — applied at the route boundary for batch and serial number operations. */
 import { z } from "zod";
 
-export const batchStatus = z.enum(["active", "expired", "depleted", "quarantine"]);
+export const batchStatus = z.enum(["active", "expired", "depleted", "quarantine", "recalled"]);
 export const serialStatus = z.enum(["available", "issued", "returned", "scrapped"]);
 
 export const createBatchBody = z.object({

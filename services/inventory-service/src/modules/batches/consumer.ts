@@ -28,7 +28,7 @@ import { cache } from "../../shared/infra.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, INTEGRATION, RESOURCE } from "../../topics.js";
 import { batches, serialNumbers } from "./schema.js";
-import { validateBatchNotExpired } from "./domain.js";
+import { validateBatchNotExpired, validateBatchIssuable } from "./domain.js";
 import { DomainError } from "../../shared/domain.js";
 import {
   createBatchPayload,
@@ -91,6 +91,18 @@ export function registerBatchConsumers(q: Queue): void {
         throw err;
       }
 
+      // Status guard: only an active batch may be issued from. A quarantined or
+      // recalled batch is held for compliance and must never be depleted (which
+      // would overwrite its status to "depleted" and clear the hold).
+      try {
+        validateBatchIssuable(batch.status);
+      } catch (err) {
+        if (err instanceof DomainError) {
+          throw new NonRetryableError(`${err.message} (batchId ${p.batchId}, status ${batch.status})`);
+        }
+        throw err;
+      }
+
       if (batch.qty < p.qty) {
         throw new NonRetryableError(
           `BATCH_INSUFFICIENT: batch ${p.batchId} has ${batch.qty}, requested ${p.qty}`,
@@ -132,16 +144,29 @@ export function registerBatchConsumers(q: Queue): void {
         );
       }
 
-      await tx.insert(serialNumbers).values({
-        id: p.id,
-        tenantId: p.tenantId,
-        itemId: p.itemId,
-        batchId: p.batchId ?? null,
-        serialNumber: p.serialNumber,
-        status: "available",
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
-      });
+      try {
+        await tx.insert(serialNumbers).values({
+          id: p.id,
+          tenantId: p.tenantId,
+          itemId: p.itemId,
+          batchId: p.batchId ?? null,
+          serialNumber: p.serialNumber,
+          status: "available",
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        // A concurrent registration can lose the race between the SELECT pre-check
+        // and this INSERT; the unique index uq_inv_serials_tenant_item_serial then
+        // raises Postgres 23505. Translate it to a NonRetryableError so the loser
+        // fails fast with a clear reason instead of retry-looping into the DLQ.
+        if ((err as { code?: string }).code === "23505") {
+          throw new NonRetryableError(
+            `SERIAL_DUPLICATE: '${p.serialNumber}' already exists for item ${p.itemId}`,
+          );
+        }
+        throw err;
+      }
 
       await emitDomain(tx, msg, EVENTS.serialRegistered, {
         serialId: p.id, itemId: p.itemId, batchId: p.batchId ?? null, serialNumber: p.serialNumber,

@@ -268,3 +268,120 @@ describe("batch consumer — RLS cross-tenant isolation", () => {
     expect(leaked).toHaveLength(0);
   });
 });
+
+describe("batch consumer — status guard blocks issue from held batches (compliance)", () => {
+  it("issuing from a QUARANTINED batch is rejected: qty & status unchanged, dead-lettered non-retryable", async () => {
+    const id = await createBatch("LOT-QTN-ISSUE-001", "2027-12-31", 150);
+    const qtn = await app.inject({
+      method: "PATCH", url: `/v1/inventory/batches/${id}/quarantine`, headers: hdr(TENANT_A, ACTOR_A),
+      payload: { reason: "cold-chain excursion" },
+    });
+    expect(qtn.statusCode).toBe(202);
+    await drain();
+
+    // Authoritative guard: publish the issue command DIRECTLY on the queue,
+    // bypassing the route pre-check, to prove the locked-tx guard blocks it.
+    const mq = queue as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+    const issueMsgId = "aaaaaaaa-0000-4000-8000-00000000e001";
+    await queue.publish(COMMANDS.batchIssue, {
+      messageId: issueMsgId, type: COMMANDS.batchIssue, tenantId: TENANT_A, actorId: ACTOR_A,
+      correlationId: "corr-qtn-issue", schemaVersion: "1.0",
+      payload: { id: issueMsgId, tenantId: TENANT_A, batchId: id, qty: 10, postingDate: "2026-02-01" },
+    });
+    await drain();
+
+    const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(batches).where(eq(batches.id, id))));
+    expect(rows[0]!.qty).toBe(150);          // NOT decremented
+    expect(rows[0]!.status).toBe("quarantine"); // NOT overwritten to depleted
+
+    const newDlq = mq.dlq.slice(before);
+    expect(newDlq.some((d) => d.error.includes("BATCH_NOT_ISSUABLE"))).toBe(true);
+  });
+
+  it("issuing from a RECALLED batch is rejected: qty & status unchanged", async () => {
+    const id = await createBatch("LOT-RCL-ISSUE-001", "2027-12-31", 80);
+    const rcl = await app.inject({
+      method: "POST", url: `/v1/inventory/batches/${id}/recall`, headers: hdr(TENANT_A, ACTOR_A),
+      payload: { reason: "contamination", severity: "high" },
+    });
+    expect(rcl.statusCode).toBe(202);
+    await drain();
+
+    const mq = queue as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+    const issueMsgId = "aaaaaaaa-0000-4000-8000-00000000e002";
+    await queue.publish(COMMANDS.batchIssue, {
+      messageId: issueMsgId, type: COMMANDS.batchIssue, tenantId: TENANT_A, actorId: ACTOR_A,
+      correlationId: "corr-rcl-issue", schemaVersion: "1.0",
+      payload: { id: issueMsgId, tenantId: TENANT_A, batchId: id, qty: 5, postingDate: "2026-02-01" },
+    });
+    await drain();
+
+    const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(batches).where(eq(batches.id, id))));
+    expect(rows[0]!.qty).toBe(80);
+    expect(rows[0]!.status).toBe("recalled");
+    expect(mq.dlq.slice(before).some((d) => d.error.includes("BATCH_NOT_ISSUABLE"))).toBe(true);
+  });
+
+  it("the route rejects issuing from a quarantined batch up-front (422 BATCH_NOT_ISSUABLE)", async () => {
+    const id = await createBatch("LOT-QTN-ISSUE-002", "2027-12-31", 60);
+    await app.inject({
+      method: "PATCH", url: `/v1/inventory/batches/${id}/quarantine`, headers: hdr(TENANT_A, ACTOR_A),
+      payload: { reason: "qc hold" },
+    });
+    await drain();
+    const res = await app.inject({
+      method: "POST", url: "/v1/inventory/batches/issue", headers: hdr(TENANT_A, ACTOR_A),
+      payload: { batchId: id, qty: 10, postingDate: "2026-02-01" },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("BATCH_NOT_ISSUABLE");
+  });
+
+  it("issuing from an ACTIVE batch still succeeds (guard does not over-block)", async () => {
+    const id = await createBatch("LOT-ACT-ISSUE-001", "2027-12-31", 30);
+    const res = await app.inject({
+      method: "POST", url: "/v1/inventory/batches/issue", headers: hdr(TENANT_A, ACTOR_A),
+      payload: { batchId: id, qty: 12, postingDate: "2026-02-01" },
+    });
+    expect(res.statusCode).toBe(202);
+    await drain();
+    const b = (await app.inject({ method: "GET", url: `/v1/inventory/batches/${id}`, headers: hdr(TENANT_A, ACTOR_A) })).json().data;
+    expect(b.qty).toBe(18);
+    expect(b.status).toBe("active");
+  });
+});
+
+describe("serial consumer — concurrent duplicate translates 23505 to SERIAL_DUPLICATE (no DLQ retry-loop)", () => {
+  it("racing two serial.register for the same serial persists exactly one row; loser dead-lettered as SERIAL_DUPLICATE", async () => {
+    const mq = queue as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+    const serial = "SN-RACE-0001";
+    const id1 = "dddddddd-0000-4000-8000-00000000f001";
+    const id2 = "dddddddd-0000-4000-8000-00000000f002";
+    const mk = (mid: string) => ({
+      messageId: mid, type: COMMANDS.serialRegister, tenantId: TENANT_A, actorId: ACTOR_A,
+      correlationId: "corr-race", schemaVersion: "1.0",
+      payload: { id: mid, tenantId: TENANT_A, itemId: ITEM_A, serialNumber: serial },
+    });
+    // Publish both BEFORE draining so their SELECT pre-checks race ahead of either INSERT,
+    // driving the loser into the unique-index 23505 path (translated to NonRetryableError).
+    await Promise.all([
+      queue.publish(COMMANDS.serialRegister, mk(id1)),
+      queue.publish(COMMANDS.serialRegister, mk(id2)),
+    ]);
+    await drain();
+
+    const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(serialNumbers).where(eq(serialNumbers.serialNumber, serial))));
+    expect(rows).toHaveLength(1);
+
+    // Exactly one loser, dead-lettered non-retryably (a raw 23505 would be retryable
+    // and would retry-loop maxAttempts times before landing in the DLQ).
+    const dupes = mq.dlq.slice(before).filter((d) => d.error.includes("SERIAL_DUPLICATE"));
+    expect(dupes.length).toBe(1);
+  });
+});
