@@ -5,6 +5,7 @@
  *
  * Features:
  * - Pan, zoom, marker click to view entity details
+ * - Optional GIS layers (tile / WMS / GeoJSON) rendered above the base map
  * - Max 200 markers per viewport (requirement 17.3)
  * - Tile provider configured via NEXT_PUBLIC_MAP_TILE_URL env var
  * - WCAG 2.2 AA: keyboard-accessible controls, aria-labels, focus indicators
@@ -12,6 +13,7 @@
  *
  * Props:
  * - markers: Array of { id, lat, lng, label?, description? }
+ * - layers: Array of { id, name, sourceType, url, styleJson?, zIndex, visible }
  * - center: { lat, lng } — initial map center
  * - zoom: initial zoom level (default 12)
  * - onMarkerClick: callback when a marker is clicked
@@ -35,8 +37,22 @@ export interface MapCenter {
   lng: number;
 }
 
+export type MapLayerSourceType = "tile" | "wms" | "geojson";
+
+export interface MapLayer {
+  id: string;
+  name: string;
+  sourceType: MapLayerSourceType;
+  url: string;
+  /** Leaflet style/options object (e.g. { color, weight, layers, format }). */
+  styleJson?: Record<string, unknown> | null;
+  zIndex: number;
+  visible: boolean;
+}
+
 export interface CivitasMapProps {
   markers?: MapMarker[];
+  layers?: MapLayer[];
   center?: MapCenter;
   zoom?: number;
   onMarkerClick?: (marker: MapMarker) => void;
@@ -61,12 +77,17 @@ const TILE_URL =
  */
 function generateMapHtml(
   markers: MapMarker[],
+  layers: MapLayer[],
   center: MapCenter,
   zoom: number,
   tileUrl: string,
 ): string {
   const markersJson = JSON.stringify(markers);
-  const centerJson = JSON.stringify(center);
+  // Only visible layers reach the map, ordered by zIndex (lowest first).
+  const orderedLayers = [...layers]
+    .filter((l) => l.visible)
+    .sort((a, b) => a.zIndex - b.zIndex);
+  const layersJson = JSON.stringify(orderedLayers);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -90,6 +111,7 @@ function generateMapHtml(
     .marker-popup { font-family: system-ui, sans-serif; font-size: 14px; }
     .marker-popup h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
     .marker-popup p { font-size: 12px; color: #6b7280; margin: 0; }
+    .marker-popup a { font-size: 12px; color: #2563eb; }
   </style>
 </head>
 <body>
@@ -108,6 +130,32 @@ function generateMapHtml(
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
       }).addTo(map);
+
+      // GIS overlay layers (tile / wms / geojson), ordered by zIndex.
+      var layers = ${layersJson};
+      layers.forEach(function(layer) {
+        try {
+          var style = layer.styleJson || {};
+          if (layer.sourceType === 'tile') {
+            L.tileLayer(layer.url, Object.assign({ zIndex: layer.zIndex, maxZoom: 19 }, style)).addTo(map);
+          } else if (layer.sourceType === 'wms') {
+            L.tileLayer.wms(layer.url, Object.assign(
+              { format: 'image/png', transparent: true, zIndex: layer.zIndex },
+              style
+            )).addTo(map);
+          } else if (layer.sourceType === 'geojson') {
+            fetch(layer.url).then(function(r) { return r.json(); }).then(function(data) {
+              L.geoJSON(data, {
+                style: style,
+                onEachFeature: function(feature, lyr) {
+                  var name = (feature.properties && (feature.properties.name || feature.properties.label));
+                  if (name) lyr.bindPopup(String(name));
+                }
+              }).addTo(map);
+            }).catch(function() { /* best-effort: bad/blocked GeoJSON source is non-fatal */ });
+          }
+        } catch (e) { /* one bad layer must not break the map */ }
+      });
 
       var markers = ${markersJson};
 
@@ -144,6 +192,7 @@ function generateMapHtml(
 
 export function CivitasMap({
   markers = [],
+  layers = [],
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
   onMarkerClick,
@@ -174,8 +223,8 @@ export function CivitasMap({
 
   // Generate map HTML
   const mapHtml = useMemo(
-    () => generateMapHtml(visibleMarkers, center, zoom, TILE_URL),
-    [visibleMarkers, center, zoom],
+    () => generateMapHtml(visibleMarkers, layers, center, zoom, TILE_URL),
+    [visibleMarkers, layers, center, zoom],
   );
 
   const srcDoc = mapHtml;

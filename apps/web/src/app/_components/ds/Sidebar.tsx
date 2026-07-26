@@ -65,6 +65,14 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    group: "LOCATIONS & GIS",
+    items: [
+      { icon: "📍", label: "Locations", href: "/locations", moduleKey: null },
+      { icon: "🗺️", label: "Map Viewer", href: "/locations/maps", moduleKey: null },
+      { icon: "🛰️", label: "Map Monitoring", href: "/locations/maps/monitoring", moduleKey: null },
+    ],
+  },
+  {
     group: "GOVERNANCE",
     items: [
       { icon: "🔍", label: "Audit", href: "/audit", moduleKey: "audit" },
