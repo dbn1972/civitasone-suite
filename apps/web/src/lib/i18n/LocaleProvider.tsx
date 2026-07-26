@@ -38,8 +38,12 @@ export function LocaleProvider({ children, initialLocale }: LocaleProviderProps)
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored === "en" || stored === "hi" || stored === "ta" || stored === "te" || stored === "kn") {
         setLocaleState(stored);
+        // Sync to cookie for Server Components
+        document.cookie = `civitasone-locale=${stored};path=/;max-age=31536000;SameSite=Lax`;
       } else {
-        setLocaleState(detectBrowserLocale());
+        const detected = detectBrowserLocale();
+        setLocaleState(detected);
+        document.cookie = `civitasone-locale=${detected};path=/;max-age=31536000;SameSite=Lax`;
       }
     } catch {
       // SSR or localStorage unavailable — keep default
@@ -50,6 +54,12 @@ export function LocaleProvider({ children, initialLocale }: LocaleProviderProps)
     setLocaleState(newLocale);
     try {
       localStorage.setItem(STORAGE_KEY, newLocale);
+    } catch {
+      // ignore
+    }
+    // Sync to cookie so Server Components can read the locale via cookies()
+    try {
+      document.cookie = `civitasone-locale=${newLocale};path=/;max-age=31536000;SameSite=Lax`;
     } catch {
       // ignore
     }

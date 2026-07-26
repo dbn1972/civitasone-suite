@@ -220,4 +220,65 @@ export const en: Record<string, string> = {
   "misc.helpCentre": "Help Centre",
   "misc.whatsNew": "What's new",
   "misc.shortcuts": "Keyboard shortcuts",
+
+  // ─── Page: Dashboard ──────────────────────────────────────────────────
+  "dashboard.title": "Command Center",
+  "dashboard.subtitle": "What is happening, what needs action, and what to do next — filtered to your role.",
+  "dashboard.myApprovals": "My approvals",
+  "dashboard.setupBannerTitle": "New here? Finish setting up your workspace",
+  "dashboard.setupBannerDesc": "A few quick steps to get your office ready — pick up where you left off.",
+  "dashboard.yourModules": "Your modules",
+  "dashboard.noModules": "No modules assigned yet",
+  "dashboard.noModulesMsg": "Your account does not have any modules enabled. Contact your tenant administrator to request access.",
+
+  // ─── Page: Finance ────────────────────────────────────────────────────
+  "finance.title": "Financial Management",
+  "finance.subtitle": "Budget, expenditure, receipts and treasury — one governed view.",
+  "finance.budgetUtilisation": "Budget Utilisation (FY)",
+  "finance.expenditureYtd": "Expenditure (YTD)",
+  "finance.paymentsMtd": "Payments (MTD)",
+  "finance.pendingApprovals": "Pending Approvals",
+  "finance.budgetChart": "Budget Utilisation",
+  "finance.modules": "Finance Modules",
+  "finance.exportMis": "Export MIS",
+  "finance.paymentsThisMonth": "payments this month",
+
+  // ─── Page: Grievances ─────────────────────────────────────────────────
+  "grievances.title": "Grievances",
+  "grievances.subtitle": "CPGRAMS-style grievance register with 30-day lifecycle.",
+  "grievances.register": "+ Register Grievance",
+  "grievances.total": "Total",
+  "grievances.pending": "Pending",
+  "grievances.escalated": "Escalated",
+  "grievances.resolved": "Resolved",
+  "grievances.tableTitle": "Grievance Register",
+  "grievances.emptyTitle": "No grievances filed",
+  "grievances.emptyMsg": "Grievances filed under the CPGRAMS-style system will appear here.",
+
+  // ─── Page: Leave ──────────────────────────────────────────────────────
+  "leave.title": "Leave Management",
+  "leave.subtitle": "Review and process employee leave requests.",
+  "leave.approvals": "Approvals",
+  "leave.newLeave": "+ New Leave",
+  "leave.total": "Total",
+  "leave.pending": "Pending",
+  "leave.approved": "Approved",
+  "leave.rejected": "Rejected",
+  "leave.requests": "Leave Requests",
+
+  // ─── Page: Admin ──────────────────────────────────────────────────────
+  "admin.title": "Platform Administration",
+  "admin.subtitle": "Super admin tools for tenant management, billing, and platform operations.",
+
+  // ─── Page: Analytics ──────────────────────────────────────────────────
+  "analytics.title": "Data & Analytics",
+  "analytics.subtitle": "Saved dashboards and safe, whitelisted query runs over the analytics service's own data.",
+
+  // ─── Stat Labels (Shared) ─────────────────────────────────────────────
+  "stat.total": "Total",
+  "stat.pending": "Pending",
+  "stat.approved": "Approved",
+  "stat.rejected": "Rejected",
+  "stat.escalated": "Escalated",
+  "stat.resolved": "Resolved",
 };

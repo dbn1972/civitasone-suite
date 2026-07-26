@@ -3,8 +3,10 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { getLeaveRequestDetails } from "../../../_data/loaders";
 import type { LeaveRequestDetail } from "@civitasone/types";
+import { serverT } from "@/lib/i18n/server";
 
 export default async function LeaveManagementPage() {
+  const t = serverT();
   const { data: leaveRequests, source } = await getLeaveRequestDetails();
 
   const total = leaveRequests.length;
@@ -24,23 +26,23 @@ export default async function LeaveManagementPage() {
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
-        title="Leave Management"
-        subtitle="Review and process employee leave requests."
+        title={t("leave.title")}
+        subtitle={t("leave.subtitle")}
         actions={
           <>
-            <Link href="/hr/leave/approvals" className="btn">Approvals</Link>
-            <Link href="/hr/leave/apply" className="btn primary">+ New Leave</Link>
+            <Link href="/hr/leave/approvals" className="btn">{t("leave.approvals")}</Link>
+            <Link href="/hr/leave/apply" className="btn primary">{t("leave.newLeave")}</Link>
           </>
         }
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label={t("leave.total")} value={total} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("leave.pending")} value={pending} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("leave.approved")} value={approved} />
+        <StatCard icon="❌" iconBg="#fff0f0" label={t("leave.rejected")} value={rejected} />
       </StatGrid>
-      <Card title="Leave Requests">
+      <Card title={t("leave.requests")}>
         <DataTable<LeaveRequestDetail>
           columns={columns}
           rows={leaveRequests}
