@@ -45,7 +45,11 @@ export async function issueFromBatch(ctx: RequestContext, body: IssueFromBatchBo
  * Used when a defect is discovered or shelf life is approaching expiry.
  */
 export async function quarantineBatch(ctx: RequestContext, batchId: string, reason: string): Promise<Accepted> {
-  await publish(COMMANDS.batchQuarantine, ctx, batchId, {
+  // A fresh messageId for the command envelope — the target batch id lives in the
+  // payload. Reusing batchId as the messageId collides with batch.create in the
+  // idempotency inbox, which would silently dedupe (drop) the quarantine.
+  const messageId = randomUUID();
+  await publish(COMMANDS.batchQuarantine, ctx, messageId, {
     id: batchId, tenantId: ctx.tenantId, reason,
   });
   return { id: batchId, status: "accepted", correlationId: ctx.correlationId };

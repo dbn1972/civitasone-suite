@@ -10,6 +10,7 @@ import { registerItemConsumers } from "./modules/items/consumer.js";
 import { registerStoreConsumers } from "./modules/stores/consumer.js";
 import { registerMovementConsumers } from "./modules/movements/consumer.js";
 import { registerWarehouseConsumers } from "./modules/warehouses/consumer.js";
+import { registerBatchConsumers } from "./modules/batches/consumer.js";
 import { registerForecastConsumers } from "./modules/forecast/consumer.js";
 import { startForecastRefresh } from "./modules/forecast/scheduler.js";
 
@@ -19,6 +20,7 @@ registerItemConsumers(queue);
 registerStoreConsumers(queue);
 registerMovementConsumers(queue);
 registerWarehouseConsumers(queue);
+registerBatchConsumers(queue);
 registerForecastConsumers(queue);
 
 await queue.start();

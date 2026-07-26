@@ -33,6 +33,25 @@ export function validateBatchNotExpired(expiryDate: string | Date, postingDate: 
 }
 
 /**
+ * Validates that a batch is in an issuable state.
+ *
+ * Only an "active" batch may be issued from. A "quarantine" or "recalled"
+ * batch is held for compliance (e.g. vaccine lot control) and must never be
+ * depleted; "expired" and "depleted" batches are likewise not issuable.
+ *
+ * @param status - The batch's current status.
+ * @throws DomainError with code "BATCH_NOT_ISSUABLE" if the batch is not active.
+ */
+export function validateBatchIssuable(status: BatchStatus | string): void {
+  if (status !== "active") {
+    throw new DomainError(
+      "BATCH_NOT_ISSUABLE",
+      `Batch is not issuable (status: ${status}); only 'active' batches may be issued`,
+    );
+  }
+}
+
+/**
  * Validates that a serial number is not already present in the existing set.
  *
  * @param serialNumber - The serial number to validate.
@@ -49,7 +68,7 @@ export function validateSerialUnique(serialNumber: string, existingSerials: Set<
 }
 
 /** Batch status lifecycle. */
-export type BatchStatus = "active" | "expired" | "depleted" | "quarantine";
+export type BatchStatus = "active" | "expired" | "depleted" | "quarantine" | "recalled";
 
 /** Serial number status lifecycle. */
 export type SerialStatus = "available" | "issued" | "returned" | "scrapped";

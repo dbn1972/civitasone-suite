@@ -13,7 +13,7 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import { validateBatchNotExpired } from "./domain.js";
+import { validateBatchNotExpired, validateBatchIssuable } from "./domain.js";
 import { DomainError } from "../../shared/domain.js";
 
 const WRITE_ROLES  = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
@@ -56,9 +56,13 @@ export async function batchRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       validateBatchNotExpired(batch.expiryDate, body.postingDate);
+      validateBatchIssuable(batch.status);
     } catch (err) {
       if (err instanceof DomainError && err.code === "BATCH_EXPIRED") {
         throw new HttpError(422, "BATCH_EXPIRED", err.message);
+      }
+      if (err instanceof DomainError && err.code === "BATCH_NOT_ISSUABLE") {
+        throw new HttpError(422, "BATCH_NOT_ISSUABLE", err.message);
       }
       throw err;
     }
