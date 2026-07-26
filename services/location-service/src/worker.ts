@@ -8,6 +8,8 @@ import { registerHierarchyConsumers } from "./modules/hierarchy/consumer.js";
 import { registerJurisdictionConsumers } from "./modules/jurisdiction/consumer.js";
 import { registerGeofenceConsumers } from "./modules/geofence/consumer.js";
 import { registerPincodeConsumers } from "./modules/pincode/consumer.js";
+import { registerLandRecordConsumers } from "./modules/land-records/consumer.js";
+import { registerCadastralConsumers } from "./modules/cadastral/consumer.js";
 
 const log = pino({ name: "location-worker" });
 
@@ -16,6 +18,8 @@ registerHierarchyConsumers(queue);
 registerJurisdictionConsumers(queue);
 registerGeofenceConsumers(queue);
 registerPincodeConsumers(queue);
+registerLandRecordConsumers(queue);
+registerCadastralConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

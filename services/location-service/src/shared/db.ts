@@ -10,6 +10,8 @@ import { schema as hierarchyModule } from "../modules/hierarchy/schema.js";
 import { schema as jurisdictionModule } from "../modules/jurisdiction/schema.js";
 import { schema as geofenceModule } from "../modules/geofence/schema.js";
 import { schema as pincodeModule } from "../modules/pincode/schema.js";
+import { schema as landRecordsModule } from "../modules/land-records/schema.js";
+import { schema as cadastralModule } from "../modules/cadastral/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -18,6 +20,8 @@ const SCHEMA = {
   ...jurisdictionModule,
   ...geofenceModule,
   ...pincodeModule,
+  ...landRecordsModule,
+  ...cadastralModule,
   ...outboxSchema,
 };
 
