@@ -17,7 +17,7 @@
 | 6 | SAST | ⚠️ Partial | Partial | `node scripts/ci/sql-injection-guard.mjs` |
 | 7 | DAST | ⬜ Not built | No | — |
 | 8 | Dependency / container | ⚠️ Partial | No | `pnpm audit` |
-| 9 | Accessibility (WCAG 2.2 AA) | 🔴 Insufficient | Yes (weak) | `node scripts/ci/wcag-audit.mjs` |
+| **9** | **Accessibility (WCAG 2.2 AA)** | ✅ **Built** | **Yes** | `pnpm --filter @civitasone/web test:a11y` |
 | 10 | Performance / load | ⚠️ Exists, not wired | No | k6 scripts |
 | 11 | Mutation | ⬜ Not built | No | — |
 | 12 | Visual regression | ⬜ Not built | No | — |
@@ -27,16 +27,21 @@
 
 ### Honest notes on the pre-existing gates
 
-- **`scripts/ci/rtl-check.mjs` is a fake gate.** Its failure condition is
-  `if (logicalRatio < 0)`, which is mathematically impossible for a ratio of two
-  non-negative counts. It always exits 0. It must be replaced, not trusted.
-- **`scripts/ci/wcag-audit.mjs` is real but insufficient.** It does regex static
-  analysis of `page.tsx` source and *can* fail, but it never renders a page, so
-  it cannot see violations originating in client components or DS primitives. It
-  is a proxy for accessibility, not a measurement of it.
-- **The test baseline is not green.** `location-service` fails 26 tests on
-  `main` before any change in this branch. Gates are only trustworthy once the
-  baseline is green.
+- **`scripts/ci/rtl-check.mjs` was a fake gate — now replaced.** Its failure
+  condition was `if (logicalRatio < 0)`, mathematically impossible for a ratio of
+  two non-negative counts, so it always exited 0 while printing "RTL-safe layout
+  verified". It is now a real per-property ratchet.
+- **`scripts/ci/wcag-audit.mjs` was real but insufficient — now deleted.** It
+  regex-scanned `page.tsx` source and *could* fail, but never rendered a page, so
+  it could not see violations from client components, shared DS primitives, or
+  runtime states. Replaced by the axe-core gate.
+- **Neither script was wired into any workflow.** Accessibility and RTL were
+  *ungated*, not weakly gated. An earlier revision of this document claimed WCAG
+  was blocking; that was wrong and is corrected above.
+- **The test baseline is not green.** `location-service` fails 26 tests, and
+  `apps/web` fails 19 test files / 1 test, on `main` before any change in this
+  branch (verified with `git stash`). Gates are only trustworthy once the baseline
+  is green — this should be fixed before Gate #5 declares the pipeline enforced.
 
 ---
 
@@ -161,3 +166,82 @@ Everything above is automatable. These stay human:
 | Exploratory testing of novel flows | By definition not yet scripted. |
 | Compliance / legal interpretation | DPDP, CAG audit, GFR readings are accountability decisions with a named human owner. |
 | Go / no-go release decision | Risk appetite, not a test result. |
+
+---
+
+## Gate #9 — Accessibility (WCAG 2.2 AA)
+
+### What it catches
+
+Loads each route in real Chromium as a real persona and runs axe-core against the
+**rendered DOM**, so violations in client components, shared DS primitives and
+runtime states are visible — none of which the previous source-scanning script
+could see.
+
+| Check | Blocking | Notes |
+|-------|----------|-------|
+| axe `violations` at critical/serious | Yes | Zero-tolerance: baseline is empty |
+| axe `incomplete` at critical/serious | Yes (ratchet) | Undecided checks are *not* passes |
+| Landed URL == requested URL | Yes | Prevents auditing a redirect target |
+| Page heading visible, skeletons resolved | Yes | Prevents auditing a shell |
+| Data actually loaded (list routes) | Yes (ratchet) | Prevents auditing an empty state |
+| Manifest not collapsed; every route reached axe | Yes | Prevents a shrunken/errored run reading clean |
+| Design-token contrast (unit test, no browser) | Yes | Catches the commonest root cause in seconds |
+| RTL physical-property ratchet | Yes | Count may not grow |
+
+### Run it
+
+```bash
+pnpm --filter @civitasone/web test:a11y          # curated 52 routes
+pnpm --filter @civitasone/web test:a11y:full     # all ~410 routes (pre-release)
+pnpm --filter @civitasone/web exec vitest run tests/a11y/design-tokens.test.ts
+node scripts/ci/rtl-check.mjs                    # RTL ratchet
+node scripts/ci/rtl-check.mjs --report           # worst RTL offenders
+```
+
+Requires the web app running with a reachable gateway. `A11Y_BASELINE_WRITE=1` is
+refused in CI — it skips the assertion, which would launder new violations.
+
+### Verified genuine
+
+| Injected defect | Result |
+|---|---|
+| `--mut` reverted to the non-compliant `#98a2b3` | Fails, reports the measured 2.58:1 |
+| Route pointed at a persona lacking the role | Fails: "REDIRECTED to /dashboard" |
+| +5 RTL physical properties | Fails: "grew from 658 to 663" |
+| Malformed RTL baseline (`physicalCount` instead of `physical`) | Fails (previously exited 0 "PASSED") |
+
+### Violations found and fixed: 51 → 0
+
+| # | Defect | Scope | Fix |
+|---|--------|-------|-----|
+| 1 | `--mut` = `#98a2b3`, 2.58:1 on white | **50 of 52 routes** (sidebar is on every page) | `#667085`, 4.97:1 |
+| 2 | `Chart.tsx` legend `#94a3b8`, 2.56:1 | Every chart/dashboard | `#667085` |
+| 3 | Roundness slider label not associated (`label`, **critical**) | `/settings/branding` | `htmlFor`/`id` + `aria-describedby` |
+| 4 | `text-gray-400` `#9ca3af`, 2.54:1 | `/settings/branding` | `text-gray-500`, 4.83:1 |
+| 5 | Accent preview hardcoded `color:#fff`, 2.14:1 on amber | `/settings/branding` | Foreground derived from background luminance |
+
+One design token accounted for 50 of the 51 findings.
+
+### Residual state — recorded honestly
+
+| Bucket | Count | Meaning |
+|--------|------:|---------|
+| Definite violations | **0** | Zero-tolerance gate, empty baseline |
+| axe-undecidable (critical/serious) | **47** | Text over CSS gradients, and decorative glyphs (`◈`, emoji). axe cannot compute these; they need **human contrast verification** and sit in the manual-judgment bucket. |
+| Not certified | **4** | `/approvals`, `/finance/payments`, `/finance/budget/allocation`, `/finance/accounting/general-ledger` render the data-unavailable state, so the DataTable and its controls are absent. These are **unmeasured, not clean** — a separate defect to fix. |
+
+### Separate bug found by reading the rendered DOM
+
+`/finance/dashboard` displayed **"Remaining: Infinity"**. `BudgetChart` computed
+`utilized * ((100 - utilisationPct) / utilisationPct)` guarded with `|| 0`, which
+does not catch `Infinity` because `Infinity` is truthy. `utilisationPct` is `0`
+whenever nothing has been spent — normal at the start of a financial year. Fixed.
+
+### RTL state
+
+606 → **658** RTL-unsafe physical properties once the detector stopped being blind
+to Tailwind arbitrary values, against **2** logical ones. The app is effectively
+RTL-incapable; the old gate reported "RTL-safe layout verified". Ratcheted rather
+than hard-failed, because failing outright would force either a mass refactor or a
+disabled gate.
