@@ -428,25 +428,40 @@ jobs:
           NEXT_TELEMETRY_DISABLED: '1'
       - name: Install Playwright chromium
         run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
+      # Without a reachable gateway every loader returns source:"error" and each
+      # list page renders an empty state — so axe would audit shells with no
+      # DataTable, no rows and no controls, and report them clean. The spec now
+      # asserts data arrived, so this mock is required for the gate to pass.
+      - name: Start mock gateway
+        run: |
+          node scripts/ci/start-mock-gateway.mjs > mock-gateway.log 2>&1 &
+          npx --yes wait-on http://localhost:8080 --timeout 60000
       - name: Start web
         run: |
-          pnpm --filter @civitasone/web run start &
+          pnpm --filter @civitasone/web run start > web-server.log 2>&1 &
           npx --yes wait-on http://localhost:3000/auth/login --timeout 120000
         env:
-          # Dev login must be enabled for persona cookies to be accepted.
-          NEXT_PUBLIC_DEV_LOGIN: 'true'
+          # NOTE: the app reads CIVITASONE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL.
+          # `NEXT_PUBLIC_API_BASE` (used by the web-build job) is read by nothing.
+          CIVITASONE_API_BASE_URL: http://localhost:8080
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+          # Gates the /auth/dev route. Read by apps/web/src/lib/auth/env.ts.
+          ENABLE_DEV_LOGIN: 'true'
           JWT_SECRET: civitasone-dev-secret
       - name: Run axe-core WCAG 2.2 AA gate
         run: pnpm --filter @civitasone/web run test:a11y
         env:
           CI: true
           JWT_SECRET: civitasone-dev-secret
-      - name: Upload a11y traces on failure
+      - name: Upload a11y traces and server logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: a11y-traces
-          path: apps/web/test-results/
+          name: a11y-diagnostics
+          path: |
+            apps/web/test-results/
+            web-server.log
+            mock-gateway.log
           retention-days: 7
 
   # ─────────────────────────────────────────────

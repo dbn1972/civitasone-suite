@@ -24,8 +24,16 @@ export default defineConfig({
   use: {
     baseURL: process.env.A11Y_BASE_URL ?? "http://localhost:3000",
     ...devices["Desktop Chrome"],
-    // 1024px is the documented minimum supported width (GIGW responsive floor).
-    viewport: { width: 1280, height: 900 },
+    // Width 1280 sits above the documented 1024px responsive floor.
+    //
+    // Height is deliberately 2000, not a realistic 900: the sidebar is a long
+    // scrollable nav, and at 900px its lower items are clipped. axe then cannot
+    // compute their background and returns them as `incomplete` ("partially
+    // obscured by another element") rather than pass/fail. Since this gate treats
+    // undecided-at-serious-impact as blocking, a short viewport manufactured ~50
+    // undecidable checks that were measurement artifacts rather than defects. A
+    // tall viewport makes the contrast computation decidable, which is the point.
+    viewport: { width: 1280, height: 2000 },
     ignoreHTTPSErrors: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

@@ -28,7 +28,7 @@ import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = process.cwd();
-const SCAN_DIRS = [join(ROOT, "apps/web/src")];
+const SCAN_DIRS = [join(ROOT, "apps/web/src"), join(ROOT, "packages/ui-kit/src")];
 const BASELINE = join(ROOT, "scripts/ci/rtl-baseline.json");
 
 const args = process.argv.slice(2);
@@ -40,30 +40,60 @@ const REPORT = args.includes("--report");
  * Word-boundary anchored so `mb-4` (margin-bottom, direction-neutral) and
  * `border-lime-500` are not matched.
  */
+/**
+ * NOTE ON `\b` AND ARBITRARY VALUES: a trailing `\b` after `]` can never match,
+ * because `]` and the following character are both non-word — so the original
+ * patterns were BLIND to every Tailwind arbitrary value (`mr-[2px]`, `left-[10px]`).
+ * All patterns below use `(?![\w-])` as the terminator instead, which also stops
+ * `-ml-4` inside a longer token from counting.
+ */
+const END = "(?![\\w-])";
+const VAL = "(?:\\d+(?:\\.\\d+)?|px|auto|full|screen|min|max|fit|\\[[^\\]]+\\])";
+
 const PHYSICAL_PATTERNS = [
-  // Tailwind spacing: ml-/mr-/pl-/pr- followed by a scale token
-  /\b[mp][lr]-(?:\d+|px|auto|\[[^\]]+\])\b/g,
-  // Tailwind text alignment
-  /\btext-(?:left|right)\b/g,
-  // Tailwind float
-  /\bfloat-(?:left|right)\b/g,
-  // Tailwind directional borders (border-l-2, border-r, but not border-lime-500)
-  /\bborder-[lr](?:-(?:\d+|\[[^\]]+\]))?\b(?!\w)/g,
-  // Tailwind directional rounding
-  /\brounded-(?:[lr]|[tb][lr])(?:-\w+)?\b/g,
-  // Tailwind inset
-  /\b(?:left|right)-(?:\d+|px|auto|full|\[[^\]]+\])\b/g,
-  // Raw CSS / inline-style physical properties
-  /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|borderLeft|borderRight|textAlign\s*:\s*["']?(?:left|right))\b/g,
-  /(?:^|[;{\s])(?:margin-left|margin-right|padding-left|padding-right|border-left|border-right)\s*:/g,
+  // Spacing: ml-/mr-/pl-/pr- (incl. negative -ml-4 and arbitrary ml-[3px])
+  new RegExp(`(?<![\\w-])-?[mp][lr]-${VAL}${END}`, "g"),
+  // Scroll margin/padding
+  new RegExp(`(?<![\\w-])scroll-[mp][lr]-${VAL}${END}`, "g"),
+  // Text alignment
+  new RegExp(`(?<![\\w-])text-(?:left|right)${END}`, "g"),
+  // Float / clear
+  new RegExp(`(?<![\\w-])(?:float|clear)-(?:left|right)${END}`, "g"),
+  // Directional borders — border-l, border-r-2, border-l-[3px].
+  // `border-lime-500` is excluded because `lime` does not match the value set.
+  new RegExp(`(?<![\\w-])border-[lr](?:-${VAL})?${END}`, "g"),
+  // Directional rounding
+  new RegExp(`(?<![\\w-])rounded-(?:[lr]|[tb][lr])(?:-\\w+)?${END}`, "g"),
+  // Inset (left-0, right-[10px], inset-x-4 — inset-x does not mirror)
+  new RegExp(`(?<![\\w-])-?(?:left|right)-${VAL}${END}`, "g"),
+  new RegExp(`(?<![\\w-])-?inset-x-${VAL}${END}`, "g"),
+  // Axis utilities that assume LTR order
+  new RegExp(`(?<![\\w-])-?space-x-(?:${VAL}|reverse)${END}`, "g"),
+  new RegExp(`(?<![\\w-])divide-x(?:-${VAL}|-reverse)?${END}`, "g"),
+  // Transform / origin that bake in a direction
+  new RegExp(`(?<![\\w-])-?translate-x-${VAL}${END}`, "g"),
+  new RegExp(`(?<![\\w-])origin-(?:left|right|top-left|top-right|bottom-left|bottom-right)${END}`, "g"),
+  // Inline-style / JS camelCase physical properties
+  /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|borderLeft|borderRight|borderLeftWidth|borderRightWidth|borderLeftColor|borderRightColor|borderTopLeftRadius|borderTopRightRadius|borderBottomLeftRadius|borderBottomRightRadius)\b/g,
+  // Inline-style textAlign: "left" | "right"
+  /\btextAlign\s*:\s*["'](?:left|right)["']/g,
+  // Raw CSS physical declarations
+  /(?:^|[;{\s])(?:margin-left|margin-right|padding-left|padding-right|border-left|border-right|border-left-width|border-right-width|border-left-color|border-right-color|border-top-left-radius|border-top-right-radius|border-bottom-left-radius|border-bottom-right-radius)\s*:/g,
+  // Raw CSS positional left/right (but not `left` as a value of text-align,
+  // which is caught separately)
+  /(?:^|[;{\s])(?:left|right)\s*:\s*(?!auto\s*;?\s*\/\* rtl-ok)/g,
+  // Direction-baked values
+  /\btext-align\s*:\s*(?:left|right)\b/g,
+  /\bbackground-position\s*:\s*(?:left|right)\b/g,
 ];
 
 /** Logical equivalents — counted only to report progress, never to gate. */
 const LOGICAL_PATTERNS = [
-  /\b[mp][se]-(?:\d+|px|auto|\[[^\]]+\])\b/g,
-  /\btext-(?:start|end)\b/g,
-  /\bborder-[se](?:-(?:\d+|\[[^\]]+\]))?\b(?!\w)/g,
-  /\b(?:start|end)-(?:\d+|px|auto|full|\[[^\]]+\])\b/g,
+  new RegExp(`(?<![\\w-])-?[mp][se]-${VAL}${END}`, "g"),
+  new RegExp(`(?<![\\w-])text-(?:start|end)${END}`, "g"),
+  new RegExp(`(?<![\\w-])border-[se](?:-${VAL})?${END}`, "g"),
+  new RegExp(`(?<![\\w-])-?(?:start|end)-${VAL}${END}`, "g"),
+  new RegExp(`(?<![\\w-])-?inset-inline-${VAL}${END}`, "g"),
   /\b(?:marginInlineStart|marginInlineEnd|paddingInlineStart|paddingInlineEnd)\b/g,
   /(?:^|[;{\s])(?:margin-inline-start|margin-inline-end|padding-inline-start|padding-inline-end|inset-inline-start|inset-inline-end)\s*:/g,
 ];
@@ -149,7 +179,27 @@ if (!existsSync(BASELINE)) {
   process.exit(1);
 }
 
-const base = JSON.parse(readFileSync(BASELINE, "utf8"));
+let base;
+try {
+  base = JSON.parse(readFileSync(BASELINE, "utf8"));
+} catch (err) {
+  console.error(`[RTL Check] ❌ FAILED: baseline is not valid JSON — ${err.message}`);
+  process.exit(1);
+}
+
+// Without this, a baseline missing/renaming `physical` makes both comparisons
+// below evaluate against `undefined` (always false) and control falls through to
+// the success message — the exact unreachable-failure-condition bug class as the
+// `logicalRatio < 0` gate this file replaced. Proven: a baseline of
+// `{"physicalCount":606}` printed "PASSED" and exited 0.
+if (!Number.isInteger(base?.physical) || base.physical < 0) {
+  console.error(
+    `[RTL Check] ❌ FAILED: baseline at ${relative(ROOT, BASELINE)} is malformed — ` +
+      `\`physical\` must be a non-negative integer, got ${JSON.stringify(base?.physical)}. ` +
+      `Regenerate with: node scripts/ci/rtl-check.mjs --write-baseline`,
+  );
+  process.exit(1);
+}
 
 if (physical > base.physical) {
   console.error(
