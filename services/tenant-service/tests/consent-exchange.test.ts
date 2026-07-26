@@ -25,7 +25,7 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const T1 = "aaaaaaaa-1111-4000-8000-0000000001a0";
 const T2 = "aaaaaaaa-1111-4000-8000-0000000001a1";
 const ACTOR = "cccccccc-3333-4000-8000-0000000001a0";
-const token = (tid: string) => signToken({ sub: ACTOR, tid, roles: ["tenant_admin", "platform_admin"], sid: "s1" }, SECRET);
+const token = (tid: string, extra: Record<string, unknown> = {}) => signToken({ sub: ACTOR, tid, roles: ["tenant_admin", "platform_admin"], sid: "s1", ...extra }, SECRET);
 
 const HOUR = 3600_000;
 const iso = (ms: number) => new Date(Date.now() + ms).toISOString();
@@ -67,17 +67,17 @@ async function holding(mq: MemoryQueue, tenantId: string, principalId: string, c
   await publish(mq, "tenant.consent.holding.upsert", tenantId, { id: randomUUID(), tenantId, principalId, providingDept: "Registrar", category, value });
 }
 
-async function inject(m: string, u: string, tid?: string, p?: unknown): Promise<{ status: number; body: any }> {
+async function inject(m: string, u: string, tid?: string, p?: unknown, claims: Record<string, unknown> = {}): Promise<{ status: number; body: any }> {
   const app = await buildApp();
   const o: { method: string; url: string; headers?: Record<string, string>; payload?: unknown } = { method: m, url: u };
-  if (tid) o.headers = { authorization: `Bearer ${token(tid)}` };
+  if (tid) o.headers = { authorization: `Bearer ${token(tid, claims)}` };
   if (p !== undefined) o.payload = p;
   const r = await app.inject(o); await app.close();
   return { status: r.statusCode, body: r.body ? JSON.parse(r.body) : undefined };
 }
 
-const fetchReq = (tenantId: string, id: string, purposeKey: string, categories: string[]) =>
-  repo.performFetch(tenantId, id, { purposeKey, categories }, { actorId: ACTOR, correlationId: `c-${randomUUID()}` });
+const fetchReq = (tenantId: string, id: string, purposeKey: string, categories: string[], deptCode = "Revenue") =>
+  repo.performFetch(tenantId, id, { purposeKey, categories }, { actorId: ACTOR, correlationId: `c-${randomUUID()}`, deptCode });
 
 describe("consent exchange hub — real persistence (SVC-150)", () => {
   beforeAll(async () => { await wipe(T1); await wipe(T2); });
@@ -252,15 +252,15 @@ describe("consent exchange hub — real persistence (SVC-150)", () => {
     const id = created.body.data.id as string;
     await infraQueue.drain();
     // grant, then fetch over HTTP (needs a holding first)
-    await inject("POST", "/v1/consent/holdings", T1, { principalId: principal, providingDept: "Registrar", category: "address", value: { line1: "http" } });
+    await inject("POST", "/v1/consent/holdings", T1, { principalId: principal, providingDept: "Registrar", category: "address", value: { line1: "http" } }, { dept_code: "Registrar" });
     await infraQueue.drain();
     expect((await inject("POST", `/v1/consent/${id}/grant`, T1, {})).status).toBe(202);
     await infraQueue.drain();
-    const ok = await inject("POST", `/v1/consent/${id}/fetch`, T1, { purposeKey: "assess", categories: ["address"] });
+    const ok = await inject("POST", `/v1/consent/${id}/fetch`, T1, { purposeKey: "assess", categories: ["address"] }, { dept_code: "Revenue" });
     expect(ok.status).toBe(200);
     expect(ok.body.data.records[0].value.line1).toBe("http");
     // second one-time fetch → 403
-    const denied = await inject("POST", `/v1/consent/${id}/fetch`, T1, { purposeKey: "assess", categories: ["address"] });
+    const denied = await inject("POST", `/v1/consent/${id}/fetch`, T1, { purposeKey: "assess", categories: ["address"] }, { dept_code: "Revenue" });
     expect(denied.status).toBe(403);
     expect(denied.body.reason).toBe("EXPIRED");
     // detail + ledger
@@ -271,6 +271,88 @@ describe("consent exchange hub — real persistence (SVC-150)", () => {
     // 404 unknown, 409 grant-after-decision
     expect((await inject("GET", `/v1/consent/${randomUUID()}`, T1)).status).toBe(404);
     expect((await inject("POST", `/v1/consent/${id}/grant`, T1, {})).status).toBe(409);
+  });
+
+  it("fetch by an officer whose department != requestingDept is refused (DEPT_MISMATCH, no access logged)", async () => {
+    const mq = q(); await mq.start();
+    const principal = randomUUID();
+    await holding(mq, T1, principal, "address", { line1: "secret" });
+    const id = await seed(mq, T1, { principalId: principal, categories: ["address"] }); // requestingDept: "Revenue"
+    await grant(mq, T1, id);
+    await mq.stop();
+    // wrong department → refused, no data, and NO allowed ledger row
+    const wrong = await fetchReq(T1, id, "property-tax-assessment", ["address"], "Registrar");
+    expect(wrong).toEqual({ allowed: false, reason: "DEPT_MISMATCH" });
+    const ledger = await repo.listLedgerByPrincipal(T1, principal);
+    expect(ledger.some((l) => l.eventType === "fetch" && l.outcome === "allowed")).toBe(false);
+    // the correct requesting department still succeeds (don't over-block)
+    const ok = await fetchReq(T1, id, "property-tax-assessment", ["address"], "Revenue");
+    expect(ok.allowed).toBe(true);
+  });
+
+  it("HTTP: authz — dept binding on holdings/fetch + principal ownership on grant/deny/revoke, with officer override", async () => {
+    registerConsentExchangeConsumers(infraQueue);
+    await infraQueue.start();
+    const principal = randomUUID();      // the citizen's id; their token sub == this
+    const other = randomUUID();          // an unrelated citizen
+    // create request as a Revenue officer (requestingDept Revenue, providingDept Registrar)
+    const created = await inject("POST", "/v1/consent/requests", T1, {
+      principalId: principal, requestingDept: "Revenue", providingDept: "Registrar", purposeKey: "assess",
+      dataCategories: ["address"], validFrom: iso(-HOUR), validTo: iso(HOUR),
+    }, { dept_code: "Revenue" });
+    expect(created.status).toBe(202);
+    const id = created.body.data.id as string;
+    await infraQueue.drain();
+
+    // holdings register by the WRONG department → 403 DEPT_MISMATCH
+    const wrongHold = await inject("POST", "/v1/consent/holdings", T1,
+      { principalId: principal, providingDept: "Registrar", category: "address", value: { line1: "x" } }, { dept_code: "Revenue" });
+    expect(wrongHold.status).toBe(403);
+    expect(wrongHold.body.code).toBe("DEPT_MISMATCH");
+    // holdings register by the providing department → 202
+    const okHold = await inject("POST", "/v1/consent/holdings", T1,
+      { principalId: principal, providingDept: "Registrar", category: "address", value: { line1: "x" } }, { dept_code: "Registrar" });
+    expect(okHold.status).toBe(202);
+    await infraQueue.drain();
+
+    // grant by a DIFFERENT data_principal → 403 NOT_YOUR_CONSENT
+    const wrongGrant = await inject("POST", `/v1/consent/${id}/grant`, T1, {}, { sub: other, roles: ["data_principal"] });
+    expect(wrongGrant.status).toBe(403);
+    expect(wrongGrant.body.code).toBe("NOT_YOUR_CONSENT");
+    // deny by a DIFFERENT data_principal → 403 (same decide() path)
+    const wrongDeny = await inject("POST", `/v1/consent/${id}/deny`, T1, {}, { sub: other, roles: ["data_principal"] });
+    expect(wrongDeny.status).toBe(403);
+    // grant by the OWNING principal → 202
+    const okGrant = await inject("POST", `/v1/consent/${id}/grant`, T1, {}, { sub: principal, roles: ["data_principal"] });
+    expect(okGrant.status).toBe(202);
+    await infraQueue.drain();
+
+    // fetch by the wrong department → 403 DEPT_MISMATCH
+    const wrongFetch = await inject("POST", `/v1/consent/${id}/fetch`, T1, { purposeKey: "assess", categories: ["address"] }, { dept_code: "Registrar" });
+    expect(wrongFetch.status).toBe(403);
+    expect(wrongFetch.body.code).toBe("DEPT_MISMATCH");
+    // fetch by the correct requesting department → 200
+    const okFetch = await inject("POST", `/v1/consent/${id}/fetch`, T1, { purposeKey: "assess", categories: ["address"] }, { dept_code: "Revenue" });
+    expect(okFetch.status).toBe(200);
+
+    // revoke by a DIFFERENT data_principal → 403; by the owner → 202
+    const wrongRevoke = await inject("POST", `/v1/consent/${id}/revoke`, T1, undefined, { sub: other, roles: ["data_principal"] });
+    expect(wrongRevoke.status).toBe(403);
+    const okRevoke = await inject("POST", `/v1/consent/${id}/revoke`, T1, undefined, { sub: principal, roles: ["data_principal"] });
+    expect(okRevoke.status).toBe(202);
+    await infraQueue.drain();
+
+    // OFFICER OVERRIDE: a consent_officer may grant a citizen's consent on their
+    // behalf (grievance redressal) even though sub != principalId — permitted by
+    // the explicit CONSENT_OVERRIDE allow-list, not the default path.
+    const created2 = await inject("POST", "/v1/consent/requests", T1, {
+      principalId: other, requestingDept: "Revenue", providingDept: "Registrar", purposeKey: "assess",
+      dataCategories: ["address"], validFrom: iso(-HOUR), validTo: iso(HOUR),
+    }, { dept_code: "Revenue" });
+    const id2 = created2.body.data.id as string;
+    await infraQueue.drain();
+    const officerGrant = await inject("POST", `/v1/consent/${id2}/grant`, T1, {}, { sub: ACTOR, roles: ["consent_officer"] });
+    expect(officerGrant.status).toBe(202);
   });
 
   it("policy.evaluateFetch covers every deny reason", () => {

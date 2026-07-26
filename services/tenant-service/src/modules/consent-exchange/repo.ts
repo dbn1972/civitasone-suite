@@ -89,7 +89,7 @@ export type FetchResult =
 export function performFetch(
   tenantId: string, id: string,
   req: { purposeKey: string; categories: string[] },
-  actor: { actorId: string; correlationId: string },
+  actor: { actorId: string; correlationId: string; deptCode?: string | undefined },
   now: Date = new Date(),
 ): Promise<FetchResult> {
   return scoped(tenantId, async (tx) => {
@@ -98,6 +98,15 @@ export function performFetch(
       .limit(1).for("update");
     const artefact = rows[0];
     if (!artefact) return { allowed: false, reason: "NOT_FOUND" };
+
+    // AUTHZ (CRITICAL): the caller may only fetch data for an artefact consented
+    // to their OWN department. RLS scopes by tenant only, so this per-row
+    // requesting-dept binding is enforced here in-app, inside the same tx that
+    // loaded the artefact — before any consent evaluation, ledger write or data
+    // read, so a cross-dept caller learns nothing and leaves no access record.
+    if (artefact.requestingDept !== actor.deptCode) {
+      return { allowed: false, reason: "DEPT_MISMATCH" };
+    }
 
     const decision: FetchDecision = evaluateFetch(artefact, req, now);
 

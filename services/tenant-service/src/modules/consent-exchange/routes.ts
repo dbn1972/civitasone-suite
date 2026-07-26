@@ -8,6 +8,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { hasAnyRole } from "@civitasone/auth";
+import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 
@@ -17,6 +19,25 @@ const REQUESTER = ["data_requester", "dept_officer", "consent_officer", "tenant_
 const GRANTOR = ["data_principal", "consent_officer", "grievance_officer", "tenant_admin", "platform_admin", "super_admin"];
 // Transparency reads (DPDP s.11) — principal or any authorised officer.
 const VIEWER = [...new Set([...REQUESTER, ...GRANTOR])];
+
+// Roles authorised to act on a data-principal's consent ON THEIR BEHALF
+// (grievance redressal, consent/DPB officer, tenant admin). A caller who is
+// ONLY a data_principal may act solely on their OWN artefact. Anyone outside
+// this explicit allow-list acting on a consent that isn't theirs is denied.
+const CONSENT_OVERRIDE = ["consent_officer", "grievance_officer", "tenant_admin", "platform_admin", "super_admin"];
+
+/**
+ * AUTHZ (CRITICAL): binds a grant/deny/revoke to the acting principal. An
+ * authorised override role (CONSENT_OVERRIDE) may act on behalf of the citizen;
+ * otherwise the acting principal identity (ctx.actorId, the token `sub`) MUST
+ * equal the artefact's principalId. Default-deny for a mismatched data_principal.
+ */
+function assertOwnConsent(ctx: RequestContext, artefact: { principalId: string }): void {
+  if (hasAnyRole(ctx, CONSENT_OVERRIDE)) return;
+  if (ctx.actorId !== artefact.principalId) {
+    throw new HttpError(403, "NOT_YOUR_CONSENT", "you may only act on your own consent");
+  }
+}
 
 const FREQ = ["one-time", "recurring"] as const;
 const categories = z.array(z.string().min(1).max(120)).min(1).max(64);
@@ -66,6 +87,7 @@ export async function consentExchangeRoutes(app: FastifyInstance): Promise<void>
     const body = z.object({ reason: z.string().max(2000).optional() }).parse(req.body ?? {});
     const artefact = await repo.findArtefact(ctx.tenantId, id);
     if (!artefact) throw new HttpError(404, "NOT_FOUND", "consent artefact not found");
+    assertOwnConsent(ctx, artefact);
     if (artefact.status !== "requested") throw new HttpError(409, "INVALID_STATE", `cannot ${kind} a consent in status ${artefact.status}`);
     await queue.publish(`tenant.consent.${kind}`, envelope(ctx, `tenant.consent.${kind}`, { id, tenantId: ctx.tenantId, reason: body.reason }));
     return reply.code(202).send({ data: { id, status: kind === "grant" ? "active" : "denied" } });
@@ -77,6 +99,7 @@ export async function consentExchangeRoutes(app: FastifyInstance): Promise<void>
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const artefact = await repo.findArtefact(ctx.tenantId, id);
     if (!artefact) throw new HttpError(404, "NOT_FOUND", "consent artefact not found");
+    assertOwnConsent(ctx, artefact);
     if (artefact.status === "revoked") throw new HttpError(409, "ALREADY_REVOKED", "consent already revoked");
     await queue.publish("tenant.consent.revoke", envelope(ctx, "tenant.consent.revoke", { id, tenantId: ctx.tenantId }));
     return reply.code(202).send({ data: { id, status: "revoked" } });
@@ -91,6 +114,9 @@ export async function consentExchangeRoutes(app: FastifyInstance): Promise<void>
       category: z.string().min(1).max(120),
       value: z.record(z.unknown()).default({}),
     }).parse(req.body);
+    // AUTHZ (CRITICAL): only the providing department may register the data it
+    // holds. Bind the caller's department to the holding's providingDept.
+    if (ctx.deptCode !== body.providingDept) throw new HttpError(403, "DEPT_MISMATCH", "you may only register holdings for your own department");
     const id = randomUUID();
     await queue.publish("tenant.consent.holding.upsert", envelope(ctx, "tenant.consent.holding.upsert", { id, tenantId: ctx.tenantId, ...body }));
     return reply.code(202).send({ data: { id, status: "accepted" } });
@@ -101,9 +127,11 @@ export async function consentExchangeRoutes(app: FastifyInstance): Promise<void>
     const ctx = resolveContext(req); requireRole(ctx, REQUESTER);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ purposeKey: z.string().min(1).max(120), categories }).parse(req.body);
-    const result = await repo.performFetch(ctx.tenantId, id, body, { actorId: ctx.actorId, correlationId: ctx.correlationId });
+    const result = await repo.performFetch(ctx.tenantId, id, body, { actorId: ctx.actorId, correlationId: ctx.correlationId, deptCode: ctx.deptCode });
     if (!result.allowed) {
       if (result.reason === "NOT_FOUND") throw new HttpError(404, "NOT_FOUND", "consent artefact not found");
+      // Cross-department fetch attempt: caller dept != artefact.requestingDept.
+      if (result.reason === "DEPT_MISMATCH") return reply.code(403).send({ code: "DEPT_MISMATCH", message: "fetch denied: requesting department mismatch" });
       return reply.code(403).send({ code: "CONSENT_DENIED", reason: result.reason, message: `fetch denied: ${result.reason}` });
     }
     return reply.send({ data: { artefactId: result.artefactId, records: result.data }, meta: { total: result.data.length } });
