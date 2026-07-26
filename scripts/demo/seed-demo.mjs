@@ -149,9 +149,9 @@ console.log("\n=== 1. demo tenants ===");
 step("civitas_tenant", "tenants", `
 INSERT INTO tenant.tenants (id, tenant_id, name, domain, edition, status, region, residency, settings, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('${T1}', '${T1}', 'Demo Municipal Corporation (DEV DEMO)', 'demo-city.civitasone.in',    'govt_dept', 'active', 'ap-south-1', 'in', '{}', now(), now(), '${ACTOR}', '${ACTOR}', 1),
-  ('${T2}', '${T2}', 'Partner Revenue Department (DEV DEMO)', 'partner-rev.civitasone.in', 'govt_dept', 'active', 'ap-south-1', 'in', '{}', now(), now(), '${ACTOR}', '${ACTOR}', 1)
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = now();
+  ('${T1}', '${T1}', 'Demo Municipal Corporation (DEV DEMO)', 'demo-city.civitasone.in',    'govt', 'active', 'ap-south-1', 'in', '{}', now(), now(), '${ACTOR}', '${ACTOR}', 1),
+  ('${T2}', '${T2}', 'Partner Revenue Department (DEV DEMO)', 'partner-rev.civitasone.in', 'govt', 'active', 'ap-south-1', 'in', '{}', now(), now(), '${ACTOR}', '${ACTOR}', 1)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, edition = 'govt', updated_at = now();
 `);
 
 // ── 2a. identity users ────────────────────────────────────────────────────────
@@ -242,9 +242,12 @@ async function seedKeycloak() {
       const findRes = await fetch(`${api}/users?username=${encodeURIComponent(p.username)}&exact=true`, { headers: H });
       const found = findRes.ok ? await findRes.json() : [];
       let uid = found[0]?.id;
+      // Keycloak 24's declarative user profile rejects firstName/lastName with
+      // characters like '/' or '()' — strip them to plain letters/spaces.
+      const clean = p.name.replace(/[^A-Za-z ]+/g, " ").replace(/\s+/g, " ").trim() || "Demo User";
       const body = {
         username: p.username, email: p.email, emailVerified: true, enabled: true,
-        firstName: p.name.split(" ")[0], lastName: p.name.split(" ").slice(1).join(" ") || "User",
+        firstName: clean.split(" ")[0], lastName: clean.split(" ").slice(1).join(" ") || "User",
         attributes: { tid: [p.tenant], identity_user_id: [p.sub] },
       };
       if (!uid) {
@@ -298,22 +301,28 @@ async function verify() {
   }
 
   // 5b. RLS tenant isolation at the DB layer (proves data is tenant-scoped and
-  //     NOT cross-tenant), exercised as the NOBYPASSRLS finance_svc role.
+  //     NOT cross-tenant), exercised as the NOBYPASSRLS finance_svc role — NOT
+  //     as the superuser civitas_admin, which BYPASSes RLS.
   console.log("\n  -- RLS tenant-isolation check (finance_svc role, GUC-scoped) --");
-  const isoSql = (tenant) => `BEGIN; SET ROLE finance_svc; SELECT set_config('app.tenant_id','${tenant}', true); SELECT count(*) FROM budget.finance_budgets; ROLLBACK;`;
+  const lastInt = (out) => out.split("\n").map((x) => x.trim()).filter((x) => /^\d+$/.test(x)).pop() ?? "?";
+  const isoSql = (tenant) => `SET ROLE finance_svc;\nSELECT set_config('app.tenant_id','${tenant}', false);\nSELECT count(*) FROM budget.finance_budgets;\nRESET ROLE;`;
   try {
-    const t1rows = q("civitas_finance", isoSql(T1)).split("\n").pop().trim();
-    const t2rows = q("civitas_finance", isoSql(T2)).split("\n").pop().trim();
+    const t1rows = lastInt(q("civitas_finance", isoSql(T1)));
+    const t2rows = lastInt(q("civitas_finance", isoSql(T2)));
     console.log(`     tenant T1 (…0001) sees ${t1rows} budget rows`);
     console.log(`     tenant T2 (…0002) sees ${t2rows} budget rows  ${t2rows === "0" ? "(isolated ✓)" : ""}`);
     console.log(`     ⇒ ${Number(t1rows) > 0 && t2rows === "0" ? "TENANT ISOLATION CONFIRMED ✓" : "check counts above"}`);
   } catch (e) { console.log(`     isolation check error: ${String(e).slice(0, 120)}`); }
 
-  // 5c. identity RBAC assignment count per tenant (proves app-side membership)
+  // 5c. identity RBAC assignment count per tenant, as the NOBYPASSRLS identity_svc
+  //     role so RLS actually filters (proves app-side membership + isolation).
+  console.log("\n  -- app RBAC membership (identity_svc role, GUC-scoped) --");
+  const rbacSql = (tenant) => `SET ROLE identity_svc;\nSELECT set_config('app.tenant_id','${tenant}', false);\nSELECT count(*) FROM rbac.role_assignments;\nRESET ROLE;`;
   try {
-    const a1 = q("civitas_identity", `BEGIN; SELECT set_config('app.tenant_id','${T1}', true); SELECT count(*) FROM rbac.role_assignments; ROLLBACK;`).split("\n").pop().trim();
-    console.log(`\n  -- app RBAC: tenant T1 has ${a1} role assignments across personas --`);
-  } catch { /* noop */ }
+    const a1 = lastInt(q("civitas_identity", rbacSql(T1)));
+    const a2 = lastInt(q("civitas_identity", rbacSql(T2)));
+    console.log(`     tenant T1 (…0001): ${a1} role assignments · tenant T2 (…0002): ${a2} role assignments (isolated)`);
+  } catch (e) { console.log(`     rbac check error: ${String(e).slice(0, 120)}`); }
 }
 
 await seedKeycloak();
