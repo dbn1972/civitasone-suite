@@ -16,6 +16,7 @@ import { registerSettingConsumers } from "./modules/settings/consumer.js";
 import { registerOrgHierarchyConsumers } from "./modules/org-hierarchy/consumer.js";
 import { registerDataMigrationConsumers } from "./modules/data-migration/consumer.js";
 import { registerStewardshipConsumers } from "./modules/stewardship/consumer.js";
+import { registerConsentExchangeConsumers } from "./modules/consent-exchange/consumer.js";
 import { registerCodeListConsumers } from "./modules/code-lists/consumer.js";
 import { registerPositionConsumers } from "./modules/positions/consumer.js";
 
@@ -29,6 +30,7 @@ registerSettingConsumers(queue);
 registerOrgHierarchyConsumers(queue);
 registerDataMigrationConsumers(queue);
 registerStewardshipConsumers(queue);
+registerConsentExchangeConsumers(queue);
 registerCodeListConsumers(queue);
 registerPositionConsumers(queue);
 await queue.start();
