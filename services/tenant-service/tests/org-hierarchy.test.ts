@@ -51,6 +51,14 @@ async function publishCreate(q: MemoryQueue, tenantId: string, id: string, name:
   return messageId;
 }
 
+async function publishUpdate(q: MemoryQueue, tenantId: string, id: string, patch: Record<string, unknown>): Promise<void> {
+  await q.publish("tenant.org_unit.update", {
+    messageId: randomUUID(), type: "tenant.org_unit.update", tenantId, actorId: ACTOR,
+    correlationId: `u-${id}`, schemaVersion: "1.0", payload: { id, tenantId, ...patch },
+  });
+  await q.drain();
+}
+
 async function inject(m: string, u: string, tid?: string, p?: unknown): Promise<{ status: number; body: unknown }> {
   const app = await buildApp();
   const o: { method: string; url: string; headers?: Record<string, string>; payload?: unknown } = { method: m, url: u };
@@ -151,6 +159,64 @@ describe("org-hierarchy — real persistence + integrity (RLS)", () => {
     // Non-existent parent → 404.
     const orphan = await inject("POST", "/v1/org/hierarchy", T1, { name: "X", type: "unit", parentId: uuid("00ffff") });
     expect(orphan.status).toBe(404);
+  });
+
+  it("update consumer reparents a unit and recomputes its level", async () => {
+    const q = new MemoryQueue(); registerOrgHierarchyConsumers(q); await q.start();
+    const a = uuid("00aa01"); const b = uuid("00aa02");
+    await publishCreate(q, T1, a, "Alpha", "department");   // root, level 1
+    await publishCreate(q, T1, b, "Beta", "department");    // root, level 1
+    await publishUpdate(q, T1, b, { parentId: a, name: "Beta Renamed" }); // move B under A
+    await q.stop();
+
+    const moved = await repo.findById(T1, b);
+    expect(moved?.parentId).toBe(a);
+    expect(moved?.level).toBe(2);
+    expect(moved?.name).toBe("Beta Renamed");
+
+    // Detach back to root via parentId:null → level resets to 1.
+    const q2 = new MemoryQueue(); registerOrgHierarchyConsumers(q2); await q2.start();
+    await publishUpdate(q2, T1, b, { parentId: null });
+    await q2.stop();
+    const detached = await repo.findById(T1, b);
+    expect(detached?.parentId).toBeNull();
+    expect(detached?.level).toBe(1);
+  });
+
+  it("update consumer defensively rejects a cyclic reparent", async () => {
+    const q = new MemoryQueue(); registerOrgHierarchyConsumers(q); await q.start();
+    const a = uuid("00bb01"); const b = uuid("00bb02");
+    await publishCreate(q, T1, a, "P", "department");
+    await publishCreate(q, T1, b, "C", "division", a); // b under a
+    await publishUpdate(q, T1, a, { parentId: b });     // would create cycle — must be dropped
+    await q.stop();
+    const stillRoot = await repo.findById(T1, a);
+    expect(stillRoot?.parentId).toBeNull();
+    expect(stillRoot?.level).toBe(1);
+  });
+
+  it("HTTP: GET :id (with children), subtree, and a valid PATCH reparent", async () => {
+    const q = new MemoryQueue(); registerOrgHierarchyConsumers(q); await q.start();
+    const root = uuid("00cc01"); const child = uuid("00cc02"); const loose = uuid("00cc03");
+    await publishCreate(q, T1, root, "CcRoot", "department");
+    await publishCreate(q, T1, child, "CcChild", "division", root);
+    await publishCreate(q, T1, loose, "CcLoose", "department");
+    await q.stop();
+
+    const detail = await inject("GET", `/v1/org/hierarchy/${root}`, T1);
+    expect(detail.status).toBe(200);
+    expect((detail.body as { data: { children: unknown[] } }).data.children.length).toBeGreaterThanOrEqual(1);
+
+    const subtree = await inject("GET", `/v1/org/hierarchy/${root}/subtree`, T1);
+    expect(subtree.status).toBe(200);
+    expect((subtree.body as { meta: { total: number } }).meta.total).toBeGreaterThanOrEqual(2);
+
+    // Valid reparent of a root-level unit under root → 202.
+    const patched = await inject("PATCH", `/v1/org/hierarchy/${loose}`, T1, { parentId: root });
+    expect(patched.status).toBe(202);
+
+    // Detail of a non-existent unit → 404.
+    expect((await inject("GET", `/v1/org/hierarchy/${uuid("00ffff")}`, T1)).status).toBe(404);
   });
 
   it("HTTP: 401 without auth, 400 on bad payload", async () => {
