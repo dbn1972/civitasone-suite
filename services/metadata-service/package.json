@@ -15,6 +15,7 @@
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
     "@civitasone/db": "workspace:*",
+    "@civitasone/numbering": "workspace:*",
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",

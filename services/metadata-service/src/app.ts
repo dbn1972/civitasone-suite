@@ -15,6 +15,7 @@ import { validationRuleRoutes } from "./modules/rules/routes.js";
 import { formulaRoutes } from "./modules/formula/routes.js";
 import { compositionRoutes } from "./modules/composition/routes.js";
 import { previewRoutes } from "./modules/preview/routes.js";
+import { numberingRoutes } from "./modules/numbering/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
@@ -30,6 +31,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(formulaRoutes);
   await app.register(compositionRoutes);
   await app.register(previewRoutes);
+  await app.register(numberingRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

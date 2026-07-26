@@ -1,4 +1,5 @@
 import { pgSchema, uuid, varchar, text, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { numberFormats, numberSequences } from "../numbering/schema.js";
 
 export const metadataSchema = pgSchema("metadata");
 
@@ -119,6 +120,8 @@ export const moduleCompositions = metadataSchema.table("module_compositions", {
 
 export const schema = {
   entityDefinitions,
+  numberFormats,
+  numberSequences,
   fieldDefinitions,
   layoutDefinitions,
   customRecords,
