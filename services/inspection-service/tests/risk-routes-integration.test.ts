@@ -123,8 +123,6 @@ beforeAll(async () => {
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
 
-  const { registerRiskRoutes } = await import("../src/modules/risk/routes.js");
-  await registerRiskRoutes(app);
   await app.ready();
 });
 

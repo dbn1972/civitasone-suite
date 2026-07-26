@@ -314,8 +314,6 @@ beforeAll(async () => {
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
 
-  const { registerPlanningRoutes } = await import("../src/modules/planning/routes.js");
-  await registerPlanningRoutes(app);
   await app.ready();
 });
 

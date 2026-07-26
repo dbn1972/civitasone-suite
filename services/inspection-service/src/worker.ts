@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+import { tenantScoped } from "./shared/tenant-queue.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { COMMANDS, CONSUMED_EVENTS } from "./topics.js";
 import { incrementDlqMessage, captureError } from "@civitasone/observability";
@@ -34,14 +35,19 @@ import { registerLicenceConsumers } from "./modules/licence/consumer.js";
 import { registerSurveyConsumers } from "./modules/survey/consumer.js";
 import { registerTelemetryConsumers } from "./modules/telemetry/consumer.js";
 
-registerUniverseConsumers(queue);
-registerRiskConsumers(queue);
-registerPlanningConsumers(queue);
-registerAssignmentConsumers(queue);
-registerChecklistConsumers(queue);
-registerSyncConsumers(queue);
-registerEvidenceConsumers(queue);
-registerExecutionConsumers(queue);
+// Tenant-scoped queue: enters runWithTenant(msg.tenantId) before each handler so
+// wrapWithTenantGuc sets the app.tenant_id GUC and RLS-forced writes/reads succeed.
+// (Inspection roles are NOBYPASSRLS and these consumers call db.transaction directly.)
+const scopedQueue = tenantScoped(queue);
+
+registerUniverseConsumers(scopedQueue);
+registerRiskConsumers(scopedQueue);
+registerPlanningConsumers(scopedQueue);
+registerAssignmentConsumers(scopedQueue);
+registerChecklistConsumers(scopedQueue);
+registerSyncConsumers(scopedQueue);
+registerEvidenceConsumers(scopedQueue);
+registerExecutionConsumers(scopedQueue);
 registerFindingsConsumers(queue);
 registerCapaConsumers(queue);
 registerEnforcementConsumers(queue);
