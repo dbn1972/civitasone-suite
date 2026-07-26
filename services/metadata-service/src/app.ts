@@ -8,6 +8,13 @@ import { HttpError } from "./shared/context.js";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { entityRoutes } from "./modules/entities/routes.js";
+import { fieldRoutes } from "./modules/fields/routes.js";
+import { layoutRoutes } from "./modules/layouts/routes.js";
+import { recordRoutes } from "./modules/records/routes.js";
+import { validationRuleRoutes } from "./modules/rules/routes.js";
+import { formulaRoutes } from "./modules/formula/routes.js";
+import { compositionRoutes } from "./modules/composition/routes.js";
+import { previewRoutes } from "./modules/preview/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
@@ -16,6 +23,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.addHook("onRequest", async (req) => { const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId; if (tid) tenantStorage.enterWith({ tenantId: tid }); });
   registerOpsRoutes(app, { service: "metadata-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
   await app.register(entityRoutes);
+  await app.register(fieldRoutes);
+  await app.register(layoutRoutes);
+  await app.register(recordRoutes);
+  await app.register(validationRuleRoutes);
+  await app.register(formulaRoutes);
+  await app.register(compositionRoutes);
+  await app.register(previewRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }
