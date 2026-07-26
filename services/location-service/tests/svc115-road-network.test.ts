@@ -8,6 +8,10 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import type { FastifyInstance } from "fastify";
+import { isPostGISAvailable } from "./setup.js";
+
+const HAS_POSTGIS = await isPostGISAvailable();
+const describePostGIS = HAS_POSTGIS ? describe : describe.skip;
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT_A = randomUUID();
@@ -24,7 +28,7 @@ const post = (url: string, tid: string, payload: unknown) =>
 const get = (url: string, tid: string) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${tok(tid)}` } });
 const del = (url: string, tid: string) => app.inject({ method: "DELETE", url, headers: { authorization: `Bearer ${tok(tid)}` } });
 
-describe("SVC-115 road segments", () => {
+describePostGIS("SVC-115 road segments", () => {
   const N = randomUUID().slice(0, 8);
   let seg1 = "", seg2 = "", seg3 = "";
 

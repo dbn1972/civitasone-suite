@@ -8,6 +8,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import type { MemoryQueue } from "@civitasone/queue";
+import { isPostGISAvailable } from "./setup.js";
+
+const HAS_POSTGIS = await isPostGISAvailable();
+const describePostGIS = HAS_POSTGIS ? describe : describe.skip;
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -38,7 +42,7 @@ async function get(url: string, tid: string) {
   return app.inject({ method: "GET", url, headers: { authorization: `Bearer ${tok(tid)}` } });
 }
 
-describe("SVC-113 land-records round-trip", () => {
+describePostGIS("SVC-113 land-records round-trip", () => {
   const surveyNo = `SN-${Date.now()}`;
 
   it("persists a land record and reads it back", async () => {
@@ -76,7 +80,7 @@ describe("SVC-113 land-records round-trip", () => {
   });
 });
 
-describe("SVC-113 cadastral round-trip", () => {
+describePostGIS("SVC-113 cadastral round-trip", () => {
   const parcelNo = `P-${Date.now()}`;
   let parcelId = "";
 
