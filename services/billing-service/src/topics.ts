@@ -37,9 +37,6 @@ export const EVENTS = {
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
-export const CONSUMED_EVENTS = {
-  /** ml-service emits churn risk high when subscription churn probability > 0.70. */
-  mlChurnRiskHigh: "ml.prediction.churn_risk_high",
-} as const;
+export const CONSUMED_EVENTS = {} as const;
 
 export const SERVICE = "billing";

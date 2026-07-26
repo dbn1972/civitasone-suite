@@ -98,8 +98,6 @@ export const EVENTS = {
   accountCompiled:             "works.account.compiled",
 } as const;
 
-export const CONSUMED_EVENTS = {
-  workflowTaskCompleted:       "workflow.task.completed",
-} as const;
+export const CONSUMED_EVENTS = {} as const;
 
 export const SERVICE = "works";
