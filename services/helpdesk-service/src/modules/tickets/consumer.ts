@@ -146,6 +146,7 @@ export function registerTicketConsumers(rawQueue: Queue): void {
         return;
       }
       await emit(tx, msg, EVENTS.ticketTransitioned, { ticketId: p.id, newStatus: p.newStatus }, "transition", p.id);
+      await emit(tx, msg, EVENTS.ticketUpdated, { ticketId: p.id, changedFields: ["status"], newStatus: p.newStatus }, "update", p.id);
     });
     const row = await repo.findById(msg.payload.id, msg.tenantId);
     if (row) await cache.put(keyFor(msg.tenantId, msg.payload.id), row);
@@ -168,6 +169,7 @@ export function registerTicketConsumers(rawQueue: Queue): void {
         return;
       }
       await emit(tx, msg, EVENTS.ticketAssigned, { ticketId: p.id, assigneeId: p.assigneeId }, "assign", p.id);
+      await emit(tx, msg, EVENTS.ticketUpdated, { ticketId: p.id, changedFields: ["assigneeId"], assigneeId: p.assigneeId }, "update", p.id);
     });
     const row = await repo.findById(msg.payload.id, msg.tenantId);
     if (row) await cache.put(keyFor(msg.tenantId, msg.payload.id), row);

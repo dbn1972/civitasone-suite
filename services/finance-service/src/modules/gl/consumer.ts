@@ -146,6 +146,11 @@ async function postJournal(
     payload: { journalId: journal.id, voucherNo },
   });
   await enqueue(tx, {
+    topic: EVENTS.transactionPosted, eventType: EVENTS.transactionPosted,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { journalId: journal.id, voucherNo, type: journal.type, postingDate: journal.postingDate, tenantId: journal.tenantId },
+  });
+  await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
     payload: { service: "finance", action: "post_journal", resourceType: "journal", resourceId: journal.id, outcome: "success" },

@@ -38,6 +38,7 @@ export function registerContactConsumers(queue: Queue): void {
         status: p.status, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
       await emit(tx, msg, EVENTS.contactCreated, { contactId: p.id, name: p.name }, "create", p.id);
+      await emit(tx, msg, EVENTS.leadCreated, { contactId: p.id, name: p.name, leadSource: p.leadSource, leadStatus: p.leadStatus }, "lead_create", p.id);
     });
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
@@ -73,6 +74,7 @@ export function registerContactConsumers(queue: Queue): void {
       if (p.status !== undefined) patch.status = p.status;
       await repo.update(tx, p.id, p.tenantId, patch, msg.actorId);
       await emit(tx, msg, EVENTS.contactUpdated, { contactId: p.id }, "update", p.id);
+      await emit(tx, msg, EVENTS.leadUpdated, { contactId: p.id, changedFields: Object.keys(patch) }, "lead_update", p.id);
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);

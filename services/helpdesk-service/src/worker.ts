@@ -3,7 +3,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
-import { registerTicketConsumers } from "./modules/tickets/consumer.js";
+import { registerTicketConsumers, registerCitizenRequestConsumer } from "./modules/tickets/consumer.js";
 import { registerBreachRiskConsumers } from "./modules/ml-breach/consumer.js";
 import { startSlaSweeper } from "./modules/tickets/sweeper.js";
 import { startRequestBreachSweeper } from "./modules/catalogue/sweeper.js";
@@ -11,6 +11,7 @@ import { startRequestBreachSweeper } from "./modules/catalogue/sweeper.js";
 const log = pino({ name: "helpdesk-worker" });
 
 registerTicketConsumers(queue);
+registerCitizenRequestConsumer(queue);
 registerBreachRiskConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
