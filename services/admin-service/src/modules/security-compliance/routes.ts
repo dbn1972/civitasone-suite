@@ -7,6 +7,9 @@ import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
+// CAP-090 incidents live in admin.sec_incidents; the legacy admin.security_incidents
+// table this module used is dead-write, so read open counts from the real module.
+import * as incidentRepo from "../security-incident/repo.js";
 import { complianceControls, controlEvidence, vaptScans } from "./schema.js";
 import { computePosture } from "./posture.js";
 
@@ -206,10 +209,12 @@ export async function securityComplianceRoutes(app: FastifyInstance): Promise<vo
   app.get("/v1/admin/security/posture", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const [controls, scans, incidents] = await Promise.all([
-      repo.listControls(ctx.tenantId), repo.listScans(ctx.tenantId), repo.listIncidents(ctx.tenantId),
+      repo.listControls(ctx.tenantId), repo.listScans(ctx.tenantId), incidentRepo.listIncidents(ctx.tenantId),
     ]);
     const posture = computePosture(controls);
-    const openIncidents = incidents.filter((i) => i.status === "open").length;
+    // sec_incidents lifecycle is detected→triaged→contained→resolved→closed; any
+    // non-closed incident is still "open" for posture purposes.
+    const openIncidents = incidents.filter((i) => i.status !== "closed").length;
     return reply.send({
       data: {
         ...posture,

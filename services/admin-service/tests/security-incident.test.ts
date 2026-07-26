@@ -165,6 +165,50 @@ describe("breach notification (integration)", () => {
   });
 });
 
+// Finding 1 (PR #171 review) — Option (a): windowHours is not caller-adjustable.
+// The statutory DPDP §8(6) window is fixed at 72h; the deadline is always
+// detectedAt+72h and a caller-supplied windowHours>72 is ignored (clamped to 72),
+// so an incident admin cannot silently self-extend the compliance clock.
+describe("breach deadline is hard-capped at DPDP §8(6) 72h", () => {
+  const HOURS_72_MS = 72 * 3_600_000;
+
+  async function createBreachIncident(): Promise<{ id: string; detectedAt: string }> {
+    const create = await app.inject({
+      method: "POST", url: "/v1/admin/security-incidents", headers: auth(REPORTER),
+      payload: { title: "statutory window incident", severity: "critical", isBreach: true },
+    });
+    const id = create.json().data.id;
+    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER) });
+    return { id, detectedAt: detail.json().data.detectedAt };
+  }
+
+  it("persists the deadline as detectedAt + 72h (no windowHours accepted)", async () => {
+    const { id, detectedAt } = await createBreachIncident();
+    const notif = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${id}/breach-notifications`,
+      headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 10 },
+    });
+    expect(notif.statusCode).toBe(201);
+    const gap = new Date(notif.json().data.deadlineAt).getTime() - new Date(detectedAt).getTime();
+    expect(gap).toBe(HOURS_72_MS);
+  });
+
+  it("clamps a caller trying windowHours>72 back to the 72h ceiling", async () => {
+    const { id, detectedAt } = await createBreachIncident();
+    const notif = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${id}/breach-notifications`,
+      // 720h (30 days) attempt — the extra key is stripped and the window stays 72h.
+      headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 10, windowHours: 720 },
+    });
+    expect(notif.statusCode).toBe(201);
+    const gap = new Date(notif.json().data.deadlineAt).getTime() - new Date(detectedAt).getTime();
+    expect(gap).toBe(HOURS_72_MS);
+    // and it is persisted as 72h, not 720h
+    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER) });
+    expect(detail.json().data.breachNotifications[0].windowHours).toBe(72);
+  });
+});
+
 describe("tenant isolation (RLS)", () => {
   it("does not leak incidents across tenants", async () => {
     const mine = await app.inject({

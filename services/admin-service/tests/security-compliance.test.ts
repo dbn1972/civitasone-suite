@@ -135,6 +135,48 @@ describe("VAPT ingestion (integration)", () => {
   });
 });
 
+// Finding 2 (PR #171 review) — posture.openIncidents must reflect the live
+// admin.sec_incidents table (CAP-090), not the dead legacy admin.security_incidents.
+describe("posture openIncidents reflects live sec_incidents", () => {
+  const CHECKER = randomUUID();
+  function authAs(actorId: string) {
+    return { authorization: `Bearer ${token(actorId, TENANT, ["security_admin"])}`, "x-tenant-id": TENANT };
+  }
+  async function openCount(): Promise<number> {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers: auth() });
+    return res.json().data.openIncidents as number;
+  }
+
+  it("counts an open incident and drops it on close", async () => {
+    const before = await openCount();
+
+    const create = await app.inject({
+      method: "POST", url: "/v1/admin/security-incidents", headers: auth(),
+      payload: { title: "posture open incident", severity: "high" },
+    });
+    expect(create.statusCode).toBe(201);
+    const incidentId = create.json().data.id;
+
+    expect(await openCount()).toBe(before + 1);
+
+    // walk to resolved, then a different admin closes it (maker-checker)
+    for (const toStatus of ["triaged", "contained", "resolved"]) {
+      const t = await app.inject({
+        method: "POST", url: `/v1/admin/security-incidents/${incidentId}/transition`,
+        headers: auth(), payload: { toStatus },
+      });
+      expect(t.statusCode).toBe(200);
+    }
+    const close = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${incidentId}/close`,
+      headers: authAs(CHECKER), payload: { note: "closed" },
+    });
+    expect(close.statusCode).toBe(200);
+
+    expect(await openCount()).toBe(before);
+  });
+});
+
 describe("access + isolation", () => {
   it("401 without auth", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture" });

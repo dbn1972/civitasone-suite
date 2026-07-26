@@ -8,8 +8,8 @@ import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
 import { secIncidents, secBreachNotifications } from "./schema.js";
 import {
-  canTransition, checkCloseSegregation, computeBreachDeadline, eventTopicForStatus,
-  isBreachOverdue, timestampColumnFor, type IncidentStatus,
+  canTransition, checkCloseSegregation, computeBreachDeadline, DPDP_BREACH_WINDOW_HOURS,
+  eventTopicForStatus, isBreachOverdue, timestampColumnFor, type IncidentStatus,
 } from "./service.js";
 
 const ADMIN = ["super_admin", "security_admin", "platform_admin"];
@@ -147,19 +147,21 @@ export async function securityIncidentRoutes(app: FastifyInstance): Promise<void
   app.post("/v1/admin/security-incidents/:id/breach-notifications", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    // windowHours is intentionally NOT accepted: DPDP §8(6) fixes the statutory
+    // window at 72h and the same admin managing the incident must not be able to
+    // self-extend the compliance clock. Deadline is always detectedAt + 72h.
     const body = z.object({
       authority: z.enum(["data_protection_board", "data_principals"]),
-      windowHours: z.number().int().positive().max(720).default(72),
       affectedCount: z.number().int().min(0).default(0),
     }).parse(req.body);
     const nid = randomUUID();
     const result = await db.transaction(async (tx) => {
       const inc = await repo.findIncidentTx(tx, ctx.tenantId, id);
       if (!inc) throw new HttpError(404, "NOT_FOUND", "incident not found");
-      const deadline = computeBreachDeadline(new Date(inc.detectedAt), body.windowHours);
+      const deadline = computeBreachDeadline(new Date(inc.detectedAt), DPDP_BREACH_WINDOW_HOURS);
       await tx.insert(secBreachNotifications).values({
         id: nid, tenantId: ctx.tenantId, incidentId: id, authority: body.authority,
-        status: "pending", windowHours: body.windowHours, deadlineAt: deadline,
+        status: "pending", windowHours: DPDP_BREACH_WINDOW_HOURS, deadlineAt: deadline,
         affectedCount: body.affectedCount, createdBy: ctx.actorId,
       });
       if (!inc.isBreach) {
