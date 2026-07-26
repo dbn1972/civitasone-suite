@@ -32,7 +32,10 @@ export function isEffective(row: EffectiveDated, asOf: Date = new Date()): boole
  * Usage: .where(and(eq(t.tenantId, id), activeSql(t.effectiveFrom, t.effectiveTo)))
  */
 export function activeSql(fromCol: PgColumn, toCol: PgColumn, asOf: Date = new Date()): SQL {
-  return sql`${fromCol} <= ${asOf} AND (${toCol} IS NULL OR ${toCol} > ${asOf})`;
+  // Bind the instant as an ISO string with an explicit cast — a raw JS Date in a
+  // `sql` fragment has no column type for postgres.js to serialise against.
+  const at = asOf.toISOString();
+  return sql`${fromCol} <= ${at}::timestamptz AND (${toCol} IS NULL OR ${toCol} > ${at}::timestamptz)`;
 }
 
 /** Predicate for "currently open" versions (no close date) — the common case. */

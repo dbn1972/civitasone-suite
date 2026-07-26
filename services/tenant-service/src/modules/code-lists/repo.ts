@@ -7,6 +7,7 @@
 import { and, eq, isNull, or, asc, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { activeSql } from "../../shared/effective-dating.js";
 import { codeLists, codeValues, type CodeListRow, type CodeValueRow } from "./schema.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -41,8 +42,10 @@ export function lookupActiveValues(tenantId: string, code: string): Promise<Code
   return scoped(tenantId, async (tx) => {
     const list = await resolveListTx(tx, tenantId, code);
     if (!list) return null;
+    // Effective-dated point-in-time read via the shared CAP-018 helper.
     return tx.select().from(codeValues)
-      .where(and(eq(codeValues.listId, list.id), isNull(codeValues.effectiveTo), eq(codeValues.isActive, true)))
+      .where(and(eq(codeValues.listId, list.id), eq(codeValues.isActive, true),
+        activeSql(codeValues.effectiveFrom, codeValues.effectiveTo)))
       .orderBy(asc(codeValues.sortOrder), asc(codeValues.code));
   });
 }
