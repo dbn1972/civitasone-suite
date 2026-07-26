@@ -178,6 +178,25 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  packages/connector-framework:
+    dependencies:
+      '@civitasone/gov-adapters':
+        specifier: workspace:*
+        version: link:../gov-adapters
+      '@civitasone/integration-config':
+        specifier: workspace:*
+        version: link:../integration-config
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   packages/db:
     dependencies:
       '@civitasone/observability':
