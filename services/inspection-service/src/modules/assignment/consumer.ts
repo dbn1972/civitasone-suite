@@ -502,7 +502,7 @@ export function registerAssignmentConsumers(queue: Queue): void {
   // When an employee's leave changes, invalidate any cached tour plans for
   // that inspector so subsequent tour plan generation picks up the new data.
   // Requirement 4.4: Tour plans respect inspector leave and existing commitments.
-  queue.subscribe<EmployeeLeaveUpdatedPayload>(CONSUMED_EVENTS.employeeLeaveUpdated, async (msg) => {
+  queue.subscribe<EmployeeLeaveUpdatedPayload>(CONSUMED_EVENTS.employeeLeaveApproved, async (msg) => {
     const p = msg.payload;
 
     await db.transaction(async (tx) => {

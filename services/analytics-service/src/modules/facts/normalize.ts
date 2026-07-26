@@ -50,8 +50,8 @@ function firstDate(candidates: unknown[]): Date {
  * nobody else was consuming for analytics.
  */
 const SOURCE_BY_EVENT: Record<string, string> = {
-  [INBOUND.financePaymentReleased]: "finance",
-  [INBOUND.grantReleaseProcessed]: "grants",
+  [INBOUND.financePaymentMade]: "finance",
+  [INBOUND.grantDisbursementCompleted]: "grants",
   [INBOUND.procurementPoApproved]: "procurement",
   [INBOUND.meetingAttendanceMarked]: "meeting",
   [INBOUND.meetingVoteConcluded]: "meeting",

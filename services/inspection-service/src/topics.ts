@@ -301,9 +301,9 @@ export const CONSUMED_EVENTS = {
    */
   planApprovalDecided: "inspection.plan.approval_decided",
   /**
-   * Owner: hrms-service. Fires when employee leave or availability changes.
+   * Owner: hrms-service. Fires when a leave request is approved.
    * payload: { employeeId, tenantId, leaveType, startDate, endDate, status }
    * Action: update tour plan scheduling to avoid assigning inspections during leave. Req 4.4
    */
-  employeeLeaveUpdated: "hrms.leave.updated",
+  employeeLeaveApproved: "hrms.leave.approved",
 } as const;

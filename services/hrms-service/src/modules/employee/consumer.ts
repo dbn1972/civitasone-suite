@@ -221,13 +221,19 @@ export function registerEmployeeConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const patch: Parameters<typeof repo.updateEmployee>[2] = { updatedBy: msg.actorId };
-      if (p.mobile      !== undefined) patch.mobile      = p.mobile;
-      if (p.email       !== undefined) patch.email       = p.email;
-      if (p.bankAccountNo !== undefined) patch.bankAccountNo = p.bankAccountNo;
-      if (p.bankIfsc    !== undefined) patch.bankIfsc    = p.bankIfsc;
-      if (p.basicMinor  !== undefined) patch.basicMinor  = BigInt(p.basicMinor);
-      if (p.payStructureId !== undefined) patch.payStructureId = p.payStructureId;
+      const changedFields: string[] = [];
+      if (p.mobile      !== undefined) { patch.mobile      = p.mobile; changedFields.push("mobile"); }
+      if (p.email       !== undefined) { patch.email       = p.email; changedFields.push("email"); }
+      if (p.bankAccountNo !== undefined) { patch.bankAccountNo = p.bankAccountNo; changedFields.push("bankAccountNo"); }
+      if (p.bankIfsc    !== undefined) { patch.bankIfsc    = p.bankIfsc; changedFields.push("bankIfsc"); }
+      if (p.basicMinor  !== undefined) { patch.basicMinor  = BigInt(p.basicMinor); changedFields.push("basicMinor"); }
+      if (p.payStructureId !== undefined) { patch.payStructureId = p.payStructureId; changedFields.push("payStructureId"); }
       await repo.updateEmployee(tx, p.id, patch);
+      await enqueue(tx, {
+        topic: EVENTS.employeeUpdated, eventType: EVENTS.employeeUpdated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { employeeId: p.id, tenantId: p.tenantId, changedFields },
+      });
       await audit(tx, msg, "update", "employee", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
