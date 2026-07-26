@@ -17,7 +17,10 @@ registerTasksConsumers(queue);
 registerProvisioningConsumers(queue);
 registerMessagesConsumers(queue);
 import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
-registerCaseRegistryConsumers(queue);
+import { tenantScoped } from "./shared/tenant-queue.js";
+// CAP-031: cross-domain registration handlers write to FORCE-RLS workflow.cases
+// under a NOBYPASSRLS role, so they MUST run inside the message tenant's GUC.
+registerCaseRegistryConsumers(tenantScoped(queue));
 await queue.start();
 
 // RLS (#146): workflow_svc is NOBYPASSRLS and _outbox.messages is fail-closed

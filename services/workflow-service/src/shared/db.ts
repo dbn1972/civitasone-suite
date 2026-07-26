@@ -23,6 +23,13 @@ import { schema as authorityModule } from "../modules/authority/schema.js";
 import { schema as quorumModule } from "../modules/quorum/schema.js";
 import { schema as slaModule } from "../modules/sla/schema.js";
 import { schema as finalizationModule } from "../modules/finalization/schema.js";
+import { caseRegistrySchema } from "../modules/case-registry/schema.js";
+import { schema as caseLinksModule } from "../modules/case-links/schema.js";
+import { schema as deviationsModule } from "../modules/deviations/schema.js";
+import { schema as commentsModule } from "../modules/comments/schema.js";
+import { schema as workbasketsModule } from "../modules/workbaskets/schema.js";
+import { schema as checklistsModule } from "../modules/checklists/schema.js";
+import { schema as closureModule } from "../modules/closure/schema.js";
 
 const SCHEMA = {
   ...instancesModule,
@@ -44,6 +51,13 @@ const SCHEMA = {
   ...quorumModule,
   ...slaModule,
   ...finalizationModule,
+  ...caseRegistrySchema,
+  ...caseLinksModule,
+  ...deviationsModule,
+  ...commentsModule,
+  ...workbasketsModule,
+  ...checklistsModule,
+  ...closureModule,
 };
 
 const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb({ schema: SCHEMA });
