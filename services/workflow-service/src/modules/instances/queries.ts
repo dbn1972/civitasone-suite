@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedExecute } from "../../shared/db.js";
 import { INSTANCE_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 
@@ -79,7 +79,7 @@ export async function searchInstances(tenantId: string, filters: SearchFilters) 
 
   query = sql`${query} ORDER BY i.created_at DESC LIMIT ${filters.limit} OFFSET ${filters.offset}`;
 
-  const rows = (await db.execute(query)) as unknown as Array<{
+  const rows = (await scopedExecute(query)) as unknown as Array<{
     id: string; name: string; status: string; ref_type: string | null;
     ref_id: string | null; current_node: string | null;
     definition_id: string | null; created_at: Date; updated_at: Date;

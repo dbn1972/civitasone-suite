@@ -1,5 +1,6 @@
 import { eq, and, isNull, lte, SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { assetDepSchedules, assetDepEntries, type DepScheduleInsert, type DepEntryInsert, type DepScheduleRow, type DepEntryRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -56,15 +57,15 @@ export async function markEntryPosted(tx: Writer, id: string, tenantId: string, 
 // dep entries up to and including the given period. Drives the worker tick so
 // monthly depreciation posts automatically, per tenant, without a manual call.
 //
-// INTENTIONAL EXCEPTION — bare db.selectDistinct(), NOT wrapped in scopedRead():
-// this is a background scheduler tick that deliberately discovers due
-// (tenantId, period) pairs across ALL tenants in one query (see
-// scheduler.ts#runDepScheduleTick, which then emits a per-tenant depRun command
-// for each pair). Scoping this to a single tenant's GUC would defeat its
-// purpose — there is no single tenant to scope to at this call site. Mirrors
-// helpdesk-service's tickets/repo.ts#findOpenForSla sweeper exception.
+// CROSS-TENANT SCAN — runs on the BYPASSRLS scanner pool (shared/scanner-db.ts):
+// this background scheduler tick deliberately discovers due (tenantId, period)
+// pairs across ALL tenants in one query (see scheduler.ts#runDepScheduleTick,
+// which then emits a per-tenant depRun command for each pair). Under the
+// NOBYPASSRLS asset_svc role (#146) a bare cross-tenant SELECT returns zero
+// rows, so the scan uses scannerDb; all resulting writes are consumed under
+// runWithTenant(tenantId) so RLS still applies to every mutation.
 export async function findDueTenantPeriods(uptoPeriod: string): Promise<Array<{ tenantId: string; period: string }>> {
-  const rows = await db
+  const rows = await scannerDb
     .selectDistinct({ tenantId: assetDepEntries.tenantId, period: assetDepEntries.period })
     .from(assetDepEntries)
     .where(and(isNull(assetDepEntries.postedAt), lte(assetDepEntries.period, uptoPeriod)));

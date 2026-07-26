@@ -6,6 +6,7 @@ import { CONSUMED_EVENTS } from "../../topics.js";
 import { definitions } from "../definitions/schema.js";
 import * as defRepo from "../definitions/repo.js";
 import { STANDARD_DEFINITIONS, linearEdges } from "./catalog.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -17,6 +18,9 @@ const AUDIT_TOPIC = "audit.event.record";
  * covered the demo tenant and seeded no edges.
  */
 export function registerProvisioningConsumers(queue: Queue): void {
+  // RLS (#146): run the handler inside the message's tenant context so
+  // db.transaction() sets the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
+  queue = tenantScoped(queue);
   queue.subscribe(CONSUMED_EVENTS.tenantCreated, async (msg) => {
     const p = msg.payload as { tenantId?: string };
     const tenantId = p.tenantId;

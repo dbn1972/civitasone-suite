@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq, inArray } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { assetAssets } from "../src/modules/register/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -27,10 +28,25 @@ const ASSET_2 = "33333333-cccc-4000-8000-000000000002";
 const MSG_1   = "44444444-dddd-4000-8000-000000000001";
 const MSG_2   = "55555555-eeee-4000-8000-000000000002";
 
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * #146: the asset_svc role is NOBYPASSRLS and every domain table (and the
+ * outbox) has FORCE RLS with policy `tenant_id = current_tenant_id()`. Raw
+ * test reads/cleanup must therefore run inside a tenant-GUC transaction —
+ * the drizzle-side mirror of telephony's sqlAsTenant test helper (PR #152).
+ */
+function asTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction(fn)) as Promise<T>;
+}
+
 async function wipe(assetId: string, msgId: string) {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(assetAssets).where(eq(assetAssets.id, assetId));
-  await db.delete(processed).where(eq(processed.messageId, msgId));
+  await asTenant(TENANT, async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(assetAssets).where(eq(assetAssets.id, assetId));
+    await tx.delete(processed).where(eq(processed.messageId, msgId));
+  });
 }
 
 // ── 1. SLM depreciation — pure ────────────────────────────────────────────
@@ -135,17 +151,17 @@ describe("Register consumer — CQRS wiring (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(assetAssets).where(eq(assetAssets.id, ASSET_1));
+    const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_1)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe("HP Laptop 15.6");
     expect(rows[0]?.acquisitionCost).toBe(8500000n);
     expect(rows[0]?.bookValue).toBe(8500000n);
     expect(rows[0]?.status).toBe("active");
 
-    const seen = await db.select().from(processed).where(eq(processed.messageId, MSG_1));
+    const seen = await asTenant(TENANT, (tx) => tx.select().from(processed).where(eq(processed.messageId, MSG_1)));
     expect(seen).toHaveLength(1);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await asTenant(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
   });
 });
@@ -196,8 +212,10 @@ describe("Register consumer — GRN fixed_asset capitalization", () => {
   const ITEM_MSG = uuidV5(`msg:grn-asset:${GRN_ID}:FA-001`);
 
   async function cleanup() {
-    await db.delete(assetAssets).where(eq(assetAssets.code, "FA-001"));
-    await db.delete(processed).where(inArray(processed.messageId, [GRN_MSG, ITEM_MSG]));
+    await asTenant(TENANT, async (tx) => {
+      await tx.delete(assetAssets).where(eq(assetAssets.code, "FA-001"));
+      await tx.delete(processed).where(inArray(processed.messageId, [GRN_MSG, ITEM_MSG]));
+    });
   }
   beforeAll(cleanup);
   afterAll(cleanup);
@@ -231,7 +249,7 @@ describe("Register consumer — GRN fixed_asset capitalization", () => {
     await new Promise<void>((r) => setTimeout(r, 400));
     await q.stop();
 
-    const rows = await db.select().from(assetAssets).where(eq(assetAssets.code, "FA-001"));
+    const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.code, "FA-001")));
     expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows[0]?.assetType).toBe("fixed");
     expect(Number(rows[0]?.acquisitionCost)).toBe(10000000);
@@ -273,7 +291,7 @@ describe("Register consumer — idempotency (integration)", () => {
     await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
-    const rows = await db.select().from(assetAssets).where(eq(assetAssets.id, ASSET_2));
+    const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_2)));
     expect(rows).toHaveLength(1);
   });
 });

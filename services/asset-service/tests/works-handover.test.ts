@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { assetAssets } from "../src/modules/register/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
@@ -22,10 +23,25 @@ const HANDOVER_MSG = "99999999-1111-4000-8000-000000000009";
 const ASSET_ID  = uuidV5(`works-handover:${WORK_ID}`);
 const DEDUPE_ID = uuidV5(`msg:works-handover:${WORK_ID}`);
 
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * #146: the asset_svc role is NOBYPASSRLS and every domain table (and the
+ * outbox) has FORCE RLS with policy `tenant_id = current_tenant_id()`. Raw
+ * test reads/cleanup must therefore run inside a tenant-GUC transaction —
+ * the drizzle-side mirror of telephony's sqlAsTenant test helper (PR #152).
+ */
+function asTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction(fn)) as Promise<T>;
+}
+
 async function cleanup() {
-  await db.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-  await db.delete(assetAssets).where(eq(assetAssets.id, ASSET_ID));
-  await db.delete(processed).where(eq(processed.messageId, DEDUPE_ID));
+  await asTenant(TENANT, async (tx) => {
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    await tx.delete(assetAssets).where(eq(assetAssets.id, ASSET_ID));
+    await tx.delete(processed).where(eq(processed.messageId, DEDUPE_ID));
+  });
 }
 
 function handoverEnvelope() {
@@ -61,7 +77,7 @@ describe("asset-service — works.asset.handover consumer", () => {
     await new Promise<void>((r) => setTimeout(r, 500));
     await q.stop();
 
-    const rows = await db.select().from(assetAssets).where(eq(assetAssets.id, ASSET_ID));
+    const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_ID)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe("District Road Phase-1");
     expect(rows[0]?.code).toBe("PWD/2026/0042");
@@ -70,10 +86,10 @@ describe("asset-service — works.asset.handover consumer", () => {
     expect(rows[0]?.bookValue).toBe(7500000n);
     expect(rows[0]?.projectRef).toBe(`works:${WORK_ID}`);
 
-    const seen = await db.select().from(processed).where(eq(processed.messageId, DEDUPE_ID));
+    const seen = await asTenant(TENANT, (tx) => tx.select().from(processed).where(eq(processed.messageId, DEDUPE_ID)));
     expect(seen).toHaveLength(1);
 
-    const outbox = await db.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+    const outbox = await asTenant(TENANT, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
     expect(outbox.map((r) => r.eventType)).toContain(EVENTS.assetCreated);
   });
 
@@ -86,7 +102,7 @@ describe("asset-service — works.asset.handover consumer", () => {
     await new Promise<void>((r) => setTimeout(r, 400));
     await q.stop();
 
-    const rows = await db.select().from(assetAssets).where(eq(assetAssets.id, ASSET_ID));
+    const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_ID)));
     expect(rows).toHaveLength(1);
   });
 });

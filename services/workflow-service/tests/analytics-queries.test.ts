@@ -1,13 +1,13 @@
 /**
  * Coverage tests for analytics/queries.ts (1.78% → target: 100%).
- * Tests summary() and bottlenecks() read-only analytics queries.
+ * Tests asTenant(tenantId, () => summary()) and asTenant(tenantId, () => bottlenecks()) read-only analytics queries.
  */
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { summary, bottlenecks } from "../src/modules/analytics/queries.js";
-import { TestQueue, seedDefinition, cleanup } from "./helpers/engine-harness.js";
+import { TestQueue, seedDefinition, cleanup, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -18,10 +18,10 @@ function newTenant(): string { const t = randomUUID(); tenants.push(t); return t
 afterEach(async () => { if (tenants.length) { await cleanup(...tenants); tenants.length = 0; } });
 afterAll(async () => { await sqlClient.end(); });
 
-describe("analytics/queries — summary()", () => {
+describe("analytics/queries — asTenant(tenantId, () => summary())", () => {
   it("returns zeroed summary for empty tenant", async () => {
     const tenantId = newTenant();
-    const result = await summary(tenantId);
+    const result = await asTenant(tenantId, () => summary(tenantId));
 
     expect(result.totalInstances).toBe(0);
     expect(result.instancesByStatus).toEqual({});
@@ -58,7 +58,7 @@ describe("analytics/queries — summary()", () => {
       initialTaskName: "Start", definitionCode: def.code,
     }, { tenantId, actorId, messageId: id2 });
 
-    const result = await summary(tenantId);
+    const result = await asTenant(tenantId, () => summary(tenantId));
     expect(result.totalInstances).toBe(2);
     expect(result.instancesByStatus["active"]).toBe(2);
   });
@@ -82,17 +82,17 @@ describe("analytics/queries — summary()", () => {
     }, { tenantId, actorId, messageId: id });
 
     // Manually bump escalation_count on the task
-    await db.execute(sql`UPDATE workflow.tasks SET escalation_count = 3 WHERE tenant_id = ${tenantId}`);
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET escalation_count = 3 WHERE tenant_id = ${tenantId}`);
 
-    const result = await summary(tenantId);
+    const result = await asTenant(tenantId, () => summary(tenantId));
     expect(result.escalations).toBe(3);
   });
 });
 
-describe("analytics/queries — bottlenecks()", () => {
+describe("analytics/queries — asTenant(tenantId, () => bottlenecks())", () => {
   it("returns empty arrays for empty tenant", async () => {
     const tenantId = newTenant();
-    const result = await bottlenecks(tenantId);
+    const result = await asTenant(tenantId, () => bottlenecks(tenantId));
 
     expect(result.nodes).toEqual([]);
     expect(result.pendingByRole).toEqual([]);
@@ -117,7 +117,7 @@ describe("analytics/queries — bottlenecks()", () => {
       initialTaskName: "Review", definitionCode: def.code,
     }, { tenantId, actorId, messageId: id });
 
-    const result = await bottlenecks(tenantId);
+    const result = await asTenant(tenantId, () => bottlenecks(tenantId));
     expect(result.nodes.length).toBeGreaterThan(0);
     const reviewNode = result.nodes.find((n) => n.nodeKey === "review");
     expect(reviewNode).toBeDefined();

@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { registerMessagesConsumers } from "../src/modules/messages/consumer.js";
 import { messageSubscriptions, signalSubscriptions } from "../src/modules/messages/schema.js";
-import { TestQueue, cleanup, seedDefinition } from "./helpers/engine-harness.js";
+import { TestQueue, cleanup, seedDefinition, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -42,14 +42,14 @@ describe("messages/consumer — workflow.message.correlate", () => {
     }, { tenantId, actorId, messageId: instanceId });
 
     // Get the task that was created
-    const taskRows = await db.execute(
+    const taskRows = await sqlAsTenant(tenantId, 
       sql`SELECT id, node_key FROM workflow.tasks WHERE instance_id = ${instanceId} AND status = 'pending'`,
     ) as unknown as Array<{ id: string; node_key: string }>;
     const taskId = taskRows[0]!.id;
 
     // Seed a message subscription for this task
     const subId = randomUUID();
-    await db.insert(messageSubscriptions).values({
+    await asTenant(tenantId, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: subId,
       tenantId,
       instanceId,
@@ -58,7 +58,7 @@ describe("messages/consumer — workflow.message.correlate", () => {
       correlationKey: "ORDER-001",
       nodeKey: "start",
       status: "active",
-    });
+    })));
 
     // Deliver the correlate command
     await q.deliver("workflow.message.correlate", {
@@ -69,7 +69,7 @@ describe("messages/consumer — workflow.message.correlate", () => {
     }, { tenantId, actorId, messageId: randomUUID() });
 
     // Verify: subscription should be marked as matched
-    const subs = await db.execute(
+    const subs = await sqlAsTenant(tenantId, 
       sql`SELECT status FROM workflow.message_subscriptions WHERE id = ${subId}`,
     ) as unknown as Array<{ status: string }>;
     expect(subs[0]!.status).toBe("matched");
@@ -110,13 +110,13 @@ describe("messages/consumer — workflow.message.correlate", () => {
       initialTaskName: "Start", definitionCode: def.code,
     }, { tenantId, actorId, messageId: instanceId });
 
-    const taskRows = await db.execute(
+    const taskRows = await sqlAsTenant(tenantId, 
       sql`SELECT id FROM workflow.tasks WHERE instance_id = ${instanceId} AND status = 'pending'`,
     ) as unknown as Array<{ id: string }>;
     const taskId = taskRows[0]!.id;
 
     const subId = randomUUID();
-    await db.insert(messageSubscriptions).values({
+    await asTenant(tenantId, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: subId,
       tenantId,
       instanceId,
@@ -125,7 +125,7 @@ describe("messages/consumer — workflow.message.correlate", () => {
       correlationKey: "DUP-001",
       nodeKey: "start",
       status: "active",
-    });
+    })));
 
     const msgId = randomUUID();
     // First delivery
@@ -164,13 +164,13 @@ describe("messages/consumer — workflow.message.correlate", () => {
       initialTaskName: "Start", definitionCode: def.code,
     }, { tenantId, actorId, messageId: instanceId });
 
-    const taskRows = await db.execute(
+    const taskRows = await sqlAsTenant(tenantId, 
       sql`SELECT id FROM workflow.tasks WHERE instance_id = ${instanceId} AND status = 'pending'`,
     ) as unknown as Array<{ id: string }>;
     const taskId = taskRows[0]!.id;
 
     const subId = randomUUID();
-    await db.insert(messageSubscriptions).values({
+    await asTenant(tenantId, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: subId,
       tenantId,
       instanceId,
@@ -179,7 +179,7 @@ describe("messages/consumer — workflow.message.correlate", () => {
       correlationKey: "CTX-001",
       nodeKey: "start",
       status: "active",
-    });
+    })));
 
     await q.deliver("workflow.message.correlate", {
       tenantId,
@@ -189,7 +189,7 @@ describe("messages/consumer — workflow.message.correlate", () => {
     }, { tenantId, actorId, messageId: randomUUID() });
 
     // Verify context was merged (the consumer uses context || payload::jsonb)
-    const inst = await db.execute(
+    const inst = await sqlAsTenant(tenantId, 
       sql`SELECT context::text AS ctx FROM workflow.instances WHERE id = ${instanceId}`,
     ) as unknown as Array<{ ctx: string }>;
     const ctxStr = inst[0]!.ctx;
@@ -234,20 +234,20 @@ describe("messages/consumer — workflow.signal.broadcast", () => {
       initialTaskName: "Start", definitionCode: def.code,
     }, { tenantId, actorId, messageId: instanceId });
 
-    const taskRows = await db.execute(
+    const taskRows = await sqlAsTenant(tenantId, 
       sql`SELECT id FROM workflow.tasks WHERE instance_id = ${instanceId} AND status = 'pending'`,
     ) as unknown as Array<{ id: string }>;
 
     // Insert subscription — signal broadcast will find it
     const sigId = randomUUID();
-    await db.insert(signalSubscriptions).values({
+    await asTenant(tenantId, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sigId, tenantId, instanceId, taskId: taskRows[0]!.id,
       signalName: "found.sig", nodeKey: "start", status: "active",
-    });
+    })));
 
     // Verify signal subscriptions lookup works (active ones found)
     const { findActiveSignalSubscriptions } = await import("../src/modules/messages/repo.js");
-    const subs = await findActiveSignalSubscriptions(tenantId, "found.sig");
+    const subs = await asTenant(tenantId, () => findActiveSignalSubscriptions(tenantId, "found.sig"));
     expect(subs.length).toBe(1);
     expect(subs[0]!.id).toBe(sigId);
   });
@@ -260,12 +260,12 @@ describe("messages/consumer — workflow.signal.broadcast", () => {
     const q = new TestQueue();
     registerMessagesConsumers(q);
 
-    // Seed a subscription in other tenant
+    // Seed a subscription in other tenant (under THAT tenant's GUC)
     const sigId = randomUUID();
-    await db.insert(signalSubscriptions).values({
+    await asTenant(otherTenant, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sigId, tenantId: otherTenant, instanceId: randomUUID(), taskId: randomUUID(),
       signalName: "cross.tenant.sig", nodeKey: "start", status: "active",
-    });
+    })));
 
     // Broadcast from our tenant — should find zero
     await q.deliver("workflow.signal.broadcast", {
@@ -275,7 +275,7 @@ describe("messages/consumer — workflow.signal.broadcast", () => {
     }, { tenantId, actorId, messageId: randomUUID() });
 
     // Subscription should still be active (not matched from wrong tenant)
-    const sigs = await db.execute(
+    const sigs = await sqlAsTenant(otherTenant, 
       sql`SELECT status FROM workflow.signal_subscriptions WHERE id = ${sigId}`,
     ) as unknown as Array<{ status: string }>;
     expect(sigs[0]!.status).toBe("active");

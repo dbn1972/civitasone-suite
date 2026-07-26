@@ -14,6 +14,7 @@ import { tickets } from "../tickets/schema.js";
 import { csatResponses } from "./schema.js";
 import { eq, and } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { EVENTS } from "../../topics.js";
 import { markProcessed } from "../../shared/outbox.js";
 
@@ -102,7 +103,10 @@ export async function scheduleCsatSurvey(
  * Register the CSAT consumer for ticket transition events.
  * When a ticket is resolved, schedule a CSAT survey within 15 minutes.
  */
-export function registerCsatConsumer(queue: Queue): void {
+export function registerCsatConsumer(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(EVENTS.ticketTransitioned, async (msg) => {
     const payload = msg.payload as TicketTransitionedPayload;
     if (!payload || payload.newStatus !== "resolved") return;

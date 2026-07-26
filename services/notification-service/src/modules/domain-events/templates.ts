@@ -248,6 +248,11 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
       body: "The following change has been released:\n\n{{title}}\n\n{{releaseNotes}}\n\nAffected services: {{affectedServices}}\n\nRegards,\nPlatform Administration",
     },
   },
+  {
+    eventType: "contract.expiry.alert",
+    push: { title: "Contract Expiry Alert", body: "A contract is approaching expiry. Please review and initiate renewal." },
+    email: { title: "Contract Expiry Notice", body: "Dear Team,\n\nA contract under your oversight is approaching its expiry date. Please review and initiate the renewal process if required.\n\nRegards,\nContract Management" },
+  },
 ];
 
 const templateMap = new Map<string, NotificationTemplate>();

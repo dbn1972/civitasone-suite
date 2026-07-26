@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -8,7 +9,10 @@ import { periodMonthFromDate } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerUsageConsumers(queue: Queue): void {
+export function registerUsageConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<{ tenantId: string; metricKey: string; quantity: number }>(COMMANDS.usageRecord, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

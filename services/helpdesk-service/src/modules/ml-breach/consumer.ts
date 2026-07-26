@@ -10,6 +10,7 @@
  */
 
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
 import { eq, and, notInArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
@@ -33,7 +34,10 @@ interface TicketUpdatedPayload {
   tenantId?: string;
 }
 
-export function registerBreachRiskConsumers(queue: Queue): void {
+export function registerBreachRiskConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   // Re-score on ticket status transitions
   queue.subscribe<TicketUpdatedPayload>(EVENTS.ticketTransitioned, async (msg) => {
     await rescoreTicket(msg.payload.ticketId, msg.tenantId, msg.correlationId);

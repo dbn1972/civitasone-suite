@@ -1,5 +1,7 @@
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -18,6 +20,23 @@ const AUDIT_TOPIC = "audit.event.record";
  * Returns the number of subscriptions expired this sweep.
  */
 export async function sweepExpiredMessages(now = new Date(), batch = 100): Promise<number> {
+  // RLS (#146): workflow_svc is NOBYPASSRLS, so a GUC-less cross-tenant scan
+  // sees zero rows. Enumerate tenants with active timeout-bearing subscriptions
+  // via the SECURITY DEFINER helper (migration 0029 — tenant ids only) and run
+  // each tenant's sweep inside runWithTenant so reads and writes are scoped to
+  // exactly that tenant. Never wrap the whole sweep in a single tenant.
+  const tenantRows = (await db.execute(
+    sql`SELECT workflow.sweep_subscription_tenants() AS tenant_id`,
+  )) as unknown as Array<{ tenant_id: string }>;
+  let total = 0;
+  for (const { tenant_id } of tenantRows) {
+    total += await runWithTenant(tenant_id, () => sweepExpiredMessagesForTenant(now, batch));
+  }
+  return total;
+}
+
+/** Per-tenant message-timeout sweep — MUST run inside runWithTenant(tenantId). */
+async function sweepExpiredMessagesForTenant(now: Date, batch: number): Promise<number> {
   const expired = await repo.findExpiredSubscriptions(now, batch);
   let count = 0;
 

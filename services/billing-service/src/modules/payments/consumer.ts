@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -11,7 +12,10 @@ import { assertPayable, assertWithinOutstanding } from "../invoices/domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerPaymentsConsumers(queue: Queue): void {
+export function registerPaymentsConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<{
     id: string; tenantId: string; invoiceId: string; amountMinor: number;
     method?: string; gateway: string; reference?: string;

@@ -21,6 +21,10 @@ registerPlanConsumers(queue);
 registerSubscriptionConsumers(queue);
 registerQuotaConsumers(queue);
 registerSettingConsumers(queue);
+import { registerOrgHierarchyConsumers } from "./modules/org-hierarchy/consumer.js";
+registerOrgHierarchyConsumers(queue);
+import { registerDataMigrationConsumers } from "./modules/data-migration/consumer.js";
+registerDataMigrationConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

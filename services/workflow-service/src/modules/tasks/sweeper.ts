@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { and, eq, lte, gt, isNotNull, or, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -25,6 +26,31 @@ export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000a1";
 const DEFAULT_COOLDOWN_MS = Number(process.env.SLA_ESCALATION_COOLDOWN_MS ?? 60 * 60 * 1000);
 
 /**
+ * RLS (#146): workflow_svc is NOBYPASSRLS and every workflow table is
+ * fail-closed, so a GUC-less cross-tenant scan sees ZERO rows. The sweepers
+ * therefore enumerate the tenants that currently have pending tasks via the
+ * SECURITY DEFINER helper `workflow.sweep_task_tenants()` (migration 0029 —
+ * discloses tenant ids only, never row data) and run each tenant's sweep
+ * inside runWithTenant(tenantId, ...) so every read AND write is scoped to
+ * exactly that tenant. Never wrap the whole sweep in a single tenant.
+ */
+async function sweepTaskTenants(): Promise<string[]> {
+  const rows = (await db.execute(
+    sql`SELECT workflow.sweep_task_tenants() AS tenant_id`,
+  )) as unknown as Array<{ tenant_id: string }>;
+  return rows.map((r) => r.tenant_id);
+}
+
+/** Run `perTenant` once per tenant with pending tasks, summing the counts. */
+async function forEachTaskTenant(perTenant: () => Promise<number>): Promise<number> {
+  let total = 0;
+  for (const tenantId of await sweepTaskTenants()) {
+    total += await runWithTenant(tenantId, perTenant);
+  }
+  return total;
+}
+
+/**
  * Find open tasks whose due_at has passed and which are due for (re)escalation —
  * either never escalated, or last escalated before now - cooldown — then escalate
  * each: stamp escalated_at = now (last-escalated), bump escalation_count, append
@@ -36,6 +62,15 @@ export async function sweepOverdueTasks(
   now: Date = new Date(),
   batch = 200,
   cooldownMs = DEFAULT_COOLDOWN_MS,
+): Promise<number> {
+  return forEachTaskTenant(() => sweepOverdueTasksForTenant(now, batch, cooldownMs));
+}
+
+/** Per-tenant SLA escalation sweep — MUST run inside runWithTenant(tenantId). */
+async function sweepOverdueTasksForTenant(
+  now: Date,
+  batch: number,
+  cooldownMs: number,
 ): Promise<number> {
   const cooldownCutoff = new Date(now.getTime() - cooldownMs);
   const due = await scopedRead((tx) => tx.select().from(tasks)
@@ -157,6 +192,11 @@ function reminderThresholds(): number[] {
  * paced and never double-sent for the same threshold.
  */
 export async function sweepReminders(now: Date = new Date(), batch = 200): Promise<number> {
+  return forEachTaskTenant(() => sweepRemindersForTenant(now, batch));
+}
+
+/** Per-tenant reminder sweep — MUST run inside runWithTenant(tenantId). */
+async function sweepRemindersForTenant(now: Date, batch: number): Promise<number> {
   const thresholds = reminderThresholds();
   // candidate tasks: pending, have an SLA (due_at), NOT yet overdue, and still
   // have an un-fired threshold (reminder_count < thresholds.length).
@@ -263,6 +303,11 @@ const timerLog = pino({ name: "workflow-timer-sweeper" });
  * final backstop. Returns the number of timer tasks fired this sweep.
  */
 export async function sweepTimerTasks(now: Date = new Date(), batch = 200): Promise<number> {
+  return forEachTaskTenant(() => sweepTimerTasksForTenant(now, batch));
+}
+
+/** Per-tenant timer sweep — MUST run inside runWithTenant(tenantId). */
+async function sweepTimerTasksForTenant(now: Date, batch: number): Promise<number> {
   const due = await repo.dueTimers(now, batch);
   let fired = 0;
   for (const t of due) {

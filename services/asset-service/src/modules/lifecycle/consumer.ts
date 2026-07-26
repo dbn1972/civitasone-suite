@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -14,7 +15,10 @@ const log = pino({ name: "asset-lifecycle-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC    = "finance.gl.post";
 
-export function registerLifecycleConsumers(queue: Queue): void {
+export function registerLifecycleConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.assetTransfer, async (msg) => {
     try {
       const p = msg.payload as {

@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-aaa000000001";
@@ -18,7 +19,7 @@ function makeToken(roles: string[] = ["workflow_user"], actorId = ACTOR_ID) {
 }
 
 afterEach(async () => {
-  await db.execute(sql`DELETE FROM workflow.workflow_delegations WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.workflow_delegations WHERE tenant_id = ${TENANT}`);
 });
 afterAll(async () => { await sqlClient.end(); });
 

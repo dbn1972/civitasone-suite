@@ -13,12 +13,16 @@ import * as historyRepo from "../history/repo.js";
 import type { CreateInstancePayload } from "./commands.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
 import { resolveAssignee } from "../assignment/resolver.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 type ExtendedCreatePayload = CreateInstancePayload & { startNodeKey?: string };
 
 export function registerInstancesConsumers(queue: Queue): void {
+  // RLS (#146): run every handler inside the message's tenant context so
+  // db.transaction() sets the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
+  queue = tenantScoped(queue);
   subscribeWithDlq<ExtendedCreatePayload>(queue, COMMANDS.createInstance, async (msg) => {
     let taskId = "";
     await db.transaction(async (tx) => {

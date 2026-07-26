@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "dddddddd-1111-4000-8000-ddd000000001";
@@ -24,7 +25,7 @@ function noRoleToken() {
 }
 
 afterEach(async () => {
-  await db.execute(sql`DELETE FROM workflow.designer_definitions WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.designer_definitions WHERE tenant_id = ${TENANT}`);
 });
 afterAll(async () => { await sqlClient.end(); });
 

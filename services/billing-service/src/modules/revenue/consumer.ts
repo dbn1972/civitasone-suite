@@ -1,5 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -9,7 +10,10 @@ import { COMMANDS } from "../../topics.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerRevenueConsumers(q: Queue): void {
+export function registerRevenueConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const q = tenantScoped(rawQueue);
   q.subscribe(COMMANDS.revenueLedgerCreate, async (msg) => {
     await db.transaction(async (tx) => {
       await markProcessed(tx, msg.messageId);

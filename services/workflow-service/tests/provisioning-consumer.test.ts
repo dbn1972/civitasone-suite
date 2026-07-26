@@ -9,7 +9,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { registerProvisioningConsumers } from "../src/modules/provisioning/consumer.js";
 import { CONSUMED_EVENTS } from "../src/topics.js";
 import { STANDARD_DEFINITIONS } from "../src/modules/provisioning/catalog.js";
-import { TestQueue, cleanup } from "./helpers/engine-harness.js";
+import { TestQueue, cleanup, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const tenants: string[] = [];
 function newTenant(): string { const t = randomUUID(); tenants.push(t); return t; }
@@ -29,7 +29,7 @@ describe("provisioning/consumer — tenantCreated", () => {
     await q.deliver(CONSUMED_EVENTS.tenantCreated, { tenantId }, { tenantId, actorId });
 
     // Verify all standard definitions were seeded
-    const defs = await db.execute(
+    const defs = await sqlAsTenant(tenantId, 
       sql`SELECT code, status FROM workflow.definitions WHERE tenant_id = ${tenantId} ORDER BY code`,
     ) as unknown as Array<{ code: string; status: string }>;
 
@@ -51,19 +51,19 @@ describe("provisioning/consumer — tenantCreated", () => {
     await q.deliver(CONSUMED_EVENTS.tenantCreated, { tenantId }, { tenantId, actorId });
 
     // Check file_noting definition has 4 nodes and 3 edges (linear)
-    const defRows = await db.execute(
+    const defRows = await sqlAsTenant(tenantId, 
       sql`SELECT id FROM workflow.definitions WHERE tenant_id = ${tenantId} AND code = 'file_noting'`,
     ) as unknown as Array<{ id: string }>;
     expect(defRows.length).toBe(1);
     const defId = defRows[0]!.id;
 
-    const nodes = await db.execute(
+    const nodes = await sqlAsTenant(tenantId, 
       sql`SELECT node_key FROM workflow.definition_nodes WHERE definition_id = ${defId} ORDER BY sort_order`,
     ) as unknown as Array<{ node_key: string }>;
     expect(nodes.length).toBe(4);
     expect(nodes.map((n) => n.node_key)).toEqual(["draft", "section_review", "us_approve", "ds_approve"]);
 
-    const edges = await db.execute(
+    const edges = await sqlAsTenant(tenantId, 
       sql`SELECT from_node, to_node FROM workflow.definition_edges WHERE definition_id = ${defId} ORDER BY sort_order`,
     ) as unknown as Array<{ from_node: string; to_node: string }>;
     expect(edges.length).toBe(3);
@@ -83,7 +83,7 @@ describe("provisioning/consumer — tenantCreated", () => {
     await q.deliver(CONSUMED_EVENTS.tenantCreated, { tenantId }, { tenantId, actorId, messageId: randomUUID() });
     await q.deliver(CONSUMED_EVENTS.tenantCreated, { tenantId }, { tenantId, actorId, messageId: randomUUID() });
 
-    const defs = await db.execute(
+    const defs = await sqlAsTenant(tenantId, 
       sql`SELECT code FROM workflow.definitions WHERE tenant_id = ${tenantId}`,
     ) as unknown as Array<{ code: string }>;
     // Should still only have 5 (one per standard definition)

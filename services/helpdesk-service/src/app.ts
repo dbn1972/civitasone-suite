@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -27,6 +27,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
+
+  // #146 regression fix: also derive the tenant context from the AUTHENTICATED
+  // principal (req.ctx.tenantId, set by authPlugin from the verified JWT tid).
+  // createTenantTxHook only reads the OPTIONAL x-tenant-id header, so a write
+  // route reached with a valid JWT but no header ran without the tenant GUC and
+  // was rejected by FORCE RLS under the NOBYPASSRLS service role (HTTP 500).
+  // Registered after createTenantTxHook so the authenticated tid wins; the
+  // header remains the fallback for callers that send it (e.g. the gateway).
+  app.addHook("onRequest", async (req) => {
+    const tid = (req as typeof req & { ctx?: { tenantId?: string } }).ctx?.tenantId;
+    if (tid) tenantStorage.enterWith({ tenantId: tid });
+  });
 
   registerOpsRoutes(app, { service: "helpdesk-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 

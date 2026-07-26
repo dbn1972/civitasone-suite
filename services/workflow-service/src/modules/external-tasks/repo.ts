@@ -5,7 +5,7 @@
  * and fire_at (repurposed as lock_expires_at for external tasks).
  */
 import { sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { scopedExecute } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -52,7 +52,7 @@ export async function fetchAndLock(
   const workerUuid = toWorkerUuid(workerId);
   // Format topics as a Postgres array literal for ANY() comparison
   const topicsLiteral = `{${topics.map((t) => `"${t.replace(/"/g, '\\"')}"`).join(",")}}`;
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     WITH locked AS (
       SELECT id FROM workflow.tasks
       WHERE tenant_id = ${tenantId}
@@ -98,7 +98,7 @@ export async function completeExternalTask(
   result?: Record<string, unknown>,
 ): Promise<void> {
   // Verify lock ownership
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     SELECT id, instance_id, name, node_key, ref_type, ref_id, assignee_id, fire_at, status
     FROM workflow.tasks
     WHERE id = ${taskId} AND tenant_id = ${tenantId}
@@ -150,7 +150,7 @@ export async function failExternalTask(
   retries?: number,
   retryTimeout?: number,
 ): Promise<void> {
-  const rows = (await db.execute(sql`
+  const rows = (await scopedExecute(sql`
     SELECT id, assignee_id, fire_at, status
     FROM workflow.tasks
     WHERE id = ${taskId} AND tenant_id = ${tenantId}
@@ -166,7 +166,7 @@ export async function failExternalTask(
   if (retries && retries > 0) {
     // Release lock, allow re-fetch after retryTimeout
     const retryAtIso = retryTimeout ? new Date(Date.now() + retryTimeout).toISOString() : null;
-    await db.execute(sql`
+    await scopedExecute(sql`
       UPDATE workflow.tasks
       SET assignee_id = NULL,
           fire_at = ${retryAtIso}::timestamptz,
@@ -206,7 +206,7 @@ export async function extendLock(
   additionalMs: number,
 ): Promise<void> {
   const workerUuid = toWorkerUuid(workerId);
-  const result = (await db.execute(sql`
+  const result = (await scopedExecute(sql`
     UPDATE workflow.tasks
     SET fire_at = fire_at + (${additionalMs} || ' milliseconds')::interval,
         updated_at = NOW()

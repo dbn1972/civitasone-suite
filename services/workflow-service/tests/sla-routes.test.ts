@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "a7000000-1111-4000-8000-000000000001";
@@ -17,18 +18,18 @@ async function seedPastDueTask(): Promise<string> {
   const instId = randomUUID();
   const taskId = randomUUID();
   const actor = randomUUID();
-  await db.execute(sql`INSERT INTO workflow.instances (id, tenant_id, name, status, created_by, updated_by)
+  await sqlAsTenant(TENANT, sql`INSERT INTO workflow.instances (id, tenant_id, name, status, created_by, updated_by)
     VALUES (${instId}, ${TENANT}, 'SLA inst', 'active', ${actor}, ${actor})`);
-  await db.execute(sql`INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, role_ref, due_at, created_by, updated_by)
+  await sqlAsTenant(TENANT, sql`INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, role_ref, due_at, created_by, updated_by)
     VALUES (${taskId}, ${TENANT}, ${instId}, 'Overdue task', 'pending', 'officer', now() - interval '1 hour', ${actor}, ${actor})`);
   return taskId;
 }
 
 afterEach(async () => {
-  await db.execute(sql`DELETE FROM workflow.task_sla_pauses WHERE tenant_id = ${TENANT}`);
-  await db.execute(sql`DELETE FROM workflow.tasks WHERE tenant_id = ${TENANT}`);
-  await db.execute(sql`DELETE FROM workflow.instances WHERE tenant_id = ${TENANT}`);
-  await db.execute(sql`DELETE FROM workflow.working_calendars WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.task_sla_pauses WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.tasks WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.instances WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.working_calendars WHERE tenant_id = ${TENANT}`);
 });
 afterAll(async () => { await sqlClient.end(); });
 
@@ -72,7 +73,7 @@ describe("CAP-027 SLA pause/resume", () => {
   it("pauses once (idempotent) and resumes, pushing due_at forward", async () => {
     const app = await buildApp();
     const taskId = await seedPastDueTask();
-    const before = await db.execute(sql`SELECT due_at FROM workflow.tasks WHERE id = ${taskId}`);
+    const before = await sqlAsTenant(TENANT, sql`SELECT due_at FROM workflow.tasks WHERE id = ${taskId}`);
     const dueBefore = new Date((before as unknown as Array<{ due_at: string }>)[0]!.due_at).getTime();
 
     const p1 = await app.inject({ method: "POST", url: `/v1/workflow/tasks/${taskId}/sla/pause`, headers: { authorization: `Bearer ${token()}` }, payload: { reason: "waiting on citizen" } });
@@ -84,7 +85,7 @@ describe("CAP-027 SLA pause/resume", () => {
     expect(resume.statusCode).toBe(200);
     expect(resume.json().data.pausedMinutes).toBeGreaterThanOrEqual(0);
 
-    const after = await db.execute(sql`SELECT due_at FROM workflow.tasks WHERE id = ${taskId}`);
+    const after = await sqlAsTenant(TENANT, sql`SELECT due_at FROM workflow.tasks WHERE id = ${taskId}`);
     const dueAfter = new Date((after as unknown as Array<{ due_at: string }>)[0]!.due_at).getTime();
     await app.close();
     expect(dueAfter).toBeGreaterThanOrEqual(dueBefore); // clock shifted forward (or equal for a ~0s pause)

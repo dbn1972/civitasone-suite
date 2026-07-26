@@ -51,7 +51,7 @@ export async function simulationRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body ?? {});
 
     const graphFor = async (version: number) => {
-      const def = await defRepo.findByCodeVersionTx(db, ctx.tenantId, code, version);
+      const def = await db.transaction((tx) => defRepo.findByCodeVersionTx(tx as unknown as typeof db, ctx.tenantId, code, version));
       if (!def) return null;
       const [nodes, edges] = await Promise.all([defRepo.listNodes(def.id), defRepo.listEdges(def.id)]);
       return {

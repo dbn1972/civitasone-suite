@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
@@ -8,7 +9,10 @@ import * as repo from "./repo.js";
 const log = pino({ name: "asset-insurance-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerInsuranceConsumers(queue: Queue): void {
+export function registerInsuranceConsumers(rawQueue: Queue): void {
+  // #146 regression fix: run every handler inside the message tenant context so
+  // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.insurancePolicyCreate, async (msg) => {
     try {
       const p = msg.payload as {

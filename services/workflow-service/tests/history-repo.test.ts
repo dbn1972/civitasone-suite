@@ -10,7 +10,7 @@ import * as historyRepo from "../src/modules/history/repo.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { COMMANDS } from "../src/topics.js";
-import { TestQueue, seedDefinition, cleanup } from "./helpers/engine-harness.js";
+import { TestQueue, seedDefinition, cleanup, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const tenants: string[] = [];
 function newTenant(): string { const t = randomUUID(); tenants.push(t); return t; }
@@ -37,7 +37,7 @@ describe("history/repo — listForInstance", () => {
       initialTaskName: "Step 1", definitionCode: def.code,
     }, { tenantId, actorId, messageId: instanceId });
 
-    const rows = await historyRepo.listForInstance(instanceId, tenantId);
+    const rows = await asTenant(tenantId, () => historyRepo.listForInstance(instanceId, tenantId));
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]!.instanceId).toBe(instanceId);
     expect(rows[0]!.tenantId).toBe(tenantId);
@@ -45,7 +45,7 @@ describe("history/repo — listForInstance", () => {
 
   it("returns empty array for non-existent instance", async () => {
     const tenantId = newTenant();
-    const rows = await historyRepo.listForInstance(randomUUID(), tenantId);
+    const rows = await asTenant(tenantId, () => historyRepo.listForInstance(randomUUID(), tenantId));
     expect(rows).toEqual([]);
   });
 });
@@ -70,7 +70,7 @@ describe("history/repo — exportForTenant", () => {
 
     const from = new Date("2020-01-01T00:00:00Z");
     const to = new Date("2030-12-31T23:59:59Z");
-    const rows = await historyRepo.exportForTenant(tenantId, from, to, 100, null, null);
+    const rows = await asTenant(tenantId, () => historyRepo.exportForTenant(tenantId, from, to, 100, null, null));
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]!.tenantId).toBe(tenantId);
   });
@@ -79,7 +79,7 @@ describe("history/repo — exportForTenant", () => {
     const tenantId = newTenant();
     const from = new Date("2000-01-01T00:00:00Z");
     const to = new Date("2000-12-31T23:59:59Z");
-    const rows = await historyRepo.exportForTenant(tenantId, from, to, 100, null, null);
+    const rows = await asTenant(tenantId, () => historyRepo.exportForTenant(tenantId, from, to, 100, null, null));
     expect(rows).toEqual([]);
   });
 
@@ -107,13 +107,13 @@ describe("history/repo — exportForTenant", () => {
     const to = new Date("2030-12-31T23:59:59Z");
 
     // First page: limit=1
-    const page1 = await historyRepo.exportForTenant(tenantId, from, to, 1, null, null);
+    const page1 = await asTenant(tenantId, () => historyRepo.exportForTenant(tenantId, from, to, 1, null, null));
     expect(page1.length).toBe(1);
 
     // Second page using cursor from first
     const cursor = page1[0]!;
     const cursorDate = cursor.createdAt instanceof Date ? cursor.createdAt : new Date(String(cursor.createdAt));
-    const page2 = await historyRepo.exportForTenant(tenantId, from, to, 1, cursorDate, cursor.id);
+    const page2 = await asTenant(tenantId, () => historyRepo.exportForTenant(tenantId, from, to, 1, cursorDate, cursor.id));
     expect(page2.length).toBe(1);
     expect(page2[0]!.id).not.toBe(page1[0]!.id);
   });
