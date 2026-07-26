@@ -14,6 +14,7 @@ import { schema as landRecordsModule } from "../modules/land-records/schema.js";
 import { schema as cadastralModule } from "../modules/cadastral/schema.js";
 import { schema as infrastructureModule } from "../modules/infrastructure/schema.js";
 import { schema as spatialExchangeModule } from "../modules/spatial-exchange/schema.js";
+import { schema as roadNetworkModule } from "../modules/road-network/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -26,6 +27,7 @@ const SCHEMA = {
   ...cadastralModule,
   ...infrastructureModule,
   ...spatialExchangeModule,
+  ...roadNetworkModule,
   ...outboxSchema,
 };
 
