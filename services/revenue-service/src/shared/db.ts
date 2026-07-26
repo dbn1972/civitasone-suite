@@ -9,6 +9,7 @@ import { schema as billingModule }     from "../modules/billing/schema.js";
 import { schema as collectionModule }  from "../modules/collection/schema.js";
 import { schema as arrearsModule }     from "../modules/arrears/schema.js";
 import { schema as bbpsModule }        from "../modules/bbps/schema.js";
+import { schema as analyticsModule }   from "../modules/analytics/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -19,6 +20,7 @@ const SCHEMA = {
   ...collectionModule,
   ...arrearsModule,
   ...bbpsModule,
+  ...analyticsModule,
   ...outboxSchema,
 };
 

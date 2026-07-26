@@ -15,6 +15,7 @@ import { billingRoutes } from "./modules/billing/routes.js";
 import { collectionRoutes } from "./modules/collection/routes.js";
 import { arrearsRoutes } from "./modules/arrears/routes.js";
 import { bbpsRoutes } from "./modules/bbps/routes.js";
+import { analyticsRoutes } from "./modules/analytics/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -38,6 +39,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(collectionRoutes);
   await app.register(arrearsRoutes);
   await app.register(bbpsRoutes);
+  await app.register(analyticsRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 
