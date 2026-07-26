@@ -12,6 +12,7 @@ import { schema as geofenceModule } from "../modules/geofence/schema.js";
 import { schema as pincodeModule } from "../modules/pincode/schema.js";
 import { schema as landRecordsModule } from "../modules/land-records/schema.js";
 import { schema as cadastralModule } from "../modules/cadastral/schema.js";
+import { schema as infrastructureModule } from "../modules/infrastructure/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -22,6 +23,7 @@ const SCHEMA = {
   ...pincodeModule,
   ...landRecordsModule,
   ...cadastralModule,
+  ...infrastructureModule,
   ...outboxSchema,
 };
 
