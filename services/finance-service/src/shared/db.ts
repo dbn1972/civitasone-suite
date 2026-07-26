@@ -22,6 +22,7 @@ import { formulationSchema } from "../modules/budget/formulation-schema.js";
 import { distributionSchema } from "../modules/budget/distribution-schema.js";
 import { supplementarySchema } from "../modules/budget/supplementary-schema.js";
 import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
+import { schema as reconModule } from "../modules/recon/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
 const SCHEMA = {
@@ -42,6 +43,7 @@ const SCHEMA = {
   ...distributionSchema,
   ...supplementarySchema,
   ...resolutionIntakeModule,
+  ...reconModule,
   ...outboxSchema,
 };
 
