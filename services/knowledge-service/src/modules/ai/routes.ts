@@ -16,6 +16,7 @@ import {
 } from "./adapter.js";
 import { translateAndSearch } from "./nl-search.js";
 import { summarizeDocument, DocumentNotFoundError } from "./summarize.js";
+import { classifyDocument } from "./classify.js";
 
 // ── Request schemas ───────────────────────────────────────────────
 
@@ -31,6 +32,11 @@ const nlSearchBodySchema = z.object({
 
 const summarizeBodySchema = z.object({
   documentId: z.string().uuid(),
+});
+
+const classifyBodySchema = z.object({
+  text: z.string().min(1).max(50000),
+  categories: z.record(z.array(z.string().min(1).max(64)).min(1)).optional(),
 });
 
 // ── Route registration ────────────────────────────────────────────
@@ -339,5 +345,37 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
 
       throw err;
     }
+  });
+
+  /**
+   * POST /v1/knowledge/ai/classify
+   *
+   * Document intelligence — classify document text into a governance category.
+   * Uses the LLM when enabled, and a deterministic keyword classifier otherwise
+   * or on any LLM failure, so classification is ALWAYS available and honest.
+   *
+   * Returns 400 on invalid body. Returns 200 with { data: { category, confidence,
+   * method, scores } } on success.
+   *
+   * Validates: CAP-119 (document intelligence / classification).
+   */
+  app.post("/v1/knowledge/ai/classify", async (req, reply) => {
+    resolveContext(req);
+
+    const parseResult = classifyBodySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return reply.code(400).send({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid request body",
+          details: parseResult.error.flatten(),
+          correlationId: req.id,
+        },
+      });
+    }
+
+    const { text, categories } = parseResult.data;
+    const result = await classifyDocument(text, categories ? { categories } : undefined);
+    return reply.code(200).send({ data: result });
   });
 }

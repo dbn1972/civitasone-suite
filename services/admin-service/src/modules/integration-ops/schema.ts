@@ -2,7 +2,7 @@ import { pgSchema, uuid, varchar, text, integer, jsonb, timestamp } from "drizzl
 
 /**
  * CAP-060 — integration observability / DLQ replay (admin-service).
- * Mirrors migration 0022_integration_ops_dlq.sql. Schema `integration_ops`.
+ * Mirrors migration 0024_integration_ops_dlq.sql. Schema `integration_ops`.
  */
 export const integrationOpsSchema = pgSchema("integration_ops");
 

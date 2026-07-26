@@ -197,6 +197,18 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  packages/data-governance:
+    devDependencies:
+      '@types/node':
+        specifier: '*'
+        version: 20.19.43
+      typescript:
+        specifier: '*'
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   packages/db:
     dependencies:
       '@civitasone/observability':
@@ -293,6 +305,18 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  packages/kms:
+    devDependencies:
+      '@types/node':
+        specifier: '*'
+        version: 20.19.43
+      typescript:
+        specifier: '*'
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
   packages/observability:
@@ -853,6 +877,9 @@ importers:
       '@civitasone/circuit-breaker':
         specifier: workspace:*
         version: link:../../packages/circuit-breaker
+      '@civitasone/data-governance':
+        specifier: workspace:*
+        version: link:../../packages/data-governance
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -1084,6 +1111,9 @@ importers:
       '@civitasone/circuit-breaker':
         specifier: workspace:*
         version: link:../../packages/circuit-breaker
+      '@civitasone/data-governance':
+        specifier: workspace:*
+        version: link:../../packages/data-governance
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -2207,6 +2237,9 @@ importers:
         specifier: 3.23.8
         version: 3.23.8
     devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
       tsx:
         specifier: 4.7.1
         version: 4.7.1

@@ -77,6 +77,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const { securityComplianceRoutes } = await import("./modules/security-compliance/routes.js");
   await app.register(securityComplianceRoutes);
+  const { securityIncidentRoutes } = await import("./modules/security-incident/routes.js");
+  await app.register(securityIncidentRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
