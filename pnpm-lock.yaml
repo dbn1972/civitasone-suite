@@ -260,6 +260,22 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/integration-config:
+    dependencies:
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: '*'
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   packages/observability:
     devDependencies:
       '@types/node':
@@ -824,6 +840,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/integration-config':
+        specifier: workspace:*
+        version: link:../../packages/integration-config
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -2260,6 +2279,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/integration-config':
+        specifier: workspace:*
+        version: link:../../packages/integration-config
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability

@@ -23,6 +23,7 @@ import { scheduledJobRoutes } from "./modules/scheduled-jobs/routes.js";
 import { customDomainRoutes } from "./modules/custom-domains/routes.js";
 import { changeRoutes } from "./modules/change/routes.js";
 import { centralConfigRoutes } from "./modules/central-config/routes.js";
+import { integrationSettingsRoutes } from "./modules/integration-settings/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -68,6 +69,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(customDomainRoutes);
   await app.register(changeRoutes);
   await app.register(centralConfigRoutes);
+  await app.register(integrationSettingsRoutes);
   const { adminGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(adminGapRoutes);
 

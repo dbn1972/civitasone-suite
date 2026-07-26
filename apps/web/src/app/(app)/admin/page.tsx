@@ -12,6 +12,7 @@ const adminTiles: NavTile[] = [
   { title: "Editions", href: "/admin/editions", description: "Edition catalog and module bundles" },
   { title: "Entitlements", href: "/admin/entitlements", description: "Module limits and overrides" },
   { title: "Feature Flags", href: "/admin/feature-flags", description: "Feature toggles and rollout" },
+  { title: "Integrations", href: "/admin/integrations", description: "External endpoints, API keys and connections" },
   { title: "Operators", href: "/admin/operators", description: "Platform team accounts" },
   { title: "Gateways", href: "/admin/gateways", description: "Communication gateway status" },
   { title: "API Monitoring", href: "/admin/api-monitoring", description: "Endpoint health and latency" },

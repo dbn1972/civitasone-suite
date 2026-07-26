@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { resolveIntegration } from "@civitasone/integration-config";
 import type { ChannelAdapter, SendParams, SendResult } from "./types.js";
 import { renderBody } from "./render.js";
 import { maskRecipient } from "./mask.js";
@@ -7,25 +8,37 @@ import { postToGateway } from "./http-gateway.js";
 const log = pino({ name: "adapter:push" });
 
 const NOT_CONFIGURED =
-  "Push not configured: set NOTIFICATION_PUSH_DRIVER=firebase and FIREBASE_SERVER_KEY";
+  "Push not configured: set NOTIFICATION_PUSH_DRIVER=firebase and FIREBASE_SERVER_KEY (or configure the push_fcm integration in Admin → Integrations)";
+
+function pushDriver(): string {
+  return process.env.NOTIFICATION_PUSH_DRIVER ?? "stub";
+}
+
+/** Registry (per-tenant) first, then env. Null when no server key is available. */
+async function resolveServerKey(tenantId?: string): Promise<string | null> {
+  if (tenantId) {
+    const reg = await resolveIntegration({ provider: "push_fcm", tenantId });
+    if (reg) {
+      const key = reg.secrets.serverKey ?? "";
+      return key || null; // incomplete registry row → fail closed
+    }
+  }
+  if (pushDriver() === "stub") return null;
+  if (pushDriver() !== "firebase") return null;
+  return process.env.FIREBASE_SERVER_KEY ?? null;
+}
 
 export class PushAdapter implements ChannelAdapter {
   readonly type = "push";
 
   async send(params: SendParams): Promise<SendResult> {
-    const driver = process.env.NOTIFICATION_PUSH_DRIVER ?? "stub";
-
-    // P1-5: fail-closed. Stub driver OR missing server key is NOT a successful send.
-    if (driver === "stub") {
-      log.warn({ to: maskRecipient(params.recipient) }, NOT_CONFIGURED);
-      return { ok: false, error: NOT_CONFIGURED };
-    }
-
-    if (driver !== "firebase") {
+    const driver = pushDriver();
+    const usingEnv = !params.tenantId || !process.env.INTEGRATION_REGISTRY_DB_URL;
+    if (usingEnv && driver !== "stub" && driver !== "firebase") {
       return { ok: false, error: `Push driver "${driver}" is not supported; use firebase` };
     }
 
-    const serverKey = process.env.FIREBASE_SERVER_KEY;
+    const serverKey = await resolveServerKey(params.tenantId);
     if (!serverKey) {
       log.warn({ to: maskRecipient(params.recipient) }, NOT_CONFIGURED);
       return { ok: false, error: NOT_CONFIGURED };
