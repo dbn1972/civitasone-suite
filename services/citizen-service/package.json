@@ -32,7 +32,8 @@
     "ioredis": "^5.4.1",
     "pino": "^8.21.0",
     "postgres": "^3.4.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@civitasone/integration-config": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
