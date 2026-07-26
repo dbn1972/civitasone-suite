@@ -858,6 +858,9 @@ importers:
       '@civitasone/circuit-breaker':
         specifier: workspace:*
         version: link:../../packages/circuit-breaker
+      '@civitasone/data-governance':
+        specifier: workspace:*
+        version: link:../../packages/data-governance
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db
