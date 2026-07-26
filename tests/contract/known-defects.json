@@ -4,10 +4,10 @@
   "counts": {
     "deadSubscriptions": 19,
     "undeclaredDeadSubscriptions": 75,
-    "undeliverableDispatch": 1,
+    "undeliverableDispatch": 0,
     "orphanEvents": 584,
     "phantomConsumption": 4,
-    "unemittedEvents": 72
+    "unemittedEvents": 67
   },
   "deadSubscriptions": [
     "asset-service|asset.disposal.file_decided",
@@ -120,9 +120,7 @@
     "tenant-service|tenant.consent.deny",
     "tenant-service|tenant.consent.grant"
   ],
-  "undeliverableDispatch": [
-    "workflow-service|estab.file.level_approved"
-  ],
+  "undeliverableDispatch": [],
   "orphanEvents": [
     "admin.breakglass.closed",
     "admin.breakglass.opened",
@@ -732,12 +730,8 @@
     "contract-service|contract.obligation.updated",
     "contract-service|contract.renewal.created",
     "contract-service|contract.renewal.updated",
-    "crm-service|crm.lead.created",
     "crm-service|crm.lead.score_recalculated",
-    "crm-service|crm.lead.updated",
     "estab-service|estab.rti.overdue",
-    "finance-service|finance.transaction.posted",
-    "helpdesk-service|helpdesk.ticket.updated",
     "inspection-service|inspection.tada_claim.published",
     "inspection-service|inspection.tour_plan.approved",
     "inspection-service|inspection.tour_plan.submitted",

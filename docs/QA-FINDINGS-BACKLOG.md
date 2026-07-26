@@ -118,9 +118,9 @@ the ml-service hasn't emitted these events yet — tracked as unemitted events).
 | notification-service | `ml.prediction.breach_risk_high` | Declared, no subscribe() |
 | notification-service | `ml.prediction.churn_risk_high` | Declared, no subscribe() |
 | notification-service | `ml.prediction.task_high_risk` | Declared, no subscribe() |
-| payroll-service | `hrms.employee.created` | Declared, no subscribe() |
-| project-service | `ml.prediction.task_high_risk` | Declared, no subscribe() |
-| works-service | `workflow.task.completed` | Declared, no subscribe() |
+| payroll-service | `hrms.employee.created` | Declared, no subscribe() | ✅ FIXED |
+| project-service | `ml.prediction.task_high_risk` | Declared, no subscribe() | ✅ FIXED (removed) |
+| works-service | `workflow.task.completed` | Declared, no subscribe() | ✅ FIXED (removed) |
 
 **Fix:** Implement the consumer (if the integration is wanted) or remove the declaration.
 
