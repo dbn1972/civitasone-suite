@@ -45,8 +45,8 @@ export async function forwardTask(
     });
   });
 
-  // Audit trail in transition_history
-  await historyRepo.record(db, {
+  // Audit trail in transition_history (tenant-GUC transaction — RLS #146)
+  await db.transaction((tx) => historyRepo.record(tx as unknown as typeof db, {
     tenantId: ctx.tenantId,
     instanceId: existing.instanceId,
     taskId,
@@ -56,7 +56,7 @@ export async function forwardTask(
     decision: null,
     actorId: ctx.actorId,
     detail: { fromUser, toUser: toUserId, remarks: remarks ?? null },
-  });
+  }));
 
   // Invalidate cached task
   await cache.invalidateResource(ctx.tenantId, TASK_RESOURCE);
@@ -115,8 +115,8 @@ export async function recallTask(
     });
   });
 
-  // Audit trail in transition_history
-  await historyRepo.record(db, {
+  // Audit trail in transition_history (tenant-GUC transaction — RLS #146)
+  await db.transaction((tx) => historyRepo.record(tx as unknown as typeof db, {
     tenantId: ctx.tenantId,
     instanceId: existing.instanceId,
     taskId,
@@ -126,7 +126,7 @@ export async function recallTask(
     decision: null,
     actorId: ctx.actorId,
     detail: { recalledFrom: existing.assigneeId, remarks: remarks ?? null },
-  });
+  }));
 
   // Invalidate cached task
   await cache.invalidateResource(ctx.tenantId, TASK_RESOURCE);

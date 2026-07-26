@@ -269,7 +269,7 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
     const q = z.object({ from: z.coerce.number().int().positive(), to: z.coerce.number().int().positive() }).parse(req.query);
     const graphFor = async (version: number): Promise<VersionGraph | null> => {
-      const def = await repo.findByCodeVersionTx(db, ctx.tenantId, code, version);
+      const def = await db.transaction((tx) => repo.findByCodeVersionTx(tx as unknown as typeof db, ctx.tenantId, code, version));
       if (!def) return null;
       const [nodes, edges] = await Promise.all([repo.listNodes(def.id), repo.listEdges(def.id)]);
       return {

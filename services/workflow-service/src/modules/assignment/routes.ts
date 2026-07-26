@@ -19,13 +19,13 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
       priority: z.number().int().min(0).default(1),
     }).parse(req.body);
 
-    const record = await matrixRepo.insertMatrixRule(db, {
+    const record = await db.transaction((tx) => matrixRepo.insertMatrixRule(tx as unknown as typeof db, {
       tenantId: ctx.tenantId,
       roleRef: body.roleRef,
       conditionExpr: body.conditionExpr ?? null,
       userId: body.userId,
       priority: body.priority,
-    });
+    }));
     return reply.code(201).send({ data: record });
   });
 
@@ -46,7 +46,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const record = await matrixRepo.deactivateMatrixRule(db, id, ctx.tenantId);
+    const record = await db.transaction((tx) => matrixRepo.deactivateMatrixRule(tx as unknown as typeof db, id, ctx.tenantId));
     if (!record) throw new HttpError(404, "NOT_FOUND", "matrix rule not found");
     return reply.send({ data: record });
   });
@@ -64,14 +64,14 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().max(256).optional(),
     }).parse(req.body);
 
-    const record = await matrixRepo.insertSubstitution(db, {
+    const record = await db.transaction((tx) => matrixRepo.insertSubstitution(tx as unknown as typeof db, {
       tenantId: ctx.tenantId,
       userId: body.userId,
       substituteId: body.substituteId,
       fromDate: body.fromDate,
       toDate: body.toDate ?? null,
       reason: body.reason ?? null,
-    });
+    }));
     return reply.code(201).send({ data: record });
   });
 
@@ -91,7 +91,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const record = await matrixRepo.deactivateSubstitution(db, id, ctx.tenantId);
+    const record = await db.transaction((tx) => matrixRepo.deactivateSubstitution(tx as unknown as typeof db, id, ctx.tenantId));
     if (!record) throw new HttpError(404, "NOT_FOUND", "substitution rule not found");
     return reply.send({ data: record });
   });

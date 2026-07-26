@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "a9000000-1111-4000-8000-000000000001";
@@ -16,14 +17,14 @@ function token(roles: string[]) {
 async function seedInstance(): Promise<string> {
   const id = randomUUID();
   const actor = randomUUID();
-  await db.execute(sql`INSERT INTO workflow.instances (id, tenant_id, name, status, created_by, updated_by)
+  await sqlAsTenant(TENANT, sql`INSERT INTO workflow.instances (id, tenant_id, name, status, created_by, updated_by)
     VALUES (${id}, ${TENANT}, 'Final inst', 'active', ${actor}, ${actor})`);
   return id;
 }
 
 afterEach(async () => {
-  await db.execute(sql`DELETE FROM workflow.instance_finalizations WHERE tenant_id = ${TENANT}`);
-  await db.execute(sql`DELETE FROM workflow.instances WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.instance_finalizations WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.instances WHERE tenant_id = ${TENANT}`);
 });
 afterAll(async () => { await sqlClient.end(); });
 

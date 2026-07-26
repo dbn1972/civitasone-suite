@@ -15,6 +15,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { messageSubscriptions, signalSubscriptions } from "../src/modules/messages/schema.js";
 import { eq, and } from "drizzle-orm";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000001";
@@ -49,7 +50,7 @@ describe("Message correlation flow (14.3)", () => {
   afterEach(async () => {
     // Clean up seeded subscriptions
     for (const id of subIds) {
-      await db.delete(messageSubscriptions).where(eq(messageSubscriptions.id, id)).catch(() => undefined);
+      await asTenant(TENANT, () => db.transaction(async (tx) => tx.delete(messageSubscriptions).where(eq(messageSubscriptions.id, id)).catch(() => undefined)));
     }
     subIds.length = 0;
   });
@@ -61,7 +62,7 @@ describe("Message correlation flow (14.3)", () => {
     const taskId = randomUUID();
     subIds.push(subId);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: subId,
       tenantId: TENANT,
       instanceId,
@@ -70,7 +71,7 @@ describe("Message correlation flow (14.3)", () => {
       correlationKey: "ORDER-001",
       nodeKey: "catch_payment",
       status: "active",
-    });
+    })));
 
     // Deliver the message via the route
     const res = await app.inject({
@@ -112,7 +113,7 @@ describe("Message correlation flow (14.3)", () => {
     const subId = randomUUID();
     subIds.push(subId);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: subId,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -122,7 +123,7 @@ describe("Message correlation flow (14.3)", () => {
       nodeKey: "catch_invoice",
       status: "matched",
       matchedAt: new Date(),
-    });
+    })));
 
     const res = await app.inject({
       method: "POST",
@@ -178,8 +179,9 @@ describe("Message correlation flow (14.3)", () => {
     const subId = randomUUID();
     subIds.push(subId);
 
-    // Seed subscription in a DIFFERENT tenant
-    await db.insert(messageSubscriptions).values({
+    // Seed subscription in a DIFFERENT tenant (under THAT tenant's GUC —
+    // RLS WITH CHECK rejects cross-tenant inserts, by design)
+    await asTenant(otherTenant, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: subId,
       tenantId: otherTenant,
       instanceId: randomUUID(),
@@ -188,7 +190,7 @@ describe("Message correlation flow (14.3)", () => {
       correlationKey: "CT-001",
       nodeKey: "catch_cross",
       status: "active",
-    });
+    })));
 
     // Deliver from the test tenant — should not match
     const res = await app.inject({
@@ -211,7 +213,7 @@ describe("Message correlation flow (14.3)", () => {
     const instanceId = randomUUID();
     subIds.push(subId);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: subId,
       tenantId: TENANT,
       instanceId,
@@ -220,7 +222,7 @@ describe("Message correlation flow (14.3)", () => {
       correlationKey: "STAT-001",
       nodeKey: "catch_status",
       status: "active",
-    });
+    })));
 
     const res = await app.inject({
       method: "GET",
@@ -245,7 +247,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
 
   afterEach(async () => {
     for (const id of signalSubIds) {
-      await db.delete(signalSubscriptions).where(eq(signalSubscriptions.id, id)).catch(() => undefined);
+      await asTenant(TENANT, () => db.transaction(async (tx) => tx.delete(signalSubscriptions).where(eq(signalSubscriptions.id, id)).catch(() => undefined)));
     }
     signalSubIds.length = 0;
   });
@@ -256,7 +258,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
     for (const instanceId of instanceIds) {
       const subId = randomUUID();
       signalSubIds.push(subId);
-      await db.insert(signalSubscriptions).values({
+      await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
         id: subId,
         tenantId: TENANT,
         instanceId,
@@ -264,7 +266,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
         signalName: "shift.change",
         nodeKey: "catch_shift",
         status: "active",
-      });
+      })));
     }
 
     const res = await app.inject({
@@ -306,7 +308,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
     signalSubIds.push(sub1Id, sub2Id, sub3Id);
 
     // One active
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sub1Id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -314,10 +316,10 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
       signalName: "mixed.status.signal",
       nodeKey: "catch_mixed",
       status: "active",
-    });
+    })));
 
     // One already matched
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sub2Id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -326,10 +328,10 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
       nodeKey: "catch_mixed",
       status: "matched",
       matchedAt: new Date(),
-    });
+    })));
 
     // One expired
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sub3Id,
       tenantId: TENANT,
       instanceId: randomUUID(),
@@ -337,7 +339,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
       signalName: "mixed.status.signal",
       nodeKey: "catch_mixed",
       status: "expired",
-    });
+    })));
 
     const res = await app.inject({
       method: "POST",
@@ -358,8 +360,8 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
     const subId = randomUUID();
     signalSubIds.push(subId);
 
-    // Seed subscription in a different tenant
-    await db.insert(signalSubscriptions).values({
+    // Seed subscription in a different tenant (under THAT tenant's GUC)
+    await asTenant(otherTenant, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: subId,
       tenantId: otherTenant,
       instanceId: randomUUID(),
@@ -367,7 +369,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
       signalName: "tenant.isolated.signal",
       nodeKey: "catch_isolated",
       status: "active",
-    });
+    })));
 
     // Broadcast from our test tenant
     const res = await app.inject({
@@ -422,7 +424,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
     const subId = randomUUID();
     signalSubIds.push(subId);
 
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: subId,
       tenantId: TENANT,
       instanceId,
@@ -430,7 +432,7 @@ describe("Signal broadcast — multiple instances (14.4)", () => {
       signalName: "approval.reminder",
       nodeKey: "catch_reminder",
       status: "active",
-    });
+    })));
 
     const res = await app.inject({
       method: "GET",
@@ -454,10 +456,10 @@ describe("GET /v1/workflow/instances/:instanceId/subscriptions (integration)", (
 
   afterEach(async () => {
     for (const id of cleanupIds.msgs) {
-      await db.delete(messageSubscriptions).where(eq(messageSubscriptions.id, id)).catch(() => undefined);
+      await asTenant(TENANT, () => db.transaction(async (tx) => tx.delete(messageSubscriptions).where(eq(messageSubscriptions.id, id)).catch(() => undefined)));
     }
     for (const id of cleanupIds.sigs) {
-      await db.delete(signalSubscriptions).where(eq(signalSubscriptions.id, id)).catch(() => undefined);
+      await asTenant(TENANT, () => db.transaction(async (tx) => tx.delete(signalSubscriptions).where(eq(signalSubscriptions.id, id)).catch(() => undefined)));
     }
     cleanupIds.msgs.length = 0;
     cleanupIds.sigs.length = 0;
@@ -470,7 +472,7 @@ describe("GET /v1/workflow/instances/:instanceId/subscriptions (integration)", (
     cleanupIds.msgs.push(msgSubId);
     cleanupIds.sigs.push(sigSubId);
 
-    await db.insert(messageSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(messageSubscriptions).values({
       id: msgSubId,
       tenantId: TENANT,
       instanceId,
@@ -479,9 +481,9 @@ describe("GET /v1/workflow/instances/:instanceId/subscriptions (integration)", (
       correlationKey: "DOC-001",
       nodeKey: "catch_doc",
       status: "active",
-    });
+    })));
 
-    await db.insert(signalSubscriptions).values({
+    await asTenant(TENANT, () => db.transaction(async (tx) => tx.insert(signalSubscriptions).values({
       id: sigSubId,
       tenantId: TENANT,
       instanceId,
@@ -489,7 +491,7 @@ describe("GET /v1/workflow/instances/:instanceId/subscriptions (integration)", (
       signalName: "day.end",
       nodeKey: "catch_dayend",
       status: "active",
-    });
+    })));
 
     const res = await app.inject({
       method: "GET",

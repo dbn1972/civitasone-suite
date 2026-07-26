@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "b0000000-1111-4000-8000-000000000001";
@@ -30,10 +31,10 @@ const graph = {
 
 let code = "";
 afterEach(async () => {
-  await db.execute(sql`DELETE FROM workflow.instances WHERE tenant_id = ${TENANT}`);
-  await db.execute(sql`DELETE FROM workflow.definition_edges WHERE definition_id IN (SELECT id FROM workflow.definitions WHERE tenant_id = ${TENANT})`);
-  await db.execute(sql`DELETE FROM workflow.definition_nodes WHERE definition_id IN (SELECT id FROM workflow.definitions WHERE tenant_id = ${TENANT})`);
-  await db.execute(sql`DELETE FROM workflow.definitions WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.instances WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.definition_edges WHERE definition_id IN (SELECT id FROM workflow.definitions WHERE tenant_id = ${TENANT})`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.definition_nodes WHERE definition_id IN (SELECT id FROM workflow.definitions WHERE tenant_id = ${TENANT})`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.definitions WHERE tenant_id = ${TENANT}`);
 });
 afterAll(async () => { await sqlClient.end(); });
 
@@ -53,7 +54,7 @@ describe("CAP-030 in-flight version pinning", () => {
     // an in-flight instance pinned to v1
     const instId = randomUUID();
     const actor = randomUUID();
-    await db.execute(sql`INSERT INTO workflow.instances (id, tenant_id, name, status, definition_id, definition_version, current_node, created_by, updated_by)
+    await sqlAsTenant(TENANT, sql`INSERT INTO workflow.instances (id, tenant_id, name, status, definition_id, definition_version, current_node, created_by, updated_by)
       VALUES (${instId}, ${TENANT}, 'live case', 'active', ${v1.id}, 1, 'review', ${actor}, ${actor})`);
 
     // publish v2 (same code) and deploy it
@@ -68,7 +69,7 @@ describe("CAP-030 in-flight version pinning", () => {
     expect(v1Row?.version).toBe(1);
 
     // the instance row itself still points at v1 (not silently re-bound to v2)
-    const inst = await db.execute(sql`SELECT definition_id, definition_version FROM workflow.instances WHERE id = ${instId}`);
+    const inst = await sqlAsTenant(TENANT, sql`SELECT definition_id, definition_version FROM workflow.instances WHERE id = ${instId}`);
     const pin = (inst as unknown as Array<{ definition_id: string; definition_version: number }>)[0]!;
     expect(pin.definition_id).toBe(v1.id);
     expect(pin.definition_version).toBe(1);
@@ -79,7 +80,7 @@ describe("CAP-030 in-flight version pinning", () => {
     expect(rb.json().data.version).toBe(1);
     expect(rb.json().data.status).toBe("active");
 
-    const inst2 = await db.execute(sql`SELECT definition_id FROM workflow.instances WHERE id = ${instId}`);
+    const inst2 = await sqlAsTenant(TENANT, sql`SELECT definition_id FROM workflow.instances WHERE id = ${instId}`);
     expect((inst2 as unknown as Array<{ definition_id: string }>)[0]!.definition_id).toBe(v1.id);
     await app.close();
   });

@@ -8,6 +8,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
 
 const log = pino({ name: "workflow-messages-consumer" });
@@ -28,6 +29,9 @@ interface SignalPayload {
 }
 
 export function registerMessagesConsumers(q: Queue): void {
+  // RLS (#146): run every handler inside the message's tenant context so
+  // db.transaction() sets the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
+  q = tenantScoped(q);
   // --- workflow.message.correlate ---
   subscribeWithDlq<CorrelatePayload>(q, "workflow.message.correlate", async (msg) => {
     const { tenantId, messageName, correlationKey, payload } = msg.payload;

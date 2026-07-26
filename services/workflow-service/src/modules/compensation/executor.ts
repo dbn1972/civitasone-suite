@@ -13,6 +13,7 @@
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as defRepo from "../definitions/repo.js";
@@ -50,6 +51,17 @@ type Writer = Pick<typeof db, "insert" | "update" | "select" | "execute">;
  * in reverse order, invoking declared compensation handlers for each step.
  */
 export async function runCompensation(
+  instanceId: string,
+  tenantId: string,
+  actorId: string,
+): Promise<CompensationResult> {
+  // RLS (#146): the executor is invoked with an explicit tenantId (routes,
+  // consumers, tests) — establish that tenant's context so every read/write
+  // below carries the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
+  return runWithTenant(tenantId, () => runCompensationForTenant(instanceId, tenantId, actorId));
+}
+
+async function runCompensationForTenant(
   instanceId: string,
   tenantId: string,
   actorId: string,
@@ -118,8 +130,9 @@ export async function runCompensation(
     }
   }
 
-  // Emit audit event for the compensation run
-  await enqueue(db as Parameters<typeof enqueue>[0], {
+  // Emit audit event for the compensation run — inside db.transaction() so the
+  // outbox insert carries the tenant GUC (a bare db call never does).
+  await db.transaction((tx) => enqueue(tx as Parameters<typeof enqueue>[0], {
     topic: AUDIT_TOPIC,
     eventType: AUDIT_TOPIC,
     tenantId,
@@ -133,7 +146,7 @@ export async function runCompensation(
       outcome: "success",
       detail: { compensated: result.compensated, failed: result.failed, skipped: result.skipped },
     },
-  });
+  }));
 
   log.info(
     { instanceId, compensated: result.compensated, failed: result.failed, skipped: result.skipped },
@@ -164,34 +177,38 @@ async function executeHandler(
   const messageTopic = (handlerNode as unknown as Record<string, unknown>).messageTopic as string | null | undefined;
 
   if (messageTopic) {
-    // Message-throw pattern: fire a rollback command to an external service
-    await enqueue(db as Parameters<typeof enqueue>[0], {
-      topic: messageTopic,
-      eventType: "workflow.compensation.rollback",
-      tenantId,
-      actorId,
-      correlationId: randomUUID(),
-      payload: {
-        instanceId,
-        sourceNodeKey,
-        handlerKey,
-        context: instance.context ?? {},
-      },
-    });
+    // Message-throw pattern: fire a rollback command to an external service.
+    // One transaction per handler so the outbox insert + history row carry the
+    // tenant GUC (bare db calls never do) and commit/roll back together.
+    await db.transaction(async (tx) => {
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: messageTopic,
+        eventType: "workflow.compensation.rollback",
+        tenantId,
+        actorId,
+        correlationId: randomUUID(),
+        payload: {
+          instanceId,
+          sourceNodeKey,
+          handlerKey,
+          context: instance.context ?? {},
+        },
+      });
 
-    // Record in transition_history
-    await historyRepo.record(db as historyRepo.Writer, {
-      tenantId,
-      instanceId,
-      fromNode: sourceNodeKey,
-      toNode: handlerKey,
-      action: "compensate",
-      actorId,
-      detail: { messageTopic, method: "message_throw" },
+      // Record in transition_history
+      await historyRepo.record(tx as historyRepo.Writer, {
+        tenantId,
+        instanceId,
+        fromNode: sourceNodeKey,
+        toNode: handlerKey,
+        action: "compensate",
+        actorId,
+        detail: { messageTopic, method: "message_throw" },
+      });
     });
   } else {
     // No message topic — record as noted (future: could spawn a human task)
-    await historyRepo.record(db as historyRepo.Writer, {
+    await db.transaction((tx) => historyRepo.record(tx as historyRepo.Writer, {
       tenantId,
       instanceId,
       fromNode: sourceNodeKey,
@@ -199,7 +216,7 @@ async function executeHandler(
       action: "compensate",
       actorId,
       detail: { method: "compensation_noted" },
-    });
+    }));
   }
 }
 
