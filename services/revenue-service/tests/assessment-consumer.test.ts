@@ -182,10 +182,21 @@ describe("Assessment Consumer", () => {
       expect(mockMarkProcessed).toHaveBeenCalledTimes(1);
       // 3 inserts: assessment, demand, DCB entry
       expect(mockInsert).toHaveBeenCalledTimes(3);
-      // 2 enqueue calls: demandRaised + audit
-      expect(mockEnqueue).toHaveBeenCalledTimes(2);
-      expect(mockEnqueue.mock.calls[0]![1].topic).toBe("revenue.demand.raised");
-      expect(mockEnqueue.mock.calls[1]![1].topic).toBe("audit.event.record");
+      // 3 enqueue calls: assessmentCreated + demandRaised + audit.
+      // Was 2 — the assertion predated commit 92887d98, which wired the
+      // previously-unemitted `assessmentCreated` event. The test had been red
+      // since then; corrected rather than relaxed, and each topic is now
+      // asserted by name so a dropped event is caught rather than just a count.
+      expect(mockEnqueue).toHaveBeenCalledTimes(3);
+      const emittedTopics = mockEnqueue.mock.calls.map((c: unknown[]) => (c[1] as { topic: string }).topic);
+      expect(emittedTopics).toContain("revenue.assessment.created");
+      expect(emittedTopics).toContain("revenue.demand.raised");
+      expect(emittedTopics).toContain("audit.event.record");
+      // Emission ORDER: the domain events precede the audit record, so a
+      // consumer reading the outbox sees the fact before its audit entry.
+      // Asserted by position rather than index-guessing the middle entries.
+      expect(emittedTopics[0]).toBe("revenue.assessment.created");
+      expect(emittedTopics[emittedTopics.length - 1]).toBe("audit.event.record");
 
       // Cache invalidation
       expect(mockCacheInvalidate).toHaveBeenCalledWith("revenue:tenant-1:assessments");

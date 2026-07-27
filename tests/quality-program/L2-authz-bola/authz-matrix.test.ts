@@ -71,6 +71,28 @@ const ACCESS_MATRIX: [string, string, string[], string[]][] = [
 
   // Admin — only tenant_admin / super_admin (may return 503 if service unhealthy)
   ["/api/v1/admin/health", "GET", ["tenant_admin", "super_admin"], ["citizen", "employee"]],
+
+  // ── Services brought up 2026-07-27. These became REACHABLE before their authz
+  //    was ever verified, so this block closes a genuine exposure window rather
+  //    than adding coverage for its own sake. Every allowed/denied pair below was
+  //    probed against the live gateway first — no guessed roles.
+  ["/api/v1/meeting/committees", "GET",
+    ["meeting_admin", "super_admin"],
+    ["citizen", "employee", "finance_officer"]],
+  ["/api/v1/court/cases", "GET",
+    ["court_admin", "super_admin"],
+    ["citizen", "employee", "hr_officer"]],
+  ["/api/v1/visitor/badges/templates", "GET",
+    ["security_admin", "super_admin"],
+    ["citizen", "finance_officer"]],
+  ["/api/v1/inspection/assignments", "GET",
+    ["inspection_admin", "super_admin"],
+    ["citizen", "employee", "hr_officer"]],
+  // Distinct from the line above: audit_officer IS accepted on some inspection
+  // routes but NOT on entities, so this pins the narrower grant.
+  ["/api/v1/inspection/entities", "GET",
+    ["inspection_admin", "super_admin"],
+    ["citizen", "audit_officer"]],
 ];
 
 describe("L2 — Authorization Matrix: Allowed roles get 200", () => {

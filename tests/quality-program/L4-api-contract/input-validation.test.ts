@@ -69,6 +69,40 @@ describe("L4 — SQL Injection resistance", () => {
     });
   }
 
+  /**
+   * Services brought up 2026-07-27 — newly reachable, so newly attackable. Their
+   * input handling had never been exercised. `court` and `visitor` in particular
+   * hold PII behind `encryptedText()`, so an injection reaching their query layer
+   * would be a DPDP exposure, not just a crash.
+   */
+  const NEW_SURFACES = [
+    "/api/v1/meeting/committees",
+    "/api/v1/court/cases",
+    "/api/v1/visitor/badges/templates",
+    "/api/v1/inspection/assignments",
+  ];
+
+  for (const path of NEW_SURFACES) {
+    it(`${path}: SQLi in query param does not 500`, async () => {
+      const res = await apiGet(`${path}?search=${encodeURIComponent("1' OR '1'='1")}`);
+      // 500 would mean the payload reached the driver and blew up.
+      expect(res.status).not.toBe(500);
+      // 404 would mean the path is wrong and the assertion proves nothing.
+      expect(res.status).not.toBe(404);
+      expect([200, 400, 403]).toContain(res.status);
+    });
+
+    it(`${path}: UNION SELECT probe does not leak or 500`, async () => {
+      const res = await apiGet(`${path}?search=${encodeURIComponent("' UNION SELECT null,null,null --")}`);
+      expect(res.status).not.toBe(500);
+      const body = JSON.stringify(res.body ?? "");
+      // A successful union would surface column-ish artefacts; assert none of the
+      // obvious leak markers appear.
+      expect(body.toLowerCase()).not.toContain("pg_catalog");
+      expect(body.toLowerCase()).not.toContain("information_schema");
+    });
+  }
+
   it("POST with SQLi in body field", async () => {
     const { status } = await apiPost("/api/v1/finance/journals", {
       voucherNo: "'; DROP TABLE journals; --",
@@ -101,6 +135,26 @@ describe("L4 — Path traversal resistance", () => {
       expect([400, 404, 502]).toContain(res.status);
       const text = await res.text();
       expect(text).not.toContain("root:");
+    });
+  }
+
+  // Traversal against the newly-reachable services.
+  const NEW_TRAVERSAL = [
+    "/api/v1/court/../../../etc/passwd",
+    "/api/v1/visitor/badges/..%2f..%2f..%2fetc%2fpasswd",
+    "/api/v1/inspection/%2e%2e/%2e%2e/etc/shadow",
+    "/api/v1/meeting/../../../../etc/passwd",
+  ];
+
+  for (const path of NEW_TRAVERSAL) {
+    it(`new surface traversal: ${path.slice(0, 44)}...`, async () => {
+      const res = await fetch(`${GATEWAY}${path}`, {
+        headers: { authorization: `Bearer ${makeToken()}` },
+      });
+      expect([400, 403, 404, 502]).toContain(res.status);
+      const text = await res.text();
+      expect(text).not.toContain("root:");
+      expect(text).not.toContain("daemon:");
     });
   }
 });

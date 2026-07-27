@@ -10,11 +10,12 @@
 
 | Lane | Tests | Pass | Fail | Status | Verdict |
 |------|-------|------|------|--------|---------|
-| L0 Deployment Readiness | 9 | 9 | 0 | 🟡 GREEN + FINDING | **4 of 41 not serving** (was 11 — 7 fixed) |
-| L1 Tenant Isolation | 57 | 57 | 0 | ✅ GREEN | No cross-tenant leaks detected |
-| L2 Authz / BOLA | 44 | 44 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
-| L3 Data Integrity | 38 | 38 | 0 | ✅ GREEN | All money columns bigint; 0 violations |
-| L4 API Contract | 16 | 16 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
+| L0 Deployment Readiness | 9 | 9 | 0 | ✅ GREEN | **41 of 41 serving** — inventory empty |
+| L1 Tenant Isolation | 70 | 70 | 0 | ✅ GREEN | No cross-tenant leaks; covers all 41 services |
+| L2 Authz / BOLA | 67 | 67 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
+| L3 Data Integrity | 43 | 43 | 0 | 🟡 GREEN AFTER REPAIR | Money bigint; **2 controls had never run — fixed** |
+| L3b Schema Drift | guard | — | — | 🔴 GREEN + P0 FINDING | **338 drifts / 14 services; 3 live 500s**; ratcheted |
+| L4 API Contract | 28 | 28 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | 18 | 18 | 0 | ✅ GREEN | AES-GCM verified; audit ledger immutable |
 | L7 Reliability | 10 | 10 | 0 | ✅ GREEN | Honest 503s; p95 < 500ms; 0 5xx under load |
@@ -24,9 +25,14 @@
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
 | L11 Mutation Score | 1059 mutants | 755 killed | 253 survived | ✅ **71.29%** | Enforcing at 68; **≥70% criterion MET** |
 
-**Totals:** 243 tests across 12 files, plus a measured SLO run.
-Release gate: **RELEASABLE** — all blocking lanes have passing evidence and the
-error budget is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited).
+**Totals:** 447 tests across 16 files, plus a measured SLO run and 3 CI guards
+(package exports, deployment declaration, schema drift).
+
+Release gate: **NOT RELEASABLE** — the lanes pass, but L3b proves three
+gateway-reachable endpoints return 500 in the live fleet because their tables
+were never migrated, and two services leak raw Postgres errors doing so. The
+error budget itself is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited);
+the k6 read paths simply do not touch the broken endpoints.
 
 ---
 
@@ -74,10 +80,64 @@ error budget is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited).
 
 ---
 
-## L3 — Data & Schema Integrity (P0) ✅ PASS
+## L3 — Data & Schema Integrity (P0) 🟡 GREEN AFTER HONESTY REPAIR
 
 **Tested:** 18 service databases scanned  
 **Method:** Direct schema introspection via psql
+
+### P0 FINDING — this lane was largely vacuous (fixed 2026-07-27)
+
+Found while reviewing PR #206. The lane reported 38/38 green while two of its
+four controls had **never once executed**. The evidence was visible in its own
+run output, printed immediately above the green result:
+
+```
+psql: error: ... FATAL:  password authentication failed for user "civitas_admin"
+ERROR:  relation "finance.journal_lines" does not exist
+ ✓ L3-data-integrity/schema-integrity.test.ts (38 tests)
+```
+
+| # | Defect | Effect |
+|---|--------|--------|
+| D1 | `psql()` collapsed every failure to a `"__DB_ERROR__"` sentinel and each caller did `if (result === "__DB_ERROR__") return;` | A wrong password, a missing relation or a dead server all read as **clean**. This is the single root cause that hid D2 and D3. |
+| D2 | BYPASSRLS audit connected with password `civitas_admin_dev_pw`; the real password is `civitas_dev_pw` | Authentication failed on **every run since the lane was written**. The RLS-bypass security check never ran. |
+| D3 | Double-entry check queried `finance.journal_lines`; the real relation is `gl.finance_journal_lines` | The platform's **most important financial invariant had never been evaluated**. |
+| D4 | timestamptz check only called `console.warn` on violations | Could not fail regardless of what it found — pure theater. |
+
+**Repairs.** `psql()` now returns a discriminated `{ok:true,out} | {ok:false,err}`
+and every DB failure fails the test as `UNMEASURED`. Credentials come from
+`POSTGRES_ADMIN_*` with a correct default. The GL table is **resolved from
+`information_schema`** (by looking for `debit_minor` + `credit_minor` +
+`journal_id`) rather than hardcoded, and a missing GL table is itself a failure.
+The timestamptz check asserts — measured at **0 violations across all 18
+databases**, so strictness costs nothing. Two preflight tests now fail the lane
+if any configured database is unreachable or the admin credentials are wrong.
+
+**Non-vacuity of the double-entry check.** `gl.finance_journal_lines` holds
+**0 rows** in dev, so "no imbalance found" would still prove nothing. The
+detector is therefore exercised against the real table by a canary that plants a
+balanced journal and an unbalanced one inside a transaction, asserts the detector
+returns **exactly** the unbalanced `journal_id`, then `ROLLBACK`s and asserts the
+table is back to 0 rows. A `BYPASSRLS` detector canary does the same job for the
+RLS audit by inverting the predicate and requiring a non-empty match — otherwise
+an empty result is indistinguishable from a broken query.
+
+**Canary proof.** Re-running the repaired lane with the old (wrong) password —
+the exact condition that used to produce a green run:
+
+```
+$ POSTGRES_ADMIN_PASSWORD=deliberately_wrong npx vitest run L3-data-integrity
+→ UNMEASURED — admin connection as civitas_admin could not be evaluated, so this is NOT a pass.
+→ UNMEASURED — BYPASSRLS detector canary could not be evaluated, so this is NOT a pass.
+→ UNMEASURED — service role BYPASSRLS audit could not be evaluated, so this is NOT a pass.
+Tests  3 failed | 40 passed (43)
+```
+
+**Corrected verdicts.** Both controls now genuinely measured on 2026-07-27:
+`SELECT rolname FROM pg_roles WHERE rolname LIKE '%\_svc' AND rolbypassrls`
+returns **empty** — no service role can bypass RLS. The GL imbalance query over
+committed data returns **empty over 0 rows**; `debit_minor`/`credit_minor` are
+both `bigint`.
 
 ### All money columns now use bigint (paise):
 - ✅ citizen.fee.payments.amount → bigint
@@ -92,9 +152,100 @@ error budget is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited).
 - hrms.learning.courses.credit_hours — hours, not money
 
 ### Other Checks:
-- ✅ RLS: no service roles have BYPASSRLS
-- ✅ Double-entry: no unbalanced vouchers in finance GL
-- ✅ Timestamps: all timestamptz (verified)
+- ✅ RLS: no service roles have BYPASSRLS — **measured 2026-07-27** (previously asserted without ever running; see D2)
+- ✅ Double-entry: no unbalanced journal in `gl.finance_journal_lines`, detector proven by planted-imbalance canary — **measured 2026-07-27** (previously asserted without ever running; see D3)
+- ✅ Timestamps: 0 non-timestamptz columns across 18 databases, now asserted rather than warned (see D4)
+- ✅ Preflight: all 18 service databases reachable with their configured role
+
+---
+
+## L3b — Schema Drift (P0 FINDING) 🔴 338 TRACKED DRIFTS
+
+**Guard:** `scripts/ci/schema-drift-guard.mjs` · **Baseline:** `scripts/ci/schema-drift-baseline.json`  
+**Wired:** `.github/workflows/ci.yml` → Integration Tests job, after `bootstrap-postgres.sh` (needs a live DB)
+
+### What it checks
+
+Every column a Drizzle model declares must exist in that service's database.
+Direction is **declared → DB**; a column present in the DB but absent from the
+model is normal mid-rollout and is not reported.
+
+Nothing else in the programme can see this class of defect:
+
+- `tsc` type-checks the model against itself, never against the database
+- unit tests mock or never touch the affected query
+- L3 checks column **types** on columns that **exist** — it cannot notice an absent one
+- coverage is blind: a schema file can be 100% covered and still drift
+
+### Measured: 338 declared-but-missing columns across 14 services
+
+| Service | Columns | Service | Columns |
+|---------|--------:|---------|--------:|
+| location | 92 | policy | 9 |
+| knowledge | 58 | legal | 7 |
+| tenant | 51 | finance | 5 |
+| plugin | 34 | hrms | 2 |
+| theme | 27 | helpdesk | 2 |
+| inventory | 26 | works | 1 |
+| contract | 23 | notification | 1 |
+
+Most are **entire tables that no migration ever creates**, not individual
+columns — e.g. all 26 columns of `inventory.inventory.three_way_matches`, all 10
+of `contract.templates.contract_templates`, all 13 of
+`knowledge.knowledge.categories`. Verified by hand: the `templates` schema does
+not exist in `civitas_contract` at all.
+
+### This is a live 500, not a theoretical risk
+
+Probed against the running fleet with a valid `super_admin` token:
+
+| Endpoint | Result |
+|----------|--------|
+| `GET :3025/v1/inventory/matches` | **500** `{"code":"INTERNAL"}` — three-way match, a money path |
+| `GET :3009/v1/contract/templates` | **500** `relation "templates.contract_templates" does not exist` |
+| `GET :3028/v1/knowledge/categories` | **500** `relation "knowledge.categories" does not exist` |
+| `GET :8080/api/v1/inventory/matches` | **500** `UPSTREAM_ERROR` — reachable through the gateway |
+
+### Secondary P1 finding — raw Postgres errors leak to clients
+
+`contract-service` and `knowledge-service` returned the driver's error verbatim,
+including the SQLSTATE and the internal relation name:
+
+```json
+{"statusCode":500,"code":"42P01","error":"Internal Server Error",
+ "message":"relation \"templates.contract_templates\" does not exist"}
+```
+
+That violates the standing rule *"never leak raw Postgres/Redis errors to
+clients"* and discloses the internal schema layout. `inventory-service` handles
+the same failure correctly (`{"code":"INTERNAL","correlationId":...}`), so the
+two services are missing the shared error-mapping hook that inventory has.
+**Not fixed in this PR** — tracked for the drift burn-down.
+
+### Ratchet, not approval
+
+All 338 are baselined so the gate fails only on **new** drift. The baseline file
+says so explicitly: it is tracked debt, not an approved state. Every entry makes
+a `SELECT` built from its model fail at runtime.
+
+### Canary proof (all three verified)
+
+| Canary | Result |
+|--------|--------|
+| Plant `canary_planted_column` in `finance/payments/schema.ts` | `NEW: 1`, exit 1, names the file |
+| Add an already-fixed column to the baseline | `stale: 1`, exit 1, "FIXED but still listed" |
+| Corrupt the baseline to `{"entries":"not-an-array"}` | exit 1, "baseline is malformed" — cannot read as "no known drift" |
+| No reachable database | exit 1, `UNMEASURED — no service was checked` |
+| Clean run | exit 0, `RATCHET HOLDING — 338 known drift(s), no new ones` |
+
+`--write-baseline` refuses to run if any database was unreachable, so drift
+cannot be silently recorded as zero.
+
+### Not yet proven
+
+The guard has **never executed in GitHub Actions**. CI bootstraps its databases
+from the same migrations, so the drift set should be identical, but until a CI
+run goes green that is an expectation and not a measurement.
 
 ---
 
@@ -275,17 +426,63 @@ clean → 42 tables.
 
 The L0 staleness ratchet then failed on all four, forcing the inventory 8 → 4.
 
-### Still not serving (4) — blocked on database provisioning
+### ALL 41 SERVICES NOW SERVING (2026-07-27)
 
-| Service | Blocker |
-|---|---|
-| `revenue` | `revenue_svc` role and `civitas_revenue` database **do not exist** |
-| `works` | `works_svc` role and database do not exist |
-| `ml` | `ml_svc` role and database do not exist |
-| `metadata` | role exists; not yet started |
+Fleet 30 → **43 listening ports**. The L0 inventory ran **11 → 8 → 4 → 0**, each
+step a distinct root cause:
 
-`revenue` remains the sharpest case: highest line coverage in the fleet (99.6%)
-and still no database to connect to.
+| Step | Services | Root cause |
+|---|---|---|
+| 11 → 8 | payroll, admin, knowledge | Package `exports` maps pointed at `./src/*.js` while shipping to `dist/` — `ERR_MODULE_NOT_FOUND` killed them before they bound a port |
+| 8 → 4 | meeting, court, visitor, inspection | Secrets + `RUNTIME_NODE_ENV` + `JWT_ALGORITHM` needed in the launching shell; **inspection also had no role or database at all** |
+| 4 → 0 | revenue, works, ml, metadata | Roles and databases provisioned; **revenue additionally had a real auth bug** |
+
+#### P1 DEFECT — revenue-service: every authenticated route returned 401
+
+`resolveContext` read `(req as any).user`, which the auth plugin **never sets** —
+it decorates `req.ctx`. So `user` was always `undefined` and **every
+authenticated route in the service returned 401 "missing authentication"**.
+Confirmed live: `GET /v1/revenue/analytics/defaulters` returned 401 with a valid
+HS256 token that finance-service accepted on the same host.
+
+**Why 99.6% line coverage did not catch it: eight test files `vi.mock`ed
+`../src/shared/context.js` itself** and substituted a working `resolveContext`
+that read `req.ctx`. The suite exercised the mock, never the module. This is the
+sharpest example in the programme of coverage measuring the wrong thing — the
+highest-covered service in the fleet was completely non-functional.
+
+Fixed by delegating to the shared `resolveServiceContext` (matching
+finance-service), removing the mocks, and re-exporting `RequestContext` from
+`@civitasone/types` instead of keeping a private structural copy — the private
+copy is what allowed the drift. Verified 401 → **200** direct and through the
+gateway.
+
+Two related hardenings fell out of it:
+- `requireRole` now coalesces `ctx.roles ?? []`, so an absent roles claim **fails
+  closed with 403** instead of throwing a `TypeError` and surfacing as a 500.
+- A non-UUID tenant id is now asserted to be rejected; a service that accepts
+  `"tenant-1"` cannot enforce tenant isolation downstream.
+
+#### Also fixed: a test red since commit 92887d98
+
+`assessment-consumer.test.ts` asserted 2 enqueue calls after a third event
+(`assessmentCreated`) had been wired. Corrected to 3 and each topic is now
+asserted **by name**, so a dropped event fails rather than only a changed count.
+
+### Newly-exposed surfaces now covered
+
+Bringing services up made them reachable *before* their authz was verified — a
+net risk increase. Closed in the same pass:
+
+| Lane | Before | After |
+|---|---|---|
+| L1 Tenant Isolation | 57 | **70** (13 new endpoints across all 4 services) |
+| L2 Authz / BOLA | 44 | **67** (5 endpoint×role matrices, every pair probed live first) |
+| L4 API Contract | 16 | **28** (SQLi + UNION + traversal on each new surface) |
+
+Every allowed/denied role pair was probed against the live gateway before being
+written, so no guessed roles. Canary-verified: adding `court_admin` to the denied
+list for `/api/v1/court/cases` fails the matrix.
 
 ### Previously (8) — declared and routed, blocked on secrets
 
@@ -606,16 +803,17 @@ implying an unverified SLO.
 
 ## Next Steps
 
-1. **Provision `revenue_svc`, `works_svc`, `ml_svc` roles and databases**, then
-   launch those three plus `metadata`. Use
-   `infra/db/bootstrap/bootstrap_inspection.sql` as the template and apply each
-   service's migrations as `civitas_admin`. Takes the fleet 39 → 41/41.
-   `revenue` is the priority: 99.6% coverage and still no database.
+1. **Restart court/meeting/visitor with REAL PII keys.** They are currently
+   encrypting PII under the in-repo dev fallback
+   (`civitasone-<svc>-pii-dev-key-not-for-prod`). Deterministic and fine for a dev
+   box, but they must take keys from the secret manager before any real data
+   lands. This is now the top production blocker.
 2. **Reconcile `IS_PROD` with the injected `NODE_ENV`** in `ecosystem.config.js` —
    deciding prod-ness from the shell while forcing `NODE_ENV=production` into the
    app is the trap that makes a secret-less launch fail confusingly.
-3. **Extend L1/L2/L4 to `revenue` and `metadata`** once running — routes now exist,
-   but their isolation and authz remain unverified.
+3. **Extend L1/L2/L4 to `revenue`, `works`, `ml`, `metadata`** — the four brought
+   up last. meeting/court/visitor/inspection are now covered; these four are
+   serving but still have no isolation or authz verdict.
 4. **Finish the mutation burn-down on `payroll/domain.ts`** — 60.2%, the only
    file still under 70%, with 149 surviving mutants; raise `thresholds.break` as
    it lands.

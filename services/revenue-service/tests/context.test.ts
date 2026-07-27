@@ -10,9 +10,21 @@ import { resolveContext, requireRole, HttpError, type RequestContext } from "../
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function mockRequest(user?: Record<string, unknown>, headers?: Record<string, string>) {
+/**
+ * Builds a request the way the auth plugin actually decorates it.
+ *
+ * These tests previously set `req.user`, which the plugin NEVER sets — it
+ * decorates `req.ctx` (packages/auth/src/plugin.ts). Asserting against `user`
+ * meant the suite passed while every authenticated route in this service
+ * returned 401 in production. The tenant id must also be a real UUID, because
+ * resolveContext rejects a malformed one.
+ */
+const TENANT = "00000000-0000-0000-0000-000000000001";
+const ACTOR = "aaaaaaaa-0000-4000-8000-000000000001";
+
+function mockRequest(ctx?: Record<string, unknown>, headers?: Record<string, string>) {
   return {
-    user,
+    ctx,
     headers: headers ?? {},
     id: "req-123",
   } as any;
@@ -22,18 +34,19 @@ function mockRequest(user?: Record<string, unknown>, headers?: Record<string, st
 
 describe("context.ts — Shared Infrastructure", () => {
   describe("resolveContext", () => {
-    it("returns valid RequestContext when JWT user is present", () => {
+    it("returns valid RequestContext when the auth plugin has set req.ctx", () => {
       const req = mockRequest({
-        sub: "actor-1",
-        tid: "tenant-1",
+        actorId: ACTOR,
+        tenantId: TENANT,
         roles: ["revenue_admin", "finance_admin"],
-        sid: "session-42",
+        sessionId: "session-42",
+        correlationId: "req-123",
       });
 
       const ctx = resolveContext(req);
 
-      expect(ctx.actorId).toBe("actor-1");
-      expect(ctx.tenantId).toBe("tenant-1");
+      expect(ctx.actorId).toBe(ACTOR);
+      expect(ctx.tenantId).toBe(TENANT);
       expect(ctx.roles).toEqual(["revenue_admin", "finance_admin"]);
       expect(ctx.sessionId).toBe("session-42");
       expect(ctx.correlationId).toBe("req-123");
@@ -41,7 +54,7 @@ describe("context.ts — Shared Infrastructure", () => {
 
     it("uses x-correlation-id header when present", () => {
       const req = mockRequest(
-        { sub: "actor-1", tid: "tenant-1", roles: ["admin"], sid: "s1" },
+        { actorId: ACTOR, tenantId: TENANT, roles: ["admin"], sessionId: "s1" },
         { "x-correlation-id": "corr-abc-123" },
       );
 
@@ -50,23 +63,35 @@ describe("context.ts — Shared Infrastructure", () => {
       expect(ctx.correlationId).toBe("corr-abc-123");
     });
 
-    it("defaults roles to empty array when user.roles is undefined", () => {
-      const req = mockRequest({ sub: "actor-1", tid: "tenant-1", sid: "s1" });
+    it("passes through an absent roles claim rather than inventing one", () => {
+      // The shared resolver does NOT default roles. That is fine because
+      // requireRole coalesces to [] and therefore FAILS CLOSED with 403; the
+      // previous local implementation defaulted here instead, which is what let
+      // the two diverge. Asserted so the contract is explicit.
+      const req = mockRequest({ actorId: ACTOR, tenantId: TENANT, sessionId: "s1" });
 
       const ctx = resolveContext(req);
 
-      expect(ctx.roles).toEqual([]);
+      expect(ctx.roles).toBeUndefined();
+      expect(() => requireRole(ctx, ["revenue_admin"])).toThrow(HttpError);
     });
 
-    it("defaults sessionId to empty string when user.sid is undefined", () => {
-      const req = mockRequest({ sub: "actor-1", tid: "tenant-1", roles: ["admin"] });
+    it("passes through an absent sessionId rather than inventing one", () => {
+      const req = mockRequest({ actorId: ACTOR, tenantId: TENANT, roles: ["admin"] });
 
       const ctx = resolveContext(req);
 
-      expect(ctx.sessionId).toBe("");
+      expect(ctx.sessionId).toBeUndefined();
     });
 
-    it("throws HttpError 401 when no user found on request", () => {
+    it("rejects a malformed (non-UUID) tenant id", () => {
+      // Guards the UUID_RE check: a service that accepts "tenant-1" cannot
+      // enforce tenant isolation downstream.
+      const req = mockRequest({ actorId: ACTOR, tenantId: "tenant-1", roles: ["admin"], sessionId: "s1" });
+      expect(() => resolveContext(req)).toThrow(HttpError);
+    });
+
+    it("throws HttpError 401 when req.ctx is absent", () => {
       const req = mockRequest(undefined);
 
       expect(() => resolveContext(req)).toThrow(HttpError);
@@ -76,7 +101,7 @@ describe("context.ts — Shared Infrastructure", () => {
         const httpErr = err as HttpError;
         expect(httpErr.status).toBe(401);
         expect(httpErr.code).toBe("UNAUTHENTICATED");
-        expect(httpErr.message).toBe("missing authentication");
+        expect(httpErr.message).toBe("missing bearer token");
       }
     });
   });
