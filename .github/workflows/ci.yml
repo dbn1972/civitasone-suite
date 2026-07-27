@@ -179,6 +179,19 @@ jobs:
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh
+      # Runs HERE and not in arch-guard because it needs a live database: it
+      # compares every Drizzle column declaration against information_schema.
+      # inspection-service declared findings.verification_evidence with no
+      # migration creating it, so GET /api/v1/inspection/findings returned 500.
+      # tsc cannot see this (it checks the model against itself) and coverage is
+      # blind to it (a file can be 100% covered and still drift).
+      # Ratcheted: fails on NEW drift and on baselined entries that were fixed
+      # but left listed. Baseline = scripts/ci/schema-drift-baseline.json.
+      - name: Schema drift guard (declared columns must exist in the DB)
+        env:
+          POSTGRES_ADMIN_USER: civitas
+          POSTGRES_ADMIN_PASSWORD: civitas_test
+        run: node scripts/ci/schema-drift-guard.mjs
       - name: Run integration tests
         run: pnpm exec vitest run tests/integration/
 
