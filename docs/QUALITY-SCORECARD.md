@@ -22,7 +22,7 @@
 | L9 A11Y | Existing | ✅ | — | ✅ GREEN | axe-core gate active, 0 violations |
 | L10 Domain | 26 | 26 | 0 | ✅ GREEN | 100% match to golden oracles |
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
-| L11 Mutation Score | 1029 mutants | 600 killed | 296 survived | 🟡 **58.31%** | Enforcing; **below the 70% exit criterion** |
+| L11 Mutation Score | 1029 mutants | 700 killed | 269 survived | 🟡 **68.03%** | Enforcing at 65; **below the 70% criterion** |
 
 **Totals:** 243 tests across 12 files, plus a measured SLO run.
 Release gate: **RELEASABLE** — all blocking lanes have passing evidence and the
@@ -403,35 +403,54 @@ Added payroll/F&F/GL/payments suites plus the L10 golden-oracle and L11 canary
 tests (each verified to pass in isolation first, since Stryker aborts otherwise).
 Two DB-dependent files excluded to keep the run hermetic.
 
-| File | Before | After | Survived | NoCov |
+| File | Scope-fix | Burn-down | Survived | NoCov |
 |---|---|---|---|---|
-| `payroll/domain.ts` | **0 / 430** | **37.4%** | 176 | 93 |
-| `fnf/domain.ts` | **0 / 52** | **59.6%** | 19 | 2 |
-| `gl/domain.ts` | **0 / 23** | **87.0%** | 3 | 0 |
-| `payments/domain.ts` | 32% | 57.7% | 29 | 18 |
-| `quorum/domain.ts` | 73% | 73.0% | 35 | 8 |
-| `authority/domain.ts` | 71% | 73.6% | 21 | 7 |
-| `budget/domain.ts` | 82% | 81.8% | 12 | 0 |
-| `decisions/domain.ts` | 99% | 98.8% | 1 | 0 |
+| `payroll/domain.ts` | 0/430 → **37.4%** | **60.2%** | 149 (was 176) | 22 (was 93) |
+| `fnf/domain.ts` | 0/52 → **59.6%** | 59.6% | 19 | 2 |
+| `gl/domain.ts` | 0/23 → **87.0%** | 87.0% | 3 | 0 |
+| `payments/domain.ts` | 32% → 57.7% | 57.7% | 29 | 18 |
+| `quorum/domain.ts` | 73.0% | 73.0% | 35 | 8 |
+| `authority/domain.ts` | 73.6% | 73.6% | 21 | 7 |
+| `budget/domain.ts` | 81.8% | 81.8% | 12 | 0 |
+| `decisions/domain.ts` | 98.8% | 98.8% | 1 | 0 |
 
-**Overall 35.1% → 58.31%** (600 killed / 1029). NoCoverage 561 → 128, so the
-remaining gaps are genuine rather than an artifact.
+**Overall 35.1% → 58.31% → 68.03%.** Killed 600 → 700. NoCoverage 128 → 57.
+
+### Payroll burn-down (2026-07-27)
+
+`tests/quality-program/L10-domain-correctness/payroll-slip-mutants.test.ts`
+(55 tests). Targets chosen from `scripts/ci/mutation-survivors.mjs`, which grouped
+the 269 survivors by mutator — so the work went at real logic, not label strings:
+
+| Target | Why it mattered |
+|---|---|
+| ESI cap boundary + both rates | `gross * 75n * 10000n` and `/ 325n` both survived — the rate arithmetic was entirely unasserted |
+| `extraIncome` sign | a **minus** survived: declared perquisites / previous-employer salary could have been *subtracted* from taxable pay |
+| Whole old-regime branch | NoCoverage — HRA exemption, 80C/80D caps, PT deduction all unexercised |
+| `grossMinor * 12n` | `/ 12n` survived, i.e. annualisation could have divided |
+| Zero-component omission | `daMinor > 0n`, `hraMinor > 0n`, `amt === 0n` guards unasserted |
+| Recovery floor | conservation (applied + carried == demanded) and floor never breached |
+| EPF wage ceiling | 12% of the Rs 15,000 cap vs 12% of actual pay |
+
+All expected values were computed by hand from the statutory rule and the
+documented constants, not read back from the implementation.
 
 ### Honest status
 
-**58.31% does NOT meet the L11 exit criterion of ≥70%.** `break` is set to 55 —
-just below the measured score — so the gate is now **real** (a regression fails
-the build) without being permanently red. This is a ratchet, not a pass.
+**68.03% still does NOT meet the L11 exit criterion of ≥70%.** `break` raised
+55 → **65**, just under the measured score, locking in the gain while keeping the
+gate real rather than permanently red. This is a ratchet, not a pass.
 
-**176 surviving mutants in `payroll/domain.ts`** means 176 places where salary or
-tax logic can be changed and no test fails. That is the top burn-down item.
+Three files remain short: `payments` 57.7%, `fnf` 59.6%, `payroll` 60.2%.
+**149 mutants still survive in `payroll/domain.ts`.**
 
-Verified enforcing: temporarily setting `break: 95` produced
+Verified enforcing: `break: 95` produced
 `Final mutation score 58.79 under breaking threshold 95, setting exit code to 1`.
 
 ```bash
-npx stryker run                          # the gate
-node scripts/ci/mutation-summary.mjs     # per-file score, survived, no-coverage
+npx stryker run                                        # the gate
+node scripts/ci/mutation-summary.mjs                   # per-file score
+node scripts/ci/mutation-survivors.mjs "payments/domain" 40   # next target
 ```
 
 ---
@@ -524,8 +543,8 @@ implying an unverified SLO.
    app is the trap that makes a secret-less launch fail confusingly.
 3. **Extend L1/L2/L4 to `revenue` and `metadata`** once running — routes now exist,
    but their isolation and authz remain unverified.
-4. **Burn down 176 surviving mutants in `payroll/domain.ts`** (37.4% → 70%), then
-   `payments` (57.7%) and `fnf` (59.6%); raise `thresholds.break` as each lands.
+4. **Continue the mutation burn-down to ≥70%**: `payments` 57.7%, `fnf` 59.6%,
+   `payroll` 60.2% (149 mutants still surviving); raise `thresholds.break` as each lands.
 5. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
 6. Verify Trivy + ZAP actually pass in CI — both are wired but **unexecuted** on
    this machine, so their status is unproven

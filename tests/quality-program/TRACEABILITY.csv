@@ -93,3 +93,13 @@ SVC-058,Metadata Ecosystem Entry,metadata,ecosystem.config.js,metadata-svc-decla
 SVC-059,Court PII Key Wired,court,ecosystem.config.js,court-pii-key,L0,PASS
 SVC-060,Meeting PII Key Wired,meeting,ecosystem.config.js,meeting-pii-key,L0,PASS
 SVC-061,Visitor PII Key Wired,visitor,ecosystem.config.js,visitor-pii-key,L0,PASS
+CAP-034,ESI Cap Boundary And Rates,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,esi-cap-and-rates,L10,PASS
+CAP-035,Extra Income Increases Taxable,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,extra-income-additive,L10,PASS
+CAP-036,Old Regime HRA Exemption,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,sec-10-13a-least-of-three,L10,PASS
+CAP-037,Old Regime 80C 80D Caps,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,80c-80d-capped,L10,PASS
+CAP-038,Zero Component Omission,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,zero-lines-omitted,L10,PASS
+CAP-039,Recovery Floor Conservation,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,applied-plus-carried-equals-demand,L10,PASS
+CAP-040,EPF Wage Ceiling,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,epf-cap-boundary,L10,PASS
+CAP-041,HRA Slab Table,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,hra-slab-city-da-tier,L10,PASS
+CAP-042,RoundRupee Half Up,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,round-half-up-symmetric,L10,PASS
+CAP-043,Launch Runbook,platform,docs/runbooks/launch-undeployed-services.md,operator-procedure,D,PASS

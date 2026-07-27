@@ -58,27 +58,32 @@ export default {
     /**
      * ENFORCING RATCHET — was `null`, meaning this gate could never fail.
      *
-     * Measured 2026-07-27 after fixing the runner scope: 58.31% overall
-     * (600 killed / 1029). Before the fix it read 35.1%, but 561 of 1029 mutants
-     * were NoCoverage because no payroll/GL/F&F test was loaded — that number
-     * described the include-list, not the tests.
+     * History (each measured, not estimated):
+     *   35.1%  reported before the runner scope was fixed — but 561 of 1029
+     *          mutants were NoCoverage because no payroll/GL/F&F test was
+     *          loaded. That number described the include-list, not the tests.
+     *   58.31% after wiring the real suites in (600 killed, NoCoverage 128).
+     *   68.03% after the payroll burn-down (700 killed, NoCoverage 57).
      *
      * `break` is set just below the measured score so the gate is REAL (a
      * regression fails the build) without being permanently red. It does NOT
-     * assert the L11 exit criterion is met: that requires >=70%, and payroll is
-     * at 37.4%. Raise this as the burn-down below lands; do not lower it.
+     * assert the L11 exit criterion is met: that requires >=70% and three files
+     * are still short. Raise this as the burn-down continues; do not lower it.
      *
      * Per-file state (target >=70%):
-     *   payroll/domain.ts    37.4%  176 survived, 93 no-coverage   <- worst
-     *   payments/domain.ts   57.7%   29 survived, 18 no-coverage
+     *   payments/domain.ts   57.7%   29 survived, 18 no-coverage  <- next
      *   fnf/domain.ts        59.6%   19 survived,  2 no-coverage
+     *   payroll/domain.ts    60.2%  149 survived, 22 no-coverage  (was 37.4%)
      *   quorum/domain.ts     73.0%   OK
      *   authority/domain.ts  73.6%   OK
      *   budget/domain.ts     81.8%   OK
      *   gl/domain.ts         87.0%   OK
      *   decisions/domain.ts  98.8%   OK
+     *
+     * Inspect remaining gaps with:
+     *   node scripts/ci/mutation-survivors.mjs "payments/domain" 40
      */
-    break: 55,
+    break: 65,
   },
   concurrency: 4,
   timeoutMS: 30000,

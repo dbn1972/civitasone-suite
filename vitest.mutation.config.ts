@@ -76,6 +76,10 @@ export default defineConfig({
       //    domain files. These assert against independently-computed expected
       //    values, so they kill mutants that self-consistent tests miss.
       "tests/quality-program/L10-domain-correctness/payroll-domain.test.ts",
+      // Mutation burn-down: targets the ESI cap/rates, PT guard, annualisation,
+      // extra-income sign, the previously-uncovered old-regime branch, the
+      // zero-component omission guards and the recovery floor.
+      "tests/quality-program/L10-domain-correctness/payroll-slip-mutants.test.ts",
       "tests/quality-program/L10-domain-correctness/finance-domain.test.ts",
       "tests/quality-program/L11-mutation-canary/canary-tests.test.ts",
     ],
