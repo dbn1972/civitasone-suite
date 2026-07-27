@@ -1,43 +1,43 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="18" failures="0" errors="0" time="1.124">
-    <testsuite name="L6-security/audit-immutability.test.ts" timestamp="2026-07-27T06:57:22.368Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="5" failures="0" errors="0" skipped="0" time="0.252614316">
-        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: immutability triggers exist &gt; events table has an immutability trigger" time="0.052655893">
+<testsuites name="vitest tests" tests="18" failures="0" errors="0" time="1.013">
+    <testsuite name="L6-security/audit-immutability.test.ts" timestamp="2026-07-27T07:34:07.999Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="5" failures="0" errors="0" skipped="0" time="0.205972676">
+        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: immutability triggers exist &gt; events table has an immutability trigger" time="0.024353808">
         </testcase>
-        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: immutability triggers exist &gt; events table has a no-truncate trigger" time="0.026535212">
+        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: immutability triggers exist &gt; events table has a no-truncate trigger" time="0.022439055">
         </testcase>
-        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: UPDATE is rejected &gt; UPDATE on a real audit row is rejected by the append-only trigger" time="0.076106036">
+        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: UPDATE is rejected &gt; UPDATE on a real audit row is rejected by the append-only trigger" time="0.066267457">
         </testcase>
-        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: DELETE is rejected &gt; DELETE on a real audit row is rejected by the append-only trigger" time="0.070456268">
+        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: DELETE is rejected &gt; DELETE on a real audit row is rejected by the append-only trigger" time="0.067674541">
         </testcase>
-        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: TRUNCATE is rejected &gt; TRUNCATE on events is blocked" time="0.024607791">
+        <testcase classname="L6-security/audit-immutability.test.ts" name="L6 — Audit ledger: TRUNCATE is rejected &gt; TRUNCATE on events is blocked" time="0.023096353">
         </testcase>
     </testsuite>
-    <testsuite name="L6-security/crypto-audit.test.ts" timestamp="2026-07-27T06:57:22.371Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="13" failures="0" errors="0" skipped="0" time="0.671688375">
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: IV uniqueness (no reuse) &gt; 100 encryptions of the same plaintext produce 100 distinct ciphertexts" time="0.058893404">
+    <testsuite name="L6-security/crypto-audit.test.ts" timestamp="2026-07-27T07:34:08.001Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="13" failures="0" errors="0" skipped="0" time="0.638157217">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: IV uniqueness (no reuse) &gt; 100 encryptions of the same plaintext produce 100 distinct ciphertexts" time="0.056074664">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: IV uniqueness (no reuse) &gt; IV segment differs across encryptions" time="0.047222207">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: IV uniqueness (no reuse) &gt; IV segment differs across encryptions" time="0.047878527">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: Auth tag verification (tamper detection) &gt; flipping one bit in ciphertext → decrypt throws" time="0.046206156">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: Auth tag verification (tamper detection) &gt; flipping one bit in ciphertext → decrypt throws" time="0.045936747">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: Auth tag verification (tamper detection) &gt; modifying the auth tag → decrypt throws" time="0.045382761">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: Auth tag verification (tamper detection) &gt; modifying the auth tag → decrypt throws" time="0.044892921">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: Auth tag verification (tamper detection) &gt; truncated ciphertext → decrypt throws (no partial plaintext)" time="0.045272229">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — AES-256-GCM: Auth tag verification (tamper detection) &gt; truncated ciphertext → decrypt throws (no partial plaintext)" time="0.044811239">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Fail-closed: no silent pass-through &gt; missing PII_ENC_KEY → encrypt throws (never stores plaintext)" time="0.000540801">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Fail-closed: no silent pass-through &gt; missing PII_ENC_KEY → encrypt throws (never stores plaintext)" time="0.000459594">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Fail-closed: no silent pass-through &gt; short PII_ENC_KEY (&lt;16 chars) → throws" time="0.000378339">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Fail-closed: no silent pass-through &gt; short PII_ENC_KEY (&lt;16 chars) → throws" time="0.000352017">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Fail-closed: no silent pass-through &gt; wrong key → decrypt throws (does NOT return garbage)" time="0.086742358">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Fail-closed: no silent pass-through &gt; wrong key → decrypt throws (does NOT return garbage)" time="0.087909719">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — No plaintext leakage &gt; ciphertext does not contain the plaintext" time="0.043671799">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — No plaintext leakage &gt; ciphertext does not contain the plaintext" time="0.044528892">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — No plaintext leakage &gt; round-trip preserves exact value" time="0.0436014">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — No plaintext leakage &gt; round-trip preserves exact value" time="0.044873688">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Envelope format &gt; ciphertext uses enc:v2: prefix with key id" time="0.043869306">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Envelope format &gt; ciphertext uses enc:v2: prefix with key id" time="0.044139885">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Envelope format &gt; isEncrypted correctly identifies envelopes" time="0.043623865">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Envelope format &gt; isEncrypted correctly identifies envelopes" time="0.044022322">
         </testcase>
-        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Envelope format &gt; legacy plaintext passes through on read (backfill safety)" time="0.00059164">
+        <testcase classname="L6-security/crypto-audit.test.ts" name="L6 — Envelope format &gt; legacy plaintext passes through on read (backfill safety)" time="0.000582377">
         </testcase>
     </testsuite>
 </testsuites>

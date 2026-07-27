@@ -194,6 +194,14 @@ jobs:
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - name: DB-per-service isolation guard (06-T2)
         run: node scripts/ci/arch-guard.mjs
+      # Catches a package whose `exports`/`main` points at a path that does not
+      # exist on disk. render/storage/gov-adapters pointed at ./src/*.js while
+      # shipping to dist/, so Node threw ERR_MODULE_NOT_FOUND at first import and
+      # payroll/admin/knowledge died before binding a port — for ~20 hours, while
+      # pm2 reported them "online" with empty error logs. tsc cannot see this
+      # because it resolves via source paths, not the published exports map.
+      - name: Package exports guard (entry points must resolve)
+        run: node scripts/ci/package-exports-guard.mjs
       - name: Check no cross-service DB joins
         run: |
           # L1 rule: no service may import another service's schema

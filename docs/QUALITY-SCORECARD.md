@@ -10,7 +10,7 @@
 
 | Lane | Tests | Pass | Fail | Status | Verdict |
 |------|-------|------|------|--------|---------|
-| L0 Deployment Readiness | 9 | 9 | 0 | 🟡 GREEN + FINDING | **11 of 41 services not serving** (tracked) |
+| L0 Deployment Readiness | 9 | 9 | 0 | 🟡 GREEN + FINDING | **8 of 41 not serving** (was 11 — 3 fixed) |
 | L1 Tenant Isolation | 57 | 57 | 0 | ✅ GREEN | No cross-tenant leaks detected |
 | L2 Authz / BOLA | 44 | 44 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 38 | 38 | 0 | ✅ GREEN | All money columns bigint; 0 violations |
@@ -215,22 +215,60 @@ None notices a service that is not. Measured 2026-07-27 against a fleet pm2
 reported as **65/65 online**: **11 of 41 services were not serving traffic**,
 while every per-service suite was green.
 
-### P0 FINDING — pm2 "online" is not readiness
+### P0 FINDING — pm2 "online" is not readiness — ✅ ROOT-CAUSED AND FIXED
 
-| Service | Port | pm2 says | Reality |
-|---|---|---|---|
-| payroll | 3013 | online, 39 restarts | **not bound** → gateway 502 |
-| admin | 3022 | online, 14 restarts | **not bound** → gateway 502 |
-| knowledge | 3028 | online, 9 restarts | **not bound** → gateway 502 |
+| Service | Port | pm2 said | Reality | Now |
+|---|---|---|---|---|
+| payroll | 3013 | online, 39 restarts | **not bound** → 502 | ✅ 200 |
+| admin | 3022 | online, 14 restarts | **not bound** → 502 | ✅ 200 |
+| knowledge | 3028 | online, 9 restarts | **not bound** → 502 | ✅ 200 |
 
-The process exists so pm2 is satisfied, but nothing listens on the port. Error
-logs were empty — a silent failure. Payroll is salary disbursement, and it carries
-40 test files at 86% line coverage: the code is fine, the deployment is not.
+**Root cause: three shared packages declared `exports` pointing at
+`./src/*.js` while shipping compiled output to `dist/`.** `src/` holds
+TypeScript, so those paths never exist at runtime:
 
-### Not deployed at all (6)
-`court` · `meeting` · `visitor` · `inspection` · `works` · `ml` — absent from pm2;
-gateway routes point at dead ports (502). Build quality is not the issue: court
-has 50 test files at 88.9%, meeting 58 at 93.3%, visitor 45 at 81.2%.
+| Package | Broken entry points |
+|---|---|
+| `@civitasone/render` | `.`, `./pdf`, `./xlsx` |
+| `@civitasone/storage` | `.` |
+| `@civitasone/gov-adapters` | `./pfms`, `./nach`, `./traces`, `./gstn` |
+
+Node threw `ERR_MODULE_NOT_FOUND` on the first import, so `await buildApp()`
+rejected **before any socket was opened**. The process stayed alive on pm2's IPC
+channel, sitting in `epoll_wait` with **zero TCP sockets** — which pm2 reports as
+"online". Three services were down for ~20 hours with empty error logs.
+
+Diagnosis path: pm2 PIDs did not match the PIDs in the logs (the logged PIDs were
+an older, working generation); `/proc/<pid>/fd` showed only pm2 IPC sockets and
+pipes; `wchan` = `ep_poll`. Zero TCP ruled out a DB/Redis connect failure and
+pointed at a module-resolution crash, confirmed by running the service in the
+foreground.
+
+`pnpm typecheck` cannot catch this — `tsc` resolves via source paths, not the
+published `exports` map. Only a runtime import or a static check sees it.
+
+**Guarded against recurrence:** `scripts/ci/package-exports-guard.mjs`, wired into
+the arch-guard CI job. It scans all 27 packages and fails on any `main`/`types`/
+`exports` target that does not exist, naming the `dist/` alternative when present.
+It found 5 entry points beyond the two that had already broken.
+
+### Still not deployed (6) — boot-probed 2026-07-27
+
+Absent from pm2; gateway routes point at dead ports. Build quality is not the
+issue: court has 50 test files at 88.9%, meeting 58 at 93.3%, visitor 45 at 81.2%.
+
+| Service | Boot probe result | Blocked on |
+|---|---|---|
+| `works` | **boots and listens cleanly** | pm2 ecosystem entry only |
+| `ml` | **boots and listens cleanly** | pm2 ecosystem entry only |
+| `court` | fails loud: `COURT_PII_KEY is required (>=16 chars)` | secret provisioning |
+| `meeting` | fails loud: `MEETING_PII_KEY is required` | secret provisioning |
+| `visitor` | fails loud: `VISITOR_PII_KEY is required` | secret provisioning |
+| `inspection` | fails loud: missing required env vars | secret provisioning |
+
+The four PII-key failures are **correct fail-closed behaviour** — these services
+refuse to start rather than run without at-rest encryption, exactly as the DPDP
+posture requires. They are a provisioning gap, not a defect.
 
 ### Built but unreachable (2)
 | Service | State |
@@ -257,6 +295,11 @@ Plus discovery guards: if `ss` fails or the registry cannot be parsed, the lane
 
 Ratcheted: the non-serving count may not grow, and a recovered service must be
 removed from the inventory or the gate fails.
+
+**The ratchet proved itself in production use.** After payroll/admin/knowledge came
+up, the staleness check failed with *"3 service(s) are now serving but still listed
+in KNOWN_NOT_SERVING"* — forcing the inventory down from 11 to 8 rather than
+letting a stale entry silently re-admit a regression.
 
 ---
 
@@ -449,9 +492,10 @@ implying an unverified SLO.
 
 ## Next Steps
 
-1. **Bring up the 11 non-serving services** and remove them from
-   `KNOWN_NOT_SERVING` (the L0 gate fails if a recovered service is left listed).
-   Priority: payroll and admin — salary disbursement and the admin console.
+1. **Add `works` and `ml` to the pm2 ecosystem** — both boot and listen cleanly;
+   nothing else blocks them. Then **provision PII keys** for court, meeting,
+   visitor and inspection (they fail closed by design without them). That takes
+   the fleet from 33/41 to 39/41.
 2. **Add gateway routes for `revenue` and `metadata`**, then extend L1/L2/L4 to
    cover them; their isolation and authz are currently unverified.
 3. **Burn down 176 surviving mutants in `payroll/domain.ts`** (37.4% → 70%), then

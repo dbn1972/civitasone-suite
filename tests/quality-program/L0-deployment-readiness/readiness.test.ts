@@ -43,15 +43,22 @@ const ALLOW_OFFLINE = process.env.QUALITY_ALLOW_OFFLINE === "1";
  * a stale entry fails the gate, so a fixed service cannot silently regress.
  */
 const KNOWN_NOT_SERVING: Record<string, string> = {
-  payroll: "pm2 online but not bound to :3013 — gateway 502",
-  admin: "pm2 online but not bound to :3022 — gateway 502",
-  knowledge: "pm2 online but not bound to :3028 — gateway 502",
-  court: "not deployed in pm2 — gateway route points at dead :3034",
-  meeting: "not deployed in pm2 — gateway route points at dead :3033",
-  visitor: "not deployed in pm2 — gateway route points at dead :3035",
-  inspection: "not deployed in pm2 — gateway route points at dead :3037",
-  works: "not deployed in pm2 — gateway route points at dead :3036",
-  ml: "not deployed in pm2 — gateway route points at dead :3032",
+  // RECOVERED 2026-07-27: payroll, admin and knowledge were removed from this
+  // inventory after the root cause was fixed — @civitasone/render, storage and
+  // gov-adapters declared `exports` pointing at ./src/*.js while shipping to
+  // dist/, so Node threw ERR_MODULE_NOT_FOUND during `await buildApp()` and the
+  // process never bound a port. Guarded against recurrence by
+  // scripts/ci/package-exports-guard.mjs.
+  // Boot-probed 2026-07-27 with a hand-built env. Two classes:
+  //  (a) FAIL-LOUD ON MISSING SECRET — the service correctly refuses to start
+  //      without its PII key. Blocked on secret provisioning, not on code.
+  //  (b) BOOTS CLEANLY — only missing a pm2 ecosystem entry.
+  court: "not in pm2. Boot-probed: fails loud on missing COURT_PII_KEY (needs secret provisioning)",
+  meeting: "not in pm2. Boot-probed: fails loud on missing MEETING_PII_KEY (needs secret provisioning)",
+  visitor: "not in pm2. Boot-probed: fails loud on missing VISITOR_PII_KEY (needs secret provisioning)",
+  inspection: "not in pm2. Boot-probed: fails loud on missing required env vars (needs secret provisioning)",
+  works: "not in pm2. Boot-probed: BOOTS AND LISTENS cleanly — only needs a pm2 ecosystem entry",
+  ml: "not in pm2. Boot-probed: BOOTS AND LISTENS cleanly — only needs a pm2 ecosystem entry",
   revenue: "no gateway route (404) — built, 99.6% coverage, unreachable",
   metadata: "no gateway route (404) — built, unreachable",
 };

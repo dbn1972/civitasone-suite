@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    "./pfms": "./src/pfms.js",
-    "./nach": "./src/nach.js",
-    "./traces": "./src/traces.js",
-    "./gstn": "./src/gstn.js"
+    "./pfms": "./dist/pfms.js",
+    "./nach": "./dist/nach.js",
+    "./traces": "./dist/traces.js",
+    "./gstn": "./dist/gstn.js"
   },
   "scripts": {
     "build": "tsc",
