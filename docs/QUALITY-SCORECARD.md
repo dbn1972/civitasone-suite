@@ -12,7 +12,7 @@
 |------|-------|------|------|--------|---------|
 | L1 Tenant Isolation | 57 | 57 | 0 | ✅ GREEN | No cross-tenant leaks detected |
 | L2 Authz / BOLA | 44 | 44 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
-| L3 Data Integrity | 38 | 33 | 5 | 🟡 FINDINGS | 5 money columns using numeric instead of bigint |
+| L3 Data Integrity | 38 | 38 | 0 | ✅ GREEN | All money columns bigint; 0 violations |
 | L4 API Contract | — | — | — | ⬜ PENDING | Scheduled |
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | Partial | ✅ | — | 🟡 PARTIAL | SAST exists; DAST not yet wired |
@@ -67,25 +67,22 @@
 
 ---
 
-## L3 — Data & Schema Integrity (P0) 🟡 FINDINGS
+## L3 — Data & Schema Integrity (P0) ✅ PASS
 
 **Tested:** 18 service databases scanned  
 **Method:** Direct schema introspection via psql
 
-### Findings — Money columns using `numeric` instead of `bigint`:
+### All money columns now use bigint (paise):
+- ✅ citizen.fee.payments.amount → bigint
+- ✅ citizen.fee.refunds.amount → bigint
+- ✅ citizen.fee.schedules.base_amount → bigint
+- ✅ legal.rti.rti_applications.fee_paid → bigint
+- ✅ legal.rti.rti_applications.additional_fee → bigint
+- ✅ workflow.authority_limits.max_amount → bigint
 
-| Service | Column | Type | Risk |
-|---------|--------|------|------|
-| finance | `treasury.finance_guarantees.fee_pct` | numeric | LOW (percentage, not money) |
-| hrms | `learning.courses.credit_hours` | numeric | NONE (not money) |
-| citizen | `fee.schedules.base_amount` | numeric | **HIGH** (money) |
-| citizen | `fee.payments.amount` | numeric | **HIGH** (money) |
-| citizen | `fee.refunds.amount` | numeric | **HIGH** (money) |
-| legal | `rti.rti_applications.fee_paid` | numeric | **MEDIUM** (small amounts) |
-| legal | `rti.rti_applications.additional_fee` | numeric | **MEDIUM** (small amounts) |
-| workflow | `workflow.authority_limits.max_amount` | numeric | **HIGH** (authority threshold) |
-
-**Action required:** 5 columns need migration to bigint (paise). `fee_pct` and `credit_hours` are acceptable as numeric.
+### Excluded (not money):
+- finance.treasury.finance_guarantees.fee_pct — percentage, not money
+- hrms.learning.courses.credit_hours — hours, not money
 
 ### Other Checks:
 - ✅ RLS: no service roles have BYPASSRLS

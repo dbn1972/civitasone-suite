@@ -1,209 +1,287 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="101" failures="0" errors="0" time="1.66">
-    <testsuite name="L1-tenant-isolation/tenant-isolation.test.ts" timestamp="2026-07-27T02:05:08.087Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="57" failures="0" errors="0" skipped="0" time="1.23735895">
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; gateway is reachable" time="0.062798588">
+<testsuites name="vitest tests" tests="139" failures="0" errors="0" time="3.03">
+    <testsuite name="L1-tenant-isolation/tenant-isolation.test.ts" timestamp="2026-07-27T02:38:07.800Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="57" failures="0" errors="0" skipped="0" time="1.310658005">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; gateway is reachable" time="0.069093916">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance sanctions: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023540187">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance sanctions: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.035659618">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance bills: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.019665217">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance bills: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.013314342">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance advances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.015750599">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance advances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.02088219">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance journals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.040332692">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance journals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.021320477">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance budgets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.029451708">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance budgets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.017067674">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance statements: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.016718552">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance statements: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.018667818">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance UCs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.0168547">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance UCs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.019912153">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms employees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.042238854">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms employees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.043103372">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms leave requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.024289137">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms leave requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.017868988">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms attendance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.017992368">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms attendance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.019201292">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms appraisals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.016578104">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms appraisals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.017473295">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement indents: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.027240626">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement indents: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.027993611">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement vendors: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01337621">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement vendors: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010730639">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement RFQs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01241048">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement RFQs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.024763744">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement GRNs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.035582454">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement GRNs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.036585009">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement tenders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.013890968">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement tenders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.015552605">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen tickets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.028095504">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen tickets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.031465556">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.016173886">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.016457313">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen RTI: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012096174">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen RTI: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.014376915">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal cases: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.039971912">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal cases: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.033238999">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal hearings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.014720574">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal hearings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.014775627">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal court orders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.016589304">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal court orders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.013826226">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; assets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.042999036">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; assets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.032694661">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; asset maintenance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.014825633">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; asset maintenance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.019177375">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.04764127">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.057399186">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock ledger: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.019074577">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock ledger: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010694839">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; projects: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.04860677">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; projects: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.030907351">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; project milestones: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.013657319">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; project milestones: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.02162748">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grants: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.031389099">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grants: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.031733421">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grantees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010440507">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grantees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.011314533">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grant installments: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010653956">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grant installments: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01177069">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM contacts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.033618446">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM contacts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.040792409">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM deals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.013234367">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM deals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.015465253">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab files: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.026484218">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab files: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.030044359">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab meetings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010502505">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab meetings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.016297731">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; contracts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.027964624">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; contracts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.032229192">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit observations: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.011142055">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit observations: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.036332708">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit risks: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012701649">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit risks: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.013030869">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; workflow instances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.026642586">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; workflow instances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.029632452">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; knowledge docs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.004379439">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; knowledge docs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.011277979">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; analytics dashboards: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.024663513">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; analytics dashboards: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.034808651">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; inventory items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.029826716">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; inventory items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.031885216">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance sanctions: no auth → 401" time="0.001533484">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance sanctions: no auth → 401" time="0.002440768">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance bills: no auth → 401" time="0.002253175">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance bills: no auth → 401" time="0.001757895">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance advances: no auth → 401" time="0.001475129">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance advances: no auth → 401" time="0.001684639">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance journals: no auth → 401" time="0.001273497">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance journals: no auth → 401" time="0.001832208">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance budgets: no auth → 401" time="0.001310666">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance budgets: no auth → 401" time="0.001870928">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance statements: no auth → 401" time="0.001429608">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance statements: no auth → 401" time="0.001399724">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance UCs: no auth → 401" time="0.001388943">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance UCs: no auth → 401" time="0.001449669">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms employees: no auth → 401" time="0.001241619">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms employees: no auth → 401" time="0.001431708">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms leave requests: no auth → 401" time="0.001318173">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms leave requests: no auth → 401" time="0.002152554">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms attendance: no auth → 401" time="0.001430107">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms attendance: no auth → 401" time="0.002235549">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to finance/bills with wrong tenant token → data isolated" time="0.030070229">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to finance/bills with wrong tenant token → data isolated" time="0.045496771">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to hrms/employees: cross-tenant creation stays isolated" time="0.01249396">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to hrms/employees: cross-tenant creation stays isolated" time="0.014517247">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; token without tid claim → 401" time="0.006336178">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; token without tid claim → 401" time="0.006887447">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; expired token → 401" time="0.002993524">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; expired token → 401" time="0.003573521">
         </testcase>
     </testsuite>
-    <testsuite name="L2-authz-bola/authz-matrix.test.ts" timestamp="2026-07-27T02:05:08.101Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="44" failures="0" errors="0" skipped="0" time="0.770139252">
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — finance_officer → 200" time="0.094815766">
+    <testsuite name="L2-authz-bola/authz-matrix.test.ts" timestamp="2026-07-27T02:38:07.814Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="44" failures="0" errors="0" skipped="0" time="0.768903957">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — finance_officer → 200" time="0.109636797">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — finance_admin → 200" time="0.012797714">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — finance_admin → 200" time="0.012570438">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — super_admin → 200" time="0.012435161">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — super_admin → 200" time="0.009119286">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — finance_officer → 200" time="0.032933882">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — finance_officer → 200" time="0.031608251">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — finance_admin → 200" time="0.051181857">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — finance_admin → 200" time="0.018064435">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — super_admin → 200" time="0.019390459">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — super_admin → 200" time="0.031541945">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — procurement_officer → 200" time="0.018690216">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — procurement_officer → 200" time="0.023711892">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — audit_officer → 200" time="0.022094589">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — audit_officer → 200" time="0.016390429">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/journals — finance_officer → 200" time="0.018392565">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/journals — finance_officer → 200" time="0.013978089">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/journals — super_admin → 200" time="0.009967128">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/journals — super_admin → 200" time="0.011429094">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — finance_officer → 200" time="0.021995429">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — finance_officer → 200" time="0.020504835">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — finance_admin → 200" time="0.015225995">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — finance_admin → 200" time="0.014591745">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — super_admin → 200" time="0.017879465">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — super_admin → 200" time="0.017826863">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — hr_officer → 200" time="0.017734095">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — hr_officer → 200" time="0.020418846">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — hr_admin → 200" time="0.011395029">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — hr_admin → 200" time="0.009424305">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — super_admin → 200" time="0.008374008">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — super_admin → 200" time="0.008127825">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/indents — procurement_officer → 200" time="0.013275574">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/indents — procurement_officer → 200" time="0.014980135">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/indents — super_admin → 200" time="0.008078443">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/indents — super_admin → 200" time="0.008622779">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/vendors — procurement_officer → 200" time="0.010790752">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/vendors — procurement_officer → 200" time="0.012140274">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/vendors — super_admin → 200" time="0.012090308">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/vendors — super_admin → 200" time="0.012820907">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/audit/observations — audit_officer → 200" time="0.026938407">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/audit/observations — audit_officer → 200" time="0.032108314">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/audit/observations — super_admin → 200" time="0.015467111">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/audit/observations — super_admin → 200" time="0.009719396">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/admin/health — tenant_admin → 200" time="0.006353688">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/admin/health — tenant_admin → 200" time="0.007713057">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/admin/health — super_admin → 200" time="0.005493124">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/admin/health — super_admin → 200" time="0.005353914">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/bills — citizen → 403" time="0.009386195">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/bills — citizen → 403" time="0.009596614">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/bills — employee → 403" time="0.009003836">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/bills — employee → 403" time="0.007160744">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/sanctions — citizen → 403" time="0.008640519">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/sanctions — citizen → 403" time="0.007480614">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/sanctions — employee → 403" time="0.013509626">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/sanctions — employee → 403" time="0.006559898">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/journals — citizen → 403" time="0.007419126">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/journals — citizen → 403" time="0.006812829">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/journals — employee → 403" time="0.007869974">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/journals — employee → 403" time="0.006015495">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/budgets — citizen → 403" time="0.007048279">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/budgets — citizen → 403" time="0.007022487">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/hrms/employees — citizen → 403" time="0.007175499">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/hrms/employees — citizen → 403" time="0.006314104">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/indents — citizen → 403" time="0.00588117">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/indents — citizen → 403" time="0.007067764">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/indents — employee → 403" time="0.006471178">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/indents — employee → 403" time="0.007434205">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/vendors — citizen → 403" time="0.006147173">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/vendors — citizen → 403" time="0.006855833">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/audit/observations — citizen → 403" time="0.006658255">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/audit/observations — citizen → 403" time="0.009833735">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/audit/observations — employee → 403" time="0.006181658">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/audit/observations — employee → 403" time="0.006088694">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/admin/health — citizen → 403" time="0.004007517">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/admin/health — citizen → 403" time="0.004080032">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/admin/health — employee → 403" time="0.004183123">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/admin/health — employee → 403" time="0.011223858">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Mass Assignment Protection &gt; POST /api/v1/finance/bills: injected tenantId in body is ignored" time="0.012151149">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Mass Assignment Protection &gt; POST /api/v1/finance/bills: injected tenantId in body is ignored" time="0.011373446">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Mass Assignment Protection &gt; POST /api/v1/hrms/employees: injected role escalation ignored" time="0.008380851">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Mass Assignment Protection &gt; POST /api/v1/hrms/employees: injected role escalation ignored" time="0.010436049">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; alg=none attack → 401" time="0.002168349">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; alg=none attack → 401" time="0.006533666">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; wrong secret → 401" time="0.004512716">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; wrong secret → 401" time="0.005535683">
         </testcase>
-        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; manipulated payload (changed role) → 401" time="0.00327291">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; manipulated payload (changed role) → 401" time="0.003791072">
+        </testcase>
+    </testsuite>
+    <testsuite name="L3-data-integrity/schema-integrity.test.ts" timestamp="2026-07-27T02:38:07.826Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="38" failures="0" errors="0" skipped="0" time="2.632731206">
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; finance: money columns are bigint (not float/numeric)" time="0.061502331">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; hrms: money columns are bigint (not float/numeric)" time="0.06649857">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; payroll: money columns are bigint (not float/numeric)" time="0.066059799">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; procurement: money columns are bigint (not float/numeric)" time="0.056788225">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; citizen: money columns are bigint (not float/numeric)" time="0.062838392">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; legal: money columns are bigint (not float/numeric)" time="0.060444408">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; asset: money columns are bigint (not float/numeric)" time="0.05810356">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; stock: money columns are bigint (not float/numeric)" time="0.053460577">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; project: money columns are bigint (not float/numeric)" time="0.055512861">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; grant: money columns are bigint (not float/numeric)" time="0.053937625">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; crm: money columns are bigint (not float/numeric)" time="0.048275222">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; contract: money columns are bigint (not float/numeric)" time="0.054546914">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; estab: money columns are bigint (not float/numeric)" time="0.056690106">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; audit: money columns are bigint (not float/numeric)" time="0.067170685">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; workflow: money columns are bigint (not float/numeric)" time="0.057606424">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; identity: money columns are bigint (not float/numeric)" time="0.055331146">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; admin: money columns are bigint (not float/numeric)" time="0.055612278">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; analytics: money columns are bigint (not float/numeric)" time="0.044847342">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; finance: no &apos;timestamp without time zone&apos;" time="0.100046573">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; hrms: no &apos;timestamp without time zone&apos;" time="0.093236566">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; payroll: no &apos;timestamp without time zone&apos;" time="0.112127352">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; procurement: no &apos;timestamp without time zone&apos;" time="0.080812369">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; citizen: no &apos;timestamp without time zone&apos;" time="0.136022464">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; legal: no &apos;timestamp without time zone&apos;" time="0.083843103">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; asset: no &apos;timestamp without time zone&apos;" time="0.079707989">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; stock: no &apos;timestamp without time zone&apos;" time="0.076400947">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; project: no &apos;timestamp without time zone&apos;" time="0.078020527">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; grant: no &apos;timestamp without time zone&apos;" time="0.076983249">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; crm: no &apos;timestamp without time zone&apos;" time="0.07770294">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; contract: no &apos;timestamp without time zone&apos;" time="0.075760666">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; estab: no &apos;timestamp without time zone&apos;" time="0.087291774">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; audit: no &apos;timestamp without time zone&apos;" time="0.080179785">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; workflow: no &apos;timestamp without time zone&apos;" time="0.079620309">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; identity: no &apos;timestamp without time zone&apos;" time="0.076282661">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; admin: no &apos;timestamp without time zone&apos;" time="0.079360378">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; analytics: no &apos;timestamp without time zone&apos;" time="0.077923042">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — RLS / BYPASSRLS audit &gt; no service roles have BYPASSRLS" time="0.020430982">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Double-entry invariant (finance) &gt; finance GL: sum(debit) = sum(credit) for every voucher" time="0.021226069">
         </testcase>
     </testsuite>
 </testsuites>

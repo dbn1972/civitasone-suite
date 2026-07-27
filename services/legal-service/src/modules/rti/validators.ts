@@ -11,7 +11,7 @@ export const createRtiBody = z.object({
   pioRef:        z.string().max(128).optional(),
   lifeOrLiberty: z.boolean().default(false),
   thirdParty:    z.boolean().default(false),
-  feePaid:       z.number().nonnegative().default(0),
+  feePaid:       z.number().int().nonnegative().default(0), // paise
   receivedAt:    z.string().datetime().optional(),
 });
 export type CreateRtiBody = z.infer<typeof createRtiBody>;
@@ -28,7 +28,7 @@ export const thirdPartyConsultBody = z.object({
 export type ThirdPartyConsultBody = z.infer<typeof thirdPartyConsultBody>;
 
 export const additionalFeeBody = z.object({
-  additionalFee: z.number().positive(),
+  additionalFee: z.number().int().positive(), // paise
 });
 export type AdditionalFeeBody = z.infer<typeof additionalFeeBody>;
 

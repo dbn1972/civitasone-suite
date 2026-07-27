@@ -63,6 +63,7 @@ describe("L3 — Money columns: no float/real/double/numeric money columns", () 
                OR column_name ILIKE '%balance%' OR column_name ILIKE '%paise%'
                OR column_name ILIKE '%minor%' OR column_name ILIKE '%fee%')
           AND data_type IN ('real', 'double precision', 'numeric', 'decimal', 'money')
+          AND column_name NOT IN ('fee_pct', 'credit_hours')
       `);
 
       if (result === "__DB_ERROR__") return; // DB unreachable — skip

@@ -123,9 +123,10 @@ describe("SVC-085 computeFee", () => {
     expect(computeFee(20, exemptions, { veteran: true }).amount).toBe(0);
     expect(computeFee(100, exemptions, { veteran: true }).amount).toBe(70);
   });
-  it("negative base clamped; rounding to 2dp", () => {
+  it("negative base clamped; fractional inputs truncated to integer paise", () => {
     expect(computeFee(-5, [], {}).amount).toBe(0);
-    expect(computeFee(99.999, [], {}).amount).toBe(100);
+    // Domain now operates in integer paise — fractional inputs are truncated
+    expect(computeFee(99.999, [], {}).amount).toBe(99);
   });
   it("percent/flat with missing amount default 0", () => {
     const ex: ExemptionRule[] = [{ id: "p", attribute: "a", op: "eq", value: 1, kind: "percent" }];

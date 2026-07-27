@@ -44,7 +44,7 @@ export async function create(input: CreateLimitInput): Promise<AuthorityLimitRow
       scopeRef: input.scopeRef,
       authorityType: input.authorityType,
       currency: input.currency,
-      maxAmount: input.maxAmount.toFixed(2),
+      maxAmount: input.maxAmount,
       effectiveFrom: input.effectiveFrom,
       effectiveTo: input.effectiveTo,
       escalateToScopeType: input.escalateToScopeType,

@@ -39,7 +39,7 @@ export async function createSchedule(ctx: RequestContext, body: CreateScheduleBo
   await db.transaction(async (tx) => {
     await repo.insertSchedule(tx, {
       id, tenantId: ctx.tenantId, serviceId: body.serviceId, name: body.name,
-      baseAmount: body.baseAmount.toFixed(2), currency: body.currency, exemptions: body.exemptions,
+      baseAmount: body.baseAmount, currency: body.currency, exemptions: body.exemptions,
       createdBy: ctx.actorId, updatedBy: ctx.actorId,
     });
     await audit(tx, ctx, "fee_schedule_create", "fee_schedule", id);
@@ -72,7 +72,7 @@ export async function createPaymentIntent(ctx: RequestContext, body: CreateInten
     const gatewayRef = configured ? `pi_${id}` : null;
     await repo.insertPayment(tx, {
       id, tenantId: ctx.tenantId, applicationId: body.applicationId, scheduleId: sched.id,
-      citizenId: body.citizenId ?? null, amount: fee.amount.toFixed(2), currency: sched.currency,
+      citizenId: body.citizenId ?? null, amount: fee.amount, currency: sched.currency,
       exemptionApplied: fee.exemptionApplied, method: "online", status: "pending",
       gatewayRef, createdBy: ctx.actorId, updatedBy: ctx.actorId,
     });
@@ -107,7 +107,7 @@ export async function recordOfflinePayment(ctx: RequestContext, body: RecordOffl
     try {
       await repo.insertPayment(tx, {
         id, tenantId: ctx.tenantId, applicationId: body.applicationId, scheduleId: sched.id,
-        citizenId: body.citizenId ?? null, amount: fee.amount.toFixed(2), currency: sched.currency,
+        citizenId: body.citizenId ?? null, amount: fee.amount, currency: sched.currency,
         exemptionApplied: fee.exemptionApplied, method: "offline", status: "offline_recorded",
         gatewayRef: body.reference ?? null, receiptNo, receiptIssuedAt: now,
         reconciliationStatus: "reconciled", createdBy: ctx.actorId, updatedBy: ctx.actorId,
@@ -142,7 +142,7 @@ export async function requestRefund(ctx: RequestContext, paymentId: string, body
       throw new HttpError(409, "REFUND_PENDING", "a refund request is already pending for this payment");
     }
     await repo.insertRefund(tx, {
-      id, tenantId: ctx.tenantId, paymentId, amount: body.amount.toFixed(2), reason: body.reason ?? null,
+      id, tenantId: ctx.tenantId, paymentId, amount: body.amount, reason: body.reason ?? null,
       status: "requested", requestedBy: ctx.actorId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
     });
     // Payment status is left unchanged until a checker approves (so a rejection

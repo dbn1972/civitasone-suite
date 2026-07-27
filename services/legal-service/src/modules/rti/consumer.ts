@@ -37,7 +37,7 @@ export function registerRtiConsumers(queue: Queue): void {
         applicantName: p.applicantName, applicantAddr: p.applicantAddr ?? null,
         subject: p.subject, requestText: p.requestText, pioRef: p.pioRef ?? null,
         lifeOrLiberty: p.lifeOrLiberty ?? false, thirdParty: p.thirdParty ?? false,
-        feePaid: String(p.feePaid ?? 0), receivedAt, deadlineAt,
+        feePaid: p.feePaid ?? 0, receivedAt, deadlineAt,
         status: "received", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "receive", "rti_application", p.id, { applicationNo: p.applicationNo });
@@ -108,7 +108,7 @@ export function registerRtiConsumers(queue: Queue): void {
       const app = await repo.findByIdTx(tx, p.applicationId, p.tenantId);
       if (!app) throw new Error(`rti application ${p.applicationId} not found`);
       const n = await repo.updateApplicationVersioned(tx, p.applicationId, p.tenantId, app.version ?? 1, {
-        additionalFee: String(p.additionalFee),
+        additionalFee: p.additionalFee,
         updatedBy: msg.actorId, version: (app.version ?? 1) + 1,
       });
       if (n !== 1) throw new StaleWriteError("rti_application", p.applicationId);
