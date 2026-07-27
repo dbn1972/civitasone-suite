@@ -76,10 +76,21 @@ const KNOWN_NOT_SERVING: Record<string, string> = {
   //                              request 401 against the fleet's HS256 tokens
   // inspection additionally required its role and database to be created at all
   // (see infra/db/bootstrap/bootstrap_inspection.sql) — neither existed.
-  works: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch (boots clean otherwise); works_svc role/db not yet provisioned",
-  ml: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch; ml_svc role/db not yet provisioned",
-  revenue: "gateway route ADDED; not running — needs INTERNAL_SERVICE_SECRET at launch; revenue_svc role/db not yet provisioned",
-  metadata: "ecosystem entry + gateway route ADDED; not running — needs INTERNAL_SERVICE_SECRET at launch",
+  // EMPTY as of 2026-07-27 — all 41 services are serving.
+  //
+  // The inventory ran 11 -> 8 -> 4 -> 0 as each root cause was fixed:
+  //   11  broken package `exports` maps pointing at ./src/*.js while shipping to
+  //       dist/, killing payroll/admin/knowledge before they bound a port
+  //    8  meeting/court/visitor/inspection launched (secrets + RUNTIME_NODE_ENV
+  //       + JWT_ALGORITHM in the launching shell); inspection also needed its
+  //       role and database created from scratch
+  //    4  revenue/works/ml/metadata roles and databases provisioned; revenue
+  //       additionally had a real auth bug (resolveContext read `req.user`,
+  //       which the auth plugin never sets — it decorates `req.ctx`)
+  //
+  // Keep this map EMPTY. An entry here is tracked debt, and the staleness check
+  // below fails if a serving service is listed, so a regression cannot be
+  // re-admitted by quietly adding a line.
 };
 
 /** Documented port map. Source: .kiro/steering/quick-reference.md */

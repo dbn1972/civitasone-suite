@@ -111,6 +111,23 @@ const RESOURCE_ENDPOINTS = [
   ["/api/v1/analytics/dashboards", "analytics dashboards"],
   // Inventory
   ["/api/v1/inventory/items", "inventory items"],
+  // ── Services brought up 2026-07-27. Newly REACHABLE, so newly EXPOSED —
+  //    their tenant isolation had never been verified. All 13 paths below were
+  //    confirmed to return 200 before being added, so a 404 here means a real
+  //    routing regression rather than a wrong guess in the test.
+  ["/api/v1/meeting/committees", "meeting committees"],
+  ["/api/v1/meeting/action-items/overdue", "meeting overdue action items"],
+  ["/api/v1/meeting/calendar/rooms", "meeting calendar rooms"],
+  ["/api/v1/court/cases", "court cases"],
+  ["/api/v1/court/courts", "court registry"],
+  ["/api/v1/court/cases/overdue", "court overdue cases"],
+  ["/api/v1/visitor/badges/templates", "visitor badge templates"],
+  ["/api/v1/visitor/badges/jobs", "visitor badge jobs"],
+  ["/api/v1/inspection/assignments", "inspection assignments"],
+  ["/api/v1/inspection/capa", "inspection CAPA"],
+  ["/api/v1/inspection/entities", "inspection entities"],
+  ["/api/v1/inspection/checklists/templates", "inspection checklist templates"],
+  ["/api/v1/inspection/enforcement/penalty-rates", "inspection penalty rates"],
 ] as const;
 
 describe("L1 — Tenant Isolation: Cross-tenant data access", () => {

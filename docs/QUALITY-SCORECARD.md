@@ -10,11 +10,11 @@
 
 | Lane | Tests | Pass | Fail | Status | Verdict |
 |------|-------|------|------|--------|---------|
-| L0 Deployment Readiness | 9 | 9 | 0 | 🟡 GREEN + FINDING | **4 of 41 not serving** (was 11 — 7 fixed) |
-| L1 Tenant Isolation | 57 | 57 | 0 | ✅ GREEN | No cross-tenant leaks detected |
-| L2 Authz / BOLA | 44 | 44 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
+| L0 Deployment Readiness | 9 | 9 | 0 | ✅ GREEN | **41 of 41 serving** — inventory empty |
+| L1 Tenant Isolation | 70 | 70 | 0 | ✅ GREEN | No cross-tenant leaks; covers all 41 services |
+| L2 Authz / BOLA | 67 | 67 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 38 | 38 | 0 | ✅ GREEN | All money columns bigint; 0 violations |
-| L4 API Contract | 16 | 16 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
+| L4 API Contract | 28 | 28 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | 18 | 18 | 0 | ✅ GREEN | AES-GCM verified; audit ledger immutable |
 | L7 Reliability | 10 | 10 | 0 | ✅ GREEN | Honest 503s; p95 < 500ms; 0 5xx under load |
@@ -275,17 +275,63 @@ clean → 42 tables.
 
 The L0 staleness ratchet then failed on all four, forcing the inventory 8 → 4.
 
-### Still not serving (4) — blocked on database provisioning
+### ALL 41 SERVICES NOW SERVING (2026-07-27)
 
-| Service | Blocker |
-|---|---|
-| `revenue` | `revenue_svc` role and `civitas_revenue` database **do not exist** |
-| `works` | `works_svc` role and database do not exist |
-| `ml` | `ml_svc` role and database do not exist |
-| `metadata` | role exists; not yet started |
+Fleet 30 → **43 listening ports**. The L0 inventory ran **11 → 8 → 4 → 0**, each
+step a distinct root cause:
 
-`revenue` remains the sharpest case: highest line coverage in the fleet (99.6%)
-and still no database to connect to.
+| Step | Services | Root cause |
+|---|---|---|
+| 11 → 8 | payroll, admin, knowledge | Package `exports` maps pointed at `./src/*.js` while shipping to `dist/` — `ERR_MODULE_NOT_FOUND` killed them before they bound a port |
+| 8 → 4 | meeting, court, visitor, inspection | Secrets + `RUNTIME_NODE_ENV` + `JWT_ALGORITHM` needed in the launching shell; **inspection also had no role or database at all** |
+| 4 → 0 | revenue, works, ml, metadata | Roles and databases provisioned; **revenue additionally had a real auth bug** |
+
+#### P1 DEFECT — revenue-service: every authenticated route returned 401
+
+`resolveContext` read `(req as any).user`, which the auth plugin **never sets** —
+it decorates `req.ctx`. So `user` was always `undefined` and **every
+authenticated route in the service returned 401 "missing authentication"**.
+Confirmed live: `GET /v1/revenue/analytics/defaulters` returned 401 with a valid
+HS256 token that finance-service accepted on the same host.
+
+**Why 99.6% line coverage did not catch it: eight test files `vi.mock`ed
+`../src/shared/context.js` itself** and substituted a working `resolveContext`
+that read `req.ctx`. The suite exercised the mock, never the module. This is the
+sharpest example in the programme of coverage measuring the wrong thing — the
+highest-covered service in the fleet was completely non-functional.
+
+Fixed by delegating to the shared `resolveServiceContext` (matching
+finance-service), removing the mocks, and re-exporting `RequestContext` from
+`@civitasone/types` instead of keeping a private structural copy — the private
+copy is what allowed the drift. Verified 401 → **200** direct and through the
+gateway.
+
+Two related hardenings fell out of it:
+- `requireRole` now coalesces `ctx.roles ?? []`, so an absent roles claim **fails
+  closed with 403** instead of throwing a `TypeError` and surfacing as a 500.
+- A non-UUID tenant id is now asserted to be rejected; a service that accepts
+  `"tenant-1"` cannot enforce tenant isolation downstream.
+
+#### Also fixed: a test red since commit 92887d98
+
+`assessment-consumer.test.ts` asserted 2 enqueue calls after a third event
+(`assessmentCreated`) had been wired. Corrected to 3 and each topic is now
+asserted **by name**, so a dropped event fails rather than only a changed count.
+
+### Newly-exposed surfaces now covered
+
+Bringing services up made them reachable *before* their authz was verified — a
+net risk increase. Closed in the same pass:
+
+| Lane | Before | After |
+|---|---|---|
+| L1 Tenant Isolation | 57 | **70** (13 new endpoints across all 4 services) |
+| L2 Authz / BOLA | 44 | **67** (5 endpoint×role matrices, every pair probed live first) |
+| L4 API Contract | 16 | **28** (SQLi + UNION + traversal on each new surface) |
+
+Every allowed/denied role pair was probed against the live gateway before being
+written, so no guessed roles. Canary-verified: adding `court_admin` to the denied
+list for `/api/v1/court/cases` fails the matrix.
 
 ### Previously (8) — declared and routed, blocked on secrets
 
@@ -606,16 +652,17 @@ implying an unverified SLO.
 
 ## Next Steps
 
-1. **Provision `revenue_svc`, `works_svc`, `ml_svc` roles and databases**, then
-   launch those three plus `metadata`. Use
-   `infra/db/bootstrap/bootstrap_inspection.sql` as the template and apply each
-   service's migrations as `civitas_admin`. Takes the fleet 39 → 41/41.
-   `revenue` is the priority: 99.6% coverage and still no database.
+1. **Restart court/meeting/visitor with REAL PII keys.** They are currently
+   encrypting PII under the in-repo dev fallback
+   (`civitasone-<svc>-pii-dev-key-not-for-prod`). Deterministic and fine for a dev
+   box, but they must take keys from the secret manager before any real data
+   lands. This is now the top production blocker.
 2. **Reconcile `IS_PROD` with the injected `NODE_ENV`** in `ecosystem.config.js` —
    deciding prod-ness from the shell while forcing `NODE_ENV=production` into the
    app is the trap that makes a secret-less launch fail confusingly.
-3. **Extend L1/L2/L4 to `revenue` and `metadata`** once running — routes now exist,
-   but their isolation and authz remain unverified.
+3. **Extend L1/L2/L4 to `revenue`, `works`, `ml`, `metadata`** — the four brought
+   up last. meeting/court/visitor/inspection are now covered; these four are
+   serving but still have no isolation or authz verdict.
 4. **Finish the mutation burn-down on `payroll/domain.ts`** — 60.2%, the only
    file still under 70%, with 149 surviving mutants; raise `thresholds.break` as
    it lands.

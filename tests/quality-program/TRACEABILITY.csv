@@ -115,3 +115,15 @@ CAP-052,FnF Chapter VIA Old Regime Only,payroll,L10-domain-correctness/fnf-settl
 CAP-053,FnF Zero Clamps,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,taxable-and-tds-clamped,L10,PASS
 CAP-054,FnF Sec 87A Rebate,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,rebate-below-cap,L10,PASS
 CAP-055,FnF Net Payable Conservation,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,net-equals-gross-less-tds,L10,PASS
+CAP-056,Revenue Auth Context Fix,revenue,services/revenue-service/tests/context.test.ts,resolve-context-reads-req-ctx,L2,PASS
+CAP-057,Revenue Role Fail Closed,revenue,services/revenue-service/tests/context.test.ts,absent-roles-403-not-500,L2,PASS
+CAP-058,Revenue Malformed Tenant Rejected,revenue,services/revenue-service/tests/context.test.ts,non-uuid-tenant-401,L1,PASS
+SVC-062,Meeting Tenant Isolation,meeting,L1-tenant-isolation/tenant-isolation.test.ts,meeting-cross-tenant,L1,PASS
+SVC-063,Court Tenant Isolation,court,L1-tenant-isolation/tenant-isolation.test.ts,court-cross-tenant,L1,PASS
+SVC-064,Visitor Tenant Isolation,visitor,L1-tenant-isolation/tenant-isolation.test.ts,visitor-cross-tenant,L1,PASS
+SVC-065,Inspection Tenant Isolation,inspection,L1-tenant-isolation/tenant-isolation.test.ts,inspection-cross-tenant,L1,PASS
+SVC-066,Meeting Authz Matrix,meeting,L2-authz-bola/authz-matrix.test.ts,meeting-role-matrix,L2,PASS
+SVC-067,Court Authz Matrix,court,L2-authz-bola/authz-matrix.test.ts,court-role-matrix,L2,PASS
+SVC-068,Visitor Authz Matrix,visitor,L2-authz-bola/authz-matrix.test.ts,visitor-role-matrix,L2,PASS
+SVC-069,Inspection Authz Matrix,inspection,L2-authz-bola/authz-matrix.test.ts,inspection-role-matrix,L2,PASS
+SVC-070,New Surface Injection Resistance,platform,L4-api-contract/input-validation.test.ts,new-surfaces-sqli-traversal,L4,PASS
