@@ -252,23 +252,46 @@ the arch-guard CI job. It scans all 27 packages and fails on any `main`/`types`/
 `exports` target that does not exist, naming the `dist/` alternative when present.
 It found 5 entry points beyond the two that had already broken.
 
-### Still not deployed (6) — boot-probed 2026-07-27
+### Still not serving (8) — now declared and routed, blocked on secrets
 
-Absent from pm2; gateway routes point at dead ports. Build quality is not the
-issue: court has 50 test files at 88.9%, meeting 58 at 93.3%, visitor 45 at 81.2%.
+Build quality is not the issue: court has 50 test files at 88.9%, meeting 58 at
+93.3%, visitor 45 at 81.2%, revenue 37 at 99.6%.
 
-| Service | Boot probe result | Blocked on |
+**Two declaration gaps, now fixed:**
+
+| Gap | Services | Fix |
 |---|---|---|
-| `works` | **boots and listens cleanly** | pm2 ecosystem entry only |
-| `ml` | **boots and listens cleanly** | pm2 ecosystem entry only |
-| `court` | fails loud: `COURT_PII_KEY is required (>=16 chars)` | secret provisioning |
-| `meeting` | fails loud: `MEETING_PII_KEY is required` | secret provisioning |
-| `visitor` | fails loud: `VISITOR_PII_KEY is required` | secret provisioning |
-| `inspection` | fails loud: missing required env vars | secret provisioning |
+| Absent from `ecosystem.config.js` — undeployable by construction | `works`, `metadata` | `svc()` entries added |
+| No gateway route — every request 404s | `revenue`, `metadata` | prefixes added to the registry |
+| No PII key supplied, so the service fail-closes at boot | `court`, `meeting`, `visitor` | key resolvers added via a `piiKey()` factory (env → host key file → dev fallback, fail closed in prod) |
 
-The four PII-key failures are **correct fail-closed behaviour** — these services
-refuse to start rather than run without at-rest encryption, exactly as the DPDP
-posture requires. They are a provisioning gap, not a defect.
+`inspection` needed no change — its required-env allowlist was already fully
+supplied. An earlier probe reported it failing; that probe used a hand-built env
+missing `S3_BUCKET_NAME`/`HRMS_SERVICE_URL`. **The defect was in the probe, not
+the config**, and the earlier scorecard entry was wrong.
+
+**Remaining blocker — a config inconsistency, not a code defect.** `svc()` injects
+`NODE_ENV=production` into every app, while the ecosystem decides `IS_PROD` from
+the *shell* `NODE_ENV`. Launched without secrets in the launching shell, a service
+receives an empty `INTERNAL_SERVICE_SECRET` together with `NODE_ENV=production`,
+and `@civitasone/auth/plugin` correctly refuses:
+
+```
+Error: INTERNAL_SERVICE_SECRET must be set in production; refusing to start.
+```
+
+That is fail-closed behaviour working as intended. Bringing these 8 up requires
+the real `INTERNAL_SERVICE_SECRET` / `DEVICE_TRUST_SECRET` (plus per-service PII
+keys) injected from the secret manager at launch — an operational step,
+deliberately not automated. The running fleet was left unchanged at 33/41.
+
+### Guarded against recurrence
+
+`scripts/ci/deployment-declaration-guard.mjs` (wired into the arch-guard CI job)
+fails if any service in `services/` is missing from `ecosystem.config.js` or from
+the gateway registry. `gateway` and `queue` are exempt with recorded reasons.
+Verified genuine: deleting the `works` ecosystem entry and the `revenue` route
+produced `UNDEPLOYABLE — works` and `UNREACHABLE — revenue`, exit 1.
 
 ### Built but unreachable (2)
 | Service | State |
@@ -492,18 +515,21 @@ implying an unverified SLO.
 
 ## Next Steps
 
-1. **Add `works` and `ml` to the pm2 ecosystem** — both boot and listen cleanly;
-   nothing else blocks them. Then **provision PII keys** for court, meeting,
-   visitor and inspection (they fail closed by design without them). That takes
-   the fleet from 33/41 to 39/41.
-2. **Add gateway routes for `revenue` and `metadata`**, then extend L1/L2/L4 to
-   cover them; their isolation and authz are currently unverified.
-3. **Burn down 176 surviving mutants in `payroll/domain.ts`** (37.4% → 70%), then
+1. **Launch the 8 declared-but-not-running services with real secrets.** They are
+   now declared and routed; the only blocker is injecting
+   `INTERNAL_SERVICE_SECRET` / `DEVICE_TRUST_SECRET` (+ per-service PII keys) from
+   the secret manager at launch. Takes the fleet 33/41 → 41/41.
+2. **Reconcile `IS_PROD` with the injected `NODE_ENV`** in `ecosystem.config.js` —
+   deciding prod-ness from the shell while forcing `NODE_ENV=production` into the
+   app is the trap that makes a secret-less launch fail confusingly.
+3. **Extend L1/L2/L4 to `revenue` and `metadata`** once running — routes now exist,
+   but their isolation and authz remain unverified.
+4. **Burn down 176 surviving mutants in `payroll/domain.ts`** (37.4% → 70%), then
    `payments` (57.7%) and `fnf` (59.6%); raise `thresholds.break` as each lands.
-4. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
-5. Verify Trivy + ZAP actually pass in CI — both are wired but **unexecuted** on
+5. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
+6. Verify Trivy + ZAP actually pass in CI — both are wired but **unexecuted** on
    this machine, so their status is unproven
-6. Wire k6 soak (≥2h) + chaos automation as L7 gates
-7. Expand TRACEABILITY.csv from 83 to all 270 capabilities
-8. Complete B1 (Testcontainers ephemeral DB harness)
-9. Fix the header-posture ZAP `WARN` rules on the real gateway, then ratchet to `FAIL`
+7. Wire k6 soak (≥2h) + chaos automation as L7 gates
+8. Expand TRACEABILITY.csv from 98 to all 270 capabilities
+9. Complete B1 (Testcontainers ephemeral DB harness)
+10. Fix the header-posture ZAP `WARN` rules on the real gateway, then ratchet to `FAIL`

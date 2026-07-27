@@ -84,3 +84,12 @@ CAP-031,Package Exports Resolve,platform,scripts/ci/package-exports-guard.mjs,en
 SVC-052,Payroll Service Serving,payroll,L0-deployment-readiness/readiness.test.ts,payroll-port-bound,L0,PASS
 SVC-053,Admin Service Serving,admin,L0-deployment-readiness/readiness.test.ts,admin-port-bound,L0,PASS
 SVC-054,Knowledge Service Serving,knowledge,L0-deployment-readiness/readiness.test.ts,knowledge-port-bound,L0,PASS
+CAP-032,Service Declared In Ecosystem,platform,scripts/ci/deployment-declaration-guard.mjs,all-services-declared,L0,PASS
+CAP-033,Service Has Gateway Route,gateway,scripts/ci/deployment-declaration-guard.mjs,all-services-routed,L0,PASS
+SVC-055,Revenue Gateway Route,revenue,services/gateway-service/src/registry.ts,revenue-prefix,L0,PASS
+SVC-056,Metadata Gateway Route,metadata,services/gateway-service/src/registry.ts,metadata-prefix,L0,PASS
+SVC-057,Works Ecosystem Entry,works,ecosystem.config.js,works-svc-declared,L0,PASS
+SVC-058,Metadata Ecosystem Entry,metadata,ecosystem.config.js,metadata-svc-declared,L0,PASS
+SVC-059,Court PII Key Wired,court,ecosystem.config.js,court-pii-key,L0,PASS
+SVC-060,Meeting PII Key Wired,meeting,ecosystem.config.js,meeting-pii-key,L0,PASS
+SVC-061,Visitor PII Key Wired,visitor,ecosystem.config.js,visitor-pii-key,L0,PASS

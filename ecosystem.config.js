@@ -155,6 +155,48 @@ const CRM_PII_KEY = (() => {
 })();
 
 
+// -- Per-service PII at-rest key resolver (DPDP) ------------------------------
+// Factory for the same injection contract used by CITIZEN_PII_KEY / CRM_PII_KEY
+// above: env -> on-host key file -> dev fallback, fail closed in production.
+// NO secret literal on the prod path.
+//
+// Added for court / meeting / visitor, which each fail closed on startup without
+// their key. Boot-probed 2026-07-27: all three refused to start with
+// "<SVC>_PII_KEY is required (>=16 chars) for at-rest PII encryption" — correct
+// behaviour, but it left them undeployable because the ecosystem never supplied
+// the key.
+function piiKey(envName, fileSlug, serviceName) {
+  const fromEnv = process.env[envName];
+  if (fromEnv && fromEnv.length >= 16) return fromEnv;
+  try {
+    const fs = require("fs");
+    const p = require("path").join(
+      process.env.HOME || "/home/ec2-user",
+      `.civitasone-${fileSlug}-pii-key`,
+    );
+    const v = fs.readFileSync(p, "utf8").trim();
+    if (v.length >= 16) return v;
+  } catch (e) { /* fall through */ }
+  if (IS_PROD) {
+    throw new Error(
+      `[ecosystem] ${envName} required for ${serviceName} ` +
+        `(inject from secret manager or provision the host key file). Refusing to start.`,
+    );
+  }
+  return `civitasone-${fileSlug}-pii-dev-key-not-for-prod`;
+}
+
+const COURT_PII_KEY = piiKey("COURT_PII_KEY", "court", "court-service");
+const MEETING_PII_KEY = piiKey("MEETING_PII_KEY", "meeting", "meeting-service");
+const VISITOR_PII_KEY = piiKey("VISITOR_PII_KEY", "visitor", "visitor-service");
+
+// NOTE on inspection-service: it validates a required-env allowlist at boot
+// (DATABASE_URL, QUEUE_DRIVER, S3_BUCKET_NAME, HRMS_SERVICE_URL — see its
+// app.ts). All four are ALREADY supplied by its svc()/worker() entries below.
+// The 2026-07-27 boot probe that reported it failing was run with a hand-built
+// env missing S3_BUCKET_NAME/HRMS_SERVICE_URL — a defect in the probe, not in
+// this config. No change needed here.
+
 function svc(name, port, dbUser, dbName, extra = {}) {
   return {
     name,
@@ -286,9 +328,9 @@ module.exports = {
     worker("inventory",    "inventory_svc",    "civitas_inventory"),
     worker("telephony",    "telephony_svc",    "civitas_telephony"),
     worker("ml",           "ml_svc",           "civitas_ml"),
-    worker("meeting",      "meeting_svc",      "civitas_meeting"),
-    worker("court",        "court_svc",        "civitas_court"),
-    worker("visitor",      "visitor_svc",      "civitas_visitor"),
+    worker("meeting",      "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
+    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY }),
+    worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
     worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
@@ -318,9 +360,13 @@ module.exports = {
 
     svc("analytics",    3031, "analytics_svc",    "civitas_analytics"),
     svc("ml",           3032, "ml_svc",           "civitas_ml"),
-    svc("meeting",      3033, "meeting_svc",      "civitas_meeting"),
-    svc("court",        3034, "court_svc",        "civitas_court"),
-    svc("visitor",      3035, "visitor_svc",      "civitas_visitor"),
+    svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
+    svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }),
+    svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
+    // Previously absent from this file entirely, so they could never be started.
+    // Boot-probed 2026-07-27: works listens cleanly with no extra config.
+    svc("works",        3036, "works_svc",        "civitas_works"),
+    svc("metadata",     3039, "metadata_svc",     "civitas_metadata"),
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue"),
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",

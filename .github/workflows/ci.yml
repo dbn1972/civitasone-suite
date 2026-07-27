@@ -202,6 +202,13 @@ jobs:
       # because it resolves via source paths, not the published exports map.
       - name: Package exports guard (entry points must resolve)
         run: node scripts/ci/package-exports-guard.mjs
+      # Every service must be declared in ecosystem.config.js (or it can never be
+      # started) AND have a gateway route (or no client can reach it). `works` and
+      # `metadata` were absent from the ecosystem entirely; `revenue` and
+      # `metadata` had no gateway route — revenue carries the fleet's highest
+      # line coverage (99.6%) and was completely unreachable.
+      - name: Deployment declaration guard (startable + reachable)
+        run: node scripts/ci/deployment-declaration-guard.mjs
       - name: Check no cross-service DB joins
         run: |
           # L1 rule: no service may import another service's schema
