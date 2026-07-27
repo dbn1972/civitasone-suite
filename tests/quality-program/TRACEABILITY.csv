@@ -27,3 +27,18 @@ CAP-002,Journal Balance Gate,finance,L11-mutation-canary/canary-tests.test.ts,jo
 CAP-003,Pension Age Threshold,payroll,L11-mutation-canary/canary-tests.test.ts,pension-age-boundary-canary,L11,PASS
 CAP-004,Isolation Gate Validity,platform,L11-mutation-canary/canary-tests.test.ts,isolation-gate-no-500,L11,PASS
 CAP-005,Authz Gate Validity,platform,L11-mutation-canary/canary-tests.test.ts,authz-gate-no-200-bypass,L11,PASS
+SVC-024,PII Encryption IV Uniqueness,platform,L6-security/crypto-audit.test.ts,iv-uniqueness-100x,L6,PASS
+SVC-025,PII Auth Tag Verification,platform,L6-security/crypto-audit.test.ts,auth-tag-tamper-detect,L6,PASS
+SVC-026,PII Fail-Closed on Missing Key,platform,L6-security/crypto-audit.test.ts,missing-key-throws,L6,PASS
+SVC-027,PII No Plaintext Leakage,platform,L6-security/crypto-audit.test.ts,no-plaintext-in-ciphertext,L6,PASS
+SVC-028,PII Round-Trip Fidelity,platform,L6-security/crypto-audit.test.ts,roundtrip-unicode-long-empty,L6,PASS
+SVC-029,PII Envelope Format v2,platform,L6-security/crypto-audit.test.ts,envelope-format-keyid,L6,PASS
+SVC-030,Audit Ledger Immutability Trigger,audit,L6-security/audit-immutability.test.ts,immutable-trigger-present,L6,PASS
+SVC-031,Audit Ledger No-Truncate,audit,L6-security/audit-immutability.test.ts,truncate-rejected,L6,PASS
+SVC-032,Health Endpoint Honesty,gateway,L7-reliability/dependency-honesty.test.ts,health-real-status,L7,PASS
+SVC-033,Upstream Down Honest Error,gateway,L7-reliability/dependency-honesty.test.ts,unreachable-no-fake-200,L7,PASS
+SVC-034,Read Path Latency SLO,platform,L7-reliability/dependency-honesty.test.ts,p95-under-500ms,L7,PASS
+SVC-035,No 5xx Under Sequential Load,platform,L7-reliability/dependency-honesty.test.ts,50-sequential-no-500,L7,PASS
+SVC-036,No 5xx Under Concurrent Load,platform,L7-reliability/dependency-honesty.test.ts,20-concurrent-no-500,L7,PASS
+SVC-037,Cache Miss Graceful Degradation,platform,L7-reliability/dependency-honesty.test.ts,cache-bust-no-500,L7,PASS
+SVC-038,Rate Limiting Enforcement,gateway,L7-reliability/dependency-honesty.test.ts,burst-150-rate-limited,L7,PASS
