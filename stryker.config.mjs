@@ -64,26 +64,27 @@ export default {
      *          loaded. That number described the include-list, not the tests.
      *   58.31% after wiring the real suites in (600 killed, NoCoverage 128).
      *   68.03% after the payroll burn-down (700 killed, NoCoverage 57).
+     *   71.29% after the payments + F&F burn-down (755 killed, NoCoverage 48).
      *
-     * `break` is set just below the measured score so the gate is REAL (a
-     * regression fails the build) without being permanently red. It does NOT
-     * assert the L11 exit criterion is met: that requires >=70% and three files
-     * are still short. Raise this as the burn-down continues; do not lower it.
+     * The L11 exit criterion of >=70% is now MET at the suite level. `break` is
+     * held just below the measured score so a regression fails the build; it is
+     * a floor, not the target. Raise it as the burn-down continues; never lower.
      *
      * Per-file state (target >=70%):
-     *   payments/domain.ts   57.7%   29 survived, 18 no-coverage  <- next
-     *   fnf/domain.ts        59.6%   19 survived,  2 no-coverage
-     *   payroll/domain.ts    60.2%  149 survived, 22 no-coverage  (was 37.4%)
+     *   payroll/domain.ts    60.2%  149 survived, 22 no-coverage  <- only file
+     *                                                               still short
+     *   payments/domain.ts   70.9%   OK  (was 57.7%)
      *   quorum/domain.ts     73.0%   OK
      *   authority/domain.ts  73.6%   OK
      *   budget/domain.ts     81.8%   OK
      *   gl/domain.ts         87.0%   OK
+     *   fnf/domain.ts        96.2%   OK  (was 59.6%)
      *   decisions/domain.ts  98.8%   OK
      *
      * Inspect remaining gaps with:
-     *   node scripts/ci/mutation-survivors.mjs "payments/domain" 40
+     *   node scripts/ci/mutation-survivors.mjs "payroll/domain" 60
      */
-    break: 65,
+    break: 68,
   },
   concurrency: 4,
   timeoutMS: 30000,

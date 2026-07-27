@@ -103,3 +103,15 @@ CAP-040,EPF Wage Ceiling,payroll,L10-domain-correctness/payroll-slip-mutants.tes
 CAP-041,HRA Slab Table,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,hra-slab-city-da-tier,L10,PASS
 CAP-042,RoundRupee Half Up,payroll,L10-domain-correctness/payroll-slip-mutants.test.ts,round-half-up-symmetric,L10,PASS
 CAP-043,Launch Runbook,platform,docs/runbooks/launch-undeployed-services.md,operator-procedure,D,PASS
+CAP-044,Maker Checker SoD On Money Path,finance,L10-domain-correctness/payments-domain-mutants.test.ts,self-approval-rejected,L10,PASS
+CAP-045,Three Way Positivity Guard,finance,L10-domain-correctness/payments-domain-mutants.test.ts,all-legs-positive,L10,PASS
+CAP-046,Three Way Tolerance Exact,finance,L10-domain-correctness/payments-domain-mutants.test.ts,tolerance-boundary-exclusive,L10,PASS
+CAP-047,Payment Mode Allowlist,finance,L10-domain-correctness/payments-domain-mutants.test.ts,mode-case-sensitive,L10,PASS
+CAP-048,Bill Passed Gate,finance,L10-domain-correctness/payments-domain-mutants.test.ts,requires-status-passed,L10,PASS
+CAP-049,Bill Stage Machine,finance,L10-domain-correctness/payments-domain-mutants.test.ts,section-accounts-pay,L10,PASS
+CAP-050,FnF Separation Income Additive,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,separation-adds-to-salary,L10,PASS
+CAP-051,FnF Std Deduction Paise,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,rupees-to-paise-conversion,L10,PASS
+CAP-052,FnF Chapter VIA Old Regime Only,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,80c-80d-other-additive,L10,PASS
+CAP-053,FnF Zero Clamps,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,taxable-and-tds-clamped,L10,PASS
+CAP-054,FnF Sec 87A Rebate,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,rebate-below-cap,L10,PASS
+CAP-055,FnF Net Payable Conservation,payroll,L10-domain-correctness/fnf-settlement-mutants.test.ts,net-equals-gross-less-tds,L10,PASS

@@ -39,11 +39,69 @@ export interface ThreeWayLegs {
   invoiceMinor: bigint;    // vendor invoice value being passed (bill gross)
 }
 
-/** Overage of `value` above `cap` as a percentage (0 when within/under cap). */
+/**
+ * Overage of `value` above `cap` as a percentage (0 when within/under cap).
+ *
+ * REPORTING ONLY — do not use for the accept/reject decision. The BigInt
+ * division truncates, so the result is quantised down to 0.01% steps and
+ * systematically UNDER-reports. Use `exceedsTolerance()` to decide.
+ */
 function overagePct(value: bigint, cap: bigint): number {
   if (cap <= 0n) return value > 0n ? Number.POSITIVE_INFINITY : 0;
   if (value <= cap) return 0;
   return Number((value - cap) * 10000n / cap) / 100;
+}
+
+/**
+ * Exact tolerance test on an absolute deviation: is `deviation` more than
+ * `tolerancePct` of `cap`? Integer-only — no float, no truncating division.
+ *
+ *   exceed when deviation / cap > tolerancePct / 100
+ *          <=>  deviation * 10000 > cap * (tolerancePct * 100)
+ *
+ * `tolerancePct` is scaled to basis points so fractional tolerances (2.5%)
+ * stay exact. Boundary is EXCLUSIVE: exactly at tolerance is within tolerance.
+ *
+ * Exported so every money-path tolerance gate shares one implementation rather
+ * than re-deriving it through `overagePct()`, which truncates (see below).
+ */
+export function deviationExceedsTolerance(deviation: bigint, cap: bigint, tolerancePct: number): boolean {
+  if (cap <= 0n) return deviation > 0n;
+  if (deviation <= 0n) return false;
+  const toleranceBps = BigInt(Math.round(tolerancePct * 100)); // percent -> bps
+  return deviation * 10000n > cap * toleranceBps;
+}
+
+/**
+ * Exact tolerance test: is `value` more than `tolerancePct` above `cap`?
+ *
+ * WHY THIS EXISTS (money-path precision defect, found by mutation testing)
+ * ----------------------------------------------------------------------
+ * The decision used to be `overagePct(value, cap) > tolerancePct`. That routes a
+ * money comparison through a truncating BigInt division and then a float, so the
+ * measured overage is quantised DOWN to 0.01%-of-cap steps. The rounding is
+ * always toward zero, so the error always favours ADMITTING overage — i.e.
+ * paying more than was authorised. Measured examples:
+ *
+ *   PO Rs 1,000    GRN +Rs 20.01   -> reported 2.00% (true 2.001%) -> admitted at 2%
+ *   PO Rs 1 crore  GRN +Rs 999.99  -> reported 0.00% (true 0.010%) -> admitted
+ *                                     even at ZERO tolerance
+ *
+ * The quantum is `cap / 10000` paise, so the larger the PO the more money slips
+ * through: Rs 999.99 on a Rs 1 crore order.
+ *
+ * This compares in exact integer arithmetic instead — no float, no truncation:
+ *   reject when (value - cap) / cap > tolerancePct / 100
+ *          <=>  (value - cap) * 10000 > cap * (tolerancePct * 100)
+ *
+ * `tolerancePct` is scaled to basis points so fractional tolerances (e.g. 2.5%)
+ * remain exact. The boundary stays EXCLUSIVE: exactly at tolerance is allowed,
+ * which is the pre-existing contract.
+ */
+function exceedsTolerance(value: bigint, cap: bigint, tolerancePct: number): boolean {
+  if (cap <= 0n) return value > 0n;
+  if (value <= cap) return false;
+  return deviationExceedsTolerance(value - cap, cap, tolerancePct);
 }
 
 /**
@@ -71,22 +129,22 @@ export function assertThreeWayMatch(
       `po/grn/invoice amounts must all be positive to reconcile (po=${poAmountMinor} grn=${grnAmountMinor} invoice=${invoiceMinor})`,
     );
   }
-  if (overagePct(grnAmountMinor, poAmountMinor) > tolerancePct) {
+  if (exceedsTolerance(grnAmountMinor, poAmountMinor, tolerancePct)) {
     throw new DomainError(
       "GRN_EXCEEDS_PO",
-      `received value ${grnAmountMinor} paise exceeds ordered value ${poAmountMinor} paise beyond ${tolerancePct}% tolerance`,
+      `received value ${grnAmountMinor} paise exceeds ordered value ${poAmountMinor} paise by ~${overagePct(grnAmountMinor, poAmountMinor)}%, beyond the ${tolerancePct}% tolerance`,
     );
   }
-  if (overagePct(invoiceMinor, grnAmountMinor) > tolerancePct) {
+  if (exceedsTolerance(invoiceMinor, grnAmountMinor, tolerancePct)) {
     throw new DomainError(
       "INVOICE_EXCEEDS_GRN",
-      `invoice ${invoiceMinor} paise exceeds accepted/received value ${grnAmountMinor} paise beyond ${tolerancePct}% tolerance`,
+      `invoice ${invoiceMinor} paise exceeds accepted/received value ${grnAmountMinor} paise by ~${overagePct(invoiceMinor, grnAmountMinor)}%, beyond the ${tolerancePct}% tolerance`,
     );
   }
-  if (overagePct(invoiceMinor, poAmountMinor) > tolerancePct) {
+  if (exceedsTolerance(invoiceMinor, poAmountMinor, tolerancePct)) {
     throw new DomainError(
       "INVOICE_EXCEEDS_PO",
-      `invoice ${invoiceMinor} paise exceeds ordered value ${poAmountMinor} paise beyond ${tolerancePct}% tolerance`,
+      `invoice ${invoiceMinor} paise exceeds ordered value ${poAmountMinor} paise by ~${overagePct(invoiceMinor, poAmountMinor)}%, beyond the ${tolerancePct}% tolerance`,
     );
   }
 }

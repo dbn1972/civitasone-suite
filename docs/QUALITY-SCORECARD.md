@@ -22,7 +22,7 @@
 | L9 A11Y | Existing | ✅ | — | ✅ GREEN | axe-core gate active, 0 violations |
 | L10 Domain | 26 | 26 | 0 | ✅ GREEN | 100% match to golden oracles |
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
-| L11 Mutation Score | 1029 mutants | 700 killed | 269 survived | 🟡 **68.03%** | Enforcing at 65; **below the 70% criterion** |
+| L11 Mutation Score | 1059 mutants | 755 killed | 253 survived | ✅ **71.29%** | Enforcing at 68; **≥70% criterion MET** |
 
 **Totals:** 243 tests across 12 files, plus a measured SLO run.
 Release gate: **RELEASABLE** — all blocking lanes have passing evidence and the
@@ -403,18 +403,20 @@ Added payroll/F&F/GL/payments suites plus the L10 golden-oracle and L11 canary
 tests (each verified to pass in isolation first, since Stryker aborts otherwise).
 Two DB-dependent files excluded to keep the run hermetic.
 
-| File | Scope-fix | Burn-down | Survived | NoCov |
-|---|---|---|---|---|
-| `payroll/domain.ts` | 0/430 → **37.4%** | **60.2%** | 149 (was 176) | 22 (was 93) |
-| `fnf/domain.ts` | 0/52 → **59.6%** | 59.6% | 19 | 2 |
-| `gl/domain.ts` | 0/23 → **87.0%** | 87.0% | 3 | 0 |
-| `payments/domain.ts` | 32% → 57.7% | 57.7% | 29 | 18 |
-| `quorum/domain.ts` | 73.0% | 73.0% | 35 | 8 |
-| `authority/domain.ts` | 73.6% | 73.6% | 21 | 7 |
-| `budget/domain.ts` | 81.8% | 81.8% | 12 | 0 |
-| `decisions/domain.ts` | 98.8% | 98.8% | 1 | 0 |
+| File | Scope-fix | Payroll pass | Payments+F&F pass | Survived | NoCov |
+|---|---|---|---|---|---|
+| `payroll/domain.ts` | 0/430 → **37.4%** | **60.2%** | 60.2% | 149 (was 176) | 22 (was 93) |
+| `payments/domain.ts` | 32% → 57.7% | 57.7% | **70.9%** | 30 | 11 |
+| `fnf/domain.ts` | 0/52 → **59.6%** | 59.6% | **96.2%** | 2 | 0 |
+| `gl/domain.ts` | 0/23 → **87.0%** | 87.0% | 87.0% | 3 | 0 |
+| `quorum/domain.ts` | 73.0% | 73.0% | 73.0% | 35 | 8 |
+| `authority/domain.ts` | 73.6% | 73.6% | 73.6% | 21 | 7 |
+| `budget/domain.ts` | 81.8% | 81.8% | 81.8% | 12 | 0 |
+| `decisions/domain.ts` | 98.8% | 98.8% | 98.8% | 1 | 0 |
 
-**Overall 35.1% → 58.31% → 68.03%.** Killed 600 → 700. NoCoverage 128 → 57.
+**Overall 35.1% → 58.31% → 68.03% → 71.29%.** Killed 600 → 755.
+NoCoverage 128 → 48. **The ≥70% L11 exit criterion is now met at suite level.**
+`payroll/domain.ts` at 60.2% is the only file still short.
 
 ### Payroll burn-down (2026-07-27)
 
@@ -435,14 +437,49 @@ the 269 survivors by mutator — so the work went at real logic, not label strin
 All expected values were computed by hand from the statutory rule and the
 documented constants, not read back from the implementation.
 
+### Payments + F&F burn-down (2026-07-27) — and a real defect found
+
+`payments-domain-mutants.test.ts` (64 tests) + `fnf-settlement-mutants.test.ts`
+(22 tests).
+
+**P1 DEFECT FOUND AND FIXED — three-way-match tolerance under-reported overage,
+always in the vendor's favour.**
+
+The accept/reject decision was `overagePct(value, cap) > tolerancePct`, routing a
+money comparison through a truncating BigInt division and then a float. The
+measured overage was quantised **down** to 0.01%-of-cap steps, and because
+truncation is always toward zero the error **always admitted** overage — i.e.
+authorised paying more than the PO. Measured:
+
+| PO | GRN overage | Reported | True | At 2% tolerance |
+|---|---|---|---|---|
+| ₹1,000 | +₹20.01 | 2.00% | 2.001% | **admitted** |
+| ₹1 crore | +₹999.99 | **0.00%** | 0.010% | **admitted even at ZERO tolerance** |
+
+The quantum is `cap / 10000` paise, so the larger the order the more slips
+through: ₹999.99 on a ₹1 crore PO.
+
+Fixed by adding `exceedsTolerance()`, which compares in exact integer arithmetic
+with no float and no truncation — `(value - cap) * 10000 > cap * toleranceBps`.
+The boundary stays exclusive (exactly-at-tolerance is still allowed, preserving
+the existing contract). `overagePct()` is retained for error messages only, now
+documented as reporting-only. **finance-service: 868/868 tests still pass**, so
+the tightening broke nothing.
+
+**Also found: the maker-checker SoD guard on the money path was entirely
+NoCoverage.** Every mutant survived, including `creatorId !== approverId`, which
+inverts the check — self-approval of a disbursement would have been permitted with
+no test failing. Now covered, including a documented weakness asserted so it
+cannot change silently: the guard requires *both* ids truthy, so two empty-string
+actor ids bypass it. Callers must validate presence; the function does not.
+
 ### Honest status
 
-**68.03% still does NOT meet the L11 exit criterion of ≥70%.** `break` raised
-55 → **65**, just under the measured score, locking in the gain while keeping the
-gate real rather than permanently red. This is a ratchet, not a pass.
+**71.29% meets the L11 exit criterion of ≥70%** at suite level. `break` raised
+65 → **68**, held just under the measured score so a regression fails the build.
 
-Three files remain short: `payments` 57.7%, `fnf` 59.6%, `payroll` 60.2%.
-**149 mutants still survive in `payroll/domain.ts`.**
+`payroll/domain.ts` at 60.2% is the **only file still below 70%**, with 149
+surviving mutants. The suite-level pass does not make that file safe.
 
 Verified enforcing: `break: 95` produced
 `Final mutation score 58.79 under breaking threshold 95, setting exit code to 1`.
@@ -543,8 +580,9 @@ implying an unverified SLO.
    app is the trap that makes a secret-less launch fail confusingly.
 3. **Extend L1/L2/L4 to `revenue` and `metadata`** once running — routes now exist,
    but their isolation and authz remain unverified.
-4. **Continue the mutation burn-down to ≥70%**: `payments` 57.7%, `fnf` 59.6%,
-   `payroll` 60.2% (149 mutants still surviving); raise `thresholds.break` as each lands.
+4. **Finish the mutation burn-down on `payroll/domain.ts`** — 60.2%, the only
+   file still under 70%, with 149 surviving mutants; raise `thresholds.break` as
+   it lands.
 5. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
 6. Verify Trivy + ZAP actually pass in CI — both are wired but **unexecuted** on
    this machine, so their status is unproven
