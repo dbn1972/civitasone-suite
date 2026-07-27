@@ -7,7 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, assertDistinctMakerChecker, nextStage, DEFAULT_THREE_WAY_TOLERANCE_PCT } from "./domain.js";
+import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertValidPaymentMode, assertDistinctMakerChecker, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
@@ -32,6 +32,22 @@ async function headIdByCode(tx: unknown, tenantId: string, code: string, label: 
 }
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/**
+ * Resolve the 3-way-match tolerance from env.
+ *
+ * `Number(raw) || undefined` was WRONG on the money path: `FINANCE_THREE_WAY_TOLERANCE_PCT=0`
+ * is falsy, so an operator asking for ZERO tolerance silently got the 2% default
+ * and overage up to 2% was admitted. Only an unset/blank/non-finite/negative
+ * value falls back to the default; 0 is an explicit, valid setting.
+ */
+function resolveThreeWayTolerancePct(fallbackPct: number = DEFAULT_THREE_WAY_TOLERANCE_PCT): number {
+  const raw = process.env.FINANCE_THREE_WAY_TOLERANCE_PCT;
+  if (raw == null || raw.trim() === "") return fallbackPct;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallbackPct;
+  return parsed;
+}
 
 export function registerPaymentsConsumers(queue: Queue): void {
   // Tenant context: every command carries tenantId in its envelope. Wrap each
@@ -190,7 +206,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         }
       }
       if (poAmt != null && grnAmt != null) {
-        const tol = Number(process.env.FINANCE_THREE_WAY_TOLERANCE_PCT ?? "") || undefined;
+        const tol = resolveThreeWayTolerancePct();
         assertThreeWayMatch(bill.poRef, bill.grnRef, {
           poAmountMinor: poAmt, grnAmountMinor: grnAmt, invoiceMinor: bill.grossMinor,
         }, tol);
@@ -423,7 +439,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
       tenantId: string; messageId?: string;
       poAmountMinor?: number | string;
     };
-    const THREE_WAY_MATCH_TOLERANCE_PCT = Number(process.env.FINANCE_THREE_WAY_TOLERANCE_PCT ?? "") || 5;
+    // Advisory gate (emits passed/failed); the hard authorisation gate is on
+    // billApprove above. Default here is 5% (looser than the approve default)
+    // because this fires on receipt, before the invoice is known.
+    const THREE_WAY_MATCH_TOLERANCE_PCT = resolveThreeWayTolerancePct(5);
     const grnTotalMinor = BigInt(p.totalMinor ?? 0);
     const poAmountMinor = p.poAmountMinor != null ? BigInt(p.poAmountMinor) : grnTotalMinor;
     const billId = randomUUID();
@@ -451,13 +470,21 @@ export function registerPaymentsConsumers(queue: Queue): void {
         updatedBy: msg.actorId,
       });
 
-      // Three-way match validation: compare PO amount vs GRN amount (tolerance-based)
-      // Variance = |poAmount - grnAmount| / poAmount * 100
+      // Three-way match validation: compare PO amount vs GRN amount (tolerance-based).
+      // Deviation = |poAmount - grnAmount|.
+      const deviationMinor = grnTotalMinor > poAmountMinor
+        ? grnTotalMinor - poAmountMinor
+        : poAmountMinor - grnTotalMinor;
+      // The DECISION uses exact integer arithmetic. `variance` below is REPORTING
+      // ONLY: its BigInt division truncates toward zero, so it quantises to
+      // 0.01%-of-PO steps and under-reports (on a Rs 1 crore PO the quantum is
+      // Rs 1,000). Deciding on it admitted overage the tolerance forbids.
+      const matched = !deviationExceedsTolerance(deviationMinor, poAmountMinor, THREE_WAY_MATCH_TOLERANCE_PCT);
       const variance = poAmountMinor > 0n
-        ? Number((grnTotalMinor > poAmountMinor ? grnTotalMinor - poAmountMinor : poAmountMinor - grnTotalMinor) * 10000n / poAmountMinor) / 100
+        ? Number(deviationMinor * 10000n / poAmountMinor) / 100
         : (grnTotalMinor > 0n ? Number.POSITIVE_INFINITY : 0);
 
-      if (variance <= THREE_WAY_MATCH_TOLERANCE_PCT) {
+      if (matched) {
         // Match passes
         await enqueue(tx, {
           topic: "procurement.three_way_match.passed",

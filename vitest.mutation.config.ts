@@ -80,6 +80,13 @@ export default defineConfig({
       // extra-income sign, the previously-uncovered old-regime branch, the
       // zero-component omission guards and the recovery floor.
       "tests/quality-program/L10-domain-correctness/payroll-slip-mutants.test.ts",
+      // Targets the maker-checker SoD guard (was entirely NoCoverage), the
+      // three-way positivity guard and the tolerance boundaries.
+      "tests/quality-program/L10-domain-correctness/payments-domain-mutants.test.ts",
+      // Targets the F&F Step 5-8 tax arithmetic: separation-income sign, the
+      // rupee->paise std-deduction conversion, Chapter VI-A additivity, and the
+      // taxable/TDS zero clamps.
+      "tests/quality-program/L10-domain-correctness/fnf-settlement-mutants.test.ts",
       "tests/quality-program/L10-domain-correctness/finance-domain.test.ts",
       "tests/quality-program/L11-mutation-canary/canary-tests.test.ts",
     ],
