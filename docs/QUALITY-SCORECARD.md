@@ -22,7 +22,9 @@
 | L10 Domain | 26 | 26 | 0 | ✅ GREEN | 100% match to golden oracles |
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
 
-**Totals:** 243 tests across 12 files. Release gate: **RELEASABLE** (all blocking lanes have passing evidence).
+**Totals:** 243 tests across 12 files, plus a measured SLO run.
+Release gate: **RELEASABLE** — all blocking lanes have passing evidence and the
+error budget is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited).
 
 ---
 
@@ -128,9 +130,20 @@
 - ✅ gitleaks secret scanning
 - ✅ `pnpm audit --prod --audit-level=moderate`
 
-### Not Yet Built:
-- ⬜ OWASP ZAP DAST against the gateway
-- ⬜ Trivy container image scanning
+### Added this round (CI-only — cannot execute locally)
+- ✅ **Trivy container scan** — `gateway`, `finance`, `hrms` images. Blocks on
+  CRITICAL/HIGH **with a known fix** (`ignore-unfixed: true`); unfixed CVEs are
+  reported via SARIF but do not block, since no action is available.
+- ✅ **OWASP ZAP baseline DAST** with a ratcheting `.zap/rules.tsv`: injection,
+  traversal, code-injection and error-disclosure classes are `FAIL`; header
+  posture is `WARN` pending the real-gateway fix; four rules are `IGNORE`d with
+  recorded reasons.
+
+**Scope limit, stated plainly:** ZAP runs against `start-mock-gateway.mjs`, a
+static-JSON fixture — not the production gateway. It exercises the HTTP surface
+deterministically in CI. It is **not** a full authenticated scan of a live fleet,
+and no such claim is made. Trivy has not run on this machine (not installed), so
+its result is unverified until CI executes it.
 
 ---
 
@@ -155,6 +168,37 @@
   into 429 — order-dependent coupling (B2 violation). The burst now uses a
   dedicated actor.
 
+### SLO measurement (k6) — now the release gate's error-budget input
+
+`tests/load/k6-slo.js` + `scripts/ci/run-slo-measurement.sh` produce
+`evidence/<date>/L7-k6-slo.json`, which `release-gate.mjs` consumes.
+
+Latest measured run (361 requests over 30s):
+
+| Metric | Measured | Threshold | Verdict |
+|--------|----------|-----------|---------|
+| Read p95 | 10.2 ms | < 500 ms (dev) / 200 ms (`SLO_STRICT=1`) | ✅ |
+| 5xx rate | 0.00% | < 1% | ✅ |
+| Rate-limited | 0.00% | < 20% | ✅ |
+| Measured reads | 361 | > 252 (70% floor) | ✅ |
+
+**Finding — rate limiting is keyed by IP, not by user.** The steering doc states
+"100 req/min per user". What is implemented in `gateway-service/src/app.ts` is a
+**global 1000 req/min using fastify's default keyGenerator (`req.ip`)**, plus a
+per-tenant 200/min tier that keys on the `x-tenant-id` header and falls back to
+IP when absent.
+
+Proven: a 30s run at 50 req/s returned exactly 1000 successes then 501 × 429, and
+raising the actor count from 1 → 40 moved the limited share only from 33.33% to
+33.37%. Distinct users share one bucket.
+
+Consequences: (a) the documented per-user limit does not exist, so one user can
+consume the whole IP budget — the noisy-neighbour protection L1 asks for is
+weaker than documented; (b) any load generator behind a single egress IP measures
+the limiter rather than the service. The SLO run therefore holds 12 req/s, below
+the 16.6 req/s ceiling, and fails if >20% of responses are 429 so a limiter-bound
+run can never be mistaken for an SLO measurement.
+
 ### Not Yet Built:
 - ⬜ k6 soak test (≥2h) wired as a gate
 - ⬜ Chaos: kill-service / DB-failover / dep-down automation
@@ -175,6 +219,12 @@
 - ✅ 4 prompt-injection payloads not honoured; no system prompt or credential echo
 - ✅ No `ANTHROPIC_API_KEY` / `sk-ant-` / `x-api-key` / `JWT_SECRET` leakage in error paths
 - ✅ Injection text in a normal data field does not bypass tenant scoping
+- ✅ **Unreachable fleet now fails loudly.** The direct-to-service tests previously
+  swallowed connection errors and returned, so an entirely down fleet read GREEN
+  while asserting nothing. A `beforeAll` probe now fails with a diagnostic unless
+  `QUALITY_ALLOW_OFFLINE=1` is set, making the gap visible instead of silent.
+  Verified against a dead port: 4 tests fail with the expected message; with the
+  opt-out set, 19 pass.
 
 ### P1 FINDING — fabricated verification verdicts
 
@@ -210,20 +260,35 @@ but no real client is wired, or tag the payload `{ verified: false, source: "stu
 ## Release Gate
 
 `scripts/ci/release-gate.mjs` audits the evidence pack rather than re-running tests.
+Every failure path was proven by injection, not assumed:
 
 | Property | Verified |
 |----------|----------|
-| Missing artifact → UNMEASURED → blocks (exit 1) | ✅ proven with an empty dir |
-| Failing lane → blocks (exit 1) | ✅ proven by injecting `failures="3"` |
-| Complete passing evidence → releasable (exit 0) | ✅ proven on the real pack |
+| Missing artifact → UNMEASURED → blocks (exit 1) | ✅ empty dir → exit 1 |
+| Failing lane → blocks (exit 1) | ✅ injected `failures="3"` → exit 1 |
+| Complete passing evidence → releasable (exit 0) | ✅ real pack → exit 0 |
 | Empty suite (0 tests) → UNMEASURED, not a pass | ✅ enforced |
+| **SLO p95 breach → blocks** | ✅ injected p95 812ms → exit 1 |
+| **SLO 5xx breach → blocks** | ✅ injected 5.5% → FAIL |
+| **SLO 0 reads → UNMEASURED** | ✅ injected count 0 → UNMEASURED |
+| **Missing SLO + `--require-slo` → blocks** | ✅ exit 1 |
+| Missing SLO without the flag → releasable **but annotated** | ✅ prints an explicit note that no error budget was asserted |
 
-Blocking lanes: L1, L2, L3, L4, L6, L10, L11. Advisory (P2): L7, L8.
+Blocking lanes: L1, L2, L3, L4, L6, L10, L11, plus SLO on breach.
+Advisory (P2): L7, L8. SLO UNMEASURED blocks only under `--require-slo`.
 
 ```bash
-bash scripts/ci/quality-gates.sh all     # runs all lanes, then the release gate
-node scripts/ci/release-gate.mjs         # audit today's evidence pack
+bash scripts/ci/quality-gates.sh all     # lanes + SLO + release gate
+bash scripts/ci/quality-gates.sh slo     # SLO measurement only
+node scripts/ci/release-gate.mjs         # audit today's evidence
+node scripts/ci/release-gate.mjs --require-slo   # treat missing SLO as a block
+SLO_STRICT=1 node scripts/ci/release-gate.mjs    # enforce the 200ms prod target
 ```
+
+**What "RELEASABLE" does and does not mean.** With an SLO artifact present it
+means the blocking lanes passed *and* the error budget is healthy. Without one it
+means only that the lanes passed — the gate says so explicitly rather than
+implying an unverified SLO.
 
 ---
 
@@ -259,13 +324,22 @@ node scripts/ci/release-gate.mjs         # audit today's evidence pack
 
 ---
 
+## Open Decisions (need a human)
+
+1. **The 4 fabricating gov-integration routes** — highest-value open item. Needs
+   product/security sign-off because it changes behaviour on an auth-critical KYC
+   path. Recommended: `501 NOT_IMPLEMENTED` when a credential is set but no real
+   client is wired.
+2. **Rate limiting is IP-keyed, not user-keyed** — the documented "100 req/min per
+   user" does not exist. Decide whether to implement per-user limiting (add a
+   `keyGenerator` on the user claim) or correct the steering doc.
+
 ## Next Steps
 
-1. **Decide the fix for the 4 fabricating gov-integration routes** (needs product
-   /security sign-off — this is the highest-value open item)
-2. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
-3. Add OWASP ZAP DAST + Trivy container scanning to L6
-4. Wire k6 soak + chaos automation as L7 gates
-5. Expand TRACEABILITY.csv from 43 to all 270 capabilities
-6. Complete B1 (Testcontainers ephemeral DB harness)
-7. Add SLO / error-budget input to the release gate (currently evidence-only)
+1. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
+2. Verify Trivy + ZAP actually pass in CI — both are wired but **unexecuted** on
+   this machine, so their status is unproven
+3. Wire k6 soak (≥2h) + chaos automation as L7 gates
+4. Expand TRACEABILITY.csv from 70 to all 270 capabilities
+5. Complete B1 (Testcontainers ephemeral DB harness)
+6. Fix the header-posture ZAP `WARN` rules on the real gateway, then ratchet to `FAIL`

@@ -1,0 +1,46 @@
+# OWASP ZAP baseline rule configuration.
+#
+# Format: <rule-id>\t<action>\t<comment>
+#   FAIL  — treat as a build failure
+#   WARN  — report only
+#   IGNORE— suppress entirely (must carry a justification)
+#
+# This is a RATCHET: rules move from WARN to FAIL as each class is fixed on the
+# real gateway. Nothing here is an assertion that the current posture is correct.
+#
+# NOTE ON SCOPE: the CI target is scripts/ci/start-mock-gateway.mjs, a fixture
+# that returns static JSON. Findings about ITS headers are not findings about the
+# production gateway (which registers @fastify/helmet + strict CORS). Rules that
+# would only ever describe the mock are IGNOREd with that reason recorded.
+
+# ── Genuine issues on any HTTP surface — keep visible ─────────────────────────
+10020	WARN	Missing Anti-clickjacking Header (X-Frame-Options / CSP frame-ancestors)
+10021	WARN	Missing X-Content-Type-Options: nosniff
+10035	WARN	Strict-Transport-Security not set (TLS terminates at the LB in prod)
+10038	WARN	Content Security Policy header not set
+10063	WARN	Permissions-Policy header not set
+10098	WARN	Cross-Domain Misconfiguration — verify CORS origin allowlist per env
+
+# ── Injection / disclosure classes: must never appear ─────────────────────────
+40012	FAIL	Cross Site Scripting (reflected)
+40014	FAIL	Cross Site Scripting (persistent)
+40016	FAIL	Cross Site Scripting (persistent) — prime
+40017	FAIL	Cross Site Scripting (persistent) — spider
+40018	FAIL	SQL Injection
+40019	FAIL	SQL Injection — MySQL
+40020	FAIL	SQL Injection — Hypersonic
+40021	FAIL	SQL Injection — Oracle
+40022	FAIL	SQL Injection — PostgreSQL
+40024	FAIL	SQL Injection — SQLite
+90019	FAIL	Server Side Code Injection
+90020	FAIL	Remote OS Command Injection
+7		FAIL	Remote File Inclusion
+6		FAIL	Path Traversal
+90022	FAIL	Application Error Disclosure — must not leak stack traces
+10037	FAIL	Server leaks information via X-Powered-By / Server header
+
+# ── Not applicable to a JSON API fixture ─────────────────────────────────────
+10015	IGNORE	Re-examine Cache-control — static JSON fixture, no cacheable user data
+10027	IGNORE	Information Disclosure - Suspicious Comments — mock fixture source
+10109	IGNORE	Modern Web Application — mock returns JSON only, no app shell
+10049	IGNORE	Non-Storable Content — not meaningful for the mock

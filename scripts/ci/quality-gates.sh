@@ -63,6 +63,9 @@ case "$LANE" in
   L11|l11)
     run_lane "L11-mutation-canary" "L11 Mutation & Canary (Meta)" || FAILURES=$((FAILURES + 1))
     ;;
+  slo)
+    # Handled by the SLO block below; no vitest lane to run.
+    ;;
   all)
     run_lane "L1-tenant-isolation" "L1 Tenant Isolation (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L2-authz-bola" "L2 Authorization / BOLA (P0)" || FAILURES=$((FAILURES + 1))
@@ -76,10 +79,24 @@ case "$LANE" in
     ;;
   *)
     echo "Unknown lane: $LANE"
-    echo "Usage: $0 [L1|L2|L3|L4|L6|L7|L8|L10|L11|all]"
+    echo "Usage: $0 [L1|L2|L3|L4|L6|L7|L8|L10|L11|slo|all]"
     exit 1
     ;;
 esac
+
+# ── SLO measurement (error-budget input for the release gate) ───────────────
+# Skipped when k6 is absent: the release gate then reports SLO as UNMEASURED,
+# which is visible rather than silently treated as healthy.
+if [ "$LANE" = "all" ] || [ "$LANE" = "slo" ]; then
+  echo ""
+  echo "── SLO Measurement (k6) ───────────────────────────────"
+  if command -v k6 >/dev/null 2>&1; then
+    bash "$ROOT/scripts/ci/run-slo-measurement.sh" "${SLO_ACTORS:-40}" \
+      || echo "SLO measurement did not pass — release gate will report it."
+  else
+    echo "k6 not installed — SLO will be reported as UNMEASURED."
+  fi
+fi
 
 # ── Release gate: audit the evidence pack just produced ─────────────────────
 if [ "$LANE" = "all" ]; then
