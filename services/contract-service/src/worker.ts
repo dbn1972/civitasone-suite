@@ -7,6 +7,11 @@ import { registerContractConsumers } from "./modules/contracts/consumer.js";
 import { registerEOfficeDecisionConsumers } from "./modules/contracts/eoffice-consumer.js";
 import { registerRateConsumers }     from "./modules/rate/consumer.js";
 import { registerClauseConsumers }   from "./modules/clauses/consumer.js";
+import { registerTemplateConsumers } from "./modules/templates/consumer.js";
+import { registerApprovalConsumers } from "./modules/approvals/consumer.js";
+import { registerObligationConsumers } from "./modules/obligations/consumer.js";
+import { registerRenewalConsumers } from "./modules/renewals/consumer.js";
+import { registerEsignConsumers } from "./modules/esign/consumer.js";
 
 const log = pino({ name: "contract-worker" });
 
@@ -14,6 +19,11 @@ registerContractConsumers(queue);
 registerEOfficeDecisionConsumers(queue);
 registerRateConsumers(queue);
 registerClauseConsumers(queue);
+registerTemplateConsumers(queue);
+registerApprovalConsumers(queue);
+registerObligationConsumers(queue);
+registerRenewalConsumers(queue);
+registerEsignConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

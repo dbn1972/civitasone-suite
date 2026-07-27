@@ -12,6 +12,8 @@ import { registerMovementConsumers } from "./modules/movements/consumer.js";
 import { registerWarehouseConsumers } from "./modules/warehouses/consumer.js";
 import { registerBatchConsumers } from "./modules/batches/consumer.js";
 import { registerForecastConsumers } from "./modules/forecast/consumer.js";
+import { registerCycleCountConsumers } from "./modules/cycle-count/consumer.js";
+import { registerMatchingConsumers } from "./modules/matching/consumer.js";
 import { startForecastRefresh } from "./modules/forecast/scheduler.js";
 
 const log = pino({ name: "inventory-worker" });
@@ -22,6 +24,8 @@ registerMovementConsumers(queue);
 registerWarehouseConsumers(queue);
 registerBatchConsumers(queue);
 registerForecastConsumers(queue);
+registerCycleCountConsumers(queue);
+registerMatchingConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue, 500, "inventory-service");

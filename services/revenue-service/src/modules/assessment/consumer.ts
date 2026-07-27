@@ -108,6 +108,20 @@ export function registerAssessmentConsumers(queue: Queue): void {
 
       // 6. Enqueue domain event + audit
       await enqueue(tx, {
+        topic: EVENTS.assessmentCreated,
+        eventType: EVENTS.assessmentCreated,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          assessmentId: assessment!.id,
+          assesseeId,
+          rateHeadId,
+          financialYear,
+          baseValue,
+        },
+      });
+      await enqueue(tx, {
         topic: EVENTS.demandRaised,
         eventType: EVENTS.demandRaised,
         tenantId: msg.tenantId,

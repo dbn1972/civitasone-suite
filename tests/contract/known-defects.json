@@ -7,7 +7,7 @@
     "undeliverableDispatch": 0,
     "orphanEvents": 584,
     "phantomConsumption": 4,
-    "unemittedEvents": 67
+    "unemittedEvents": 62
   },
   "deadSubscriptions": [
     "asset-service|asset.disposal.file_decided",
@@ -758,13 +758,10 @@
     "payroll-service|payroll.fnf.draft_created",
     "plugin-service|plugins.store.deleted",
     "plugin-service|plugins.store.updated",
-    "procurement-service|procurement.three_way_match.failed",
-    "procurement-service|procurement.three_way_match.passed",
     "report-service|reports.job.failed",
     "report-service|reports.scheduled.failed",
     "report-service|reports.scheduled.generated",
     "report-service|reports.template.executed",
-    "revenue-service|revenue.assessment.created",
     "stock-service|stock.stock.negative_rejected",
     "telephony-service|telephony.call.transcription_completed",
     "tenant-service|tenant.deleted",

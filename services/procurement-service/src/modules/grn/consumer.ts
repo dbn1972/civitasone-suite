@@ -61,6 +61,11 @@ export function registerGrnConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       if (threeWayMatch) {
+        await enqueue(tx, {
+          topic: EVENTS.threeWayMatchPassed, eventType: EVENTS.threeWayMatchPassed,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId },
+        });
         const poId = p.poRef.replace(/^procurement_po:/, "");
         const po = await import("../po/repo.js").then((m) => m.findPoById(poId, p.tenantId));
         const poItems = await import("../po/repo.js").then((m) => m.findPoItemsByPoId(poId, p.tenantId));
@@ -117,6 +122,11 @@ export function registerGrnConsumers(queue: Queue): void {
           },
         });
       } else {
+        await enqueue(tx, {
+          topic: EVENTS.threeWayMatchFailed, eventType: EVENTS.threeWayMatchFailed,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, reason: "qty_mismatch_or_inspection_failed" },
+        });
         await enqueue(tx, {
           topic: EVENTS.grnRejected, eventType: EVENTS.grnRejected,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

@@ -5,7 +5,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
 
@@ -98,6 +98,23 @@ async function sweepExpiredMessagesForTenant(now: Date, batch: number): Promise<
             resourceType: "message_subscription",
             resourceId: sub.id,
             outcome: "success",
+          },
+        });
+
+        // Domain event: message timeout
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: EVENTS.messageTimeout,
+          eventType: EVENTS.messageTimeout,
+          tenantId: sub.tenantId,
+          actorId: SYSTEM_ACTOR_ID,
+          correlationId,
+          payload: {
+            subscriptionId: sub.id,
+            instanceId: sub.instanceId,
+            taskId: sub.taskId,
+            messageName: sub.messageName,
+            correlationKey: sub.correlationKey,
+            timeoutAt: sub.timeoutAt?.toISOString() ?? null,
           },
         });
 

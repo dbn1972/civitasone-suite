@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
@@ -22,6 +22,13 @@ interface CorrelatePayload {
   payload?: Record<string, unknown>;
 }
 
+interface DeliverPayload {
+  tenantId: string;
+  messageName: string;
+  recipientInstanceId: string;
+  payload?: Record<string, unknown>;
+}
+
 interface SignalPayload {
   tenantId: string;
   signalName: string;
@@ -32,6 +39,50 @@ export function registerMessagesConsumers(q: Queue): void {
   // RLS (#146): run every handler inside the message's tenant context so
   // db.transaction() sets the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
   q = tenantScoped(q);
+
+  // --- workflow.message.deliver ---
+  subscribeWithDlq<DeliverPayload>(q, COMMANDS.deliverMessage, async (msg) => {
+    const { tenantId, messageName, recipientInstanceId, payload } = msg.payload;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const correlationId = msg.correlationId ?? randomUUID();
+
+      // Domain event: message delivered
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: EVENTS.messageDelivered,
+        eventType: EVENTS.messageDelivered,
+        tenantId,
+        actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
+        correlationId,
+        payload: {
+          messageName,
+          recipientInstanceId,
+          payload: payload ?? {},
+        },
+      });
+
+      // Audit event
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId,
+        actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
+        correlationId,
+        payload: {
+          service: "workflow",
+          action: "message_delivered",
+          resourceType: "message",
+          resourceId: msg.messageId,
+          outcome: "success",
+        },
+      });
+    });
+
+    log.info({ tenantId, messageName, recipientInstanceId }, "message delivered");
+  });
+
   // --- workflow.message.correlate ---
   subscribeWithDlq<CorrelatePayload>(q, "workflow.message.correlate", async (msg) => {
     const { tenantId, messageName, correlationKey, payload } = msg.payload;
@@ -104,6 +155,22 @@ export function registerMessagesConsumers(q: Queue): void {
           resourceType: "message_subscription",
           resourceId: subscription.id,
           outcome: "success",
+        },
+      });
+
+      // Domain event: message received
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: EVENTS.messageReceived,
+        eventType: EVENTS.messageReceived,
+        tenantId,
+        actorId: SYSTEM_ACTOR_ID,
+        correlationId,
+        payload: {
+          subscriptionId: subscription.id,
+          instanceId: subscription.instanceId,
+          taskId: subscription.taskId,
+          messageName,
+          correlationKey,
         },
       });
     });
@@ -179,9 +246,42 @@ export function registerMessagesConsumers(q: Queue): void {
             outcome: "success",
           },
         });
+
+        // Domain event: signal received
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: EVENTS.signalReceived,
+          eventType: EVENTS.signalReceived,
+          tenantId,
+          actorId: SYSTEM_ACTOR_ID,
+          correlationId,
+          payload: {
+            subscriptionId: sub.id,
+            instanceId: sub.instanceId,
+            taskId: sub.taskId,
+            signalName,
+          },
+        });
       });
     }
 
     log.info({ tenantId, signalName, count: subscriptions.length }, "signal broadcast completed");
+
+    // Emit signalDelivered event after all subscriptions processed
+    if (subscriptions.length > 0) {
+      await db.transaction(async (tx) => {
+        const correlationId = msg.correlationId ?? randomUUID();
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: EVENTS.signalDelivered,
+          eventType: EVENTS.signalDelivered,
+          tenantId,
+          actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
+          correlationId,
+          payload: {
+            signalName,
+            subscriberCount: subscriptions.length,
+          },
+        });
+      });
+    }
   });
 }
