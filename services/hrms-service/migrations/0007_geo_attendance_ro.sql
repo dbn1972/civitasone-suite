@@ -40,8 +40,16 @@ CREATE TABLE IF NOT EXISTS attendance.hrms_geo_attendance (
   device_id VARCHAR(256),
   ip_address VARCHAR(45),
   marked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_by UUID NOT NULL,
-  
+  created_by UUID NOT NULL
+  -- FIXED 2026-07-27: `created_by UUID NOT NULL,` was followed by a blank line and
+  -- then `);` — a dangling comma, so this was a syntax error and the migration
+  -- aborted here on every run. Everything below it (the index, the office-location
+  -- seed rows) never ran either, and migrations 0034/0035 later failed with
+  -- `relation "attendance.hrms_geo_attendance" does not exist`, which is how its
+  -- RLS policy went missing. The table exists on developer machines because it was
+  -- created there by hand. Detected by running the bootstrap against a throwaway
+  -- postgres:16-alpine container; hidden because bootstrap-postgres.sh warned and
+  -- continued. Only the comma is removed — no columns are added or changed.
 );
 CREATE INDEX IF NOT EXISTS idx_geo_att_emp_date ON attendance.hrms_geo_attendance(tenant_id, employee_id, attendance_date);
 

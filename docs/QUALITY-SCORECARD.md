@@ -14,7 +14,8 @@
 | L1 Tenant Isolation | 70 | 70 | 0 | ✅ GREEN | No cross-tenant leaks; covers all 41 services |
 | L2 Authz / BOLA | 67 | 67 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 43 | 43 | 0 | 🟡 GREEN AFTER REPAIR | Money bigint; **2 controls had never run — fixed** |
-| L3b Schema Drift | 9 + guard | 9 | 0 | 🟡 BURNING DOWN | **338 → 231**; all 3 live 500s fixed; ratcheted |
+| L3b Schema Drift | 9 + guard | 9 | 0 | 🟡 BURNING DOWN | 3 live 500s fixed; baseline now measured on a **fresh** cluster: 253 |
+| L3c Bootstrap Honesty | guard | — | — | 🟡 RATCHETED | **97 → 46** failing migrations; **14 RLS-policy-less tables fixed**; 41/41 DBs created |
 | L4 API Contract | 28 | 28 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | 18 | 18 | 0 | ✅ GREEN | AES-GCM verified; audit ledger immutable |
@@ -207,10 +208,86 @@ is the stale-detection path proven on a real fix rather than a synthetic canary.
 **Remaining 231:** location 92, tenant 51, plugin 34, theme 27, policy 9,
 legal 7, finance 5, helpdesk 2, hrms 2, notification 1, works 1.
 
-**Root cause of the whole class — `bootstrap-postgres.sh` swallows migration
-failures.** On failure it prints `⚠ Migration failed for …` and **continues**, so
-the bootstrap still exits 0. That is why 338 drifts accumulated without CI
-noticing. Two concrete proofs in knowledge-service:
+### Root cause found and fixed (2026-07-27) — the bootstrap was never honest
+
+Measured by running `scripts/ci/bootstrap-postgres.sh` against a **throwaway
+`postgres:16-alpine` container**, which is the only faithful stand-in for CI. A
+developer host cannot reveal any of this: schemas, roles and databases created
+there by hand over time mask exactly the defects the bootstrap is meant to create.
+
+| # | Finding | Evidence |
+|---|---------|----------|
+| B1 | **No bootstrap file created the `civitas_admin` role**, yet three files depend on it | `ERROR: role "civitas_admin" does not exist` at `bootstrap_inspection.sql:55`; script **exited 3 before applying a single migration** |
+| B2 | **97 migrations failed** and the script still exited 0 | it printed `⚠ Migration failed for …` and continued |
+| B3 | **30 failures were missing module schemas** never created by any bootstrap file | `schema "procurement"/"hrms"/"theme"/"citizen"/"plugin"/… does not exist` |
+| B4 | **`CREATE POLICY IF NOT EXISTS` is not valid PostgreSQL** — 10 migrations used it | aborted *after* `ENABLE ROW LEVEL SECURITY` committed |
+| B5 | **`ADD CONSTRAINT IF NOT EXISTS` is not valid PostgreSQL** — 2 migrations used it | crm `0016`, hrms `0045` never applied anything |
+| B6 | A dangling comma and a doubled-quote literal — 2 more migrations that never applied anywhere | hrms `0007` (`created_by UUID NOT NULL,` then `);`), hrms `0009` (`''["a","b"]''`) |
+| B7 | **7 service databases were created by no bootstrap file at all** | court, meeting, visitor, gateway absent entirely; metadata, ml, revenue, works had orphaned files |
+| B8 | **3 bootstrap files existed but were never invoked** | `bootstrap_metadata.sql`, `bootstrap_missing_services.sql`, `bootstrap_remaining_services.sql` — the last is one character-class away from the file that *is* called (`bootstrap-remaining-services.sql`, hyphens) |
+| B9 | **8 services had no migration loop entry**, so their migrations never ran in CI even once a database existed | court, meeting, visitor, metadata, ml, revenue, works, gateway |
+
+#### B4 was a live P0: 14 tables RLS-enabled with **zero policies**
+
+`CREATE POLICY IF NOT EXISTS` is a syntax error, so those migrations aborted at
+that statement — *after* `ALTER TABLE … ENABLE ROW LEVEL SECURITY` had already
+committed. In PostgreSQL, RLS enabled with no policy is **deny-all** for
+non-owners. The tables are owned by `civitas_admin` and the services connect as
+`<svc>_svc`, so every read returned nothing and every write was rejected:
+
+```
+$ psql -U notification_svc -d civitas_notification
+  INSERT INTO dnd.dnd_windows (tenant_id) VALUES ('…0001');
+ERROR:  new row violates row-level security policy for table "dnd_windows"
+```
+
+12 notification-service tables (scheduling, digest, webhook, analytics × 3, DND × 2,
+i18n, segments, template partials) and 2 plugin-service tables (sandbox
+executions, plugin stores) were non-functional at the database layer. All 14 now
+carry a policy; verified `0` tables remain RLS-enabled-without-policy in both
+databases.
+
+#### Result
+
+| Metric | Before | After |
+|--------|-------:|------:|
+| Migrations failing on a fresh cluster | **97** | **46** |
+| Service databases created | 32 | **41** |
+| Services with a migration loop entry | 32 | **41** |
+| Tables RLS-enabled with no policy | 14 | **0** |
+| Bootstrap exit code on a fresh cluster | **3** (aborted) | 0 |
+
+The remaining 46 are ratcheted in `scripts/ci/migration-failure-allowlist.txt`,
+each annotated with the error that aborted it. Largest groups: 6 × `extension
+"postgis" is not available` (the CI image is plain `postgres:16-alpine`; dev uses a
+separate PostGIS container), 6 × `permission denied to create/alter role` (scanner
+roles, which need a `CREATEROLE` grantor), and the rest chains of
+`relation … does not exist` behind other failures.
+
+**Ratchet canaries, all verified against fresh containers:**
+
+| Canary | Result |
+|--------|--------|
+| Remove one entry from the allow-list | `❌ NEW migration failure(s)` naming it, exit 1 |
+| Add a non-existent entry | `❌ allow-listed migration(s) now PASS`, exit 1 |
+| Delete the allow-list | exit 1 — *"Refusing to report success — with no baseline, 46 failure(s) would be silently accepted"* |
+| Clean run | `✅ RATCHET HOLDING`, exit 0 |
+
+Reasons after `#` are stripped before comparison, so editing an annotation can
+never change the verdict.
+
+#### Drift baseline moved to the fresh cluster
+
+The 231-entry baseline had been measured on the dev host. Against a freshly
+bootstrapped cluster the guard reported **22 NEW** and would have turned CI red —
+the risk flagged as "unproven in CI" when the guard landed. The baseline is now
+measured where CI measures: **253 entries**, `NEW 0`, `stale 0`, 39/40 databases
+reachable. The dev host reports those 22 as `stale`, which is legitimate, so
+`--allow-stale` exists for local runs and CI runs strict.
+
+#### Original diagnosis, for the record
+
+Two concrete proofs in knowledge-service:
 
 - `0004_rls_full_tenant_isolation.sql` runs `ALTER TABLE knowledge.categories
   ENABLE ROW LEVEL SECURITY` and `0007_fk_indexes.sql` indexes
@@ -221,9 +298,8 @@ noticing. Two concrete proofs in knowledge-service:
   that aborts the whole file, so every RLS statement after line 9 was skipped —
   silently.
 
-**Not fixed in this round.** Making the bootstrap fail loudly needs a measured
-allow-list of migrations that currently fail in CI, and that measurement cannot be
-taken from a dev host. Tracked as the next PR.
+**Fixed in the round above.** The measurement was taken by running the bootstrap
+against a throwaway container rather than the dev host.
 
 ### Original measurement: 338 declared-but-missing columns across 14 services
 

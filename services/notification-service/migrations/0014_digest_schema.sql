@@ -54,12 +54,14 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_digest_rules_lookup
 -- Enable RLS for tenant isolation
 ALTER TABLE digest.digest_rules ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS digest_rules_tenant_isolation
+DROP POLICY IF EXISTS digest_rules_tenant_isolation ON digest.digest_rules;
+CREATE POLICY digest_rules_tenant_isolation
   ON digest.digest_rules
   USING (tenant_id = current_setting('app.tenant_id')::uuid);
 
 ALTER TABLE digest.digest_buckets ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS digest_buckets_tenant_isolation
+DROP POLICY IF EXISTS digest_buckets_tenant_isolation ON digest.digest_buckets;
+CREATE POLICY digest_buckets_tenant_isolation
   ON digest.digest_buckets
   USING (tenant_id = current_setting('app.tenant_id')::uuid);

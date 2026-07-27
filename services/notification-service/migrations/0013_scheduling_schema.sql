@@ -34,6 +34,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sched_tenant
 -- Enable RLS for tenant isolation
 ALTER TABLE scheduling.scheduled_notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS scheduling_tenant_isolation
+DROP POLICY IF EXISTS scheduling_tenant_isolation ON scheduling.scheduled_notifications;
+CREATE POLICY scheduling_tenant_isolation
   ON scheduling.scheduled_notifications
   USING (tenant_id = current_setting('app.tenant_id')::uuid);

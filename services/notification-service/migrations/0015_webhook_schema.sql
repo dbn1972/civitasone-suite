@@ -26,6 +26,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_webhook_tenant
 -- Enable RLS for tenant isolation
 ALTER TABLE webhook.endpoints ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS webhook_tenant_isolation
+DROP POLICY IF EXISTS webhook_tenant_isolation ON webhook.endpoints;
+CREATE POLICY webhook_tenant_isolation
   ON webhook.endpoints
   USING (tenant_id = current_setting('app.tenant_id')::uuid);

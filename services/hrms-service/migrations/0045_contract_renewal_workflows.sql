@@ -32,9 +32,21 @@ CREATE TABLE IF NOT EXISTS contracts.hrms_contracts (
 );
 
 -- Unique contract number per tenant
-ALTER TABLE contracts.hrms_contracts
-  ADD CONSTRAINT IF NOT EXISTS uq_contracts_tenant_contract_no
-  UNIQUE (tenant_id, contract_no);
+--
+-- FIXED 2026-07-27: this was `ADD CONSTRAINT IF NOT EXISTS`, which is not valid
+-- PostgreSQL — there is no IF NOT EXISTS clause on ADD CONSTRAINT. The statement
+-- was a syntax error, so with ON_ERROR_STOP=1 this migration aborted here on
+-- every run: the unique constraint, the partial unique index and every lookup
+-- index below were never created. Detected by running the bootstrap against a
+-- throwaway postgres:16-alpine container; hidden because
+-- scripts/ci/bootstrap-postgres.sh warned and continued.
+-- Rewritten to the idempotent DO/duplicate_object form used elsewhere in the repo.
+DO $$ BEGIN
+  ALTER TABLE contracts.hrms_contracts
+    ADD CONSTRAINT uq_contracts_tenant_contract_no
+    UNIQUE (tenant_id, contract_no);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Only one active contract per employee per tenant (partial unique index)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_contracts_employee_active

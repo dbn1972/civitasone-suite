@@ -43,12 +43,14 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_held_release
 -- Enable RLS for tenant isolation
 ALTER TABLE dnd.dnd_windows ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS dnd_windows_tenant_isolation
+DROP POLICY IF EXISTS dnd_windows_tenant_isolation ON dnd.dnd_windows;
+CREATE POLICY dnd_windows_tenant_isolation
   ON dnd.dnd_windows
   USING (tenant_id = current_setting('app.tenant_id')::uuid);
 
 ALTER TABLE dnd.held_notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS dnd_held_tenant_isolation
+DROP POLICY IF EXISTS dnd_held_tenant_isolation ON dnd.held_notifications;
+CREATE POLICY dnd_held_tenant_isolation
   ON dnd.held_notifications
   USING (tenant_id = current_setting('app.tenant_id')::uuid);

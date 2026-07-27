@@ -31,6 +31,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_locale_tenant
 -- Enable RLS for tenant isolation
 ALTER TABLE i18n.locale_variants ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS i18n_tenant_isolation
+DROP POLICY IF EXISTS i18n_tenant_isolation ON i18n.locale_variants;
+CREATE POLICY i18n_tenant_isolation
   ON i18n.locale_variants
   USING (tenant_id = current_setting('app.tenant_id')::uuid);

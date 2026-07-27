@@ -24,14 +24,57 @@ run_bootstrap() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -v ON_ERROR_STOP=1 -f "$1"
 }
 
+# MUST be first. No bootstrap file created civitas_admin, yet
+# bootstrap_inspection.sql, bootstrap_metadata.sql and grant_service_schemas.sql
+# all depend on it. Against a fresh Postgres — which is what the CI service
+# container is — this script aborted with `role "civitas_admin" does not exist`
+# at bootstrap_inspection.sql:55 and exited 3 BEFORE APPLYING ANY MIGRATION, so
+# every later step ran against an empty database. Invisible on dev machines
+# because the role was created there by hand, outside version control.
+ADMIN_PW="${POSTGRES_ADMIN_PASSWORD:-civitas_dev_pw}"
+echo "→ $ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
+psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -v ON_ERROR_STOP=1 \
+     -v admin_pw="$ADMIN_PW" -f "$ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
+
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_new_services.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_contract.sql"
 run_bootstrap "$ROOT/scripts/ci/bootstrap-remaining-services.sql"
+# Three bootstrap files existed in infra/db/bootstrap/ but were never invoked by
+# this script, so their databases did not exist in CI at all and their services
+# could not be tested. Confirmed against a fresh cluster: the schema-drift guard
+# reported civitas_court, civitas_metadata, civitas_ml, civitas_revenue and
+# civitas_works as UNREACHABLE. Note the near-identical name of the file above —
+# scripts/ci/bootstrap-remaining-services.sql (hyphens) is a DIFFERENT file from
+# infra/db/bootstrap/bootstrap_remaining_services.sql (underscores), which is how
+# the latter came to be orphaned.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_remaining_services.sql"
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_missing_services.sql"
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_metadata.sql"
+# court, meeting and visitor appeared in NO bootstrap file at all, despite all
+# three being declared in ecosystem.config.js and routed in the gateway registry.
+# All 14 court-service migrations failed on a fresh cluster because civitas_court
+# did not exist.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_court_meeting_visitor.sql"
 # inspection-service had NO role and NO database in any bootstrap file, so a
 # fresh CI database could not host it. Without this line the file exists but the
 # pipeline never calls it. Idempotent; safe to re-run.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql"
+# Module schemas that migrations reference but no bootstrap file created. Measured
+# against a throwaway container: `schema "X" does not exist` was the largest single
+# cause of migration failure (30 of 97). Must run before the migration loop.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_missing_schemas.sql"
+
+# Every migration that fails is recorded here and reconciled against a committed
+# allow-list at the end of this script. Before that reconciliation existed, a
+# failed migration printed a warning and the script still exited 0 — which is how
+# 97 broken migrations and 231 declared-but-missing columns accumulated without CI
+# ever going red.
+MIGRATION_FAILURES=()
+# Parallel array of "path|first error message", so the generated allow-list records
+# WHY each entry fails. A bare list of filenames is not reviewable — a reader
+# cannot tell a missing postgis extension from a genuine SQL bug.
+MIGRATION_FAILURE_REASONS=()
 
 declare -A SERVICE_DBS=(
   [tenant-service]="tenant_svc:civitas_tenant"
@@ -53,6 +96,17 @@ declare -A SERVICE_DBS=(
   [location-service]="location_svc:civitas_location"
   [knowledge-service]="knowledge_svc:civitas_knowledge"
   [workflow-service]="workflow_svc:civitas_workflow"
+  # These three own their own databases and schemas (verified on the dev cluster:
+  # civitas_meeting/civitas_visitor are owned by their service role, and
+  # civitas_metadata by metadata_svc), so their migrations run as the service role
+  # like everything else here. They had no entry in any migration loop, so their
+  # migrations had never run in CI.
+  [meeting-service]="meeting_svc:civitas_meeting"
+  [visitor-service]="visitor_svc:civitas_visitor"
+  [metadata-service]="metadata_svc:civitas_metadata"
+  # gateway-service is mostly a proxy, but its catalogue module has a real
+  # migration that documents "DB civitas_gateway, role gateway_svc".
+  [gateway-service]="gateway_svc:civitas_gateway"
   [analytics-service]="analytics_svc:civitas_analytics"
   [contract-service]="contract_svc:civitas_contract"
   [crm-service]="crm_svc:civitas_crm"
@@ -75,39 +129,149 @@ for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
   export PGPASSWORD="$pw"
   for f in $(find "$mig_dir" -maxdepth 1 -name '*.sql' | sort); do
     echo "Applying $(basename "$f") → $db ($svc)"
-    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$role" -d "$db" -v ON_ERROR_STOP=1 -f "$f"; then
+    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$role" -d "$db" -v ON_ERROR_STOP=1 -f "$f" \
+         2>&1 | tee /tmp/bootstrap-migration-out.txt | grep -v '^$'; then :; fi
+    if grep -q '^psql:.*ERROR:' /tmp/bootstrap-migration-out.txt; then
       echo "⚠ Migration failed for $svc/$(basename "$f") — DB integration tests for this service may fail in CI."
+      MIGRATION_FAILURES+=("$svc/$(basename "$f")")
+      # First error only: with ON_ERROR_STOP=1 it is the one that aborted the file.
+      MIGRATION_FAILURE_REASONS+=("$svc/$(basename "$f")|$(sed -n 's/^psql:.*ERROR:  //p' /tmp/bootstrap-migration-out.txt | head -1 | cut -c1-110)")
     fi
   done
 done
 
-# ── inspection-service: admin-run migrations + grant re-assert ───────────────
-# Deliberately NOT in SERVICE_DBS above. That loop applies migrations as the
-# SERVICE role, but civitas_inspection follows the civitas_court convention where
-# schemas are owned by civitas_admin and the service role holds only USAGE + DML.
-# Running its migrations as inspection_svc would fail on CREATE SCHEMA.
+# ── Admin-owned databases: admin-run migrations + grant re-assert ────────────
 #
-# Migrations therefore run as the admin role, after which the grant block in
-# bootstrap_inspection.sql is re-applied so the service role picks up the objects
-# the migrations just created.
-INSPECTION_MIG="$ROOT/services/inspection-service/migrations"
-if [ -d "$INSPECTION_MIG" ]; then
-  export PGPASSWORD="${POSTGRES_ADMIN_PASSWORD:-${PGPASSWORD:-civitas_dev_pw}}"
-  ADMIN_USER="${POSTGRES_ADMIN_USER:-civitas_admin}"
-  insp_failed=0
-  for f in $(find "$INSPECTION_MIG" -maxdepth 1 -name '*.sql' | sort); do
-    echo "Applying $(basename "$f") → civitas_inspection (admin-run)"
-    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
-         -v ON_ERROR_STOP=1 -f "$f" >/dev/null; then
-      echo "⚠ Migration failed for inspection-service/$(basename "$f")"
-      insp_failed=$((insp_failed + 1))
+# Deliberately NOT in SERVICE_DBS above. That loop applies migrations as the
+# SERVICE role, but these databases follow the admin-owned convention: schemas are
+# owned by civitas_admin and the service role holds only USAGE + DML, so it cannot
+# ALTER its own tables. Running their migrations as <svc>_svc fails on CREATE
+# SCHEMA.
+#
+# Verified against the dev cluster before listing them here:
+#   civitas_court, civitas_inspection, civitas_ml, civitas_revenue, civitas_works
+#   are all owned by civitas_admin, and their module schemas are admin-owned too.
+#
+# court, ml, revenue and works had no entry in ANY migration loop, so their
+# migrations had never run in CI even after their databases were created. The
+# schema-drift guard reported all four as UNREACHABLE against a fresh cluster.
+#
+# After migrations, grant_service_schemas.sql re-grants USAGE + DML on whatever
+# schemas the migrations just created, without transferring ownership.
+ADMIN_OWNED_DBS=(
+  "court-service:civitas_court:court_svc"
+  "inspection-service:civitas_inspection:inspection_svc"
+  "ml-service:civitas_ml:ml_svc"
+  "revenue-service:civitas_revenue:revenue_svc"
+  "works-service:civitas_works:works_svc"
+)
+export PGPASSWORD="${POSTGRES_ADMIN_PASSWORD:-${PGPASSWORD:-civitas_dev_pw}}"
+ADMIN_USER="${POSTGRES_ADMIN_USER:-civitas_admin}"
+
+for entry in "${ADMIN_OWNED_DBS[@]}"; do
+  IFS=: read -r svc db role <<< "$entry"
+  mig_dir="$ROOT/services/$svc/migrations"
+  [ -d "$mig_dir" ] || continue
+  svc_failed=0
+  for f in $(find "$mig_dir" -maxdepth 1 -name '*.sql' | sort); do
+    echo "Applying $(basename "$f") → $db ($svc, admin-run)"
+    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d "$db" \
+         -v ON_ERROR_STOP=1 -f "$f" > /tmp/bootstrap-migration-out.txt 2>&1; then
+      echo "⚠ Migration failed for $svc/$(basename "$f")"
+      svc_failed=$((svc_failed + 1))
+      MIGRATION_FAILURES+=("$svc/$(basename "$f")")
+      MIGRATION_FAILURE_REASONS+=("$svc/$(basename "$f")|$(sed -n 's/^psql:.*ERROR:  //p' /tmp/bootstrap-migration-out.txt | head -1 | cut -c1-110)")
     fi
   done
-  # Re-assert USAGE/DML on schemas the migrations created.
-  psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
-    -v ON_ERROR_STOP=1 -f "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql" >/dev/null \
-    || echo "⚠ inspection grant re-assert failed"
-  echo "inspection-service migrations: ${insp_failed} failure(s)"
+  # Re-assert USAGE/DML on schemas the migrations created. Ownership stays admin.
+  psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d "$db" -v ON_ERROR_STOP=1 \
+    -v svc_role="$role" -f "$ROOT/infra/db/bootstrap/grant_service_schemas.sql" >/dev/null \
+    || echo "⚠ $svc grant re-assert failed"
+  echo "$svc migrations: ${svc_failed} failure(s)"
+done
+
+# inspection additionally re-runs its own bootstrap, which sets role attributes
+# the generic grant file does not touch.
+psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
+  -v ON_ERROR_STOP=1 -f "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql" >/dev/null \
+  || echo "⚠ inspection bootstrap re-assert failed (expected if civitas_admin lacks CREATEROLE)"
+
+# ── Migration failure reconciliation ─────────────────────────────────────────
+#
+# Until this block existed, a failed migration printed a warning and the script
+# still exited 0. That is how 97 broken migrations went unnoticed, and it is the
+# mechanism behind the 231 declared-but-missing columns the schema-drift guard
+# reports: a migration aborts, its tables are never created, and nothing fails.
+#
+# Ratcheted rather than strict, because 33 migrations still fail for reasons that
+# each need their own fix. The allow-list is TRACKED DEBT, not approval:
+#   - a failure NOT in the list      -> exit 1 (new breakage)
+#   - a list entry that now PASSES   -> exit 1 (stale; remove it so the breakage
+#                                       cannot be reintroduced for free)
+#
+# Regenerate only after a real fix, and only against a FRESH cluster — measuring
+# on a developer machine understates failures, because schemas and roles created
+# there by hand mask exactly the defects this catches:
+#   docker run -d --name pgprobe -e POSTGRES_USER=civitas -e POSTGRES_PASSWORD=civitas_test \
+#     -e POSTGRES_DB=civitas_test -p 5499:5432 postgres:16-alpine
+#   PGHOST=localhost PGPORT=5499 PGUSER=civitas PGPASSWORD=civitas_test \
+#     PGDATABASE=civitas_test POSTGRES_ADMIN_PASSWORD=civitas_test \
+#     BOOTSTRAP_WRITE_ALLOWLIST=1 bash scripts/ci/bootstrap-postgres.sh
+ALLOWLIST="$ROOT/scripts/ci/migration-failure-allowlist.txt"
+
+printf '%s\n' "${MIGRATION_FAILURES[@]+"${MIGRATION_FAILURES[@]}"}" \
+  | grep -v '^$' | sort -u > /tmp/bootstrap-failures-observed.txt || true
+observed_count=$(wc -l < /tmp/bootstrap-failures-observed.txt | tr -d ' ')
+
+if [ "${BOOTSTRAP_WRITE_ALLOWLIST:-0}" = "1" ]; then
+  {
+    echo "# Migrations that fail on a FRESH cluster. TRACKED DEBT, not approval."
+    echo "# Each entry means the migration ABORTED and none of its objects were created."
+    echo "# The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the"
+    echo "# one that aborted the file. Only the path before '#' is compared."
+    echo "# Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container."
+    echo "# Generated: $(date -u +%Y-%m-%d)  Count: ${observed_count}"
+    printf '%s\n' "${MIGRATION_FAILURE_REASONS[@]+"${MIGRATION_FAILURE_REASONS[@]}"}" \
+      | grep -v '^$' | sort -u \
+      | awk -F'|' '{ printf "%-58s # %s\n", $1, $2 }'
+  } > "$ALLOWLIST"
+  echo "📝 allow-list written: ${observed_count} entries → ${ALLOWLIST}"
+  echo "✅ Postgres bootstrap complete (${PGHOST}:${PGPORT})"
+  exit 0
 fi
+
+if [ ! -f "$ALLOWLIST" ]; then
+  echo "❌ allow-list missing: $ALLOWLIST"
+  echo "   Refusing to report success — with no baseline, ${observed_count} failure(s) would be silently accepted."
+  exit 1
+fi
+
+# Strip the trailing "# reason" annotation and surrounding whitespace before
+# comparing, so editing a reason never changes the gate's verdict.
+sed 's/#.*//' "$ALLOWLIST" | sed 's/[[:space:]]*$//' | grep -v '^$' | sort -u \
+  > /tmp/bootstrap-failures-allowed.txt
+novel=$(comm -23 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed.txt)
+stale=$(comm -13 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed.txt)
+
+echo "──────────────────────────────────────────────────────────────"
+echo "  Migration failures: ${observed_count} observed, $(wc -l < /tmp/bootstrap-failures-allowed.txt | tr -d ' ') allow-listed"
+
+rc=0
+if [ -n "$novel" ]; then
+  echo "  ❌ NEW migration failure(s) — not in the allow-list:"
+  printf '      %s\n' $novel
+  echo "     A migration that aborts creates none of its objects. Fix it, or record"
+  echo "     it with a reason if the failure is genuinely expected."
+  rc=1
+fi
+if [ -n "$stale" ]; then
+  echo "  ❌ allow-listed migration(s) now PASS — remove them from the allow-list:"
+  printf '      %s\n' $stale
+  echo "     Leaving them listed lets the breakage be reintroduced for free."
+  rc=1
+fi
+[ "$rc" -eq 0 ] && echo "  ✅ RATCHET HOLDING — no new migration failures."
+echo "──────────────────────────────────────────────────────────────"
+[ "$rc" -eq 0 ] || exit 1
 
 echo "✅ Postgres bootstrap complete (${PGHOST}:${PGPORT})"

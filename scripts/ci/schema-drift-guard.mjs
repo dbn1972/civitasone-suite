@@ -49,6 +49,22 @@ const only = process.argv[2] && process.argv[2].startsWith("--") === false
   : undefined;
 
 /**
+ * The baseline is measured against a FRESH cluster bootstrapped from
+ * scripts/ci/bootstrap-postgres.sh, because that is the only reproducible,
+ * version-controlled state and it is what CI gates on.
+ *
+ * A long-lived developer cluster legitimately holds objects a fresh one lacks —
+ * schemas and tables created by hand over time, outside version control. Measured
+ * 2026-07-27: the dev cluster has 22 columns that a freshly bootstrapped cluster
+ * does not, so it reports them as `stale`.
+ *
+ * `--allow-stale` downgrades stale entries to INFO for that case. It does NOT
+ * relax the check that matters: NEW drift still fails. CI must run WITHOUT this
+ * flag, so a genuinely fixed-but-still-listed entry is caught there.
+ */
+const ALLOW_STALE = process.argv.includes("--allow-stale");
+
+/**
  * Columns a model may declare that are intentionally absent from the database —
  * e.g. a computed/virtual field. Each needs a written reason.
  * Format: "<service>.<schema>.<table>.<column>": "reason"
@@ -69,8 +85,17 @@ const ALLOWED_MISSING = {};
  * The gate also fails if a baselined entry is FIXED but left in the file, so a
  * regression cannot be reintroduced for free.
  *
+ * MEASURE IT ON A FRESH CLUSTER. A developer host understates drift, because
+ * schemas and tables created there by hand mask exactly the defects this catches.
  * Regenerate only after a real fix:
- *   node scripts/ci/schema-drift-guard.mjs --write-baseline
+ *   docker run -d --name pgprobe -e POSTGRES_USER=civitas -e POSTGRES_PASSWORD=civitas_test \
+ *     -e POSTGRES_DB=civitas_test -p 5499:5432 postgres:16-alpine
+ *   PGHOST=localhost PGPORT=5499 PGUSER=civitas PGPASSWORD=civitas_test \
+ *     PGDATABASE=civitas_test POSTGRES_ADMIN_PASSWORD=civitas_test \
+ *     bash scripts/ci/bootstrap-postgres.sh
+ *   PGHOST=localhost PGPORT=5499 POSTGRES_ADMIN_USER=civitas \
+ *     POSTGRES_ADMIN_PASSWORD=civitas_test \
+ *     node scripts/ci/schema-drift-guard.mjs --write-baseline
  */
 const BASELINE_FILE = join(REPO_ROOT, "scripts/ci/schema-drift-baseline.json");
 const WRITE_BASELINE = process.argv.includes("--write-baseline");
@@ -295,15 +320,26 @@ if (novel.length > 0) {
 }
 
 if (stale.length > 0) {
-  console.log(`  ${stale.length} baselined entr(ies) are FIXED but still listed:`);
-  for (const k of stale) console.log(`      ${k}`);
-  console.log("");
-  console.log("  Remove them so the drift cannot be reintroduced for free:");
-  console.log("      node scripts/ci/schema-drift-guard.mjs --write-baseline");
+  if (ALLOW_STALE) {
+    console.log(
+      `  INFO: ${stale.length} baselined entr(ies) are absent from this cluster's drift.\n` +
+        "  --allow-stale was passed, so this is not a failure. Expected on a\n" +
+        "  hand-provisioned developer cluster, which holds objects a freshly\n" +
+        "  bootstrapped one does not. CI runs WITHOUT this flag.",
+    );
+  } else {
+    console.log(`  ${stale.length} baselined entr(ies) are FIXED but still listed:`);
+    for (const k of stale) console.log(`      ${k}`);
+    console.log("");
+    console.log("  Remove them so the drift cannot be reintroduced for free:");
+    console.log("      node scripts/ci/schema-drift-guard.mjs --write-baseline");
+    console.log("  On a long-lived developer cluster this is expected — the baseline is");
+    console.log("  measured against a FRESH bootstrap. Re-run with --allow-stale locally.");
+  }
 }
 
 console.log("──────────────────────────────────────────────────────────────");
-if (novel.length > 0 || stale.length > 0) process.exit(1);
+if (novel.length > 0 || (stale.length > 0 && ALLOW_STALE === false)) process.exit(1);
 console.log(`  RATCHET HOLDING — ${known.size} known drift(s), no new ones.`);
 console.log("──────────────────────────────────────────────────────────────");
 process.exit(0);

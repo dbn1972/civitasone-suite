@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS sandbox.plugin_executions (
 ALTER TABLE sandbox.plugin_executions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sandbox.plugin_executions FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS tenant_isolation ON sandbox.plugin_executions
+DROP POLICY IF EXISTS tenant_isolation ON sandbox.plugin_executions;
+CREATE POLICY tenant_isolation
+  ON sandbox.plugin_executions
   USING (tenant_id = current_setting('app.tenant_id')::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);
 
