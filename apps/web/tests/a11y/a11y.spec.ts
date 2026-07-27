@@ -27,6 +27,7 @@ import { join, dirname } from "node:path";
 import { CURATED_ROUTES, PUBLIC_ROUTES, type RouteSpec } from "./routes.js";
 import { authenticate } from "./persona-auth.js";
 import { discoverAllRoutes } from "./discover.js";
+import { installApiMocks, MOCK_REQUIRED_ROUTES } from "./api-mocks.js";
 
 const BASELINE_PATH = join(__dirname, "a11y-baseline.json");
 const WRITE = process.env.A11Y_BASELINE_WRITE === "1";
@@ -204,6 +205,12 @@ test.describe("WCAG 2.2 AA — authenticated routes", () => {
   for (const spec of routes) {
     test(`${spec.path} [${spec.persona}/${spec.archetype}]`, async ({ page, baseURL }) => {
       await authenticate(page.context(), spec.persona, baseURL!);
+
+      // Install API mocks for routes that need gateway data to render their
+      // data-bearing UI (DataTable, pagination, sort controls).
+      if (MOCK_REQUIRED_ROUTES.has(spec.path)) {
+        await installApiMocks(page);
+      }
 
       const response = await page.goto(spec.path, {
         waitUntil: "domcontentloaded",

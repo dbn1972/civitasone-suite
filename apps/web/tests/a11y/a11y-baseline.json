@@ -6,7 +6,7 @@
     "blocking": 0,
     "incompleteBlocking": 47,
     "advisory": 0,
-    "uncertified": 4
+    "uncertified": 0
   },
   "blocking": [],
   "incompleteBlocking": [
@@ -59,10 +59,5 @@
     "/works|color-contrast"
   ],
   "advisory": [],
-  "uncertified": [
-    "/approvals",
-    "/finance/accounting/general-ledger",
-    "/finance/budget/allocation",
-    "/finance/payments"
-  ]
+  "uncertified": []
 }
