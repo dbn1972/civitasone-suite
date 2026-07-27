@@ -1,0 +1,22 @@
+{
+  "$comment": "B3 Golden Oracles — independently-computed expected values for finance domain",
+  "journal_double_entry": {
+    "note": "Every journal must have sum(debit) == sum(credit). Invalid scenarios below.",
+    "balanced": [
+      { "lines": [{"debitMinor": 100000, "creditMinor": 0}, {"debitMinor": 0, "creditMinor": 100000}], "valid": true },
+      { "lines": [{"debitMinor": 50000, "creditMinor": 0}, {"debitMinor": 30000, "creditMinor": 0}, {"debitMinor": 0, "creditMinor": 80000}], "valid": true },
+      { "lines": [{"debitMinor": 99999999999, "creditMinor": 0}, {"debitMinor": 0, "creditMinor": 99999999999}], "valid": true, "note": "large values OK with bigint" }
+    ],
+    "unbalanced": [
+      { "lines": [{"debitMinor": 100001, "creditMinor": 0}, {"debitMinor": 0, "creditMinor": 100000}], "valid": false, "note": "off by 1 paise" },
+      { "lines": [{"debitMinor": 50000, "creditMinor": 0}], "valid": false, "note": "single line" }
+    ]
+  },
+  "budget_reappropriation_zero_sum": {
+    "note": "Budget reappropriation must be zero-sum: total surrendered == total augmented",
+    "cases": [
+      { "surrenders": [500000, 300000], "augmentations": [800000], "valid": true },
+      { "surrenders": [500000], "augmentations": [400000], "valid": false, "note": "100000 unaccounted" }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+capability_id,capability_name,service,test_file,test_id,lane,status
+SVC-001,Tenant Isolation,platform,L1-tenant-isolation/tenant-isolation.test.ts,cross-tenant-get-isolation,L1,PASS
+SVC-002,JWT Auth Enforcement,platform,L1-tenant-isolation/tenant-isolation.test.ts,auth-no-token-401,L1,PASS
+SVC-003,Token Expiry Enforcement,platform,L1-tenant-isolation/tenant-isolation.test.ts,expired-token-401,L1,PASS
+SVC-004,Role-Based Access Control,platform,L2-authz-bola/authz-matrix.test.ts,denied-roles-get-403,L2,PASS
+SVC-005,Finance Sanctions Access,finance,L2-authz-bola/authz-matrix.test.ts,finance-sanctions-role-check,L2,PASS
+SVC-006,HRMS Employee Access,hrms,L2-authz-bola/authz-matrix.test.ts,hrms-employees-role-check,L2,PASS
+SVC-007,Procurement Access,procurement,L2-authz-bola/authz-matrix.test.ts,procurement-indents-role-check,L2,PASS
+SVC-008,Mass Assignment Protection,platform,L2-authz-bola/authz-matrix.test.ts,mass-assignment-protection,L2,PASS
+SVC-009,JWT Tamper Resistance,platform,L2-authz-bola/authz-matrix.test.ts,jwt-alg-none-rejected,L2,PASS
+SVC-010,Money as Bigint,platform,L3-data-integrity/schema-integrity.test.ts,money-columns-bigint,L3,PASS
+SVC-011,BYPASSRLS Audit,platform,L3-data-integrity/schema-integrity.test.ts,no-bypassrls-roles,L3,PASS
+SVC-012,Double-Entry Balance,finance,L3-data-integrity/schema-integrity.test.ts,gl-double-entry-balanced,L3,PASS
+SVC-013,SQL Injection Prevention,platform,L4-api-contract/input-validation.test.ts,sqli-resistance,L4,PASS
+SVC-014,Path Traversal Prevention,platform,L4-api-contract/input-validation.test.ts,path-traversal-resistance,L4,PASS
+SVC-015,XSS Prevention,platform,L4-api-contract/input-validation.test.ts,xss-stored-field-safe,L4,PASS
+SVC-016,Payload Size Limit,platform,L4-api-contract/input-validation.test.ts,oversized-body-rejected,L4,PASS
+SVC-017,Concurrency Safety,finance,L4-api-contract/input-validation.test.ts,parallel-mutation-no-500,L4,PASS
+SVC-018,Gratuity Computation,payroll,L10-domain-correctness/payroll-domain.test.ts,gratuity-golden-oracle,L10,PASS
+SVC-019,Pension Additional %,payroll,L10-domain-correctness/payroll-domain.test.ts,pension-age-band-golden,L10,PASS
+SVC-020,EPF Contribution,payroll,L10-domain-correctness/payroll-domain.test.ts,epf-computation-golden,L10,PASS
+SVC-021,Pension Commutation 15yr,payroll,L10-domain-correctness/payroll-domain.test.ts,commutation-deduction-15yr,L10,PASS
+SVC-022,Journal Balance Invariant,finance,L10-domain-correctness/finance-domain.test.ts,double-entry-golden,L10,PASS
+SVC-023,Bigint Precision (>2^53),finance,L10-domain-correctness/finance-domain.test.ts,bigint-precision-large,L10,PASS
+CAP-001,Gratuity Cap 20L,payroll,L11-mutation-canary/canary-tests.test.ts,gratuity-cap-canary,L11,PASS
+CAP-002,Journal Balance Gate,finance,L11-mutation-canary/canary-tests.test.ts,journal-offbyone-canary,L11,PASS
+CAP-003,Pension Age Threshold,payroll,L11-mutation-canary/canary-tests.test.ts,pension-age-boundary-canary,L11,PASS
+CAP-004,Isolation Gate Validity,platform,L11-mutation-canary/canary-tests.test.ts,isolation-gate-no-500,L11,PASS
+CAP-005,Authz Gate Validity,platform,L11-mutation-canary/canary-tests.test.ts,authz-gate-no-200-bypass,L11,PASS

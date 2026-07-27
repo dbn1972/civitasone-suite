@@ -13,13 +13,13 @@
 | L1 Tenant Isolation | 57 | 57 | 0 | ✅ GREEN | No cross-tenant leaks detected |
 | L2 Authz / BOLA | 44 | 44 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 38 | 38 | 0 | ✅ GREEN | All money columns bigint; 0 violations |
-| L4 API Contract | — | — | — | ⬜ PENDING | Scheduled |
+| L4 API Contract | 16 | 16 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | Partial | ✅ | — | 🟡 PARTIAL | SAST exists; DAST not yet wired |
 | L7 Reliability | — | — | — | ⬜ PENDING | k6 scripts exist, not gated |
 | L9 A11Y | Existing | ✅ | — | ✅ GREEN | axe-core gate active, 0 violations |
-| L10 Domain | — | — | — | ⬜ PENDING | Golden oracles needed |
-| L11 Mutation | — | — | — | ⬜ PENDING | Stryker configured, not gated |
+| L10 Domain | 21 | 21 | 0 | ✅ GREEN | 100% match to golden oracles |
+| L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
 
 ---
 
@@ -120,8 +120,8 @@
 
 ## Next Steps
 
-1. Fix the 5 numeric→bigint money columns (P1)
-2. Wire L1/L2/L3 into CI workflow
-3. Build L4 (API contract fuzzing with fast-check)
-4. Build L10 (domain golden oracles)
-5. Wire Stryker mutation testing (L11)
+1. Wire L1/L2 into CI (requires live stack or mock gateway)
+2. Build L6 full (ZAP DAST, Trivy container scan, CodeQL)
+3. Build L7 (k6 load gating, chaos engineering)
+4. Expand TRACEABILITY.csv to cover all 270 capabilities
+5. Complete B1 (Testcontainers ephemeral DB harness)
