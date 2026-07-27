@@ -31,6 +31,7 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 
 const REPO_ROOT = resolve(__dirname, "../../..");
 
@@ -146,24 +147,23 @@ describe("L10 payroll — zero-valued lines are omitted from the slip", () => {
 
 // ── HRA slab table (L162 + hraSlabPct tiers) ─────────────────────────────────
 
-describe("L10 payroll — HRA slab by city class and DA tier", () => {
-  const cases: Array<[string, bigint, bigint]> = [
-    // [cityClass, daRateBps, expected pct]  tier: DA>=100% -> 2, >=50% -> 1, else 0
-    ["X", 0n, 24n], ["X", 5000n, 27n], ["X", 10000n, 30n],
-    ["Y", 0n, 16n], ["Y", 5000n, 18n], ["Y", 10000n, 20n],
-    ["Z", 0n, 8n], ["Z", 5000n, 9n], ["Z", 10000n, 10n],
-  ];
+describe("L10 payroll — HRA slab by city class and DA tier (vs golden fixture)", () => {
+  // Driven from goldens/payroll-goldens.json so the fixture cannot silently
+  // contradict the implementation again. It previously recorded X=27% at DA<25%
+  // with class names A/B/C — both wrong, and unasserted, so it went unnoticed.
+  const golden = JSON.parse(
+    readFileSync(resolve(__dirname, "../goldens/payroll-goldens.json"), "utf8"),
+  ) as { hra_slab: { cases: Array<{ cityClass: string; daRateBps: number; expectedPct: number }> } };
 
-  for (const [cls, da, expected] of cases) {
-    it(`${cls} at DA ${Number(da) / 100}% -> ${expected}%`, () => {
-      expect(hraSlabPct(cls, da)).toBe(expected);
+  it("golden fixture is populated (guards against an empty case list)", () => {
+    expect(golden.hra_slab.cases.length).toBeGreaterThanOrEqual(9);
+  });
+
+  for (const c of golden.hra_slab.cases) {
+    it(`${c.cityClass} at DA ${c.daRateBps / 100}% -> ${c.expectedPct}%`, () => {
+      expect(hraSlabPct(c.cityClass, BigInt(c.daRateBps))).toBe(BigInt(c.expectedPct));
     });
   }
-
-  it("tier boundary is inclusive at exactly 50% DA", () => {
-    expect(hraSlabPct("X", 4999n)).toBe(24n);
-    expect(hraSlabPct("X", 5000n)).toBe(27n);
-  });
 
   it("HRA amount equals slab pct of basic", () => {
     // basic 40,000.00; X class, DA 0 => 24% => 4_000_000 * 24 / 100 = 960_000
