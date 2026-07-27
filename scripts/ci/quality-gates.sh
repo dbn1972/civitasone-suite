@@ -36,6 +36,9 @@ run_lane() {
 FAILURES=0
 
 case "$LANE" in
+  L0|l0)
+    run_lane "L0-deployment-readiness" "L0 Deployment Readiness (P0)" || FAILURES=$((FAILURES + 1))
+    ;;
   L1|l1)
     run_lane "L1-tenant-isolation" "L1 Tenant Isolation (P0)" || FAILURES=$((FAILURES + 1))
     ;;
@@ -67,6 +70,7 @@ case "$LANE" in
     # Handled by the SLO block below; no vitest lane to run.
     ;;
   all)
+    run_lane "L0-deployment-readiness" "L0 Deployment Readiness (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L1-tenant-isolation" "L1 Tenant Isolation (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L2-authz-bola" "L2 Authorization / BOLA (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L3-data-integrity" "L3 Data & Schema Integrity (P0)" || FAILURES=$((FAILURES + 1))
@@ -79,7 +83,7 @@ case "$LANE" in
     ;;
   *)
     echo "Unknown lane: $LANE"
-    echo "Usage: $0 [L1|L2|L3|L4|L6|L7|L8|L10|L11|slo|all]"
+    echo "Usage: $0 [L0|L1|L2|L3|L4|L6|L7|L8|L10|L11|slo|all]"
     exit 1
     ;;
 esac
