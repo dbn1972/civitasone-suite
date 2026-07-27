@@ -64,13 +64,21 @@ const KNOWN_NOT_SERVING: Record<string, string> = {
   // INTERNAL_SERVICE_SECRET / DEVICE_TRUST_SECRET (and the per-service PII keys
   // for court/meeting/visitor) injected from the secret manager at launch — an
   // operational step, deliberately not automated here.
-  court: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET + COURT_PII_KEY at launch",
-  meeting: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET + MEETING_PII_KEY at launch",
-  visitor: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET + VISITOR_PII_KEY at launch",
-  inspection: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch",
-  works: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch (boots clean otherwise)",
-  ml: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch",
-  revenue: "gateway route ADDED; not running — needs INTERNAL_SERVICE_SECRET at launch",
+  // RECOVERED 2026-07-27: meeting, court, visitor and inspection were removed
+  // from this inventory after being brought up and verified (port bound,
+  // /health 200, reachable through the gateway). The launch needs three things
+  // present in the launching shell, which is what had been missing:
+  //   INTERNAL_SERVICE_SECRET  — else @civitasone/auth/plugin refuses to start
+  //   RUNTIME_NODE_ENV=staging — the runtime NODE_ENV the services see; note
+  //                              this is NOT `NODE_ENV`, which only controls
+  //                              the ecosystem's own IS_PROD decision
+  //   JWT_ALGORITHM=HS256      — defaults to RS256, which made every gatewayed
+  //                              request 401 against the fleet's HS256 tokens
+  // inspection additionally required its role and database to be created at all
+  // (see infra/db/bootstrap/bootstrap_inspection.sql) — neither existed.
+  works: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch (boots clean otherwise); works_svc role/db not yet provisioned",
+  ml: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch; ml_svc role/db not yet provisioned",
+  revenue: "gateway route ADDED; not running — needs INTERNAL_SERVICE_SECRET at launch; revenue_svc role/db not yet provisioned",
   metadata: "ecosystem entry + gateway route ADDED; not running — needs INTERNAL_SERVICE_SECRET at launch",
 };
 

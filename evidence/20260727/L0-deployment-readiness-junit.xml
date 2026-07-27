@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="9" failures="0" errors="0" time="0.547">
-    <testsuite name="L0-deployment-readiness/readiness.test.ts" timestamp="2026-07-27T07:33:55.461Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="9" failures="0" errors="0" skipped="0" time="0.082561433">
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; discovers services from the repo" time="0.001722096">
+<testsuites name="vitest tests" tests="9" failures="0" errors="0" time="0.609">
+    <testsuite name="L0-deployment-readiness/readiness.test.ts" timestamp="2026-07-27T10:17:29.813Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="9" failures="0" errors="0" skipped="0" time="0.079452063">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; discovers services from the repo" time="0.001676459">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; parses gateway upstreams from the registry" time="0.000296846">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; parses gateway upstreams from the registry" time="0.000321642">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; reads the host&apos;s listening ports" time="0.000341901">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; reads the host&apos;s listening ports" time="0.000367361">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; every service has a documented port" time="0.000780375">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Discovery guards (a broken probe must not pass silently) &gt; every service has a documented port" time="0.001348385">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 1: port is bound (catches the pm2-online lie) &gt; no service is newly unbound" time="0.000278868">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 1: port is bound (catches the pm2-online lie) &gt; no service is newly unbound" time="0.000377888">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 1: port is bound (catches the pm2-online lie) &gt; tracked-down inventory is not stale" time="0.000237038">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 1: port is bound (catches the pm2-online lie) &gt; tracked-down inventory is not stale" time="0.000227644">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 2: gateway route exists (catches built-but-unreachable) &gt; no service is newly missing a gateway route" time="0.000237523">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 2: gateway route exists (catches built-but-unreachable) &gt; no service is newly missing a gateway route" time="0.000220284">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 3: reachable through the gateway &gt; gateway itself is up" time="0.064912714">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 3: reachable through the gateway &gt; gateway itself is up" time="0.060228349">
         </testcase>
-        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 3: reachable through the gateway &gt; records the serving fleet size" time="0.000419398">
+        <testcase classname="L0-deployment-readiness/readiness.test.ts" name="L0 — Check 3: reachable through the gateway &gt; records the serving fleet size" time="0.000535541">
         </testcase>
     </testsuite>
 </testsuites>

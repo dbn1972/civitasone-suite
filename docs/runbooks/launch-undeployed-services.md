@@ -80,6 +80,57 @@ export INTERNAL_SERVICE_SECRET DEVICE_TRUST_SECRET \
        COURT_PII_KEY MEETING_PII_KEY VISITOR_PII_KEY
 ```
 
+### 3b. Set the two runtime knobs — THIS IS THE STEP THAT GETS MISSED
+
+```bash
+export RUNTIME_NODE_ENV=staging   # runtime NODE_ENV the SERVICES see
+export JWT_ALGORITHM=HS256        # must match the tokens the fleet issues
+export NODE_ENV=staging           # only controls the ecosystem's own IS_PROD
+```
+
+Both were verified the hard way on 2026-07-27:
+
+- **`RUNTIME_NODE_ENV`, not `NODE_ENV`,** sets the runtime env the services see
+  (`ecosystem.config.js` line ~62: `NODE_ENV: RUNTIME_NODE_ENV`). Exporting
+  `NODE_ENV=staging` alone leaves the service running as `production` — it only
+  flips the ecosystem's `IS_PROD` decision, which governs whether secrets are
+  demanded and whether PII dev fallbacks are permitted.
+- **`JWT_ALGORITHM` defaults to `RS256`.** Miss it and the service starts, binds
+  its port and answers `/health` with 200 — but **every gatewayed request returns
+  401**, because the fleet issues HS256 tokens. This looks like an auth bug and is
+  purely a launch-env mismatch.
+
+Confirm against a known-good service before starting anything:
+
+```bash
+FID=$(pm2 jlist | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+  console.log(JSON.parse(d).find(x=>x.name==='finance').pm_id)})")
+pm2 env "$FID" | grep -E '^(JWT_ALGORITHM|NODE_ENV):'
+```
+
+Your new service must end up with the same two values. Check with `pm2 env` after
+starting, before concluding anything about auth.
+
+### 3c. Confirm the role and database exist
+
+A service with no database cannot start, and this is not hypothetical:
+`inspection_svc` and `civitas_inspection` **did not exist at all**, so
+inspection-service — 39 test files, 78.6% coverage, declared and routed — could
+never have run.
+
+```bash
+PGPASSWORD="$PGADMIN_PW" psql -h localhost -p 5435 -U civitas_admin -d postgres -t -A \
+  -c "SELECT rolname FROM pg_roles WHERE rolname LIKE '%\_svc' ORDER BY 1"
+PGPASSWORD="$PGADMIN_PW" psql -h localhost -p 5435 -U civitas_admin -d postgres -t -A \
+  -c "SELECT datname FROM pg_database WHERE datname LIKE 'civitas\_%' ORDER BY 1"
+```
+
+Still missing as of 2026-07-27: **`revenue_svc`, `works_svc`, `ml_svc`** and their
+databases. Provision with `infra/db/bootstrap/bootstrap_inspection.sql` as the
+template — it documents the convention (role `NOSUPERUSER NOBYPASSRLS`, db owned
+by `civitas_admin`, service role gets `USAGE` + DML but never ownership), then
+apply that service's migrations as `civitas_admin` and re-run the grant block.
+
 Sanity-check lengths only — never values:
 
 ```bash
@@ -185,6 +236,10 @@ and authz are **unverified** until they are covered.
 | Symptom | Cause | Action |
 |---|---|---|
 | `online` in pm2, `bound=0`, **empty error log** | Startup threw before binding — usually a missing secret or an unresolvable import | Run in the foreground (below) to see the real error |
+| `/health` 200 but **every gatewayed route 401** | `JWT_ALGORITHM` defaulted to RS256 while the fleet issues HS256 | `pm2 env <id> \| grep JWT_ALGORITHM`; redo step 3b, `pm2 delete` and restart |
+| Service runs as `production` despite `NODE_ENV=staging` | You set `NODE_ENV`, not `RUNTIME_NODE_ENV` | Export `RUNTIME_NODE_ENV`; see step 3b |
+| `password authentication failed for user "<svc>_svc"` | Role does not exist | Provision it; see step 3c |
+| Gatewayed route returns 400 | Route resolved, zod rejected the empty query — this is SUCCESS for reachability | No action |
 | `INTERNAL_SERVICE_SECRET must be set in production` | Secret absent from the launching shell | Redo step 3; `pm2 delete <svc>` then start again |
 | `<SVC>_PII_KEY is required (>=16 chars)` | PII key missing or too short | Provide a ≥16-char key or the host key file |
 | `ERR_MODULE_NOT_FOUND` on a `@civitasone/*` path | Package `exports` map points at a non-existent file | `node scripts/ci/package-exports-guard.mjs` |

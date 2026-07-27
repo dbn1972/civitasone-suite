@@ -1,119 +1,119 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="57" failures="0" errors="0" time="1.403">
-    <testsuite name="L1-tenant-isolation/tenant-isolation.test.ts" timestamp="2026-07-27T07:33:57.968Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="57" failures="0" errors="0" skipped="0" time="0.937715734">
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; gateway is reachable" time="0.05131956">
+<testsuites name="vitest tests" tests="57" failures="0" errors="0" time="1.34">
+    <testsuite name="L1-tenant-isolation/tenant-isolation.test.ts" timestamp="2026-07-27T10:17:32.301Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="57" failures="0" errors="0" skipped="0" time="0.932233073">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; gateway is reachable" time="0.050554564">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance sanctions: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.031564375">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance sanctions: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.030667637">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance bills: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.011453005">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance bills: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010773742">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance advances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010105392">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance advances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009360989">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance journals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01050088">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance journals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010187017">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance budgets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009792505">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance budgets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008773747">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance statements: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010247005">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance statements: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009046879">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance UCs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008938669">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; finance UCs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008492302">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms employees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.029467624">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms employees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.029355002">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms leave requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012924869">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms leave requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01309031">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms attendance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012596219">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms attendance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.013420034">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms appraisals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012424101">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; hrms appraisals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.0131896">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement indents: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.022981416">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement indents: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023038935">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement vendors: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01028817">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement vendors: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010198808">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement RFQs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009526157">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement RFQs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009657736">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement GRNs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012174943">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement GRNs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012273233">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement tenders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009406658">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; procurement tenders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009323409">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen tickets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.022275855">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen tickets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.021927695">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009465153">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen requests: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009512472">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen RTI: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009062238">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; citizen RTI: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008945095">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal cases: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.02222495">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal cases: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.022823426">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal hearings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010238143">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal hearings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.010363789">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal court orders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009353349">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; legal court orders: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008908056">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; assets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.024795968">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; assets: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023153405">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; asset maintenance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01011482">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; asset maintenance: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009826565">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.025749938">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.024113579">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock ledger: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009482884">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; stock ledger: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008794062">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; projects: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.035555416">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; projects: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.022862113">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; project milestones: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009048134">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; project milestones: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008487518">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grants: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.021825565">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grants: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.021863268">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grantees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.00888285">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grantees: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008333762">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grant installments: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.008848971">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; grant installments: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.00933218">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM contacts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.025401112">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM contacts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.027410358">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM deals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012372892">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; CRM deals: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.012364252">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab files: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.024499523">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab files: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.025630169">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab meetings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009418966">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; estab meetings: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.009150806">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; contracts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023342139">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; contracts: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023921398">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit observations: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.022095924">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit observations: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023713529">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit risks: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.011498938">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; audit risks: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.01091821">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; workflow instances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023213071">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; workflow instances: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.025428314">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; knowledge docs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.027618726">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; knowledge docs: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.02645454">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; analytics dashboards: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.025612896">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; analytics dashboards: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.023173056">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; inventory items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.025778377">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant GET isolation (T_A reads T_B endpoints) &gt; inventory items: Tenant B token on Tenant A-scoped data returns empty or 200 with no cross-tenant data" time="0.029139477">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance sanctions: no auth → 401" time="0.001606075">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance sanctions: no auth → 401" time="0.00179678">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance bills: no auth → 401" time="0.001467958">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance bills: no auth → 401" time="0.001342928">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance advances: no auth → 401" time="0.001324778">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance advances: no auth → 401" time="0.001194743">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance journals: no auth → 401" time="0.001303937">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance journals: no auth → 401" time="0.001439134">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance budgets: no auth → 401" time="0.001277484">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance budgets: no auth → 401" time="0.001450646">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance statements: no auth → 401" time="0.002085617">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance statements: no auth → 401" time="0.001411835">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance UCs: no auth → 401" time="0.001562096">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; finance UCs: no auth → 401" time="0.003072425">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms employees: no auth → 401" time="0.001128462">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms employees: no auth → 401" time="0.00276337">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms leave requests: no auth → 401" time="0.001230755">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms leave requests: no auth → 401" time="0.002783325">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms attendance: no auth → 401" time="0.001350206">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Auth enforcement: No token → 401 &gt; hrms attendance: no auth → 401" time="0.002627534">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to finance/bills with wrong tenant token → data isolated" time="0.027719929">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to finance/bills with wrong tenant token → data isolated" time="0.031413894">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to hrms/employees: cross-tenant creation stays isolated" time="0.01864342">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: Cross-tenant data access &gt; Cross-tenant write isolation &gt; POST to hrms/employees: cross-tenant creation stays isolated" time="0.018662761">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; token without tid claim → 401" time="0.006024972">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; token without tid claim → 401" time="0.005863947">
         </testcase>
-        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; expired token → 401" time="0.002925906">
+        <testcase classname="L1-tenant-isolation/tenant-isolation.test.ts" name="L1 — Tenant Isolation: JWT tenant enforcement &gt; expired token → 401" time="0.00319172">
         </testcase>
     </testsuite>
 </testsuites>

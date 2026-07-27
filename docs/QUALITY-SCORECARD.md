@@ -10,7 +10,7 @@
 
 | Lane | Tests | Pass | Fail | Status | Verdict |
 |------|-------|------|------|--------|---------|
-| L0 Deployment Readiness | 9 | 9 | 0 | 🟡 GREEN + FINDING | **8 of 41 not serving** (was 11 — 3 fixed) |
+| L0 Deployment Readiness | 9 | 9 | 0 | 🟡 GREEN + FINDING | **4 of 41 not serving** (was 11 — 7 fixed) |
 | L1 Tenant Isolation | 57 | 57 | 0 | ✅ GREEN | No cross-tenant leaks detected |
 | L2 Authz / BOLA | 44 | 44 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 38 | 38 | 0 | ✅ GREEN | All money columns bigint; 0 violations |
@@ -252,7 +252,42 @@ the arch-guard CI job. It scans all 27 packages and fails on any `main`/`types`/
 `exports` target that does not exist, naming the `dist/` alternative when present.
 It found 5 entry points beyond the two that had already broken.
 
-### Still not serving (8) — now declared and routed, blocked on secrets
+### Brought up 2026-07-27 (4) — meeting, court, visitor, inspection
+
+All four verified: port bound, `/health` 200, and reachable through the gateway.
+Fleet 35 → **39 listening ports**. The launch had been blocked by three things,
+none of which was a code defect:
+
+| Blocker | Detail |
+|---|---|
+| `INTERNAL_SERVICE_SECRET` absent from the launching shell | `@civitasone/auth/plugin` refuses to start; process survives on pm2's IPC so pm2 reports "online" |
+| **`RUNTIME_NODE_ENV`, not `NODE_ENV`** | `ecosystem.config.js` injects `NODE_ENV: RUNTIME_NODE_ENV`. Setting `NODE_ENV=staging` alone leaves the service running as `production` — it only flips the ecosystem's own `IS_PROD` decision |
+| **`JWT_ALGORITHM` defaults to `RS256`** | Miss it and the service binds its port and answers `/health` 200 while **every gatewayed request returns 401**, because the fleet issues HS256 tokens. Presents as an auth bug; is purely a launch-env mismatch |
+
+**inspection additionally had no database at all.** Neither the `inspection_svc`
+role nor `civitas_inspection` existed — so a service with 39 test files at 78.6%
+coverage, declared in the ecosystem and routed in the gateway, could never have
+started. Provisioned via the new
+`infra/db/bootstrap/bootstrap_inspection.sql` (role `NOSUPERUSER NOBYPASSRLS`, db
+owned by `civitas_admin`, service role gets `USAGE` + DML but never ownership —
+mirroring the verified `civitas_court` convention), then all 16 migrations applied
+clean → 42 tables.
+
+The L0 staleness ratchet then failed on all four, forcing the inventory 8 → 4.
+
+### Still not serving (4) — blocked on database provisioning
+
+| Service | Blocker |
+|---|---|
+| `revenue` | `revenue_svc` role and `civitas_revenue` database **do not exist** |
+| `works` | `works_svc` role and database do not exist |
+| `ml` | `ml_svc` role and database do not exist |
+| `metadata` | role exists; not yet started |
+
+`revenue` remains the sharpest case: highest line coverage in the fleet (99.6%)
+and still no database to connect to.
+
+### Previously (8) — declared and routed, blocked on secrets
 
 Build quality is not the issue: court has 50 test files at 88.9%, meeting 58 at
 93.3%, visitor 45 at 81.2%, revenue 37 at 99.6%.
@@ -571,10 +606,11 @@ implying an unverified SLO.
 
 ## Next Steps
 
-1. **Launch the 8 declared-but-not-running services with real secrets.** They are
-   now declared and routed; the only blocker is injecting
-   `INTERNAL_SERVICE_SECRET` / `DEVICE_TRUST_SECRET` (+ per-service PII keys) from
-   the secret manager at launch. Takes the fleet 33/41 → 41/41.
+1. **Provision `revenue_svc`, `works_svc`, `ml_svc` roles and databases**, then
+   launch those three plus `metadata`. Use
+   `infra/db/bootstrap/bootstrap_inspection.sql` as the template and apply each
+   service's migrations as `civitas_admin`. Takes the fleet 39 → 41/41.
+   `revenue` is the priority: 99.6% coverage and still no database.
 2. **Reconcile `IS_PROD` with the injected `NODE_ENV`** in `ecosystem.config.js` —
    deciding prod-ness from the shell while forcing `NODE_ENV=production` into the
    app is the trap that makes a secret-less launch fail confusingly.
