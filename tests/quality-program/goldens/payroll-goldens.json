@@ -1,0 +1,38 @@
+{
+  "$comment": "B3 Golden Oracles — independently-computed expected values for payroll domain",
+  "gratuity": [
+    { "yearsOfService": 4.9, "lastBasicMinor": 5600000, "lastDaMinor": 2800000, "expected": 0, "note": "<5 years → 0" },
+    { "yearsOfService": 5.0, "lastBasicMinor": 5600000, "lastDaMinor": 2800000, "expected": 24230800, "note": "(56000+28000)*15*5/26 = 242307.69 → 242308 paise" },
+    { "yearsOfService": 10.0, "lastBasicMinor": 5600000, "lastDaMinor": 2800000, "expected": 48461500, "note": "84000*15*10/26 = 484615.38 → rounds" },
+    { "yearsOfService": 10.5, "lastBasicMinor": 5600000, "lastDaMinor": 2800000, "expected": 53307700, "note": "6 months in last year → rounds UP to 11 years: 84000*15*11/26 = 533076.92" },
+    { "yearsOfService": 35.0, "lastBasicMinor": 15000000, "lastDaMinor": 7500000, "expected": 200000000, "note": "capped at 20 lakh" },
+    { "yearsOfService": 25.0, "lastBasicMinor": 5600000, "lastDaMinor": 2800000, "expected": 121153800, "note": "84000*15*25/26 = 1211538.46" }
+  ],
+  "pension_additional_pct": [
+    { "age": 79, "expectedPct": 0 },
+    { "age": 80, "expectedPct": 20 },
+    { "age": 84, "expectedPct": 20 },
+    { "age": 85, "expectedPct": 30 },
+    { "age": 89, "expectedPct": 30 },
+    { "age": 90, "expectedPct": 40 },
+    { "age": 95, "expectedPct": 50 },
+    { "age": 100, "expectedPct": 100 }
+  ],
+  "epf": {
+    "note": "EPF: 12% of Basic+DA, capped at wage ceiling ₹15000 (1500000 paise)",
+    "cases": [
+      { "basicMinor": 1200000, "daMinor": 300000, "expectedPfEmployee": 180000, "note": "12% of 15000 (both under cap)" },
+      { "basicMinor": 2500000, "daMinor": 1250000, "expectedPfEmployee": 180000, "note": "basic+DA 37500 > cap 15000 → 12% of 15000" },
+      { "basicMinor": 1000000, "daMinor": 0, "expectedPfEmployee": 120000, "note": "12% of 10000" }
+    ]
+  },
+  "hra_slab": {
+    "note": "HRA % of Basic: X-class city with DA<25%: 27%, A-class: 18%, B/C: 9%",
+    "cases": [
+      { "cityClass": "X", "daRateBps": 0, "expectedPct": 27 },
+      { "cityClass": "X", "daRateBps": 2500, "expectedPct": 30, "note": "DA>=25% → X gets 30%" },
+      { "cityClass": "A", "daRateBps": 0, "expectedPct": 18 },
+      { "cityClass": "B", "daRateBps": 0, "expectedPct": 9 }
+    ]
+  }
+}

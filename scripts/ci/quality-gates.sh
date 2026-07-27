@@ -45,14 +45,26 @@ case "$LANE" in
   L3|l3)
     run_lane "L3-data-integrity" "L3 Data & Schema Integrity (P0)" || FAILURES=$((FAILURES + 1))
     ;;
+  L4|l4)
+    run_lane "L4-api-contract" "L4 API Contract & Input (P1)" || FAILURES=$((FAILURES + 1))
+    ;;
+  L10|l10)
+    run_lane "L10-domain-correctness" "L10 Domain Correctness (P0)" || FAILURES=$((FAILURES + 1))
+    ;;
+  L11|l11)
+    run_lane "L11-mutation-canary" "L11 Mutation & Canary (Meta)" || FAILURES=$((FAILURES + 1))
+    ;;
   all)
     run_lane "L1-tenant-isolation" "L1 Tenant Isolation (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L2-authz-bola" "L2 Authorization / BOLA (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L3-data-integrity" "L3 Data & Schema Integrity (P0)" || FAILURES=$((FAILURES + 1))
+    run_lane "L4-api-contract" "L4 API Contract & Input (P1)" || FAILURES=$((FAILURES + 1))
+    run_lane "L10-domain-correctness" "L10 Domain Correctness (P0)" || FAILURES=$((FAILURES + 1))
+    run_lane "L11-mutation-canary" "L11 Mutation & Canary (Meta)" || FAILURES=$((FAILURES + 1))
     ;;
   *)
     echo "Unknown lane: $LANE"
-    echo "Usage: $0 [L1|L2|L3|all]"
+    echo "Usage: $0 [L1|L2|L3|L4|L10|L11|all]"
     exit 1
     ;;
 esac
