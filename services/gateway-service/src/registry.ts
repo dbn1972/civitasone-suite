@@ -58,6 +58,11 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "visitor",     prefix: "/api/v1/visitor",   upstream: upstream("visitor", 3035) },
   { name: "inspection",  prefix: "/api/v1/inspection", upstream: upstream("inspection", 3037) },
   { name: "works",       prefix: "/api/v1/works",    upstream: upstream("works", 3036) },
+  // Previously absent: both services were built and tested but had NO gateway
+  // route, so every request 404'd and no client could reach them. revenue-service
+  // has the fleet's highest line coverage (99.6%) and was entirely unreachable.
+  { name: "revenue",     prefix: "/api/v1/revenue",  upstream: upstream("revenue", 3038) },
+  { name: "metadata",    prefix: "/api/v1/metadata", upstream: upstream("metadata", 3039) },
   { name: "locations",    prefix: "/api/v1/locations", upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },

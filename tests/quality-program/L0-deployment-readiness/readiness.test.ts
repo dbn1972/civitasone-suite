@@ -49,18 +49,29 @@ const KNOWN_NOT_SERVING: Record<string, string> = {
   // dist/, so Node threw ERR_MODULE_NOT_FOUND during `await buildApp()` and the
   // process never bound a port. Guarded against recurrence by
   // scripts/ci/package-exports-guard.mjs.
-  // Boot-probed 2026-07-27 with a hand-built env. Two classes:
-  //  (a) FAIL-LOUD ON MISSING SECRET — the service correctly refuses to start
-  //      without its PII key. Blocked on secret provisioning, not on code.
-  //  (b) BOOTS CLEANLY — only missing a pm2 ecosystem entry.
-  court: "not in pm2. Boot-probed: fails loud on missing COURT_PII_KEY (needs secret provisioning)",
-  meeting: "not in pm2. Boot-probed: fails loud on missing MEETING_PII_KEY (needs secret provisioning)",
-  visitor: "not in pm2. Boot-probed: fails loud on missing VISITOR_PII_KEY (needs secret provisioning)",
-  inspection: "not in pm2. Boot-probed: fails loud on missing required env vars (needs secret provisioning)",
-  works: "not in pm2. Boot-probed: BOOTS AND LISTENS cleanly — only needs a pm2 ecosystem entry",
-  ml: "not in pm2. Boot-probed: BOOTS AND LISTENS cleanly — only needs a pm2 ecosystem entry",
-  revenue: "no gateway route (404) — built, 99.6% coverage, unreachable",
-  metadata: "no gateway route (404) — built, unreachable",
+  // All 8 are now DECLARED (ecosystem.config.js) and ROUTED (gateway registry) —
+  // see scripts/ci/deployment-declaration-guard.mjs. They are not RUNNING, and
+  // the blocker is secret provisioning, not code:
+  //
+  //   `svc()` injects NODE_ENV=production into every app, but the ecosystem
+  //   decides IS_PROD from the *shell* NODE_ENV. Started without the secrets
+  //   present in the launching shell, a service receives an EMPTY
+  //   INTERNAL_SERVICE_SECRET together with NODE_ENV=production, and
+  //   @civitasone/auth/plugin then refuses to start:
+  //     "INTERNAL_SERVICE_SECRET must be set in production; refusing to start."
+  //
+  // That is correct fail-closed behaviour. Bringing these up requires the real
+  // INTERNAL_SERVICE_SECRET / DEVICE_TRUST_SECRET (and the per-service PII keys
+  // for court/meeting/visitor) injected from the secret manager at launch — an
+  // operational step, deliberately not automated here.
+  court: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET + COURT_PII_KEY at launch",
+  meeting: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET + MEETING_PII_KEY at launch",
+  visitor: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET + VISITOR_PII_KEY at launch",
+  inspection: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch",
+  works: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch (boots clean otherwise)",
+  ml: "declared+routed, not running — needs INTERNAL_SERVICE_SECRET at launch",
+  revenue: "gateway route ADDED; not running — needs INTERNAL_SERVICE_SECRET at launch",
+  metadata: "ecosystem entry + gateway route ADDED; not running — needs INTERNAL_SERVICE_SECRET at launch",
 };
 
 /** Documented port map. Source: .kiro/steering/quick-reference.md */

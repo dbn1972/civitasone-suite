@@ -1,0 +1,119 @@
+#!/usr/bin/env node
+/**
+ * deployment-declaration-guard.mjs
+ *
+ * Every service in `services/` must be declared in BOTH:
+ *   1. ecosystem.config.js        — or it can never be started
+ *   2. gateway-service/registry.ts — or no client can ever reach it
+ *
+ * THE DEFECTS THIS CATCHES
+ * -----------------------
+ * Measured 2026-07-27 across 41 services:
+ *   - `works` and `metadata` were absent from ecosystem.config.js entirely, so
+ *     they were undeployable by construction.
+ *   - `revenue` and `metadata` had NO gateway route, so every request 404'd.
+ *     revenue-service carries the fleet's HIGHEST line coverage (99.6%) and 37
+ *     test files, and was completely unreachable from the web app.
+ *
+ * Neither condition is visible to a per-service test suite or a coverage gate: a
+ * service can be fully built, fully tested and scored "Implemented" while being
+ * impossible to start or impossible to call. This is a static check because it
+ * must hold regardless of whether a fleet is currently running.
+ *
+ * NOT checked here: whether a declared service is actually RUNNING. That is
+ * runtime state and belongs to the L0 readiness lane
+ * (tests/quality-program/L0-deployment-readiness).
+ *
+ * Usage: node scripts/ci/deployment-declaration-guard.mjs
+ * Exit:  0 clean, 1 on any undeclared service.
+ */
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
+const SERVICES_DIR = join(REPO_ROOT, "services");
+const ECOSYSTEM = join(REPO_ROOT, "ecosystem.config.js");
+const REGISTRY = join(REPO_ROOT, "services/gateway-service/src/registry.ts");
+
+/**
+ * Services that are intentionally not reachable through the gateway. `gateway`
+ * IS the edge; `queue` is an internal-only control plane with no public surface.
+ * Any other entry needs a written reason.
+ */
+const NO_GATEWAY_ROUTE_BY_DESIGN = {
+  gateway: "is the edge itself",
+  queue: "internal control plane — no public surface",
+};
+
+function fail(msg) {
+  console.error(msg);
+  process.exitCode = 1;
+}
+
+for (const p of [SERVICES_DIR, ECOSYSTEM, REGISTRY]) {
+  if (existsSync(p) === false) {
+    console.error(`deployment-declaration-guard: required path missing: ${p}`);
+    process.exit(1);
+  }
+}
+
+const services = readdirSync(SERVICES_DIR)
+  .filter((d) => d.endsWith("-service"))
+  .map((d) => d.replace("-service", ""))
+  .sort();
+
+const eco = readFileSync(ECOSYSTEM, "utf8");
+// svc("name", ...) / worker("name", ...) plus inline `name: "x"` app objects.
+const declared = new Set([
+  ...[...eco.matchAll(/\bsvc\("([a-z-]+)"/g)].map((m) => m[1]),
+  ...[...eco.matchAll(/name:\s*"([a-z-]+)"/g)].map((m) => m[1]),
+]);
+
+const registry = readFileSync(REGISTRY, "utf8");
+const routed = new Set([...registry.matchAll(/upstream\("([a-z-]+)"/g)].map((m) => m[1]));
+
+// Discovery guards: a broken regex must not silently pass an empty set.
+if (services.length < 30) fail(`only ${services.length} services discovered — discovery looks broken`);
+if (declared.size < 30) fail(`only ${declared.size} ecosystem declarations parsed — parser looks broken`);
+if (routed.size < 30) fail(`only ${routed.size} gateway upstreams parsed — parser looks broken`);
+
+const missingFromEcosystem = services.filter((s) => declared.has(s) === false);
+const missingFromRegistry = services.filter(
+  (s) => routed.has(s) === false && NO_GATEWAY_ROUTE_BY_DESIGN[s] === undefined,
+);
+
+console.log("──────────────────────────────────────────────────────────────");
+console.log("  Deployment Declaration Guard");
+console.log("──────────────────────────────────────────────────────────────");
+console.log(`  services in repo        : ${services.length}`);
+console.log(`  declared in ecosystem   : ${declared.size}`);
+console.log(`  routed via gateway      : ${routed.size}`);
+console.log(`  exempt from routing     : ${Object.keys(NO_GATEWAY_ROUTE_BY_DESIGN).join(", ")}`);
+console.log("");
+
+if (missingFromEcosystem.length > 0) {
+  fail(
+    `  UNDEPLOYABLE — ${missingFromEcosystem.length} service(s) absent from ecosystem.config.js:\n` +
+      missingFromEcosystem.map((s) => `      ${s}`).join("\n") +
+      `\n      A service with no ecosystem entry can never be started, no matter\n` +
+      `      how well tested it is. Add an svc() entry.\n`,
+  );
+}
+
+if (missingFromRegistry.length > 0) {
+  fail(
+    `  UNREACHABLE — ${missingFromRegistry.length} service(s) have no gateway route:\n` +
+      missingFromRegistry.map((s) => `      ${s}`).join("\n") +
+      `\n      Every request returns 404 regardless of coverage. Add a prefix to\n` +
+      `      services/gateway-service/src/registry.ts, or record an exemption\n` +
+      `      with a reason in NO_GATEWAY_ROUTE_BY_DESIGN.\n`,
+  );
+}
+
+if (process.exitCode === 1) {
+  console.log("──────────────────────────────────────────────────────────────");
+  process.exit(1);
+}
+
+console.log("  CLEAN — every service is both startable and reachable.");
+console.log("──────────────────────────────────────────────────────────────");
