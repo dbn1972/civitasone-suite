@@ -22,12 +22,52 @@ const SECRET = process.env.JWT_SECRET ?? "civitasone-dev-secret";
 const TENANT = "00000000-0000-0000-0000-000000000001";
 const ACTOR = "aaaaaaaa-0000-4000-8000-000000000001";
 
+/**
+ * Direct-to-service base URL. Going through the gateway can yield a 503 from the
+ * CIRCUIT BREAKER rather than from the env gate, which would let these tests pass
+ * for the wrong reason. Hitting identity-service directly proves the guard itself
+ * returns NOT_CONFIGURED.
+ */
+const IDENTITY_DIRECT = process.env.IDENTITY_DIRECT_URL ?? "http://127.0.0.1:3001";
+
 let signToken: (payload: Record<string, unknown>, secret: string) => string;
+
+/**
+ * Reachability of the direct-to-service target, probed once.
+ *
+ * Previously each direct test swallowed a connection error and returned, so an
+ * entirely unreachable fleet made the lane read GREEN while asserting nothing.
+ * Now: unreachable is a FAILURE by default. A runner that legitimately has no
+ * live fleet (a PR runner) must opt out explicitly with
+ * QUALITY_ALLOW_OFFLINE=1, which makes the gap visible instead of silent.
+ */
+let identityReachable = false;
+const ALLOW_OFFLINE = process.env.QUALITY_ALLOW_OFFLINE === "1";
 
 beforeAll(async () => {
   const auth = await import("@civitasone/auth");
   signToken = auth.signToken;
+
+  try {
+    const res = await fetch(`${IDENTITY_DIRECT}/health`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    identityReachable = res.status < 500 || res.status === 503;
+  } catch {
+    identityReachable = false;
+  }
 });
+
+/** Assert the target is reachable, or fail loudly unless offline is opted into. */
+function requireIdentityReachable(): boolean {
+  if (identityReachable) return true;
+  if (ALLOW_OFFLINE) return false; // caller returns; gap is declared via env
+  expect.fail(
+    `identity-service is unreachable at ${IDENTITY_DIRECT} — the env-gate assertion ` +
+      `cannot be verified, so this lane proves nothing. Start the fleet, or set ` +
+      `QUALITY_ALLOW_OFFLINE=1 to acknowledge the lane is UNMEASURED in this run.`,
+  );
+}
 
 function makeToken(roles = ["super_admin"]) {
   return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "l8-test", dept_code: "TEST" }, SECRET);
@@ -129,14 +169,6 @@ describe("L8 — Gov integrations fail closed (never fabricate)", () => {
   }
 });
 
-/**
- * Direct-to-service assertions. Going through the gateway can yield a 503 from
- * the CIRCUIT BREAKER rather than from the env gate, which would let these tests
- * pass for the wrong reason. Hitting identity-service on 127.0.0.1:3001 proves
- * the guard itself returns NOT_CONFIGURED.
- */
-const IDENTITY_DIRECT = process.env.IDENTITY_DIRECT_URL ?? "http://127.0.0.1:3001";
-
 describe("L8 — Gov integrations return NOT_CONFIGURED at the source (direct-to-service)", () => {
   const DIRECT_ROUTES: Array<[string, string, unknown]> = [
     ["POST", "/identity/gov/aadhaar/otp-verify", { txnId: "00000000-0000-0000-0000-0000000000ab", otp: "123456" }],
@@ -156,13 +188,10 @@ describe("L8 — Gov integrations return NOT_CONFIGURED at the source (direct-to
       };
       if (body !== undefined) init.body = JSON.stringify(body);
 
-      let res: Response;
-      try {
-        res = await fetch(`${IDENTITY_DIRECT}${path}`, init);
-      } catch {
-        // Service not reachable directly (e.g. CI without a live fleet).
-        return;
-      }
+      // Unreachable fleet fails here unless QUALITY_ALLOW_OFFLINE=1 is set.
+      if (!requireIdentityReachable()) return;
+
+      const res = await fetch(`${IDENTITY_DIRECT}${path}`, init);
       const text = await res.text();
 
       expect(res.status, `${path} body: ${text.slice(0, 200)}`).toBe(503);

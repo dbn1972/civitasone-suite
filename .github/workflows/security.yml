@@ -31,6 +31,107 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ─────────────────────────────────────────────
+  # L6 — Container image scanning (Trivy).
+  # Blocks on CRITICAL/HIGH with a known fix. Unfixed CVEs are reported but do
+  # not block, since there is no action available to take.
+  # ─────────────────────────────────────────────
+  trivy-container:
+    name: Trivy Container Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Highest-exposure images: the only public ingress, plus the two
+        # services holding money and PII.
+        service: [gateway-service, finance-service, hrms-service]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: |
+          docker build -f services/${{ matrix.service }}/Dockerfile \
+            -t civitasone/${{ matrix.service }}:scan .
+      - name: Trivy scan (fail on fixable CRITICAL/HIGH)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: civitasone/${{ matrix.service }}:scan
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Trivy full report (SARIF, informational)
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: civitasone/${{ matrix.service }}:scan
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: '0'
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+      - name: Archive report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-${{ matrix.service }}
+          path: trivy-${{ matrix.service }}.sarif
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # L6 — DAST against the gateway (OWASP ZAP baseline).
+  #
+  # Runs against the MOCK gateway, not a live fleet: the point is to exercise the
+  # HTTP surface (headers, cookies, error handling, obvious injection responses)
+  # deterministically in CI. A full authenticated ZAP scan against a live stack is
+  # a separate nightly concern and is NOT claimed here.
+  # ─────────────────────────────────────────────
+  zap-dast:
+    name: ZAP DAST (gateway baseline)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '9' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Start mock gateway
+        run: |
+          node scripts/ci/start-mock-gateway.mjs > mock-gateway.log 2>&1 &
+          npx --yes wait-on http://localhost:8080/health --timeout 60000
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: .zap/rules.tsv
+          # Report findings without failing the build on the first run: the mock
+          # gateway is not the production surface, so treating its header posture
+          # as a release blocker would be misleading. Ratchet via rules.tsv.
+          cmd_options: '-a -I'
+          allow_issue_writing: false
+      - name: Archive ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+            mock-gateway.log
+          retention-days: 30
+
   codeql:
     name: CodeQL SAST
     runs-on: ubuntu-latest

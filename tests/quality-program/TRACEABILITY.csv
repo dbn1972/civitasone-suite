@@ -56,3 +56,16 @@ CAP-007,Fabrication Baseline Not Stale,identity,L8-ai-features/no-fabricated-ver
 CAP-008,Release Gate Blocks Unmeasured,platform,scripts/ci/release-gate.mjs,unmeasured-blocks-exit-1,D,PASS
 CAP-009,Release Gate Blocks Failures,platform,scripts/ci/release-gate.mjs,failing-lane-blocks-exit-1,D,PASS
 CAP-010,Latency SLO Min-Sample Floor,platform,L7-reliability/dependency-honesty.test.ts,p95-requires-15-samples,L7,PASS
+CAP-011,SLO Read Latency p95,platform,tests/load/k6-slo.js,read_latency-p95-threshold,L7,PASS
+CAP-012,SLO Error Budget 5xx<1%,platform,tests/load/k6-slo.js,server_error_rate-threshold,L7,PASS
+CAP-013,SLO Anti-Vacuous Read Floor,platform,tests/load/k6-slo.js,reachable_reads-count-floor,L7,PASS
+CAP-014,SLO Limiter Interference Guard,platform,tests/load/k6-slo.js,rate_limited_rate-threshold,L7,PASS
+CAP-015,Release Gate SLO p95 Breach Blocks,platform,scripts/ci/release-gate.mjs,slo-p95-breach-exit-1,D,PASS
+CAP-016,Release Gate SLO 5xx Breach Blocks,platform,scripts/ci/release-gate.mjs,slo-5xx-breach-exit-1,D,PASS
+CAP-017,Release Gate SLO Zero-Reads Unmeasured,platform,scripts/ci/release-gate.mjs,slo-zero-reads-unmeasured,D,PASS
+CAP-018,Release Gate SLO Require Flag,platform,scripts/ci/release-gate.mjs,require-slo-missing-blocks,D,PASS
+CAP-019,L8 Reachability Guard,identity,L8-ai-features/env-gated-honesty.test.ts,unreachable-fails-loud,L8,PASS
+SVC-048,Container CVE Scan Gateway,gateway,.github/workflows/security.yml,trivy-gateway-service,L6,CI
+SVC-049,Container CVE Scan Finance,finance,.github/workflows/security.yml,trivy-finance-service,L6,CI
+SVC-050,Container CVE Scan HRMS,hrms,.github/workflows/security.yml,trivy-hrms-service,L6,CI
+SVC-051,DAST Gateway Baseline,gateway,.github/workflows/security.yml,zap-baseline,L6,CI
