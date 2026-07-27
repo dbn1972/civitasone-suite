@@ -147,6 +147,19 @@ BEGIN
       ADD CONSTRAINT retention_policies_action_check
       CHECK (action IN ('archive', 'destroy'));
   END IF;
+
+  -- search_index.status: 0005_check_constraints_status_columns.sql already
+  -- defines this domain as ('indexed') and names the constraint
+  -- search_index_status_check. Created here under the SAME NAME so that 0005
+  -- becomes a no-op (its DO block traps duplicate_object) rather than creating a
+  -- second, divergent constraint.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                  WHERE conname = 'search_index_status_check'
+                    AND conrelid = 'knowledge.search_index'::regclass) THEN
+    ALTER TABLE knowledge.search_index
+      ADD CONSTRAINT search_index_status_check
+      CHECK (status IN ('indexed'));
+  END IF;
 END
 $$;
 
@@ -161,10 +174,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS document_shares_doc_principal_uk
 CREATE UNIQUE INDEX IF NOT EXISTS search_index_document_uk
   ON knowledge.search_index (tenant_id, document_id);
 
--- Lookup indexes. categories.parent_id already gets one from 0007_fk_indexes.sql,
--- which is why that migration referenced a table that did not exist.
+-- The five indexes 0007_fk_indexes.sql intended to create, under the EXACT names
+-- it uses (idx_*). 0007 could not create them because the tables did not exist;
+-- matching its names means 0007 becomes a no-op via IF NOT EXISTS rather than
+-- creating a duplicate index under a different name.
+-- Not CONCURRENTLY: these tables are brand new and empty in the same migration,
+-- so there is nothing to lock. The >1K-row rule does not apply.
+CREATE INDEX IF NOT EXISTS idx_categories_parent_id            ON knowledge.categories (parent_id);
+CREATE INDEX IF NOT EXISTS idx_retention_policies_category_id  ON knowledge.retention_policies (category_id);
+CREATE INDEX IF NOT EXISTS idx_search_index_document_id        ON knowledge.search_index (document_id);
+CREATE INDEX IF NOT EXISTS idx_document_shares_document_id     ON knowledge.document_shares (document_id);
+CREATE INDEX IF NOT EXISTS idx_document_versions_document_id   ON knowledge.document_versions (document_id);
+
+-- Tenant-scoped lookup indexes for the filters the repos actually issue.
 CREATE INDEX IF NOT EXISTS categories_tenant_idx           ON knowledge.categories (tenant_id);
-CREATE INDEX IF NOT EXISTS categories_parent_idx           ON knowledge.categories (parent_id);
 CREATE INDEX IF NOT EXISTS document_versions_tenant_idx    ON knowledge.document_versions (tenant_id);
 CREATE INDEX IF NOT EXISTS document_versions_document_idx  ON knowledge.document_versions (tenant_id, document_id);
 CREATE INDEX IF NOT EXISTS document_shares_tenant_idx      ON knowledge.document_shares (tenant_id);
