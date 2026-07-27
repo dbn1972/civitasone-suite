@@ -14,7 +14,7 @@
 | L1 Tenant Isolation | 70 | 70 | 0 | ✅ GREEN | No cross-tenant leaks; covers all 41 services |
 | L2 Authz / BOLA | 67 | 67 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 43 | 43 | 0 | 🟡 GREEN AFTER REPAIR | Money bigint; **2 controls had never run — fixed** |
-| L3b Schema Drift | guard | — | — | 🔴 GREEN + P0 FINDING | **338 drifts / 14 services; 3 live 500s**; ratcheted |
+| L3b Schema Drift | 9 + guard | 9 | 0 | 🟡 BURNING DOWN | **338 → 231**; all 3 live 500s fixed; ratcheted |
 | L4 API Contract | 28 | 28 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | 18 | 18 | 0 | ✅ GREEN | AES-GCM verified; audit ledger immutable |
@@ -25,14 +25,19 @@
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
 | L11 Mutation Score | 1059 mutants | 755 killed | 253 survived | ✅ **71.29%** | Enforcing at 68; **≥70% criterion MET** |
 
-**Totals:** 447 tests across 16 files, plus a measured SLO run and 3 CI guards
+**Totals:** 456 tests across 17 files, plus a measured SLO run and 3 CI guards
 (package exports, deployment declaration, schema drift).
 
-Release gate: **NOT RELEASABLE** — the lanes pass, but L3b proves three
-gateway-reachable endpoints return 500 in the live fleet because their tables
-were never migrated, and two services leak raw Postgres errors doing so. The
-error budget itself is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited);
-the k6 read paths simply do not touch the broken endpoints.
+Release gate: **NOT RELEASABLE** — the three live 500s L3b found are fixed and
+locked by a regression lane, but 231 schema drifts remain across 11 services and
+the bootstrap script that let them accumulate still swallows migration failures.
+The error budget itself is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited).
+
+Known red, pre-existing, unrelated to schema drift: `inventory-service`
+`tests/batch-consumer.test.ts` — the serial-registration race persists **0** rows
+where it should persist exactly 1, so both concurrent inserts fail rather than one
+winning. Confirmed pre-existing via `git stash` (fails identically on `main`).
+Needs its own investigation; not touched here.
 
 ---
 
@@ -177,7 +182,50 @@ Nothing else in the programme can see this class of defect:
 - L3 checks column **types** on columns that **exist** — it cannot notice an absent one
 - coverage is blind: a schema file can be 100% covered and still drift
 
-### Measured: 338 declared-but-missing columns across 14 services
+### Burn-down round 1 (2026-07-27): 338 → 231, all three live 500s fixed
+
+| Service | Was | Now | Migration |
+|---------|----:|----:|-----------|
+| inventory | 26 | **0** | `0014_three_way_matches.sql` |
+| contract | 23 | **0** | `0013_templates_schema.sql` |
+| knowledge | 58 | **0** | `0011_missing_module_tables.sql` |
+
+107 columns / 8 tables created. Verified live, direct and through the gateway:
+
+| Endpoint | Before | After |
+|----------|--------|-------|
+| `:3025/v1/inventory/matches` | 500 | **200** `{"data":[],"meta":{...}}` |
+| `:8080/api/v1/inventory/matches` | 500 UPSTREAM_ERROR | **200** |
+| `:3009/v1/contract/templates` | 500 `42P01` | **200** |
+| `:3028/v1/knowledge/categories` | 500 `42P01` | **200** |
+| `:3028/v1/knowledge/retention-policies` | 500 | **200** |
+| `:3028/v1/knowledge/search` | 500 | **200** |
+
+The ratchet detected all 107 as `stale` before the baseline was regenerated, which
+is the stale-detection path proven on a real fix rather than a synthetic canary.
+
+**Remaining 231:** location 92, tenant 51, plugin 34, theme 27, policy 9,
+legal 7, finance 5, helpdesk 2, hrms 2, notification 1, works 1.
+
+**Root cause of the whole class — `bootstrap-postgres.sh` swallows migration
+failures.** On failure it prints `⚠ Migration failed for …` and **continues**, so
+the bootstrap still exits 0. That is why 338 drifts accumulated without CI
+noticing. Two concrete proofs in knowledge-service:
+
+- `0004_rls_full_tenant_isolation.sql` runs `ALTER TABLE knowledge.categories
+  ENABLE ROW LEVEL SECURITY` and `0007_fk_indexes.sql` indexes
+  `knowledge.categories (parent_id)` — both against a table that never existed.
+  A migration was actively depending on a missing table and nothing failed.
+- Run as `knowledge_svc`, `0004` in fact aborts even earlier:
+  `ERROR: must be owner of function current_tenant_id`. With `ON_ERROR_STOP=1`
+  that aborts the whole file, so every RLS statement after line 9 was skipped —
+  silently.
+
+**Not fixed in this round.** Making the bootstrap fail loudly needs a measured
+allow-list of migrations that currently fail in CI, and that measurement cannot be
+taken from a dev host. Tracked as the next PR.
+
+### Original measurement: 338 declared-but-missing columns across 14 services
 
 | Service | Columns | Service | Columns |
 |---------|--------:|---------|--------:|
