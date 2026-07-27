@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="38" failures="0" errors="0" time="2.854">
+    <testsuite name="L3-data-integrity/schema-integrity.test.ts" timestamp="2026-07-27T05:01:11.002Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="38" failures="0" errors="0" skipped="0" time="2.49579968">
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; finance: money columns are bigint (not float/numeric)" time="0.060039615">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; hrms: money columns are bigint (not float/numeric)" time="0.059382391">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; payroll: money columns are bigint (not float/numeric)" time="0.053711034">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; procurement: money columns are bigint (not float/numeric)" time="0.053370144">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; citizen: money columns are bigint (not float/numeric)" time="0.051565709">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; legal: money columns are bigint (not float/numeric)" time="0.065790011">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; asset: money columns are bigint (not float/numeric)" time="0.104314402">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; stock: money columns are bigint (not float/numeric)" time="0.051195295">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; project: money columns are bigint (not float/numeric)" time="0.06235386">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; grant: money columns are bigint (not float/numeric)" time="0.050695503">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; crm: money columns are bigint (not float/numeric)" time="0.041984798">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; contract: money columns are bigint (not float/numeric)" time="0.049800462">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; estab: money columns are bigint (not float/numeric)" time="0.05435015">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; audit: money columns are bigint (not float/numeric)" time="0.052356553">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; workflow: money columns are bigint (not float/numeric)" time="0.052176253">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; identity: money columns are bigint (not float/numeric)" time="0.049879887">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; admin: money columns are bigint (not float/numeric)" time="0.052407852">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Money columns: no float/real/double/numeric money columns &gt; analytics: money columns are bigint (not float/numeric)" time="0.043540773">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; finance: no &apos;timestamp without time zone&apos;" time="0.095259277">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; hrms: no &apos;timestamp without time zone&apos;" time="0.08838485">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; payroll: no &apos;timestamp without time zone&apos;" time="0.078216425">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; procurement: no &apos;timestamp without time zone&apos;" time="0.079015557">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; citizen: no &apos;timestamp without time zone&apos;" time="0.077082515">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; legal: no &apos;timestamp without time zone&apos;" time="0.078560082">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; asset: no &apos;timestamp without time zone&apos;" time="0.080096389">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; stock: no &apos;timestamp without time zone&apos;" time="0.076727011">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; project: no &apos;timestamp without time zone&apos;" time="0.076842868">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; grant: no &apos;timestamp without time zone&apos;" time="0.076885255">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; crm: no &apos;timestamp without time zone&apos;" time="0.076317623">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; contract: no &apos;timestamp without time zone&apos;" time="0.076896283">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; estab: no &apos;timestamp without time zone&apos;" time="0.087920456">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; audit: no &apos;timestamp without time zone&apos;" time="0.078199712">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; workflow: no &apos;timestamp without time zone&apos;" time="0.078715594">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; identity: no &apos;timestamp without time zone&apos;" time="0.076623667">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; admin: no &apos;timestamp without time zone&apos;" time="0.079953299">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Timestamp columns: must be timestamptz (not timestamp without time zone) &gt; analytics: no &apos;timestamp without time zone&apos;" time="0.078350252">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — RLS / BYPASSRLS audit &gt; no service roles have BYPASSRLS" time="0.020848735">
+        </testcase>
+        <testcase classname="L3-data-integrity/schema-integrity.test.ts" name="L3 — Double-entry invariant (finance) &gt; finance GL: sum(debit) = sum(credit) for every voucher" time="0.02215684">
+        </testcase>
+    </testsuite>
+</testsuites>

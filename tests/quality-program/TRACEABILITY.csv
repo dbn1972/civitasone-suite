@@ -42,3 +42,17 @@ SVC-035,No 5xx Under Sequential Load,platform,L7-reliability/dependency-honesty.
 SVC-036,No 5xx Under Concurrent Load,platform,L7-reliability/dependency-honesty.test.ts,20-concurrent-no-500,L7,PASS
 SVC-037,Cache Miss Graceful Degradation,platform,L7-reliability/dependency-honesty.test.ts,cache-bust-no-500,L7,PASS
 SVC-038,Rate Limiting Enforcement,gateway,L7-reliability/dependency-honesty.test.ts,burst-150-rate-limited,L7,PASS
+SVC-039,Audit UPDATE Rejected,audit,L6-security/audit-immutability.test.ts,update-seeded-row-rejected,L6,PASS
+SVC-040,Audit DELETE Rejected,audit,L6-security/audit-immutability.test.ts,delete-seeded-row-rejected,L6,PASS
+SVC-041,Aadhaar eKYC Fail-Closed,identity,L8-ai-features/env-gated-honesty.test.ts,aadhaar-otp-verify-not-configured,L8,PASS
+SVC-042,PAN Validation Fail-Closed,identity,L8-ai-features/env-gated-honesty.test.ts,nic-validate-pan-not-configured,L8,PASS
+SVC-043,DigiLocker Fail-Closed,identity,L8-ai-features/env-gated-honesty.test.ts,digilocker-pull-not-configured,L8,PASS
+SVC-044,GSTN Fail-Closed,identity,L8-ai-features/env-gated-honesty.test.ts,gstn-verify-not-configured,L8,PASS
+SVC-045,AI Assistant Fail-Closed,citizen,L8-ai-features/env-gated-honesty.test.ts,ai-assist-no-provider,L8,PASS
+SVC-046,Prompt Injection Resistance,citizen,L8-ai-features/env-gated-honesty.test.ts,injection-not-honoured,L8,PASS
+SVC-047,No AI Credential Leakage,platform,L8-ai-features/env-gated-honesty.test.ts,no-provider-creds-in-errors,L8,PASS
+CAP-006,No Fabricated Verdicts Ratchet,identity,L8-ai-features/no-fabricated-verdicts.test.ts,no-new-fabricating-route,L8,FINDING
+CAP-007,Fabrication Baseline Not Stale,identity,L8-ai-features/no-fabricated-verdicts.test.ts,baseline-not-stale,L8,PASS
+CAP-008,Release Gate Blocks Unmeasured,platform,scripts/ci/release-gate.mjs,unmeasured-blocks-exit-1,D,PASS
+CAP-009,Release Gate Blocks Failures,platform,scripts/ci/release-gate.mjs,failing-lane-blocks-exit-1,D,PASS
+CAP-010,Latency SLO Min-Sample Floor,platform,L7-reliability/dependency-honesty.test.ts,p95-requires-15-samples,L7,PASS

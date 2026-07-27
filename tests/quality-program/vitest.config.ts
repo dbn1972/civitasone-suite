@@ -17,6 +17,7 @@ export default defineConfig({
       "L4-api-contract/**/*.test.ts",
       "L6-security/**/*.test.ts",
       "L7-reliability/**/*.test.ts",
+      "L8-ai-features/**/*.test.ts",
       "L10-domain-correctness/**/*.test.ts",
       "L11-mutation-canary/**/*.test.ts",
     ],
