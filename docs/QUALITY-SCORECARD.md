@@ -10,6 +10,7 @@
 
 | Lane | Tests | Pass | Fail | Status | Verdict |
 |------|-------|------|------|--------|---------|
+| L0 Deployment Readiness | 9 | 9 | 0 | 🟡 GREEN + FINDING | **11 of 41 services not serving** (tracked) |
 | L1 Tenant Isolation | 57 | 57 | 0 | ✅ GREEN | No cross-tenant leaks detected |
 | L2 Authz / BOLA | 44 | 44 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 38 | 38 | 0 | ✅ GREEN | All money columns bigint; 0 violations |
@@ -21,6 +22,7 @@
 | L9 A11Y | Existing | ✅ | — | ✅ GREEN | axe-core gate active, 0 violations |
 | L10 Domain | 26 | 26 | 0 | ✅ GREEN | 100% match to golden oracles |
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
+| L11 Mutation Score | 1029 mutants | 600 killed | 296 survived | 🟡 **58.31%** | Enforcing; **below the 70% exit criterion** |
 
 **Totals:** 243 tests across 12 files, plus a measured SLO run.
 Release gate: **RELEASABLE** — all blocking lanes have passing evidence and the
@@ -206,6 +208,58 @@ run can never be mistaken for an SLO measurement.
 
 ---
 
+## L0 — Deployment Readiness 🟡 GREEN WITH P0 FINDING
+
+**Why this lane exists:** every other lane tests services that *are* serving.
+None notices a service that is not. Measured 2026-07-27 against a fleet pm2
+reported as **65/65 online**: **11 of 41 services were not serving traffic**,
+while every per-service suite was green.
+
+### P0 FINDING — pm2 "online" is not readiness
+
+| Service | Port | pm2 says | Reality |
+|---|---|---|---|
+| payroll | 3013 | online, 39 restarts | **not bound** → gateway 502 |
+| admin | 3022 | online, 14 restarts | **not bound** → gateway 502 |
+| knowledge | 3028 | online, 9 restarts | **not bound** → gateway 502 |
+
+The process exists so pm2 is satisfied, but nothing listens on the port. Error
+logs were empty — a silent failure. Payroll is salary disbursement, and it carries
+40 test files at 86% line coverage: the code is fine, the deployment is not.
+
+### Not deployed at all (6)
+`court` · `meeting` · `visitor` · `inspection` · `works` · `ml` — absent from pm2;
+gateway routes point at dead ports (502). Build quality is not the issue: court
+has 50 test files at 88.9%, meeting 58 at 93.3%, visitor 45 at 81.2%.
+
+### Built but unreachable (2)
+| Service | State |
+|---|---|
+| **revenue** | 37 test files, **99.6% coverage — highest in the fleet** — and no gateway route (404) |
+| **metadata** | 8 test files, no coverage report, no gateway route (404) |
+
+Revenue is the textbook "scored Implemented but unreachable" defect: it passes
+every per-service and coverage gate while being impossible to call from the web app.
+
+### The three checks, and why each is separate
+1. **Port bound** (`ss -tln`) — catches the pm2-online lie
+2. **Gateway route present** (registry parse) — catches revenue/metadata
+3. **Reachable** (request through gateway) — catches 502/404
+
+Plus discovery guards: if `ss` fails or the registry cannot be parsed, the lane
+**fails loudly** rather than reporting every service down (a false alarm) or clean.
+
+### Verified genuine
+| Injected | Result |
+|---|---|
+| Removed `payroll` from the tracked inventory | ❌ Fails, names it, on **2 independent checks** |
+| Added a stale entry for the serving `finance` | ❌ Fails: "now serving but still listed" |
+
+Ratcheted: the non-serving count may not grow, and a recovered service must be
+removed from the inventory or the gate fails.
+
+---
+
 ## L8 — AI / External Integrations 🟡 GREEN WITH P1 FINDING
 
 **Tested:** 23 tests (19 runtime + 4 static)
@@ -257,6 +311,65 @@ but no real client is wired, or tag the payload `{ verified: false, source: "stu
 
 ---
 
+## L11 — Mutation Testing 🟡 ENFORCING, BELOW TARGET
+
+### P1 FINDING — the mutation gate was theater
+
+`stryker.config.mjs` mutates 8 domain files including the payroll engine, GL
+double-entry and F&F settlement. But `vitest.mutation.config.ts` loaded only
+**7 test files** — none from payroll, none covering `gl/domain.ts`,
+`fnf/domain.ts` or `payments/domain.ts`. And `thresholds.break` was `null`, so the
+gate **could never fail**.
+
+Reported score before the fix: **35.1%** — but **561 of 1029 mutants were
+`NoCoverage`**, which contradicts payroll's 86% line coverage. That number
+described the runner's include-list, not the test suites. The config comment
+admits why the list was trimmed: files with pre-existing failures make Stryker
+abort its dry-run.
+
+Net effect: the salary, tax, pension and double-entry engines — where a bug means
+wrong pay or an unbalanced ledger — had **zero mutation coverage**, under a gate
+that could not go red.
+
+### After fixing the runner scope
+
+Added payroll/F&F/GL/payments suites plus the L10 golden-oracle and L11 canary
+tests (each verified to pass in isolation first, since Stryker aborts otherwise).
+Two DB-dependent files excluded to keep the run hermetic.
+
+| File | Before | After | Survived | NoCov |
+|---|---|---|---|---|
+| `payroll/domain.ts` | **0 / 430** | **37.4%** | 176 | 93 |
+| `fnf/domain.ts` | **0 / 52** | **59.6%** | 19 | 2 |
+| `gl/domain.ts` | **0 / 23** | **87.0%** | 3 | 0 |
+| `payments/domain.ts` | 32% | 57.7% | 29 | 18 |
+| `quorum/domain.ts` | 73% | 73.0% | 35 | 8 |
+| `authority/domain.ts` | 71% | 73.6% | 21 | 7 |
+| `budget/domain.ts` | 82% | 81.8% | 12 | 0 |
+| `decisions/domain.ts` | 99% | 98.8% | 1 | 0 |
+
+**Overall 35.1% → 58.31%** (600 killed / 1029). NoCoverage 561 → 128, so the
+remaining gaps are genuine rather than an artifact.
+
+### Honest status
+
+**58.31% does NOT meet the L11 exit criterion of ≥70%.** `break` is set to 55 —
+just below the measured score — so the gate is now **real** (a regression fails
+the build) without being permanently red. This is a ratchet, not a pass.
+
+**176 surviving mutants in `payroll/domain.ts`** means 176 places where salary or
+tax logic can be changed and no test fails. That is the top burn-down item.
+
+Verified enforcing: temporarily setting `break: 95` produced
+`Final mutation score 58.79 under breaking threshold 95, setting exit code to 1`.
+
+```bash
+npx stryker run                          # the gate
+node scripts/ci/mutation-summary.mjs     # per-file score, survived, no-coverage
+```
+
+---
+
 ## Release Gate
 
 `scripts/ci/release-gate.mjs` audits the evidence pack rather than re-running tests.
@@ -274,7 +387,7 @@ Every failure path was proven by injection, not assumed:
 | **Missing SLO + `--require-slo` → blocks** | ✅ exit 1 |
 | Missing SLO without the flag → releasable **but annotated** | ✅ prints an explicit note that no error budget was asserted |
 
-Blocking lanes: L1, L2, L3, L4, L6, L10, L11, plus SLO on breach.
+Blocking lanes: L0, L1, L2, L3, L4, L6, L10, L11, plus SLO on breach.
 Advisory (P2): L7, L8. SLO UNMEASURED blocks only under `--require-slo`.
 
 ```bash
@@ -336,10 +449,17 @@ implying an unverified SLO.
 
 ## Next Steps
 
-1. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
-2. Verify Trivy + ZAP actually pass in CI — both are wired but **unexecuted** on
+1. **Bring up the 11 non-serving services** and remove them from
+   `KNOWN_NOT_SERVING` (the L0 gate fails if a recovered service is left listed).
+   Priority: payroll and admin — salary disbursement and the admin console.
+2. **Add gateway routes for `revenue` and `metadata`**, then extend L1/L2/L4 to
+   cover them; their isolation and authz are currently unverified.
+3. **Burn down 176 surviving mutants in `payroll/domain.ts`** (37.4% → 70%), then
+   `payments` (57.7%) and `fnf` (59.6%); raise `thresholds.break` as each lands.
+4. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
+5. Verify Trivy + ZAP actually pass in CI — both are wired but **unexecuted** on
    this machine, so their status is unproven
-3. Wire k6 soak (≥2h) + chaos automation as L7 gates
-4. Expand TRACEABILITY.csv from 70 to all 270 capabilities
-5. Complete B1 (Testcontainers ephemeral DB harness)
-6. Fix the header-posture ZAP `WARN` rules on the real gateway, then ratchet to `FAIL`
+6. Wire k6 soak (≥2h) + chaos automation as L7 gates
+7. Expand TRACEABILITY.csv from 83 to all 270 capabilities
+8. Complete B1 (Testcontainers ephemeral DB harness)
+9. Fix the header-posture ZAP `WARN` rules on the real gateway, then ratchet to `FAIL`

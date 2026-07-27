@@ -69,3 +69,14 @@ SVC-048,Container CVE Scan Gateway,gateway,.github/workflows/security.yml,trivy-
 SVC-049,Container CVE Scan Finance,finance,.github/workflows/security.yml,trivy-finance-service,L6,CI
 SVC-050,Container CVE Scan HRMS,hrms,.github/workflows/security.yml,trivy-hrms-service,L6,CI
 SVC-051,DAST Gateway Baseline,gateway,.github/workflows/security.yml,zap-baseline,L6,CI
+CAP-020,Port Bound Readiness Check,platform,L0-deployment-readiness/readiness.test.ts,no-service-newly-unbound,L0,FINDING
+CAP-021,Gateway Route Coverage,gateway,L0-deployment-readiness/readiness.test.ts,no-service-missing-route,L0,FINDING
+CAP-022,Readiness Inventory Not Stale,platform,L0-deployment-readiness/readiness.test.ts,tracked-down-not-stale,L0,PASS
+CAP-023,Readiness Discovery Guard,platform,L0-deployment-readiness/readiness.test.ts,ss-parse-fails-loud,L0,PASS
+CAP-024,Documented Port Per Service,platform,L0-deployment-readiness/readiness.test.ts,every-service-has-port,L0,PASS
+CAP-025,Serving Fleet Size Ratchet,platform,L0-deployment-readiness/readiness.test.ts,not-serving-count-ratchet,L0,PASS
+CAP-026,Mutation Payroll Engine,payroll,stryker.config.mjs,payroll-domain-mutation,L11,FINDING
+CAP-027,Mutation GL Double-Entry,finance,stryker.config.mjs,gl-domain-mutation,L11,PASS
+CAP-028,Mutation FnF Settlement,payroll,stryker.config.mjs,fnf-domain-mutation,L11,FINDING
+CAP-029,Mutation Payments Domain,finance,stryker.config.mjs,payments-domain-mutation,L11,FINDING
+CAP-030,Mutation Gate Enforcing,platform,stryker.config.mjs,thresholds-break-55,L11,PASS

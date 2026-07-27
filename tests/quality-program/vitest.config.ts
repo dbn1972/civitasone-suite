@@ -11,6 +11,7 @@ export default defineConfig({
   },
   test: {
     include: [
+      "L0-deployment-readiness/**/*.test.ts",
       "L1-tenant-isolation/**/*.test.ts",
       "L2-authz-bola/**/*.test.ts",
       "L3-data-integrity/**/*.test.ts",

@@ -29,6 +29,7 @@ const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 
 /** P0/P1 lanes that MUST have evidence before a release is allowed. */
 const REQUIRED_LANES = [
+  { id: "L0", name: "Deployment Readiness", priority: "P0" },
   { id: "L1", name: "Tenant Isolation", priority: "P0" },
   { id: "L2", name: "Authz / BOLA", priority: "P0" },
   { id: "L3", name: "Data & Schema Integrity", priority: "P0" },
