@@ -651,6 +651,58 @@ jobs:
       - name: QA readiness score
         run: node scripts/qa-readiness-score.mjs
 
+  # ─────────────────────────────────────────────
+  # Quality Program Gates (L1/L2/L3)
+  # World-class test lanes: tenant isolation, authz matrix, schema integrity.
+  # Requires live services (runs against gateway), so depends on live-stack.
+  # For PRs: runs L3 (schema) only (no live gateway needed).
+  # ─────────────────────────────────────────────
+  quality-gates-schema:
+    name: Quality Gates — Schema Integrity (L3)
+    runs-on: ubuntu-latest
+    needs: [test]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: civitas
+          POSTGRES_PASSWORD: civitas_test
+          POSTGRES_DB: civitas_test
+        ports: ['5435:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: '5435'
+      PGUSER: civitas
+      PGPASSWORD: civitas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - name: Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='./packages/*'
+      - name: Bootstrap Postgres
+        run: bash scripts/ci/bootstrap-postgres.sh
+      - name: Run L3 Schema Integrity gate
+        run: |
+          cd tests/quality-program
+          npx vitest run L3-data-integrity/ --config vitest.config.ts
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-l3-evidence
+          path: evidence/
+          retention-days: 14
+
   docker-build:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
