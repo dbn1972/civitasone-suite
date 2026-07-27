@@ -51,6 +51,12 @@ case "$LANE" in
   L10|l10)
     run_lane "L10-domain-correctness" "L10 Domain Correctness (P0)" || FAILURES=$((FAILURES + 1))
     ;;
+  L6|l6)
+    run_lane "L6-security" "L6 Security (P1)" || FAILURES=$((FAILURES + 1))
+    ;;
+  L7|l7)
+    run_lane "L7-reliability" "L7 Reliability (P2)" || FAILURES=$((FAILURES + 1))
+    ;;
   L11|l11)
     run_lane "L11-mutation-canary" "L11 Mutation & Canary (Meta)" || FAILURES=$((FAILURES + 1))
     ;;
@@ -59,12 +65,14 @@ case "$LANE" in
     run_lane "L2-authz-bola" "L2 Authorization / BOLA (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L3-data-integrity" "L3 Data & Schema Integrity (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L4-api-contract" "L4 API Contract & Input (P1)" || FAILURES=$((FAILURES + 1))
+    run_lane "L6-security" "L6 Security (P1)" || FAILURES=$((FAILURES + 1))
+    run_lane "L7-reliability" "L7 Reliability (P2)" || FAILURES=$((FAILURES + 1))
     run_lane "L10-domain-correctness" "L10 Domain Correctness (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L11-mutation-canary" "L11 Mutation & Canary (Meta)" || FAILURES=$((FAILURES + 1))
     ;;
   *)
     echo "Unknown lane: $LANE"
-    echo "Usage: $0 [L1|L2|L3|L4|L10|L11|all]"
+    echo "Usage: $0 [L1|L2|L3|L4|L6|L7|L10|L11|all]"
     exit 1
     ;;
 esac
