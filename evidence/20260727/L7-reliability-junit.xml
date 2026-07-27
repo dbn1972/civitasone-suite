@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="10" failures="0" errors="0" time="2.15">
-    <testsuite name="L7-reliability/dependency-honesty.test.ts" timestamp="2026-07-27T07:34:11.202Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="10" failures="0" errors="0" skipped="0" time="1.776651211">
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Health endpoints report honest status &gt; gateway /health returns a real status object" time="0.054622156">
+<testsuites name="vitest tests" tests="10" failures="0" errors="0" time="2.271">
+    <testsuite name="L7-reliability/dependency-honesty.test.ts" timestamp="2026-07-27T10:17:45.269Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="10" failures="0" errors="0" skipped="0" time="1.908145541">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Health endpoints report honest status &gt; gateway /health returns a real status object" time="0.055483707">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Health endpoints report honest status &gt; unreachable upstream → 502/503, never a fabricated 200" time="0.01060072">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Health endpoints report honest status &gt; unreachable upstream → 502/503, never a fabricated 200" time="0.010754148">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/finance/bills: p95 latency under 500ms over 20 requests" time="0.106988537">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/finance/bills: p95 latency under 500ms over 20 requests" time="0.1352075">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/finance/sanctions: p95 latency under 500ms over 20 requests" time="0.172738947">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/finance/sanctions: p95 latency under 500ms over 20 requests" time="0.174544448">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/hrms/employees: p95 latency under 500ms over 20 requests" time="0.107435062">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/hrms/employees: p95 latency under 500ms over 20 requests" time="0.105755825">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/procurement/vendors: p95 latency under 500ms over 20 requests" time="0.148929189">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Read-path latency SLO (p95 &lt; 200ms) &gt; /api/v1/procurement/vendors: p95 latency under 500ms over 20 requests" time="0.163851428">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — No 5xx under sustained read load &gt; 50 sequential reads produce zero 500s" time="0.229416509">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — No 5xx under sustained read load &gt; 50 sequential reads produce zero 500s" time="0.312216207">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — No 5xx under sustained read load &gt; 20 concurrent reads produce zero 500s" time="0.143537924">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — No 5xx under sustained read load &gt; 20 concurrent reads produce zero 500s" time="0.138088549">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Graceful degradation (cache miss does not 500) &gt; repeated reads with cache-busting params still succeed" time="0.050280305">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Graceful degradation (cache miss does not 500) &gt; repeated reads with cache-busting params still succeed" time="0.055159629">
         </testcase>
-        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Rate limiting is enforced (noisy-neighbor protection) &gt; burst of 150 requests triggers rate limiting or completes cleanly" time="0.635884555">
+        <testcase classname="L7-reliability/dependency-honesty.test.ts" name="L7 — Rate limiting is enforced (noisy-neighbor protection) &gt; burst of 150 requests triggers rate limiting or completes cleanly" time="0.638307604">
         </testcase>
     </testsuite>
 </testsuites>

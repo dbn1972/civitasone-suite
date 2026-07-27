@@ -28,6 +28,10 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_new_services.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_contract.sql"
 run_bootstrap "$ROOT/scripts/ci/bootstrap-remaining-services.sql"
+# inspection-service had NO role and NO database in any bootstrap file, so a
+# fresh CI database could not host it. Without this line the file exists but the
+# pipeline never calls it. Idempotent; safe to re-run.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql"
 
 declare -A SERVICE_DBS=(
   [tenant-service]="tenant_svc:civitas_tenant"
@@ -76,5 +80,34 @@ for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
     fi
   done
 done
+
+# ── inspection-service: admin-run migrations + grant re-assert ───────────────
+# Deliberately NOT in SERVICE_DBS above. That loop applies migrations as the
+# SERVICE role, but civitas_inspection follows the civitas_court convention where
+# schemas are owned by civitas_admin and the service role holds only USAGE + DML.
+# Running its migrations as inspection_svc would fail on CREATE SCHEMA.
+#
+# Migrations therefore run as the admin role, after which the grant block in
+# bootstrap_inspection.sql is re-applied so the service role picks up the objects
+# the migrations just created.
+INSPECTION_MIG="$ROOT/services/inspection-service/migrations"
+if [ -d "$INSPECTION_MIG" ]; then
+  export PGPASSWORD="${POSTGRES_ADMIN_PASSWORD:-${PGPASSWORD:-civitas_dev_pw}}"
+  ADMIN_USER="${POSTGRES_ADMIN_USER:-civitas_admin}"
+  insp_failed=0
+  for f in $(find "$INSPECTION_MIG" -maxdepth 1 -name '*.sql' | sort); do
+    echo "Applying $(basename "$f") → civitas_inspection (admin-run)"
+    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
+         -v ON_ERROR_STOP=1 -f "$f" >/dev/null; then
+      echo "⚠ Migration failed for inspection-service/$(basename "$f")"
+      insp_failed=$((insp_failed + 1))
+    fi
+  done
+  # Re-assert USAGE/DML on schemas the migrations created.
+  psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
+    -v ON_ERROR_STOP=1 -f "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql" >/dev/null \
+    || echo "⚠ inspection grant re-assert failed"
+  echo "inspection-service migrations: ${insp_failed} failure(s)"
+fi
 
 echo "✅ Postgres bootstrap complete (${PGHOST}:${PGPORT})"

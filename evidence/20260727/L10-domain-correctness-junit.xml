@@ -1,59 +1,349 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="26" failures="0" errors="0" time="0.498">
-    <testsuite name="L10-domain-correctness/finance-domain.test.ts" timestamp="2026-07-27T07:34:14.535Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="7" failures="0" errors="0" skipped="0" time="0.038086785">
-        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; balanced journal" time="0.003157062">
+<testsuites name="vitest tests" tests="168" failures="0" errors="0" time="0.695">
+    <testsuite name="L10-domain-correctness/finance-domain.test.ts" timestamp="2026-07-27T10:17:48.634Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="7" failures="0" errors="0" skipped="0" time="0.054764354">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; balanced journal" time="0.002350298">
         </testcase>
-        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; balanced journal" time="0.000367639">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; balanced journal" time="0.000580637">
         </testcase>
-        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; large values OK with bigint" time="0.000437991">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; large values OK with bigint" time="0.000463017">
         </testcase>
-        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; unbalanced journals (should throw) &gt; off by 1 paise" time="0.000537921">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; unbalanced journals (should throw) &gt; off by 1 paise" time="0.000746841">
         </testcase>
-        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; unbalanced journals (should throw) &gt; single line" time="0.000316867">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; unbalanced journals (should throw) &gt; single line" time="0.000340596">
         </testcase>
-        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry: bigint precision (no float drift) &gt; amounts above 2^53 remain precise" time="0.000379471">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry: bigint precision (no float drift) &gt; amounts above 2^53 remain precise" time="0.000481059">
         </testcase>
-        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry: bigint precision (no float drift) &gt; off-by-one at scale is caught" time="0.000581072">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry: bigint precision (no float drift) &gt; off-by-one at scale is caught" time="0.000600026">
         </testcase>
     </testsuite>
-    <testsuite name="L10-domain-correctness/payroll-domain.test.ts" timestamp="2026-07-27T07:34:14.538Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="19" failures="0" errors="0" skipped="0" time="0.085108195">
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; &lt;5 years → 0" time="0.001652811">
+    <testsuite name="L10-domain-correctness/fnf-settlement-mutants.test.ts" timestamp="2026-07-27T10:17:48.646Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="22" failures="0" errors="0" skipped="0" time="0.08594267">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — separation income adds to FY salary income &gt; taxable separation income raises annual taxable income" time="0.002569852">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; (56000+28000)*15*5/26 = 242307.69 → 242308 paise" time="0.000314364">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — separation income adds to FY salary income &gt; notice buyout is fully taxable and adds to taxable income" time="0.000497191">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 84000*15*10/26 = 484615.38 → rounds" time="0.000216477">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — separation income adds to FY salary income &gt; YTD salary already paid raises taxable income one-for-one" time="0.00070799">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 6 months in last year → rounds UP to 11 years: 84000*15*11/26 = 533076.92" time="0.000213736">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — standard deduction is converted rupees to paise &gt; new regime deducts Rs 75,000 = 7,500,000 paise" time="0.000615599">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; capped at 20 lakh" time="0.000581729">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — standard deduction is converted rupees to paise &gt; old regime deducts Rs 50,000 = 5,000,000 paise" time="0.000351484">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 84000*15*25/26 = 1211538.46" time="0.000189317">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — standard deduction is converted rupees to paise &gt; the regimes differ by exactly the Rs 25,000 std-deduction gap" time="0.000655361">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 79 → 0%" time="0.000352206">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — Chapter VI-A deductions apply only in the old regime &gt; 80C reduces taxable income in the OLD regime" time="0.000342024">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 80 → 20%" time="0.000199795">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — Chapter VI-A deductions apply only in the old regime &gt; 80C is IGNORED in the NEW regime" time="0.000429851">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 84 → 20%" time="0.000415624">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — Chapter VI-A deductions apply only in the old regime &gt; 80C, 80D and other deductions accumulate ADDITIVELY (old regime)" time="0.000523833">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 85 → 30%" time="0.000220964">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — Chapter VI-A deductions apply only in the old regime &gt; each Chapter VI-A component contributes on its own" time="0.000450749">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 89 → 30%" time="0.000174072">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — negative results are clamped to zero, never emitted &gt; annual taxable income clamps at 0 when deductions exceed income" time="0.000342885">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 90 → 40%" time="0.000163914">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — negative results are clamped to zero, never emitted &gt; no tax is due when taxable income clamps to zero" time="0.000428587">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 95 → 50%" time="0.000521068">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — negative results are clamped to zero, never emitted &gt; TDS on separation clamps at 0 when YTD TDS already exceeds annual tax" time="0.000545634">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 100 → 100%" time="0.000219504">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — negative results are clamped to zero, never emitted &gt; TDS on separation is annual tax minus YTD TDS when positive" time="0.00040407">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; 12% of 15000 (both under cap)" time="0.00114173">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — annual tax conversion and Sec 288A rounding &gt; annual tax is a whole number of rupees expressed in paise" time="0.000255664">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; basic+DA 37500 &gt; cap 15000 → 12% of 15000" time="0.000257477">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — annual tax conversion and Sec 288A rounding &gt; Sec 87A rebate zeroes the tax below the rebate cap" time="0.00026245">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; 12% of 10000" time="0.000372973">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — annual tax conversion and Sec 288A rounding &gt; annual tax above the rebate cap is computed from the slabs by hand" time="0.00026524">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Pension computation (basic + DR + additional) &gt; pensioner aged 82 gets 20% additional pension" time="0.000564966">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — annual tax conversion and Sec 288A rounding &gt; a higher taxable income yields a higher tax (monotonic)" time="0.000241855">
         </testcase>
-        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Pension computation (basic + DR + additional) &gt; commutation deducted before restoration (15-year rule)" time="0.000333055">
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — annual tax conversion and Sec 288A rounding &gt; zero income yields zero tax" time="0.000436284">
+        </testcase>
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — net payable equals gross less TDS &gt; net = gross - TDS on separation" time="0.000260875">
+        </testcase>
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — net payable equals gross less TDS &gt; gross is the sum of all settlement legs" time="0.000271902">
+        </testcase>
+        <testcase classname="L10-domain-correctness/fnf-settlement-mutants.test.ts" name="L10 F&amp;F — net payable equals gross less TDS &gt; every leg contributes to gross individually" time="0.000719165">
+        </testcase>
+    </testsuite>
+    <testsuite name="L10-domain-correctness/payments-domain-mutants.test.ts" timestamp="2026-07-27T10:17:48.672Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="64" failures="0" errors="0" skipped="0" time="0.074824172">
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — maker/checker segregation of duties &gt; rejects self-approval when maker and checker are the same actor" time="0.003076725">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — maker/checker segregation of duties &gt; permits approval by a different actor" time="0.000456747">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — maker/checker segregation of duties &gt; is case- and value-sensitive, not merely a length check" time="0.000666791">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — maker/checker segregation of duties &gt; error carries the MAKER_CHECKER_VIOLATION code and a money-path message" time="0.000561535">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — maker/checker segregation of duties &gt; does NOT fire when both ids are empty (guard requires both to be truthy)" time="0.00067978">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — maker/checker segregation of duties &gt; does NOT fire when only one id is present" time="0.000452014">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; accepts when both refs are present" time="0.000383205">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; rejects when po null" time="0.000573712">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; rejects when grn null" time="0.000509474">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; rejects when po undefined" time="0.000397531">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; rejects when grn undefined" time="0.00028677">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; rejects when po empty string" time="0.00042039">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; rejects when grn empty string" time="0.00058904">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — three-way match requires both references &gt; rejects when both missing" time="0.000330496">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; accepts three equal positive legs" time="0.000418552">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; rejects when po is zero" time="0.000498003">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; rejects when grn is zero" time="0.00027534">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; rejects when invoice is zero" time="0.000239714">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; rejects when po is negative" time="0.000236432">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; rejects when grn is negative" time="0.000237006">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; rejects when invoice is negative" time="0.000239163">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — all three legs must be positive &gt; one paise on every leg is enough to reconcile" time="0.000321314">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; default tolerance is 2 percent" time="0.000194511">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; GRN exactly 2% over PO is ALLOWED (boundary exclusive)" time="0.000526294">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; GRN just above 2% over PO is REJECTED" time="0.000393912">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; invoice exactly 2% over GRN is ALLOWED" time="0.000297634">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; invoice just above 2% over GRN is REJECTED" time="0.000346758">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; invoice over PO is rejected even when it is within tolerance of GRN" time="0.001341714">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; a custom tolerance is honoured" time="0.000482758">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — tolerance boundary is exclusive (exactly-at-limit is allowed) &gt; zero tolerance rejects any overage but still allows an exact match" time="0.000449658">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — under-billing is permitted &gt; invoice far below GRN and PO reconciles" time="0.000361428">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — under-billing is permitted &gt; GRN far below PO reconciles (partial delivery)" time="0.000291611">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; accepts NEFT" time="0.000330281">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; accepts RTGS" time="0.000255246">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; accepts IMPS" time="0.000207229">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; accepts DBT" time="0.000212095">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; accepts PFMS" time="0.000197031">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; accepts cheque" time="0.000195471">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; rejects &quot;neft&quot;" time="0.000343344">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; rejects &quot;CHEQUE&quot;" time="0.000250445">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; rejects &quot;UPI&quot;" time="0.000225314">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; rejects &quot;cash&quot;" time="0.000234322">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; rejects &quot;&quot;" time="0.004371037">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; rejects &quot;NEFT &quot;" time="0.000269277">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; rejects &quot;wire&quot;" time="0.000205842">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment mode allowlist &gt; the rejection message lists the permitted modes" time="0.000251028">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; accepts &apos;passed&apos;" time="0.000271163">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;draft&quot;" time="0.000251939">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;submitted&quot;" time="0.000213137">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;approved&quot;" time="0.000182925">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;rejected&quot;" time="0.000185502">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;paid&quot;" time="0.00018176">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;&quot;" time="0.000175771">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;PASSED&quot;" time="0.000173129">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; rejects &quot;passed &quot;" time="0.000179718">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — payment requires bill.status = passed &gt; the error reports the offending status" time="0.000198048">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; section advances to accounts" time="0.000196226">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; accounts advances to pay" time="0.000147061">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; pay is terminal" time="0.000283594">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; rejects unknown stage &quot;&quot;" time="0.001140499">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; rejects unknown stage &quot;unknown&quot;" time="0.000199147">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; rejects unknown stage &quot;Section&quot;" time="0.000204275">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; rejects unknown stage &quot;PAY&quot;" time="0.000179332">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payments-domain-mutants.test.ts" name="L10 payments — bill stage progression &gt; progression cannot skip a stage" time="0.000687148">
+        </testcase>
+    </testsuite>
+    <testsuite name="L10-domain-correctness/payroll-domain.test.ts" timestamp="2026-07-27T10:17:48.710Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="19" failures="0" errors="0" skipped="0" time="0.066502259">
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; &lt;5 years → 0" time="0.002066302">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; (56000+28000)*15*5/26 = 242307.69 → 242308 paise" time="0.000336025">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 84000*15*10/26 = 484615.38 → rounds" time="0.000220588">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 6 months in last year → rounds UP to 11 years: 84000*15*11/26 = 533076.92" time="0.000213063">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; capped at 20 lakh" time="0.000619981">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 84000*15*25/26 = 1211538.46" time="0.000827424">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 79 → 0%" time="0.000382188">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 80 → 20%" time="0.000384386">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 84 → 20%" time="0.000404998">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 85 → 30%" time="0.000213317">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 89 → 30%" time="0.000863632">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 90 → 40%" time="0.000273716">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 95 → 50%" time="0.000658906">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 100 → 100%" time="0.000230245">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; 12% of 15000 (both under cap)" time="0.001278854">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; basic+DA 37500 &gt; cap 15000 → 12% of 15000" time="0.000247565">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; 12% of 10000" time="0.00039333">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Pension computation (basic + DR + additional) &gt; pensioner aged 82 gets 20% additional pension" time="0.000555644">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Pension computation (basic + DR + additional) &gt; commutation deducted before restoration (15-year rule)" time="0.000350647">
+        </testcase>
+    </testsuite>
+    <testsuite name="L10-domain-correctness/payroll-slip-mutants.test.ts" timestamp="2026-07-27T10:17:48.720Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="56" failures="0" errors="0" skipped="0" time="0.098342525">
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — zero-valued lines are omitted from the slip &gt; DA line is absent when the DA rate is 0" time="0.006760811">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — zero-valued lines are omitted from the slip &gt; DA line is present and exact when the rate is set" time="0.000503418">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — zero-valued lines are omitted from the slip &gt; HRA line is absent when the city slab yields 0 (basic 0)" time="0.00063114">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — zero-valued lines are omitted from the slip &gt; a raw component computing to 0 is skipped entirely" time="0.000514659">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; golden fixture is populated (guards against an empty case list)" time="0.000344296">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; X at DA 0% -&gt; 24%" time="0.000269564">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; X at DA 49.99% -&gt; 24%" time="0.00019136">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; X at DA 50% -&gt; 27%" time="0.000382163">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; X at DA 100% -&gt; 30%" time="0.000239106">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; Y at DA 0% -&gt; 16%" time="0.000188555">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; Y at DA 50% -&gt; 18%" time="0.000170774">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; Y at DA 100% -&gt; 20%" time="0.00036604">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; Z at DA 0% -&gt; 8%" time="0.000460653">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; Z at DA 50% -&gt; 9%" time="0.000220489">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; Z at DA 100% -&gt; 10%" time="0.000189884">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — HRA slab by city class and DA tier (vs golden fixture) &gt; HRA amount equals slab pct of basic" time="0.001415519">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — ESI applies only at or below the Rs 21,000 gross ceiling &gt; employee ESI is 0.75% of gross when gross &lt;= cap" time="0.000389851">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — ESI applies only at or below the Rs 21,000 gross ceiling &gt; employer ESI is 3.25% of gross when gross &lt;= cap" time="0.000267595">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — ESI applies only at or below the Rs 21,000 gross ceiling &gt; ESI is charged at exactly the cap (boundary is inclusive)" time="0.002543702">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — ESI applies only at or below the Rs 21,000 gross ceiling &gt; ESI is zero one paise above the cap" time="0.000400912">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — professional tax line &gt; PT line is omitted when ptMinor is 0" time="0.000621392">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — professional tax line &gt; PT line is present and rounded to the rupee when set" time="0.000368165">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — EPF 12% of (basic+DA) capped at the Rs 15,000 wage ceiling &gt; below the ceiling, PF is 12% of basic+DA" time="0.000267004">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — EPF 12% of (basic+DA) capped at the Rs 15,000 wage ceiling &gt; above the ceiling, PF is 12% of the ceiling, not of actual pay" time="0.00026382">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — EPF 12% of (basic+DA) capped at the Rs 15,000 wage ceiling &gt; at exactly the ceiling, PF is 12% of the ceiling" time="0.000257765">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — declared extra income raises annual taxable income &gt; perquisites add to taxable income" time="0.000738464">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — declared extra income raises annual taxable income &gt; previous-employer salary adds to taxable income (Sec 192(2))" time="0.000351041">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — declared extra income raises annual taxable income &gt; other-sources income adds to taxable income" time="0.000257526">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — declared extra income raises annual taxable income &gt; all three accumulate additively" time="0.000277646">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — declared extra income raises annual taxable income &gt; annual gross is 12x the monthly gross (not a division)" time="0.000226134">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — old regime deductions (previously uncovered) &gt; old regime applies a Rs 50,000 standard deduction, new regime Rs 75,000" time="0.000411086">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — old regime deductions (previously uncovered) &gt; 80C reduces taxable income and is capped at Rs 1,50,000" time="0.000372424">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — old regime deductions (previously uncovered) &gt; 80D reduces taxable income and is capped at Rs 75,000" time="0.000321838">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — old regime deductions (previously uncovered) &gt; PT is deductible in the old regime (12 months&apos; worth)" time="0.000468062">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — old regime deductions (previously uncovered) &gt; Sec 10(13A) HRA exemption is the least of the three statutory limits" time="0.00027868">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — old regime deductions (previously uncovered) &gt; a low rent yields a smaller exemption (limit b binds)" time="0.000247434">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — old regime deductions (previously uncovered) &gt; rent below 10% of salary yields no exemption (b clamps at 0)" time="0.000244603">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — protected net floor caps recovery and carries the rest &gt; recovery within headroom is applied in full with no carry-forward" time="0.000340177">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — protected net floor caps recovery and carries the rest &gt; recovery exceeding headroom is trimmed and the remainder carried forward" time="0.000374417">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — protected net floor caps recovery and carries the rest &gt; net pay never falls below the protected floor" time="0.000302056">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — protected net floor caps recovery and carries the rest &gt; a fully-trimmed recovery line is dropped from the slip" time="0.000533309">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — protected net floor caps recovery and carries the rest &gt; statutory deductions are NOT subject to the floor" time="0.000273641">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — gross/deduction/net conservation &gt; gross equals the sum of earning lines" time="0.000316439">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — gross/deduction/net conservation &gt; net equals gross minus total deductions" time="0.002258771">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — gross/deduction/net conservation &gt; raw components route to earnings or deductions by type" time="0.000520747">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — gross/deduction/net conservation &gt; pctOfBasic takes precedence over fixedMinor when both are present" time="0.000311221">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — gross/deduction/net conservation &gt; fixedMinor is used when pctOfBasic is absent or zero" time="0.000478221">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — gross/deduction/net conservation &gt; BASIC/DA/HRA raw components are ignored (handled ahead of the loop)" time="0.000666028">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; roundRupee(0) = 0" time="0.000182827">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; roundRupee(49) = 0" time="0.000123299">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; roundRupee(50) = 100" time="0.000117326">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; roundRupee(51) = 100" time="0.000115479">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; roundRupee(149) = 100" time="0.000120582">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; roundRupee(150) = 200" time="0.000121256">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; roundRupee(100) = 100" time="0.000168419">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-slip-mutants.test.ts" name="L10 payroll — roundRupee is round-half-up and sign-symmetric &gt; negative amounts round symmetrically" time="0.000214015">
         </testcase>
     </testsuite>
 </testsuites>

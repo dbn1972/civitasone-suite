@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="11" failures="0" errors="0" time="0.444">
-    <testsuite name="L11-mutation-canary/canary-tests.test.ts" timestamp="2026-07-27T07:34:15.950Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="11" failures="0" errors="0" skipped="0" time="0.079266426">
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Journal balance gate catches off-by-one &gt; CANARY: 1 paise imbalance is caught (not silently accepted)" time="0.002541347">
+<testsuites name="vitest tests" tests="11" failures="0" errors="0" time="0.56">
+    <testsuite name="L11-mutation-canary/canary-tests.test.ts" timestamp="2026-07-27T10:17:50.453Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="11" failures="0" errors="0" skipped="0" time="0.080662231">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Journal balance gate catches off-by-one &gt; CANARY: 1 paise imbalance is caught (not silently accepted)" time="0.002750792">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Journal balance gate catches off-by-one &gt; CANARY: empty lines array caught (mutation: remove length check)" time="0.000589934">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Journal balance gate catches off-by-one &gt; CANARY: empty lines array caught (mutation: remove length check)" time="0.000672232">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Journal balance gate catches off-by-one &gt; CANARY: single line caught (mutation: change &lt; 2 to &lt; 1)" time="0.000391369">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Journal balance gate catches off-by-one &gt; CANARY: single line caught (mutation: change &lt; 2 to &lt; 1)" time="0.000414745">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Gratuity gate catches boundary errors &gt; CANARY: 4.99 years → 0 (mutation: change &lt; 5 to &lt;= 5)" time="0.000574311">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Gratuity gate catches boundary errors &gt; CANARY: 4.99 years → 0 (mutation: change &lt; 5 to &lt;= 5)" time="0.000608649">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Gratuity gate catches boundary errors &gt; CANARY: exactly 5 years → non-zero (mutation: change &lt; 5 to &lt; 6)" time="0.000354847">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Gratuity gate catches boundary errors &gt; CANARY: exactly 5 years → non-zero (mutation: change &lt; 5 to &lt; 6)" time="0.000351385">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Gratuity gate catches boundary errors &gt; CANARY: cap at 20 lakh enforced (mutation: remove cap check)" time="0.000264714">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Gratuity gate catches boundary errors &gt; CANARY: cap at 20 lakh enforced (mutation: remove cap check)" time="0.000349645">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Pension age bands correct at boundaries &gt; CANARY: age 79 → 0% (mutation: change threshold from 80 to 79)" time="0.000314052">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Pension age bands correct at boundaries &gt; CANARY: age 79 → 0% (mutation: change threshold from 80 to 79)" time="0.000267061">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Pension age bands correct at boundaries &gt; CANARY: age 80 → 20% (mutation: change 20 to 30)" time="0.000229515">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Pension age bands correct at boundaries &gt; CANARY: age 80 → 20% (mutation: change 20 to 30)" time="0.000232821">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Pension age bands correct at boundaries &gt; CANARY: age 100 → 100% (mutation: change 100 to 50)" time="0.000612334">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Pension age bands correct at boundaries &gt; CANARY: age 100 → 100% (mutation: change 100 to 50)" time="0.000644933">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Tenant isolation gate catches cross-tenant &gt; CANARY: if isolation test accepted 500 as valid, it would miss service errors" time="0.000853614">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Tenant isolation gate catches cross-tenant &gt; CANARY: if isolation test accepted 500 as valid, it would miss service errors" time="0.000936264">
         </testcase>
-        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Authz gate catches role bypass &gt; CANARY: if authz test accepted 200 for denied role, it would miss bypass" time="0.000312961">
+        <testcase classname="L11-mutation-canary/canary-tests.test.ts" name="L11 — Canary: Authz gate catches role bypass &gt; CANARY: if authz test accepted 200 for denied role, it would miss bypass" time="0.000335443">
         </testcase>
     </testsuite>
 </testsuites>
