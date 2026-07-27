@@ -1,37 +1,37 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="16" failures="0" errors="0" time="0.821">
-    <testsuite name="L4-api-contract/input-validation.test.ts" timestamp="2026-07-27T06:57:20.167Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="16" failures="0" errors="0" skipped="0" time="0.452057949">
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: &apos;; DROP TABLE users; --..." time="0.068700071">
+<testsuites name="vitest tests" tests="16" failures="0" errors="0" time="0.857">
+    <testsuite name="L4-api-contract/input-validation.test.ts" timestamp="2026-07-27T07:34:06.034Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="16" failures="0" errors="0" skipped="0" time="0.456693887">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: &apos;; DROP TABLE users; --..." time="0.07459166">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: 1&apos; OR &apos;1&apos;=&apos;1..." time="0.014064596">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: 1&apos; OR &apos;1&apos;=&apos;1..." time="0.017687119">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: 1; SELECT * FROM pg_tables --..." time="0.013816079">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: 1; SELECT * FROM pg_tables --..." time="0.013275918">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: &apos; UNION SELECT null,null,null ..." time="0.013305226">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: &apos; UNION SELECT null,null,null ..." time="0.021704301">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: admin&apos;/*..." time="0.014612233">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: admin&apos;/*..." time="0.026926696">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: 1&apos;; WAITFOR DELAY &apos;0:0:5&apos; --..." time="0.012219169">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; GET with SQLi in query param: 1&apos;; WAITFOR DELAY &apos;0:0:5&apos; --..." time="0.013458622">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; POST with SQLi in body field" time="0.021839334">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — SQL Injection resistance &gt; POST with SQLi in body field" time="0.023767739">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Path traversal resistance &gt; traversal: /api/v1/finance/../../../etc/passwd..." time="0.004946834">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Path traversal resistance &gt; traversal: /api/v1/finance/../../../etc/passwd..." time="0.006043804">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Path traversal resistance &gt; traversal: /api/v1/finance/bills/..%2f..%2f..%2fetc..." time="0.00838849">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Path traversal resistance &gt; traversal: /api/v1/finance/bills/..%2f..%2f..%2fetc..." time="0.010964791">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Path traversal resistance &gt; traversal: /api/v1/finance/bills/%2e%2e/%2e%2e/etc/..." time="0.005380353">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Path traversal resistance &gt; traversal: /api/v1/finance/bills/%2e%2e/%2e%2e/etc/..." time="0.005704053">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — XSS in stored fields &gt; script tag in vendor name is stored escaped, not executed" time="0.008442857">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — XSS in stored fields &gt; script tag in vendor name is stored escaped, not executed" time="0.00779982">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Boundary inputs &gt; oversized body (&gt;1MB) → 413 or 400" time="0.018922527">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Boundary inputs &gt; oversized body (&gt;1MB) → 413 or 400" time="0.01962515">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Boundary inputs &gt; null bytes in string field → rejected" time="0.040371099">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Boundary inputs &gt; null bytes in string field → rejected" time="0.014453233">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Boundary inputs &gt; unicode normalization: no injection via homoglyph" time="0.020438461">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Boundary inputs &gt; unicode normalization: no injection via homoglyph" time="0.008403276">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Idempotency (replay protection) &gt; POST same journal twice with same idempotency data → no duplicate" time="0.023796761">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Idempotency (replay protection) &gt; POST same journal twice with same idempotency data → no duplicate" time="0.024300237">
         </testcase>
-        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Concurrency (N-way parallel mutation) &gt; 10 parallel bill submissions → all complete without 500" time="0.042675974">
+        <testcase classname="L4-api-contract/input-validation.test.ts" name="L4 — Concurrency (N-way parallel mutation) &gt; 10 parallel bill submissions → all complete without 500" time="0.042817725">
         </testcase>
     </testsuite>
 </testsuites>

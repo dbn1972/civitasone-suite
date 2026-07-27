@@ -2,10 +2,12 @@
   "name": "@civitasone/render",
   "version": "0.1.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./pdf": "./src/pdf.js",
-    "./xlsx": "./src/xlsx.js"
+    ".": "./dist/index.js",
+    "./pdf": "./dist/pdf.js",
+    "./xlsx": "./dist/xlsx.js"
   },
   "scripts": {
     "build": "tsc",
