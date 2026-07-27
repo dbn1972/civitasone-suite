@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, boolean, varchar, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, boolean, varchar, bigint, timestamp } from "drizzle-orm/pg-core";
 
 export const rtiSchema = pgSchema("rti");
 
@@ -14,8 +14,8 @@ export const rtiApplications = rtiSchema.table("rti_applications", {
   pioRef:          text("pio_ref"),
   lifeOrLiberty:   boolean("life_or_liberty").notNull().default(false),
   thirdParty:      boolean("third_party").notNull().default(false),
-  feePaid:         numeric("fee_paid", { precision: 12, scale: 2 }).notNull().default("0"),
-  additionalFee:   numeric("additional_fee", { precision: 12, scale: 2 }).notNull().default("0"),
+  feePaid:         bigint("fee_paid", { mode: "number" }).notNull().default(0),
+  additionalFee:   bigint("additional_fee", { mode: "number" }).notNull().default(0),
   receivedAt:      timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   deadlineAt:      timestamp("deadline_at", { withTimezone: true }).notNull(),
   status:          varchar("status", { length: 24 }).notNull().default("received"),

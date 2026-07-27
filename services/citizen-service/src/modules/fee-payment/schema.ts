@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb, numeric, boolean, primaryKey } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, integer, bigint, timestamp, jsonb, boolean, primaryKey } from "drizzle-orm/pg-core";
 import type { ExemptionRule } from "./domain.js";
 
 export const feeSchema = pgSchema("fee");
@@ -16,7 +16,7 @@ export const feeSchedules = feeSchema.table("schedules", {
   tenantId:    uuid("tenant_id").notNull(),
   serviceId:   uuid("service_id").notNull(),
   name:        text("name").notNull(),
-  baseAmount:  numeric("base_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  baseAmount:  bigint("base_amount", { mode: "number" }).notNull().default(0),
   currency:    varchar("currency", { length: 3 }).notNull().default("INR"),
   exemptions:  jsonb("exemptions").$type<ExemptionRule[]>().notNull().default([]),
   active:      boolean("active").notNull().default(true),
@@ -33,7 +33,7 @@ export const feePayments = feeSchema.table("payments", {
   applicationId:        uuid("application_id").notNull(),
   scheduleId:           uuid("schedule_id"),
   citizenId:            uuid("citizen_id"),
-  amount:               numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  amount:               bigint("amount", { mode: "number" }).notNull(),
   currency:             varchar("currency", { length: 3 }).notNull().default("INR"),
   exemptionApplied:     text("exemption_applied"),
   method:               varchar("method", { length: 16 }).notNull(),
@@ -53,7 +53,7 @@ export const feeRefunds = feeSchema.table("refunds", {
   id:          uuid("id").primaryKey().defaultRandom(),
   tenantId:    uuid("tenant_id").notNull(),
   paymentId:   uuid("payment_id").notNull(),
-  amount:      numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  amount:      bigint("amount", { mode: "number" }).notNull(),
   reason:      text("reason"),
   status:      varchar("status", { length: 16 }).notNull().default("requested"),
   requestedBy: uuid("requested_by").notNull(),

@@ -11,14 +11,14 @@ const exemptionSchema = z.object({
   op:        z.enum(ELIGIBILITY_OPS),
   value:     z.unknown().optional(),
   kind:      z.enum(EXEMPTION_KINDS),
-  amount:    z.number().min(0).max(1_000_000_000).optional(),
+  amount:    z.number().int().min(0).max(100_000_000_00).optional(), // paise (max ₹100 Cr)
   label:     safeText({ max: 200 }).optional(),
 });
 
 export const createScheduleBody = z.object({
   serviceId:  z.string().uuid(),
   name:       safeText({ max: 128 }),
-  baseAmount: z.number().min(0).max(1_000_000_000),
+  baseAmount: z.number().int().min(0).max(100_000_000_00), // paise (max ₹100 Cr)
   currency:   z.string().length(3).default("INR"),
   exemptions: z.array(exemptionSchema).max(100).default([]),
 });
@@ -52,7 +52,7 @@ export const recordOfflineBody = z.object({
 export type RecordOfflineBody = z.infer<typeof recordOfflineBody>;
 
 export const refundRequestBody = z.object({
-  amount: z.number().positive().max(1_000_000_000),
+  amount: z.number().int().positive().max(100_000_000_00), // paise (max ₹100 Cr)
   reason: safeText({ max: 500, multiline: true }).optional(),
 });
 export type RefundRequestBody = z.infer<typeof refundRequestBody>;

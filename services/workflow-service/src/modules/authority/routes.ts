@@ -32,7 +32,7 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
       scopeRef: z.string().min(1).max(128),
       authorityType: typeEnum.default("financial"),
       currency: z.string().min(1).max(8).default("INR"),
-      maxAmount: z.number().nonnegative(),
+      maxAmount: z.number().int().nonnegative(), // paise
       effectiveFrom: z.string().regex(dateRe),
       effectiveTo: z.string().regex(dateRe).nullable().optional(),
       escalateToScopeType: scopeEnum.nullable().optional(),

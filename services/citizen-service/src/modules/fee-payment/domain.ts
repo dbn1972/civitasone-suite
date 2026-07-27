@@ -1,12 +1,12 @@
 /**
  * SVC-085 — pure fee & exemption computation (no I/O, unit-tested).
  *
- * A fee schedule is a base amount plus an ordered list of exemption rules. The
- * FIRST exemption whose predicate matches the subject is applied:
+ * A fee schedule is a base amount (in paise) plus an ordered list of exemption
+ * rules. The FIRST exemption whose predicate matches the subject is applied:
  *   - kind "waive"   → amount becomes 0
- *   - kind "percent" → amount reduced by `value`% (clamped to [0, base])
- *   - kind "flat"    → amount reduced by `value` (clamped to >= 0)
- * Amounts are handled in whole minor-unit-free decimals rounded to 2 dp.
+ *   - kind "percent" → amount reduced by `value`% (integer math, truncated)
+ *   - kind "flat"    → amount reduced by `value` paise (clamped to >= 0)
+ * All amounts are in paise (bigint-safe integers). No floating point.
  */
 
 import { evaluateRule, type EligibilityOp } from "../eligibility/domain.js";
@@ -20,23 +20,19 @@ export interface ExemptionRule {
   op: EligibilityOp;
   value?: unknown;   // predicate operand
   kind: ExemptionKind;
-  amount?: number | undefined;   // percent (0-100) or flat reduction; ignored for waive
+  amount?: number | undefined;   // percent (0-100) or flat reduction in paise; ignored for waive
   label?: string | undefined;
 }
 
 export interface FeeComputation {
-  baseAmount: number;
-  amount: number;
+  baseAmount: number;  // paise
+  amount: number;      // paise
   exemptionApplied: string | null;   // rule id
   exemptionLabel: string | null;
 }
 
-function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
 export function computeFee(baseAmount: number, exemptions: ExemptionRule[], subject: Record<string, unknown>): FeeComputation {
-  const base = round2(Math.max(0, baseAmount));
+  const base = Math.max(0, Math.trunc(baseAmount));
   for (const ex of exemptions) {
     // The exemption predicate reuses the eligibility operator engine so both
     // subsystems share one deterministic matcher.
@@ -45,9 +41,12 @@ export function computeFee(baseAmount: number, exemptions: ExemptionRule[], subj
     }
     let amount = base;
     if (ex.kind === "waive") amount = 0;
-    else if (ex.kind === "percent") amount = base - (base * Math.min(100, Math.max(0, ex.amount ?? 0))) / 100;
-    else if (ex.kind === "flat") amount = base - Math.max(0, ex.amount ?? 0);
-    amount = round2(Math.max(0, amount));
+    else if (ex.kind === "percent") {
+      const pct = Math.min(100, Math.max(0, Math.trunc(ex.amount ?? 0)));
+      amount = base - Math.trunc((base * pct) / 100);
+    }
+    else if (ex.kind === "flat") amount = base - Math.max(0, Math.trunc(ex.amount ?? 0));
+    amount = Math.max(0, amount);
     return { baseAmount: base, amount, exemptionApplied: ex.id, exemptionLabel: ex.label ?? ex.id };
   }
   return { baseAmount: base, amount: base, exemptionApplied: null, exemptionLabel: null };

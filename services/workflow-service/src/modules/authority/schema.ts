@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, numeric, date, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, bigint, date, timestamp } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("workflow");
 
@@ -10,7 +10,7 @@ export const authorityLimits = domainSchema.table("authority_limits", {
   scopeRef: varchar("scope_ref", { length: 128 }).notNull(),
   authorityType: varchar("authority_type", { length: 16 }).notNull().default("financial"),
   currency: varchar("currency", { length: 8 }).notNull().default("INR"),
-  maxAmount: numeric("max_amount", { precision: 18, scale: 2 }).notNull(),
+  maxAmount: bigint("max_amount", { mode: "number" }).notNull(),
   effectiveFrom: date("effective_from").notNull(),
   effectiveTo: date("effective_to"),
   escalateToScopeType: varchar("escalate_to_scope_type", { length: 16 }),
