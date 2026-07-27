@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS store.plugin_stores (
 ALTER TABLE store.plugin_stores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE store.plugin_stores FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS tenant_isolation ON store.plugin_stores
+DROP POLICY IF EXISTS tenant_isolation ON store.plugin_stores;
+CREATE POLICY tenant_isolation
+  ON store.plugin_stores
   USING (tenant_id = current_setting('app.tenant_id')::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);
 

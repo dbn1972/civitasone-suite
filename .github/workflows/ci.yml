@@ -186,7 +186,11 @@ jobs:
       # tsc cannot see this (it checks the model against itself) and coverage is
       # blind to it (a file can be 100% covered and still drift).
       # Ratcheted: fails on NEW drift and on baselined entries that were fixed
-      # but left listed. Baseline = scripts/ci/schema-drift-baseline.json.
+      # but left listed. Baseline = scripts/ci/schema-drift-baseline.json,
+      # measured against a FRESHLY bootstrapped cluster — which is what this job
+      # has. Deliberately run WITHOUT --allow-stale: that flag exists only for
+      # hand-provisioned developer clusters, and stale detection must be strict
+      # somewhere or a fixed-but-still-listed entry is never caught.
       - name: Schema drift guard (declared columns must exist in the DB)
         env:
           POSTGRES_ADMIN_USER: civitas

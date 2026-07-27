@@ -24,6 +24,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_segment_tenant
 -- Enable RLS for tenant isolation
 ALTER TABLE segments.recipient_segments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS segments_tenant_isolation
+DROP POLICY IF EXISTS segments_tenant_isolation ON segments.recipient_segments;
+CREATE POLICY segments_tenant_isolation
   ON segments.recipient_segments
   USING (tenant_id = current_setting('app.tenant_id')::uuid);

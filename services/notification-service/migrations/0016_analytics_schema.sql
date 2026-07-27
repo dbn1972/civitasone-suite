@@ -50,18 +50,21 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_metrics_lookup
 -- Enable RLS for tenant isolation
 ALTER TABLE analytics.open_events ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS analytics_open_tenant_isolation
+DROP POLICY IF EXISTS analytics_open_tenant_isolation ON analytics.open_events;
+CREATE POLICY analytics_open_tenant_isolation
   ON analytics.open_events
   USING (tenant_id = current_setting('app.tenant_id')::uuid);
 
 ALTER TABLE analytics.click_events ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS analytics_click_tenant_isolation
+DROP POLICY IF EXISTS analytics_click_tenant_isolation ON analytics.click_events;
+CREATE POLICY analytics_click_tenant_isolation
   ON analytics.click_events
   USING (tenant_id = current_setting('app.tenant_id')::uuid);
 
 ALTER TABLE analytics.delivery_metrics ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS analytics_metrics_tenant_isolation
+DROP POLICY IF EXISTS analytics_metrics_tenant_isolation ON analytics.delivery_metrics;
+CREATE POLICY analytics_metrics_tenant_isolation
   ON analytics.delivery_metrics
   USING (tenant_id = current_setting('app.tenant_id')::uuid);

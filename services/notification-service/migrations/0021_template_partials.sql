@@ -21,6 +21,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_partial_name_tenant
 -- Enable RLS for tenant isolation
 ALTER TABLE templates.partials ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS partials_tenant_isolation
+DROP POLICY IF EXISTS partials_tenant_isolation ON templates.partials;
+CREATE POLICY partials_tenant_isolation
   ON templates.partials
   USING (tenant_id = current_setting('app.tenant_id')::uuid);
