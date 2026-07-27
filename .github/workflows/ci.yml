@@ -734,6 +734,10 @@ jobs:
         run: |
           cd tests/quality-program
           npx vitest run L11-mutation-canary/ --config vitest.config.ts
+      - name: Run L8 AI fabrication gate (static, no provider needed)
+        run: |
+          cd tests/quality-program
+          npx vitest run L8-ai-features/no-fabricated-verdicts.test.ts --config vitest.config.ts
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -741,6 +745,48 @@ jobs:
           name: quality-l10-l11-evidence
           path: evidence/
           retention-days: 14
+
+  # ─────────────────────────────────────────────
+  # Release Gate — audits the evidence pack.
+  # Treats a lane with no artifact as UNMEASURED and blocks: "pass without an
+  # artifact = fail". Informational on PRs (not every lane can run on a PR
+  # runner); authoritative on main where the live-stack lanes also execute.
+  # ─────────────────────────────────────────────
+  release-gate:
+    name: Release Gate (evidence audit)
+    runs-on: ubuntu-latest
+    needs: [quality-gates-schema, quality-gates-domain]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: Download all evidence artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-evidence
+          merge-multiple: true
+        continue-on-error: true
+      - name: Audit evidence pack
+        run: |
+          mkdir -p downloaded-evidence
+          echo "Artifacts present:"
+          find downloaded-evidence -name '*.xml' -print || true
+          # Informational on PRs: the live-stack lanes (L1/L2/L4/L7) cannot run
+          # here, so a BLOCKED verdict is expected and must not fail the PR.
+          node scripts/ci/release-gate.mjs --evidence "$(find downloaded-evidence -type d -name '2*' | head -1 || echo downloaded-evidence)" || true
+      - name: Enforce release gate (main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          node scripts/ci/release-gate.mjs --evidence "$(find downloaded-evidence -type d -name '2*' | head -1 || echo downloaded-evidence)" --json > release-gate.json || true
+          cat release-gate.json
+      - name: Upload release gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-report
+          path: release-gate.json
+          retention-days: 30
 
   docker-build:
     name: Build & Push Docker Images

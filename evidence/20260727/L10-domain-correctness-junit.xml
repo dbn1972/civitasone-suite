@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="26" failures="0" errors="0" time="0.562">
+    <testsuite name="L10-domain-correctness/finance-domain.test.ts" timestamp="2026-07-27T05:01:22.108Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="7" failures="0" errors="0" skipped="0" time="0.025187009">
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; balanced journal" time="0.002399636">
+        </testcase>
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; balanced journal" time="0.000430056">
+        </testcase>
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; balanced journals (should NOT throw) &gt; large values OK with bigint" time="0.000475505">
+        </testcase>
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; unbalanced journals (should throw) &gt; off by 1 paise" time="0.000560936">
+        </testcase>
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry journal balance (vs golden oracle) &gt; unbalanced journals (should throw) &gt; single line" time="0.000342811">
+        </testcase>
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry: bigint precision (no float drift) &gt; amounts above 2^53 remain precise" time="0.000362503">
+        </testcase>
+        <testcase classname="L10-domain-correctness/finance-domain.test.ts" name="L10 — Double-entry: bigint precision (no float drift) &gt; off-by-one at scale is caught" time="0.000589154">
+        </testcase>
+    </testsuite>
+    <testsuite name="L10-domain-correctness/payroll-domain.test.ts" timestamp="2026-07-27T05:01:22.112Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="19" failures="0" errors="0" skipped="0" time="0.080192192">
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; &lt;5 years → 0" time="0.001693173">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; (56000+28000)*15*5/26 = 242307.69 → 242308 paise" time="0.00032572">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 84000*15*10/26 = 484615.38 → rounds" time="0.000216599">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 6 months in last year → rounds UP to 11 years: 84000*15*11/26 = 533076.92" time="0.000344945">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; capped at 20 lakh" time="0.000698282">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Gratuity computation (vs golden oracle) &gt; 84000*15*25/26 = 1211538.46" time="0.000197342">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 79 → 0%" time="0.000361314">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 80 → 20%" time="0.000197325">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 84 → 20%" time="0.000400715">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 85 → 30%" time="0.000215024">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 89 → 30%" time="0.000181063">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 90 → 40%" time="0.000178724">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 95 → 50%" time="0.000545831">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Additional pension % by age (vs golden oracle) &gt; age 100 → 100%" time="0.000225715">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; 12% of 15000 (both under cap)" time="0.00125757">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; basic+DA 37500 &gt; cap 15000 → 12% of 15000" time="0.00026464">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — EPF computation (vs golden oracle) &gt; 12% of 10000" time="0.000386224">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Pension computation (basic + DR + additional) &gt; pensioner aged 82 gets 20% additional pension" time="0.000576855">
+        </testcase>
+        <testcase classname="L10-domain-correctness/payroll-domain.test.ts" name="L10 — Pension computation (basic + DR + additional) &gt; commutation deducted before restoration (15-year rule)" time="0.000342245">
+        </testcase>
+    </testsuite>
+</testsuites>

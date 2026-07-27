@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="44" failures="0" errors="0" time="0.989">
+    <testsuite name="L2-authz-bola/authz-matrix.test.ts" timestamp="2026-07-27T05:01:07.155Z" hostname="ip-10-0-1-222.ap-south-1.compute.internal" tests="44" failures="0" errors="0" skipped="0" time="0.590407578">
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — finance_officer → 200" time="0.064383927">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — finance_admin → 200" time="0.010742128">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/bills — super_admin → 200" time="0.008206385">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — finance_officer → 200" time="0.016278263">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — finance_admin → 200" time="0.012696455">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — super_admin → 200" time="0.024103216">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — procurement_officer → 200" time="0.015023573">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/sanctions — audit_officer → 200" time="0.013747304">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/journals — finance_officer → 200" time="0.013302709">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/journals — super_admin → 200" time="0.008918346">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — finance_officer → 200" time="0.014195756">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — finance_admin → 200" time="0.012104428">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/finance/budgets — super_admin → 200" time="0.012420081">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — hr_officer → 200" time="0.00901652">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — hr_admin → 200" time="0.008300195">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/hrms/employees — super_admin → 200" time="0.008672413">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/indents — procurement_officer → 200" time="0.036076206">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/indents — super_admin → 200" time="0.007896543">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/vendors — procurement_officer → 200" time="0.009727644">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/procurement/vendors — super_admin → 200" time="0.010369451">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/audit/observations — audit_officer → 200" time="0.010991885">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/audit/observations — super_admin → 200" time="0.007756079">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/admin/health — tenant_admin → 200" time="0.005612287">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Allowed roles get 200 &gt; GET /api/v1/admin/health — super_admin → 200" time="0.004615879">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/bills — citizen → 403" time="0.006979248">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/bills — employee → 403" time="0.006222438">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/sanctions — citizen → 403" time="0.006224563">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/sanctions — employee → 403" time="0.00591902">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/journals — citizen → 403" time="0.006012403">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/journals — employee → 403" time="0.006264727">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/finance/budgets — citizen → 403" time="0.006089047">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/hrms/employees — citizen → 403" time="0.0067274">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/indents — citizen → 403" time="0.006942186">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/indents — employee → 403" time="0.00655034">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/procurement/vendors — citizen → 403" time="0.006553031">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/audit/observations — citizen → 403" time="0.006481401">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/audit/observations — employee → 403" time="0.006502497">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/admin/health — citizen → 403" time="0.00473601">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Authorization Matrix: Denied roles get 403 &gt; GET /api/v1/admin/health — employee → 403" time="0.004031631">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Mass Assignment Protection &gt; POST /api/v1/finance/bills: injected tenantId in body is ignored" time="0.010232006">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — Mass Assignment Protection &gt; POST /api/v1/hrms/employees: injected role escalation ignored" time="0.008118311">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; alg=none attack → 401" time="0.002230692">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; wrong secret → 401" time="0.003703836">
+        </testcase>
+        <testcase classname="L2-authz-bola/authz-matrix.test.ts" name="L2 — JWT Tampering &gt; manipulated payload (changed role) → 401" time="0.003766466">
+        </testcase>
+    </testsuite>
+</testsuites>

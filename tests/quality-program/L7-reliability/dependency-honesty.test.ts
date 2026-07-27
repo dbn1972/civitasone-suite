@@ -59,27 +59,40 @@ describe("L7 — Read-path latency SLO (p95 < 200ms)", () => {
   for (const path of READ_ENDPOINTS) {
     it(`${path}: p95 latency under 500ms over 20 requests`, async () => {
       const token = makeToken();
+      const TOTAL = 20;
+      // Minimum successful samples for the percentile to mean anything. Without
+      // this floor an all-down stack returned zero samples and read as a pass.
+      const MIN_SAMPLES = 15;
       const latencies: number[] = [];
+      const statuses: number[] = [];
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < TOTAL; i++) {
         const start = performance.now();
         const res = await fetch(`${GATEWAY}${path}`, {
           headers: { authorization: `Bearer ${token}` },
         });
         const elapsed = performance.now() - start;
-        // Only count successful reads toward the SLO
+        statuses.push(res.status);
         if (res.status === 200) latencies.push(elapsed);
       }
 
-      if (latencies.length === 0) {
-        // Endpoint unavailable — cannot measure, skip rather than false-fail
-        return;
+      // Fail loud rather than silently reading clean on an unreachable endpoint.
+      if (latencies.length < MIN_SAMPLES) {
+        const summary = [...new Set(statuses)]
+          .map((s) => `${s}×${statuses.filter((x) => x === s).length}`)
+          .join(", ");
+        expect.fail(
+          `${path}: only ${latencies.length}/${TOTAL} requests returned 200 ` +
+            `(need >=${MIN_SAMPLES} to measure p95). Observed statuses: ${summary}. ` +
+            `The SLO is UNMEASURED, which is not a pass.`,
+        );
       }
 
       latencies.sort((a, b) => a - b);
-      const p95 = latencies[Math.floor(latencies.length * 0.95)] ?? latencies[latencies.length - 1]!;
+      const idx = Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95));
+      const p95 = latencies[idx]!;
       // Dev-machine threshold: 500ms (production target is 200ms)
-      expect(p95).toBeLessThan(500);
+      expect(p95, `${path} p95=${p95.toFixed(1)}ms over ${latencies.length} samples`).toBeLessThan(500);
     });
   }
 });
@@ -130,7 +143,15 @@ describe("L7 — Graceful degradation (cache miss does not 500)", () => {
 
 describe("L7 — Rate limiting is enforced (noisy-neighbor protection)", () => {
   it("burst of 150 requests triggers rate limiting or completes cleanly", async () => {
-    const token = makeToken();
+    // Dedicated actor: the gateway rate-limit bucket is keyed per user, and a
+    // burst on the shared test actor pushed later lanes (L8) into 429 —
+    // order-dependent coupling, which B2 forbids. Isolating the burst keeps the
+    // shared bucket clean for other lanes.
+    const burstActor = "aaaaaaaa-0000-4000-8000-00000000b057";
+    const token = signToken(
+      { sub: burstActor, tid: TENANT, roles: ["super_admin"], sid: "l7-burst", dept_code: "TEST" },
+      SECRET,
+    );
     const results = await Promise.all(
       Array.from({ length: 150 }, () =>
         fetch(`${GATEWAY}/api/v1/finance/bills`, {

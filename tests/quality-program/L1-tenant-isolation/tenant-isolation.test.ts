@@ -134,9 +134,12 @@ describe("L1 — Tenant Isolation: Cross-tenant data access", () => {
         // we expect empty results. The key assertion is that B NEVER sees A's data.
         const resB = await apiGet(path, tokenB);
 
-        // Should get 200 (empty) or 404 — never a 500 and never A's data
-        // 502 = service unhealthy (real finding, documented but not a security issue)
-        expect([200, 404, 502]).toContain(resB.status);
+        // Should get 200 (empty) or 404 — never a 500 and never A's data.
+        // 502/503 = service unhealthy or circuit breaker open (knowledge-service
+        // is a known operational finding; which of the two appears depends on
+        // breaker state). Both are honest unavailability, not an isolation leak.
+        // 500 is deliberately EXCLUDED: an unhandled error can leak data.
+        expect([200, 404, 502, 503]).toContain(resB.status);
 
         if (resB.status === 200) {
           const body = resB.body as Record<string, unknown>;

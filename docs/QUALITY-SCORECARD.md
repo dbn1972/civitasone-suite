@@ -17,9 +17,12 @@
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | 18 | 18 | 0 | ✅ GREEN | AES-GCM verified; audit ledger immutable |
 | L7 Reliability | 10 | 10 | 0 | ✅ GREEN | Honest 503s; p95 < 500ms; 0 5xx under load |
+| L8 AI / Externals | 23 | 23 | 0 | 🟡 GREEN + FINDING | Fail-closed proven; **4 fabricating routes tracked** |
 | L9 A11Y | Existing | ✅ | — | ✅ GREEN | axe-core gate active, 0 violations |
-| L10 Domain | 21 | 21 | 0 | ✅ GREEN | 100% match to golden oracles |
+| L10 Domain | 26 | 26 | 0 | ✅ GREEN | 100% match to golden oracles |
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
+
+**Totals:** 243 tests across 12 files. Release gate: **RELEASABLE** (all blocking lanes have passing evidence).
 
 ---
 
@@ -113,8 +116,12 @@
 - ✅ Immutability trigger present on `events.events`
 - ✅ No-truncate trigger present
 - ✅ TRUNCATE rejected (statement-level trigger fires even on empty table)
-- 🟡 UPDATE/DELETE: triggers present, but row-level firing unverified on an empty
-  table — recorded as unmeasured, not as a pass
+- ✅ **UPDATE rejected** — gap now closed. The test seeds one audit row inside the
+  probe transaction so the row-level trigger has a target; Postgres raises
+  `events.events is append-only: UPDATE is not permitted (AUD-1)`. Verified the
+  test can fail by neutering the mutation to `SELECT 1` → test failed as expected.
+- ✅ **DELETE rejected** — same mechanism, `AUD-1` raised. Transaction is always
+  rolled back, so the seeded row never persists.
 
 ### Existing CI Security Gates (already in `.github/workflows/security.yml`):
 - ✅ CodeQL SAST (security-and-quality queries)
@@ -139,10 +146,84 @@
 - ✅ Cache-busting reads still succeed (graceful degradation, no 500 on cache miss)
 - ✅ 150-request burst → rate limited or clean, zero 500s
 
+### Gaps closed this round:
+- ✅ **Latency SLO no longer reads clean when unmeasurable.** Previously an
+  all-down endpoint produced zero samples and silently passed. Now requires ≥15
+  of 20 requests to return 200, else fails with the observed status histogram.
+- ✅ **Burst test no longer poisons other lanes.** The 150-request burst shared the
+  test actor, so the gateway's per-user rate-limit bucket pushed later L8 requests
+  into 429 — order-dependent coupling (B2 violation). The burst now uses a
+  dedicated actor.
+
 ### Not Yet Built:
 - ⬜ k6 soak test (≥2h) wired as a gate
 - ⬜ Chaos: kill-service / DB-failover / dep-down automation
 - ⬜ DR backup→restore drill verification
+
+---
+
+## L8 — AI / External Integrations 🟡 GREEN WITH P1 FINDING
+
+**Tested:** 23 tests (19 runtime + 4 static)
+
+### What passes
+- ✅ All 7 gov-integration routes fail closed — verified **direct-to-service**
+  (`127.0.0.1:3001`) returning `503 NOT_CONFIGURED`, not via the gateway where a
+  circuit-breaker 503 would have made the test pass for the wrong reason
+- ✅ Aadhaar, PAN/NIC, DigiLocker, GSTN all confirmed env-gated
+- ✅ AI assistant routes fail closed with no provider configured
+- ✅ 4 prompt-injection payloads not honoured; no system prompt or credential echo
+- ✅ No `ANTHROPIC_API_KEY` / `sk-ant-` / `x-api-key` / `JWT_SECRET` leakage in error paths
+- ✅ Injection text in a normal data field does not bypass tenant scoping
+
+### P1 FINDING — fabricated verification verdicts
+
+Every gov-integration route fails closed correctly. But once its credential env
+var is set to **any non-empty value**, four routes return a hardcoded
+authoritative-looking verdict **without ever contacting the upstream authority**:
+
+| Route | Fabricated response | Severity |
+|-------|--------------------|----------|
+| `POST /identity/gov/aadhaar/otp-verify` | `{ verified: true, name: "REDACTED" }` | **P1 — any 6-digit OTP passes Aadhaar eKYC** |
+| `POST /identity/gov/nic/validate-pan` | `{ valid: true, name: "VERIFIED" }` | **P1 — every PAN validates** |
+| `POST /identity/gov/digilocker/pull-document` | `{ verified: true, uri: "dl://…" }` | **P1 — every document verifies** |
+| `GET /identity/gov/gstn/verify/:gstin` | `{ tradeName: "Verified Entity", status: "active" }` | **P2 — every GSTIN active** |
+
+Setting `UIDAI_API_KEY=x` in staging makes every Aadhaar OTP verification succeed.
+A caller cannot distinguish this from a real UIDAI response. For a statutory KYC
+surface this is worse than an outage, because it is silent.
+
+`fail-closed` ✅ · `never-fabricate` ❌
+
+**Status:** NOT fixed in this PR. Implementing real UIDAI/NIC/DigiLocker clients
+is a product effort, and unilaterally flipping `verified: true` → `false` on an
+auth-critical KYC path needs product/security sign-off. Filed as tracked debt and
+ratcheted by `L8-ai-features/no-fabricated-verdicts.test.ts`, which **fails if a
+new fabricating route is added** and **also fails if a fixed one is left in the
+baseline** (so a regression cannot slip back for free).
+
+**Recommended fix:** return `501 NOT_IMPLEMENTED` when the credential is present
+but no real client is wired, or tag the payload `{ verified: false, source: "stub" }`.
+
+---
+
+## Release Gate
+
+`scripts/ci/release-gate.mjs` audits the evidence pack rather than re-running tests.
+
+| Property | Verified |
+|----------|----------|
+| Missing artifact → UNMEASURED → blocks (exit 1) | ✅ proven with an empty dir |
+| Failing lane → blocks (exit 1) | ✅ proven by injecting `failures="3"` |
+| Complete passing evidence → releasable (exit 0) | ✅ proven on the real pack |
+| Empty suite (0 tests) → UNMEASURED, not a pass | ✅ enforced |
+
+Blocking lanes: L1, L2, L3, L4, L6, L10, L11. Advisory (P2): L7, L8.
+
+```bash
+bash scripts/ci/quality-gates.sh all     # runs all lanes, then the release gate
+node scripts/ci/release-gate.mjs         # audit today's evidence pack
+```
 
 ---
 
@@ -180,10 +261,11 @@
 
 ## Next Steps
 
-1. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
-2. Add OWASP ZAP DAST + Trivy container scanning to L6
-3. Wire k6 soak + chaos automation as L7 gates
-4. Expand TRACEABILITY.csv from 28 to all 270 capabilities
-5. Complete B1 (Testcontainers ephemeral DB harness)
-6. Build L8 (AI feature testing: prompt injection, LLM-as-judge)
-7. Build the release gate (SLO / error-budget check)
+1. **Decide the fix for the 4 fabricating gov-integration routes** (needs product
+   /security sign-off — this is the highest-value open item)
+2. Wire L1/L2/L4/L7 into CI via the live-stack job (they need a running gateway)
+3. Add OWASP ZAP DAST + Trivy container scanning to L6
+4. Wire k6 soak + chaos automation as L7 gates
+5. Expand TRACEABILITY.csv from 43 to all 270 capabilities
+6. Complete B1 (Testcontainers ephemeral DB harness)
+7. Add SLO / error-budget input to the release gate (currently evidence-only)

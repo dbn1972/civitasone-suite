@@ -57,6 +57,9 @@ case "$LANE" in
   L7|l7)
     run_lane "L7-reliability" "L7 Reliability (P2)" || FAILURES=$((FAILURES + 1))
     ;;
+  L8|l8)
+    run_lane "L8-ai-features" "L8 AI Features (P2)" || FAILURES=$((FAILURES + 1))
+    ;;
   L11|l11)
     run_lane "L11-mutation-canary" "L11 Mutation & Canary (Meta)" || FAILURES=$((FAILURES + 1))
     ;;
@@ -67,15 +70,23 @@ case "$LANE" in
     run_lane "L4-api-contract" "L4 API Contract & Input (P1)" || FAILURES=$((FAILURES + 1))
     run_lane "L6-security" "L6 Security (P1)" || FAILURES=$((FAILURES + 1))
     run_lane "L7-reliability" "L7 Reliability (P2)" || FAILURES=$((FAILURES + 1))
+    run_lane "L8-ai-features" "L8 AI Features (P2)" || FAILURES=$((FAILURES + 1))
     run_lane "L10-domain-correctness" "L10 Domain Correctness (P0)" || FAILURES=$((FAILURES + 1))
     run_lane "L11-mutation-canary" "L11 Mutation & Canary (Meta)" || FAILURES=$((FAILURES + 1))
     ;;
   *)
     echo "Unknown lane: $LANE"
-    echo "Usage: $0 [L1|L2|L3|L4|L6|L7|L10|L11|all]"
+    echo "Usage: $0 [L1|L2|L3|L4|L6|L7|L8|L10|L11|all]"
     exit 1
     ;;
 esac
+
+# ── Release gate: audit the evidence pack just produced ─────────────────────
+if [ "$LANE" = "all" ]; then
+  echo ""
+  echo "── Release Gate (evidence audit) ──────────────────────"
+  node "$ROOT/scripts/ci/release-gate.mjs" --evidence "$EVIDENCE_DIR" || FAILURES=$((FAILURES + 1))
+fi
 
 echo ""
 echo "════════════════════════════════════════════════════"
