@@ -34,6 +34,7 @@
     "arch:guard": "node scripts/ci/arch-guard.mjs",
     "guard:schema-drift": "node scripts/ci/schema-drift-guard.mjs --allow-stale",
     "guard:ci-config": "node scripts/ci/ci-config-guard.mjs",
+    "guard:ledger-poison": "node scripts/ci/test-ledger-poison-guard.mjs",
     "test:e2e-live": "playwright test --config tests/e2e-live/playwright.config.ts",
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },
