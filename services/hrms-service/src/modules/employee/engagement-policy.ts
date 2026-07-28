@@ -130,6 +130,49 @@ export function resolvePolicy(
   return null;
 }
 
+/**
+ * Permissive default for an employee type that matches neither a tenant master
+ * row nor a canonical category (e.g. legacy "permanent" / "contract" codes).
+ * Fully payroll-eligible with all statutory heads on, so employees that predate
+ * engagement-typing are paid exactly as before — engagement branching is opt-in
+ * per employee (set employeeType to a canonical category or define a type master).
+ */
+export const DEFAULT_POLICY: EngagementPolicy = {
+  eligibleForLeave: true, eligibleForPayroll: true, eligibleForAppraisal: true,
+  paymentRoute: "payroll", payMode: "monthly", taxSection: "192",
+  statutoryPf: true, statutoryEsi: true, statutoryNps: true,
+  eligibleForGratuity: true, eligibleForBonus: false, leaveEncashment: true,
+  defaultProbationMonths: 0, maxContractMonths: null,
+};
+
+/**
+ * Build a pure resolver: employeeType code → EngagementPolicy. Precedence:
+ * tenant master row (by code) → canonical catalogue (by category) → permissive
+ * default. Used to project each employee's policy into the payroll-input feed.
+ */
+export function buildTypeResolver(tenantTypes: PolicyRow[], canonical: PolicyRow[]): (typeCode: string) => EngagementPolicy {
+  const byCode = new Map<string, PolicyRow>();
+  for (const t of tenantTypes) byCode.set(String(t.code), t);
+  const byCategory = new Map<string, PolicyRow>();
+  for (const c of canonical) byCategory.set(String(c.category), c);
+  return (typeCode: string): EngagementPolicy => {
+    const t = byCode.get(typeCode);
+    if (t) return toPolicy(t);
+    const c = byCategory.get(typeCode); // treat the code itself as a canonical category
+    if (c) return toPolicy(c);
+    return DEFAULT_POLICY;
+  };
+}
+
+/** Load a type→policy resolver for a tenant (tenant master + canonical catalogue). */
+export async function loadTypeResolver(tenantId: string): Promise<(typeCode: string) => EngagementPolicy> {
+  const [tenantTypes, canonical] = await Promise.all([
+    scopedRead((tx) => tx.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, tenantId))),
+    scopedRead((tx) => tx.select().from(engagementCatalogue)),
+  ]);
+  return buildTypeResolver(tenantTypes as unknown as PolicyRow[], canonical as unknown as PolicyRow[]);
+}
+
 const HR_VIEW_ROLES = ["hr_admin", "super_admin", "admin", "manager", "officer", "employee"];
 const codeParam = z.object({ code: z.string().min(1).max(24) });
 

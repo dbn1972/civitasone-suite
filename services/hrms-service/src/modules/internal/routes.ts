@@ -6,6 +6,7 @@ import * as leaveRepo from "../leave/repo.js";
 import * as attendanceRepo from "../attendance/repo.js";
 import { countWorkingDays } from "../leave/holidays.js";
 import { activePaySuspendedEmployeeIds } from "../disciplinary/repo.js";
+import { loadTypeResolver } from "../employee/engagement-policy.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
@@ -17,6 +18,9 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
 
     const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
     const active = employees.filter((e) => e.status !== "separated");
+    // DIC engagement policy per employee (payroll excludes non-salary types +
+    // gates statutory). Resolver = tenant type master over canonical catalogue.
+    const resolveType = await loadTypeResolver(ctx.tenantId);
     const approvedLeaves = await leaveRepo.findApprovedLeaveInMonth(ctx.tenantId, q.month);
     // Pay-suspension flag from the Disciplinary module: active suspensions with
     // pay_suspended=true. Payroll applies subsistence allowance / withholds pay.
@@ -42,23 +46,34 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({
       month: q.month,
-      employees: active.map((e) => ({
-        id: e.id,
-        employeeNo: e.employeeNo,
-        fullName: e.fullName,
-        basicMinor: e.basicMinor.toString(),
-        payStructureId: e.payStructureId,
-        bankAccountNo: e.bankAccountNo,
-        bankIfsc: e.bankIfsc,
-        pan: e.pan,
-        uan: e.uanNumber,
-        cityClass: (e.hraCityClass ?? "X") as "X" | "Y" | "Z",
-        taxRegime: (e.taxRegime ?? "new") as "old" | "new",
-        departmentId: e.departmentId,
-        pensionScheme: (e.pensionScheme ?? "NPS") as "GPF" | "NPS" | "EPF",
-        paySuspended: paySuspended.has(e.id),
-        ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),
-      })),
+      employees: active.map((e) => {
+        const pol = resolveType(e.employeeType);
+        return {
+          id: e.id,
+          employeeNo: e.employeeNo,
+          fullName: e.fullName,
+          basicMinor: e.basicMinor.toString(),
+          payStructureId: e.payStructureId,
+          bankAccountNo: e.bankAccountNo,
+          bankIfsc: e.bankIfsc,
+          pan: e.pan,
+          uan: e.uanNumber,
+          cityClass: (e.hraCityClass ?? "X") as "X" | "Y" | "Z",
+          taxRegime: (e.taxRegime ?? "new") as "old" | "new",
+          departmentId: e.departmentId,
+          pensionScheme: (e.pensionScheme ?? "NPS") as "GPF" | "NPS" | "EPF",
+          paySuspended: paySuspended.has(e.id),
+          ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),
+          // DIC engagement policy — payroll consumes these to exclude non-salary
+          // types (consultant/third-party/apprentice) and gate PF/ESI/NPS.
+          engagementType: e.employeeType,
+          paymentRoute: pol.paymentRoute,
+          eligibleForPayroll: pol.eligibleForPayroll,
+          statutoryPf: pol.statutoryPf,
+          statutoryEsi: pol.statutoryEsi,
+          statutoryNps: pol.statutoryNps,
+        };
+      }),
       lopDays: Object.fromEntries(lopByEmployee.entries()),
     });
   });
