@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createJobOpeningBody, createApplicationBody, publicApplicationBody, offerApplicationBody, hireApplicationBody, idParam } from "./validators.js";
+import { assertKnownEngagementType } from "../employee/engagement-policy.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -95,12 +96,14 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = hireApplicationBody.parse(req.body);
 
-    // Validate the application exists and is in a hireable state
+    // Validate the application exists and is in a hireable state first (cheap
+    // 404/409 before the engagement-type catalogue reads).
     const application = await repo.findApplicationById(id, ctx.tenantId);
     if (!application) throw new HttpError(404, "NOT_FOUND", "Application not found");
     if (application.stage !== "selected" && application.stage !== "offered") {
       throw new HttpError(409, "INVALID_STATE", `Cannot hire application in stage "${application.stage}"`);
     }
+    await assertKnownEngagementType(ctx.tenantId, body.employeeType);
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.hireApplication(ctx, id, body));
   });
