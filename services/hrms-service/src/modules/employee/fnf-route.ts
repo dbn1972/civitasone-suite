@@ -16,6 +16,7 @@ import { eq, and } from "drizzle-orm";
 import { hrmsEmployees } from "./schema.js";
 import { hrmsLeaveAllocs } from "../leave/schema.js";
 import { fetchFnfTaxBreakdown, PayrollUnavailableError } from "../../shared/payroll-client.js";
+import { loadTypeResolver } from "./engagement-policy.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer", "payroll_admin"];
 
@@ -78,7 +79,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
         eq(hrmsLeaveAllocs.employeeId, id),
       )));
     const totalLeaveBalance = allocations.reduce((sum, a) => sum + (a.balanceDays ?? 0), 0);
-    const leaveEncashmentMinor = dailyBasicMinor * totalLeaveBalance;
+    let leaveEncashmentMinor = dailyBasicMinor * totalLeaveBalance;
 
     // 3. Gratuity (only if >= 5 years of service)
     // Formula: (basic * 15) / 26 * completed_years
@@ -87,6 +88,26 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     if (completedYears >= 5) {
       gratuityMinor = Math.round((basicMinor * 15 * completedYears) / 26);
     }
+
+    // DIC engagement gate: consultant / third-party / apprentice types carry NO
+    // gratuity or leave-encashment regardless of tenure. Resolved from the
+    // employee's engagement policy (categorised types only; legacy/un-categorised
+    // types stay permissive, so existing settlements are unchanged). Applied
+    // before the total + the payroll tax breakdown so nothing reinstates them.
+    // Fail-open: a resolver error must never break the settlement calculation.
+    let engGratuityEligible = true;
+    let engLeaveEncashEligible = true;
+    try {
+      const resolveType = await loadTypeResolver(ctx.tenantId);
+      const engagementPolicy = resolveType(emp.employeeType);
+      engGratuityEligible = engagementPolicy.eligibleForGratuity;
+      engLeaveEncashEligible = engagementPolicy.leaveEncashment;
+    } catch (err) {
+      req.log.warn({ err }, "engagement policy resolve failed; F&F terminal benefits not gated");
+    }
+    const gratuityEligible = completedYears >= 5 && engGratuityEligible;
+    if (!engGratuityEligible) gratuityMinor = 0;
+    if (!engLeaveEncashEligible) leaveEncashmentMinor = 0;
 
     // Total F&F
     const totalMinor = noticeBuyoutMinor + leaveEncashmentMinor + gratuityMinor;
@@ -193,6 +214,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
       employeeId: id,
       employeeNo: emp.employeeNo,
       fullName: emp.fullName,
+      engagementType: emp.employeeType,
       separationDate: body.separationDate,
       dateOfJoining: emp.dateOfJoining,
       yearsOfService: Math.round(yearsOfService * 100) / 100,
@@ -208,11 +230,13 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
         leaveEncashment: {
           leaveBalanceDays: totalLeaveBalance,
           amountMinor: leaveEncashmentMinor,
+          engagementEligible: engLeaveEncashEligible,
         },
         gratuity: {
-          eligible: completedYears >= 5,
+          eligible: gratuityEligible,
           completedYears,
           amountMinor: gratuityMinor,
+          engagementEligible: engGratuityEligible,
         },
       },
       totalFnfMinor: totalMinor,
