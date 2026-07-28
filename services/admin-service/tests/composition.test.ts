@@ -15,8 +15,10 @@ const TENANT = "cccccccc-dddd-4000-8000-0000000000e1";
 const OTHER = "cccccccc-dddd-4000-8000-0000000000e2";
 const FRESH = "cccccccc-dddd-4000-8000-0000000000e3";
 const ENABLE = "cccccccc-dddd-4000-8000-0000000000e4"; // dedicated to the enable/disable flow
+const PROC = "cccccccc-dddd-4000-8000-0000000000e5"; // ERP module enable flow
+const BUNDLE = "cccccccc-dddd-4000-8000-0000000000e6"; // bundle enable flow
 const ADMIN = "11111111-eeee-4000-8000-000000000001";
-const TENANTS = [TENANT, OTHER, FRESH, ENABLE];
+const TENANTS = [TENANT, OTHER, FRESH, ENABLE, PROC, BUNDLE];
 
 function token(actorId: string, roles: string[] = ["tenant_admin"], tenantId = TENANT): string {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-comp" }, SECRET, 3600);
@@ -152,6 +154,57 @@ describe("enable / disable with dependency resolution (fresh tenant)", () => {
   });
 });
 
+describe("ERP registry + bundles (whole-platform composition)", () => {
+  it("registry exposes the full ERP graph, clusters and bundles", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/composition/registry", headers: auth(ADMIN) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // 34 modules across HR + Finance + P2P + Delivery + Citizen + Governance + Insight
+    expect(body.modules.length).toBeGreaterThanOrEqual(34);
+    const proc = body.modules.find((m: any) => m.id === "procurement");
+    expect(proc.cluster).toBe("p2p");
+    expect(proc.hardDeps).toEqual(expect.arrayContaining(["finance", "budget", "workflow"]));
+    // bundle catalogue present (one-click clusters)
+    expect(body.bundles.map((b: any) => b.code)).toEqual(
+      expect.arrayContaining(["hr", "payroll", "finance", "p2p", "delivery", "citizen", "governance", "insight"]),
+    );
+    const p2p = body.bundles.find((b: any) => b.code === "p2p");
+    expect(p2p.moduleIds).toEqual(expect.arrayContaining(["procurement", "contract", "inventory", "asset"]));
+    // govt profile now carries the non-HR rule-packs
+    const govt = body.profiles.find((p: any) => p.code === "govt_dept");
+    expect(govt.rulePacks.accounting_basis).toBe("govt_fund");
+    expect(govt.rulePacks.procurement_rulebook).toBe("gfr_gem");
+  });
+
+  it("enabling procurement pulls finance + budget as deps", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/composition/modules/procurement/enable", headers: auth(ADMIN, ["tenant_admin"], PROC) });
+    expect(res.statusCode).toBe(200);
+    const src = sourceMap(res.json());
+    expect(src["procurement"]).toBe("user");
+    expect(src["finance"]).toBe("dep");
+    expect(src["budget"]).toBe("dep");
+  });
+
+  it("blocks disabling finance while procurement depends on it (409)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/composition/modules/finance/disable", headers: auth(ADMIN, ["tenant_admin"], PROC) });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("enabling the p2p bundle turns on the whole cluster + its deps", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/composition/bundles/p2p/enable", headers: auth(ADMIN, ["tenant_admin"], BUNDLE) });
+    expect(res.statusCode).toBe(200);
+    const src = sourceMap(res.json());
+    ["procurement", "contract", "inventory", "asset"].forEach((m) => expect(src[m]).toBe("user"));
+    expect(src["finance"]).toBe("dep"); // pulled by procurement/inventory/asset
+    expect(src["budget"]).toBe("dep"); // pulled by procurement
+  });
+
+  it("rejects an unknown bundle code (404)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/composition/bundles/ghostbundle/enable", headers: auth(ADMIN, ["tenant_admin"], BUNDLE) });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 // Read raw rows with the RLS GUC set to a specific tenant (mirrors central-config test).
 function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
   return sqlClient.begin(async (sql) => {
@@ -162,20 +215,20 @@ function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promi
 
 describe("RLS tenant isolation", () => {
   it("a tenant never sees another tenant's entitlements", async () => {
-    // FRESH was fully disabled above; onboard it as govt (12 defaults), then read as OTHER.
+    // FRESH was fully disabled above; onboard it as govt (28 defaults), then read as OTHER.
     await app.inject({ method: "POST", url: "/v1/admin/composition/onboard", headers: auth(ADMIN, ["tenant_admin"], FRESH), payload: { profile: "govt_dept" } });
     const other = await app.inject({ method: "GET", url: "/v1/admin/composition/tenant", headers: auth(ADMIN, ["tenant_admin"], OTHER) });
     expect(other.statusCode).toBe(200);
-    // OTHER is small_office (7 defaults) — must NOT reflect FRESH's govt set (12 defaults)
+    // OTHER is small_office (10 defaults) — must NOT reflect FRESH's govt set (28 defaults)
     expect(other.json().profile.code).toBe("small_office");
-    expect(other.json().counts.user).toBeLessThan(12);
+    expect(other.json().counts.user).toBe(10);
 
     // FORCE RLS proof: an UNSCOPED read (no app.tenant_id GUC) is fail-closed → 0 rows,
-    // even though the rows exist — a SCOPED read for FRESH sees all 12.
+    // even though the rows exist — a SCOPED read for FRESH sees all 28.
     const unscoped = await sqlClient`SELECT count(*)::int AS n FROM composition.tenant_entitlement WHERE tenant_id = ${FRESH}`;
     expect(unscoped[0].n).toBe(0);
     const scoped = await readAsTenant(FRESH, (sql) => sql`SELECT count(*)::int AS n FROM composition.tenant_entitlement WHERE tenant_id = ${FRESH}`);
-    expect((scoped as Array<{ n: number }>)[0].n).toBe(12);
+    expect((scoped as Array<{ n: number }>)[0].n).toBe(28);
     // And FRESH cannot see OTHER's rows even with its own GUC set.
     const crossView = await readAsTenant(FRESH, (sql) => sql`SELECT count(*)::int AS n FROM composition.tenant_entitlement WHERE tenant_id = ${OTHER}`);
     expect((crossView as Array<{ n: number }>)[0].n).toBe(0);

@@ -19,7 +19,7 @@ import {
 // Mirror of the seeded production graph (subset of columns the resolver uses).
 function fixtureDefs(): ModuleDef[] {
   const m = (id: string, layer: number, isCore: boolean, hardDeps: string[], softDeps: string[], screens: string[], sortOrder: number): ModuleDef => ({
-    id, name: id, layer, isCore, hardDeps, softDeps, screens, sortOrder,
+    id, name: id, layer, isCore, hardDeps, softDeps, screens, cluster: "", sortOrder,
   });
   return [
     m("identity", 0, true, [], [], ["Users"], 10),
@@ -34,6 +34,8 @@ function fixtureDefs(): ModuleDef[] {
     m("appraisal", 2, false, ["employee", "workflow"], [], ["Appraisal"], 100),
     m("career", 2, false, ["employee", "workflow"], [], ["Transfers"], 110),
     m("finance", 3, false, ["config"], [], ["General Ledger"], 120),
+    m("budget", 3, false, ["finance"], [], ["Budget"], 200),
+    m("procurement", 3, false, ["finance", "budget", "workflow"], [], ["Tender"], 230),
     m("payroll", 3, false, ["employee", "config", "finance"], ["attendance", "leave", "loans"], ["Payroll & Salary Slip"], 130),
     m("loans", 3, false, ["employee"], ["payroll"], ["Loans & Advances"], 140),
     m("separation", 3, false, ["employee"], ["payroll"], ["Separation"], 160),
@@ -50,13 +52,13 @@ describe("buildRegistry validation", () => {
   });
   it("rejects unknown dependency references", () => {
     const bad = fixtureDefs();
-    bad.push({ id: "ghost", name: "ghost", layer: 5, isCore: false, hardDeps: ["nope"], softDeps: [], screens: [], sortOrder: 999 });
+    bad.push({ id: "ghost", name: "ghost", layer: 5, isCore: false, hardDeps: ["nope"], softDeps: [], screens: [], cluster: "", sortOrder: 999 });
     expect(() => buildRegistry(bad)).toThrow(/unknown dependency/);
   });
   it("detects a hard-dependency cycle", () => {
     const cyc: ModuleDef[] = [
-      { id: "a", name: "a", layer: 0, isCore: false, hardDeps: ["b"], softDeps: [], screens: [], sortOrder: 1 },
-      { id: "b", name: "b", layer: 0, isCore: false, hardDeps: ["a"], softDeps: [], screens: [], sortOrder: 2 },
+      { id: "a", name: "a", layer: 0, isCore: false, hardDeps: ["b"], softDeps: [], screens: [], cluster: "", sortOrder: 1 },
+      { id: "b", name: "b", layer: 0, isCore: false, hardDeps: ["a"], softDeps: [], screens: [], cluster: "", sortOrder: 2 },
     ];
     expect(() => buildRegistry(cyc)).toThrow(/cycle/);
   });
@@ -147,5 +149,30 @@ describe("hardClosure", () => {
     // payroll -> employee -> {org, config}; employee,finance -> config -> identity
     const cl = hardClosure(reg, ["payroll"]);
     ["employee", "config", "finance", "org", "identity"].forEach((d) => expect(cl.has(d)).toBe(true));
+  });
+});
+
+describe("ERP (non-HR) dependency edges", () => {
+  it("enabling procurement pulls finance + budget as deps (workflow is core)", () => {
+    const c = resolveComposition(reg, ["procurement"]);
+    const src = Object.fromEntries(c.entries.map((e) => [e.id, e.source]));
+    expect(src["procurement"]).toBe("user");
+    expect(src["finance"]).toBe("dep");
+    expect(src["budget"]).toBe("dep");
+    expect(src["workflow"]).toBe("core");
+  });
+
+  it("blocks disabling finance while procurement is enabled", () => {
+    const res = canDisable(reg, ["procurement", "finance"], "finance");
+    expect(res.ok).toBe(false);
+    expect(res.blockers).toContain("procurement");
+  });
+
+  it("disabling procurement GCs its dep-only budget + finance", () => {
+    const afterUser = applyDisable(reg, ["procurement"], "procurement");
+    const c = resolveComposition(reg, afterUser);
+    expect(c.moduleIds).not.toContain("procurement");
+    expect(c.moduleIds).not.toContain("budget");
+    expect(c.moduleIds).not.toContain("finance");
   });
 });

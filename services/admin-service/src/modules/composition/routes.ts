@@ -28,6 +28,7 @@ const ADMIN_ROLES = ["tenant_admin", "super_admin", "platform_admin"];
 
 const onboardBody = z.object({ profile: z.string().min(1).max(64) });
 const moduleParam = z.object({ id: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
+const bundleParam = z.object({ code: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
 
 function safeParse<T>(schema: z.ZodType<T, z.ZodTypeDef, any>, data: unknown): T {
   const result = schema.safeParse(data);
@@ -60,7 +61,7 @@ async function tenantView(tenantId: string): Promise<unknown> {
 
   const modules = comp.entries.map((e) => {
     const m = reg.get(e.id)!;
-    return { id: m.id, name: m.name, layer: m.layer, source: e.source, screens: m.screens };
+    return { id: m.id, name: m.name, layer: m.layer, cluster: m.cluster, source: e.source, screens: m.screens };
   });
   const counts = {
     total: comp.entries.length,
@@ -92,17 +93,23 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/composition/registry", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const [mods, profiles] = await Promise.all([repo.loadRegistry(ctx.tenantId), repo.loadProfiles(ctx.tenantId)]);
+    const [mods, profiles, bundles] = await Promise.all([
+      repo.loadRegistry(ctx.tenantId),
+      repo.loadProfiles(ctx.tenantId),
+      repo.loadBundles(ctx.tenantId),
+    ]);
     return reply.send({
       modules: mods.map((m) => ({
         id: m.id,
         name: m.name,
         layer: m.layer,
         isCore: m.isCore,
+        cluster: m.cluster,
         hardDeps: m.hardDeps,
         softDeps: m.softDeps,
         screens: m.screens,
       })),
+      bundles: bundles.map((b) => ({ code: b.code, label: b.label, subtitle: b.subtitle, moduleIds: b.moduleIds })),
       profiles: profiles.map((p) => ({
         code: p.code,
         label: p.label,
@@ -148,6 +155,25 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     const reg = await registryFor(ctx.tenantId);
     if (!reg.has(id)) throw new HttpError(404, "UNKNOWN_MODULE", `unknown module: ${id}`);
     const nextUser = applyEnable(reg, await repo.getUserModules(ctx.tenantId), id);
+    await repo.replaceUserModules(ctx.tenantId, nextUser, ctx.actorId);
+    return reply.send(await tenantView(ctx.tenantId));
+  });
+
+  // Enable a whole bundle (cluster) — every module in it becomes a user pick,
+  // and each module's hard deps are pulled in automatically.
+  app.post("/v1/admin/composition/bundles/:code/enable", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { code } = safeParse(bundleParam, req.params);
+    const bundles = await repo.loadBundles(ctx.tenantId);
+    const bundle = bundles.find((b) => b.code === code);
+    if (!bundle) throw new HttpError(404, "UNKNOWN_BUNDLE", `unknown bundle: ${code}`);
+    const reg = await registryFor(ctx.tenantId);
+    let nextUser = await repo.getUserModules(ctx.tenantId);
+    for (const id of bundle.moduleIds) {
+      if (!reg.has(id)) throw new HttpError(500, "BUNDLE_INVALID", `bundle ${code} references unknown module ${id}`);
+      nextUser = applyEnable(reg, nextUser, id);
+    }
     await repo.replaceUserModules(ctx.tenantId, nextUser, ctx.actorId);
     return reply.send(await tenantView(ctx.tenantId));
   });
