@@ -26,8 +26,9 @@
 | L11 Mutation/Canary | 11 | 11 | 0 | ✅ GREEN | 100% canaries caught |
 | L11 Mutation Score | 1059 mutants | 755 killed | 253 survived | ✅ **71.29%** | Enforcing at 68; **≥70% criterion MET** |
 
-**Totals:** 456 tests across 17 files, plus a measured SLO run and 3 CI guards
-(package exports, deployment declaration, schema drift).
+**Totals:** 479 tests across 19 files, plus a measured SLO run and 6 CI guards
+(package exports, deployment declaration, schema drift, CI config, test ledger, and
+the bootstrap's own migration-failure reconciliation) — see the Guard Inventory below.
 
 Release gate: **NOT RELEASABLE** — the three live 500s L3b found are fixed and
 locked by a regression lane, but 231 schema drifts remain across 11 services and
@@ -73,6 +74,37 @@ that use a real database were each run **twice** and compared — identity 8/8,
 knowledge 52/52, ml 18/18, notification 4/4, policy 9/9, tenant-modules 37/37,
 tenant 9/9, all identical across runs. So inventory was the only live instance, and
 7 files were left alone rather than churned on suspicion.
+
+**Guarded against recurrence:** `scripts/ci/test-ledger-poison-guard.mjs` flags any
+test that publishes a hardcoded `messageId` against a real database without clearing
+the ledger. 948 test files scanned, 18 exempt by construction (they mock
+persistence), 8 real candidates, 7 tracked in
+`scripts/ci/test-ledger-poison-allowlist.json` with a written reason each. Fails on
+a new unlisted file, a stale entry, a reasonless entry, a malformed list, a missing
+list, and on finding no candidates at all. 11 permanent canaries in the L11 lane
+cover every one of those paths.
+
+---
+
+## Guard Inventory
+
+Six CI guards now cover defect classes that no test can see. Each is ratcheted where
+it has outstanding debt, and each has been demonstrated failing on a planted defect.
+
+| Guard | Catches | Proven by |
+|-------|---------|-----------|
+| `package-exports-guard` | `exports` maps pointing at paths that do not exist — killed 3 services for ~20h while pm2 reported them online | found 5 more broken entry points on first run |
+| `deployment-declaration-guard` | a service startable but unroutable, or routed but undeclared | fails on both classes |
+| `schema-drift-guard` | a Drizzle column the database lacks — every `SELECT` from that model 500s | 174 ratcheted; planted column → `NEW: 1` |
+| `bootstrap-postgres.sh` reconciliation | a migration that fails while the bootstrap still exits 0 | 40 ratcheted; 4 canaries |
+| `ci-config-guard` | orphaned bootstrap files, socket-only health checks, ratchet escape hatches in CI | 7 canaries (L11) |
+| `test-ledger-poison-guard` | a test that poisons its own idempotency ledger | 11 canaries (L11) |
+
+Two of these guards shipped with a defect in themselves — a regex matching `-h`
+inside `--health-interval`, and a guard wired into no workflow at all. Both were
+caught by canaries that assert the failure **message**, not just the exit code. That
+is the single most useful convention in this programme: an exit-1-for-the-wrong-reason
+is indistinguishable from a working gate unless you check what it said.
 
 ---
 

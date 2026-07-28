@@ -275,6 +275,15 @@ jobs:
       #    'connection refused'.
       - name: CI config guard (bootstrap files invoked, health checks use TCP)
         run: node scripts/ci/ci-config-guard.mjs
+      # A test publishing a HARDCODED messageId against a real database must clear
+      # it from _inbox.processed. markProcessed() returns false for a known id and
+      # the consumer then RETURNS — no insert, no throw, so no retry and no dead
+      # letter. inventory-service's serial-race test therefore passed the first
+      # time it ever ran and failed on every run after, with a symptom that looks
+      # like a concurrency defect in the code under test. CI is green on a fresh
+      # database, so nothing else can see this.
+      - name: Test ledger poison guard (hardcoded messageIds must be cleared)
+        run: node scripts/ci/test-ledger-poison-guard.mjs
       - name: Check no cross-service DB joins
         run: |
           # L1 rule: no service may import another service's schema

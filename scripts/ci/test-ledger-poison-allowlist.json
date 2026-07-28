@@ -1,0 +1,13 @@
+{
+  "$comment": "Test files that publish a hardcoded messageId against a REAL database and do not clear the idempotency ledger. TRACKED, not approved. Each was run TWICE and compared on 2026-07-27 and produced identical results, so none is currently poisoned - they are recorded here rather than edited on suspicion, because a speculative change to a passing test is its own risk. If one later fails with a 'zero rows, zero dead letters' shape, this is the first place to look. The guard fails on a NEW unlisted file and on a STALE entry that no longer qualifies.",
+  "generatedAt": "2026-07-27",
+  "entries": {
+    "identity-service/tests/identity.test.ts": "run twice, identical (8/8); the hardcoded id is not gated on markProcessed",
+    "knowledge-service/tests/knowledge-modules.test.ts": "run twice, identical (52/52)",
+    "ml-service/tests/observability.test.ts": "run twice, identical (18/18)",
+    "notification-service/tests/notification.test.ts": "run twice, identical (4/4)",
+    "policy-service/tests/policy.test.ts": "run twice, identical (9/9)",
+    "tenant-service/tests/tenant-modules.test.ts": "run twice, identical (37/37)",
+    "tenant-service/tests/tenant.test.ts": "run twice, identical (9/9)"
+  }
+}
