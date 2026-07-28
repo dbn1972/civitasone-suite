@@ -7,6 +7,7 @@
 import { createTenantDb } from "@civitasone/db";
 import { schema as employeeModule }    from "../modules/employee/schema.js";
 import { schema as recruitmentModule } from "../modules/recruitment/schema.js";
+import { schema as requisitionModule } from "../modules/recruitment/requisition-schema.js";
 import { schema as attendanceModule }  from "../modules/attendance/schema.js";
 import { schema as leaveModule }       from "../modules/leave/schema.js";
 import { schema as trainingModule }    from "../modules/training/schema.js";
@@ -38,6 +39,7 @@ import { outboxSchema }                from "./outbox.js";
 const SCHEMA = {
   ...employeeModule,
   ...recruitmentModule,
+  ...requisitionModule,
   ...attendanceModule,
   ...leaveModule,
   ...trainingModule,
