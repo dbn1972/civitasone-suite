@@ -25,6 +25,13 @@ export const createEmployeeBody = z.object({
   legalEntityId:  z.string().uuid().optional(),
   costCenterId:   z.string().uuid().optional(),
   locationId:     z.string().uuid().optional(),
+  // Statutory + engagement-type-specific identifiers (DIC).
+  esicIpNumber:   z.string().max(17).optional(),
+  pran:           z.string().max(12).optional(),
+  gstin:          z.string().max(15).optional(),
+  sacCode:        z.string().max(6).optional(),
+  agencyRef:      z.string().max(64).optional(),
+  napsId:         z.string().max(24).optional(),
 });
 export type CreateEmployeeBody = z.infer<typeof createEmployeeBody>;
 
@@ -43,6 +50,12 @@ export const updateEmployeeBody = z.object({
   basicMinor:     z.bigint().optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
+  esicIpNumber:   z.string().max(17).optional(),
+  pran:           z.string().max(12).optional(),
+  gstin:          z.string().max(15).optional(),
+  sacCode:        z.string().max(6).optional(),
+  agencyRef:      z.string().max(64).optional(),
+  napsId:         z.string().max(24).optional(),
 });
 export type UpdateEmployeeBody = z.infer<typeof updateEmployeeBody>;
 
