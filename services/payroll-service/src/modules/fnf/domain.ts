@@ -26,6 +26,14 @@ export interface FnfInput {
   separationType: SeparationType;
   separationDate: string;
   employeeCategory: EmployeeCategory;
+  /**
+   * DIC engagement terminal-benefit gates (default true). When an engagement
+   * type's policy excludes gratuity or leave-encashment (consultant, third-party,
+   * apprentice), the corresponding gross is forced to zero before exemption/tax.
+   * Omitting them keeps pre-engagement behaviour.
+   */
+  eligibleForGratuity?: boolean;
+  leaveEncashmentEligible?: boolean;
   // Gross F&F amounts (from hrms-service fnf-calculate)
   noticeBuyoutMinor: bigint;
   leaveEncashmentGrossMinor: bigint;
@@ -86,6 +94,14 @@ export interface FnfResult {
  * 7. Net payable = total gross − TDS on separation.
  */
 export function computeFnfSettlement(input: FnfInput): FnfResult {
+  // Step 0 (DIC engagement gate): a type whose policy excludes gratuity or
+  // leave-encashment (consultant / third-party / apprentice) settles zero for
+  // that head. Applied before exemption/tax so nothing downstream can reinstate
+  // it. Defaults to eligible, preserving pre-engagement behaviour.
+  const gratuityGrossMinor = input.eligibleForGratuity === false ? 0n : input.gratuityGrossMinor;
+  const leaveEncashmentGrossMinor = input.leaveEncashmentEligible === false ? 0n : input.leaveEncashmentGrossMinor;
+  input = { ...input, gratuityGrossMinor, leaveEncashmentGrossMinor };
+
   // Step 1: Exemptions
   const gratuityExemption = computeGratuityExemption({
     actualGratuityMinor: input.gratuityGrossMinor,
