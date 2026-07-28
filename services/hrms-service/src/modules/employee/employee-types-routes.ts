@@ -32,6 +32,16 @@ const employeeTypeMaster = employeeSchema.table("hrms_employee_types", {
   defaultProbationMonths: integer("default_probation_months").notNull().default(0),
   maxContractMonths: integer("max_contract_months"),  // null = unlimited
   payMode: varchar("pay_mode", { length: 16 }).notNull().default("monthly"), // monthly|hourly|consolidated|stipend|none
+  // Engagement policy pack (migration 0065) — drives pay/statutory/tax/leave per type.
+  category: varchar("category", { length: 24 }).notNull().default("other"), // pay_scale|contractual|consultant|third_party|apprentice|other
+  paymentRoute: varchar("payment_route", { length: 16 }).notNull().default("payroll"), // payroll|invoice|agency|stipend|none
+  taxSection: varchar("tax_section", { length: 8 }).notNull().default("192"), // 192|194J|194C|stipend|none
+  statutoryPf: boolean("statutory_pf").notNull().default(true),
+  statutoryEsi: boolean("statutory_esi").notNull().default(true),
+  statutoryNps: boolean("statutory_nps").notNull().default(false),
+  eligibleForGratuity: boolean("eligible_for_gratuity").notNull().default(true),
+  eligibleForBonus: boolean("eligible_for_bonus").notNull().default(false),
+  leaveEncashment: boolean("leave_encashment").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -49,6 +59,15 @@ const createBody = z.object({
   defaultProbationMonths: z.number().int().nonnegative().default(0),
   maxContractMonths: z.number().int().positive().optional(),
   payMode: z.enum(["monthly", "hourly", "consolidated", "stipend", "none"]).default("monthly"),
+  category: z.enum(["pay_scale", "contractual", "consultant", "third_party", "apprentice", "other"]).default("other"),
+  paymentRoute: z.enum(["payroll", "invoice", "agency", "stipend", "none"]).default("payroll"),
+  taxSection: z.enum(["192", "194J", "194C", "stipend", "none"]).default("192"),
+  statutoryPf: z.boolean().default(true),
+  statutoryEsi: z.boolean().default(true),
+  statutoryNps: z.boolean().default(false),
+  eligibleForGratuity: z.boolean().default(true),
+  eligibleForBonus: z.boolean().default(false),
+  leaveEncashment: z.boolean().default(false),
   sortOrder: z.number().int().nonnegative().default(0),
 });
 
@@ -92,6 +111,15 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     if (body.defaultProbationMonths !== undefined) patch.defaultProbationMonths = body.defaultProbationMonths;
     if (body.maxContractMonths !== undefined) patch.maxContractMonths = body.maxContractMonths;
     if (body.payMode !== undefined) patch.payMode = body.payMode;
+    if (body.category !== undefined) patch.category = body.category;
+    if (body.paymentRoute !== undefined) patch.paymentRoute = body.paymentRoute;
+    if (body.taxSection !== undefined) patch.taxSection = body.taxSection;
+    if (body.statutoryPf !== undefined) patch.statutoryPf = body.statutoryPf;
+    if (body.statutoryEsi !== undefined) patch.statutoryEsi = body.statutoryEsi;
+    if (body.statutoryNps !== undefined) patch.statutoryNps = body.statutoryNps;
+    if (body.eligibleForGratuity !== undefined) patch.eligibleForGratuity = body.eligibleForGratuity;
+    if (body.eligibleForBonus !== undefined) patch.eligibleForBonus = body.eligibleForBonus;
+    if (body.leaveEncashment !== undefined) patch.leaveEncashment = body.leaveEncashment;
     if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder;
     await db.transaction((tx) => tx.update(employeeTypeMaster).set(patch as any).where(eq(employeeTypeMaster.id, id)));
     return reply.send({ id, status: "updated" });
