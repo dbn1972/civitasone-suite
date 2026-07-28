@@ -41,6 +41,9 @@ export function registerFnfConsumers(queue: Queue): void {
       deductions80dMinor: string;
       otherDeductionsMinor: string;
       fyStartYear: number;
+      // DIC engagement terminal-benefit gates (default true when absent).
+      eligibleForGratuity?: boolean;
+      leaveEncashmentEligible?: boolean;
     };
 
     await db.transaction(async (tx) => {
@@ -63,6 +66,8 @@ export function registerFnfConsumers(queue: Queue): void {
         noticeBuyoutMinor: BigInt(p.noticeBuyoutMinor ?? "0"),
         leaveEncashmentGrossMinor: BigInt(p.leaveEncashmentGrossMinor ?? "0"),
         gratuityGrossMinor: BigInt(p.gratuityGrossMinor ?? "0"),
+        ...(p.eligibleForGratuity != null ? { eligibleForGratuity: p.eligibleForGratuity } : {}),
+        ...(p.leaveEncashmentEligible != null ? { leaveEncashmentEligible: p.leaveEncashmentEligible } : {}),
         retrenchmentCompMinor: BigInt(p.retrenchmentCompMinor ?? "0"),
         vrsCompMinor: BigInt(p.vrsCompMinor ?? "0"),
         arrearsMinor: BigInt(p.arrearsMinor ?? "0"),
