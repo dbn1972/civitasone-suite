@@ -195,6 +195,57 @@ for (const wf of workflows) {
   }
 }
 
+// ── CHECK 3 ──────────────────────────────────────────────────────────────────
+/**
+ * No CI step may pass a flag that relaxes a ratchet or rewrites its baseline.
+ *
+ * Every ratchet in this repo has an escape hatch, and each is legitimate where it
+ * is meant to be used:
+ *   --allow-stale               downgrades stale drift to INFO, for a
+ *                               hand-provisioned developer cluster
+ *   --write-baseline            regenerates the drift baseline
+ *   BOOTSTRAP_WRITE_ALLOWLIST=1 regenerates the migration failure allow-list
+ *
+ * In a workflow they are all fatal to the thing they belong to. `--allow-stale` in
+ * CI means a fixed-but-still-listed entry is never caught anywhere, since CI is the
+ * only place the strict run happens. A baseline regenerated inside CI is worse: the
+ * gate would record whatever it finds as the new normal and pass forever.
+ *
+ * This is the cheapest possible protection for the most expensive failure — a gate
+ * that still runs, still prints its banner, and can no longer fail.
+ */
+const RATCHET_ESCAPE_HATCHES = [
+  { pattern: "--allow-stale", why: "relaxes stale detection; CI is the only strict run" },
+  { pattern: "--write-baseline", why: "rewrites the drift baseline — the gate would bless its own findings" },
+  { pattern: "BOOTSTRAP_WRITE_ALLOWLIST", why: "rewrites the migration failure allow-list" },
+];
+
+let workflowLinesScanned = 0;
+for (const wf of workflows) {
+  const src = readFileSync(join(WORKFLOW_DIR, wf), "utf8");
+  const lines = src.split("\n");
+  workflowLinesScanned += lines.length;
+  lines.forEach((line, idx) => {
+    // Skip YAML comments: the ci.yml note explaining WHY the flag is absent must
+    // not itself trip the check.
+    if (line.trim().startsWith("#")) return;
+    for (const hatch of RATCHET_ESCAPE_HATCHES) {
+      if (line.includes(hatch.pattern)) {
+        failures.push(
+          `${wf}:${idx + 1}: CI step uses \`${hatch.pattern}\`.\n` +
+            `      ${hatch.why}.\n` +
+            `      The gate would keep running and reporting, and stop being able to fail.\n` +
+            `      line: ${line.trim()}`,
+        );
+      }
+    }
+  });
+}
+
+if (workflowLinesScanned === 0) {
+  failures.push("no workflow lines were scanned for ratchet escape hatches — check 3 was vacuous");
+}
+
 // ── Report ───────────────────────────────────────────────────────────────────
 console.log("──────────────────────────────────────────────────────────────");
 console.log("  CI Config Guard");
@@ -222,6 +273,7 @@ if (failures.length > 0) {
 }
 
 console.log("  CLEAN — every bootstrap file is invoked, every Postgres health check");
-console.log("  forces TCP with a role the container actually creates.");
+console.log("  forces TCP with a role the container actually creates, and no CI step");
+console.log("  passes a flag that would stop a ratchet being able to fail.");
 console.log("──────────────────────────────────────────────────────────────");
 process.exit(0);
