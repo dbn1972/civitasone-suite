@@ -73,12 +73,48 @@ export const hrmsOffers = recruitmentSchema.table("hrms_offers", {
   currency:      char("currency", { length: 3 }).notNull().default("INR"),
   joiningDate:   date("joining_date"),
   status:        varchar("status", { length: 24 }).notNull().default("draft"),
+  offerNo:       varchar("offer_no", { length: 48 }),
+  offerVersion:  integer("offer_version").notNull().default(1),
+  basicMinor:        bigint("basic_minor", { mode: "bigint" }).notNull().default(0n),
+  joiningBonusMinor: bigint("joining_bonus_minor", { mode: "bigint" }).notNull().default(0n),
+  relocationMinor:   bigint("relocation_minor", { mode: "bigint" }).notNull().default(0n),
+  variablePayMinor:  bigint("variable_pay_minor", { mode: "bigint" }).notNull().default(0n),
+  grossCtcMinor:     bigint("gross_ctc_minor", { mode: "bigint" }).notNull().default(0n),
+  grade:         varchar("grade", { length: 48 }),
+  templateRef:   varchar("template_ref", { length: 200 }),
+  approvalChain: jsonb("approval_chain").notNull().default([]),
+  currentStage:  integer("current_stage").notNull().default(-1),
+  releasedAt:    timestamp("released_at", { withTimezone: true }),
+  approvedAt:    timestamp("approved_at", { withTimezone: true }),
+  expiresAt:     date("expires_at"),
+  acceptedAt:    timestamp("accepted_at", { withTimezone: true }),
+  acceptedVersion: integer("accepted_version"),
+  acceptanceMeta:  jsonb("acceptance_meta"),
+  declinedAt:    timestamp("declined_at", { withTimezone: true }),
+  declineReasonCode: varchar("decline_reason_code", { length: 24 }),
+  declineRemarks: text("decline_remarks"),
+  withdrawReason: text("withdraw_reason"),
+  supersedesOfferId: uuid("supersedes_offer_id"),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),
   updatedBy:     uuid("updated_by").notNull(),
   version:       integer("version").notNull().default(1),
 });
+
+/** Immutable offer lifecycle audit trail (R-RA-0164). */
+export const hrmsOfferEvents = recruitmentSchema.table("hrms_offer_events", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  offerId:       uuid("offer_id").notNull(),
+  applicationId: uuid("application_id").notNull(),
+  action:        varchar("action", { length: 16 }).notNull(),
+  reasonCode:    varchar("reason_code", { length: 24 }),
+  remarks:       text("remarks"),
+  actorId:       uuid("actor_id").notNull(),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OfferEventRow = typeof hrmsOfferEvents.$inferSelect;
 
 
 // Maps the existing recruitment.hrms_interviews table (migration 0008). The
@@ -127,4 +163,4 @@ export const hrmsScreeningEvents = recruitmentSchema.table("hrms_screening_event
 
 export type ScreeningEventRow = typeof hrmsScreeningEvents.$inferSelect;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents };
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents };
