@@ -164,6 +164,18 @@ export function attendanceLopApplies(p: EngagementPolicy): boolean {
 }
 
 /**
+ * Is this engagement type entitled to the salaried (CCS / statutory) leave
+ * scheme? Consultants (invoice-billed) and third-party staff (agency-deployed)
+ * take leave under their own contract / the agency, never the DIC leave ledger,
+ * so `eligible_for_leave` is false for them; pay_scale / contractual / apprentice
+ * are eligible. The leave apply flow uses this to reject an ineligible type up
+ * front. Pure. (Un-categorised / legacy types are permissive via DEFAULT_POLICY.)
+ */
+export function leaveEligible(p: EngagementPolicy): boolean {
+  return p.eligibleForLeave;
+}
+
+/**
  * Build a pure resolver: employeeType code → EngagementPolicy for the payroll
  * feed. A policy is imposed ONLY when the type is explicitly categorised into a
  * canonical engagement category (consultant / third_party / apprentice / …); the
