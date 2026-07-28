@@ -116,6 +116,9 @@ export const EVENTS = {
   // third-party / agency (194C, CLRA) — consumed by Finance AP
   contractorBillApproved:    "hrms.contractor_bill.approved",
   contractorBillPaid:        "hrms.contractor_bill.paid",
+  // apprentice / NAPS stipend — consumed by Finance AP + NAPS reimbursement claim
+  apprenticeStipendApproved: "hrms.apprentice_stipend.approved",
+  apprenticeStipendPaid:     "hrms.apprentice_stipend.paid",
   // SVC-003: a recruitment hire filled a position for an auto-generated
   // manpower-plan requisition (consumed by modules/manpower-planning).
   positionFilled:    "hrms.recruitment.position_filled",
