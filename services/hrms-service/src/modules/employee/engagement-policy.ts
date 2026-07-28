@@ -146,9 +146,19 @@ export const DEFAULT_POLICY: EngagementPolicy = {
 };
 
 /**
- * Build a pure resolver: employeeType code → EngagementPolicy. Precedence:
- * tenant master row (by code) → canonical catalogue (by category) → permissive
- * default. Used to project each employee's policy into the payroll-input feed.
+ * Build a pure resolver: employeeType code → EngagementPolicy for the payroll
+ * feed. A policy is imposed ONLY when the type is explicitly categorised into a
+ * canonical engagement category (consultant / third_party / apprentice / …); the
+ * canonical catalogue is authoritative for that category. Un-categorised types
+ * (a tenant row with the migration-default category 'other', or an unknown code)
+ * stay permissive (DEFAULT_POLICY).
+ *
+ * Why not trust a tenant row's own statutory flags: migration 0065 back-filled
+ * the new columns on every pre-existing type row with plain defaults (e.g.
+ * statutory_nps=false), which are NOT intentional configuration. Keying the
+ * policy off the canonical *category* avoids regressing existing NPS/EPF
+ * employees while still letting a tenant activate branching by categorising a
+ * type (or by naming employeeType as a canonical category directly).
  */
 export function buildTypeResolver(tenantTypes: PolicyRow[], canonical: PolicyRow[]): (typeCode: string) => EngagementPolicy {
   const byCode = new Map<string, PolicyRow>();
@@ -157,9 +167,12 @@ export function buildTypeResolver(tenantTypes: PolicyRow[], canonical: PolicyRow
   for (const c of canonical) byCategory.set(String(c.category), c);
   return (typeCode: string): EngagementPolicy => {
     const t = byCode.get(typeCode);
-    if (t) return toPolicy(t);
-    const c = byCategory.get(typeCode); // treat the code itself as a canonical category
-    if (c) return toPolicy(c);
+    // A tenant row maps its code → category; else treat the code itself as a category.
+    const category = t ? String(t.category ?? "other") : typeCode;
+    if (category !== "other") {
+      const c = byCategory.get(category);
+      if (c) return toPolicy(c);
+    }
     return DEFAULT_POLICY;
   };
 }
