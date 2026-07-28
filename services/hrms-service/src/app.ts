@@ -58,6 +58,7 @@ import { competencyRoutes } from "./modules/competency/routes.js";
 import { contractRoutes } from "./modules/contracts/routes.js";
 import { integrationRoutes } from "./modules/integration/routes.js";
 import { consultantInvoiceRoutes } from "./modules/consultant-invoice/routes.js";
+import { contractorBillRoutes } from "./modules/contractor-bill/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -124,6 +125,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(deputationRoutes);
   await app.register(claimsRoutes);
   await app.register(consultantInvoiceRoutes);
+  await app.register(contractorBillRoutes);
   await app.register(schedulerRoutes);
   await app.register(disciplinaryRoutes);
   await app.register(reservationRoutes);
