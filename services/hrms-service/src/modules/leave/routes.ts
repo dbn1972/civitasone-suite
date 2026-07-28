@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyBaseLogger } from "fastify";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitasone/schemas/web";
@@ -9,6 +9,7 @@ import { db, scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody } from "./validators.js";
 import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
+import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -23,16 +24,34 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
  * codes outside the engine (e.g. EOL/MED) fall back to the consumer balance
  * check so nothing breaks. Throws 422 on a rule violation.
  */
-async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof applyLeaveBody.parse>): Promise<void> {
+async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof applyLeaveBody.parse>, log?: FastifyBaseLogger): Promise<void> {
   const alloc = await repo.findAllocById(body.allocId);
   if (!alloc) throw new HttpError(404, "ALLOC_NOT_FOUND", "leave allocation not found");
   const types = await repo.listLeaveTypesByTenant(tenantId);
   const lt = types.find((t) => t.id === body.leaveTypeId);
   if (!lt) throw new HttpError(404, "LEAVE_TYPE_NOT_FOUND", "leave type not found");
   const code = (lt.code ?? "").toUpperCase();
-  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return;
   const [emp] = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, body.employeeId)));
   if (!emp) throw new HttpError(404, "EMP_NOT_FOUND", "employee not found");
+  // DIC engagement gate — an engagement type not entitled to the salaried leave
+  // scheme (consultant invoice-billed, third_party agency-deployed) cannot draw
+  // on the DIC leave ledger. Runs for EVERY leave code, before the CCS-engine
+  // early-return below. Fail-open on resolver error so a transient failure never
+  // blocks a legitimate application.
+  const resolver = await loadTypeResolver(tenantId).catch((err: unknown) => {
+    // Fail open, but make the control's failure observable — if the resolver
+    // starts failing consistently the eligibility gate silently stops enforcing.
+    log?.error({ err, event: "leave.eligibility.resolver_failed", tenantId }, "leave eligibility resolver failed — failing open");
+    return null;
+  });
+  if (resolver && !leaveEligible(resolver(emp.employeeType ?? ""))) {
+    throw new HttpError(
+      422,
+      "LEAVE_NOT_ELIGIBLE",
+      `engagement type '${emp.employeeType ?? "unknown"}' is not eligible for the leave scheme — this workforce category does not accrue leave`,
+    );
+  }
+  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return;
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = (allowed as string[]).includes(emp.employeeType ?? "")
     ? (emp.employeeType as EmployeeType) : "permanent";
@@ -77,7 +96,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    await enforceCcsLeaveRules(ctx.tenantId, body);
+    await enforceCcsLeaveRules(ctx.tenantId, body, req.log);
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
   });
 
@@ -85,7 +104,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    await enforceCcsLeaveRules(ctx.tenantId, body);
+    await enforceCcsLeaveRules(ctx.tenantId, body, req.log);
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
   });
 
