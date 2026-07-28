@@ -24,6 +24,9 @@ import * as repo from "./screening-repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ADMIN_ROLES = ["hr_admin", "super_admin"];
+// Deliberate non-shortlist decisions that bulk shortlist must not silently
+// overturn — those require the admin override path.
+const BULK_SHORTLIST_BLOCKED = new Set(["ineligible", "waitlisted", "manual_review"]);
 const idParam = z.object({ id: z.string().uuid() });
 
 function jsonSafe(v: unknown): unknown {
@@ -129,12 +132,13 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     await db.transaction(async (tx) => {
       for (const a of apps) {
         if (a.shortlistFrozen) { skipped++; continue; }
-        // Bulk shortlist is a first-pass tool — it must NOT silently overturn an
-        // existing decision (e.g. an 'ineligible' rejection). Overturning a
-        // decided application is an override that must go through the
-        // screening-decision endpoint (admin + reason, audited as an override).
-        // Only pending or already-shortlisted (idempotent) rows are affected.
-        if (a.screeningDecision !== "pending" && a.screeningDecision !== "shortlisted") { skipped++; continue; }
+        // Bulk shortlist advances the NORMAL forward path (pending / eligible ->
+        // shortlisted; idempotent on shortlisted). It must NOT silently overturn a
+        // deliberate non-shortlist decision — a rejection (ineligible), a
+        // waitlist, or a manual-review hold. Overturning one of those is an
+        // override that must go through the screening-decision endpoint (admin +
+        // reason, audited as an override).
+        if (BULK_SHORTLIST_BLOCKED.has(a.screeningDecision)) { skipped++; continue; }
         await repo.setScreeningById(tx, ctx.tenantId, a.id, {
           screeningDecision: "shortlisted", screenedBy: ctx.actorId, screenedAt: new Date(),
         });
