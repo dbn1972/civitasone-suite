@@ -3,8 +3,28 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  DEFAULT_GOVT_CHAIN, currentStageRole, isFinalStage, canPublish, isEditable, cloneFields,
+  DEFAULT_GOVT_CHAIN, currentStageRole, isFinalStage, canPublish, isEditable, cloneFields, toVacancyType,
 } from "../src/modules/recruitment/requisition-domain.js";
+
+const JOB_OPENING_VACANCY_TYPES = new Set(["regular", "internship", "apprenticeship", "contractual", "deputation"]);
+
+describe("toVacancyType", () => {
+  it("only ever produces a value the job_openings CHECK constraint accepts", () => {
+    const modes = ["direct", "deputation", "absorption", "promotion", "contract", "consultant"];
+    const campaigns = ["direct", "campus", "walkin", "referral", "lateral", "apprenticeship", "mass"];
+    for (const m of modes) for (const c of campaigns) {
+      expect(JOB_OPENING_VACANCY_TYPES.has(toVacancyType(m, c))).toBe(true);
+    }
+  });
+  it("maps the unambiguous cases and defaults to regular", () => {
+    expect(toVacancyType("deputation", "direct")).toBe("deputation");
+    expect(toVacancyType("contract", "direct")).toBe("contractual");
+    expect(toVacancyType("consultant", "direct")).toBe("contractual");
+    expect(toVacancyType("direct", "apprenticeship")).toBe("apprenticeship");
+    expect(toVacancyType("direct", "campus")).toBe("regular");
+    expect(toVacancyType("promotion", "referral")).toBe("regular");
+  });
+});
 
 describe("currentStageRole", () => {
   it("returns the role for the active stage, null when out of range", () => {
