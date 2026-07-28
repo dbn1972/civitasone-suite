@@ -73,3 +73,29 @@ describe("legacy modules-list mode (flag off)", () => {
     expect(reply._code).toBe(403);
   });
 });
+
+describe("service-to-service auth headers", () => {
+  it("composition mode uses the x-internal / x-service-secret contract + composition URL", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "s3cr3t");
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ configured: true, data: [{ name: "finance" }] }) }));
+    vi.stubGlobal("fetch", fetchSpy);
+    await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance");
+    const [url, opts] = fetchSpy.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(url).toContain(`/v1/admin/composition/internal/${TID}/modules`);
+    expect(opts.headers["x-internal"]).toBe("1");
+    expect(opts.headers["x-tenant-id"]).toBe(TID);
+    expect(opts.headers["x-service-secret"]).toBe("s3cr3t");
+  });
+
+  it("legacy mode keeps the modules-list URL + x-internal-secret header", async () => {
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "s3cr3t");
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [{ name: "finance" }] }) }));
+    vi.stubGlobal("fetch", fetchSpy);
+    await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance");
+    const [url, opts] = fetchSpy.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(url).toContain(`/v1/admin/tenants/${TID}/modules-list`);
+    expect(opts.headers["x-internal-secret"]).toBe("s3cr3t");
+    expect(opts.headers["x-internal"]).toBeUndefined();
+  });
+});
