@@ -3,7 +3,7 @@
 # The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
-# Generated: 2026-07-27  Count: 46
+# Generated: 2026-07-27  Count: 40
 admin-service/0006_rls_full_tenant_isolation.sql           # relation "custom_domains.custom_domains" does not exist
 admin-service/0009_fk_indexes.sql                          # relation "scheduled_jobs.job_execution_history" does not exist
 admin-service/0018_nobypassrls_service_roles.sql           # permission denied to alter role
@@ -27,12 +27,6 @@ identity-service/0013_rls_full_tenant_isolation.sql        # relation "devices.e
 location-service/0006_rls_full_tenant_isolation.sql        # relation "geofence.geofences" does not exist
 location-service/0009_fk_indexes.sql                       # relation "hierarchy.administrative_units" does not exist
 location-service/0010_additional_status_type_constraints.sql # relation "jurisdiction.jurisdictions" does not exist
-location-service/0011_postgis_spatial.sql                  # extension "postgis" is not available
-location-service/0014_land_cadastral_rls.sql               # extension "postgis" is not available
-location-service/0015_locations_geom_trigger.sql           # extension "postgis" is not available
-location-service/0016_spatial_features.sql                 # extension "postgis" is not available
-location-service/0017_road_network.sql                     # extension "postgis" is not available
-location-service/0019_geo_points.sql                       # extension "postgis" is not available
 meeting-service/0007_meeting_scanner_role.sql              # permission denied to create role
 notification-service/0024_notification_scanner_role.sql    # permission denied to create role
 plugin-service/0004_rls_full_tenant_isolation.sql          # relation "hooks.plugin_hooks" does not exist

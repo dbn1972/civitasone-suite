@@ -50,6 +50,26 @@ CREATE SCHEMA IF NOT EXISTS scheduled_jobs AUTHORIZATION admin_svc;
 CREATE SCHEMA IF NOT EXISTS geofence     AUTHORIZATION location_svc;
 CREATE SCHEMA IF NOT EXISTS hierarchy    AUTHORIZATION location_svc;
 CREATE SCHEMA IF NOT EXISTS jurisdiction AUTHORIZATION location_svc;
+-- PostGIS must be installed by a SUPERUSER: it is not a trusted extension, so
+-- `CREATE EXTENSION postgis` as location_svc fails with "permission denied to
+-- create extension". Six location-service migrations (0011, 0014, 0015, 0016,
+-- 0017, 0019) begin with CREATE EXTENSION and so aborted on every run, which is
+-- why location carries the largest share of schema drift (103 columns).
+--
+-- Creating it here, as the bootstrapping superuser, turns those migrations'
+-- `CREATE EXTENSION IF NOT EXISTS postgis` into a no-op and lets them proceed.
+-- Requires a PostGIS-capable image; the CI service container is
+-- postgis/postgis:16-3.4 (see .github/workflows/ci.yml). Guarded so a plain
+-- postgres image still bootstraps — location's spatial migrations simply remain in
+-- the failure allow-list there.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
+    CREATE EXTENSION IF NOT EXISTS postgis;
+    RAISE NOTICE 'postgis extension present in civitas_location';
+  ELSE
+    RAISE NOTICE 'postgis NOT available in this image — location spatial migrations will fail';
+  END IF;
+END $$;
 
 \connect civitas_asset
 CREATE SCHEMA IF NOT EXISTS asset AUTHORIZATION asset_svc;

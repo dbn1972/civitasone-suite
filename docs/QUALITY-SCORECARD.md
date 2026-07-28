@@ -14,8 +14,8 @@
 | L1 Tenant Isolation | 70 | 70 | 0 | ✅ GREEN | No cross-tenant leaks; covers all 41 services |
 | L2 Authz / BOLA | 67 | 67 | 0 | ✅ GREEN | Role matrix enforced; JWT tamper blocked |
 | L3 Data Integrity | 43 | 43 | 0 | 🟡 GREEN AFTER REPAIR | Money bigint; **2 controls had never run — fixed** |
-| L3b Schema Drift | 9 + guard | 9 | 0 | 🟡 BURNING DOWN | 3 live 500s fixed; baseline now measured on a **fresh** cluster: 253 |
-| L3c Bootstrap Honesty | guard | — | — | 🟡 RATCHETED | **97 → 46** failing migrations; **14 RLS-policy-less tables fixed**; 41/41 DBs created |
+| L3b Schema Drift | 9 + guard | 9 | 0 | 🟡 BURNING DOWN | 3 live 500s fixed; **338 → 174** on a fresh cluster; 40/40 verifiable |
+| L3c Bootstrap Honesty | guard | — | — | 🟡 RATCHETED | **97 → 40** failing migrations; **14 RLS-policy-less tables fixed**; 41/41 DBs created |
 | L4 API Contract | 28 | 28 | 0 | ✅ GREEN | 0 injection; 0 traversal; concurrent-safe |
 | L5 Events | Existing | ✅ | — | ✅ GREEN | Gate #3 active (28 known defects baselined) |
 | L6 Security | 18 | 18 | 0 | ✅ GREEN | AES-GCM verified; audit ledger immutable |
@@ -251,18 +251,72 @@ databases.
 
 | Metric | Before | After |
 |--------|-------:|------:|
-| Migrations failing on a fresh cluster | **97** | **46** |
+| Migrations failing on a fresh cluster | **97** | **40** |
 | Service databases created | 32 | **41** |
 | Services with a migration loop entry | 32 | **41** |
 | Tables RLS-enabled with no policy | 14 | **0** |
 | Bootstrap exit code on a fresh cluster | **3** (aborted) | 0 |
+| Schema drift (measured on a fresh cluster) | 253 | **174** |
+| Services the drift guard can verify | 32 | **40 / 40** |
 
-The remaining 46 are ratcheted in `scripts/ci/migration-failure-allowlist.txt`,
-each annotated with the error that aborted it. Largest groups: 6 × `extension
-"postgis" is not available` (the CI image is plain `postgres:16-alpine`; dev uses a
-separate PostGIS container), 6 × `permission denied to create/alter role` (scanner
-roles, which need a `CREATEROLE` grantor), and the rest chains of
-`relation … does not exist` behind other failures.
+#### B10 — the CI Postgres image could not run six migrations
+
+`postgres:16-alpine` has no PostGIS, so location-service `0011`, `0014`, `0015`,
+`0016`, `0017` and `0019` failed on **every** CI run with `extension "postgis" is
+not available`. That is why location carried the largest single share of schema
+drift: 103 columns.
+
+Switching the three bootstrap-running jobs to `postgis/postgis:16-3.4` was
+necessary but not sufficient — PostGIS is not a *trusted* extension, so
+`CREATE EXTENSION postgis` as `location_svc` fails with `permission denied to
+create extension`. The extension is now installed by the bootstrapping superuser in
+`bootstrap_missing_schemas.sql`, guarded on `pg_available_extensions` so a plain
+Postgres image still bootstraps.
+
+All six now apply. Migration failures **46 → 40**, and drift **253 → 174**
+(location 103 → 24, audit 5 → 0).
+
+The ratchet flagged all six as `stale` before the allow-list was regenerated —
+the second time stale detection has been proven by an actual fix rather than a
+planted one.
+
+#### Capability gaps are now skipped and named, not counted as drift
+
+The dev cluster on `:5435` has **no PostGIS at all** (dev runs it in a separate
+container on `:5436`). Once CI could create the spatial tables, the same baseline
+measured on dev showed **68 NEW** — every one of them location-service. Drift that
+depends on which host you measure from is not drift.
+
+The guard now reads each service's required extensions from its own
+`CREATE EXTENSION` statements and **skips the service by name** when one is absent,
+exactly as it does for an unreachable database. Never silently: `--write-baseline`
+refuses to run when anything was skipped.
+
+Verified on both clusters from one baseline:
+
+| Cluster | Result |
+|---------|--------|
+| Fresh `postgis/postgis:16-3.4` (as CI) | 40/40 checked, `NEW 0`, `stale 0`, exit 0 |
+| Dev `:5435`, `--allow-stale` | 39 checked, 1 skipped (`civitas_location lacks required extension: postgis`), `NEW 0`, exit 0 |
+
+Two further canaries: `--write-baseline` on the dev cluster **refuses** and leaves
+the baseline byte-identical; a planted column on the fresh cluster still reports
+`NEW: 1` and names the declaring file. A regex bug found while testing this —
+`\w+` truncated `"uuid-ossp"` to `uuid`, skipping court and meeting for a
+non-existent missing extension — was fixed before the mechanism was trusted.
+
+#### Determinism proof
+
+Both baselines were **written against one fresh container and verified against a
+second, independent one**: bootstrap `40 observed / 40 allow-listed, RATCHET
+HOLDING`, drift `174, NEW 0, stale 0, 40 services checked`. A baseline that only
+reproduces on the host that generated it is not a baseline.
+
+The remaining 40 are ratcheted in `scripts/ci/migration-failure-allowlist.txt`,
+each annotated with the error that aborted it. Largest group: 6 ×
+`permission denied to create/alter role` (scanner roles, which need a `CREATEROLE`
+grantor). The rest are chains of `relation … does not exist` behind other failures.
+The 6 PostGIS failures are gone — see B10 below.
 
 **Ratchet canaries, all verified against fresh containers:**
 
@@ -270,7 +324,7 @@ roles, which need a `CREATEROLE` grantor), and the rest chains of
 |--------|--------|
 | Remove one entry from the allow-list | `❌ NEW migration failure(s)` naming it, exit 1 |
 | Add a non-existent entry | `❌ allow-listed migration(s) now PASS`, exit 1 |
-| Delete the allow-list | exit 1 — *"Refusing to report success — with no baseline, 46 failure(s) would be silently accepted"* |
+| Delete the allow-list | exit 1 — *"Refusing to report success — with no baseline, N failure(s) would be silently accepted"* |
 | Clean run | `✅ RATCHET HOLDING`, exit 0 |
 
 Reasons after `#` are stripped before comparison, so editing an annotation can

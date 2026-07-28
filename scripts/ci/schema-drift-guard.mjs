@@ -159,6 +159,44 @@ function parseSchemaFile(src) {
   return out;
 }
 
+/**
+ * Extensions a service's migrations require, read from their own
+ * `CREATE EXTENSION [IF NOT EXISTS] <name>` statements.
+ *
+ * WHY THIS MATTERS: if a required extension is absent, the migrations that need it
+ * abort and their tables are never created — so every column they declare shows up
+ * as drift. That is a property of the CLUSTER, not of the code, and counting it as
+ * drift makes the number depend on which host you measure from.
+ *
+ * Concretely: six location-service migrations begin with CREATE EXTENSION postgis.
+ * The CI service container is postgis/postgis:16-3.4 so they succeed there, but the
+ * dev cluster on :5435 is a plain Postgres with postgis NOT AVAILABLE at all (dev
+ * runs PostGIS in a separate container on :5436). Measured 2026-07-27: that single
+ * difference accounted for 68 columns — every one of them location-service.
+ *
+ * Such a service is SKIPPED and named, exactly like an unreachable database. It is
+ * never silently treated as clean, and --write-baseline refuses to run when
+ * anything was skipped.
+ */
+function requiredExtensionsFor(svc) {
+  const migDir = join(SERVICES_DIR, `${svc}-service`, "migrations");
+  if (existsSync(migDir) === false) return [];
+  const found = new Set();
+  for (const f of readdirSync(migDir)) {
+    if (f.endsWith(".sql") === false) continue;
+    const src = readFileSync(join(migDir, f), "utf8");
+    // [\w-]+ not \w+: extension names may contain hyphens ("uuid-ossp"), and
+    // stopping at the hyphen produced a phantom extension called "uuid" that no
+    // cluster has, so court and meeting were skipped for a reason that did not exist.
+    for (const m of src.matchAll(/CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?"?([\w-]+)"?/gi)) {
+      // pgcrypto is created by the bootstrap in every database; listing it would
+      // add noise without ever being the reason a service is skipped.
+      if (m[1].toLowerCase() !== "pgcrypto") found.add(m[1].toLowerCase());
+    }
+  }
+  return [...found].sort();
+}
+
 function schemaFilesFor(svc) {
   const modDir = join(SERVICES_DIR, `${svc}-service`, "src", "modules");
   if (existsSync(modDir) === false) return [];
@@ -195,6 +233,23 @@ for (const svc of services) {
     skipped.push(`${svc} (${db} unreachable)`);
     continue;
   }
+
+  // A missing required extension means the migrations that need it aborted, so
+  // their columns would all read as drift. That is a cluster capability gap, not a
+  // code defect — skip and name it rather than counting it.
+  const required = requiredExtensionsFor(svc);
+  if (required.length > 0) {
+    const installed = psql(db, "SELECT extname FROM pg_extension");
+    const have = new Set(
+      (installed ?? "").split("\n").map((r) => r.trim().toLowerCase()).filter(Boolean),
+    );
+    const absent = required.filter((e) => have.has(e) === false);
+    if (absent.length > 0) {
+      skipped.push(`${svc} (${db} lacks required extension: ${absent.join(", ")})`);
+      continue;
+    }
+  }
+
   checkedServices += 1;
 
   const present = new Set(
@@ -218,7 +273,7 @@ console.log("──────────────────────�
 console.log(`  services checked   : ${checkedServices}`);
 console.log(`  columns declared   : ${declaredCount}`);
 if (skipped.length > 0) {
-  console.log(`  SKIPPED (unreachable, NOT verified): ${skipped.length}`);
+  console.log(`  SKIPPED (NOT verified — unreachable or missing extension): ${skipped.length}`);
   for (const s of skipped) console.log(`      ${s}`);
 }
 console.log("");
@@ -239,9 +294,10 @@ const found = new Set(missing.map((m) => `${m.svc}.${m.key}`));
 if (WRITE_BASELINE) {
   if (skipped.length > 0) {
     console.error(
-      `  REFUSING to write a baseline: ${skipped.length} database(s) were unreachable,\n` +
-        `  so their drift is unknown and would be silently recorded as zero.\n` +
-        `  Bring them up first: ${skipped.join(", ")}`,
+      `  REFUSING to write a baseline: ${skipped.length} database(s) were not verified\n` +
+        `  (unreachable, or missing an extension their migrations require).\n` +
+        `  Their drift is unknown and would be silently recorded as zero.\n` +
+        `  Fix them first: ${skipped.join(", ")}`,
     );
     process.exit(1);
   }

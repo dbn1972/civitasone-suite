@@ -84,7 +84,15 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # PostGIS-capable image, not plain postgres:16-alpine. Six location-service
+        # migrations (0011, 0014, 0015, 0016, 0017, 0019) begin with CREATE EXTENSION
+        # postgis and aborted on every run with `extension "postgis" is not
+        # available`, which is why location-service carries the largest share of
+        # schema drift (103 columns). The extension is installed by the bootstrapping
+        # superuser in bootstrap_missing_schemas.sql, because postgis is not a trusted
+        # extension and location_svc cannot create it. Verified locally against
+        # postgis/postgis:16-3.4: postgis 3.4.3 available.
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: civitas
           POSTGRES_PASSWORD: civitas_test
@@ -142,7 +150,8 @@ jobs:
     needs: [test]
     services:
       postgres:
-        image: postgres:16-alpine
+        # PostGIS-capable image — see the note on the `test` job above.
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: civitas
           POSTGRES_PASSWORD: civitas_test
@@ -545,7 +554,8 @@ jobs:
     needs: [typecheck-lint]
     services:
       postgres:
-        image: postgres:16-alpine
+        # PostGIS-capable image — see the note on the `test` job above.
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: civitas
           POSTGRES_PASSWORD: civitas_test
