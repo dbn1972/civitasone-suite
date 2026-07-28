@@ -1,6 +1,6 @@
 import { encryptedText } from "../../shared/pii-crypto.js";
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, jsonb,
+  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, jsonb, boolean,
 } from "drizzle-orm/pg-core";
 
 export const recruitmentSchema = pgSchema("recruitment");
@@ -49,6 +49,12 @@ export const hrmsApplications = recruitmentSchema.table("hrms_applications", {
   eligibilityResult: jsonb("eligibility_result"),
   withdrawReason: text("withdraw_reason"),
   dedupKey:      varchar("dedup_key", { length: 320 }),
+  screeningDecision:  varchar("screening_decision", { length: 16 }).notNull().default("pending"),
+  screeningReasonCode: varchar("screening_reason_code", { length: 24 }),
+  screeningRemarks:   text("screening_remarks"),
+  screenedBy:         uuid("screened_by"),
+  screenedAt:         timestamp("screened_at", { withTimezone: true }),
+  shortlistFrozen:    boolean("shortlist_frozen").notNull().default(false),
   stage:         varchar("stage", { length: 32 }).notNull().default("applied"),
   status:        varchar("status", { length: 24 }).notNull().default("active"),
   appliedAt:     timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
@@ -104,4 +110,21 @@ export type JobOpeningRow = typeof hrmsJobOpenings.$inferSelect;
 export type ApplicationRow = typeof hrmsApplications.$inferSelect;
 export type InterviewRow = typeof hrmsInterviews.$inferSelect;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews };
+/** Immutable screening audit trail (R-RA-0119). */
+export const hrmsScreeningEvents = recruitmentSchema.table("hrms_screening_events", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  applicationId: uuid("application_id").notNull(),
+  jobOpeningId:  uuid("job_opening_id").notNull(),
+  action:        varchar("action", { length: 16 }).notNull(),
+  decision:      varchar("decision", { length: 16 }),
+  reasonCode:    varchar("reason_code", { length: 24 }),
+  remarks:       text("remarks"),
+  isOverride:    boolean("is_override").notNull().default(false),
+  actorId:       uuid("actor_id").notNull(),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type ScreeningEventRow = typeof hrmsScreeningEvents.$inferSelect;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents };
