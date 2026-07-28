@@ -115,7 +115,14 @@ async function getEnabledModules(tenantId: string): Promise<Set<string> | null> 
     const url = useComposition
       ? `${adminUrl}/v1/admin/composition/internal/${tenantId}/modules`
       : `${adminUrl}/v1/admin/tenants/${tenantId}/modules-list`;
-    const headers = { "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET ?? "" };
+    const secret = process.env.INTERNAL_SERVICE_SECRET ?? "";
+    // The composition endpoint sits behind admin's global auth hook, whose
+    // service-to-service contract is x-internal:1 + x-tenant-id + x-service-secret
+    // (packages/auth/plugin.ts). The legacy modules-list path keeps its existing
+    // header untouched so its (fail-open) behaviour is unchanged when the flag is off.
+    const headers: Record<string, string> = useComposition
+      ? { "x-internal": "1", "x-tenant-id": tenantId, "x-service-secret": secret, "x-internal-caller": "gateway-module-guard" }
+      : { "x-internal-secret": secret };
 
     const body = await moduleGuardBreaker.call(async () => {
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(2000) });
