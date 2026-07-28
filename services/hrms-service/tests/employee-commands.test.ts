@@ -105,4 +105,22 @@ describe("updateEmployee", () => {
     expect(r.status).toBe("accepted");
     expect(publishMock).toHaveBeenCalledOnce();
   });
+
+  it("forwards statutory / type-specific identifiers + managerId onto the queue payload", async () => {
+    const mgr = randomUUID();
+    await updateEmployee(ctx(), randomUUID(), {
+      managerId: mgr,
+      esicIpNumber: "3100000000", pran: "110012345678",
+      gstin: "29ABCDE1234F1Z5", sacCode: "998311",
+      agencyRef: "AG/DEP/2025/017", napsId: "NAPS-2025-0001",
+    } as any);
+    const payload = publishMock.mock.calls[0][1].payload;
+    expect(payload.managerId).toBe(mgr);
+    expect(payload.esicIpNumber).toBe("3100000000");
+    expect(payload.pran).toBe("110012345678");
+    expect(payload.gstin).toBe("29ABCDE1234F1Z5");
+    expect(payload.sacCode).toBe("998311");
+    expect(payload.agencyRef).toBe("AG/DEP/2025/017");
+    expect(payload.napsId).toBe("NAPS-2025-0001");
+  });
 });

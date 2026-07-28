@@ -58,6 +58,8 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           bankIfsc: e.bankIfsc,
           pan: e.pan,
           uan: e.uanNumber,
+          esicIp: e.esicIpNumber,
+          pran: e.pran,
           cityClass: (e.hraCityClass ?? "X") as "X" | "Y" | "Z",
           taxRegime: (e.taxRegime ?? "new") as "old" | "new",
           departmentId: e.departmentId,

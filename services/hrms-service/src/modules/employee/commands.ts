@@ -101,6 +101,12 @@ export async function updateEmployee(ctx: RequestContext, id: string, body: Upda
       basicMinor: body.basicMinor !== undefined ? body.basicMinor.toString() : undefined,
       payStructureId: body.payStructureId,
       managerId: body.managerId,
+      esicIpNumber: body.esicIpNumber,
+      pran: body.pran,
+      gstin: body.gstin,
+      sacCode: body.sacCode,
+      agencyRef: body.agencyRef,
+      napsId: body.napsId,
     },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));

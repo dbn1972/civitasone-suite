@@ -65,6 +65,15 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   currency:         char("currency", { length: 3 }).notNull().default("INR"),
   payStructureId:   uuid("pay_structure_id"),
   pensionScheme:    varchar("pension_scheme", { length: 8 }).notNull().default("NPS"),
+  // Statutory identifiers (DIC): EPFO UAN is above; ESIC Insured-Person no. + NPS PRAN.
+  esicIpNumber:     varchar("esic_ip_number", { length: 17 }),
+  pran:             varchar("pran", { length: 12 }),
+  // Engagement-type-specific identifiers: consultant GSTIN/SAC (194J+GST),
+  // third-party agency deployment ref (CLRA), apprentice NAPS/NATS registration.
+  gstin:            varchar("gstin", { length: 15 }),
+  sacCode:          varchar("sac_code", { length: 6 }),
+  agencyRef:        varchar("agency_ref", { length: 64 }),
+  napsId:           varchar("naps_id", { length: 24 }),
   managerId:        uuid("manager_id"),
   userRef:          text("user_ref"),
   // ERP org-structure refs (cross-service)
