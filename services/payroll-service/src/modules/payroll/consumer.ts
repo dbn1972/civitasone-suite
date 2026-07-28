@@ -10,7 +10,7 @@ import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
 import { annualTaxFromTaxableMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
@@ -497,6 +497,10 @@ async function processPayrollRun(
       // Multi-DDO: only pay employees whose department belongs to this run's DDO.
       if (ddoDepartments && !ddoDepartments.has(emp.departmentId)) continue;
       if (alreadyComputed.has(emp.id)) continue; // M1: skip already-computed employees
+      // DIC engagement gate: consultants (invoice/194J), third-party (agency/194C)
+      // and apprentices (stipend) are NOT paid through the salary run — their pay
+      // is handled by their own flows. Skip like the department/DDO filters above.
+      if (!isPayrollEligible(emp as { paymentRoute?: string; eligibleForPayroll?: boolean })) continue;
 
       const cityClass = emp.cityClass ?? "X";
       // P2: generate retro-arrears for any back-dated salary revision BEFORE
@@ -563,6 +567,8 @@ async function processPayrollRun(
       const tdsYtdMinor = (await resolveTdsYtdMinor(p.tenantId, emp.id, fyStart, p.month))
         + (decl?.prevEmployerTdsMinor ?? 0n);
 
+      // Engagement statutory gates carried on the run input (default: on).
+      const eng = emp as { statutoryPf?: boolean; statutoryEsi?: boolean; statutoryNps?: boolean };
       const result = await computeAndInsertSlip(tx, msg, {
         runId: p.id,
         tenantId: p.tenantId,
@@ -571,6 +577,9 @@ async function processPayrollRun(
         basicMinor,
         month: p.month,
         pensionScheme: emp.pensionScheme ?? "NPS",
+        ...(eng.statutoryPf != null ? { statutoryPf: eng.statutoryPf } : {}),
+        ...(eng.statutoryEsi != null ? { statutoryEsi: eng.statutoryEsi } : {}),
+        ...(eng.statutoryNps != null ? { statutoryNps: eng.statutoryNps } : {}),
         daRateBps,
         cityClass,
         ptMinor: resolvePt(
@@ -792,6 +801,7 @@ export async function computeAndInsertSlip(
   params: {
     runId: string; tenantId: string; employeeId: string; employeeNo: string;
     basicMinor: bigint; month: string; pensionScheme?: PensionScheme;
+    statutoryPf?: boolean; statutoryEsi?: boolean; statutoryNps?: boolean;
     daRateBps?: bigint; cityClass?: CityClass; ptMinor?: bigint;
     taxRegime?: "old" | "new"; fyStartYear?: number;
     tdsYtdMinor?: bigint; monthsRemaining?: number; protectedNetFloorMinor?: bigint;
@@ -814,6 +824,9 @@ export async function computeAndInsertSlip(
     rawComponents: params.rawComponents ?? [],
     components: params.components ?? [],
     pensionScheme: params.pensionScheme ?? "NPS",
+    ...(params.statutoryPf != null ? { statutoryPf: params.statutoryPf } : {}),
+    ...(params.statutoryEsi != null ? { statutoryEsi: params.statutoryEsi } : {}),
+    ...(params.statutoryNps != null ? { statutoryNps: params.statutoryNps } : {}),
   });
   const slipId = randomUUID();
   const allComps = [...result.earnings, ...result.deductions];

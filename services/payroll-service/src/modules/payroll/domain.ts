@@ -53,6 +53,16 @@ export interface SlipInput {
   /** Structure components evaluated for fixed/pct (DA & HRA handled specially). */
   rawComponents?: RawComponent[];
   pensionScheme?: PensionScheme;
+  /**
+   * Engagement-policy statutory gates (DIC). Default true — omitting them keeps
+   * pre-engagement behaviour. When false, that statutory head is suppressed:
+   * consultants / third-party / apprentices carry NO PF, ESI or NPS. Payroll
+   * eligibility itself (whether a slip is generated at all) is enforced upstream
+   * via isPayrollEligible(); this only gates the deduction heads on a slip.
+   */
+  statutoryPf?: boolean;
+  statutoryEsi?: boolean;
+  statutoryNps?: boolean;
   /** Income-tax regime + FY start year for monthly TDS (defaults: new / 2025). */
   taxRegime?: Regime;
   fyStartYear?: number;
@@ -73,6 +83,19 @@ export interface SlipInput {
 
 /** Deduction codes treated as "recovery" — subject to the protected-net floor. */
 const RECOVERY_CODES = new Set(["LOP", "LOAN_EMI", "ARREAR_RECOVERY"]);
+
+/**
+ * Engagement-policy gate: whether an employee of this engagement type is paid
+ * through the SALARY payroll at all. Consultants (invoice / 194J), third-party
+ * (agency / 194C) and apprentices (stipend) are NOT — they are handled by their
+ * own flows, so the salary run must skip them. Defaults to eligible when no
+ * policy is supplied, preserving pre-engagement behaviour. Pure.
+ */
+export function isPayrollEligible(emp: { paymentRoute?: string | null; eligibleForPayroll?: boolean | null }): boolean {
+  if (emp.eligibleForPayroll === false) return false;
+  const route = (emp.paymentRoute ?? "payroll").toLowerCase();
+  return route === "payroll";
+}
 
 export interface SlipResult {
   grossMinor: bigint;
@@ -138,6 +161,9 @@ export function computeSlip(input: SlipInput): SlipResult {
     components = [],
     rawComponents = [],
     pensionScheme = "EPF",
+    statutoryPf = true,
+    statutoryEsi = true,
+    statutoryNps = true,
     taxRegime = "new",
     fyStartYear = 2025,
     declaration = {},
@@ -187,9 +213,13 @@ export function computeSlip(input: SlipInput): SlipResult {
   if (pensionScheme === "GPF") {
     gpfMinor = pct(pensionBase, GPF_PCT);
   } else if (pensionScheme === "NPS") {
-    npsEmployeeMinor = pct(pensionBase, NPS_EMP_PCT);
-    npsEmployerMinor = pct(pensionBase, NPS_ER_PCT);
-  } else {
+    // Engagement gate: no NPS for a type whose policy excludes it.
+    if (statutoryNps) {
+      npsEmployeeMinor = pct(pensionBase, NPS_EMP_PCT);
+      npsEmployerMinor = pct(pensionBase, NPS_ER_PCT);
+    }
+  } else if (statutoryPf) {
+    // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
     const pfWage    = pensionBase > PF_WAGE_CAP ? PF_WAGE_CAP : pensionBase;
     pfEmployeeMinor = pct(pfWage, PF_PCT);
     pfEmployerMinor = pct(pfWage, PF_PCT);
@@ -199,8 +229,10 @@ export function computeSlip(input: SlipInput): SlipResult {
     epfEmployerMinor = pfEmployerMinor - epsMinor;
   }
 
-  const esiMinor         = grossMinor <= ESI_CAP ? roundRupee((grossMinor * 75n) / 10000n) : 0n;
-  const esiEmployerMinor = grossMinor <= ESI_CAP ? roundRupee((grossMinor * 325n) / 10000n) : 0n;
+  // Engagement gate: ESI only when the type's policy allows it AND under the cap.
+  const esiApplicable    = statutoryEsi && grossMinor <= ESI_CAP;
+  const esiMinor         = esiApplicable ? roundRupee((grossMinor * 75n) / 10000n) : 0n;
+  const esiEmployerMinor = esiApplicable ? roundRupee((grossMinor * 325n) / 10000n) : 0n;
 
   const pt = roundRupee(ptMinor);
   if (pt > 0n) deductions.push({ code: "PT", name: "Professional Tax", type: "deduction", amountMinor: pt });
