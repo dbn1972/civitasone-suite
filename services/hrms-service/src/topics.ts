@@ -110,6 +110,9 @@ export const EVENTS = {
   leaveApproved:     "hrms.leave.approved",
   attendanceMarked:  "hrms.attendance.marked",
   claimApproved:     "hrms.claim.approved",
+  // consultant / invoice (194J) — consumed by Finance AP
+  consultantInvoiceApproved: "hrms.consultant_invoice.approved",
+  consultantInvoicePaid:     "hrms.consultant_invoice.paid",
   // SVC-003: a recruitment hire filled a position for an auto-generated
   // manpower-plan requisition (consumed by modules/manpower-planning).
   positionFilled:    "hrms.recruitment.position_filled",
