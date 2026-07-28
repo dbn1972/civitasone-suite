@@ -38,6 +38,7 @@ export const engagementCatalogue = employeeSchema.table("engagement_type_catalog
   eligibleForGratuity: boolean("eligible_for_gratuity").notNull().default(true),
   eligibleForBonus: boolean("eligible_for_bonus").notNull().default(false),
   leaveEncashment: boolean("leave_encashment").notNull().default(false),
+  attendanceMode: varchar("attendance_mode", { length: 16 }).notNull().default("muster_lop"),
   defaultProbationMonths: integer("default_probation_months").notNull().default(0),
   maxContractMonths: integer("max_contract_months"),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -61,6 +62,7 @@ const employeeTypeMaster = employeeSchema.table("hrms_employee_types", {
   eligibleForGratuity: boolean("eligible_for_gratuity").notNull().default(true),
   eligibleForBonus: boolean("eligible_for_bonus").notNull().default(false),
   leaveEncashment: boolean("leave_encashment").notNull().default(false),
+  attendanceMode: varchar("attendance_mode", { length: 16 }).notNull().default("muster_lop"),
   defaultProbationMonths: integer("default_probation_months").notNull().default(0),
   maxContractMonths: integer("max_contract_months"),
 });
@@ -78,6 +80,8 @@ export interface EngagementPolicy {
   eligibleForGratuity: boolean;
   eligibleForBonus: boolean;
   leaveEncashment: boolean;
+  /** muster_lop | informational | none — see attendanceLopApplies. */
+  attendanceMode: string;
   defaultProbationMonths: number;
   maxContractMonths: number | null;
 }
@@ -99,6 +103,7 @@ export function toPolicy(row: PolicyRow): EngagementPolicy {
     eligibleForGratuity: !!row.eligibleForGratuity,
     eligibleForBonus: !!row.eligibleForBonus,
     leaveEncashment: !!row.leaveEncashment,
+    attendanceMode: String(row.attendanceMode ?? "muster_lop"),
     defaultProbationMonths: Number(row.defaultProbationMonths ?? 0),
     maxContractMonths: row.maxContractMonths == null ? null : Number(row.maxContractMonths),
   };
@@ -142,8 +147,21 @@ export const DEFAULT_POLICY: EngagementPolicy = {
   paymentRoute: "payroll", payMode: "monthly", taxSection: "192",
   statutoryPf: true, statutoryEsi: true, statutoryNps: true,
   eligibleForGratuity: true, eligibleForBonus: false, leaveEncashment: true,
+  attendanceMode: "muster_lop",
   defaultProbationMonths: 0, maxContractMonths: null,
 };
+
+/**
+ * Does attendance / approved-LOP-leave absence drive SALARY Loss-of-Pay for this
+ * engagement policy? True only for payroll-salaried types on a muster
+ * (`muster_lop`). Consultants (invoice-billed), third-party staff (agency-paid),
+ * and apprentices (NAPS stipend) may still have their attendance tracked for
+ * compliance / agency billing, but it must never dock a DIC salary they are not
+ * paid through. The payroll-input feed uses this to scope its LOP accrual. Pure.
+ */
+export function attendanceLopApplies(p: EngagementPolicy): boolean {
+  return p.eligibleForPayroll && p.attendanceMode === "muster_lop";
+}
 
 /**
  * Build a pure resolver: employeeType code → EngagementPolicy for the payroll
