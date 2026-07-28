@@ -124,20 +124,24 @@ describe("screening routes", () => {
     await app.close();
   });
 
-  it("bulk shortlist does NOT overturn a decided (ineligible) application — must use override path", async () => {
+  it("bulk shortlist advances pending/eligible forward but never overturns a rejection/hold", async () => {
     H.findByIdsMock.mockResolvedValue([
-      appRow({ id: "p1", screeningDecision: "pending" }),
-      appRow({ id: "r1", screeningDecision: "ineligible" }),   // decided -> must be skipped, not flipped
-      appRow({ id: "s1", screeningDecision: "shortlisted" }),  // idempotent -> ok
+      appRow({ id: "p1", screeningDecision: "pending" }),       // forward -> shortlist
+      appRow({ id: "e1", screeningDecision: "eligible" }),      // forward (normal path) -> shortlist
+      appRow({ id: "s1", screeningDecision: "shortlisted" }),   // idempotent -> shortlist
+      appRow({ id: "r1", screeningDecision: "ineligible" }),    // rejection -> SKIP (needs override)
+      appRow({ id: "w1", screeningDecision: "waitlisted" }),    // hold -> SKIP
+      appRow({ id: "m1", screeningDecision: "manual_review" }), // hold -> SKIP
+      appRow({ id: "f1", screeningDecision: "eligible", shortlistFrozen: true }), // frozen -> SKIP
     ]);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist`, headers: auth(["hr_officer"]),
-      payload: { applicationIds: ["11111111-1111-4000-8000-000000000001", "22222222-2222-4000-8000-000000000002", "33333333-3333-4000-8000-000000000003"] } });
+      payload: { applicationIds: ["11111111-1111-4000-8000-000000000001"] } });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ shortlisted: 2, skipped: 1 }); // pending + shortlisted done; ineligible skipped
-    // the ineligible row was never written
+    expect(r.json()).toMatchObject({ shortlisted: 3, skipped: 4 }); // p1/e1/s1 advanced; r1/w1/m1/f1 skipped
     const writtenIds = H.setByIdMock.mock.calls.map((c) => c[2]);
-    expect(writtenIds).not.toContain("r1");
+    for (const blocked of ["r1", "w1", "m1", "f1"]) expect(writtenIds).not.toContain(blocked);
+    expect(writtenIds).toContain("e1"); // the normal eligible->shortlist path works
     await app.close();
   });
 
