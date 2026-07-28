@@ -167,12 +167,23 @@ export function buildTypeResolver(tenantTypes: PolicyRow[], canonical: PolicyRow
   for (const c of canonical) byCategory.set(String(c.category), c);
   return (typeCode: string): EngagementPolicy => {
     const t = byCode.get(typeCode);
-    // A tenant row maps its code → category; else treat the code itself as a category.
-    const category = t ? String(t.category ?? "other") : typeCode;
-    if (category !== "other") {
-      const c = byCategory.get(category);
-      if (c) return toPolicy(c);
+    if (t) {
+      const category = String(t.category ?? "other");
+      // Explicitly categorised into a canonical engagement category → the
+      // canonical catalogue is authoritative for that category.
+      if (category !== "other") {
+        const c = byCategory.get(category);
+        if (c) return toPolicy(c);
+      }
+      // Un-categorised CUSTOM tenant type (e.g. "Visiting Faculty") → trust the
+      // admin's own flags on the row. Migration 0066 has made pre-existing
+      // back-filled 'other' rows permissive, so trusting them cannot regress
+      // employees that predate engagement-typing.
+      return toPolicy(t);
     }
+    // No tenant row → treat the code itself as a canonical category, else default.
+    const c = byCategory.get(typeCode);
+    if (c) return toPolicy(c);
     return DEFAULT_POLICY;
   };
 }

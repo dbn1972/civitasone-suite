@@ -163,7 +163,6 @@ export function computeSlip(input: SlipInput): SlipResult {
     pensionScheme = "EPF",
     statutoryPf = true,
     statutoryEsi = true,
-    statutoryNps = true,
     taxRegime = "new",
     fyStartYear = 2025,
     declaration = {},
@@ -213,11 +212,15 @@ export function computeSlip(input: SlipInput): SlipResult {
   if (pensionScheme === "GPF") {
     gpfMinor = pct(pensionBase, GPF_PCT);
   } else if (pensionScheme === "NPS") {
-    // Engagement gate: no NPS for a type whose policy excludes it.
-    if (statutoryNps) {
-      npsEmployeeMinor = pct(pensionBase, NPS_EMP_PCT);
-      npsEmployerMinor = pct(pensionBase, NPS_ER_PCT);
-    }
+    // Pension scheme is authoritative per-employee: an employee on NPS always
+    // gets NPS. (The engagement type gates payroll INCLUSION via isPayrollEligible
+    // — an excluded type never reaches computeSlip — not which pension scheme
+    // applies. Gating NPS by a type flag here previously zeroed pension entirely
+    // for an NPS-scheme employee of a type with statutoryNps=false, with no
+    // fall-through to EPF. statutoryNps is retained on SlipInput for callers but
+    // no longer suppresses a scheme-driven contribution.)
+    npsEmployeeMinor = pct(pensionBase, NPS_EMP_PCT);
+    npsEmployerMinor = pct(pensionBase, NPS_ER_PCT);
   } else if (statutoryPf) {
     // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
     const pfWage    = pensionBase > PF_WAGE_CAP ? PF_WAGE_CAP : pensionBase;

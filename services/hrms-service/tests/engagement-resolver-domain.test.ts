@@ -32,15 +32,18 @@ describe("buildTypeResolver", () => {
     expect(r("CN").paymentRoute).toBe("invoice");
   });
 
-  it("an un-categorised tenant row (category 'other') stays permissive — migration-default flags ignored", () => {
-    const tenant = [{ code: "permanent", category: "other", statutoryNps: false, eligibleForPayroll: false }];
+  it("an un-categorised CUSTOM tenant row is trusted (admin config honored)", () => {
+    // A tenant defines a bespoke type via CRUD, leaving category at the default
+    // 'other' but explicitly configuring it as a non-payroll stipend type.
+    const tenant = [{ code: "VF", category: "other", eligibleForPayroll: false, paymentRoute: "stipend", statutoryPf: false, statutoryEsi: false, statutoryNps: false, eligibleForGratuity: false, leaveEncashment: false }];
     const r = buildTypeResolver(tenant, canonical);
-    expect(r("permanent")).toEqual(DEFAULT_POLICY);   // NOT the row's default-false flags
-    expect(r("permanent").statutoryNps).toBe(true);
-    expect(r("permanent").eligibleForPayroll).toBe(true);
+    expect(r("VF").eligibleForPayroll).toBe(false);     // admin's explicit config honored
+    expect(r("VF").paymentRoute).toBe("stipend");
+    expect(r("VF").eligibleForGratuity).toBe(false);
+    expect(r("VF").leaveEncashment).toBe(false);
   });
 
-  it("falls back to the permissive default for legacy/unknown codes", () => {
+  it("falls back to the permissive default only for codes with NO tenant row and NO canonical match", () => {
     const r = buildTypeResolver([], canonical);
     expect(r("permanent")).toEqual(DEFAULT_POLICY);
     expect(r("contract").eligibleForPayroll).toBe(true);

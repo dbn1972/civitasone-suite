@@ -35,12 +35,16 @@ describe("computeSlip statutory gating", () => {
     expect(r.pfEmployeeMinor).toBe(0n);
     expect(r.pfEmployerMinor).toBe(0n);
   });
-  it("NPS deducted by default; statutoryNps=false suppresses it", () => {
+  it("NPS is scheme-driven — deducted for an NPS employee regardless of statutoryNps", () => {
     const on = computeSlip({ ...base, pensionScheme: "NPS" });
     expect(on.npsEmployeeMinor).toBeGreaterThan(0n);
-    const off = computeSlip({ ...base, pensionScheme: "NPS", statutoryNps: false });
-    expect(off.npsEmployeeMinor).toBe(0n);
-    expect(off.npsEmployerMinor).toBe(0n);
+    // statutoryNps no longer suppresses a scheme-driven contribution: pension is a
+    // per-employee decision (pensionScheme), and gating it by a type flag wrongly
+    // zeroed pension entirely (no fall-through to EPF). Engagement gates payroll
+    // INCLUSION (isPayrollEligible), not which scheme applies.
+    const stillOn = computeSlip({ ...base, pensionScheme: "NPS", statutoryNps: false });
+    expect(stillOn.npsEmployeeMinor).toBeGreaterThan(0n);
+    expect(stillOn.npsEmployeeMinor).toBe(on.npsEmployeeMinor);
   });
   it("statutoryEsi=false suppresses ESI even under the wage cap", () => {
     const on = computeSlip({ ...base, pensionScheme: "EPF" });
