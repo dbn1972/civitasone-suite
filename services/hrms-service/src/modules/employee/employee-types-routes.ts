@@ -38,10 +38,10 @@ const employeeTypeMaster = employeeSchema.table("hrms_employee_types", {
   taxSection: varchar("tax_section", { length: 8 }).notNull().default("192"), // 192|194J|194C|stipend|none
   statutoryPf: boolean("statutory_pf").notNull().default(true),
   statutoryEsi: boolean("statutory_esi").notNull().default(true),
-  statutoryNps: boolean("statutory_nps").notNull().default(false),
+  statutoryNps: boolean("statutory_nps").notNull().default(true),
   eligibleForGratuity: boolean("eligible_for_gratuity").notNull().default(true),
   eligibleForBonus: boolean("eligible_for_bonus").notNull().default(false),
-  leaveEncashment: boolean("leave_encashment").notNull().default(false),
+  leaveEncashment: boolean("leave_encashment").notNull().default(true),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -62,12 +62,14 @@ const createBody = z.object({
   category: z.enum(["pay_scale", "contractual", "consultant", "third_party", "apprentice", "other"]).default("other"),
   paymentRoute: z.enum(["payroll", "invoice", "agency", "stipend", "none"]).default("payroll"),
   taxSection: z.enum(["192", "194J", "194C", "stipend", "none"]).default("192"),
+  // Permissive defaults: an unset flag means "full benefit". An admin sets the
+  // restrictive flags they want (e.g. a consultant type → eligibleForPayroll:false).
   statutoryPf: z.boolean().default(true),
   statutoryEsi: z.boolean().default(true),
-  statutoryNps: z.boolean().default(false),
+  statutoryNps: z.boolean().default(true),
   eligibleForGratuity: z.boolean().default(true),
   eligibleForBonus: z.boolean().default(false),
-  leaveEncashment: z.boolean().default(false),
+  leaveEncashment: z.boolean().default(true),
   sortOrder: z.number().int().nonnegative().default(0),
 });
 
