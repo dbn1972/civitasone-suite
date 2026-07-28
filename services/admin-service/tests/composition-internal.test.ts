@@ -76,3 +76,26 @@ describe("GET /v1/admin/composition/internal/:tenantId/modules", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("GET /v1/admin/composition/my-modules (web nav visibility)", () => {
+  // A NON-admin token for the onboarded tenant — the nav is shown to every user.
+  const navAuth = (tid: string) => ({ authorization: `Bearer ${signToken({ sub: ADMIN, tid, roles: ["employee"], sid: "s" }, SECRET, 3600)}` });
+
+  it("returns the caller's resolved modules for any authenticated role", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/composition/my-modules", headers: navAuth(ONBOARDED) });
+    expect(res.statusCode).toBe(200);
+    const keys = res.json().data.map((m: { name: string }) => m.name);
+    expect(keys).toEqual(expect.arrayContaining(["hrms", "finance", "payroll"]));
+  });
+
+  it("returns an empty list for an un-onboarded tenant (web shows all)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/composition/my-modules", headers: navAuth(VIRGIN) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual([]);
+  });
+
+  it("requires authentication (401 without a token)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/composition/my-modules" });
+    expect(res.statusCode).toBe(401);
+  });
+});

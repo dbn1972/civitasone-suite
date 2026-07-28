@@ -686,6 +686,21 @@ export async function getTenantSettings(): Promise<LoaderResult<TenantSettingSum
   });
 }
 
+/**
+ * The tenant's own enabled modules for NAV visibility, sourced from the module
+ * composition engine (any authenticated user; RLS-scoped to their tenant).
+ * Shape matches getTenantSettings so mapTenantSettings + the schema are reused;
+ * an empty list (un-onboarded tenant) is treated by getEnabledModules as show-all.
+ */
+export async function getNavModules(): Promise<LoaderResult<TenantSettingSummary[]>> {
+  return fetchJson("/api/v1/admin/composition/my-modules", [] as TenantSettingSummary[], {
+    revalidateSeconds: 60,
+    telemetryKey: "tenant.nav_modules",
+    responseSchema: tenantModulesResponseSchema,
+    mapResponse: mapTenantSettings,
+  });
+}
+
 export type ServiceHealthRow = { service: string; status: string };
 
 export type TenantAdminReadiness = {

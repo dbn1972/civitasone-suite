@@ -8,15 +8,17 @@
  * behaviour). Requirement 13.1/13.2 are about hiding *disabled* modules, not
  * about hiding when we simply don't know.
  */
-import { getTenantSettings } from "@/app/_data/loaders";
+import { getNavModules } from "@/app/_data/loaders";
 
 /**
  * Returns the set of enabled module keys for the current tenant, or null when it
- * could not be determined (caller should then show all). The tenant modules API
- * returns module names; we normalise to lowercase keys.
+ * could not be determined (caller should then show all). Sourced from the module
+ * composition engine (dependency-resolved org profile, projected to gateway
+ * route-keys). An un-onboarded tenant returns an empty list → null → show all,
+ * so composition never blanks the nav for a tenant that predates onboarding.
  */
 export async function getEnabledModules(): Promise<string[] | null> {
-  const result = await getTenantSettings();
+  const result = await getNavModules();
   if (result.source === "error") return null;
   const names = result.data.map((m) => m.name?.toLowerCase().trim()).filter(Boolean) as string[];
   return names.length > 0 ? names : null;

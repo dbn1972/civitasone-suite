@@ -168,6 +168,23 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ configured: true, data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
   });
 
+  // The caller's OWN enabled modules (gateway route-keys) for web nav visibility.
+  // Any authenticated user — the sidebar is shown to everyone and this only
+  // reveals which modules exist for the caller's own tenant (RLS-scoped). An
+  // empty list (un-onboarded tenant) makes the web treat visibility as "unknown"
+  // and show all — fail-open, never a blank nav.
+  app.get("/v1/admin/composition/my-modules", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const [profileCode, userModules] = await Promise.all([
+      repo.getTenantProfileCode(ctx.tenantId),
+      repo.getUserModules(ctx.tenantId),
+    ]);
+    if (profileCode === null && userModules.length === 0) return reply.send({ data: [] });
+    const reg = await registryFor(ctx.tenantId);
+    const comp = resolveComposition(reg, userModules);
+    return reply.send({ data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
+  });
+
   // Onboard: apply an org profile (sets terminology/rule-packs + default modules).
   app.post("/v1/admin/composition/onboard", async (req, reply) => {
     const ctx = resolveContext(req);
