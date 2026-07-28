@@ -45,11 +45,17 @@ jobs:
           POSTGRES_PASSWORD: civitas_test
           POSTGRES_DB: civitas_test
         ports: ['5435:5432']
+        # TCP check rather than the default unix socket. A bare `pg_isready` talks to
+        # the temporary socket-only server the postgres entrypoint runs during initdb,
+        # so it reports healthy before the container accepts TCP — measured on
+        # postgis/postgis:16-3.4: socket READY at 5s, TCP not until 50s. The plain
+        # image has the same window, just narrower. Enforced by
+        # scripts/ci/ci-config-guard.mjs, which is what flagged this file.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U civitas"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
       # Task 17.4 (Req 12.1, 13.2): LocalStack backs the object-storage publish
       # step end-to-end on a `dry_run` manual dispatch, so artifact upload +
       # object-storage publish can be verified WITHOUT touching real

@@ -263,6 +263,18 @@ jobs:
       # line coverage (99.6%) and was completely unreachable.
       - name: Deployment declaration guard (startable + reachable)
         run: node scripts/ci/deployment-declaration-guard.mjs
+      # Two config defects that no test can see, both of which shipped:
+      #  - infra/db/bootstrap/bootstrap_remaining_services.sql was invoked by
+      #    nothing (the file that IS invoked differs only by underscores vs
+      #    hyphens and directory), so civitas_metadata/ml/revenue/works did not
+      #    exist in CI. An SQL file that never runs cannot error.
+      #  - `--health-cmd pg_isready` defaults to the unix socket, which the
+      #    postgres entrypoint answers from a temporary server during initdb.
+      #    Measured: socket READY at 5s, TCP not until 50s — so jobs started
+      #    against a server refusing connections and failed later with
+      #    'connection refused'.
+      - name: CI config guard (bootstrap files invoked, health checks use TCP)
+        run: node scripts/ci/ci-config-guard.mjs
       - name: Check no cross-service DB joins
         run: |
           # L1 rule: no service may import another service's schema
