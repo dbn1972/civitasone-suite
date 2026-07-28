@@ -98,11 +98,25 @@ jobs:
           POSTGRES_PASSWORD: civitas_test
           POSTGRES_DB: civitas_test
         ports: ['5435:5432']
+        # MEASURED, not assumed. Polling postgis/postgis:16-3.4 every 5s:
+        #     5s  socket=READY  tcp=no      query=no
+        #    ...
+        #    45s  socket=READY  tcp=no      query=no
+        #    50s  socket=READY  tcp=READY   query=1
+        # A bare `pg_isready` uses the unix socket, and the postgres entrypoint runs a
+        # temporary socket-only server while it executes the initdb scripts. So it
+        # reported healthy at 5s — 45s before the container would accept a single TCP
+        # connection. GitHub Actions would have marked the service up and started the
+        # bootstrap against a server refusing connections.
+        # Checking TCP explicitly flips at exactly the moment the first query succeeds.
+        # Retries are raised to 20 (+30s start period, up to 230s) because the honest
+        # check takes longer to pass than the misleading one did.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U civitas"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 20
+          --health-start-period 30s
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
@@ -157,11 +171,25 @@ jobs:
           POSTGRES_PASSWORD: civitas_test
           POSTGRES_DB: civitas_test
         ports: ['5435:5432']
+        # MEASURED, not assumed. Polling postgis/postgis:16-3.4 every 5s:
+        #     5s  socket=READY  tcp=no      query=no
+        #    ...
+        #    45s  socket=READY  tcp=no      query=no
+        #    50s  socket=READY  tcp=READY   query=1
+        # A bare `pg_isready` uses the unix socket, and the postgres entrypoint runs a
+        # temporary socket-only server while it executes the initdb scripts. So it
+        # reported healthy at 5s — 45s before the container would accept a single TCP
+        # connection. GitHub Actions would have marked the service up and started the
+        # bootstrap against a server refusing connections.
+        # Checking TCP explicitly flips at exactly the moment the first query succeeds.
+        # Retries are raised to 20 (+30s start period, up to 230s) because the honest
+        # check takes longer to pass than the misleading one did.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U civitas"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 20
+          --health-start-period 30s
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
@@ -561,11 +589,25 @@ jobs:
           POSTGRES_PASSWORD: civitas_test
           POSTGRES_DB: civitas_test
         ports: ['5435:5432']
+        # MEASURED, not assumed. Polling postgis/postgis:16-3.4 every 5s:
+        #     5s  socket=READY  tcp=no      query=no
+        #    ...
+        #    45s  socket=READY  tcp=no      query=no
+        #    50s  socket=READY  tcp=READY   query=1
+        # A bare `pg_isready` uses the unix socket, and the postgres entrypoint runs a
+        # temporary socket-only server while it executes the initdb scripts. So it
+        # reported healthy at 5s — 45s before the container would accept a single TCP
+        # connection. GitHub Actions would have marked the service up and started the
+        # bootstrap against a server refusing connections.
+        # Checking TCP explicitly flips at exactly the moment the first query succeeds.
+        # Retries are raised to 20 (+30s start period, up to 230s) because the honest
+        # check takes longer to pass than the misleading one did.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U civitas"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 20
+          --health-start-period 30s
       redis:
         image: redis:7-alpine
         ports: ['6381:6379']
@@ -637,11 +679,15 @@ jobs:
           POSTGRES_PASSWORD: civitas_test
           POSTGRES_DB: civitas_test
         ports: ['5435:5432']
+        # TCP check rather than the default unix socket — see the note on the
+        # `test` job. postgres:16-alpine has the same premature-ready window as the
+        # PostGIS image, just a narrower one, because the entrypoint's temporary
+        # socket-only server answers `pg_isready` before TCP is accepted.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U civitas"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
@@ -711,11 +757,15 @@ jobs:
           POSTGRES_PASSWORD: civitas_test
           POSTGRES_DB: civitas_test
         ports: ['5435:5432']
+        # TCP check rather than the default unix socket — see the note on the
+        # `test` job. postgres:16-alpine has the same premature-ready window as the
+        # PostGIS image, just a narrower one, because the entrypoint's temporary
+        # socket-only server answers `pg_isready` before TCP is accepted.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U civitas"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
     env:
       PGHOST: localhost
       PGPORT: '5435'
