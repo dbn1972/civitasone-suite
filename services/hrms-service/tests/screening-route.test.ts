@@ -1,0 +1,175 @@
+/**
+ * Screening & shortlisting route wiring — auto-screen, decision with mandatory
+ * rejection reason, override gates (admin + reason), freeze gate, bulk shortlist,
+ * blind-list redaction, and audit trail.
+ */
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { signToken } from "@civitasone/auth";
+
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+const TENANT = "aaaaaaaa-1111-4000-8000-000000000c11";
+const USER = "aaaaaaaa-7777-4000-8000-000000000c11";
+const VAC = "bbbbbbbb-0000-4000-8000-00000000c011";
+const APP = "cccccccc-0000-4000-8000-00000000c012";
+
+const H = vi.hoisted(() => ({
+  findAppMock: vi.fn(),
+  listForVacMock: vi.fn(),
+  findByIdsMock: vi.fn(),
+  setScreeningMock: vi.fn(),
+  setByIdMock: vi.fn(),
+  insertEventMock: vi.fn(),
+  listEventsMock: vi.fn(),
+}));
+
+vi.mock("../src/shared/db.js", async (io) => ({
+  ...(await io<Record<string, unknown>>()),
+  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
+}));
+vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
+  ...(await io<Record<string, unknown>>()),
+  findApplication: (...a: unknown[]) => H.findAppMock(...a),
+  listApplicationsForVacancy: (...a: unknown[]) => H.listForVacMock(...a),
+  findApplicationsByIds: (...a: unknown[]) => H.findByIdsMock(...a),
+  setScreening: (...a: unknown[]) => H.setScreeningMock(...a),
+  setScreeningById: (...a: unknown[]) => H.setByIdMock(...a),
+  insertEvent: (...a: unknown[]) => H.insertEventMock(...a),
+  listEvents: (...a: unknown[]) => H.listEventsMock(...a),
+}));
+
+import { buildApp } from "../src/app.js";
+import { sqlClient } from "../src/shared/db.js";
+
+const auth = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET)}` });
+const appRow = (over = {}) => ({ id: APP, tenantId: TENANT, jobOpeningId: VAC, applicantName: "Asha", email: "a@x.in", mobile: "9", category: "OBC", dateOfBirth: "1998-01-01", qualification: "B.Tech", experienceYears: 5, screeningDecision: "pending", shortlistFrozen: false, version: 1, eligibilityResult: { eligible: true }, ...over });
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  H.setScreeningMock.mockResolvedValue(undefined);
+  H.setByIdMock.mockResolvedValue(undefined);
+  H.insertEventMock.mockResolvedValue(undefined);
+  H.listEventsMock.mockResolvedValue([]);
+});
+afterAll(async () => { await sqlClient.end(); });
+
+describe("screening routes", () => {
+  it("auto-screens only pending applications from their eligibility result", async () => {
+    H.listForVacMock.mockResolvedValue([
+      appRow({ id: "a1", screeningDecision: "pending", eligibilityResult: { eligible: true } }),
+      appRow({ id: "a2", screeningDecision: "pending", eligibilityResult: { eligible: false } }),
+      appRow({ id: "a3", screeningDecision: "shortlisted" }),         // already decided -> skip
+      appRow({ id: "a4", screeningDecision: "pending", eligibilityResult: {} }), // never evaluated -> skip
+    ]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/auto-screen`, headers: auth(["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ screened: 2, skipped: 2 });
+    await app.close();
+  });
+
+  it("requires a structured reason to mark an application ineligible (400)", async () => {
+    H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "pending" }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible" } });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("REASON_REQUIRED");
+    await app.close();
+  });
+
+  it("records an ineligible decision with a reason code", async () => {
+    H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "pending" }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible", reasonCode: "experience", remarks: "short" } });
+    expect(r.statusCode).toBe(200);
+    expect(H.insertEventMock.mock.calls[0][1].action).toBe("decision");
+    await app.close();
+  });
+
+  it("blocks changing an existing decision without override (409) and without admin (403)", async () => {
+    H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "ineligible" }));
+    const app = await buildApp();
+    const noFlag = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "eligible" } });
+    expect(noFlag.statusCode).toBe(409);
+    expect(noFlag.json().code).toBe("OVERRIDE_REQUIRED");
+    const nonAdmin = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "eligible", override: true, overrideReason: "re-check" } });
+    expect(nonAdmin.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("allows an admin override with a reason and records is_override", async () => {
+    H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "ineligible" }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "shortlisted", override: true, overrideReason: "manager review" } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().isOverride).toBe(true);
+    expect(H.insertEventMock.mock.calls[0][1]).toMatchObject({ action: "override", isOverride: true });
+    await app.close();
+  });
+
+  it("rejects any screening change once the shortlist is frozen (409)", async () => {
+    H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "shortlisted", shortlistFrozen: true }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "waitlisted" } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("SHORTLIST_FROZEN");
+    await app.close();
+  });
+
+  it("bulk-shortlists the requested applications", async () => {
+    H.findByIdsMock.mockResolvedValue([appRow({ id: "a1" }), appRow({ id: "a2", shortlistFrozen: true })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist`, headers: auth(["hr_admin"]), payload: { applicationIds: ["11111111-1111-4000-8000-000000000001", "22222222-2222-4000-8000-000000000002"] } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ shortlisted: 1, skipped: 1 });
+    await app.close();
+  });
+
+  it("bulk shortlist does NOT overturn a decided (ineligible) application — must use override path", async () => {
+    H.findByIdsMock.mockResolvedValue([
+      appRow({ id: "p1", screeningDecision: "pending" }),
+      appRow({ id: "r1", screeningDecision: "ineligible" }),   // decided -> must be skipped, not flipped
+      appRow({ id: "s1", screeningDecision: "shortlisted" }),  // idempotent -> ok
+    ]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist`, headers: auth(["hr_officer"]),
+      payload: { applicationIds: ["11111111-1111-4000-8000-000000000001", "22222222-2222-4000-8000-000000000002", "33333333-3333-4000-8000-000000000003"] } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ shortlisted: 2, skipped: 1 }); // pending + shortlisted done; ineligible skipped
+    // the ineligible row was never written
+    const writtenIds = H.setByIdMock.mock.calls.map((c) => c[2]);
+    expect(writtenIds).not.toContain("r1");
+    await app.close();
+  });
+
+  it("freezes the shortlisted applications", async () => {
+    H.listForVacMock.mockResolvedValue([appRow({ id: "a1", screeningDecision: "shortlisted" }), appRow({ id: "a2", screeningDecision: "ineligible" })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist/freeze`, headers: auth(["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().frozen).toBe(1);
+    await app.close();
+  });
+
+  it("returns a blind list with protected attributes removed", async () => {
+    H.listForVacMock.mockResolvedValue([appRow()]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${VAC}/blind-list`, headers: auth(["hr_officer"]) });
+    expect(r.statusCode).toBe(200);
+    const row = r.json().data[0];
+    expect(row).not.toHaveProperty("applicantName");
+    expect(row).not.toHaveProperty("email");
+    expect(row).not.toHaveProperty("category");
+    expect(row.qualification).toBe("B.Tech");
+    await app.close();
+  });
+
+  it("returns the screening audit trail", async () => {
+    H.findAppMock.mockResolvedValue(appRow());
+    H.listEventsMock.mockResolvedValue([{ id: "e1", action: "decision", decision: "eligible" }]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/applications/${APP}/screening-audit`, headers: auth(["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data).toHaveLength(1);
+    await app.close();
+  });
+});
