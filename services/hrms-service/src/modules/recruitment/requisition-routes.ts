@@ -20,7 +20,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import {
-  DEFAULT_GOVT_CHAIN, currentStageRole, isFinalStage, canPublish, isEditable, cloneFields,
+  DEFAULT_GOVT_CHAIN, currentStageRole, isFinalStage, canPublish, isEditable, cloneFields, toVacancyType,
   type ApprovalStage,
 } from "./requisition-domain.js";
 import * as repo from "./requisition-repo.js";
@@ -348,7 +348,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
         refNo: r.requisitionNo, title: r.title,
         departmentId: r.departmentId!, designationId: r.designationId ?? null,
         vacancies: r.vacancies, description: r.reason ?? null,
-        vacancyType: r.employmentType, location: r.location ?? null,
+        vacancyType: toVacancyType(r.recruitmentMode, r.campaignType), location: r.location ?? null,
         qualification: r.qualification ?? null,
         isPublished: "true", status: "open",
         postedAt: new Date().toISOString().slice(0, 10),

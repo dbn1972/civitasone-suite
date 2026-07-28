@@ -51,6 +51,20 @@ export const CLONE_CARRY_FIELDS = [
   "slaDays", "approvalChain",
 ] as const;
 
+/**
+ * Map a requisition's recruitment mode / campaign type to a valid
+ * hrms_job_openings.vacancy_type value at publication. The job-openings table
+ * constrains vacancy_type to {regular, internship, apprenticeship, contractual,
+ * deputation}; the requisition's employment_type (permanent/…) is a DIFFERENT
+ * domain and must not be written there directly. Pure.
+ */
+export function toVacancyType(recruitmentMode: string, campaignType: string): string {
+  if (recruitmentMode === "deputation") return "deputation";
+  if (recruitmentMode === "contract" || recruitmentMode === "consultant") return "contractual";
+  if (campaignType === "apprenticeship") return "apprenticeship";
+  return "regular";
+}
+
 export function cloneFields(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of CLONE_CARRY_FIELDS) {
