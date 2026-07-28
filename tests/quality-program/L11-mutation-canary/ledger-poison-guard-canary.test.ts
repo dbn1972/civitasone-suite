@@ -114,6 +114,44 @@ it("does a thing", async () => {
 });
 `;
 
+/**
+ * The id is fixed but bound to a const first. This is the shape the guard
+ * originally MISSED — and it is the shape inventory-service's own test took after
+ * its ids were lifted into a RACE_MESSAGE_IDS constant. A guard that only matches
+ * `messageId: "literal"` stops working the moment someone tidies up.
+ */
+const POISONER_VIA_CONST = `
+import { queue } from "../src/shared/infra.js";
+const FIXED_ID = "aaaaaaaa-0000-4000-8000-000000000009";
+it("does a thing", async () => {
+  await queue.publish("x.y", { messageId: FIXED_ID, payload: {} });
+});
+`;
+
+/** Same, via an array destructured into locals — the other common spelling. */
+const POISONER_VIA_ARRAY = `
+import { queue } from "../src/shared/infra.js";
+const IDS = ["aaaaaaaa-0000-4000-8000-00000000000a", "aaaaaaaa-0000-4000-8000-00000000000b"];
+const [first, second] = IDS;
+it("does a thing", async () => {
+  await queue.publish("x.y", { messageId: first, payload: {} });
+  await queue.publish("x.y", { messageId: second, payload: {} });
+});
+`;
+
+/**
+ * A uuid literal that never reaches messageId. Must NOT be flagged: tenant and
+ * actor ids are hardcoded in almost every test, and flagging on their presence
+ * alone would swamp the signal and get the guard disabled.
+ */
+const UUID_BUT_NOT_A_MESSAGE_ID = `
+import { queue } from "../src/shared/infra.js";
+const TENANT = "aaaaaaaa-0000-4000-8000-00000000000c";
+it("does a thing", async () => {
+  await queue.publish("x.y", { messageId: crypto.randomUUID(), tenantId: TENANT, payload: {} });
+});
+`;
+
 const POISON_PATH = "widget-service/tests/poison.test.ts";
 const FIXED_PATH = "widget-service/tests/fixed.test.ts";
 
@@ -195,6 +233,37 @@ describe("L11 — Canary: test-ledger-poison-guard is not vacuous", () => {
     const r = runGuard(makeSandbox([]));
     expect(r.exitCode).toBe(1);
     expect(r.output).toContain("UNMEASURED");
+  });
+
+  it("CANARY: a hardcoded messageId via a CONST is caught (the detection gap that missed inventory)", () => {
+    // The guard originally only matched `messageId: "literal"`. That would NOT
+    // have flagged inventory-service's serial-race test after its ids were lifted
+    // into RACE_MESSAGE_IDS. This canary pins the broader detection.
+    const r = runGuard(makeSandbox([{ path: "widget-service/tests/via-const.test.ts", content: POISONER_VIA_CONST }]));
+    expect(r.exitCode, "a const-bound fixed id was NOT caught").toBe(1);
+    expect(r.output).toContain("can poison their own idempotency ledger");
+    expect(r.output).toContain("via-const.test.ts");
+  });
+
+  it("CANARY: a hardcoded messageId via array destructuring is caught", () => {
+    const r = runGuard(makeSandbox([{ path: "widget-service/tests/via-array.test.ts", content: POISONER_VIA_ARRAY }]));
+    expect(r.exitCode, "an array-destructured fixed id was NOT caught").toBe(1);
+    expect(r.output).toContain("via-array.test.ts");
+  });
+
+  it("CANARY: a uuid literal that does NOT reach messageId is NOT flagged", () => {
+    // Tenant ids, actor ids, etc. are hardcoded everywhere. A guard that flagged
+    // on their presence alone would swamp the signal and get disabled within a
+    // month. This proves the false-positive path is absent.
+    const r = runGuard(
+      makeSandbox([
+        { path: "widget-service/tests/not-a-msgid.test.ts", content: UUID_BUT_NOT_A_MESSAGE_ID },
+        // A real candidate is needed too, or UNMEASURED fires.
+        { path: "widget-service/tests/fixed.test.ts", content: POISONER_FIXED },
+      ]),
+    );
+    expect(r.exitCode, `a non-messageId uuid was wrongly flagged:\n${r.output}`).toBe(0);
+    expect(r.output).toContain("CLEAN");
   });
 
   it("CANARY: a malformed allow-list is rejected, not read as empty", () => {

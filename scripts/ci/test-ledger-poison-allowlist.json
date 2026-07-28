@@ -1,5 +1,5 @@
 {
-  "$comment": "Test files that publish a hardcoded messageId against a REAL database and do not clear the idempotency ledger. TRACKED, not approved. Each was run TWICE and compared on 2026-07-27 and produced identical results, so none is currently poisoned - they are recorded here rather than edited on suspicion, because a speculative change to a passing test is its own risk. If one later fails with a 'zero rows, zero dead letters' shape, this is the first place to look. The guard fails on a NEW unlisted file and on a STALE entry that no longer qualifies.",
+  "$comment": "Test files that publish a hardcoded messageId against a REAL database and do not clear the idempotency ledger. TRACKED, not approved. Every entry was run TWICE and compared, and produced identical results, so none is currently poisoned - they are recorded here rather than edited on suspicion, because a speculative change to a passing test is its own risk. If one later fails with a 'zero rows, zero dead letters' shape, this is the first place to look. The guard fails on a NEW unlisted file and on a STALE entry that no longer qualifies. Note: 39 other files matched the same detection and already clear the ledger, so clearing it is the established convention here - these are the exceptions.",
   "generatedAt": "2026-07-27",
   "entries": {
     "identity-service/tests/identity.test.ts": "run twice, identical (8/8); the hardcoded id is not gated on markProcessed",
@@ -8,6 +8,18 @@
     "notification-service/tests/notification.test.ts": "run twice, identical (4/4)",
     "policy-service/tests/policy.test.ts": "run twice, identical (9/9)",
     "tenant-service/tests/tenant-modules.test.ts": "run twice, identical (37/37)",
-    "tenant-service/tests/tenant.test.ts": "run twice, identical (9/9)"
+    "tenant-service/tests/tenant.test.ts": "run twice, identical (9/9)",
+    "analytics-service/tests/analytics.test.ts": "id reaches messageId via a const; run twice, identical (11/11)",
+    "crm-service/tests/crm.test.ts": "id reaches messageId via a const; run twice, identical (4/4)",
+    "helpdesk-service/tests/helpdesk.test.ts": "id reaches messageId via a const; run twice, identical (4/4)",
+    "install-service/tests/install.test.ts": "id reaches messageId via a const; run twice, identical (4/4)",
+    "knowledge-service/tests/knowledge.test.ts": "id reaches messageId via a const; run twice, identical (7/7)",
+    "location-service/tests/location.test.ts": "id reaches messageId via a const; run twice, identical (17/17)",
+    "plugin-service/tests/plugin.test.ts": "id reaches messageId via a const; run twice, identical (4/4)",
+    "report-service/tests/reports.test.ts": "id reaches messageId via a const; run twice, identical (4/4)",
+    "telephony-service/tests/telephony.test.ts": "id reaches messageId via a const; run twice, identical (8/8)",
+    "theme-service/tests/theme-modules.test.ts": "id reaches messageId via a const; run twice, identical (12/12)",
+    "theme-service/tests/theme.test.ts": "id reaches messageId via a const; run twice, identical (4/4)",
+    "workflow-service/tests/workflow.test.ts": "id reaches messageId via a const; run twice, identical (9/9)"
   }
 }
