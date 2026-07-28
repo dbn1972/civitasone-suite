@@ -218,6 +218,18 @@ const RATCHET_ESCAPE_HATCHES = [
   { pattern: "--allow-stale", why: "relaxes stale detection; CI is the only strict run" },
   { pattern: "--write-baseline", why: "rewrites the drift baseline — the gate would bless its own findings" },
   { pattern: "BOOTSTRAP_WRITE_ALLOWLIST", why: "rewrites the migration failure allow-list" },
+  // Test seams on the ledger guard. Neither can weaken it — pointing it at a
+  // fixture tree makes it check the fixture, and an empty tree exits 1 as
+  // UNMEASURED — but a CI step redirecting a gate away from the real repository
+  // should be impossible, not merely harmless. Listed for symmetry with the above.
+  {
+    pattern: "LEDGER_GUARD_SERVICES_DIR",
+    why: "points the ledger guard at a fixture tree instead of services/; exists only for the L11 canaries",
+  },
+  {
+    pattern: "LEDGER_GUARD_ALLOWLIST",
+    why: "substitutes the ledger guard's allow-list; exists only for the L11 canaries",
+  },
 ];
 
 let workflowLinesScanned = 0;

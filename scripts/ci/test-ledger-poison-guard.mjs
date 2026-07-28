@@ -94,7 +94,53 @@ if (existsSync(ALLOWLIST_FILE)) {
   process.exit(1);
 }
 
+/** `messageId: "literal"` — the form people write first. */
 const HARDCODED_MSGID = /messageId:\s*["'][^"']+["']/;
+/** `messageId: someIdentifier` — needs resolving to see if the value is fixed. */
+const MSGID_IDENT = /messageId:\s*([A-Za-z_$][\w$]*)/g;
+const UUID_LITERAL = /["'][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}["']/i;
+
+/**
+ * A hardcoded id is just as dangerous when it is bound to a const first.
+ *
+ * DETECTION GAP THIS CLOSES: the guard originally matched only
+ * `messageId: "literal"`. That would NOT have flagged the very file that motivated
+ * it — inventory-service's serial-race test, after its ids were lifted into a
+ * `RACE_MESSAGE_IDS` constant. It passes for the right reason (it clears the
+ * ledger), but the guard would not have noticed if it did not. Detecting only the
+ * naive spelling means the guard stops working the moment someone tidies up.
+ *
+ * Resolves two indirections, which is what tests actually use:
+ *   const ID = "uuid";            ... messageId: ID
+ *   const IDS = ["uuid", "uuid"]; const [a, b] = IDS; ... messageId: a
+ *
+ * Deliberately does NOT flag a file merely for containing a uuid literal — tenant
+ * and actor ids are hardcoded everywhere and would swamp the signal. The id has to
+ * reach `messageId`.
+ */
+function hasHardcodedMessageIdViaConst(src) {
+  const idents = new Set();
+  for (const m of src.matchAll(MSGID_IDENT)) idents.add(m[1]);
+  if (idents.size === 0) return false;
+
+  const constInit = (name) => {
+    const m = new RegExp(`const\\s+${name.replace(/[$]/g, "\\$")}\\b[^=]*=\\s*([^;]{0,400})`).exec(src);
+    return m ? m[1] : null;
+  };
+
+  for (const name of idents) {
+    const init = constInit(name);
+    if (init && UUID_LITERAL.test(init)) return true;
+  }
+  // const [a, b] = SOME_CONST  — the names are bound from an array of literals.
+  for (const m of src.matchAll(/const\s*\[([^\]]+)\]\s*=\s*([A-Za-z_$][\w$]*)/g)) {
+    const bound = m[1].split(",").map((n) => n.trim());
+    if (bound.some((n) => idents.has(n)) === false) continue;
+    const init = constInit(m[2]);
+    if (init && UUID_LITERAL.test(init)) return true;
+  }
+  return false;
+}
 /** A test that mocks the db or the outbox never reaches _inbox.processed. */
 const MOCKS_PERSISTENCE = /vi\.mock\(\s*["'][^"']*(shared\/db|shared\/outbox|@civitasone\/outbox|@civitasone\/db)/;
 /** Any form of clearing the ledger. */
@@ -129,7 +175,7 @@ for (const svc of services) {
   for (const file of testFilesFor(join(SERVICES_DIR, svc))) {
     scanned += 1;
     const src = readFileSync(file, "utf8");
-    if (HARDCODED_MSGID.test(src) === false) continue;
+    if (HARDCODED_MSGID.test(src) === false && hasHardcodedMessageIdViaConst(src) === false) continue;
     if (MOCKS_PERSISTENCE.test(src)) {
       mockedSkipped += 1;
       continue;
