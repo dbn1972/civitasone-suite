@@ -18,6 +18,15 @@ export const moduleRegistry = compositionSchema.table("module_registry", {
   hardDeps: text("hard_deps").array().notNull().$type<string[]>().default([]),
   softDeps: text("soft_deps").array().notNull().$type<string[]>().default([]),
   screens: text("screens").array().notNull().$type<string[]>().default([]),
+  cluster: text("cluster").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const moduleBundle = compositionSchema.table("module_bundle", {
+  code: text("code").primaryKey(),
+  label: text("label").notNull(),
+  subtitle: text("subtitle").notNull().default(""),
+  moduleIds: text("module_ids").array().notNull().$type<string[]>().default([]),
   sortOrder: integer("sort_order").notNull().default(0),
 });
 
@@ -56,5 +65,6 @@ export const tenantProfile = compositionSchema.table("tenant_profile", {
 
 export type ModuleRegistryRow = typeof moduleRegistry.$inferSelect;
 export type OrgProfileRow = typeof orgProfile.$inferSelect;
+export type ModuleBundleRow = typeof moduleBundle.$inferSelect;
 
-export const schema = { moduleRegistry, orgProfile, tenantEntitlement, tenantProfile };
+export const schema = { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile };

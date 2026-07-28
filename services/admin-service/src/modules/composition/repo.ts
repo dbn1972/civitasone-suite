@@ -13,8 +13,16 @@
 import { eq, and } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
-import { moduleRegistry, orgProfile, tenantEntitlement, tenantProfile } from "./schema.js";
+import { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile } from "./schema.js";
 import type { ModuleDef } from "./domain.js";
+
+export interface BundleRow {
+  code: string;
+  label: string;
+  subtitle: string;
+  moduleIds: string[];
+  sortOrder: number;
+}
 
 export interface ProfileRow {
   code: string;
@@ -39,9 +47,18 @@ export async function loadRegistry(tenantId: string): Promise<ModuleDef[]> {
       hardDeps: r.hardDeps,
       softDeps: r.softDeps,
       screens: r.screens,
+      cluster: r.cluster,
       sortOrder: r.sortOrder,
     }))
     .sort((a, b) => a.layer - b.layer || a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+}
+
+/** Load the bundle catalogue (global reference data). */
+export async function loadBundles(tenantId: string): Promise<BundleRow[]> {
+  const rows = await runWithTenant(tenantId, () => scopedRead((tx) => tx.select().from(moduleBundle)));
+  return rows
+    .map((r) => ({ code: r.code, label: r.label, subtitle: r.subtitle, moduleIds: r.moduleIds, sortOrder: r.sortOrder }))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code));
 }
 
 export async function loadProfiles(tenantId: string): Promise<ProfileRow[]> {

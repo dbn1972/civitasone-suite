@@ -26,6 +26,8 @@ export interface ModuleDef {
   hardDeps: string[];
   softDeps: string[];
   screens: string[];
+  /** Presentation grouping (kernel/cluster), e.g. "core", "finance", "p2p". */
+  cluster: string;
   sortOrder: number;
 }
 
