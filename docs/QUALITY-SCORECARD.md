@@ -34,11 +34,45 @@ locked by a regression lane, but 231 schema drifts remain across 11 services and
 the bootstrap script that let them accumulate still swallows migration failures.
 The error budget itself is verified (read p95 10.2ms, 5xx 0.00%, 0% rate-limited).
 
-Known red, pre-existing, unrelated to schema drift: `inventory-service`
-`tests/batch-consumer.test.ts` — the serial-registration race persists **0** rows
-where it should persist exactly 1, so both concurrent inserts fail rather than one
-winning. Confirmed pre-existing via `git stash` (fails identically on `main`).
-Needs its own investigation; not touched here.
+### The last red test was a self-poisoning test, not a concurrency defect ✅ FIXED
+
+`inventory-service tests/batch-consumer.test.ts` — the serial-registration race
+persisted **0** rows where exactly 1 should win. It read like a real concurrency
+bug: both concurrent inserts appearing to fail.
+
+It was not. The test publishes two **fixed** message ids so the race is
+deterministic, and `cleanup()` deleted serials, batches and items but never touched
+`_inbox.processed`. `markProcessed(tx, msg.messageId)` returns false for an id it
+has already seen, and the consumer then returns without doing anything — no insert,
+no error, **no dead letter**. So the very first run passed, recorded both ids as
+processed, and every run afterwards found 0 rows and 0 dead letters. The test had
+poisoned its own database, permanently.
+
+Proven rather than inferred:
+
+```
+$ psql -d civitas_inventory -c "select message_id from _inbox.processed
+    where message_id in ('dddddddd-...f001','dddddddd-...f002')"
+ dddddddd-0000-4000-8000-00000000f001
+ dddddddd-0000-4000-8000-00000000f002
+```
+
+and the consumer was verified **correct** by re-running the identical race in
+isolation with fresh ids: 1 row persisted, loser dead-lettered as
+`SERIAL_DUPLICATE`. The 0-rows/0-DLQ signature is diagnostic — a genuine race would
+have produced at least one dead letter.
+
+Fixed by clearing those two ids in `cleanup()`. Now passes on three consecutive
+runs (previously: pass once, fail forever). inventory-service 466 passed / 1
+skipped, coverage 86.74% lines.
+
+**Audited for the same class rather than assumed unique.** 26 test files use
+hardcoded message ids; 19 mock the database so they never reach the ledger, and
+`payroll-service/tests/integration-hr.test.ts` already clears it. The remaining 7
+that use a real database were each run **twice** and compared — identity 8/8,
+knowledge 52/52, ml 18/18, notification 4/4, policy 9/9, tenant-modules 37/37,
+tenant 9/9, all identical across runs. So inventory was the only live instance, and
+7 files were left alone rather than churned on suspicion.
 
 ---
 

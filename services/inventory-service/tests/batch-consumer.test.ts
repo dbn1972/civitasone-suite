@@ -23,7 +23,7 @@ import type { FastifyInstance } from "fastify";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
@@ -61,6 +61,26 @@ function wireTenantAwareQueue(q: Queue): Queue {
   return q;
 }
 
+/**
+ * Message ids the concurrency test publishes directly. They are FIXED so the race
+ * is deterministic, which means they must be cleared from the idempotency ledger
+ * between runs.
+ *
+ * BUG THIS FIXES: cleanup() deleted serials, batches and items but never touched
+ * `_inbox.processed`. `markProcessed(tx, msg.messageId)` returns false for an id it
+ * has already seen and the consumer then returns without doing anything — no
+ * insert, no error, no DLQ entry. So the first ever run passed, recorded both ids
+ * as processed, and every run after that found 0 rows and 0 dead letters. The test
+ * had poisoned its own database, permanently, and the symptom
+ * ("expected [] to have a length of 1") looks exactly like a concurrency defect in
+ * the consumer. It is not: verified in isolation with fresh ids, the consumer
+ * persists exactly one row and dead-letters the loser as SERIAL_DUPLICATE.
+ */
+const RACE_MESSAGE_IDS = [
+  "dddddddd-0000-4000-8000-00000000f001",
+  "dddddddd-0000-4000-8000-00000000f002",
+] as const;
+
 async function cleanup(): Promise<void> {
   for (const t of [TENANT_A, TENANT_B]) {
     await runWithTenant(t, () => db.transaction(async (tx) => {
@@ -69,6 +89,13 @@ async function cleanup(): Promise<void> {
       await tx.delete(items).where(eq(items.tenantId, t));
     }));
   }
+  // Not tenant-scoped: _inbox.processed is keyed by messageId alone. Only the
+  // fixed ids this file publishes directly are removed — every other test derives
+  // its messageId from a fresh uuid, so clearing the whole ledger would be both
+  // unnecessary and destructive to concurrent runs.
+  await runWithTenant(TENANT_A, () => db.transaction(async (tx) => {
+    await tx.delete(processed).where(inArray(processed.messageId, [...RACE_MESSAGE_IDS]));
+  }));
 }
 
 async function seedItems(): Promise<void> {
@@ -360,8 +387,10 @@ describe("serial consumer — concurrent duplicate translates 23505 to SERIAL_DU
     const mq = queue as unknown as MemoryQueue;
     const before = mq.dlq.length;
     const serial = "SN-RACE-0001";
-    const id1 = "dddddddd-0000-4000-8000-00000000f001";
-    const id2 = "dddddddd-0000-4000-8000-00000000f002";
+    // Fixed message ids so the race is deterministic. They are cleared from
+    // _inbox.processed by cleanup() — see RACE_MESSAGE_IDS. Without that, this
+    // test passes exactly once per database and fails on every run after.
+    const [id1, id2] = RACE_MESSAGE_IDS;
     const mk = (mid: string) => ({
       messageId: mid, type: COMMANDS.serialRegister, tenantId: TENANT_A, actorId: ACTOR_A,
       correlationId: "corr-race", schemaVersion: "1.0",
