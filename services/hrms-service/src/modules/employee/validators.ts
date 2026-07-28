@@ -14,7 +14,10 @@ export const createEmployeeBody = z.object({
   email:         z.string().email().optional(),
   bankAccountNo: z.string().optional(),
   bankIfsc:      z.string().max(16).optional(),
-  employeeType:  z.enum(["permanent", "temporary", "contract", "deputation", "intern", "apprentice", "volunteer"]).default("permanent"),
+  // Any code; membership (canonical category / tenant type-master / legacy) is
+  // enforced at the route via assertKnownEngagementType so tenant-defined types
+  // are accepted and typos rejected (a static enum would reject valid tenant codes).
+  employeeType:  z.string().min(1).max(32).default("permanent"),
   basicMinor:    z.number().int().nonnegative().default(0),
   currency:      z.string().length(3).default("INR"),
   payStructureId: z.string().uuid().optional(),

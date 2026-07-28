@@ -57,7 +57,10 @@ export const hireApplicationBody = z.object({
   basicMinor:    z.number().int().nonnegative(),
   departmentId:  z.string().uuid(),
   designationId: z.string().uuid(),
-  employeeType:  z.enum(["permanent", "temporary", "contract", "deputation"]).default("permanent"),
+  // Any code; membership enforced at the hire route via assertKnownEngagementType
+  // so the 5 DIC engagement types (consultant/third_party/apprentice/…) and
+  // tenant-defined type codes can be recruited (was a 4-value enum).
+  employeeType:  z.string().min(1).max(32).default("permanent"),
 });
 export type HireApplicationBody = z.infer<typeof hireApplicationBody>;
 

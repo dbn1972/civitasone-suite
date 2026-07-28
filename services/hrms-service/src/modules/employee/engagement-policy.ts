@@ -17,7 +17,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { pgSchema, varchar, integer, boolean } from "drizzle-orm/pg-core";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 
 const employeeSchema = pgSchema("employee");
@@ -190,11 +190,57 @@ export function buildTypeResolver(tenantTypes: PolicyRow[], canonical: PolicyRow
 
 /** Load a type→policy resolver for a tenant (tenant master + canonical catalogue). */
 export async function loadTypeResolver(tenantId: string): Promise<(typeCode: string) => EngagementPolicy> {
-  const [tenantTypes, canonical] = await Promise.all([
-    scopedRead((tx) => tx.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, tenantId))),
-    scopedRead((tx) => tx.select().from(engagementCatalogue)),
-  ]);
+  // SEQUENTIAL reads (not Promise.all): two concurrent tenant transactions on the
+  // pooled connection clash and return non-iterable results (this manifested once
+  // as "tenantTypes is not iterable"). Same constraint as assertKnownEngagementType.
+  const tenantTypes = await scopedRead((tx) => tx.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, tenantId)));
+  const canonical = await scopedRead((tx) => tx.select().from(engagementCatalogue));
   return buildTypeResolver(tenantTypes as unknown as PolicyRow[], canonical as unknown as PolicyRow[]);
+}
+
+/**
+ * Legacy employeeType codes that predate engagement-typing. Accepted at create
+ * time for backward compatibility (existing tenants/integrations use these);
+ * they resolve to a permissive policy via buildTypeResolver.
+ */
+const LEGACY_EMPLOYEE_TYPES = new Set(["permanent", "temporary", "contract", "deputation", "intern", "apprentice", "volunteer"]);
+
+/**
+ * Pure: is `code` a recognised employee type given the known canonical
+ * engagement categories and the tenant's own type-master codes? Legacy defaults
+ * are always accepted.
+ */
+export function isKnownEngagementType(code: string, canonicalCategories: Set<string>, tenantCodes: Set<string>): boolean {
+  return LEGACY_EMPLOYEE_TYPES.has(code) || canonicalCategories.has(code) || tenantCodes.has(code);
+}
+
+/**
+ * Enforce at CREATE time that an employeeType is a recognised engagement type —
+ * a canonical engagement category (pay_scale / contractual / consultant /
+ * third_party / apprentice), a tenant-defined type-master code, or a legacy
+ * default — so downstream payroll / statutory / F&F branching resolves correctly
+ * and a typo cannot silently become a permissive "unknown" type. Throws 400.
+ *
+ * Reads are SEQUENTIAL (never Promise.all): two concurrent tenant transactions
+ * on the pooled connection clash and return non-iterable results.
+ */
+export async function assertKnownEngagementType(tenantId: string, code: string): Promise<void> {
+  const canonRows = await scopedRead((tx) => tx.select({ c: engagementCatalogue.category }).from(engagementCatalogue));
+  const ttRows = await scopedRead((tx) =>
+    tx.select({ c: employeeTypeMaster.code }).from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, tenantId)),
+  );
+  const known = isKnownEngagementType(
+    code,
+    new Set(canonRows.map((r) => String(r.c))),
+    new Set(ttRows.map((r) => String(r.c))),
+  );
+  if (!known) {
+    throw new HttpError(
+      400,
+      "UNKNOWN_EMPLOYEE_TYPE",
+      `unknown employee type '${code}' — use an engagement category (e.g. consultant, third_party, apprentice) or a defined employee-type`,
+    );
+  }
 }
 
 const HR_VIEW_ROLES = ["hr_admin", "super_admin", "admin", "manager", "officer", "employee"];

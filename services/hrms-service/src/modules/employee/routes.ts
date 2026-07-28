@@ -6,6 +6,7 @@ import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
 import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody } from "./validators.js";
+import { assertKnownEngagementType } from "./engagement-policy.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
 import { promotionBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
@@ -26,6 +27,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createEmployeeBody.parse(req.body);
+    await assertKnownEngagementType(ctx.tenantId, body.employeeType);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createEmployee(ctx, body));
   });
 
