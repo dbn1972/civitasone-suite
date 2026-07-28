@@ -11,9 +11,11 @@
  * derived by the pure resolver in domain.ts. Writes are transactional + RLS-scoped.
  */
 import type { FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import { toGatewayKeys } from "./gateway-map.js";
 import {
   buildRegistry,
   resolveComposition,
@@ -27,6 +29,7 @@ import {
 const ADMIN_ROLES = ["tenant_admin", "super_admin", "platform_admin"];
 
 const onboardBody = z.object({ profile: z.string().min(1).max(64) });
+const internalParam = z.object({ tenantId: z.string().uuid() });
 const moduleParam = z.object({ id: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
 const bundleParam = z.object({ code: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
 
@@ -128,6 +131,41 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     return reply.send(await tenantView(ctx.tenantId));
+  });
+
+  // INTERNAL (service-to-service) — resolved module entitlements for the gateway
+  // module-guard, projected to the gateway's route-key vocabulary. Auth via
+  // INTERNAL_SERVICE_SECRET (no user JWT), mirroring /tenants/:id/modules-list.
+  //
+  // `configured` is FALSE when the tenant has never onboarded (no profile, no
+  // entitlements). The gateway MUST treat configured:false as "fail open"
+  // (allow all) — never as an empty allow-list — so turning enforcement on can
+  // never black-hole a tenant that predates composition onboarding.
+  app.get("/v1/admin/composition/internal/:tenantId/modules", async (req, reply) => {
+    const secret = req.headers["x-internal-secret"] as string | undefined;
+    const expected = process.env.INTERNAL_SERVICE_SECRET;
+    const secretNotConfigured = typeof expected !== "string" || expected.length === 0;
+    const validInternal =
+      !secretNotConfigured &&
+      typeof secret === "string" &&
+      secret.length === expected.length &&
+      timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
+    // If the secret IS configured but the caller didn't present a valid one,
+    // fall back to super-admin JWT auth (mirrors the modules-list route).
+    if (!validInternal && !secretNotConfigured) {
+      const ctx = resolveContext(req);
+      requireRole(ctx, ADMIN_ROLES);
+    }
+    const { tenantId } = safeParse(internalParam, req.params);
+    const [profileCode, userModules] = await Promise.all([
+      repo.getTenantProfileCode(tenantId),
+      repo.getUserModules(tenantId),
+    ]);
+    const configured = profileCode !== null || userModules.length > 0;
+    if (!configured) return reply.send({ configured: false, data: [] });
+    const reg = await registryFor(tenantId);
+    const comp = resolveComposition(reg, userModules);
+    return reply.send({ configured: true, data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
   });
 
   // Onboard: apply an org profile (sets terminology/rule-packs + default modules).

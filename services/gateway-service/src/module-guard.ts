@@ -106,16 +106,26 @@ async function getEnabledModules(tenantId: string): Promise<Set<string> | null> 
   if (cached && cached.expires > Date.now()) return cached.modules;
 
   try {
-    // Query admin-service directly (internal network), wrapped in circuit breaker
+    // Query admin-service directly (internal network), wrapped in circuit breaker.
+    // When COMPOSITION_ENFORCEMENT=on, source the allow-list from the dependency-
+    // resolved composition engine (org profile + hard-dep closure, projected to
+    // gateway route-keys); otherwise keep the legacy config-based modules-list.
     const adminUrl = process.env.GATEWAY_ADMIN_URL ?? "http://127.0.0.1:3022";
-    const url = `${adminUrl}/v1/admin/tenants/${tenantId}/modules-list`;
+    const useComposition = process.env.COMPOSITION_ENFORCEMENT === "on";
+    const url = useComposition
+      ? `${adminUrl}/v1/admin/composition/internal/${tenantId}/modules`
+      : `${adminUrl}/v1/admin/tenants/${tenantId}/modules-list`;
     const headers = { "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET ?? "" };
 
     const body = await moduleGuardBreaker.call(async () => {
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(2000) });
       if (!res.ok) throw new Error(`admin-service ${res.status}`);
-      return (await res.json()) as { data: Array<{ name: string }> };
+      return (await res.json()) as { configured?: boolean; data: Array<{ name: string }> };
     });
+
+    // Composition mode: a tenant that never onboarded is `configured:false` —
+    // fail OPEN (null), never enforce an empty allow-list against it.
+    if (useComposition && body.configured === false) return null;
 
     const modules = new Set<string>(body.data.map((m: { name: string }) => m.name));
     moduleCache.set(tenantId, { modules, expires: Date.now() + CACHE_TTL_MS });
