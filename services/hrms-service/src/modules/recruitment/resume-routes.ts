@@ -94,6 +94,12 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     if (String((err as { code?: string }).code) === "23505") {
       return reply.code(409).send({ code: "RESUME_CONFLICT", message: "a concurrent upload won the version race; please retry", correlationId });
     }
+    // Honour Fastify's own client errors (e.g. FST_ERR_CTP_EMPTY_JSON_BODY = 400)
+    // instead of masking them as a 500.
+    const status = (err as { statusCode?: number }).statusCode;
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      return reply.code(status).send({ code: (err as { code?: string }).code ?? "BAD_REQUEST", message: err.message, correlationId });
+    }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
   });

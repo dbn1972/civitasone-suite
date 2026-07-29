@@ -119,6 +119,17 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
     await app.close();
   });
 
+  it("activates with an application/json content-type and empty body without 500ing (maps to 400 or succeeds)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/candidates/${CID}/resumes/${RID}/activate`,
+      headers: { ...auth, "content-type": "application/json" },
+      // no payload → Fastify raises FST_ERR_CTP_EMPTY_JSON_BODY (400); must NOT be a 500
+    });
+    expect(r.statusCode).not.toBe(500);
+    await app.close();
+  });
+
   it("404 when activating a resume version that does not exist", async () => {
     H.findResume.mockResolvedValue(null);
     const app = await buildApp();
