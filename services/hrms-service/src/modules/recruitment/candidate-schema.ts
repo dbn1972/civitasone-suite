@@ -97,4 +97,24 @@ export const hrmsCandidateReferences = candidateSchema.table("hrms_candidate_ref
 export type ReferenceRow = typeof hrmsCandidateReferences.$inferSelect;
 export type ReferenceInsert = typeof hrmsCandidateReferences.$inferInsert;
 
-export const schema = { hrmsCandidates, hrmsCandidateEducation, hrmsCandidateEmployment, hrmsCandidateReferences };
+// R-RA-0087: multiple resume versions per candidate; exactly one active. The
+// file itself lives in object storage — only its key/metadata is recorded here.
+export const hrmsCandidateResumes = candidateSchema.table("hrms_candidate_resumes", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  candidateId:   uuid("candidate_id").notNull(),
+  versionNo:     integer("version_no").notNull(),
+  fileKey:       varchar("file_key", { length: 512 }).notNull(),
+  fileName:      varchar("file_name", { length: 255 }).notNull(),
+  mimeType:      varchar("mime_type", { length: 128 }).notNull(),
+  fileSizeBytes: bigint("file_size_bytes", { mode: "bigint" }).notNull(),
+  fingerprint:   varchar("fingerprint", { length: 128 }),
+  label:         varchar("label", { length: 120 }),
+  isActive:      boolean("is_active").notNull().default(false),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+});
+export type ResumeRow = typeof hrmsCandidateResumes.$inferSelect;
+export type ResumeInsert = typeof hrmsCandidateResumes.$inferInsert;
+
+export const schema = { hrmsCandidates, hrmsCandidateEducation, hrmsCandidateEmployment, hrmsCandidateReferences, hrmsCandidateResumes };
