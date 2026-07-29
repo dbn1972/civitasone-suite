@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, varchar, boolean, date, text, integer, bigint, numeric, timestamp,
+  pgSchema, uuid, varchar, boolean, date, text, integer, bigint, numeric, timestamp, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const candidateSchema = pgSchema("candidate");
@@ -26,6 +26,11 @@ export const hrmsCandidates = candidateSchema.table("hrms_candidates", {
   subCategory:       varchar("sub_category", { length: 32 }),
   disability:        boolean("disability").notNull().default(false),
   exServiceman:      boolean("ex_serviceman").notNull().default(false),
+  disabilityType:    varchar("disability_type", { length: 24 }),
+  disabilityPercentage: integer("disability_percentage"),
+  freedomFighterDependent: boolean("freedom_fighter_dependent").notNull().default(false),
+  reservationDocs:   jsonb("reservation_docs").$type<string[]>().notNull().default([]),
+  relationshipDeclaration: jsonb("relationship_declaration").$type<Record<string, unknown>>().notNull().default({}),
   activeResumeRef:   varchar("active_resume_ref", { length: 512 }),
   consentVersion:    varchar("consent_version", { length: 24 }),
   consentAcceptedAt: timestamp("consent_accepted_at", { withTimezone: true }),
@@ -76,4 +81,20 @@ export type CandidateInsert = typeof hrmsCandidates.$inferInsert;
 export type EducationRow = typeof hrmsCandidateEducation.$inferSelect;
 export type EmploymentRow = typeof hrmsCandidateEmployment.$inferSelect;
 
-export const schema = { hrmsCandidates, hrmsCandidateEducation, hrmsCandidateEmployment };
+export const hrmsCandidateReferences = candidateSchema.table("hrms_candidate_references", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  candidateId:   uuid("candidate_id").notNull(),
+  refName:       varchar("ref_name", { length: 200 }).notNull(),
+  relationship:  varchar("relationship", { length: 120 }).notNull(),
+  organisation:  varchar("organisation", { length: 200 }),
+  designation:   varchar("designation", { length: 120 }),
+  email:         varchar("email", { length: 200 }),
+  phone:         varchar("phone", { length: 20 }),
+  yearsKnown:    integer("years_known"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ReferenceRow = typeof hrmsCandidateReferences.$inferSelect;
+export type ReferenceInsert = typeof hrmsCandidateReferences.$inferInsert;
+
+export const schema = { hrmsCandidates, hrmsCandidateEducation, hrmsCandidateEmployment, hrmsCandidateReferences };
