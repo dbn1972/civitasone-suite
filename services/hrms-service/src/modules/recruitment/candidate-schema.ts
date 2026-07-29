@@ -1,0 +1,79 @@
+import {
+  pgSchema, uuid, varchar, boolean, date, text, integer, bigint, numeric, timestamp,
+} from "drizzle-orm/pg-core";
+
+export const candidateSchema = pgSchema("candidate");
+
+export const hrmsCandidates = candidateSchema.table("hrms_candidates", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull(),
+  email:             varchar("email", { length: 200 }).notNull(),
+  normalizedEmail:   varchar("normalized_email", { length: 200 }).notNull(),
+  mobile:            varchar("mobile", { length: 20 }),
+  normalizedMobile:  varchar("normalized_mobile", { length: 10 }),
+  emailVerified:     boolean("email_verified").notNull().default(false),
+  mobileVerified:    boolean("mobile_verified").notNull().default(false),
+  resumeFingerprint: varchar("resume_fingerprint", { length: 128 }),
+  fullName:          varchar("full_name", { length: 200 }),
+  dateOfBirth:       date("date_of_birth"),
+  gender:            varchar("gender", { length: 16 }),
+  maritalStatus:     varchar("marital_status", { length: 16 }),
+  nationality:       varchar("nationality", { length: 64 }),
+  guardianName:      varchar("guardian_name", { length: 200 }),
+  correspondenceAddress: text("correspondence_address"),
+  permanentAddress:  text("permanent_address"),
+  category:          varchar("category", { length: 8 }),
+  subCategory:       varchar("sub_category", { length: 32 }),
+  disability:        boolean("disability").notNull().default(false),
+  exServiceman:      boolean("ex_serviceman").notNull().default(false),
+  activeResumeRef:   varchar("active_resume_ref", { length: 512 }),
+  consentVersion:    varchar("consent_version", { length: 24 }),
+  consentAcceptedAt: timestamp("consent_accepted_at", { withTimezone: true }),
+  status:            varchar("status", { length: 16 }).notNull().default("draft"),
+  submittedAt:       timestamp("submitted_at", { withTimezone: true }),
+  withdrawnAt:       timestamp("withdrawn_at", { withTimezone: true }),
+  dataRequestAt:     timestamp("data_request_at", { withTimezone: true }),
+  version:           integer("version").notNull().default(1),
+  createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:         uuid("created_by").notNull(),
+  updatedBy:         uuid("updated_by").notNull(),
+});
+
+export const hrmsCandidateEducation = candidateSchema.table("hrms_candidate_education", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  candidateId:     uuid("candidate_id").notNull(),
+  qualification:   varchar("qualification", { length: 120 }).notNull(),
+  subject:         varchar("subject", { length: 200 }),
+  institution:     varchar("institution", { length: 200 }),
+  boardUniversity: varchar("board_university", { length: 200 }),
+  yearOfPassing:   integer("year_of_passing"),
+  marksPercent:    numeric("marks_percent", { precision: 5, scale: 2 }),
+  grade:           varchar("grade", { length: 16 }),
+  verificationStatus: varchar("verification_status", { length: 16 }).notNull().default("unverified"),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+});
+
+export const hrmsCandidateEmployment = candidateSchema.table("hrms_candidate_employment", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  candidateId:     uuid("candidate_id").notNull(),
+  employer:        varchar("employer", { length: 200 }).notNull(),
+  roleTitle:       varchar("role_title", { length: 200 }),
+  fromDate:        date("from_date"),
+  toDate:          date("to_date"),
+  noticePeriodDays: integer("notice_period_days"),
+  ctcMinor:        bigint("ctc_minor", { mode: "bigint" }),
+  reasonForLeaving: text("reason_for_leaving"),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+});
+
+export type CandidateRow = typeof hrmsCandidates.$inferSelect;
+export type CandidateInsert = typeof hrmsCandidates.$inferInsert;
+export type EducationRow = typeof hrmsCandidateEducation.$inferSelect;
+export type EmploymentRow = typeof hrmsCandidateEmployment.$inferSelect;
+
+export const schema = { hrmsCandidates, hrmsCandidateEducation, hrmsCandidateEmployment };
