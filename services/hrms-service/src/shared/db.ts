@@ -14,6 +14,7 @@ import { schema as assessmentAttemptModule } from "../modules/recruitment/attemp
 import { schema as assessmentResultModule } from "../modules/recruitment/result-schema.js";
 import { schema as selectionModule } from "../modules/recruitment/selection-schema.js";
 import { schema as recruitmentReservationModule } from "../modules/recruitment/reservation-schema.js";
+import { schema as qualificationModule } from "../modules/recruitment/qualification-schema.js";
 import { schema as attendanceModule }  from "../modules/attendance/schema.js";
 import { schema as leaveModule }       from "../modules/leave/schema.js";
 import { schema as trainingModule }    from "../modules/training/schema.js";
@@ -52,6 +53,7 @@ const SCHEMA = {
   ...assessmentResultModule,
   ...selectionModule,
   ...recruitmentReservationModule,
+  ...qualificationModule,
   ...attendanceModule,
   ...leaveModule,
   ...trainingModule,
