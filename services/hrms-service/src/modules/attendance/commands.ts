@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { MarkAttendanceBody, RegularisationCreateBody } from "./validators.js";
+import type { MarkAttendanceBody, RegularisationCreateBody, PeriodLockBody } from "./validators.js";
 
 export type Accepted = { id: string; batchId: string; count: number; status: string; correlationId: string };
 export type AcceptedSingle = { id: string; status: string; correlationId: string };
@@ -31,4 +31,24 @@ export async function createRegularisation(ctx: RequestContext, body: Regularisa
     },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+async function publishLockState(
+  ctx: RequestContext, topic: string, body: PeriodLockBody, status: "locked" | "open",
+): Promise<AcceptedSingle> {
+  const id = randomUUID();
+  await queue.publish(topic, {
+    messageId: id, type: topic,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, period: body.period, status, reason: body.reason ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export function lockPeriod(ctx: RequestContext, body: PeriodLockBody): Promise<AcceptedSingle> {
+  return publishLockState(ctx, COMMANDS.attendanceLockPeriod, body, "locked");
+}
+
+export function unlockPeriod(ctx: RequestContext, body: PeriodLockBody): Promise<AcceptedSingle> {
+  return publishLockState(ctx, COMMANDS.attendanceUnlockPeriod, body, "open");
 }

@@ -58,6 +58,21 @@ export async function listAttendance(tenantId: string, limit: number) {
   });
 }
 
+export async function listAttendanceLocks(tenantId: string, limit = 200) {
+  const key = cache.listKey(tenantId, "attendance_locks", "list");
+  return (await cache.getOrLoad(key, async () => {
+    const rows = await repo.listLocksByTenant(tenantId, limit);
+    return rows.map((r) => ({
+      id: r.id,
+      period: (r.period ?? "").trim(),
+      status: r.status as "locked" | "open",
+      reason: r.reason ?? undefined,
+      lockedBy: r.lockedBy ?? undefined,
+      lockedAt: r.lockedAt ? new Date(r.lockedAt as unknown as string).toISOString() : undefined,
+    }));
+  })) ?? [];
+}
+
 export async function getAttendanceSummaryForMonth(
   tenantId: string,
   month: string,

@@ -305,15 +305,25 @@ paths:
   # HRMS Service
   # ═══════════════════════════════════════════════════════════════════════════
 
-  /v1/hrms/leave/apply:
+  /v1/hrms/leave-applications:
     post:
       operationId: applyLeave
       tags: [HRMS]
       summary: Apply for leave
       description: |
-        Submits a leave application for the authenticated employee. Validates
-        against CCS(Leave) Rules including balance checks, minimum service
-        requirements, and leave-type-specific policies (CL/EL/HPL/ML etc).
+        Submits a leave application for an employee (CQRS write — returns 202,
+        the command is processed asynchronously). Roles: hr_admin, hr_officer,
+        super_admin, manager, or employee (self-service).
+
+        Synchronous validation before acceptance (`enforceCcsLeaveRules`):
+        - Engagement eligibility gate — engagement types not entitled to the
+          salaried leave scheme (e.g. consultant, third_party) are rejected
+          (422 `LEAVE_NOT_ELIGIBLE`).
+        - Overlap guard — dates that overlap an existing pending/approved
+          application for the same employee are rejected (422 `LEAVE_OVERLAP`).
+        - CCS(Leave) Rules — balance checks, minimum service requirements, and
+          leave-type-specific policies (CL/EL/HPL/ML etc) (422
+          `LEAVE_RULE_VIOLATION`).
       requestBody:
         required: true
         content:
@@ -322,7 +332,7 @@ paths:
               $ref: "#/components/schemas/ApplyLeaveRequest"
       responses:
         "202":
-          description: Leave application accepted
+          description: Leave application accepted (queued for processing)
           content:
             application/json:
               schema:
@@ -337,12 +347,181 @@ paths:
           description: Missing or invalid bearer token
         "403":
           description: Insufficient role
-        "422":
-          description: Leave rule violation (CCS Rules)
+        "404":
+          description: |
+            Referenced entity not found — `ALLOC_NOT_FOUND` (leave allocation),
+            `LEAVE_TYPE_NOT_FOUND`, or `EMP_NOT_FOUND` (employee).
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            Business rule violation. Possible `code` values:
+            - `LEAVE_NOT_ELIGIBLE` — engagement type does not accrue leave.
+            - `LEAVE_OVERLAP` — the requested dates overlap an existing
+              pending/approved leave application for the same employee.
+            - `LEAVE_RULE_VIOLATION` — CCS(Leave) Rules violation (balance,
+              minimum service, leave-type policy).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/leave-requests:
+    post:
+      operationId: applyLeaveRequest
+      tags: [HRMS]
+      summary: Apply for leave (alias of /v1/hrms/leave-applications)
+      description: |
+        Alias route for `POST /v1/hrms/leave-applications`. Identical behaviour,
+        request body, validation, and responses — provided for clients that use
+        the `leave-requests` naming. See `/v1/hrms/leave-applications` for full
+        validation semantics (engagement eligibility, overlap guard, CCS Rules).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyLeaveRequest"
+      responses:
+        "202":
+          description: Leave application accepted (queued for processing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: |
+            Referenced entity not found — `ALLOC_NOT_FOUND` (leave allocation),
+            `LEAVE_TYPE_NOT_FOUND`, or `EMP_NOT_FOUND` (employee).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            Business rule violation. Possible `code` values:
+            - `LEAVE_NOT_ELIGIBLE` — engagement type does not accrue leave.
+            - `LEAVE_OVERLAP` — the requested dates overlap an existing
+              pending/approved leave application for the same employee.
+            - `LEAVE_RULE_VIOLATION` — CCS(Leave) Rules violation (balance,
+              minimum service, leave-type policy).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/attendance/locks:
+    get:
+      operationId: listAttendanceLocks
+      tags: [HRMS]
+      summary: List attendance period locks
+      description: |
+        Returns the attendance period locks for the tenant (DEF-AT-001,
+        T&A-ATM-0247). Each entry records whether an attendance month
+        (`period`, YYYY-MM) is `locked` (payroll cut-off) or `open`, along with
+        who locked it and when. Roles: hr_admin, hr_officer, super_admin, manager.
+      responses:
+        "200":
+          description: Current attendance period locks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AttendanceLock"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: lockAttendancePeriod
+      tags: [HRMS]
+      summary: Lock an attendance period (payroll cut-off)
+      description: |
+        Locks an attendance month so that attendance marking and regularisation
+        for any date in that month are rejected (422 `ATTENDANCE_LOCKED`) until
+        the period is re-opened (DEF-AT-001, T&A-ATM-0247). CQRS write — returns
+        202, processed asynchronously. Elevated roles only: hr_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PeriodLockRequest"
+      responses:
+        "202":
+          description: Lock command accepted (queued for processing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error (period must be YYYY-MM)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/attendance/locks/unlock:
+    post:
+      operationId: unlockAttendancePeriod
+      tags: [HRMS]
+      summary: Re-open a locked attendance period
+      description: |
+        Re-opens a previously locked attendance month, allowing attendance
+        marking and regularisation for that month again (DEF-AT-001,
+        T&A-ATM-0247). CQRS write — returns 202, processed asynchronously.
+        Elevated roles only: hr_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PeriodLockRequest"
+      responses:
+        "202":
+          description: Unlock command accepted (queued for processing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error (period must be YYYY-MM)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
       security:
         - bearerAuth: []
 
@@ -6796,12 +6975,51 @@ components:
           type: string
           format: date
         daysApplied:
-          type: number
-          minimum: 0.5
-          description: Supports half-day (0.5) leave
+          type: integer
+          minimum: 1
+          description: Number of leave days applied (positive integer)
+        reason:
+          type: string
+          maxLength: 1000
+
+    PeriodLockRequest:
+      type: object
+      required: [period]
+      properties:
+        period:
+          type: string
+          pattern: "^\\d{4}-\\d{2}$"
+          description: Attendance month to lock/unlock (YYYY-MM)
+          example: "2026-06"
         reason:
           type: string
           maxLength: 500
+          description: Optional justification recorded on the lock for audit
+
+    AttendanceLock:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        period:
+          type: string
+          description: Attendance month (YYYY-MM)
+          example: "2026-06"
+        status:
+          type: string
+          enum: [locked, open]
+        reason:
+          type: string
+          nullable: true
+        lockedBy:
+          type: string
+          format: uuid
+          nullable: true
+        lockedAt:
+          type: string
+          format: date-time
+          nullable: true
 
     CheckInRecord:
       type: object

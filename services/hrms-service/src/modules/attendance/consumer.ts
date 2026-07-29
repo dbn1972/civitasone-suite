@@ -39,6 +39,31 @@ export function registerAttendanceConsumers(queue: Queue): void {
     });
   });
 
+  const handleLockState = async (msg: Parameters<Parameters<Queue["subscribe"]>[1]>[0]): Promise<void> => {
+    const p = msg.payload as { id: string; tenantId: string; period: string; status: "locked" | "open"; reason: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.upsertLock(tx, {
+        id: p.id, tenantId: p.tenantId, period: p.period, status: p.status,
+        reason: p.reason, actorId: msg.actorId, at: new Date(),
+      });
+      await enqueue(tx, {
+        topic: p.status === "locked" ? EVENTS.attendancePeriodLocked : EVENTS.attendancePeriodUnlocked,
+        eventType: p.status === "locked" ? EVENTS.attendancePeriodLocked : EVENTS.attendancePeriodUnlocked,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { period: p.period, status: p.status },
+      });
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "hrms", action: p.status === "locked" ? "attendance_period_lock" : "attendance_period_unlock", resourceType: "attendance_lock", resourceId: p.period, outcome: "success" },
+      });
+    });
+    await cache.invalidate(cache.listKey(msg.tenantId, "attendance_locks", "list"));
+  };
+  queue.subscribe(COMMANDS.attendanceLockPeriod, handleLockState);
+  queue.subscribe(COMMANDS.attendanceUnlockPeriod, handleLockState);
+
   queue.subscribe(COMMANDS.regularisationCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string;
