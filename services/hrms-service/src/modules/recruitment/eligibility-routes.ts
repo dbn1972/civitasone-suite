@@ -18,6 +18,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { evaluateEligibility, isValidCalendarDate, type EligibilityCriteria, type Applicant } from "./eligibility.js";
+import { isApplicationOpen, applicationClosedReason } from "./job-publication.js";
 import * as repo from "./eligibility-repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -85,7 +86,11 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
       ...applicantFields,
     }).parse(req.body);
     const v = await mustVacancy(ctx.tenantId, id);
-    if (v.status !== "open") throw new HttpError(409, "VACANCY_CLOSED", "this vacancy is not accepting applications");
+    // R-RA-0069: no applications after closure (status/publish + the closing
+    // deadline). An authorised extension pushes the deadline out and reopens.
+    if (!isApplicationOpen(v as never, Date.now())) {
+      throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(v as never, Date.now()));
+    }
 
     const criteria = toCriteria(v);
     // Duplicate prevention (R-RA-0100) unless the vacancy explicitly allows multiple.
