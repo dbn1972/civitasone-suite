@@ -51,6 +51,19 @@ async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof ap
       `engagement type '${emp.employeeType ?? "unknown"}' is not eligible for the leave scheme — this workforce category does not accrue leave`,
     );
   }
+  // DEF-LM-002 (T&A-LM-0283): reject a new application whose dates overlap an
+  // existing pending/approved leave for the same employee. Prevents double-booking
+  // the same calendar days across leave types. Runs for EVERY leave code (not just
+  // CCS-engine codes) so it must precede the early-return below.
+  const overlaps = await repo.findOverlappingLeaveApps(tenantId, body.employeeId, body.fromDate, body.toDate);
+  if (overlaps.length > 0) {
+    const clash = overlaps[0]!;
+    throw new HttpError(
+      422,
+      "LEAVE_OVERLAP",
+      `leave dates ${body.fromDate}..${body.toDate} overlap an existing ${clash.status} application (${clash.fromDate}..${clash.toDate}, id ${clash.id})`,
+    );
+  }
   if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return;
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = (allowed as string[]).includes(emp.employeeType ?? "")
