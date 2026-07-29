@@ -122,8 +122,8 @@ report before continuing. Never merge with red CI or coverage < 80%.
 
 | Task | ID | Requirement | Notes | Status |
 |------|-----|-------------|-------|--------|
-| R01 | R-RA-0087 | Multiple resume versions + active-resume flag | version rows + single active per candidate | ☐ Next |
-| R02 | R-RA-0111 | HR override of automated screening | maker-checker: approver ≠ overrider; reason + audit | ☐ |
+| R01 | R-RA-0087 | Multiple resume versions + active-resume flag | version rows + single active per candidate | ✅ Merged (PR #263 + fix #264) — migration 0092, upload/list/activate, DB single-active invariant, IDOR key guard; live-smoke verified |
+| R02 | R-RA-0111 | HR override of automated screening | maker-checker: approver ≠ overrider; reason + audit | ☐ Next |
 | R03 | R-RA-0118 | Rejection comms without disclosing internal scoring | policy flag + candidate-facing projection strips scores | ☐ |
 | R04 | R-RA-0142 | Interview invite/reminder/reschedule/cancel comms lifecycle | send via outbox/stub behind a flag | ☐ |
 | R05 | R-RA-0143 | Candidate self-service confirm / request reschedule | request record + HR approve/decline (note auth deferral) | ☐ |
@@ -227,7 +227,7 @@ separate UAT workshop, not in this automated loop.
 | Sprint | Tasks | Done | Verified-Only | Implemented | Blocked |
 |--------|-------|------|---------------|-------------|---------|
 | 1 | 9 | 2 | 0 | 2 (T01 #248, T02 #251) | 0 |
-| 2 — Recruitment drive | 14 (7 buildable + 7 external) | 0 | — | ~87/120 module items merged (PRs #237–261) | 0 |
+| 2 — Recruitment drive | 14 (7 buildable + 7 external) | 1 (R01 #263/#264) | — | ~88/120 module items merged | 0 |
 | 3 | 7 | 0 | 0 | 0 | 0 |
 | 4 | 5 | 0 | 0 | 0 | 0 |
 | 5 | 5 | 0 | 0 | 0 | 0 |
@@ -238,14 +238,20 @@ separate UAT workshop, not in this automated loop.
 Update after each merge.
 
 ### Sprint 2 recruitment drive — next action
-**R01 (R-RA-0087, multiple resume versions + active-resume flag)** is the first
-buildable task. Kick-off checklist:
-1. `git worktree add /home/ec2-user/wt/rra-0087 -b fix/rra-0087-resume-versions origin/main`
-2. Parse the checklist rows 0048–0167 with `python3 + openpyxl` and diff against
-   the recruitment module to confirm the buildable/external split above before
-   writing code.
-3. Build → domain + route tests → adversarial review → suite green → PR →
-   squash-merge → deploy → **live smoke** → update memory + this file.
+**R02 (R-RA-0111, HR override of automated screening)** is the next buildable
+task. Maker-checker: the approver of an override must differ from the overrider
+and from the screening content-author; capture a reason + audit trail.
+
+R01 (R-RA-0087) is DONE — merged (PR #263 + follow-up #264), migration 0092
+applied to civitas_hrms, deployed and live-smoke verified (single-active
+invariant + active_resume_ref sync confirmed against the running service).
+
+Standing kick-off checklist for each task:
+1. Branch from fresh `origin/main`; build the module (schema/domain/repo/routes),
+   register in app.ts + db.ts.
+2. Domain + route tests → adversarial review (fix CRITICAL/HIGH) → full suite
+   green → PR → squash-merge → deploy (migrate + rebuild dist + pm2 restart) →
+   **live smoke** → update memory + this file.
 
 > ⚠️ Migration-numbering note: the merged attendance-lock migration
 > `0083_attendance_period_lock.sql` collides with the existing
