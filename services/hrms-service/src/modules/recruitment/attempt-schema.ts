@@ -1,4 +1,4 @@
-import { uuid, varchar, integer, boolean, jsonb, numeric, timestamp } from "drizzle-orm/pg-core";
+import { uuid, varchar, integer, boolean, jsonb, numeric, timestamp, text } from "drizzle-orm/pg-core";
 import { assessmentSchema } from "./blueprint-schema.js";
 
 export const hrmsAssessmentSchedules = assessmentSchema.table("hrms_assessment_schedules", {
@@ -54,6 +54,11 @@ export const hrmsAssessmentAttempts = assessmentSchema.table("hrms_assessment_at
   frozenAt:           timestamp("frozen_at", { withTimezone: true }),
   published:          boolean("published").notNull().default(false),
   publishedAt:        timestamp("published_at", { withTimezone: true }),
+  disposition:        varchar("disposition", { length: 24 }).notNull().default("none"),
+  dispositionReason:  text("disposition_reason"),
+  dispositionBy:      uuid("disposition_by"),
+  dispositionAt:      timestamp("disposition_at", { withTimezone: true }),
+  supersededBy:       uuid("superseded_by"),
   version:            integer("version").notNull().default(1),
   createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:          timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
