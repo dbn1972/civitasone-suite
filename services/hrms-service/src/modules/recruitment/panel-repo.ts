@@ -5,6 +5,16 @@ import { hrmsInterviews, hrmsInterviewPanelists, type InterviewRow, type Panelis
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select" | "delete">;
 
+/**
+ * Rows affected by a write, robust across drivers: node-postgres exposes
+ * `rowCount`, postgres-js (this project's driver) exposes `count`. Using only
+ * `rowCount` silently reads as undefined here, defeating affected-row checks.
+ */
+function affectedRows(res: unknown): number {
+  const r = res as { rowCount?: number; count?: number };
+  return r.rowCount ?? r.count ?? 0;
+}
+
 export async function findInterview(tenantId: string, id: string): Promise<InterviewRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsInterviews)
     .where(and(eq(hrmsInterviews.tenantId, tenantId), eq(hrmsInterviews.id, id))).limit(1));
@@ -15,7 +25,7 @@ export async function updateInterview(tx: Writer, tenantId: string, id: string, 
   const res = await tx.update(hrmsInterviews)
     .set({ ...patch, version: sql`${hrmsInterviews.version} + 1` })
     .where(and(eq(hrmsInterviews.tenantId, tenantId), eq(hrmsInterviews.id, id), eq(hrmsInterviews.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) throw new HttpError(409, "VERSION_CONFLICT", "interview was modified by another request; reload and retry");
+  if (affectedRows(res) === 0) throw new HttpError(409, "VERSION_CONFLICT", "interview was modified by another request; reload and retry");
 }
 
 /**
@@ -47,7 +57,7 @@ export async function recusePanelist(tx: Writer, tenantId: string, interviewId: 
   const res = await tx.update(hrmsInterviewPanelists)
     .set({ recused: true, recusedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(hrmsInterviewPanelists.tenantId, tenantId), eq(hrmsInterviewPanelists.interviewId, interviewId), eq(hrmsInterviewPanelists.memberId, memberId)));
-  const n = (res as { rowCount?: number }).rowCount ?? 0;
+  const n = affectedRows(res);
   if (n > 0) await touchInterviewVersion(tx, tenantId, interviewId);
   return n;
 }
