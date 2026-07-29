@@ -243,4 +243,37 @@ export const hrmsInterviewPanelists = recruitmentSchema.table("hrms_interview_pa
 export type PanelistRow = typeof hrmsInterviewPanelists.$inferSelect;
 export type PanelistInsert = typeof hrmsInterviewPanelists.$inferInsert;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists };
+/**
+ * Maker-checker override of an automated/manual screening decision (R-RA-0111).
+ * An HR admin REQUESTS a change to an already-decided application; a DIFFERENT
+ * admin (separation of duties: approver != requester and != the original
+ * screener) approves or rejects it. Only on approval is the application's
+ * decision actually changed. One pending request per application at a time.
+ */
+export const hrmsScreeningOverrides = recruitmentSchema.table("hrms_screening_overrides", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull(),
+  applicationId:     uuid("application_id").notNull(),
+  jobOpeningId:      uuid("job_opening_id").notNull(),
+  fromDecision:      varchar("from_decision", { length: 16 }).notNull(),
+  toDecision:        varchar("to_decision", { length: 16 }).notNull(),
+  // The application.version at request time — approval requires an exact match
+  // so an A→B→A decision cycle (same value, new version) is caught as stale.
+  applicationVersion: integer("application_version").notNull(),
+  reasonCode:        varchar("reason_code", { length: 24 }),
+  reason:            text("reason").notNull(),
+  status:            varchar("status", { length: 12 }).notNull().default("pending"),
+  originalScreenedBy: uuid("original_screened_by"),
+  requestedBy:       uuid("requested_by").notNull(),
+  requestedAt:       timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  decidedBy:         uuid("decided_by"),
+  decidedAt:         timestamp("decided_at", { withTimezone: true }),
+  decisionNote:      text("decision_note"),
+  createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  version:           integer("version").notNull().default(1),
+});
+export type ScreeningOverrideRow = typeof hrmsScreeningOverrides.$inferSelect;
+export type ScreeningOverrideInsert = typeof hrmsScreeningOverrides.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides };
