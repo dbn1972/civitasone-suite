@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createJobOpeningBody, createApplicationBody, publicApplicationBody, offerApplicationBody, hireApplicationBody, idParam } from "./validators.js";
 import { assertKnownEngagementType } from "../employee/engagement-policy.js";
+import { isApplicationOpen, applicationClosedReason } from "./job-publication.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -33,6 +34,13 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = createApplicationBody.parse(req.body);
+    // R-RA-0069: no applications after closure. HR-assisted path — enforce open
+    // status + deadline, but NOT public-published (HR may record against internal
+    // / unpublished openings). requirePublished=false.
+    const vacancy = await repo.findJobOpeningById(body.jobOpeningId);
+    if (vacancy && !isApplicationOpen(vacancy as never, Date.now(), false)) {
+      throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createApplication(ctx, body));
   });
 
@@ -144,8 +152,10 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
     const body = publicApplicationBody.parse(req.body);
     // Resolve tenant from the vacancy
     const vacancy = await repo.findJobOpeningById(body.jobOpeningId);
-    if (!vacancy || vacancy.status !== "open" || vacancy.isPublished !== "true") {
-      throw new HttpError(404, "NOT_FOUND", "This vacancy is not accepting applications");
+    if (!vacancy) throw new HttpError(404, "NOT_FOUND", "This vacancy is not accepting applications");
+    // R-RA-0069: no applications after closure (status/publish + closing deadline).
+    if (!isApplicationOpen(vacancy as never, Date.now())) {
+      throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
     }
     const result = await commands.createPublicApplication(vacancy.tenantId, body);
     return reply.code(201).send(result);

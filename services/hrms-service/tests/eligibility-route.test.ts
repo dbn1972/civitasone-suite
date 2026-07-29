@@ -40,7 +40,7 @@ import { sqlClient } from "../src/shared/db.js";
 
 const auth = { authorization: `Bearer ${signToken({ sub: USER, tid: TENANT, roles: ["hr_admin"], sid: "s" }, SECRET)}` };
 const CRITERIA = { ageMin: 21, ageMax: 35, cutoffDate: "2026-01-01", experienceMinYears: 2, categoryAgeRelaxation: { OBC: 3 }, allowMultiple: false };
-const vacancy = (over = {}) => ({ id: VAC, tenantId: TENANT, status: "open", eligibility: CRITERIA, version: 1, ...over });
+const vacancy = (over = {}) => ({ id: VAC, tenantId: TENANT, status: "open", isPublished: "true", eligibility: CRITERIA, version: 1, ...over });
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -20,6 +20,17 @@ export const hrmsJobOpenings = recruitmentSchema.table("hrms_job_openings", {
   payRange:      varchar("pay_range", { length: 120 }),
   isPublished:   varchar("is_published", { length: 5 }).notNull().default("false"),
   eligibility:   jsonb("eligibility").notNull().default({}),
+  applicationDeadline: timestamp("application_deadline", { withTimezone: true }),
+  minExperienceYears: integer("min_experience_years"),
+  feesMinor:     bigint("fees_minor", { mode: "bigint" }),
+  feeExemption:  text("fee_exemption"),
+  requiredDocuments: jsonb("required_documents").notNull().default([]),
+  selectionProcess: text("selection_process"),
+  importantDates: jsonb("important_dates").notNull().default({}),
+  portalScope:   varchar("portal_scope", { length: 16 }).notNull().default("public"),
+  titleAlt:      varchar("title_alt", { length: 300 }),
+  descriptionAlt: text("description_alt"),
+  corrigendumCount: integer("corrigendum_count").notNull().default(0),
   status:        varchar("status", { length: 24 }).notNull().default("open"),
   postedAt:      date("posted_at"),
   closesAt:      date("closes_at"),
@@ -183,4 +194,19 @@ export const hrmsInterviewScores = recruitmentSchema.table("hrms_interview_score
 });
 export type InterviewScoreRow = typeof hrmsInterviewScores.$inferSelect;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores };
+/** Immutable corrigendum / extension / cancellation log (R-RA-0068). */
+export const hrmsVacancyCorrigenda = recruitmentSchema.table("hrms_vacancy_corrigenda", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  jobOpeningId: uuid("job_opening_id").notNull(),
+  seq:          integer("seq").notNull(),
+  action:       varchar("action", { length: 16 }).notNull(),
+  changes:      text("changes").notNull(),
+  oldDeadline:  timestamp("old_deadline", { withTimezone: true }),
+  newDeadline:  timestamp("new_deadline", { withTimezone: true }),
+  actorId:      uuid("actor_id").notNull(),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type CorrigendumRow = typeof hrmsVacancyCorrigenda.$inferSelect;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda };
