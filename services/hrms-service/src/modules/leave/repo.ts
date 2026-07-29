@@ -1,4 +1,4 @@
-import { eq, and, gte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, ne, sql } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps,
@@ -52,6 +52,36 @@ export async function listAllocsForEmployee(tenantId: string, employeeId: string
   return scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
     .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId)))
     .limit(limit));
+}
+
+/**
+ * DEF-LM-002 (T&A-LM-0283): Find leave applications for the same employee whose
+ * date range overlaps [fromDate, toDate]. Only ACTIVE applications block a new
+ * one — pending (awaiting approval) and approved. Rejected/cancelled/draft
+ * applications never conflict. Two ranges overlap when
+ * existing.fromDate <= new.toDate AND existing.toDate >= new.fromDate.
+ * Dates are stored as ISO `date` (YYYY-MM-DD) so lexical comparison is correct.
+ * An optional excludeId lets callers ignore a specific application (e.g. when
+ * re-validating an edit of the same record).
+ */
+export async function findOverlappingLeaveApps(
+  tenantId: string,
+  employeeId: string,
+  fromDate: string,
+  toDate: string,
+  excludeId?: string,
+): Promise<LeaveAppRow[]> {
+  return scopedRead((tx) => {
+    const conditions = [
+      eq(hrmsLeaveApps.tenantId, tenantId),
+      eq(hrmsLeaveApps.employeeId, employeeId),
+      inArray(hrmsLeaveApps.status, ["pending", "approved"]),
+      lte(hrmsLeaveApps.fromDate, toDate),
+      gte(hrmsLeaveApps.toDate, fromDate),
+    ];
+    if (excludeId) conditions.push(ne(hrmsLeaveApps.id, excludeId));
+    return tx.select().from(hrmsLeaveApps).where(and(...conditions)).limit(50);
+  });
 }
 
 export async function findApprovedLeaveInMonth(tenantId: string, month: string): Promise<LeaveAppRow[]> {
