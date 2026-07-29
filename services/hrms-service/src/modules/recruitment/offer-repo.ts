@@ -46,7 +46,9 @@ export async function updateOffer(
   const res = await tx.update(hrmsOffers)
     .set({ ...patch, version: sql`${hrmsOffers.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsOffers.tenantId, tenantId), eq(hrmsOffers.id, id), eq(hrmsOffers.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  // postgres-js reports affected rows as .count, not .rowCount (see PR #254).
+  const affected = (res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0;
+  if (affected === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "offer was modified by another request; reload and retry");
   }
 }
