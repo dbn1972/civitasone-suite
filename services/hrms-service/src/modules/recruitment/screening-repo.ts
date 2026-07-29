@@ -35,7 +35,10 @@ export async function setScreening(
   const res = await tx.update(hrmsApplications)
     .set({ ...patch, version: sql`${hrmsApplications.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.id, id), eq(hrmsApplications.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  // postgres-js reports affected rows as `.count` (drizzle's `.rowCount` is
+  // undefined on this driver) — check both so the version guard actually fires.
+  const changed = (res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0;
+  if (changed === 0) {
     throw new Error("VERSION_CONFLICT");
   }
 }

@@ -85,24 +85,23 @@ describe("screening routes", () => {
     await app.close();
   });
 
-  it("blocks changing an existing decision without override (409) and without admin (403)", async () => {
+  it("routes an override of a decided application to the maker-checker flow (409) — no single-admin direct override", async () => {
     H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "ineligible" }));
     const app = await buildApp();
-    const noFlag = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "eligible" } });
-    expect(noFlag.statusCode).toBe(409);
-    expect(noFlag.json().code).toBe("OVERRIDE_REQUIRED");
-    const nonAdmin = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "eligible", override: true, overrideReason: "re-check" } });
-    expect(nonAdmin.statusCode).toBe(403);
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "eligible" } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("OVERRIDE_VIA_MAKER_CHECKER");
+    expect(H.setScreeningMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("allows an admin override with a reason and records is_override", async () => {
-    H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "ineligible" }));
+  it("re-affirming the same decision is an idempotent no-op that does NOT rewrite the author", async () => {
+    H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "shortlisted" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "shortlisted", override: true, overrideReason: "manager review" } });
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "shortlisted" } });
     expect(r.statusCode).toBe(200);
-    expect(r.json().isOverride).toBe(true);
-    expect(H.insertEventMock.mock.calls[0][1]).toMatchObject({ action: "override", isOverride: true });
+    expect(r.json().unchanged).toBe(true);
+    expect(H.setScreeningMock).not.toHaveBeenCalled();
     await app.close();
   });
 

@@ -79,8 +79,6 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
       decision: z.enum(SCREENING_DECISIONS),
       reasonCode: z.enum(REJECTION_REASON_CODES).optional(),
       remarks: z.string().max(2000).optional(),
-      override: z.boolean().optional(),
-      overrideReason: z.string().max(2000).optional(),
     }).parse(req.body);
 
     const a = await mustApp(ctx.tenantId, id);
@@ -88,16 +86,23 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     if (requiresRejectionReason(body.decision as ScreeningDecision) && !body.reasonCode) {
       throw new HttpError(400, "REASON_REQUIRED", "a structured rejection reason is required to mark an application ineligible");
     }
-    // Overriding an existing (auto or manual) decision requires an admin + reason.
-    const isChange = a.screeningDecision !== "pending" && a.screeningDecision !== body.decision;
-    if (isChange) {
-      if (!ctx.roles.some((r: string) => ADMIN_ROLES.includes(r))) {
-        throw new HttpError(403, "OVERRIDE_FORBIDDEN", "only an HR admin may override an existing screening decision");
-      }
-      if (!body.override || !body.overrideReason) {
-        throw new HttpError(409, "OVERRIDE_REQUIRED", `application is already '${a.screeningDecision}'; set override=true with an overrideReason to change it`);
-      }
+
+    const alreadyDecided = a.screeningDecision !== "pending";
+    // Idempotent re-affirmation of the same decision: a no-op. Crucially we do
+    // NOT rewrite screened_by, so the original author (the SoD "content author")
+    // is preserved and cannot be laundered by re-submitting the same value.
+    if (alreadyDecided && a.screeningDecision === body.decision) {
+      return reply.send({ id, screeningDecision: body.decision, isOverride: false, unchanged: true });
     }
+    // Changing an existing decision is an OVERRIDE — it MUST go through the
+    // maker-checker flow (R-RA-0111) so one admin cannot both change and approve.
+    // The former single-admin direct override is deliberately closed.
+    if (alreadyDecided) {
+      throw new HttpError(409, "OVERRIDE_VIA_MAKER_CHECKER",
+        `application is already '${a.screeningDecision}'; raise a maker-checker override at POST /v1/hrms/applications/${id}/screening-overrides`);
+    }
+
+    // First-time decision on a still-pending application.
     try {
       await db.transaction(async (tx) => {
         await repo.setScreening(tx, ctx.tenantId, id, {
@@ -108,17 +113,16 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
         }, a.version);
         await repo.insertEvent(tx, {
           tenantId: ctx.tenantId, applicationId: id, jobOpeningId: a.jobOpeningId,
-          action: isChange ? "override" : "decision", decision: body.decision,
-          reasonCode: body.reasonCode ?? null,
-          remarks: isChange ? (body.overrideReason ?? body.remarks ?? null) : (body.remarks ?? null),
-          isOverride: isChange, actorId: ctx.actorId,
+          action: "decision", decision: body.decision,
+          reasonCode: body.reasonCode ?? null, remarks: body.remarks ?? null,
+          isOverride: false, actorId: ctx.actorId,
         });
       });
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "application changed; reload and retry");
       throw err;
     }
-    return reply.send({ id, screeningDecision: body.decision, isOverride: isChange });
+    return reply.send({ id, screeningDecision: body.decision, isOverride: false });
   });
 
   // ── bulk shortlist (R-RA-0114) ──
