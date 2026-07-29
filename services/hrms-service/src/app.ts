@@ -32,6 +32,7 @@ import { requisitionRoutes } from "./modules/recruitment/requisition-routes.js";
 import { eligibilityRoutes } from "./modules/recruitment/eligibility-routes.js";
 import { screeningRoutes } from "./modules/recruitment/screening-routes.js";
 import { offerRoutes } from "./modules/recruitment/offer-routes.js";
+import { interviewScoringRoutes } from "./modules/recruitment/interview-scoring-routes.js";
 import { leaveCancelRoutes } from "./modules/leave/cancel-route.js";
 import { compOffRoutes } from "./modules/leave/comp-off-routes.js";
 import { fnfRoutes } from "./modules/employee/fnf-route.js";
@@ -120,6 +121,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(eligibilityRoutes);
   await app.register(screeningRoutes);
   await app.register(offerRoutes);
+  await app.register(interviewScoringRoutes);
   await app.register(leaveCancelRoutes);
   await app.register(compOffRoutes);
   await app.register(fnfRoutes);

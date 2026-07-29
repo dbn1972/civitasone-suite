@@ -137,6 +137,10 @@ export const hrmsInterviews = recruitmentSchema.table("hrms_interviews", {
   status:          varchar("status", { length: 24 }).notNull().default("scheduled"),
   feedback:        text("feedback"),
   recommendation:  varchar("recommendation", { length: 24 }),
+  scorecardTemplate: jsonb("scorecard_template").$type<unknown[]>().notNull().default([]),
+  cutoffScore:     integer("cutoff_score"),
+  panelScore:      integer("panel_score"),
+  consolidatedAt:  timestamp("consolidated_at", { withTimezone: true }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
   version:         integer("version").notNull().default(1),
@@ -163,4 +167,20 @@ export const hrmsScreeningEvents = recruitmentSchema.table("hrms_screening_event
 
 export type ScreeningEventRow = typeof hrmsScreeningEvents.$inferSelect;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents };
+/** Independent per-interviewer score (R-RA-0146). */
+export const hrmsInterviewScores = recruitmentSchema.table("hrms_interview_scores", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  interviewId:   uuid("interview_id").notNull(),
+  interviewerId: uuid("interviewer_id").notNull(),
+  scores:        jsonb("scores").$type<Record<string, number>>().notNull().default({}),
+  overallScore:  integer("overall_score"),
+  comments:      text("comments"),
+  submitted:     boolean("submitted").notNull().default(false),
+  submittedAt:   timestamp("submitted_at", { withTimezone: true }),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type InterviewScoreRow = typeof hrmsInterviewScores.$inferSelect;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores };
