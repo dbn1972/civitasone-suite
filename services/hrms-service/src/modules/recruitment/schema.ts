@@ -155,6 +155,13 @@ export const hrmsInterviews = recruitmentSchema.table("hrms_interviews", {
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
   version:         integer("version").notNull().default(1),
+  outcomeStatus:   varchar("outcome_status", { length: 16 }).notNull().default("pending"),
+  rejectionReason: varchar("rejection_reason", { length: 32 }),
+  rejectionNote:   text("rejection_note"),
+  waitlistRank:    integer("waitlist_rank"),
+  recommendationValidUntil: date("recommendation_valid_until"),
+  outcomeBy:       uuid("outcome_by"),
+  outcomeAt:       timestamp("outcome_at", { withTimezone: true }),
 });
 
 export type JobOpeningRow = typeof hrmsJobOpenings.$inferSelect;
@@ -209,4 +216,23 @@ export const hrmsVacancyCorrigenda = recruitmentSchema.table("hrms_vacancy_corri
 });
 export type CorrigendumRow = typeof hrmsVacancyCorrigenda.$inferSelect;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda };
+export const hrmsInterviewPanelists = recruitmentSchema.table("hrms_interview_panelists", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  interviewId:  uuid("interview_id").notNull(),
+  memberId:     uuid("member_id").notNull(),
+  memberName:   varchar("member_name", { length: 256 }).notNull(),
+  panelRole:    varchar("panel_role", { length: 24 }).notNull().default("member"),
+  availability: jsonb("availability").$type<Record<string, unknown>>().notNull().default({}),
+  coiDeclared:  boolean("coi_declared").notNull().default(false),
+  coiType:      varchar("coi_type", { length: 24 }).notNull().default("none"),
+  coiNote:      text("coi_note"),
+  recused:      boolean("recused").notNull().default(false),
+  recusedAt:    timestamp("recused_at", { withTimezone: true }),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type PanelistRow = typeof hrmsInterviewPanelists.$inferSelect;
+export type PanelistInsert = typeof hrmsInterviewPanelists.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists };
