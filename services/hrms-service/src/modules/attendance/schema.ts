@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, varchar, date, time, timestamp,
+  pgSchema, uuid, text, integer, char, varchar, date, time, timestamp,
 } from "drizzle-orm/pg-core";
 
 export const attendanceSchema = pgSchema("attendance");
@@ -66,9 +66,28 @@ export const hrmsAttendanceRegularisations = attendanceSchema.table("hrms_attend
   version:         integer("version").notNull().default(1),
 });
 
+// DEF-AT-001 (T&A-ATM-0247): payroll cut-off / attendance period lock. One row
+// per (tenant, period YYYY-MM). status='locked' blocks attendance writes for that
+// month until re-opened.
+export const hrmsAttendanceLocks = attendanceSchema.table("hrms_attendance_locks", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull(),
+  period:     char("period", { length: 7 }).notNull(),
+  status:     varchar("status", { length: 8 }).notNull().default("locked"),
+  reason:     text("reason"),
+  lockedBy:   uuid("locked_by"),
+  lockedAt:   timestamp("locked_at", { withTimezone: true }),
+  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:  uuid("created_by").notNull(),
+  updatedBy:  uuid("updated_by").notNull(),
+  version:    integer("version").notNull().default(1),
+});
+
 export type AttendanceRow = typeof hrmsAttendance.$inferSelect;
 export type AttendanceInsert = typeof hrmsAttendance.$inferInsert;
 export type RegularisationRow = typeof hrmsAttendanceRegularisations.$inferSelect;
 export type RegularisationInsert = typeof hrmsAttendanceRegularisations.$inferInsert;
+export type AttendanceLockRow = typeof hrmsAttendanceLocks.$inferSelect;
 
-export const schema = { hrmsShifts, hrmsShiftAssignments, hrmsAttendance, hrmsAttendanceRegularisations };
+export const schema = { hrmsShifts, hrmsShiftAssignments, hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks };

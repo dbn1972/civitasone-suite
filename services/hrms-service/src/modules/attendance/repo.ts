@@ -1,8 +1,8 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
-  hrmsAttendance, hrmsAttendanceRegularisations,
-  type AttendanceRow, type AttendanceInsert, type RegularisationRow,
+  hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks,
+  type AttendanceRow, type AttendanceInsert, type RegularisationRow, type AttendanceLockRow,
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -49,4 +49,50 @@ export async function listRegularisationsByTenant(tenantId: string, limit = 100)
 
 export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanceRegularisations.$inferInsert): Promise<void> {
   await tx.insert(hrmsAttendanceRegularisations).values(row);
+}
+
+// ── DEF-AT-001: attendance period lock ─────────────────────────────────────
+
+/** Return the set of periods (YYYY-MM) that are currently LOCKED for the tenant. */
+export async function findLockedPeriods(tenantId: string, periods: string[]): Promise<string[]> {
+  if (periods.length === 0) return [];
+  const rows = await scopedRead((tx) => tx.select({ period: hrmsAttendanceLocks.period })
+    .from(hrmsAttendanceLocks)
+    .where(and(
+      eq(hrmsAttendanceLocks.tenantId, tenantId),
+      eq(hrmsAttendanceLocks.status, "locked"),
+      inArray(hrmsAttendanceLocks.period, periods),
+    )));
+  return rows.map((r) => (r.period ?? "").trim());
+}
+
+export async function listLocksByTenant(tenantId: string, limit = 200): Promise<AttendanceLockRow[]> {
+  return scopedRead((tx) => tx.select().from(hrmsAttendanceLocks)
+    .where(eq(hrmsAttendanceLocks.tenantId, tenantId))
+    .limit(limit));
+}
+
+/**
+ * Idempotent upsert of a period lock state. On conflict (tenant, period) the
+ * status/reason/actor are updated — locking then re-opening the same period
+ * mutates the single row rather than creating duplicates.
+ */
+export async function upsertLock(
+  tx: Writer,
+  row: {
+    id: string; tenantId: string; period: string; status: "locked" | "open";
+    reason: string | null; actorId: string; at: Date;
+  },
+): Promise<void> {
+  await (tx as typeof db).insert(hrmsAttendanceLocks).values({
+    id: row.id, tenantId: row.tenantId, period: row.period, status: row.status,
+    reason: row.reason, lockedBy: row.actorId, lockedAt: row.at,
+    createdBy: row.actorId, updatedBy: row.actorId,
+  }).onConflictDoUpdate({
+    target: [hrmsAttendanceLocks.tenantId, hrmsAttendanceLocks.period],
+    set: {
+      status: row.status, reason: row.reason, lockedBy: row.actorId,
+      lockedAt: row.at, updatedBy: row.actorId, updatedAt: new Date(),
+    },
+  });
 }

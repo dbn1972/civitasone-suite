@@ -14,6 +14,9 @@ export const COMMANDS = {
   leaveReject:          "hrms.leave.reject",
   attendanceMark:       "hrms.attendance.mark",
   regularisationCreate: "hrms.attendance.regularisation.create",
+  // DEF-AT-001: payroll cut-off / attendance period lock (locks or re-opens a month)
+  attendanceLockPeriod:   "hrms.attendance.period.lock",
+  attendanceUnlockPeriod: "hrms.attendance.period.unlock",
   appraisalCreate:      "hrms.appraisal.create",
   appraisalAdvanceStage: "hrms.appraisal.advance_stage",
   jobCreate:            "hrms.job.create",
@@ -109,6 +112,8 @@ export const EVENTS = {
   leaveApplied:      "hrms.leave.applied",
   leaveApproved:     "hrms.leave.approved",
   attendanceMarked:  "hrms.attendance.marked",
+  attendancePeriodLocked:   "hrms.attendance.period_locked",
+  attendancePeriodUnlocked: "hrms.attendance.period_unlocked",
   claimApproved:     "hrms.claim.approved",
   // consultant / invoice (194J) — consumed by Finance AP
   consultantInvoiceApproved: "hrms.consultant_invoice.approved",

@@ -28,3 +28,10 @@ export const regularisationCreateBody = z.object({
   reason:          z.string().min(1),
 });
 export type RegularisationCreateBody = z.infer<typeof regularisationCreateBody>;
+
+// DEF-AT-001: lock / unlock an attendance period (payroll cut-off).
+export const periodLockBody = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/, "must be YYYY-MM"),
+  reason: z.string().max(500).optional(),
+});
+export type PeriodLockBody = z.infer<typeof periodLockBody>;
