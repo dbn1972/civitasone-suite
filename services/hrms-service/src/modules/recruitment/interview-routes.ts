@@ -25,7 +25,7 @@ const scheduleInterviewBody = z.object({
   scheduledAt: z.string(), // ISO date-time
   durationMinutes: z.number().int().min(15).default(60),
   mode: z.enum(["in_person", "video", "phone"]).default("video"),
-  roundType: z.enum(["screening", "technical", "hr", "panel", "final", "group_discussion"]).default("technical"),
+  roundType: z.enum(["screening", "technical", "hr", "panel", "final", "group_discussion", "domain", "behavioural", "presentation", "final_selection"]).default("technical"),
   roundNumber: z.number().int().min(1).default(1),
   notes: z.string().optional(),
 });
