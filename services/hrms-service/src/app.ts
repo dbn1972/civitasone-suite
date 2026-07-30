@@ -38,6 +38,7 @@ import { interviewResponseRoutes } from "./modules/recruitment/interview-respons
 import { interviewRecordingRoutes } from "./modules/recruitment/interview-recording-routes.js";
 import { applicationFeeRoutes } from "./modules/recruitment/application-fee-routes.js";
 import { applicationPdfRoutes } from "./modules/recruitment/application-pdf-routes.js";
+import { interviewCalendarRoutes } from "./modules/recruitment/interview-calendar-routes.js";
 import { offerRoutes } from "./modules/recruitment/offer-routes.js";
 import { offerExtraRoutes } from "./modules/recruitment/offer-extra-routes.js";
 import { selectionListRoutes } from "./modules/recruitment/selection-routes.js";
@@ -149,6 +150,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(interviewRecordingRoutes);
   await app.register(applicationFeeRoutes);
   await app.register(applicationPdfRoutes);
+  await app.register(interviewCalendarRoutes);
   await app.register(offerRoutes);
   await app.register(offerExtraRoutes);
   await app.register(selectionListRoutes);
