@@ -19,6 +19,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { REJECTION_REASON_CODES, SCREENING_DECISIONS } from "./screening.js";
 import { validateOverrideRequest, sodViolationForApprover, isActionable } from "./screening-override.js";
+import { emitAudit } from "./audit-emit.js";
 import * as repo from "./screening-override-repo.js";
 import * as screeningRepo from "./screening-repo.js";
 
@@ -112,6 +113,9 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
         await repo.setRequestStatus(tx, ctx.tenantId, reqId, {
           status: "approved", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
         }, r.version);
+        await emitAudit(tx, ctx, "screening_override_approved", "screening_override", reqId, {
+          applicationId: r.applicationId, fromDecision: r.fromDecision, toDecision: r.toDecision, requestedBy: r.requestedBy,
+        });
       });
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the application or request changed; reload and retry");

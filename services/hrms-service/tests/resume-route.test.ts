@@ -19,6 +19,7 @@ const H = vi.hoisted(() => ({
   activateResume: vi.fn(),
 }));
 
+vi.mock("../src/modules/recruitment/audit-emit.js", () => ({ emitAudit: async () => undefined }));
 vi.mock("../src/shared/db.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },

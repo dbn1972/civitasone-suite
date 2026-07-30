@@ -17,6 +17,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { validateResumeUpload, resumeKeyPrefix, RESUME_MIME_TYPES } from "./resume-domain.js";
+import { emitAudit } from "./audit-emit.js";
 import * as candidateRepo from "./candidate-repo.js";
 import * as repo from "./resume-repo.js";
 
@@ -44,13 +45,17 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     if (errors.length > 0) throw new HttpError(422, "INVALID_RESUME", errors.join("; "));
 
     const rid = randomUUID();
-    const result = await db.transaction((tx) => repo.createResumeVersion(tx, {
-      id: rid, tenantId: ctx.tenantId, candidateId: id,
-      fileKey: body.fileKey, fileName: body.fileName, mimeType: body.mimeType,
-      fileSizeBytes: BigInt(body.fileSizeBytes),
-      fingerprint: body.fingerprint ?? null, label: body.label ?? null,
-      actorId: ctx.actorId,
-    }, body.makeActive ?? false));
+    const result = await db.transaction(async (tx) => {
+      const r = await repo.createResumeVersion(tx, {
+        id: rid, tenantId: ctx.tenantId, candidateId: id,
+        fileKey: body.fileKey, fileName: body.fileName, mimeType: body.mimeType,
+        fileSizeBytes: BigInt(body.fileSizeBytes),
+        fingerprint: body.fingerprint ?? null, label: body.label ?? null,
+        actorId: ctx.actorId,
+      }, body.makeActive ?? false);
+      await emitAudit(tx, ctx, "resume_uploaded", "candidate_resume", rid, { candidateId: id, versionNo: r.versionNo });
+      return r;
+    });
 
     return reply.code(201).send({ id: rid, candidateId: id, versionNo: result.versionNo, isActive: result.isActive });
   });
