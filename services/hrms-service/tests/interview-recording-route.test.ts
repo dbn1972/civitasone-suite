@@ -136,6 +136,15 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
     await app.close();
   });
 
+  it("maps a duplicate active storage key to 409 (not 500)", async () => {
+    H.insertRecording.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: true, consentReference: "e-1" } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("DUPLICATE_RECORDING");
+    await app.close();
+  });
+
   it("requires auth (401)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/recordings` });
