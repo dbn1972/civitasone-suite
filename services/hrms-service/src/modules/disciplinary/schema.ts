@@ -73,4 +73,61 @@ export type DisciplinaryCaseInsert = typeof hrmsDisciplinaryCases.$inferInsert;
 export type SuspensionRow = typeof hrmsSuspensions.$inferSelect;
 export type SuspensionInsert = typeof hrmsSuspensions.$inferInsert;
 
-export const schema = { hrmsDisciplinaryCases, hrmsDisciplinaryEvents, hrmsSuspensions };
+// ── Sprint 4: POSH / ICC Case Management (T25–T29) ────────────────────────
+
+// T25 (ER-GPDV-0561..0567): ICC complaint intake (confidential).
+export const hrmsIccComplaints = disciplinarySchema.table("hrms_icc_complaints", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  complainantId: uuid("complainant_id").notNull(),
+  respondentId:  uuid("respondent_id"),
+  summary:       text("summary").notNull(),
+  filedAt:       timestamp("filed_at", { withTimezone: true }).notNull().defaultNow(),
+  status:        varchar("status", { length: 16 }).notNull().default("filed"),
+  confidential:  boolean("confidential").notNull().default(true),
+  iccMembersOnly: boolean("icc_members_only").notNull().default(true),
+  createdBy:     uuid("created_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+
+// T26 (ER-GPDV-0568..0570): ICC hearing + finding.
+export const hrmsIccHearings = disciplinarySchema.table("hrms_icc_hearings", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  complaintId:   uuid("complaint_id").notNull(),
+  hearingDate:   date("hearing_date").notNull(),
+  notes:         text("notes"),
+  finding:       varchar("finding", { length: 24 }),
+  conductedBy:   uuid("conducted_by"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  version:       integer("version").notNull().default(1),
+});
+
+// T27 (ER-GPDV-0571..0573): statutory 90-day timeline tracking.
+export const hrmsIccTimelines = disciplinarySchema.table("hrms_icc_timelines", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  complaintId:   uuid("complaint_id").notNull(),
+  milestone:     varchar("milestone", { length: 32 }).notNull(),
+  dueDate:       date("due_date").notNull(),
+  completedAt:   timestamp("completed_at", { withTimezone: true }),
+  escalatedAt:   timestamp("escalated_at", { withTimezone: true }),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// T28 (ER-GPDV-0563..0566): access control — complaint restricted to ICC members.
+// Covered by hrmsIccComplaints.icc_members_only + RLS policy (HR cannot see without ICC role).
+
+// T29 (ER-GPDV-0579/0583): annual POSH report data (generated from complaints).
+export const hrmsIccAnnualReports = disciplinarySchema.table("hrms_icc_annual_reports", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  year:          integer("year").notNull(),
+  totalFiled:    integer("total_filed").notNull().default(0),
+  totalResolved: integer("total_resolved").notNull().default(0),
+  totalPending:  integer("total_pending").notNull().default(0),
+  generatedAt:   timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  generatedBy:   uuid("generated_by").notNull(),
+});
+
+export const schema = { hrmsDisciplinaryCases, hrmsDisciplinaryEvents, hrmsSuspensions, hrmsIccComplaints, hrmsIccHearings, hrmsIccTimelines, hrmsIccAnnualReports };
