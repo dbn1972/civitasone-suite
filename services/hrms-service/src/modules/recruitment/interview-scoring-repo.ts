@@ -18,7 +18,7 @@ export async function updateInterview(
   const res = await tx.update(hrmsInterviews)
     .set({ ...patch, version: sql`${hrmsInterviews.version} + 1` })
     .where(and(eq(hrmsInterviews.tenantId, tenantId), eq(hrmsInterviews.id, id), eq(hrmsInterviews.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "interview was modified by another request; reload and retry");
   }
 }

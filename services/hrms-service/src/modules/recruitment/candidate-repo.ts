@@ -43,7 +43,7 @@ export async function updateCandidate(
   const res = await tx.update(hrmsCandidates)
     .set({ ...patch, version: sql`${hrmsCandidates.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsCandidates.tenantId, tenantId), eq(hrmsCandidates.id, id), eq(hrmsCandidates.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "candidate was modified by another request; reload and retry");
   }
 }

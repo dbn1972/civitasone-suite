@@ -34,7 +34,7 @@ export async function updateContractor(
   const res = await tx.update(hrmsContractors)
     .set({ ...patch, version: sql`${hrmsContractors.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsContractors.tenantId, tenantId), eq(hrmsContractors.id, id), eq(hrmsContractors.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "contractor was modified by another request; reload and retry");
   }
 }
@@ -105,7 +105,7 @@ export async function updateBill(
       eq(hrmsContractorBills.id, id),
       eq(hrmsContractorBills.version, expectedVersion),
     ));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "bill was modified by another request; reload and retry");
   }
 }

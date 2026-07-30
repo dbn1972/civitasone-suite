@@ -32,7 +32,7 @@ export async function updateLtc(
   const res = await tx.update(hrmsLtcClaims)
     .set({ ...patch, version: sql`${hrmsLtcClaims.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsLtcClaims.tenantId, tenantId), eq(hrmsLtcClaims.id, id), eq(hrmsLtcClaims.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "LTC claim was modified by another request; reload and retry");
   }
 }
@@ -87,7 +87,7 @@ export async function updateCea(
   const res = await tx.update(hrmsCeaClaims)
     .set({ ...patch, version: sql`${hrmsCeaClaims.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsCeaClaims.tenantId, tenantId), eq(hrmsCeaClaims.id, id), eq(hrmsCeaClaims.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "CEA claim was modified by another request; reload and retry");
   }
 }
