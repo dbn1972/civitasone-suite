@@ -127,6 +127,9 @@ export const EVENTS = {
   // SVC-003: a recruitment hire filled a position for an auto-generated
   // manpower-plan requisition (consumed by modules/manpower-planning).
   positionFilled:    "hrms.recruitment.position_filled",
+  // R-RA-0142: interview communication queued for delivery (consumed by the
+  // notification service). Only emitted when interview comms are flag-enabled.
+  interviewCommDispatch: "hrms.interview.comm.dispatch",
 
   // contracts
   contractCreated:    "hrms.contract.created",
