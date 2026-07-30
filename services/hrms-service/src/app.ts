@@ -66,6 +66,7 @@ import { compOffRoutes } from "./modules/leave/comp-off-routes.js";
 import { fnfRoutes } from "./modules/employee/fnf-route.js";
 import { lifecycleRoutes } from "./modules/lifecycle/routes.js";
 import { onboardingRoutes } from "./modules/lifecycle/onboarding-routes.js";
+import { bgvPropertyPolicyRoutes } from "./modules/lifecycle/bgv-property-policy-routes.js";
 import { serviceBookRoutes } from "./modules/service-book/routes.js";
 import { pensionRoutes } from "./modules/pension/routes.js";
 import { aparRoutes } from "./modules/apar/routes.js";
@@ -185,6 +186,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fnfRoutes);
   await app.register(lifecycleRoutes);
   await app.register(onboardingRoutes);
+  await app.register(bgvPropertyPolicyRoutes);
   await app.register(serviceBookRoutes);
   await app.register(pensionRoutes);
   await app.register(aparRoutes);
