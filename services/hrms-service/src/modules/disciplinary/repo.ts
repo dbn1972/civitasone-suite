@@ -42,7 +42,7 @@ export async function updateCase(
       eq(hrmsDisciplinaryCases.tenantId, tenantId),
       eq(hrmsDisciplinaryCases.id, id),
       eq(hrmsDisciplinaryCases.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "case was modified by another request; reload and retry");
   }
 }
@@ -148,7 +148,7 @@ export async function updateSuspension(
       eq(hrmsSuspensions.tenantId, tenantId),
       eq(hrmsSuspensions.id, id),
       eq(hrmsSuspensions.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "suspension was modified by another request; reload and retry");
   }
 }

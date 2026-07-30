@@ -35,7 +35,7 @@ export async function updateAppraisal(
     .update(hrmsAppraisals)
     .set({ ...patch, version: sql`${hrmsAppraisals.version} + 1`, updatedAt: new Date() })
     .where(where);
-  if (expectedVersion !== undefined && (res as { rowCount?: number }).rowCount === 0) {
+  if (expectedVersion !== undefined && ((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT",
       "appraisal was modified by another request; reload and retry");
   }

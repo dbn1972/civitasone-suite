@@ -20,7 +20,7 @@ export async function setVacancyEligibility(
   const res = await tx.update(hrmsJobOpenings)
     .set({ eligibility: eligibility as never, version: sql`${hrmsJobOpenings.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, id), eq(hrmsJobOpenings.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "vacancy was modified by another request; reload and retry");
   }
 }
@@ -56,7 +56,7 @@ export async function withdrawApplication(
   const res = await tx.update(hrmsApplications)
     .set({ status: "withdrawn", withdrawReason: reason, version: sql`${hrmsApplications.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.id, id), eq(hrmsApplications.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "application was modified by another request; reload and retry");
   }
 }

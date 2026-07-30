@@ -71,7 +71,7 @@ export async function review(
       eq(hrmsBoardDecisionIntake.status, "pending_review"),
       eq(hrmsBoardDecisionIntake.version, expectedVersion),
     ));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT",
       "intake item was already reviewed or modified; reload and retry");
   }

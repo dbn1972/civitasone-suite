@@ -23,7 +23,7 @@ export async function updateSchedule(tx: Writer, tenantId: string, id: string, p
   const res = await tx.update(hrmsAssessmentSchedules)
     .set({ ...patch, version: sql`${hrmsAssessmentSchedules.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsAssessmentSchedules.tenantId, tenantId), eq(hrmsAssessmentSchedules.id, id), eq(hrmsAssessmentSchedules.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) throw new HttpError(409, "VERSION_CONFLICT", "schedule was modified by another request; reload and retry");
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) throw new HttpError(409, "VERSION_CONFLICT", "schedule was modified by another request; reload and retry");
 }
 export async function listSchedules(tenantId: string, filter: { status?: string; blueprintId?: string }, limit: number): Promise<ScheduleRow[]> {
   const conds = [eq(hrmsAssessmentSchedules.tenantId, tenantId)];
@@ -46,7 +46,7 @@ export async function updateAttempt(tx: Writer, tenantId: string, id: string, pa
   const res = await tx.update(hrmsAssessmentAttempts)
     .set({ ...patch, version: sql`${hrmsAssessmentAttempts.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsAssessmentAttempts.tenantId, tenantId), eq(hrmsAssessmentAttempts.id, id), eq(hrmsAssessmentAttempts.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) throw new HttpError(409, "VERSION_CONFLICT", "attempt was modified by another request; reload and retry");
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) throw new HttpError(409, "VERSION_CONFLICT", "attempt was modified by another request; reload and retry");
 }
 export async function listAttemptsBySchedule(tenantId: string, scheduleId: string, limit: number): Promise<AttemptRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsAssessmentAttempts)

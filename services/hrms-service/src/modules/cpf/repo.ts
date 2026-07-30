@@ -34,7 +34,7 @@ export async function bumpAccountVersion(
   const res = await tx.update(hrmsCpfAccounts)
     .set({ version: sql`${hrmsCpfAccounts.version} + 1`, updatedBy, updatedAt: new Date() })
     .where(where);
-  if (expectedVersion !== undefined && (res as { rowCount?: number }).rowCount === 0) {
+  if (expectedVersion !== undefined && ((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "CPF account was modified by another request; reload and retry");
   }
 }

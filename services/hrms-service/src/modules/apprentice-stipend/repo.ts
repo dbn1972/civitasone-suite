@@ -32,7 +32,7 @@ export async function updateApprenticeship(
   const res = await tx.update(hrmsApprenticeships)
     .set({ ...patch, version: sql`${hrmsApprenticeships.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsApprenticeships.tenantId, tenantId), eq(hrmsApprenticeships.id, id), eq(hrmsApprenticeships.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "apprenticeship was modified by another request; reload and retry");
   }
 }
@@ -70,7 +70,7 @@ export async function updateStipend(
       eq(hrmsApprenticeStipends.id, id),
       eq(hrmsApprenticeStipends.version, expectedVersion),
     ));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "stipend run was modified by another request; reload and retry");
   }
 }

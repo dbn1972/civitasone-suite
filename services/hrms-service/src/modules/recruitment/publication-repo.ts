@@ -18,7 +18,7 @@ export async function updateVacancy(
   const res = await tx.update(hrmsJobOpenings)
     .set({ ...patch, version: sql`${hrmsJobOpenings.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, id), eq(hrmsJobOpenings.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "vacancy was modified by another request; reload and retry");
   }
 }

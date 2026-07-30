@@ -30,7 +30,7 @@ export async function updateBlueprint(
       eq(hrmsAssessmentBlueprints.id, id),
       eq(hrmsAssessmentBlueprints.version, expectedVersion),
     ));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "blueprint was modified by another request; reload and retry");
   }
 }
@@ -66,7 +66,7 @@ export async function updateQuestion(
       eq(hrmsAssessmentQuestions.id, id),
       eq(hrmsAssessmentQuestions.version, expectedVersion),
     ));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "question was modified by another request; reload and retry");
   }
 }

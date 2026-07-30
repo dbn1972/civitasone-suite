@@ -44,7 +44,7 @@ export async function updateRequisition(
   const res = await tx.update(hrmsRequisitions)
     .set({ ...patch, version: sql`${hrmsRequisitions.version} + 1`, updatedAt: new Date() })
     .where(and(eq(hrmsRequisitions.tenantId, tenantId), eq(hrmsRequisitions.id, id), eq(hrmsRequisitions.version, expectedVersion)));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "requisition was modified by another request; reload and retry");
   }
 }

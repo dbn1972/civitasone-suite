@@ -94,7 +94,7 @@ export async function updateInvoice(
       eq(hrmsConsultantInvoices.id, id),
       eq(hrmsConsultantInvoices.version, expectedVersion),
     ));
-  if ((res as { rowCount?: number }).rowCount === 0) {
+  if (((res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0) === 0) {
     throw new HttpError(409, "VERSION_CONFLICT", "invoice was modified by another request; reload and retry");
   }
 }
