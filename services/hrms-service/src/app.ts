@@ -9,7 +9,9 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { employeeRoutes }   from "./modules/employee/routes.js";
+import { nomineeAddressRoutes } from "./modules/employee/nominee-address-routes.js";
 import { leaveRoutes }      from "./modules/leave/routes.js";
+import { leaveConversionRoutes } from "./modules/leave/conversion-routes.js";
 import { leaveContextRoutes } from "./modules/leave/context-routes.js";
 import { attendanceRoutes } from "./modules/attendance/routes.js";
 import { recruitmentRoutes, publicRecruitmentRoutes } from "./modules/recruitment/routes.js";
@@ -62,6 +64,7 @@ import { leaveCancelRoutes } from "./modules/leave/cancel-route.js";
 import { compOffRoutes } from "./modules/leave/comp-off-routes.js";
 import { fnfRoutes } from "./modules/employee/fnf-route.js";
 import { lifecycleRoutes } from "./modules/lifecycle/routes.js";
+import { onboardingRoutes } from "./modules/lifecycle/onboarding-routes.js";
 import { serviceBookRoutes } from "./modules/service-book/routes.js";
 import { pensionRoutes } from "./modules/pension/routes.js";
 import { aparRoutes } from "./modules/apar/routes.js";
@@ -122,7 +125,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
 
   await app.register(employeeRoutes);
+  await app.register(nomineeAddressRoutes);
   await app.register(leaveRoutes);
+  await app.register(leaveConversionRoutes);
   await app.register(leaveContextRoutes);
   await app.register(attendanceRoutes);
   await app.register(recruitmentRoutes);
@@ -176,6 +181,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(compOffRoutes);
   await app.register(fnfRoutes);
   await app.register(lifecycleRoutes);
+  await app.register(onboardingRoutes);
   await app.register(serviceBookRoutes);
   await app.register(pensionRoutes);
   await app.register(aparRoutes);
