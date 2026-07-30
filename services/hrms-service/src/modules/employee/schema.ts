@@ -106,4 +106,46 @@ export type EmployeeRow = typeof hrmsEmployees.$inferSelect;
 export type EmployeeInsert = typeof hrmsEmployees.$inferInsert;
 export type DeptRow = typeof hrmsDepartments.$inferSelect;
 
-export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs };
+// DEF-EM-003: nominee / dependant / next-of-kin table (T04).
+export const hrmsEmployeeNominees = employeeSchema.table("hrms_employee_nominees", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  employeeId:   uuid("employee_id").notNull(),
+  name:         varchar("name", { length: 200 }).notNull(),
+  relationship: varchar("relationship", { length: 64 }).notNull(),
+  dateOfBirth:  date("date_of_birth"),
+  sharePercent: integer("share_percent"),
+  contactPhone: varchar("contact_phone", { length: 20 }),
+  purpose:      varchar("purpose", { length: 32 }).notNull().default("general"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:    uuid("created_by").notNull(),
+  updatedBy:    uuid("updated_by").notNull(),
+  version:      integer("version").notNull().default(1),
+});
+export type NomineeRow = typeof hrmsEmployeeNominees.$inferSelect;
+export type NomineeInsert = typeof hrmsEmployeeNominees.$inferInsert;
+
+// DEF-EM-002: multi-address model with history (T05).
+export const hrmsEmployeeAddresses = employeeSchema.table("hrms_employee_addresses", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  employeeId:   uuid("employee_id").notNull(),
+  addressType:  varchar("address_type", { length: 16 }).notNull(),
+  line1:        text("line1").notNull(),
+  line2:        text("line2"),
+  city:         varchar("city", { length: 100 }),
+  state:        varchar("state", { length: 100 }),
+  pincode:      varchar("pincode", { length: 10 }),
+  country:      varchar("country", { length: 64 }).notNull().default("IN"),
+  isCurrent:    boolean("is_current").notNull().default(true),
+  effectiveFrom: date("effective_from"),
+  effectiveTo:  date("effective_to"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:    uuid("created_by").notNull(),
+  version:      integer("version").notNull().default(1),
+});
+export type AddressRow = typeof hrmsEmployeeAddresses.$inferSelect;
+export type AddressInsert = typeof hrmsEmployeeAddresses.$inferInsert;
+
+export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs, hrmsEmployeeNominees, hrmsEmployeeAddresses };
