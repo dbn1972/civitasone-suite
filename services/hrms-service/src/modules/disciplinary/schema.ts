@@ -130,4 +130,26 @@ export const hrmsIccAnnualReports = disciplinarySchema.table("hrms_icc_annual_re
   generatedBy:   uuid("generated_by").notNull(),
 });
 
-export const schema = { hrmsDisciplinaryCases, hrmsDisciplinaryEvents, hrmsSuspensions, hrmsIccComplaints, hrmsIccHearings, hrmsIccTimelines, hrmsIccAnnualReports };
+// 0176: COI / confidentiality declarations (CCS Conduct Rules)
+export const hrmsCoiDeclarations = disciplinarySchema.table("hrms_coi_declarations", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  employeeId:      uuid("employee_id").notNull(),
+  declarationType: varchar("declaration_type", { length: 32 }).notNull(),
+  declarationDate: date("declaration_date").notNull(),
+  details:         text("details").notNull(),
+  status:          varchar("status", { length: 16 }).notNull().default("active"),
+  acknowledgedAt:  timestamp("acknowledged_at", { withTimezone: true }),
+  revokedAt:       timestamp("revoked_at", { withTimezone: true }),
+  revokeReason:    text("revoke_reason"),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+  updatedBy:       uuid("updated_by").notNull(),
+  version:         integer("version").notNull().default(1),
+});
+
+export type CoiDeclarationRow = typeof hrmsCoiDeclarations.$inferSelect;
+export type CoiDeclarationInsert = typeof hrmsCoiDeclarations.$inferInsert;
+
+export const schema = { hrmsDisciplinaryCases, hrmsDisciplinaryEvents, hrmsSuspensions, hrmsIccComplaints, hrmsIccHearings, hrmsIccTimelines, hrmsIccAnnualReports, hrmsCoiDeclarations };
