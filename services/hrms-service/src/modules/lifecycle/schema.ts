@@ -178,4 +178,27 @@ export const hrmsPolicyAcknowledgements = lifecycleSchema.table("hrms_policy_ack
   createdBy:     uuid("created_by").notNull(),
 });
 
-export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsBgvChecks, hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsPropertyReturns, hrmsEmployeeEducation, hrmsEmployeeEmploymentHistory, hrmsPolicyAcknowledgements };
+// 0314: Employee hold/release with approval status
+export const hrmsEmployeeHolds = lifecycleSchema.table("hrms_employee_holds", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  holdType:      varchar("hold_type", { length: 32 }).notNull(),
+  reason:        text("reason").notNull(),
+  status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  requestedBy:   uuid("requested_by").notNull(),
+  approvedBy:    uuid("approved_by"),
+  approvedAt:    timestamp("approved_at", { withTimezone: true }),
+  releasedBy:    uuid("released_by"),
+  releasedAt:    timestamp("released_at", { withTimezone: true }),
+  releaseReason: text("release_reason"),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo:   date("effective_to"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  version:       integer("version").notNull().default(1),
+});
+export type EmployeeHoldRow = typeof hrmsEmployeeHolds.$inferSelect;
+export type EmployeeHoldInsert = typeof hrmsEmployeeHolds.$inferInsert;
+
+export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsBgvChecks, hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsPropertyReturns, hrmsEmployeeEducation, hrmsEmployeeEmploymentHistory, hrmsPolicyAcknowledgements, hrmsEmployeeHolds };

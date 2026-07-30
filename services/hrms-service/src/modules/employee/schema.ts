@@ -75,6 +75,9 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   agencyRef:        varchar("agency_ref", { length: 64 }),
   napsId:           varchar("naps_id", { length: 24 }),
   managerId:        uuid("manager_id"),
+  functionalManagerId: uuid("functional_manager_id"),
+  projectManagerId: uuid("project_manager_id"),
+  fitnessStatus:    varchar("fitness_status", { length: 16 }).default("pending"),
   userRef:          text("user_ref"),
   // ERP org-structure refs (cross-service)
   legalEntityId:    uuid("legal_entity_id"),     // finance org.legal_entities
