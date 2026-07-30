@@ -114,7 +114,7 @@ report before continuing. Never merge with red CI or coverage < 80%.
 | T17 | R-RA-0162 | Offer-acceptance metadata (IP/device) | ✅ Merged (Selection & offer core 0153–0167) |
 | T10 | R-RA-0099 | Application-fee collection | ↪ Re-verify in 2B gap-fill diff, R07 (Application & eligibility 0092–0105) |
 | T11 | R-RA-0059 | Requisition clone endpoint | ↪ Re-verify in 2B gap-fill diff, R07 (Job requisition 0048–0062) |
-| T13 | R-RA-0105 | Application-PDF download | ↪ Re-verify in 2B gap-fill diff, R07 (Application & eligibility 0092–0105) |
+| T13 | R-RA-0105 | Application-PDF download | ✅ Merged (PR #281) — GET /v1/hrms/applications/:id/pdf via @civitasone/render, HTML-escaped, no internal-field leak, honest html-only fallback; live-smoke verified (200 application/pdf) |
 | T15 | R-RA-0140 | Interview calendar sync | ➜ Reclassified **EXTERNAL** (see 2B) |
 | T16 | R-RA-0143 | Candidate self-reschedule | ➜ Buildable (see 2B, R05) |
 
@@ -250,8 +250,8 @@ live-smoke verified:
 - R07 R-RA-0099 application fee + verified R-RA-0059 clone (PR #279)
 
 Remaining in the drive:
-- **R-RA-0105** (application PDF download) — buildable but needs the
-  `@civitasone/render` PDF integration; carried as a follow-up.
+- **R-RA-0105** (application PDF download) — ✅ done (PR #281), rendered via
+  `@civitasone/render`.
 - **2C EXTERNAL (X01–X07)** — DigiLocker/LinkedIn, AI parse/JD-match/questions,
   proctoring, calendar/Teams-Zoom, eSign, eOffice, pre-joining handoff. Each
   needs an internal skeleton + typed adapter seam + feature flag + stub +
