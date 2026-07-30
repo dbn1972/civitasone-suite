@@ -108,6 +108,10 @@ export async function interviewRecordingRoutes(app: FastifyInstance): Promise<vo
       return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
     }
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId });
+    // Duplicate active storage key (partial unique index) — a client conflict, not a 500.
+    if (String((err as { code?: string }).code) === "23505") {
+      return reply.code(409).send({ code: "DUPLICATE_RECORDING", message: "an active recording already exists for this storage key", correlationId });
+    }
     const status = (err as { statusCode?: number }).statusCode;
     if (typeof status === "number" && status >= 400 && status < 500) {
       return reply.code(status).send({ code: (err as { code?: string }).code ?? "BAD_REQUEST", message: err.message, correlationId });
