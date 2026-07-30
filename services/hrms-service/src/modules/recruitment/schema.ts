@@ -279,4 +279,26 @@ export const hrmsScreeningOverrides = recruitmentSchema.table("hrms_screening_ov
 export type ScreeningOverrideRow = typeof hrmsScreeningOverrides.$inferSelect;
 export type ScreeningOverrideInsert = typeof hrmsScreeningOverrides.$inferInsert;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides };
+/**
+ * Interview communications lifecycle log (R-RA-0142). Append-only record of each
+ * candidate comm (invite/reminder/reschedule/cancel) and how it was dispatched
+ * (queued to the outbox when the feature flag is on, else recorded as a stub).
+ */
+export const hrmsInterviewComms = recruitmentSchema.table("hrms_interview_comms", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  interviewId:   uuid("interview_id").notNull(),
+  applicationId: uuid("application_id").notNull(),
+  commType:      varchar("comm_type", { length: 12 }).notNull(),
+  channel:       varchar("channel", { length: 8 }).notNull(),
+  status:        varchar("status", { length: 10 }).notNull(),
+  message:       text("message").notNull(),
+  scheduledFor:  timestamp("scheduled_for", { withTimezone: true }),
+  idempotencyKey: varchar("idempotency_key", { length: 64 }),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+});
+export type InterviewCommRow = typeof hrmsInterviewComms.$inferSelect;
+export type InterviewCommInsert = typeof hrmsInterviewComms.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms };
