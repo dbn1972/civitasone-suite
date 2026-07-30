@@ -128,7 +128,7 @@ report before continuing. Never merge with red CI or coverage < 80%.
 | R04 | R-RA-0142 | Interview invite/reminder/reschedule/cancel comms lifecycle | send via outbox/stub behind a flag | ✅ Merged (PR #271 + fix #272) — comms log (migration 0095), outbox/stub behind FEATURE_INTERVIEW_COMMS_ENABLED, idempotency key on dispatch, real date/time validation, state guard; live-smoke verified |
 | R05 | R-RA-0143 | Candidate self-service confirm / request reschedule | request record + HR approve/decline (note auth deferral) | ✅ Merged (PR #274) — confirm/reschedule_request + HR approve/decline (migration 0096), future-slot validation, one-pending-per-interview, HR-gated auth-deferral stand-in; live-smoke verified |
 | R06 | R-RA-0152 | Recording/transcript with consent + retention controls | consent + retention_until + delete-after; storage behind a seam | ✅ Merged (PR #276 + fix #277) — consent (fail-closed at server + DB) + consentReference, retention_until + expired-purge query, soft-delete erasure with honest object-purge stub, path-traversal-safe key (migration 0097); live-smoke verified |
-| R07 | 0048–0062 / 0063–0076 / 0092–0105 | Gap-fills found by diffing existing modules vs checklist | includes re-verifying old T10/T11/T13 | ☐ Next |
+| R07 | 0048–0062 / 0063–0076 / 0092–0105 | Gap-fills found by diffing existing modules vs checklist | includes re-verifying old T10/T11/T13 | ✅ Merged (PR #279) — verify-first: T11 R-RA-0059 clone already done+tested; built T10 R-RA-0099 application fee (assess/exempt/manual-pay, migration 0098, verified-exemption anti-bypass, online gateway deferred as honest 501); live-smoke verified. T13 R-RA-0105 application PDF remains (needs @civitasone/render) |
 
 ### 2C — EXTERNAL (internal skeleton + typed adapter seam + feature flag + stub adapter + honest note — DO NOT fake)
 
@@ -237,15 +237,30 @@ separate UAT workshop, not in this automated loop.
 
 Update after each merge.
 
-### Sprint 2 recruitment drive — next action
-**R04 (R-RA-0142, interview invite/reminder/reschedule/cancel comms lifecycle)**
-is the next buildable task. Send via outbox/stub behind a feature flag; record
-each comm and its lifecycle state.
+### Sprint 2 recruitment drive — status: all BUILDABLE (2B) items done ✅
 
-DONE so far: R01 (R-RA-0087 resume versions, PR #263/#264), R02 (R-RA-0111
-maker-checker screening override, PR #266), R03 (R-RA-0118 rejection notice
-without internal scoring, PR #268) — all migrated, deployed and live-smoke
-verified against civitas_hrms.
+All seven 2B buildable tasks are merged, deployed to civitas_hrms, and
+live-smoke verified:
+- R01 R-RA-0087 resume versions (PR #263/#264)
+- R02 R-RA-0111 maker-checker screening override (PR #266)
+- R03 R-RA-0118 rejection notice without internal scoring (PR #268)
+- R04 R-RA-0142 interview comms lifecycle (PR #271/#272)
+- R05 R-RA-0143 candidate confirm/request-reschedule (PR #274)
+- R06 R-RA-0152 recording/transcript consent+retention (PR #276/#277)
+- R07 R-RA-0099 application fee + verified R-RA-0059 clone (PR #279)
+
+Remaining in the drive:
+- **R-RA-0105** (application PDF download) — buildable but needs the
+  `@civitasone/render` PDF integration; carried as a follow-up.
+- **2C EXTERNAL (X01–X07)** — DigiLocker/LinkedIn, AI parse/JD-match/questions,
+  proctoring, calendar/Teams-Zoom, eSign, eOffice, pre-joining handoff. Each
+  needs an internal skeleton + typed adapter seam + feature flag + stub +
+  honest note (501/`{source:"stub"}`), NOT a faked integration.
+
+Module-wide follow-ups surfaced by adversarial reviews (track separately):
+CQRS/outbox audit on the candidate/recruitment direct-write routes; the inert
+`.rowCount` optimistic-lock checks in sibling recruitment repos (C1); the
+`0083` migration-number collision.
 
 Standing kick-off checklist for each task:
 1. Branch from fresh `origin/main`; build the module (schema/domain/repo/routes),
