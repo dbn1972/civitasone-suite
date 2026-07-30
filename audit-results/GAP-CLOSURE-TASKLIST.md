@@ -123,15 +123,9 @@ report before continuing. Never merge with red CI or coverage < 80%.
 | Task | ID | Requirement | Notes | Status |
 |------|-----|-------------|-------|--------|
 | R01 | R-RA-0087 | Multiple resume versions + active-resume flag | version rows + single active per candidate | ✅ Merged (PR #263 + fix #264) — migration 0092, upload/list/activate, DB single-active invariant, IDOR key guard; live-smoke verified |
-<<<<<<< Updated upstream
 | R02 | R-RA-0111 | HR override of automated screening | maker-checker: approver ≠ overrider; reason + audit | ✅ Merged (PR #266) — request/approve/reject/cancel, SoD (≠ requester & ≠ author), ABA-proof version pin, closed the single-admin direct-override bypass, fixed inert .rowCount guard (C1); live-smoke verified |
-| R03 | R-RA-0118 | Rejection comms without disclosing internal scoring | policy flag + candidate-facing projection strips scores | ☐ Next |
-| R04 | R-RA-0142 | Interview invite/reminder/reschedule/cancel comms lifecycle | send via outbox/stub behind a flag | ☐ |
-=======
-| R02 | R-RA-0111 | HR override of automated screening | maker-checker: approver ≠ overrider; reason + audit | ☐ Next |
 | R03 | R-RA-0118 | Rejection comms without disclosing internal scoring | policy flag + candidate-facing projection strips scores | ✅ Merged (PR #268) — allow-list candidate notice, per-vacancy disclose flag (fail-closed, migration 0094); live-smoke verified no score/remark/screener leak |
 | R04 | R-RA-0142 | Interview invite/reminder/reschedule/cancel comms lifecycle | send via outbox/stub behind a flag | ☐ Next |
->>>>>>> Stashed changes
 | R05 | R-RA-0143 | Candidate self-service confirm / request reschedule | request record + HR approve/decline (note auth deferral) | ☐ |
 | R06 | R-RA-0152 | Recording/transcript with consent + retention controls | consent + retention_until + delete-after; storage behind a seam | ☐ |
 | R07 | 0048–0062 / 0063–0076 / 0092–0105 | Gap-fills found by diffing existing modules vs checklist | includes re-verifying old T10/T11/T13 | ☐ |
@@ -244,13 +238,14 @@ separate UAT workshop, not in this automated loop.
 Update after each merge.
 
 ### Sprint 2 recruitment drive — next action
-**R02 (R-RA-0111, HR override of automated screening)** is the next buildable
-task. Maker-checker: the approver of an override must differ from the overrider
-and from the screening content-author; capture a reason + audit trail.
+**R04 (R-RA-0142, interview invite/reminder/reschedule/cancel comms lifecycle)**
+is the next buildable task. Send via outbox/stub behind a feature flag; record
+each comm and its lifecycle state.
 
-R01 (R-RA-0087) is DONE — merged (PR #263 + follow-up #264), migration 0092
-applied to civitas_hrms, deployed and live-smoke verified (single-active
-invariant + active_resume_ref sync confirmed against the running service).
+DONE so far: R01 (R-RA-0087 resume versions, PR #263/#264), R02 (R-RA-0111
+maker-checker screening override, PR #266), R03 (R-RA-0118 rejection notice
+without internal scoring, PR #268) — all migrated, deployed and live-smoke
+verified against civitas_hrms.
 
 Standing kick-off checklist for each task:
 1. Branch from fresh `origin/main`; build the module (schema/domain/repo/routes),
