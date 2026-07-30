@@ -134,13 +134,13 @@ report before continuing. Never merge with red CI or coverage < 80%.
 
 | Task | ID | Integration | Status |
 |------|-----|-------------|--------|
-| X01 | R-RA-0078 / 0079 | DigiLocker / LinkedIn login | ☐ |
-| X02 | R-RA-0088 / 0107 / 0145 | AI resume parse / JD-match / AI question generation | ☐ |
-| X03 | R-RA-0128 | Remote proctoring | ☐ |
-| X04 | R-RA-0140 / 0141 | Calendar sync + Teams/Zoom meeting links | ☐ |
-| X05 | R-RA-0151 / 0159 | eSign | ☐ |
-| X06 | R-RA-0154 | eOffice | ☐ |
-| X07 | R-RA-0166 | Accepted → pre-joining handoff | needs minimal handoff table (onboarding module absent) or defer with clear note | ☐ |
+| X01 | R-RA-0078 / 0079 | DigiLocker / LinkedIn login | ✅ Already in identity-service (gov-integrations + OAuth modules); verified by baseline |
+| X02 | R-RA-0088 / 0107 / 0145 | AI resume parse / JD-match / AI question generation | ✅ Seam merged (PR #284) — RecruitmentAiAdapter + feature flag + honest 501/stub |
+| X03 | R-RA-0128 | Remote proctoring | ✅ Seam merged (PR #284) — ProctoringAdapter + feature flag + honest 501/stub |
+| X04 | R-RA-0140 / 0141 | Calendar sync + Teams/Zoom meeting links | ✅ Merged (PR #283) — real .ics + CalendarAdapter seam (honest 501 for push-sync) |
+| X05 | R-RA-0151 / 0159 | eSign | ✅ Seam merged (PR #284) — ESignAdapter + feature flag + honest 501/stub; @civitasone/render DSC exists |
+| X06 | R-RA-0154 | eOffice | ✅ Already Verified-Pass (eoffice-consumer.ts + CONSUMED_EVENTS.recruitmentFileDecided) |
+| X07 | R-RA-0166 | Accepted → pre-joining handoff | ✅ Already Verified-Pass (hire endpoint → employee creation via CQRS) |
 
 > **Honesty gate:** external items must never return fabricated verdicts. If a
 > provider/model is not wired, the endpoint returns 501 or `{ source: "stub" }`,
