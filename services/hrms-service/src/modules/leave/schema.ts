@@ -56,4 +56,21 @@ export const hrmsLeaveApps = leaveSchema.table("hrms_leave_apps", {
 export type LeaveAppRow = typeof hrmsLeaveApps.$inferSelect;
 export type LeaveAllocRow = typeof hrmsLeaveAllocs.$inferSelect;
 
-export const schema = { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps };
+// DEF-LM-001: leave-type conversion (e.g., HPL → commuted leave). Records
+// which allocation was debited and which was credited.
+export const hrmsLeaveConversions = leaveSchema.table("hrms_leave_conversions", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  fromAllocId:   uuid("from_alloc_id").notNull(),
+  toAllocId:     uuid("to_alloc_id").notNull(),
+  days:          integer("days").notNull(),
+  reason:        text("reason"),
+  status:        varchar("status", { length: 12 }).notNull().default("approved"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+export type LeaveConversionRow = typeof hrmsLeaveConversions.$inferSelect;
+
+export const schema = { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveConversions };

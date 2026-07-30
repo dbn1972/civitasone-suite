@@ -382,4 +382,20 @@ export const hrmsApplicationFees = recruitmentSchema.table("hrms_application_fee
 export type ApplicationFeeRow = typeof hrmsApplicationFees.$inferSelect;
 export type ApplicationFeeInsert = typeof hrmsApplicationFees.$inferInsert;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses, hrmsInterviewRecordings, hrmsApplicationFees };
+// DEF-RC-002: candidate job alert subscriptions (T07). A candidate subscribes to
+// criteria; when a matching vacancy is published, a notification is triggered.
+export const hrmsJobAlerts = recruitmentSchema.table("hrms_job_alerts", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  candidateId:   uuid("candidate_id").notNull(),
+  criteria:      jsonb("criteria").$type<Record<string, unknown>>().notNull().default({}),
+  channel:       varchar("channel", { length: 8 }).notNull().default("email"),
+  active:        boolean("active").notNull().default(true),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  version:       integer("version").notNull().default(1),
+});
+export type JobAlertRow = typeof hrmsJobAlerts.$inferSelect;
+export type JobAlertInsert = typeof hrmsJobAlerts.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses, hrmsInterviewRecordings, hrmsApplicationFees, hrmsJobAlerts };
