@@ -356,4 +356,30 @@ export const hrmsInterviewRecordings = recruitmentSchema.table("hrms_interview_r
 export type InterviewRecordingRow = typeof hrmsInterviewRecordings.$inferSelect;
 export type InterviewRecordingInsert = typeof hrmsInterviewRecordings.$inferInsert;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses, hrmsInterviewRecordings };
+/**
+ * Application fee (R-RA-0099): one fee record per application. Exempt (amount 0),
+ * pending, paid (manual/offline reference, or gateway when wired) or refunded.
+ * amount_minor is bigint paise. Online gateway payment is an external seam.
+ */
+export const hrmsApplicationFees = recruitmentSchema.table("hrms_application_fees", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  applicationId:   uuid("application_id").notNull(),
+  jobOpeningId:    uuid("job_opening_id").notNull(),
+  amountMinor:     bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
+  currency:        varchar("currency", { length: 3 }).notNull().default("INR"),
+  status:          varchar("status", { length: 10 }).notNull().default("pending"),
+  exemptionReason: varchar("exemption_reason", { length: 64 }),
+  provider:        varchar("provider", { length: 10 }).notNull().default("none"),
+  paymentRef:      varchar("payment_ref", { length: 128 }),
+  paidAt:          timestamp("paid_at", { withTimezone: true }),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:       uuid("updated_by").notNull(),
+  version:         integer("version").notNull().default(1),
+});
+export type ApplicationFeeRow = typeof hrmsApplicationFees.$inferSelect;
+export type ApplicationFeeInsert = typeof hrmsApplicationFees.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses, hrmsInterviewRecordings, hrmsApplicationFees };
