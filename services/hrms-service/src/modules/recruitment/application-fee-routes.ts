@@ -17,6 +17,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { assessFee, gatewayEnabled, validateManualPayment } from "./application-fee.js";
+import { emitAudit } from "./audit-emit.js";
 import * as repo from "./application-fee-repo.js";
 import * as screeningRepo from "./screening-repo.js";
 
@@ -107,9 +108,14 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const paymentRef = body.paymentRef!.trim();
 
     try {
-      await db.transaction((tx) => repo.updateFee(tx, ctx.tenantId, fee.id, {
-        status: "paid", provider: "manual", paymentRef, paidAt: new Date(), updatedBy: ctx.actorId,
-      }, fee.version));
+      await db.transaction(async (tx) => {
+        await repo.updateFee(tx, ctx.tenantId, fee.id, {
+          status: "paid", provider: "manual", paymentRef, paidAt: new Date(), updatedBy: ctx.actorId,
+        }, fee.version);
+        await emitAudit(tx, ctx, "application_fee_paid", "application_fee", fee.id, {
+          applicationId: id, amountMinor: fee.amountMinor.toString(), provider: "manual", paymentRef,
+        });
+      });
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the fee record changed; reload and retry");
       throw err;

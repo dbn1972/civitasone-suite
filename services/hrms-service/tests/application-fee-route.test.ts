@@ -15,6 +15,7 @@ const H = vi.hoisted(() => ({
   findApplication: vi.fn(), getVacancyFee: vi.fn(), findFee: vi.fn(), insertFee: vi.fn(), updateFee: vi.fn(),
 }));
 
+vi.mock("../src/modules/recruitment/audit-emit.js", () => ({ emitAudit: async () => undefined }));
 vi.mock("../src/shared/db.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
