@@ -1601,6 +1601,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/render':
+        specifier: workspace:*
+        version: link:../../packages/render
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
