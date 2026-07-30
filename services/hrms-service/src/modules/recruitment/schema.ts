@@ -31,6 +31,9 @@ export const hrmsJobOpenings = recruitmentSchema.table("hrms_job_openings", {
   titleAlt:      varchar("title_alt", { length: 300 }),
   descriptionAlt: text("description_alt"),
   corrigendumCount: integer("corrigendum_count").notNull().default(0),
+  // R-RA-0118 policy flag: when true, a rejection notice may disclose the
+  // high-level reason CATEGORY to the candidate (never scores/remarks).
+  discloseRejectionReason: boolean("disclose_rejection_reason").notNull().default(false),
   status:        varchar("status", { length: 24 }).notNull().default("open"),
   postedAt:      date("posted_at"),
   closesAt:      date("closes_at"),

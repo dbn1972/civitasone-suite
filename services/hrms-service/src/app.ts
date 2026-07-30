@@ -32,6 +32,7 @@ import { requisitionRoutes } from "./modules/recruitment/requisition-routes.js";
 import { eligibilityRoutes } from "./modules/recruitment/eligibility-routes.js";
 import { screeningRoutes } from "./modules/recruitment/screening-routes.js";
 import { screeningOverrideRoutes } from "./modules/recruitment/screening-override-routes.js";
+import { rejectionNoticeRoutes } from "./modules/recruitment/rejection-notice-routes.js";
 import { offerRoutes } from "./modules/recruitment/offer-routes.js";
 import { offerExtraRoutes } from "./modules/recruitment/offer-extra-routes.js";
 import { selectionListRoutes } from "./modules/recruitment/selection-routes.js";
@@ -137,6 +138,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(eligibilityRoutes);
   await app.register(screeningRoutes);
   await app.register(screeningOverrideRoutes);
+  await app.register(rejectionNoticeRoutes);
   await app.register(offerRoutes);
   await app.register(offerExtraRoutes);
   await app.register(selectionListRoutes);
