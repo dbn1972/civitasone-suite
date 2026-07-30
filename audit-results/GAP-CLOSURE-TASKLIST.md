@@ -192,10 +192,10 @@ report before continuing. Never merge with red CI or coverage < 80%.
 
 | Task | ID | Checklist | Verify Target | Service | Status |
 |------|-----|-----------|---------------|---------|--------|
-| T35 | — | A-AHC-0702..0705 | Do AI endpoints return real (non-stub) verdicts? | hrms/ml | ☐ |
-| T36 | — | A-AHC-0706..0710 | Is there bias/accuracy/drift monitoring? | hrms/ml | ☐ |
-| T37 | — | A-AHC-0711..0714 | Is there a manual-process fallback + opt-out? | hrms/ml | ☐ |
-| T38 | — | A-AHC-0715..0717 | Are AI decisions audited + explainable? | hrms/ml | ☐ |
+| T35 | — | A-AHC-0702..0705 | Do AI endpoints return real (non-stub) verdicts? | hrms/ml | ⏸️ Requires ML model deployment (seam + stub in place from PR #284; flag-gated, honest 501) |
+| T36 | — | A-AHC-0706..0710 | Is there bias/accuracy/drift monitoring? | hrms/ml | ⏸️ Requires ML infra (monitoring tooling) |
+| T37 | — | A-AHC-0711..0714 | Is there a manual-process fallback + opt-out? | hrms/ml | ⏸️ Fallback path = flag OFF (existing; production default) |
+| T38 | — | A-AHC-0715..0717 | Are AI decisions audited + explainable? | hrms/ml | ⏸️ Adapter returns source:"stub"/"ai"; audit of real verdicts requires wired adapter |
 
 > NOTE: honesty gate — AI tasks must NOT return fabricated verdicts. Reuse the
 > quality-program L8 "no-fabricated-verdicts" pattern. If a model is not
@@ -208,8 +208,8 @@ report before continuing. Never merge with red CI or coverage < 80%.
 
 | Task | ID | Checklist | Verify Target | Service | Status |
 |------|-----|-----------|---------------|---------|--------|
-| T39 | — | I-EI-0654..0665 | DigiLocker/eSign/eOffice/bank live-sandbox tests | multi | ☐ |
-| T40 | — | I-EI-0666..0675 | PF/ESIC/PFMS file generation + upload ack | payroll | ☐ |
+| T39 | — | I-EI-0654..0665 | DigiLocker/eSign/eOffice/bank live-sandbox tests | multi | ⏸️ Requires third-party sandbox credentials (DigiLocker staging, eSign cert, bank test account); adapter seams ready |
+| T40 | — | I-EI-0666..0675 | PF/ESIC/PFMS file generation + upload ack | payroll | ⏸️ Requires PFMS/ESIC sandbox access + file-format validation (payroll-service scope) |
 
 ---
 
