@@ -328,4 +328,32 @@ export const hrmsInterviewResponses = recruitmentSchema.table("hrms_interview_re
 export type InterviewResponseRow = typeof hrmsInterviewResponses.$inferSelect;
 export type InterviewResponseInsert = typeof hrmsInterviewResponses.$inferInsert;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses };
+/**
+ * Interview recording / transcript with consent + retention (R-RA-0152). Only
+ * the object-store key is stored (bytes live behind the storage seam). Consent
+ * is mandatory; retention_until drives the purge job; soft-delete on erasure.
+ */
+export const hrmsInterviewRecordings = recruitmentSchema.table("hrms_interview_recordings", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  interviewId:    uuid("interview_id").notNull(),
+  applicationId:  uuid("application_id").notNull(),
+  kind:           varchar("kind", { length: 12 }).notNull(),
+  storageKey:     varchar("storage_key", { length: 512 }).notNull(),
+  consentGiven:   boolean("consent_given").notNull().default(false),
+  consentReference: varchar("consent_reference", { length: 200 }),
+  consentBy:      uuid("consent_by"),
+  consentAt:      timestamp("consent_at", { withTimezone: true }),
+  retentionUntil: date("retention_until").notNull(),
+  status:         varchar("status", { length: 10 }).notNull().default("active"),
+  deletedAt:      timestamp("deleted_at", { withTimezone: true }),
+  deletedBy:      uuid("deleted_by"),
+  objectPurgedAt: timestamp("object_purged_at", { withTimezone: true }),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:      uuid("created_by").notNull(),
+  version:        integer("version").notNull().default(1),
+});
+export type InterviewRecordingRow = typeof hrmsInterviewRecordings.$inferSelect;
+export type InterviewRecordingInsert = typeof hrmsInterviewRecordings.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses, hrmsInterviewRecordings };
