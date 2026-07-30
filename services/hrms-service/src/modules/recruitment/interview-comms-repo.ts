@@ -37,8 +37,11 @@ export async function listComms(tenantId: string, interviewId: string): Promise<
 export async function rescheduleInterview(
   tx: Writer, tenantId: string, id: string, scheduledDate: string, scheduledTime: string, actorId: string, expectedVersion: number,
 ): Promise<boolean> {
+  // A reschedule moves the date/time but the interview remains 'scheduled'
+  // (the status CHECK domain has no 'rescheduled' value; the comms log records
+  // that a reschedule happened).
   const res = await tx.update(hrmsInterviews)
-    .set({ scheduledDate, scheduledTime, status: "rescheduled", version: sql`${hrmsInterviews.version} + 1` })
+    .set({ scheduledDate, scheduledTime, version: sql`${hrmsInterviews.version} + 1` })
     .where(and(eq(hrmsInterviews.tenantId, tenantId), eq(hrmsInterviews.id, id), eq(hrmsInterviews.version, expectedVersion)));
   void actorId;
   return affected(res) > 0;
