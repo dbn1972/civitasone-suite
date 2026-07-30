@@ -19,6 +19,7 @@ import { db } from "../../shared/db.js";
 import {
   normalizeEmail, mobileDedupKey, CATEGORIES, lockedFieldsIn, consentSatisfied, profileCompleteness,
 } from "./candidate.js";
+import { otpVerificationEnabled, submissionRequiresVerification } from "./otp-verify.js";
 import * as repo from "./candidate-repo.js";
 
 // Candidate PII (DOB, reservation category, disability, addresses) is HR-only —
@@ -205,6 +206,11 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const c = await mustCand(ctx.tenantId, id);
     if (c.status !== "draft") throw new HttpError(409, "WRONG_STATE", `profile is '${c.status}', not a draft`);
     if (!consentSatisfied(body)) throw new HttpError(400, "CONSENT_REQUIRED", "a versioned consent must be accepted to submit the profile");
+    // DEF-RC-003: when OTP verification is enabled, email must be verified before
+    // submission (the candidate proved they own the contact address).
+    if (submissionRequiresVerification(otpVerificationEnabled(process.env), c.emailVerified)) {
+      throw new HttpError(422, "EMAIL_NOT_VERIFIED", "email must be verified (OTP) before the profile can be submitted");
+    }
     await db.transaction((tx) => repo.updateCandidate(tx, ctx.tenantId, id, {
       status: "submitted", submittedAt: new Date(),
       consentVersion: body.consentVersion ?? null, consentAcceptedAt: new Date(), updatedBy: ctx.actorId,
