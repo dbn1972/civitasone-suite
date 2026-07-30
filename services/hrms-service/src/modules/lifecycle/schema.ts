@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp,
+  pgSchema, uuid, text, integer, bigint, boolean, char, varchar, date, timestamp,
 } from "drizzle-orm/pg-core";
 
 export const lifecycleSchema = pgSchema("lifecycle");
@@ -72,4 +72,110 @@ export const hrmsSeparations = lifecycleSchema.table("hrms_separations", {
 
 export type SeparationRow = typeof hrmsSeparations.$inferSelect;
 
-export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations };
+// ── Sprint 3: Onboarding + Structured Data ─────────────────────────────────
+
+// T18 (HTR-PO-0173): BGV component tracking.
+export const hrmsBgvChecks = lifecycleSchema.table("hrms_bgv_checks", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  checkType:     varchar("check_type", { length: 32 }).notNull(),
+  provider:      varchar("provider", { length: 64 }),
+  status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  result:        text("result"),
+  initiatedAt:   timestamp("initiated_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt:   timestamp("completed_at", { withTimezone: true }),
+  createdBy:     uuid("created_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+
+// T19 (HTR-PO-0192): 30/60/90-day onboarding task tracking.
+export const hrmsOnboardingTasks = lifecycleSchema.table("hrms_onboarding_tasks", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  title:         varchar("title", { length: 200 }).notNull(),
+  dueByDay:      integer("due_by_day").notNull(),
+  status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  completedAt:   timestamp("completed_at", { withTimezone: true }),
+  assignedTo:    uuid("assigned_to"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+
+// T20 (HTR-PO-0191): buddy/mentor assignment.
+export const hrmsBuddyAssignments = lifecycleSchema.table("hrms_buddy_assignments", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  buddyId:       uuid("buddy_id").notNull(),
+  role:          varchar("role", { length: 16 }).notNull().default("buddy"),
+  assignedAt:    timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+  endedAt:       timestamp("ended_at", { withTimezone: true }),
+  createdBy:     uuid("created_by").notNull(),
+});
+
+// T21 (HTR-PO-0169): mandatory document configuration per employee type.
+export const hrmsMandatoryDocConfigs = lifecycleSchema.table("hrms_mandatory_doc_configs", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeType:  varchar("employee_type", { length: 32 }).notNull(),
+  docType:       varchar("doc_type", { length: 64 }).notNull(),
+  required:      boolean("required").notNull().default(true),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+});
+
+// T22 (CH-EMDS-0222): property-return filing tracking (separation).
+export const hrmsPropertyReturns = lifecycleSchema.table("hrms_property_returns", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  itemDescription: text("item_description").notNull(),
+  returnStatus:  varchar("return_status", { length: 16 }).notNull().default("pending"),
+  returnedAt:    timestamp("returned_at", { withTimezone: true }),
+  verifiedBy:    uuid("verified_by"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+
+// T23 (R-RA-0084/0085): structured education + employment history (employee-side).
+export const hrmsEmployeeEducation = lifecycleSchema.table("hrms_employee_education", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  qualification: varchar("qualification", { length: 120 }).notNull(),
+  subject:       varchar("subject", { length: 200 }),
+  institution:   varchar("institution", { length: 200 }),
+  yearOfPassing: integer("year_of_passing"),
+  verified:      boolean("verified").notNull().default(false),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+});
+
+export const hrmsEmployeeEmploymentHistory = lifecycleSchema.table("hrms_employee_employment_history", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  employer:      varchar("employer", { length: 200 }).notNull(),
+  roleTitle:     varchar("role_title", { length: 200 }),
+  fromDate:      date("from_date"),
+  toDate:        date("to_date"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+});
+
+// T24 (HTR-PO-0190): policy acknowledgement tracking.
+export const hrmsPolicyAcknowledgements = lifecycleSchema.table("hrms_policy_acknowledgements", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  policyName:    varchar("policy_name", { length: 200 }).notNull(),
+  policyVersion: varchar("policy_version", { length: 24 }),
+  acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+});
+
+export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsBgvChecks, hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsPropertyReturns, hrmsEmployeeEducation, hrmsEmployeeEmploymentHistory, hrmsPolicyAcknowledgements };
