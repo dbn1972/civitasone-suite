@@ -123,8 +123,8 @@ report before continuing. Never merge with red CI or coverage < 80%.
 | Task | ID | Requirement | Notes | Status |
 |------|-----|-------------|-------|--------|
 | R01 | R-RA-0087 | Multiple resume versions + active-resume flag | version rows + single active per candidate | ✅ Merged (PR #263 + fix #264) — migration 0092, upload/list/activate, DB single-active invariant, IDOR key guard; live-smoke verified |
-| R02 | R-RA-0111 | HR override of automated screening | maker-checker: approver ≠ overrider; reason + audit | ☐ Next |
-| R03 | R-RA-0118 | Rejection comms without disclosing internal scoring | policy flag + candidate-facing projection strips scores | ☐ |
+| R02 | R-RA-0111 | HR override of automated screening | maker-checker: approver ≠ overrider; reason + audit | ✅ Merged (PR #266) — request/approve/reject/cancel, SoD (≠ requester & ≠ author), ABA-proof version pin, closed the single-admin direct-override bypass, fixed inert .rowCount guard (C1); live-smoke verified |
+| R03 | R-RA-0118 | Rejection comms without disclosing internal scoring | policy flag + candidate-facing projection strips scores | ☐ Next |
 | R04 | R-RA-0142 | Interview invite/reminder/reschedule/cancel comms lifecycle | send via outbox/stub behind a flag | ☐ |
 | R05 | R-RA-0143 | Candidate self-service confirm / request reschedule | request record + HR approve/decline (note auth deferral) | ☐ |
 | R06 | R-RA-0152 | Recording/transcript with consent + retention controls | consent + retention_until + delete-after; storage behind a seam | ☐ |
