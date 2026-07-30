@@ -301,4 +301,31 @@ export const hrmsInterviewComms = recruitmentSchema.table("hrms_interview_comms"
 export type InterviewCommRow = typeof hrmsInterviewComms.$inferSelect;
 export type InterviewCommInsert = typeof hrmsInterviewComms.$inferInsert;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms };
+/**
+ * Candidate interview self-service responses (R-RA-0143): a confirm (terminal)
+ * or a reschedule_request (pending → approved/declined by HR). One open
+ * reschedule request per interview at a time.
+ */
+export const hrmsInterviewResponses = recruitmentSchema.table("hrms_interview_responses", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  interviewId:   uuid("interview_id").notNull(),
+  applicationId: uuid("application_id").notNull(),
+  responseType:  varchar("response_type", { length: 20 }).notNull(),
+  status:        varchar("status", { length: 12 }).notNull(),
+  preferredDate: date("preferred_date"),
+  preferredTime: varchar("preferred_time", { length: 5 }),
+  reason:        text("reason"),
+  fromDate:      date("from_date"),
+  fromTime:      varchar("from_time", { length: 5 }),
+  decidedBy:     uuid("decided_by"),
+  decidedAt:     timestamp("decided_at", { withTimezone: true }),
+  decisionNote:  text("decision_note"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+export type InterviewResponseRow = typeof hrmsInterviewResponses.$inferSelect;
+export type InterviewResponseInsert = typeof hrmsInterviewResponses.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses };
