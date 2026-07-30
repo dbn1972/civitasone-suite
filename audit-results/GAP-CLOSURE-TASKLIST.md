@@ -126,8 +126,8 @@ report before continuing. Never merge with red CI or coverage < 80%.
 | R02 | R-RA-0111 | HR override of automated screening | maker-checker: approver ≠ overrider; reason + audit | ✅ Merged (PR #266) — request/approve/reject/cancel, SoD (≠ requester & ≠ author), ABA-proof version pin, closed the single-admin direct-override bypass, fixed inert .rowCount guard (C1); live-smoke verified |
 | R03 | R-RA-0118 | Rejection comms without disclosing internal scoring | policy flag + candidate-facing projection strips scores | ✅ Merged (PR #268) — allow-list candidate notice, per-vacancy disclose flag (fail-closed, migration 0094); live-smoke verified no score/remark/screener leak |
 | R04 | R-RA-0142 | Interview invite/reminder/reschedule/cancel comms lifecycle | send via outbox/stub behind a flag | ✅ Merged (PR #271 + fix #272) — comms log (migration 0095), outbox/stub behind FEATURE_INTERVIEW_COMMS_ENABLED, idempotency key on dispatch, real date/time validation, state guard; live-smoke verified |
-| R05 | R-RA-0143 | Candidate self-service confirm / request reschedule | request record + HR approve/decline (note auth deferral) | ☐ Next |
-| R06 | R-RA-0152 | Recording/transcript with consent + retention controls | consent + retention_until + delete-after; storage behind a seam | ☐ |
+| R05 | R-RA-0143 | Candidate self-service confirm / request reschedule | request record + HR approve/decline (note auth deferral) | ✅ Merged (PR #274) — confirm/reschedule_request + HR approve/decline (migration 0096), future-slot validation, one-pending-per-interview, HR-gated auth-deferral stand-in; live-smoke verified |
+| R06 | R-RA-0152 | Recording/transcript with consent + retention controls | consent + retention_until + delete-after; storage behind a seam | ☐ Next |
 | R07 | 0048–0062 / 0063–0076 / 0092–0105 | Gap-fills found by diffing existing modules vs checklist | includes re-verifying old T10/T11/T13 | ☐ |
 
 ### 2C — EXTERNAL (internal skeleton + typed adapter seam + feature flag + stub adapter + honest note — DO NOT fake)
