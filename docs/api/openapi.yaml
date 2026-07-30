@@ -525,6 +525,335 @@ paths:
       security:
         - bearerAuth: []
 
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Recruitment — New Endpoints (PRs #263–#286)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/hrms/candidates/{id}/resumes:
+    post:
+      operationId: uploadResumeVersion
+      tags: [HRMS - Recruitment]
+      summary: Upload a new resume version (R-RA-0087)
+      responses:
+        "201": { description: Resume version created }
+        "422": { description: Invalid resume (MIME/size/IDOR) }
+      security: [{ bearerAuth: [] }]
+    get:
+      operationId: listResumeVersions
+      tags: [HRMS - Recruitment]
+      summary: List resume versions for a candidate
+      responses:
+        "200": { description: Resume versions (newest first) }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/candidates/{id}/resumes/{resumeId}/activate:
+    post:
+      operationId: activateResumeVersion
+      tags: [HRMS - Recruitment]
+      summary: Make a resume version active
+      responses:
+        "200": { description: Resume activated }
+        "404": { description: Resume version not found }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/applications/{id}/screening-overrides:
+    post:
+      operationId: requestScreeningOverride
+      tags: [HRMS - Recruitment]
+      summary: Request a maker-checker screening override (R-RA-0111)
+      responses:
+        "201": { description: Override request created (pending) }
+        "409": { description: Override already pending or shortlist frozen }
+        "422": { description: Invalid override (same decision / pending app) }
+      security: [{ bearerAuth: [] }]
+    get:
+      operationId: listScreeningOverrides
+      tags: [HRMS - Recruitment]
+      summary: List screening override requests for an application
+      responses:
+        "200": { description: Override request list }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/screening-overrides/{reqId}/approve:
+    post:
+      operationId: approveScreeningOverride
+      tags: [HRMS - Recruitment]
+      summary: Approve + apply a screening override (checker)
+      responses:
+        "200": { description: Override approved, decision changed }
+        "403": { description: SoD violation (requester/original screener) }
+        "409": { description: Stale / not pending / version conflict }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/screening-overrides/{reqId}/reject:
+    post:
+      operationId: rejectScreeningOverride
+      tags: [HRMS - Recruitment]
+      summary: Reject a screening override (checker)
+      responses:
+        "200": { description: Override rejected }
+        "403": { description: SoD violation }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/screening-overrides/{reqId}/cancel:
+    post:
+      operationId: cancelScreeningOverride
+      tags: [HRMS - Recruitment]
+      summary: Cancel a pending override (requester only)
+      responses:
+        "200": { description: Override cancelled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/applications/{id}/rejection-notice:
+    get:
+      operationId: getRejectionNotice
+      tags: [HRMS - Recruitment]
+      summary: Candidate-safe rejection notice (R-RA-0118, no internal scores)
+      responses:
+        "200": { description: Allow-list projected notice }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/job-openings/{id}/rejection-policy:
+    patch:
+      operationId: setRejectionPolicy
+      tags: [HRMS - Recruitment]
+      summary: Set the per-vacancy disclosure policy for rejection reason
+      responses:
+        "200": { description: Policy updated }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interviews/{id}/comms:
+    post:
+      operationId: sendInterviewComm
+      tags: [HRMS - Recruitment]
+      summary: Interview comm (invite/reminder/reschedule/cancel) (R-RA-0142)
+      responses:
+        "201": { description: Comm recorded (queued or stubbed) }
+        "409": { description: Interview not commable / version conflict }
+        "422": { description: Reschedule requires newDate+newTime }
+      security: [{ bearerAuth: [] }]
+    get:
+      operationId: listInterviewComms
+      tags: [HRMS - Recruitment]
+      summary: List interview communications log
+      responses:
+        "200": { description: Comms list }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interviews/{id}/candidate-response:
+    post:
+      operationId: recordCandidateResponse
+      tags: [HRMS - Recruitment]
+      summary: Candidate confirm / request reschedule (R-RA-0143)
+      responses:
+        "201": { description: Response recorded }
+        "409": { description: Interview not commable / reschedule pending }
+        "422": { description: Invalid response (past slot, missing fields) }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interviews/{id}/candidate-responses:
+    get:
+      operationId: listCandidateResponses
+      tags: [HRMS - Recruitment]
+      summary: List candidate responses for an interview
+      responses:
+        "200": { description: Responses list }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interview-reschedule-requests/{reqId}/approve:
+    post:
+      operationId: approveRescheduleRequest
+      tags: [HRMS - Recruitment]
+      summary: HR approves a reschedule request (applies new slot)
+      responses:
+        "200": { description: Approved, interview rescheduled }
+        "409": { description: Not pending / version conflict }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interview-reschedule-requests/{reqId}/decline:
+    post:
+      operationId: declineRescheduleRequest
+      tags: [HRMS - Recruitment]
+      summary: HR declines a reschedule request
+      responses:
+        "200": { description: Declined }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interviews/{id}/recordings:
+    post:
+      operationId: registerRecording
+      tags: [HRMS - Recruitment]
+      summary: Register a recording/transcript with consent (R-RA-0152)
+      responses:
+        "201": { description: Recording registered with retention deadline }
+        "422": { description: No consent / invalid key / path traversal }
+      security: [{ bearerAuth: [] }]
+    get:
+      operationId: listRecordings
+      tags: [HRMS - Recruitment]
+      summary: List active recordings for an interview
+      responses:
+        "200": { description: Active recordings }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interview-recordings/{id}:
+    delete:
+      operationId: eraseRecording
+      tags: [HRMS - Recruitment]
+      summary: Soft-delete a recording (erasure, admin)
+      responses:
+        "200": { description: Deleted (object purge pending adapter) }
+        "409": { description: Version conflict }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/recordings/expired:
+    get:
+      operationId: listExpiredRecordings
+      tags: [HRMS - Recruitment]
+      summary: Retention purge candidates (admin)
+      responses:
+        "200": { description: Expired recordings }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interviews/{id}/calendar.ics:
+    get:
+      operationId: downloadInterviewIcs
+      tags: [HRMS - Recruitment]
+      summary: Download RFC-5545 iCalendar invite (R-RA-0140)
+      responses:
+        "200": { description: text/calendar attachment }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/interviews/{id}/calendar-sync:
+    post:
+      operationId: pushCalendarSync
+      tags: [HRMS - Recruitment]
+      summary: Push-sync to Google/Outlook (external seam, 501 when unwired)
+      responses:
+        "501": { description: Calendar sync not enabled / adapter not implemented }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/applications/{id}/fee/assess:
+    post:
+      operationId: assessApplicationFee
+      tags: [HRMS - Recruitment]
+      summary: Assess fee (exempt or pending) from vacancy (R-RA-0099)
+      responses:
+        "201": { description: Fee assessed }
+        "200": { description: Already assessed (idempotent) }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/applications/{id}/fee/pay:
+    post:
+      operationId: payApplicationFee
+      tags: [HRMS - Recruitment]
+      summary: Record manual payment (admin)
+      responses:
+        "200": { description: Fee paid }
+        "409": { description: Not payable (exempt/paid/refunded) }
+        "422": { description: Missing payment reference }
+        "501": { description: Online gateway not enabled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/applications/{id}/fee:
+    get:
+      operationId: getApplicationFee
+      tags: [HRMS - Recruitment]
+      summary: Get fee status for an application
+      responses:
+        "200": { description: Fee record }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/applications/{id}/pdf:
+    get:
+      operationId: downloadApplicationPdf
+      tags: [HRMS - Recruitment]
+      summary: Download application copy as PDF (R-RA-0105)
+      responses:
+        "200": { description: application/pdf or text/html fallback }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/candidates/{id}/otp/trigger:
+    post:
+      operationId: triggerOtp
+      tags: [HRMS - Recruitment]
+      summary: Trigger OTP for email/mobile verification (DEF-RC-003)
+      responses:
+        "201": { description: OTP created }
+        "501": { description: OTP verification not enabled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/candidates/{id}/otp/verify:
+    post:
+      operationId: verifyOtp
+      tags: [HRMS - Recruitment]
+      summary: Validate a candidate OTP code
+      responses:
+        "200": { description: Verified }
+        "422": { description: Invalid/expired code }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/recruitment/ai/parse-resume:
+    post:
+      operationId: aiParseResume
+      tags: [HRMS - Recruitment AI]
+      summary: AI resume parsing (external seam, 501 when not wired)
+      responses:
+        "200": { description: Parsed result (or stub) }
+        "501": { description: AI not enabled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/recruitment/ai/jd-match:
+    post:
+      operationId: aiJdMatch
+      tags: [HRMS - Recruitment AI]
+      summary: AI JD-match score (external seam)
+      responses:
+        "200": { description: Match result (or stub) }
+        "501": { description: AI not enabled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/recruitment/ai/generate-questions:
+    post:
+      operationId: aiGenerateQuestions
+      tags: [HRMS - Recruitment AI]
+      summary: AI question generation (external seam)
+      responses:
+        "200": { description: Questions (or stub) }
+        "501": { description: AI not enabled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/recruitment/proctoring/start:
+    post:
+      operationId: startProctoring
+      tags: [HRMS - Recruitment]
+      summary: Start remote proctoring session (external seam)
+      responses:
+        "200": { description: Session (or stub) }
+        "501": { description: Proctoring not enabled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/recruitment/proctoring/end:
+    post:
+      operationId: endProctoring
+      tags: [HRMS - Recruitment]
+      summary: End remote proctoring session (external seam)
+      responses:
+        "200": { description: Ended (or stub) }
+        "501": { description: Proctoring not enabled }
+      security: [{ bearerAuth: [] }]
+
+  /v1/hrms/recruitment/esign:
+    post:
+      operationId: eSignDocument
+      tags: [HRMS - Recruitment]
+      summary: Digital signature / eSign (external seam)
+      responses:
+        "200": { description: Signed (or stub) }
+        "501": { description: eSign not enabled }
+      security: [{ bearerAuth: [] }]
+
   /v1/hrms/attendance/geo-check-in:
     post:
       operationId: geoCheckIn
