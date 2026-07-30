@@ -117,4 +117,17 @@ export const hrmsCandidateResumes = candidateSchema.table("hrms_candidate_resume
 export type ResumeRow = typeof hrmsCandidateResumes.$inferSelect;
 export type ResumeInsert = typeof hrmsCandidateResumes.$inferInsert;
 
-export const schema = { hrmsCandidates, hrmsCandidateEducation, hrmsCandidateEmployment, hrmsCandidateReferences, hrmsCandidateResumes };
+export const hrmsCandidateOtpChallenges = candidateSchema.table("hrms_candidate_otp_challenges", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  candidateId: uuid("candidate_id").notNull(),
+  channel:     varchar("channel", { length: 8 }).notNull(),
+  code:        varchar("code", { length: 6 }).notNull(),
+  expiresAt:   timestamp("expires_at", { withTimezone: true }).notNull(),
+  attempts:    integer("attempts").notNull().default(0),
+  verified:    boolean("verified").notNull().default(false),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OtpChallengeRow = typeof hrmsCandidateOtpChallenges.$inferSelect;
+
+export const schema = { hrmsCandidates, hrmsCandidateEducation, hrmsCandidateEmployment, hrmsCandidateReferences, hrmsCandidateResumes, hrmsCandidateOtpChallenges };

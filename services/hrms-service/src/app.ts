@@ -50,6 +50,7 @@ import { candidateSkillsRoutes } from "./modules/recruitment/skills-routes.js";
 import { qualificationRoutes } from "./modules/recruitment/qualification-routes.js";
 import { candidateRoutes } from "./modules/recruitment/candidate-routes.js";
 import { candidateResumeRoutes } from "./modules/recruitment/resume-routes.js";
+import { otpVerifyRoutes } from "./modules/recruitment/otp-verify-routes.js";
 import { jobPublicationRoutes } from "./modules/recruitment/publication-routes.js";
 import { assessmentBlueprintRoutes } from "./modules/recruitment/blueprint-routes.js";
 import { assessmentAttemptRoutes } from "./modules/recruitment/attempt-routes.js";
@@ -163,6 +164,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(qualificationRoutes);
   await app.register(candidateRoutes);
   await app.register(candidateResumeRoutes);
+  await app.register(otpVerifyRoutes);
   await app.register(jobPublicationRoutes);
   await app.register(assessmentBlueprintRoutes);
   await app.register(assessmentAttemptRoutes);
