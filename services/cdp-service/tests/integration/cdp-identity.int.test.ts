@@ -22,10 +22,10 @@ import type { ScopedTx } from "../../src/shared/db.js";
 
 const EXPECTED_DB = "civitas_cdp";
 const DEFAULT_DSN = `postgres://cdp_svc:cdp_dev_pw@localhost:5435/${EXPECTED_DB}`;
-// cdp-service has no vitest.config.ts of its own, so it inherits the repo-root
-// one — whose DATABASE_URL points at civitas_finance. Only honour an inherited
-// DSN when it actually addresses this service's database; otherwise fall back to
-// the documented local dev DSN for the cdp_svc role.
+// `services/cdp-service/vitest.config.ts` supplies the right DSN. This guard
+// stays as defence in depth: if the test is ever run through a config further up
+// the tree (the repo-root one points DATABASE_URL at civitas_finance), only
+// honour the inherited DSN when it actually addresses this service's database.
 const inheritedDsn = process.env["DATABASE_URL"];
 const DSN = inheritedDsn?.includes(EXPECTED_DB) === true ? inheritedDsn : DEFAULT_DSN;
 // `src/shared/db.ts` builds its client at module-evaluation time from
@@ -203,9 +203,7 @@ describe.skipIf(!reachable)("cdp repo — real Postgres (identity resolution, me
     ]);
     // Version bump is computed by the DB (`version + 1`).
     expect(winner?.version).toBe(2);
-    // The merge did record something in mergedFromIds — but see the FINDING
-    // test below for the shape it actually stores.
-    expect(winner?.mergedFromIds).toHaveLength(1);
+    expect(winner?.mergedFromIds).toEqual([loserId]);
 
     const loser = await asTenant(TENANT_A, () => profileRepo.findById(loserId, TENANT_A));
     expect(loser?.profileType).toBe("merged");
@@ -271,17 +269,12 @@ describe.skipIf(!reachable)("cdp repo — real Postgres (identity resolution, me
     expect(listedByB.rows.map((r) => r.id)).not.toContain(profileId);
   });
 
-  it("FINDING: markMerged() double-encodes mergedFromIds, corrupting merge lineage", async () => {
-    // profiles/repo.ts markMerged() appends with
-    //   mergedFromIds: sql`${profiles.mergedFromIds} || ${JSON.stringify([loserId])}::jsonb`
-    // Against a real database the interpolated parameter is JSON-encoded a
-    // second time before it reaches Postgres, so the concat appends a jsonb
-    // *string* rather than a jsonb *array*: the column ends up holding
-    // ["[\"<loserId>\"]"] instead of ["<loserId>"]. Any consumer reading
-    // mergedFromIds to discover which profiles were merged in gets an
-    // unparseable UUID. The mock-based suite never saw this because nothing
-    // executed the SQL.
-    // Pinned here; replace with `toEqual([loserId])` once markMerged is fixed.
+  it("records the loser id in mergedFromIds as a plain jsonb array of uuids", async () => {
+    // markMerged() used to append with
+    //   sql`${profiles.mergedFromIds} || ${JSON.stringify([loserId])}::jsonb`
+    // which the driver encoded a second time, storing ["[\"<loserId>\"]"] — an
+    // unparseable uuid for anything reading the lineage. The value must be the
+    // uuid itself, and it must survive a round-trip as a real jsonb array.
     const winnerId = await createProfile(TENANT_A, { name: "Lineage winner" });
     const loserId = await createProfile(TENANT_A, { name: "Lineage loser" });
 
@@ -290,8 +283,79 @@ describe.skipIf(!reachable)("cdp repo — real Postgres (identity resolution, me
     );
 
     const winner = await asTenant(TENANT_A, () => profileRepo.findById(winnerId, TENANT_A));
-    expect(winner?.mergedFromIds).toEqual([JSON.stringify([loserId])]);
-    expect(winner?.mergedFromIds).not.toEqual([loserId]);
+    expect(winner?.mergedFromIds).toEqual([loserId]);
+    expect(winner ? profileRepo.toView(winner).mergedFromIds : []).toEqual([loserId]);
+
+    // Prove it is jsonb array-of-string in the column, not a nested string:
+    // jsonb_array_elements_text unwraps to the bare uuid.
+    const rows = await asTenant(TENANT_A, () =>
+      tx((t) =>
+        t.execute<{ raw: string; kind: string; elem: string }>(
+          sql`SELECT merged_from_ids::text AS raw,
+                     jsonb_typeof(merged_from_ids) AS kind,
+                     jsonb_array_elements_text(merged_from_ids) AS elem
+              FROM cdp.profiles WHERE id = ${winnerId}::uuid`,
+        ),
+      ),
+    );
+    const first = Array.isArray(rows) ? rows[0] : undefined;
+    // A jsonb array of bare uuids, not a jsonb string wrapping one.
+    expect(first?.kind).toBe("array");
+    expect(first?.elem).toBe(loserId);
+    expect(first?.raw).toBe(JSON.stringify([loserId]));
+  });
+
+  it("carries transitive lineage forward when the loser had itself absorbed profiles", async () => {
+    // A merged-away profile's own lineage must not be dropped: merging B (which
+    // had already absorbed C) into A has to leave A pointing at both B and C.
+    const olderId = await createProfile(TENANT_A, { name: "Oldest" });
+    const winnerId = await createProfile(TENANT_A, { name: "Transitive winner" });
+    const loserId = await createProfile(TENANT_A, { name: "Transitive loser" });
+
+    // The loser absorbed `olderId` in an earlier merge.
+    await asTenant(TENANT_A, () =>
+      tx((t) => profileRepo.markMerged(t, loserId, olderId, TENANT_A, { name: "Transitive loser" }, [], [])),
+    );
+    const loserBefore = await asTenant(TENANT_A, () => profileRepo.findById(loserId, TENANT_A));
+    expect(loserBefore?.mergedFromIds).toEqual([olderId]);
+
+    // Now merge the loser into the winner, exactly as the merge route does:
+    // it forwards `loser.mergedFromIds`.
+    await asTenant(TENANT_A, () =>
+      tx((t) =>
+        profileRepo.markMerged(
+          t,
+          winnerId,
+          loserId,
+          TENANT_A,
+          { name: "Transitive winner" },
+          [],
+          loserBefore?.mergedFromIds ?? [],
+        ),
+      ),
+    );
+
+    const winner = await asTenant(TENANT_A, () => profileRepo.findById(winnerId, TENANT_A));
+    expect(winner?.mergedFromIds).toHaveLength(2);
+    expect(winner?.mergedFromIds).toEqual(expect.arrayContaining([loserId, olderId]));
+
+    // Replaying the same merge is idempotent — no duplicate lineage entries.
+    await asTenant(TENANT_A, () =>
+      tx((t) =>
+        profileRepo.markMerged(
+          t,
+          winnerId,
+          loserId,
+          TENANT_A,
+          { name: "Transitive winner" },
+          [],
+          [olderId, loserId],
+        ),
+      ),
+    );
+    const replayed = await asTenant(TENANT_A, () => profileRepo.findById(winnerId, TENANT_A));
+    expect(replayed?.mergedFromIds).toHaveLength(2);
+    expect(new Set(replayed?.mergedFromIds)).toEqual(new Set([loserId, olderId]));
   });
 
   it("refuses to write a row belonging to another tenant (RLS WITH CHECK)", async () => {

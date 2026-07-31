@@ -9,6 +9,7 @@ export function toView(r: RedemptionRow) {
   return {
     id: r.id,
     tenantId: r.tenantId,
+    memberId: r.memberId,
     enrolmentId: r.enrolmentId,
     points: r.points.toString(),
     rewardType: r.rewardType,

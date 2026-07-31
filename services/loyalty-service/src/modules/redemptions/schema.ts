@@ -5,6 +5,10 @@ const domainSchema = pgSchema("loyalty");
 export const redemptions = domainSchema.table("redemptions", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
+  // Legacy denormalised link to the CDP profile, kept because
+  // (tenant_id, member_id) is still indexed and queried. Nullable since 0004:
+  // rows created through the enrolment path may not know the profile id.
+  memberId: uuid("member_id"),
   enrolmentId: uuid("enrolment_id"),
   points: bigint("points", { mode: "bigint" }).notNull(),
   rewardType: varchar("reward_type", { length: 50 }).notNull(),
