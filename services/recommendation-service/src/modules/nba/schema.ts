@@ -12,6 +12,8 @@ export const recommendations = recommendationSchema.table("recommendations", {
   profileId: uuid("profile_id").notNull(),
   recommendationType: varchar("recommendation_type", { length: 64 }).notNull(),
   productId: uuid("product_id"),
+  /** Delivery channel the recommendation was served on (web, mobile, call-centre...). */
+  channel: varchar("channel", { length: 64 }),
   /** Confidence/relevance score (0.0 – 1.0). */
   score: numeric("score", { precision: 5, scale: 4 }).notNull(),
   status: varchar("status", { length: 24 }).notNull().default("served"),

@@ -63,6 +63,18 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   // has the fleet's highest line coverage (99.6%) and was entirely unreachable.
   { name: "revenue",     prefix: "/api/v1/revenue",  upstream: upstream("revenue", 3038) },
   { name: "metadata",    prefix: "/api/v1/metadata", upstream: upstream("metadata", 3039) },
+  // Customer-engagement platform services (generic — client-specific behaviour
+  // lives in services/adapters/*). These were built and tested but had NO
+  // gateway route, so every request 404'd and no client could reach them.
+  // Ports start at 3043: 3036-3042 were already claimed by works/inspection/
+  // revenue/metadata, so the original 3036-3039 assignments collided.
+  { name: "cdp",             prefix: "/api/v1/cdp",             upstream: upstream("cdp", 3043) },
+  { name: "catalogue",       prefix: "/api/v1/catalogue",       upstream: upstream("catalogue", 3044) },
+  { name: "journeys",        prefix: "/api/v1/journeys",        upstream: upstream("journey", 3045) },
+  { name: "field",           prefix: "/api/v1/field",           upstream: upstream("field", 3046) },
+  { name: "recommendations", prefix: "/api/v1/recommendations", upstream: upstream("recommendation", 3040) },
+  { name: "ai",              prefix: "/api/v1/ai",              upstream: upstream("ai-agent", 3041) },
+  { name: "loyalty",         prefix: "/api/v1/loyalty",         upstream: upstream("loyalty", 3042) },
   { name: "locations",    prefix: "/api/v1/locations", upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
