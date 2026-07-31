@@ -16,6 +16,10 @@ export const COMMANDS = {
   updateActivity: "crm.activity.update",
   createAccount: "crm.account.create",
   recalculateLeadScore: "crm.lead.score_recalculate",
+  /** Inbound lead capture from any channel (email, telephony, chatbot, whatsapp, partner_api). */
+  inboundCapture: "crm.lead.inbound_capture",
+  /** Lead lifecycle transition (nurture, recycled, disqualified, qualified, converted). */
+  leadTransition: "crm.lead.transition",
 } as const;
 
 export const EVENTS = {
@@ -39,6 +43,10 @@ export const EVENTS = {
   leadCreated: "crm.lead.created",
   // A logged customer complaint/escalation opens a CRM case (ticket-worthy).
   caseOpened: "crm.case.opened",
+  /** Inbound lead captured and contact created from external channel. */
+  leadCaptured: "crm.lead.captured",
+  /** Lead status transitioned (nurture/recycled/disqualified/qualified/converted). */
+  leadTransitioned: "crm.lead.transitioned",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

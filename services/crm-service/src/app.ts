@@ -16,6 +16,9 @@ import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { pipelineRoutes } from "./modules/pipelines/routes.js";
 import { customFieldRoutes } from "./modules/custom-fields/routes.js";
 import { leadScoreRoutes } from "./modules/leads/score-route.js";
+import { inboundLeadRoutes } from "./modules/leads/inbound-routes.js";
+import { completenessRoutes } from "./modules/leads/completeness-route.js";
+import { lifecycleRoutes } from "./modules/leads/lifecycle-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -42,6 +45,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(pipelineRoutes);
   await app.register(customFieldRoutes);
   await app.register(leadScoreRoutes);
+  await app.register(inboundLeadRoutes);
+  await app.register(completenessRoutes);
+  await app.register(lifecycleRoutes);
 
   return app;
 }
