@@ -44,6 +44,16 @@ const SERVICES = [
   { name: "tenant-service",      db: "civitas_tenant" },
   { name: "theme-service",       db: "civitas_theme" },
   { name: "workflow-service",    db: "civitas_workflow" },
+  // Customer-engagement platform services. These were absent from this list, so
+  // `migrate-all` never created their schemas and the services had no database
+  // to talk to.
+  { name: "cdp-service",            db: "civitas_cdp" },
+  { name: "catalogue-service",      db: "civitas_catalogue" },
+  { name: "journey-service",        db: "civitas_journey" },
+  { name: "field-service",          db: "civitas_field" },
+  { name: "loyalty-service",        db: "civitas_loyalty" },
+  { name: "recommendation-service", db: "civitas_recommendation" },
+  { name: "ai-agent-service",       db: "civitas_ai_agent" },
 ];
 
 let applied = 0;

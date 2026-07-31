@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const CATALOGUE_ROLES = ["catalogue_user", "catalogue_admin", "super_admin"];
@@ -19,6 +23,8 @@ const updateRateBody = z.object({
   effectiveTo: z.string().date().nullable().optional(),
   rateValueMinor: z.coerce.bigint().optional(),
   source: z.string().min(1).max(128).optional(),
+  /** Optional optimistic-lock guard. Falls back to the row's current version. */
+  version: z.number().int().positive().optional(),
 });
 
 const rateQuery = z.object({
@@ -66,11 +72,10 @@ export async function rateRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createRateBody.parse(req.body);
-    const id = crypto.randomUUID();
-    const { db: database } = await import("../../shared/db.js");
-    await repo.insertRate(
-      { insert: database.insert, update: database.update, select: database.select },
-      {
+    const id = randomUUID();
+
+    await db.transaction(async (tx) => {
+      await repo.insertRate(tx, {
         id,
         tenantId: ctx.tenantId,
         productId: body.productId,
@@ -81,8 +86,26 @@ export async function rateRoutes(app: FastifyInstance): Promise<void> {
         createdBy: ctx.actorId,
         updatedBy: ctx.actorId,
         version: 1,
-      },
-    );
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.rateCreated,
+        eventType: EVENTS.rateCreated,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: {
+          rateId: id,
+          productId: body.productId,
+          effectiveFrom: body.effectiveFrom,
+          effectiveTo: body.effectiveTo ?? null,
+          // bigint paise — serialised as a string so the jsonb payload stays JSON-safe.
+          rateValueMinor: body.rateValueMinor.toString(),
+          source: body.source,
+        },
+      });
+    });
+
     return reply.code(201).send({ data: { id } });
   });
 
@@ -102,16 +125,33 @@ export async function rateRoutes(app: FastifyInstance): Promise<void> {
     if (body.rateValueMinor !== undefined) patch["rateValue"] = body.rateValueMinor;
     if (body.source !== undefined) patch["source"] = body.source;
 
-    const { db: database } = await import("../../shared/db.js");
-    await repo.updateRate(
-      { insert: database.insert, update: database.update, select: database.select },
-      id,
-      ctx.tenantId,
-      patch as Partial<typeof existing>,
-      existing.version,
-    );
-    return reply.send({ data: { id, version: existing.version + 1 } });
+    const expectedVersion = body.version ?? existing.version;
+
+    await db.transaction(async (tx) => {
+      const ok = await repo.updateRate(tx, id, ctx.tenantId, patch as Partial<typeof existing>, expectedVersion);
+      if (!ok) {
+        throw new HttpError(409, "VERSION_CONFLICT", "Rate has been modified; retry with current version");
+      }
+
+      await enqueue(tx, {
+        topic: EVENTS.rateUpdated,
+        eventType: EVENTS.rateUpdated,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: {
+          rateId: id,
+          productId: existing.productId,
+          previousVersion: expectedVersion,
+          ...(body.effectiveFrom !== undefined ? { effectiveFrom: body.effectiveFrom } : {}),
+          ...(body.effectiveTo !== undefined ? { effectiveTo: body.effectiveTo } : {}),
+          // bigint paise — serialised as a string so the jsonb payload stays JSON-safe.
+          ...(body.rateValueMinor !== undefined ? { rateValueMinor: body.rateValueMinor.toString() } : {}),
+          ...(body.source !== undefined ? { source: body.source } : {}),
+        },
+      });
+    });
+
+    return reply.send({ data: { id, version: expectedVersion + 1 } });
   });
 }
-
-declare const crypto: { randomUUID(): string };

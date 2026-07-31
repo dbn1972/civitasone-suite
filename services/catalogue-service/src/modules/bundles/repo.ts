@@ -2,8 +2,6 @@ import { eq, and, ne, sql } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { bundles, type BundleRow, type BundleInsert } from "./schema.js";
 
-export type Writer = { insert: ScopedTx["insert"]; update: ScopedTx["update"]; select: ScopedTx["select"] };
-
 export async function findById(id: string, tenantId: string): Promise<BundleRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(bundles)
@@ -31,20 +29,26 @@ export async function listBundles(filters: BundleListFilters): Promise<{ rows: B
   return { rows, total: countResult[0]?.count ?? 0 };
 }
 
-export async function insertBundle(tx: Writer, row: BundleInsert): Promise<void> {
+export async function insertBundle(tx: ScopedTx, row: BundleInsert): Promise<void> {
   await tx.insert(bundles).values(row);
 }
 
-export async function updateBundle(tx: Writer, id: string, tenantId: string, patch: Partial<BundleInsert>, expectedVersion: number): Promise<boolean> {
-  await tx.update(bundles)
-    .set({ ...patch, updatedAt: new Date(), version: expectedVersion + 1 })
-    .where(and(eq(bundles.id, id), eq(bundles.tenantId, tenantId), eq(bundles.version, expectedVersion)));
-  return true;
+/**
+ * Optimistic-locked update. Returns false when the expected version no longer
+ * matches (0 rows updated) so the route can answer 409.
+ */
+export async function updateBundle(tx: ScopedTx, id: string, tenantId: string, patch: Partial<BundleInsert>, expectedVersion: number): Promise<boolean> {
+  const result = await tx.update(bundles)
+    .set({ ...patch, updatedAt: new Date(), version: sql`${bundles.version} + 1` })
+    .where(and(eq(bundles.id, id), eq(bundles.tenantId, tenantId), eq(bundles.version, expectedVersion)))
+    .returning({ id: bundles.id });
+  return result.length > 0;
 }
 
-export async function softDeleteBundle(tx: Writer, id: string, tenantId: string, expectedVersion: number): Promise<boolean> {
-  await tx.update(bundles)
-    .set({ status: "deleted", updatedAt: new Date(), version: expectedVersion + 1 })
-    .where(and(eq(bundles.id, id), eq(bundles.tenantId, tenantId), eq(bundles.version, expectedVersion)));
-  return true;
+export async function softDeleteBundle(tx: ScopedTx, id: string, tenantId: string, expectedVersion: number): Promise<boolean> {
+  const result = await tx.update(bundles)
+    .set({ status: "deleted", updatedAt: new Date(), version: sql`${bundles.version} + 1` })
+    .where(and(eq(bundles.id, id), eq(bundles.tenantId, tenantId), eq(bundles.version, expectedVersion)))
+    .returning({ id: bundles.id });
+  return result.length > 0;
 }

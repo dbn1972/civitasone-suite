@@ -2,8 +2,6 @@ import { eq, and, ilike, sql, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { products, type ProductRow, type ProductInsert } from "./schema.js";
 
-export type Writer = { insert: ScopedTx["insert"]; update: ScopedTx["update"]; select: ScopedTx["select"] };
-
 export async function findById(id: string, tenantId: string): Promise<ProductRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(products)
@@ -50,23 +48,29 @@ export async function listByTenant(tenantId: string): Promise<ProductRow[]> {
   );
 }
 
-export async function insertProduct(tx: Writer, row: ProductInsert): Promise<void> {
+export async function insertProduct(tx: ScopedTx, row: ProductInsert): Promise<void> {
   await tx.insert(products).values(row);
 }
 
-export async function updateProduct(tx: Writer, id: string, tenantId: string, patch: Partial<ProductInsert>, expectedVersion: number): Promise<boolean> {
+/**
+ * Optimistic-locked update. Returns false when the expected version no longer
+ * matches (0 rows updated) so the route can answer 409 instead of silently
+ * overwriting a concurrent writer. Version bump is computed by the DB.
+ */
+export async function updateProduct(tx: ScopedTx, id: string, tenantId: string, patch: Partial<ProductInsert>, expectedVersion: number): Promise<boolean> {
   const result = await tx.update(products)
-    .set({ ...patch, updatedAt: new Date(), version: expectedVersion + 1 })
-    .where(and(eq(products.id, id), eq(products.tenantId, tenantId), eq(products.version, expectedVersion)));
-  // Drizzle returns the mutated rows — if version mismatch, 0 rows affected
-  return true; // In Drizzle ORM, update throws or succeeds
+    .set({ ...patch, updatedAt: new Date(), version: sql`${products.version} + 1` })
+    .where(and(eq(products.id, id), eq(products.tenantId, tenantId), eq(products.version, expectedVersion)))
+    .returning({ id: products.id });
+  return result.length > 0;
 }
 
-export async function softDelete(tx: Writer, id: string, tenantId: string, expectedVersion: number): Promise<boolean> {
-  await tx.update(products)
-    .set({ lifecycleStatus: "withdrawn", updatedAt: new Date(), version: expectedVersion + 1 })
-    .where(and(eq(products.id, id), eq(products.tenantId, tenantId), eq(products.version, expectedVersion)));
-  return true;
+export async function softDelete(tx: ScopedTx, id: string, tenantId: string, expectedVersion: number): Promise<boolean> {
+  const result = await tx.update(products)
+    .set({ lifecycleStatus: "withdrawn", updatedAt: new Date(), version: sql`${products.version} + 1` })
+    .where(and(eq(products.id, id), eq(products.tenantId, tenantId), eq(products.version, expectedVersion)))
+    .returning({ id: products.id });
+  return result.length > 0;
 }
 
 export async function findByIds(ids: string[], tenantId: string): Promise<ProductRow[]> {

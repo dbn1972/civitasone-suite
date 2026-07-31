@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { evaluateProductEligibility, type EligibilityRule } from "./domain.js";
 
@@ -30,11 +34,10 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createRuleBody.parse(req.body);
-    const id = crypto.randomUUID();
-    const { db: database } = await import("../../shared/db.js");
-    await repo.insertRule(
-      { insert: database.insert, update: database.update, select: database.select },
-      {
+    const id = randomUUID();
+
+    await db.transaction(async (tx) => {
+      await repo.insertRule(tx, {
         id,
         tenantId: ctx.tenantId,
         productId: body.productId,
@@ -44,8 +47,18 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
         createdBy: ctx.actorId,
         updatedBy: ctx.actorId,
         version: 1,
-      },
-    );
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.eligibilityRuleCreated,
+        eventType: EVENTS.eligibilityRuleCreated,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: { ruleId: id, productId: body.productId, ruleType: body.ruleType, criteria: body.criteria },
+      });
+    });
+
     return reply.code(201).send({ data: { id } });
   });
 
@@ -65,12 +78,21 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Eligibility rule not found");
-    const { db: database } = await import("../../shared/db.js");
-    await repo.deleteRule(
-      { insert: database.insert, update: database.update, select: database.select },
-      id,
-      ctx.tenantId,
-    );
+
+    await db.transaction(async (tx) => {
+      const ok = await repo.deleteRule(tx, id, ctx.tenantId);
+      if (!ok) throw new HttpError(404, "NOT_FOUND", "Eligibility rule not found");
+
+      await enqueue(tx, {
+        topic: EVENTS.eligibilityRuleDeleted,
+        eventType: EVENTS.eligibilityRuleDeleted,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: { ruleId: id, productId: existing.productId, ruleType: existing.ruleType, status: "deleted" },
+      });
+    });
+
     return reply.code(200).send({ data: { id, status: "deleted" } });
   });
 
@@ -114,5 +136,3 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 }
-
-declare const crypto: { randomUUID(): string };

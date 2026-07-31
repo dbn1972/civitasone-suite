@@ -101,14 +101,12 @@ export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const q = listQuery.parse(req.query);
 
-    if (q.programId) {
-      const { rows, total } = await repo.listByProgram(ctx.tenantId, q.programId, q.limit, q.offset);
-      const page = Math.floor(q.offset / q.limit) + 1;
-      return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
-    }
+    const { rows, total } = q.programId
+      ? await repo.listByProgram(ctx.tenantId, q.programId, q.limit, q.offset)
+      : await repo.listByTenant(ctx.tenantId, q.limit, q.offset);
 
-    // Without programId, return empty with pagination meta
-    return reply.send({ data: [], meta: { page: 1, pageSize: q.limit, total: 0 } });
+    const page = Math.floor(q.offset / q.limit) + 1;
+    return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
   });
 
   // GET /v1/loyalty/members/:profileId — list enrolments for a profile

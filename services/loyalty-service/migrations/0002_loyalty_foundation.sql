@@ -43,7 +43,7 @@ CREATE POLICY loyalty_programs_tenant_isolation ON loyalty.programs
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.programs TO loyalty_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'loyalty_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.programs TO loyalty_svc; END IF; END $grant$;
 
 -- ── Enrolments ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS loyalty.enrolments (
@@ -80,7 +80,7 @@ CREATE POLICY loyalty_enrolments_tenant_isolation ON loyalty.enrolments
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.enrolments TO loyalty_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'loyalty_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.enrolments TO loyalty_svc; END IF; END $grant$;
 
 -- ── Accruals ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS loyalty.accruals (
@@ -113,7 +113,7 @@ CREATE POLICY loyalty_accruals_tenant_isolation ON loyalty.accruals
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.accruals TO loyalty_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'loyalty_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.accruals TO loyalty_svc; END IF; END $grant$;
 
 -- ── Tier Definitions ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS loyalty.tier_definitions (
@@ -142,7 +142,7 @@ CREATE POLICY loyalty_tier_definitions_tenant_isolation ON loyalty.tier_definiti
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.tier_definitions TO loyalty_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'loyalty_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.tier_definitions TO loyalty_svc; END IF; END $grant$;
 
 -- ── Tier Assignments ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS loyalty.tier_assignments (
@@ -168,7 +168,7 @@ CREATE POLICY loyalty_tier_assignments_tenant_isolation ON loyalty.tier_assignme
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.tier_assignments TO loyalty_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'loyalty_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.tier_assignments TO loyalty_svc; END IF; END $grant$;
 
 -- ── Update redemptions to reference enrolment ──────────────────────────────
 -- Add enrolment_id to redemptions (nullable for backward compat)
