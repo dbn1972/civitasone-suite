@@ -4,6 +4,7 @@ import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { HttpError } from "./shared/context.js";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
@@ -29,22 +30,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue },
   });
 
+  registerSchemaErrorHandler(app, HttpError);
+
   await app.register(programRoutes);
   await app.register(enrolmentRoutes);
   await app.register(accrualRoutes);
   await app.register(redemptionRoutes);
   await app.register(tierRoutes);
-
-  app.setErrorHandler((error, _req, reply) => {
-    if (error instanceof HttpError) {
-      return reply.status(error.status).send({ error: { code: error.code, message: error.message } });
-    }
-    if (error.validation) {
-      return reply.status(400).send({ error: { code: "VALIDATION_ERROR", message: error.message } });
-    }
-    reply.log.error(error);
-    return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "unexpected error" } });
-  });
 
   return app;
 }
