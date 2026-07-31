@@ -39,4 +39,4 @@ CREATE POLICY journeys_tenant_isolation ON journey.journeys
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON journey.journeys TO journey_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'journey_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON journey.journeys TO journey_svc; END IF; END $grant$;

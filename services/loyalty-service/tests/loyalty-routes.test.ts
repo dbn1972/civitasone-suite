@@ -27,6 +27,7 @@ const H = vi.hoisted(() => ({
   enrolmentFindByIdMock: vi.fn(),
   enrolmentFindByProgramAndProfileMock: vi.fn(),
   enrolmentListByProgramMock: vi.fn(),
+  enrolmentListByTenantMock: vi.fn(),
   enrolmentListByProfileMock: vi.fn(),
   enrolmentInsertMock: vi.fn(),
   enrolmentUpdateMock: vi.fn(),
@@ -79,6 +80,7 @@ vi.mock("../src/modules/enrolments/repo.js", () => ({
   findById: (...a: unknown[]) => H.enrolmentFindByIdMock(...a),
   findByProgramAndProfile: (...a: unknown[]) => H.enrolmentFindByProgramAndProfileMock(...a),
   listByProgram: (...a: unknown[]) => H.enrolmentListByProgramMock(...a),
+  listByTenant: (...a: unknown[]) => H.enrolmentListByTenantMock(...a),
   listByProfile: (...a: unknown[]) => H.enrolmentListByProfileMock(...a),
   insert: (...a: unknown[]) => H.enrolmentInsertMock(...a),
   update: (...a: unknown[]) => H.enrolmentUpdateMock(...a),
@@ -523,6 +525,22 @@ describe("Enrolments", () => {
     await app.close();
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toHaveLength(1);
+  });
+
+  it("GET /v1/loyalty/enrolments — 200 lists all tenant enrolments when no programId is given", async () => {
+    H.enrolmentListByTenantMock.mockResolvedValue({ rows: [makeEnrolment(), makeEnrolment()], total: 2 });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/loyalty/enrolments",
+      headers: { authorization: `Bearer ${userToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toHaveLength(2);
+    expect(res.json().meta.total).toBe(2);
+    expect(H.enrolmentListByTenantMock).toHaveBeenCalledOnce();
+    expect(H.enrolmentListByProgramMock).not.toHaveBeenCalled();
   });
 
   it("GET /v1/loyalty/members/:profileId — 200 lists enrolments", async () => {

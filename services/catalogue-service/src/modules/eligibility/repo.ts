@@ -2,8 +2,6 @@ import { eq, and, sql } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { eligibilityRules, type EligibilityRuleRow, type EligibilityRuleInsert } from "./schema.js";
 
-export type Writer = { insert: ScopedTx["insert"]; update: ScopedTx["update"]; select: ScopedTx["select"] };
-
 export async function findById(id: string, tenantId: string): Promise<EligibilityRuleRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(eligibilityRules)
@@ -38,12 +36,15 @@ export async function listByProducts(productIds: string[], tenantId: string): Pr
   );
 }
 
-export async function insertRule(tx: Writer, row: EligibilityRuleInsert): Promise<void> {
+export async function insertRule(tx: ScopedTx, row: EligibilityRuleInsert): Promise<void> {
   await tx.insert(eligibilityRules).values(row);
 }
 
-export async function deleteRule(tx: Writer, id: string, tenantId: string): Promise<void> {
-  await tx.update(eligibilityRules)
-    .set({ status: "deleted", updatedAt: new Date() })
-    .where(and(eq(eligibilityRules.id, id), eq(eligibilityRules.tenantId, tenantId)));
+/** Soft-delete a rule. Returns false when no matching row was updated. */
+export async function deleteRule(tx: ScopedTx, id: string, tenantId: string): Promise<boolean> {
+  const result = await tx.update(eligibilityRules)
+    .set({ status: "deleted", updatedAt: new Date(), version: sql`${eligibilityRules.version} + 1` })
+    .where(and(eq(eligibilityRules.id, id), eq(eligibilityRules.tenantId, tenantId)))
+    .returning({ id: eligibilityRules.id });
+  return result.length > 0;
 }

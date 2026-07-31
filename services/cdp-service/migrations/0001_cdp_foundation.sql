@@ -6,18 +6,25 @@ SET lock_timeout = '5s';
 -- Schema
 CREATE SCHEMA IF NOT EXISTS cdp;
 
--- Service role
+-- Service role grants.
+--
+-- This migration deliberately does NOT create the cdp_svc login role. It used to
+-- run `CREATE ROLE cdp_svc LOGIN` with no password, which — depending on
+-- pg_hba.conf — is a usable credential-free account, and would not match the
+-- password in the DATABASE_URL the service actually connects with. Service login
+-- roles and their passwords are owned by infra/db/bootstrap/*.
+--
+-- Grants are guarded on the role already existing so this migration stays
+-- runnable where the role has not been provisioned yet (local dev / CI).
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cdp_svc') THEN
-    CREATE ROLE cdp_svc LOGIN;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cdp_svc') THEN
+    GRANT USAGE ON SCHEMA cdp TO cdp_svc;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cdp TO cdp_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA cdp GRANT ALL ON TABLES TO cdp_svc;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA cdp TO cdp_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA cdp GRANT ALL ON SEQUENCES TO cdp_svc;
   END IF;
 END $$;
-
-GRANT USAGE ON SCHEMA cdp TO cdp_svc;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cdp TO cdp_svc;
-ALTER DEFAULT PRIVILEGES IN SCHEMA cdp GRANT ALL ON TABLES TO cdp_svc;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA cdp TO cdp_svc;
-ALTER DEFAULT PRIVILEGES IN SCHEMA cdp GRANT ALL ON SEQUENCES TO cdp_svc;
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Profiles (golden profile store)
@@ -207,9 +214,13 @@ CREATE TABLE IF NOT EXISTS _inbox.processed (
   processed_at timestamptz NOT NULL DEFAULT now()
 );
 
-GRANT USAGE ON SCHEMA _outbox TO cdp_svc;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA _outbox TO cdp_svc;
-ALTER DEFAULT PRIVILEGES IN SCHEMA _outbox GRANT ALL ON TABLES TO cdp_svc;
-GRANT USAGE ON SCHEMA _inbox TO cdp_svc;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA _inbox TO cdp_svc;
-ALTER DEFAULT PRIVILEGES IN SCHEMA _inbox GRANT ALL ON TABLES TO cdp_svc;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cdp_svc') THEN
+    GRANT USAGE ON SCHEMA _outbox TO cdp_svc;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA _outbox TO cdp_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA _outbox GRANT ALL ON TABLES TO cdp_svc;
+    GRANT USAGE ON SCHEMA _inbox TO cdp_svc;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA _inbox TO cdp_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA _inbox GRANT ALL ON TABLES TO cdp_svc;
+  END IF;
+END $$;

@@ -22,6 +22,7 @@ const H = vi.hoisted(() => ({
   dbInsertMock: vi.fn(),
   dbUpdateMock: vi.fn(),
   dbSelectMock: vi.fn(),
+  dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   // Products repo
   productFindByIdMock: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock("../src/shared/db.js", () => ({
     insert: (...a: unknown[]) => H.dbInsertMock(...a),
     update: (...a: unknown[]) => H.dbUpdateMock(...a),
     select: (...a: unknown[]) => H.dbSelectMock(...a),
+    transaction: (fn: (tx: unknown) => Promise<unknown>) => H.dbTransactionMock(fn),
   },
   scopedRead: (fn: (tx: unknown) => Promise<unknown>) => H.scopedReadMock(fn),
   sqlClient: { end: async () => {} },
@@ -113,6 +115,7 @@ vi.mock("../src/modules/bundles/repo.js", () => ({
 }));
 
 import { buildApp } from "../src/app.js";
+import { EVENTS } from "../src/topics.js";
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 function adminToken(roles: string[] = ["catalogue_admin", "super_admin"]) {
@@ -211,7 +214,7 @@ beforeEach(() => {
   H.rateInsertMock.mockResolvedValue(undefined);
   H.rateUpdateMock.mockResolvedValue(true);
   H.eligInsertRuleMock.mockResolvedValue(undefined);
-  H.eligDeleteRuleMock.mockResolvedValue(undefined);
+  H.eligDeleteRuleMock.mockResolvedValue(true);
   H.bundleInsertMock.mockResolvedValue(undefined);
   H.bundleUpdateMock.mockResolvedValue(true);
   H.bundleSoftDeleteMock.mockResolvedValue(true);
@@ -219,6 +222,14 @@ beforeEach(() => {
   H.dbInsertMock.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
   H.dbUpdateMock.mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) });
   H.dbSelectMock.mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }) });
+  // Mutating routes now wrap the repo write + outbox enqueue in db.transaction().
+  H.dbTransactionMock.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      insert: (...a: unknown[]) => H.dbInsertMock(...a),
+      update: (...a: unknown[]) => H.dbUpdateMock(...a),
+      select: (...a: unknown[]) => H.dbSelectMock(...a),
+    }),
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -991,5 +1002,296 @@ describe("Bundles CRUD + validation", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OPTIMISTIC LOCKING — 409 on version conflict
+// ═══════════════════════════════════════════════════════════════════════════════
+describe("Optimistic locking (409 VERSION_CONFLICT)", () => {
+  it("PATCH /v1/catalogue/products/:id — 409 when update affects no rows", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct());
+    H.productUpdateMock.mockResolvedValue(false);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/products/${PRODUCT_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Updated", version: 1 },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("VERSION_CONFLICT");
+  });
+
+  it("PATCH /v1/catalogue/products/:id — passes body.version as expected version", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct({ version: 1 }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/products/${PRODUCT_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Updated", version: 7 },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.version).toBe(8);
+    expect(H.productUpdateMock).toHaveBeenCalledWith(expect.anything(), PRODUCT_ID, TENANT, expect.anything(), 7);
+  });
+
+  it("DELETE /v1/catalogue/products/:id — 409 when soft delete affects no rows", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct());
+    H.productSoftDeleteMock.mockResolvedValue(false);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/catalogue/products/${PRODUCT_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("VERSION_CONFLICT");
+  });
+
+  it("PATCH /v1/catalogue/rates/:id — 409 when update affects no rows", async () => {
+    H.rateFindByIdMock.mockResolvedValue(makeRate());
+    H.rateUpdateMock.mockResolvedValue(false);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/rates/${RATE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { rateValueMinor: "9999", version: 1 },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("VERSION_CONFLICT");
+  });
+
+  it("PATCH /v1/catalogue/bundles/:id — 409 when update affects no rows", async () => {
+    H.bundleFindByIdMock.mockResolvedValue(makeBundle());
+    H.bundleUpdateMock.mockResolvedValue(false);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/bundles/${BUNDLE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Updated Bundle", version: 1 },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("VERSION_CONFLICT");
+  });
+
+  it("DELETE /v1/catalogue/bundles/:id — 409 when soft delete affects no rows", async () => {
+    H.bundleFindByIdMock.mockResolvedValue(makeBundle());
+    H.bundleSoftDeleteMock.mockResolvedValue(false);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/catalogue/bundles/${BUNDLE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("VERSION_CONFLICT");
+  });
+
+  it("DELETE /v1/catalogue/eligibility/rules/:id — 404 when delete affects no rows", async () => {
+    H.eligFindByIdMock.mockResolvedValue(makeRule());
+    H.eligDeleteRuleMock.mockResolvedValue(false);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/catalogue/eligibility/rules/${RULE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OUTBOX EVENTS — audit trail on every mutation
+// ═══════════════════════════════════════════════════════════════════════════════
+function enqueuedTypes(): string[] {
+  return H.enqueueMock.mock.calls.map((call) => (call[1] as { eventType: string }).eventType);
+}
+
+describe("Outbox events on mutations", () => {
+  it("POST /v1/catalogue/products — enqueues productCreated", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/catalogue/products",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Savings Account", lifecycleStatus: "draft" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(201);
+    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(enqueuedTypes()).toEqual([EVENTS.productCreated]);
+    const event = H.enqueueMock.mock.calls[0]![1] as {
+      topic: string;
+      tenantId: string;
+      actorId: string;
+      payload: Record<string, unknown>;
+    };
+    expect(event.topic).toBe(EVENTS.productCreated);
+    expect(event.tenantId).toBe(TENANT);
+    expect(event.actorId).toBe(ACTOR);
+    expect(event.payload["productId"]).toBe(res.json().data.id);
+  });
+
+  it("PATCH /v1/catalogue/products/:id — enqueues productUpdated", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/products/${PRODUCT_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Updated" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(enqueuedTypes()).toEqual([EVENTS.productUpdated]);
+  });
+
+  it("DELETE /v1/catalogue/products/:id — enqueues productDeleted", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/catalogue/products/${PRODUCT_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(enqueuedTypes()).toEqual([EVENTS.productDeleted]);
+  });
+
+  it("POST /v1/catalogue/products/:id/availability — enqueues productUpdated", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/catalogue/products/${PRODUCT_ID}/availability`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { circleId: "11111111-1111-4000-8000-111111111111", available: true },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(201);
+    expect(enqueuedTypes()).toEqual([EVENTS.productUpdated]);
+  });
+
+  it("POST /v1/catalogue/rates — enqueues rateCreated with bigint serialised as string", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/catalogue/rates",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { productId: PRODUCT_ID, effectiveFrom: "2025-01-01", rateValueMinor: "5000", source: "RBI Circular" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(201);
+    expect(enqueuedTypes()).toEqual([EVENTS.rateCreated]);
+    const event = H.enqueueMock.mock.calls[0]![1] as { payload: Record<string, unknown> };
+    expect(event.payload["rateValueMinor"]).toBe("5000");
+  });
+
+  it("PATCH /v1/catalogue/rates/:id — enqueues rateUpdated", async () => {
+    H.rateFindByIdMock.mockResolvedValue(makeRate());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/rates/${RATE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { rateValueMinor: "9999" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(enqueuedTypes()).toEqual([EVENTS.rateUpdated]);
+  });
+
+  it("POST /v1/catalogue/eligibility/rules — enqueues eligibilityRuleCreated", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/catalogue/eligibility/rules",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { productId: PRODUCT_ID, ruleType: "age_range", criteria: { minAge: 18, maxAge: 65 } },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(201);
+    expect(enqueuedTypes()).toEqual([EVENTS.eligibilityRuleCreated]);
+  });
+
+  it("DELETE /v1/catalogue/eligibility/rules/:id — enqueues eligibilityRuleDeleted", async () => {
+    H.eligFindByIdMock.mockResolvedValue(makeRule());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/catalogue/eligibility/rules/${RULE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(enqueuedTypes()).toEqual([EVENTS.eligibilityRuleDeleted]);
+  });
+
+  it("POST /v1/catalogue/bundles — enqueues bundleCreated", async () => {
+    H.productFindByIdsMock.mockResolvedValue([makeProduct({ id: PRODUCT_ID, lifecycleStatus: "active" })]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/catalogue/bundles",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Good Bundle", componentProductIds: [PRODUCT_ID] },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(201);
+    expect(enqueuedTypes()).toEqual([EVENTS.bundleCreated]);
+  });
+
+  it("PATCH /v1/catalogue/bundles/:id — enqueues bundleUpdated", async () => {
+    H.bundleFindByIdMock.mockResolvedValue(makeBundle());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/bundles/${BUNDLE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Updated Bundle" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(enqueuedTypes()).toEqual([EVENTS.bundleUpdated]);
+  });
+
+  it("DELETE /v1/catalogue/bundles/:id — enqueues bundleDeleted", async () => {
+    H.bundleFindByIdMock.mockResolvedValue(makeBundle());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/catalogue/bundles/${BUNDLE_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(enqueuedTypes()).toEqual([EVENTS.bundleDeleted]);
+  });
+
+  it("no event is enqueued when the write is rejected by optimistic locking", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct());
+    H.productUpdateMock.mockResolvedValue(false);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/catalogue/products/${PRODUCT_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { name: "Updated" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(H.enqueueMock).not.toHaveBeenCalled();
   });
 });

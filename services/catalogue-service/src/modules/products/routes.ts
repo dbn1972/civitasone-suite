@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { EVENTS } from "../../topics.js";
+import { productAvailability } from "./schema.js";
 import * as repo from "./repo.js";
 import { validateTransition, isEditable } from "./domain.js";
 
@@ -29,6 +34,8 @@ const updateProductBody = z.object({
   effectiveFrom: z.string().date().nullable().optional(),
   effectiveTo: z.string().date().nullable().optional(),
   regulatoryMetadata: z.record(z.unknown()).optional(),
+  /** Optional optimistic-lock guard. Falls back to the row's current version. */
+  version: z.number().int().positive().optional(),
 });
 
 const listQuery = z.object({
@@ -91,10 +98,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createProductBody.parse(req.body);
-    const id = crypto.randomUUID();
-    await repo.insertProduct(
-      { insert: (await import("../../shared/db.js")).db.insert, update: (await import("../../shared/db.js")).db.update, select: (await import("../../shared/db.js")).db.select },
-      {
+    const id = randomUUID();
+
+    await db.transaction(async (tx) => {
+      await repo.insertProduct(tx, {
         id,
         tenantId: ctx.tenantId,
         name: body.name,
@@ -109,8 +116,25 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         createdBy: ctx.actorId,
         updatedBy: ctx.actorId,
         version: 1,
-      },
-    );
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.productCreated,
+        eventType: EVENTS.productCreated,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: {
+          productId: id,
+          name: body.name,
+          lifecycleStatus: body.lifecycleStatus,
+          ...(body.lineId !== undefined ? { lineId: body.lineId } : {}),
+          ...(body.familyId !== undefined ? { familyId: body.familyId } : {}),
+          ...(body.parentId !== undefined ? { parentId: body.parentId } : {}),
+        },
+      });
+    });
+
     return reply.code(201).send({ data: { id } });
   });
 
@@ -149,14 +173,25 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     if (body.effectiveTo !== undefined) patch["effectiveTo"] = body.effectiveTo;
     if (body.regulatoryMetadata !== undefined) patch["regulatoryMetadata"] = body.regulatoryMetadata;
 
-    await repo.updateProduct(
-      { insert: (await import("../../shared/db.js")).db.insert, update: (await import("../../shared/db.js")).db.update, select: (await import("../../shared/db.js")).db.select },
-      id,
-      ctx.tenantId,
-      patch as Partial<typeof existing>,
-      existing.version,
-    );
-    return reply.send({ data: { id, version: existing.version + 1 } });
+    const expectedVersion = body.version ?? existing.version;
+
+    await db.transaction(async (tx) => {
+      const ok = await repo.updateProduct(tx, id, ctx.tenantId, patch as Partial<typeof existing>, expectedVersion);
+      if (!ok) {
+        throw new HttpError(409, "VERSION_CONFLICT", "Product has been modified; retry with current version");
+      }
+
+      await enqueue(tx, {
+        topic: EVENTS.productUpdated,
+        eventType: EVENTS.productUpdated,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: { productId: id, patch, previousVersion: expectedVersion },
+      });
+    });
+
+    return reply.send({ data: { id, version: expectedVersion + 1 } });
   });
 
   // Soft delete (withdraws product)
@@ -166,12 +201,23 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Product not found");
-    await repo.softDelete(
-      { insert: (await import("../../shared/db.js")).db.insert, update: (await import("../../shared/db.js")).db.update, select: (await import("../../shared/db.js")).db.select },
-      id,
-      ctx.tenantId,
-      existing.version,
-    );
+
+    await db.transaction(async (tx) => {
+      const ok = await repo.softDelete(tx, id, ctx.tenantId, existing.version);
+      if (!ok) {
+        throw new HttpError(409, "VERSION_CONFLICT", "Product has been modified; retry with current version");
+      }
+
+      await enqueue(tx, {
+        topic: EVENTS.productDeleted,
+        eventType: EVENTS.productDeleted,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: { productId: id, lifecycleStatus: "withdrawn", previousVersion: existing.version },
+      });
+    });
+
     return reply.code(200).send({ data: { id, lifecycleStatus: "withdrawn" } });
   });
 
@@ -185,21 +231,40 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Product not found");
 
-    const { db: database } = await import("../../shared/db.js");
-    const { productAvailability } = await import("./schema.js");
-    const avId = crypto.randomUUID();
-    await database.insert(productAvailability).values({
-      id: avId,
-      tenantId: ctx.tenantId,
-      productId: id,
-      circleId: body.circleId ?? null,
-      regionId: body.regionId ?? null,
-      officeId: body.officeId ?? null,
-      available: body.available ? 1 : 0,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-      version: 1,
+    const avId = randomUUID();
+
+    await db.transaction(async (tx) => {
+      await tx.insert(productAvailability).values({
+        id: avId,
+        tenantId: ctx.tenantId,
+        productId: id,
+        circleId: body.circleId ?? null,
+        regionId: body.regionId ?? null,
+        officeId: body.officeId ?? null,
+        available: body.available ? 1 : 0,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+        version: 1,
+      });
+
+      // Availability is part of the product's published shape — reuse productUpdated.
+      await enqueue(tx, {
+        topic: EVENTS.productUpdated,
+        eventType: EVENTS.productUpdated,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: {
+          productId: id,
+          availabilityId: avId,
+          available: body.available,
+          ...(body.circleId !== undefined ? { circleId: body.circleId } : {}),
+          ...(body.regionId !== undefined ? { regionId: body.regionId } : {}),
+          ...(body.officeId !== undefined ? { officeId: body.officeId } : {}),
+        },
+      });
     });
+
     return reply.code(201).send({ data: { id: avId, productId: id } });
   });
 }
@@ -237,6 +302,3 @@ function buildHierarchyTree(products: FlatProduct[]): TreeNode[] {
   const roots = childrenMap.get("__root__") ?? [];
   return roots.map((r) => buildNode(r, 0));
 }
-
-// Needed for crypto.randomUUID()
-declare const crypto: { randomUUID(): string };

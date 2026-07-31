@@ -72,6 +72,30 @@ export async function listByProgram(
   return { rows, total };
 }
 
+/**
+ * All enrolments for the tenant. Backs GET /v1/loyalty/enrolments when no
+ * programId filter is supplied — that previously returned a hardcoded empty
+ * list, so callers could not enumerate a tenant's members at all.
+ */
+export async function listByTenant(
+  tenantId: string,
+  limit: number,
+  offset: number,
+): Promise<{ rows: EnrolmentRow[]; total: number }> {
+  const where: SQL = eq(enrolments.tenantId, tenantId);
+
+  const rows = await scopedRead((tx) =>
+    tx.select().from(enrolments).where(where).orderBy(desc(enrolments.enrolledAt)).limit(limit).offset(offset),
+  );
+
+  const countResult = await scopedRead((tx) =>
+    tx.select({ count: sql<number>`count(*)::int` }).from(enrolments).where(where),
+  );
+  const total = countResult[0]?.count ?? 0;
+
+  return { rows, total };
+}
+
 export async function listByProfile(
   tenantId: string,
   profileId: string,

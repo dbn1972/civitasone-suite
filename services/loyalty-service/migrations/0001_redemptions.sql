@@ -42,4 +42,4 @@ CREATE POLICY loyalty_redemptions_tenant_isolation ON loyalty.redemptions
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.redemptions TO loyalty_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'loyalty_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON loyalty.redemptions TO loyalty_svc; END IF; END $grant$;

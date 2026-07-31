@@ -2,8 +2,6 @@ import { eq, and, sql, lte, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { rates, type RateRow, type RateInsert } from "./schema.js";
 
-export type Writer = { insert: ScopedTx["insert"]; update: ScopedTx["update"]; select: ScopedTx["select"] };
-
 export async function findById(id: string, tenantId: string): Promise<RateRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(rates)
@@ -55,13 +53,18 @@ export async function findCurrentRate(productId: string, tenantId: string): Prom
   return rows[0] ?? null;
 }
 
-export async function insertRate(tx: Writer, row: RateInsert): Promise<void> {
+export async function insertRate(tx: ScopedTx, row: RateInsert): Promise<void> {
   await tx.insert(rates).values(row);
 }
 
-export async function updateRate(tx: Writer, id: string, tenantId: string, patch: Partial<RateInsert>, expectedVersion: number): Promise<boolean> {
-  await tx.update(rates)
-    .set({ ...patch, updatedAt: new Date(), version: expectedVersion + 1 })
-    .where(and(eq(rates.id, id), eq(rates.tenantId, tenantId), eq(rates.version, expectedVersion)));
-  return true;
+/**
+ * Optimistic-locked update. Returns false when the expected version no longer
+ * matches (0 rows updated) so the route can answer 409.
+ */
+export async function updateRate(tx: ScopedTx, id: string, tenantId: string, patch: Partial<RateInsert>, expectedVersion: number): Promise<boolean> {
+  const result = await tx.update(rates)
+    .set({ ...patch, updatedAt: new Date(), version: sql`${rates.version} + 1` })
+    .where(and(eq(rates.id, id), eq(rates.tenantId, tenantId), eq(rates.version, expectedVersion)))
+    .returning({ id: rates.id });
+  return result.length > 0;
 }

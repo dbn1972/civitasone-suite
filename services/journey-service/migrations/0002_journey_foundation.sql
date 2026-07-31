@@ -39,7 +39,7 @@ CREATE POLICY step_executions_tenant_isolation ON journey.step_executions
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON journey.step_executions TO journey_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'journey_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON journey.step_executions TO journey_svc; END IF; END $grant$;
 
 -- ── Triggers table ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS journey.triggers (
@@ -70,7 +70,7 @@ CREATE POLICY triggers_tenant_isolation ON journey.triggers
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON journey.triggers TO journey_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'journey_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON journey.triggers TO journey_svc; END IF; END $grant$;
 
 -- ── Journey Executions table ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS journey.journey_executions (
@@ -103,4 +103,4 @@ CREATE POLICY journey_exec_tenant_isolation ON journey.journey_executions
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON journey.journey_executions TO journey_svc;
+DO $grant$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'journey_svc') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON journey.journey_executions TO journey_svc; END IF; END $grant$;
