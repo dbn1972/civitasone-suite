@@ -19,6 +19,14 @@ export const EVENTS = {
   recommendationRejected: "recommendation.nba.rejected",
   /** Account health score was recomputed. */
   healthScoreUpdated: "recommendation.health.updated",
+  /** A cross-sell matrix rule was created. Payload: { matrixId, triggerProductId, recommendedProductId, segment, channel, priority }. */
+  matrixEntryCreated: "recommendation.matrix.created",
+  /** A cross-sell matrix rule was updated. Payload: { matrixId, patch }. */
+  matrixEntryUpdated: "recommendation.matrix.updated",
+  /** A cross-sell matrix rule was removed. Payload: { matrixId }. */
+  matrixEntryDeleted: "recommendation.matrix.deleted",
+  /** Feedback was recorded against a served recommendation. Payload: { feedbackId, recommendationId, action, hasReason }. */
+  feedbackRecorded: "recommendation.feedback.recorded",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

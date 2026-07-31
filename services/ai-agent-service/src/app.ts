@@ -3,6 +3,7 @@ import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import { createTenantTxHook } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
@@ -29,22 +30,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue },
   });
 
+  // Uniform error envelope: ZodError → 400, HttpError → mapped status, else 500.
+  registerSchemaErrorHandler(app, HttpError);
+
   await app.register(chatRoutes);
   await app.register(copilotRoutes);
   await app.register(agentRoutes);
   await app.register(governanceRoutes);
   await app.register(guardrailRoutes);
-
-  app.setErrorHandler((error, _req, reply) => {
-    if (error instanceof HttpError) {
-      return reply.status(error.status).send({ error: { code: error.code, message: error.message } });
-    }
-    if (error.validation) {
-      return reply.status(400).send({ error: { code: "VALIDATION_ERROR", message: error.message } });
-    }
-    reply.log.error(error);
-    return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "unexpected error" } });
-  });
 
   return app;
 }
