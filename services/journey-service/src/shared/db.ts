@@ -6,11 +6,13 @@ import { createTenantDb } from "@civitasone/db";
 import { schema as journeysModule } from "../modules/journeys/schema.js";
 import { schema as stepsModule } from "../modules/steps/schema.js";
 import { schema as triggersModule } from "../modules/triggers/schema.js";
+import { schema as executionsModule } from "../modules/executions/schema.js";
 
 const SCHEMA = {
   ...journeysModule,
   ...stepsModule,
   ...triggersModule,
+  ...executionsModule,
 };
 
 const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb({ schema: SCHEMA });
