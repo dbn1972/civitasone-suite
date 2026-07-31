@@ -9,7 +9,10 @@ export const rates = catalogueSchema.table("rates", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
   productId: uuid("product_id").notNull(),
+  /** Start of effective period (inclusive). */
   effectiveDate: date("effective_date").notNull(),
+  /** End of effective period (inclusive). Null = open-ended / still current. */
+  effectiveTo: date("effective_to"),
   /** Rate value stored in minor units (paise/cents) as bigint for precision. */
   rateValue: bigint("rate_value", { mode: "bigint" }).notNull(),
   source: varchar("source", { length: 128 }).notNull(),

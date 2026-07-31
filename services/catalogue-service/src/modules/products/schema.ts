@@ -30,4 +30,22 @@ export const products = catalogueSchema.table("products", {
 export type ProductRow = typeof products.$inferSelect;
 export type ProductInsert = typeof products.$inferInsert;
 
-export const schema = { products };
+export const productAvailability = catalogueSchema.table("product_availability", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  productId: uuid("product_id").notNull(),
+  circleId: uuid("circle_id"),
+  regionId: uuid("region_id"),
+  officeId: uuid("office_id"),
+  available: integer("available").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export type ProductAvailabilityRow = typeof productAvailability.$inferSelect;
+export type ProductAvailabilityInsert = typeof productAvailability.$inferInsert;
+
+export const schema = { products, productAvailability };
