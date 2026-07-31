@@ -9,10 +9,10 @@
  * payroll, what their default probation period is, etc.
  */
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
@@ -125,5 +125,15 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder;
     await db.transaction((tx) => tx.update(employeeTypeMaster).set(patch as any).where(eq(employeeTypeMaster.id, id)));
     return reply.send({ id, status: "updated" });
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    }
+    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId });
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
   });
 }

@@ -572,6 +572,83 @@ describe("POST /v1/hrms/consultant-invoices/:invId/reject", () => {
   });
 });
 
+describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge cases", () => {
+  it("201 — submit with all optional fields (periodFrom, periodTo, description, gstin, sacCode, remarks)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
+      headers: auth(MAKER), payload: {
+        invoiceNo: "INV-FULL", invoiceDate: "2026-06-15", grossMinor: 2000000,
+        gstApplicable: true, gstRateBps: 1800,
+        periodFrom: "2026-06-01", periodTo: "2026-06-30",
+        description: "Monthly consulting services", gstin: "27AABCU9603R1ZM",
+        sacCode: "998311", remarks: "June invoice",
+      },
+    });
+    expect(r.statusCode).toBe(201);
+    expect(H.insertInvoiceMock).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("201 — falls back to employee gstin/sacCode when not provided in body", async () => {
+    H.scopedReadMock.mockResolvedValue([employee({ gstin: "07AAACR5055K1Z5", sacCode: "998312" })]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
+      headers: auth(MAKER), payload: { invoiceNo: "INV-EMP", invoiceDate: "2026-06-15", grossMinor: 1000000 },
+    });
+    expect(r.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it("201 — resolver failure allows submission (fail-open)", async () => {
+    H.loadResolverMock.mockRejectedValue(new Error("DB unavailable"));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
+      headers: auth(MAKER), payload: { invoiceNo: "INV-F", invoiceDate: "2026-06-15", grossMinor: 500000 },
+    });
+    expect(r.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it("201 — invoice in Jan (month < 4) uses previous calendar year as FY start", async () => {
+    // This exercises the financialYearWindow branch where month < 4
+    H.findInvoiceMock.mockResolvedValue(invoice({ status: "verified", verifiedBy: MAKER, invoiceDate: "2027-01-15" }));
+    H.ytdMock.mockResolvedValue(4_000_000n);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
+      headers: auth(CHECKER), payload: {},
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().tdsApplied).toBe(true);
+    await app.close();
+  });
+
+  it("500 — unhandled error from insert propagates through error handler", async () => {
+    H.insertInvoiceMock.mockRejectedValue(new Error("connection reset"));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
+      headers: auth(MAKER), payload: { invoiceNo: "INV-ERR", invoiceDate: "2026-06-15", grossMinor: 1000 },
+    });
+    expect(r.statusCode).toBe(500);
+    expect(r.json().code).toBe("INTERNAL");
+    await app.close();
+  });
+
+  it("400 — gstRateBps exceeds 10000", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
+      headers: auth(MAKER), payload: { invoiceNo: "INV-X", invoiceDate: "2026-06-15", grossMinor: 1000, gstRateBps: 20000 },
+    });
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
 describe("POST /v1/hrms/consultant-invoices/:invId/mark-paid", () => {
   it("200 — marks an approved invoice as paid", async () => {
     H.findInvoiceMock.mockResolvedValue(invoice({ status: "approved", netPayableMinor: 5_400_000n }));

@@ -113,6 +113,67 @@ describe("GET /v1/hrms/rti/requests", () => {
     await app.close();
   });
 
+  it("marks overdue for open requests past due date", async () => {
+    H.listRti.mockResolvedValue([rtiRow({ status: "filed", dueDate: "2020-01-01" })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data[0].overdue).toBe(true);
+    expect(r.json().data[0].daysToDue).toBeLessThan(0);
+    await app.close();
+  });
+
+  it("does not mark overdue for closed requests past due date", async () => {
+    H.listRti.mockResolvedValue([rtiRow({ status: "closed", dueDate: "2020-01-01" })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data[0].overdue).toBe(false);
+    await app.close();
+  });
+
+  it("does not mark overdue for responded requests", async () => {
+    H.listRti.mockResolvedValue([rtiRow({ status: "responded", dueDate: "2020-01-01" })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data[0].overdue).toBe(false);
+    await app.close();
+  });
+
+  it("marks not overdue for open requests before due date", async () => {
+    H.listRti.mockResolvedValue([rtiRow({ status: "assigned", dueDate: "2099-12-31" })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data[0].overdue).toBe(false);
+    expect(r.json().data[0].daysToDue).toBeGreaterThan(0);
+    await app.close();
+  });
+
+  it("allows hr_officer role", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests", headers: auth(USER, ["hr_officer"]) });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("allows super_admin role", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests", headers: auth(USER, ["super_admin"]) });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("returns empty data array when no requests exist", async () => {
+    H.listRti.mockResolvedValue([]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data).toEqual([]);
+    await app.close();
+  });
+
   it("returns 401 without token", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/rti/requests" });
@@ -136,6 +197,34 @@ describe("GET /v1/hrms/rti/requests/:id", () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().data.id).toBe(RTI_ID);
     expect(r.json().data.overdue).toBeDefined();
+    await app.close();
+  });
+
+  it("computes overdue=true for open request past due date", async () => {
+    H.getRti.mockResolvedValue(rtiRow({ status: "assigned", dueDate: "2020-01-01" }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/rti/requests/${RTI_ID}`, headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.overdue).toBe(true);
+    await app.close();
+  });
+
+  it("computes overdue=false for closed request past due date", async () => {
+    H.getRti.mockResolvedValue(rtiRow({ status: "closed", dueDate: "2020-01-01" }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/rti/requests/${RTI_ID}`, headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.overdue).toBe(false);
+    await app.close();
+  });
+
+  it("computes positive daysToDue for future due date", async () => {
+    H.getRti.mockResolvedValue(rtiRow({ status: "filed", dueDate: "2099-12-31" }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/rti/requests/${RTI_ID}`, headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.daysToDue).toBeGreaterThan(0);
+    expect(r.json().data.overdue).toBe(false);
     await app.close();
   });
 
@@ -199,6 +288,31 @@ describe("POST /v1/hrms/rti/requests", () => {
     await app.close();
   });
 
+  it("accepts optional applicantContact field", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, applicantContact: "sita@example.com" } });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().status).toBe("filed");
+    await app.close();
+  });
+
+  it("computes SLA correctly for month boundary", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, receivedDate: "2026-01-31", slaDays: 30 } });
+    expect(r.statusCode).toBe(201);
+    // Jan 31 + 30 days = Mar 2 (non-leap year 2026)
+    expect(r.json().dueDate).toBe("2026-03-02");
+    await app.close();
+  });
+
+  it("handles slaDays = 1", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, receivedDate: "2026-06-15", slaDays: 1 } });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().dueDate).toBe("2026-06-16");
+    await app.close();
+  });
+
   it("returns 400 on invalid body (missing required fields)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { referenceNo: "X" } });
@@ -210,6 +324,27 @@ describe("POST /v1/hrms/rti/requests", () => {
   it("returns 400 on invalid date format", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, receivedDate: "not-a-date" } });
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns 400 when slaDays exceeds max (60)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, slaDays: 61 } });
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns 400 when slaDays is zero", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, slaDays: 0 } });
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns 400 when slaDays is negative", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, slaDays: -5 } });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
