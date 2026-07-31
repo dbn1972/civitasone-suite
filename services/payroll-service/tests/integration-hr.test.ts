@@ -46,7 +46,7 @@ async function wipe() {
 
 describe("HR integration consumers", () => {
   beforeAll(async () => { await wipe(); });
-  afterAll(async () => { await wipe(); await sqlClient.end(); });
+  afterAll(async () => { await wipe(); });
 
   it("accumulates LOP days from hrms.leave.approved", async () => {
     const q = wireTenantAwareQueue(new MemoryQueue());
@@ -145,5 +145,141 @@ describe("HR integration consumers", () => {
       tx.select().from(payrollRuns).where(eq(payrollRuns.id, SELF_RUN))));
     expect(rows[0]?.status).toBe("processing"); // unchanged — self-approval forbidden
     expect(rows[0]?.approvedBy ?? null).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Additional integration consumer tests for coverage
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("HR integration consumers — attendance & idempotency", () => {
+  beforeAll(async () => { await wipe(); });
+  afterAll(async () => { await wipe(); await sqlClient.end(); });
+
+  it("accumulates LOP days from hrms.attendance.marked (absent)", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerIntegrationConsumers(q);
+    await q.start();
+
+    const msgId = "cccccccc-3333-4000-8000-000000000033";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, msgId));
+    }));
+
+    await q.publish(CONSUMED_EVENTS.attendanceMarked, {
+      messageId: msgId,
+      type: CONSUMED_EVENTS.attendanceMarked,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: "corr-att",
+      schemaVersion: "1.0",
+      payload: { employeeId: EMP_ID, attendanceDate: "2025-06-15", status: "absent" },
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+    await q.stop();
+
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollLopLedger)
+        .where(eq(payrollLopLedger.tenantId, TENANT))));
+    expect(rows.some((r) => r.source === "attendance")).toBe(true);
+  });
+
+  it("skips attendance events that are not absent/half_day", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerIntegrationConsumers(q);
+    await q.start();
+
+    const msgId = "dddddddd-4444-4000-8000-000000000033";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, msgId));
+      await tx.delete(payrollLopLedger).where(eq(payrollLopLedger.tenantId, TENANT));
+    }));
+
+    await q.publish(CONSUMED_EVENTS.attendanceMarked, {
+      messageId: msgId,
+      type: CONSUMED_EVENTS.attendanceMarked,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: "corr-att-present",
+      schemaVersion: "1.0",
+      payload: { employeeId: EMP_ID, attendanceDate: "2025-06-16", status: "present" },
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+    await q.stop();
+
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollLopLedger)
+        .where(eq(payrollLopLedger.tenantId, TENANT))));
+    // No new LOP entry for "present" status
+    expect(rows.filter((r) => r.employeeId === EMP_ID && r.month === "2025-06")).toHaveLength(0);
+  });
+
+  it("idempotency: duplicate message is skipped (no double LOP)", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerIntegrationConsumers(q);
+    await q.start();
+
+    const msgId = "eeeeeeee-5555-4000-8000-000000000033";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, msgId));
+      await tx.delete(payrollLopLedger).where(eq(payrollLopLedger.tenantId, TENANT));
+    }));
+
+    const msg = {
+      messageId: msgId,
+      type: CONSUMED_EVENTS.leaveApproved,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: "corr-idem",
+      schemaVersion: "1.0",
+      payload: { employeeId: EMP_ID, daysApplied: 3, fromDate: "2025-07-01" },
+    };
+
+    // Publish twice
+    await q.publish(CONSUMED_EVENTS.leaveApproved, msg);
+    await new Promise((r) => setTimeout(r, 200));
+    await q.publish(CONSUMED_EVENTS.leaveApproved, msg);
+    await new Promise((r) => setTimeout(r, 200));
+    await q.stop();
+
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(payrollLopLedger)
+        .where(eq(payrollLopLedger.tenantId, TENANT))));
+    // Should only have 1 entry (3 days), not 2 entries (6 days)
+    const empRows = rows.filter((r) => r.employeeId === EMP_ID && r.month === "2025-07");
+    expect(empRows).toHaveLength(1);
+    expect(empRows[0]?.lopDays).toBe(3);
+  });
+
+  it("handles hrms.employee.created as a no-op (idempotency registered)", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerIntegrationConsumers(q);
+    await q.start();
+
+    const msgId = "ffffffff-6666-4000-8000-000000000033";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, msgId));
+    }));
+
+    // Should not throw — just marks as processed
+    await q.publish(CONSUMED_EVENTS.employeeCreated, {
+      messageId: msgId,
+      type: CONSUMED_EVENTS.employeeCreated,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: "corr-emp-create",
+      schemaVersion: "1.0",
+      payload: { employeeId: EMP_ID, fullName: "Test Employee" },
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+    await q.stop();
+
+    // Verify it was marked as processed
+    const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(processed).where(eq(processed.messageId, msgId))));
+    expect(proc).toHaveLength(1);
   });
 });
