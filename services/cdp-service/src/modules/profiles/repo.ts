@@ -92,13 +92,37 @@ export async function markMerged(
   mergedLineage: Array<{ source: string; sourceId: string; timestamp: string }>,
   loserMergedFromIds: string[],
 ): Promise<void> {
+  // Merge lineage is transitive: absorbing a profile also absorbs whatever that
+  // profile had previously absorbed, otherwise the older ids are silently lost.
+  const appendedIds = [...new Set([loserId, ...loserMergedFromIds])];
+
+  // Each id is bound as `text` and assembled by jsonb_build_array. A parameter
+  // whose Postgres-inferred type is jsonb gets JSON-encoded by the driver on top
+  // of the encoding the caller already applied, which is how the previous
+  // `|| ${JSON.stringify([loserId])}::jsonb` form stored a jsonb *string*
+  // (["[\"<uuid>\"]"]) instead of a jsonb array. A text parameter is passed
+  // through verbatim, so the array is built server-side and unambiguously.
+  const appendedArray = sql`jsonb_build_array(${sql.join(
+    appendedIds.map((id) => sql`${id}::text`),
+    sql`, `,
+  )})`;
+
+  // Set-union server-side: keeps the winner's existing lineage, adds the new
+  // ids, and stays idempotent if the same merge is replayed. DISTINCT makes the
+  // element order value-sorted rather than insertion-ordered — lineage is a set,
+  // nothing depends on its order.
+  const unionedLineage = sql`(
+    SELECT COALESCE(jsonb_agg(DISTINCT elem), '[]'::jsonb)
+    FROM jsonb_array_elements(COALESCE(${profiles.mergedFromIds}, '[]'::jsonb) || ${appendedArray}) AS elem
+  )`;
+
   // Update winner with merged data
   await tx
     .update(profiles)
     .set({
       attributes: mergedAttributes,
       sourceLineage: mergedLineage,
-      mergedFromIds: sql`${profiles.mergedFromIds} || ${JSON.stringify([loserId])}::jsonb`,
+      mergedFromIds: unionedLineage,
       updatedAt: new Date(),
       version: sql`${profiles.version} + 1`,
     })

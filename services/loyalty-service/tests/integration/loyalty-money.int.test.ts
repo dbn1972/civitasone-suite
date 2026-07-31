@@ -11,13 +11,10 @@
  * above 2^53, plus the `points_balance >= 0` CHECK constraint that mocks can
  * never exercise.
  *
- * FINDING (see the "schema drift" test at the bottom): `loyalty.redemptions`
- * has a `member_id uuid NOT NULL` column with no default that the Drizzle table
- * definition in `src/modules/redemptions/schema.ts` does not model at all, so
- * `redemptionRepo.insert()` — and therefore POST /v1/loyalty/redeem — fails
- * against a real database with a NOT NULL violation. Fixing that needs a change
- * under `src/` or `migrations/`, which is out of scope for this change, so the
- * defect is reproduced and pinned here instead of being hidden.
+ * Also guards the two write paths that migration 0004 unblocked: the Drizzle
+ * table now models the (nullable) `member_id` column so `redemptionRepo.insert()`
+ * can write a row, and the status allowlist accepts `'voided'` so
+ * `redemptionRepo.voidRedemption()` can complete.
  *
  * Skips (does not fail) when Postgres is unreachable so a machine without the
  * dev database still gets a green suite.
@@ -131,27 +128,6 @@ async function accrue(enrolmentId: string, points: bigint): Promise<void> {
   );
 }
 
-/**
- * Insert a redemption row. This has to go through raw SQL rather than
- * `redemptionRepo.insert()` because that repo's Drizzle table omits the
- * NOT NULL `member_id` column — see the schema-drift test at the bottom of this
- * file. Everything downstream (void, balance restore, optimistic lock) is still
- * exercised through the real repo functions.
- */
-async function seedRedemption(
-  t: ScopedTx,
-  args: { id: string; member: Member; points: bigint; rewardType: string },
-): Promise<void> {
-  await t.execute(sql`
-    INSERT INTO loyalty.redemptions
-      (id, tenant_id, member_id, enrolment_id, points, reward_type, status, created_by, updated_by, version)
-    VALUES (
-      ${args.id}::uuid, ${TENANT}::uuid, ${args.member.profileId}::uuid, ${args.member.enrolmentId}::uuid,
-      ${args.points.toString()}::bigint, ${args.rewardType}, 'fulfilled', ${ACTOR}::uuid, ${ACTOR}::uuid, 1
-    )
-  `);
-}
-
 async function balanceOf(enrolmentId: string): Promise<bigint> {
   const row = await asTenant(TENANT, () => enrolmentRepo.findById(enrolmentId, TENANT));
   if (!row) throw new Error(`enrolment ${enrolmentId} not found`);
@@ -263,7 +239,17 @@ describe.skipIf(!reachable)("loyalty repo — real Postgres (money correctness)"
 
     await asTenant(TENANT, () =>
       tx(async (t) => {
-        await seedRedemption(t, { id: redemptionId, member, points, rewardType: "voucher" });
+        await redemptionRepo.insert(t, {
+          id: redemptionId,
+          tenantId: TENANT,
+          memberId: member.profileId,
+          enrolmentId,
+          points,
+          rewardType: "voucher",
+          status: "fulfilled",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        });
         const ok = await enrolmentRepo.adjustBalance(
           t,
           enrolmentId,
@@ -280,6 +266,7 @@ describe.skipIf(!reachable)("loyalty repo — real Postgres (money correctness)"
     const persisted = await asTenant(TENANT, () => redemptionRepo.findById(redemptionId, TENANT));
     expect(persisted?.points).toBe(points);
     expect(persisted?.status).toBe("fulfilled");
+    expect(persisted?.memberId).toBe(member.profileId);
     expect(persisted ? redemptionRepo.toView(persisted).points : "").toBe("400");
     // Lifetime points are unaffected by a redemption.
     const row = await asTenant(TENANT, () => enrolmentRepo.findById(enrolmentId, TENANT));
@@ -298,7 +285,17 @@ describe.skipIf(!reachable)("loyalty repo — real Postgres (money correctness)"
     await expect(
       asTenant(TENANT, () =>
         tx(async (t) => {
-          await seedRedemption(t, { id: redemptionId, member, points, rewardType: "voucher" });
+          await redemptionRepo.insert(t, {
+            id: redemptionId,
+            tenantId: TENANT,
+            memberId: member.profileId,
+            enrolmentId,
+            points,
+            rewardType: "voucher",
+            status: "fulfilled",
+            createdBy: ACTOR,
+            updatedBy: ACTOR,
+          });
           await enrolmentRepo.adjustBalance(t, enrolmentId, TENANT, -points, BigInt(0), enrolment?.version ?? 1);
         }),
       ),
@@ -320,7 +317,17 @@ describe.skipIf(!reachable)("loyalty repo — real Postgres (money correctness)"
 
     await asTenant(TENANT, () =>
       tx(async (t) => {
-        await seedRedemption(t, { id: redemptionId, member, points, rewardType: "cashback" });
+        await redemptionRepo.insert(t, {
+          id: redemptionId,
+          tenantId: TENANT,
+          memberId: member.profileId,
+          enrolmentId,
+          points,
+          rewardType: "cashback",
+          status: "fulfilled",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        });
         await enrolmentRepo.adjustBalance(t, enrolmentId, TENANT, -points, BigInt(0), beforeRedeem?.version ?? 1);
       }),
     );
@@ -374,57 +381,114 @@ describe.skipIf(!reachable)("loyalty repo — real Postgres (money correctness)"
     expect(await balanceOf(enrolmentId)).toBe(BigInt(100));
   });
 
-  it("FINDING: redemptionRepo.insert() cannot write a row — Drizzle schema omits NOT NULL member_id", async () => {
-    // `loyalty.redemptions.member_id` is `uuid NOT NULL` with no default
-    // (migrations/0001_redemptions.sql), but `redemptions` in
-    // src/modules/redemptions/schema.ts has no `memberId` column. So the INSERT
-    // that POST /v1/loyalty/redeem issues omits it and Postgres rejects the row.
-    // The mock-based suite could never see this because the db was faked.
-    // This assertion pins the defect; when the schema/migration is fixed this
-    // test will start failing and must be replaced with a positive assertion.
+  it("persists a redemption through redemptionRepo.insert(), with and without a member_id", async () => {
+    // `member_id` was NOT NULL with no default in 0001 while the Drizzle table
+    // did not model the column at all, so every insert this repo issued was
+    // rejected. 0004 relaxed the constraint and the column is now mapped, so
+    // both the enrolment-only and the denormalised-member shapes must persist.
     const member = await enrolMember();
 
-    await expect(
-      asTenant(TENANT, () =>
-        tx((t) =>
-          redemptionRepo.insert(t, {
-            id: randomUUID(),
-            tenantId: TENANT,
-            enrolmentId: member.enrolmentId,
-            points: BigInt(10),
-            rewardType: "voucher",
-            status: "fulfilled",
-            createdBy: ACTOR,
-            updatedBy: ACTOR,
-          }),
-        ),
+    const withMemberId = randomUUID();
+    await asTenant(TENANT, () =>
+      tx((t) =>
+        redemptionRepo.insert(t, {
+          id: withMemberId,
+          tenantId: TENANT,
+          memberId: member.profileId,
+          enrolmentId: member.enrolmentId,
+          points: BigInt(10),
+          rewardType: "voucher",
+          status: "fulfilled",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        }),
       ),
-    ).rejects.toThrow(/member_id/);
+    );
+
+    const persisted = await asTenant(TENANT, () => redemptionRepo.findById(withMemberId, TENANT));
+    expect(persisted).not.toBeNull();
+    expect(persisted?.memberId).toBe(member.profileId);
+    expect(persisted?.enrolmentId).toBe(member.enrolmentId);
+    expect(persisted?.points).toBe(BigInt(10));
+    expect(persisted?.status).toBe("fulfilled");
+    expect(persisted?.version).toBe(1);
+    // The view exposes memberId and keeps points a string on the wire.
+    const view = persisted ? redemptionRepo.toView(persisted) : null;
+    expect(view?.memberId).toBe(member.profileId);
+    expect(view?.points).toBe("10");
+
+    // Enrolment-only path: no profile id known, member_id stays null.
+    const withoutMemberId = randomUUID();
+    await asTenant(TENANT, () =>
+      tx((t) =>
+        redemptionRepo.insert(t, {
+          id: withoutMemberId,
+          tenantId: TENANT,
+          enrolmentId: member.enrolmentId,
+          points: BigInt(5),
+          rewardType: "voucher",
+          status: "fulfilled",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        }),
+      ),
+    );
+    const nullMember = await asTenant(TENANT, () => redemptionRepo.findById(withoutMemberId, TENANT));
+    expect(nullMember).not.toBeNull();
+    expect(nullMember?.memberId).toBeNull();
+    expect(nullMember ? redemptionRepo.toView(nullMember).memberId : undefined).toBeNull();
   });
 
-  it("FINDING: redemptionRepo.voidRedemption() writes a status the DB CHECK forbids", async () => {
-    // `loyalty_redemptions_status_check` allows only
-    // ('pending','fulfilled','cancelled','expired'), but voidRedemption() sets
-    // status = 'voided'. migrations/0002 added the voided_at / void_reason
-    // columns without widening the CHECK, so POST
-    // /v1/loyalty/redemptions/:id/void always fails against a real database.
-    // Pinned here; replace with a positive assertion once the constraint or the
-    // repo's status value is fixed.
+  it("voids a redemption end to end and keeps the optimistic lock honest", async () => {
+    // voidRedemption() writes status = 'voided', which the 0001 allowlist
+    // rejected until 0004 widened it.
     const member = await enrolMember();
     const redemptionId = randomUUID();
     const points = BigInt(25);
 
     await asTenant(TENANT, () =>
-      tx((t) => seedRedemption(t, { id: redemptionId, member, points, rewardType: "voucher" })),
+      tx((t) =>
+        redemptionRepo.insert(t, {
+          id: redemptionId,
+          tenantId: TENANT,
+          memberId: member.profileId,
+          enrolmentId: member.enrolmentId,
+          points,
+          rewardType: "voucher",
+          status: "fulfilled",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        }),
+      ),
     );
 
-    await expect(
-      asTenant(TENANT, () =>
-        tx((t) => redemptionRepo.voidRedemption(t, redemptionId, TENANT, "reason", ACTOR, 1)),
-      ),
-    ).rejects.toThrow(/loyalty_redemptions_status_check/);
+    const voided = await asTenant(TENANT, () =>
+      tx((t) => redemptionRepo.voidRedemption(t, redemptionId, TENANT, "customer changed mind", ACTOR, 1)),
+    );
+    expect(voided).toBe(true);
 
-    const still = await asTenant(TENANT, () => redemptionRepo.findById(redemptionId, TENANT));
-    expect(still?.status).toBe("fulfilled");
+    const row = await asTenant(TENANT, () => redemptionRepo.findById(redemptionId, TENANT));
+    expect(row?.status).toBe("voided");
+    expect(row?.voidReason).toBe("customer changed mind");
+    expect(row?.voidedAt).toBeInstanceOf(Date);
+    expect(row?.updatedBy).toBe(ACTOR);
+    // version + 1 is computed by the DB, not by the application.
+    expect(row?.version).toBe(2);
+    // Points are untouched by a void — only the balance restore moves them.
+    expect(row?.points).toBe(points);
+
+    const view = row ? redemptionRepo.toView(row) : null;
+    expect(view?.status).toBe("voided");
+    expect(view?.voidedAt).toEqual(expect.any(String));
+
+    // Replaying the void with the now-stale version matches no row, so a retry
+    // cannot re-void (and, upstream, cannot double-credit the member).
+    const replayed = await asTenant(TENANT, () =>
+      tx((t) => redemptionRepo.voidRedemption(t, redemptionId, TENANT, "retry", ACTOR, 1)),
+    );
+    expect(replayed).toBe(false);
+    const unchanged = await asTenant(TENANT, () => redemptionRepo.findById(redemptionId, TENANT));
+    expect(unchanged?.voidReason).toBe("customer changed mind");
+    expect(unchanged?.version).toBe(2);
   });
 });

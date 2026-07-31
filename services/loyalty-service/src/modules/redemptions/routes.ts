@@ -60,6 +60,9 @@ export async function redemptionRoutes(app: FastifyInstance): Promise<void> {
       await repo.insert(tx, {
         id,
         tenantId: ctx.tenantId,
+        // Denormalise the profile id so the legacy (tenant_id, member_id) index
+        // keeps resolving redemptions per member without a join to enrolments.
+        memberId: enrolment.profileId,
         enrolmentId: body.enrolmentId,
         points: pointsBigInt,
         rewardType: body.rewardType,
@@ -92,6 +95,7 @@ export async function redemptionRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({
       data: {
         id,
+        memberId: enrolment.profileId,
         enrolmentId: body.enrolmentId,
         points: body.points.toString(),
         rewardType: body.rewardType,
