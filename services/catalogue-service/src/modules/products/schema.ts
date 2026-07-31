@@ -1,0 +1,33 @@
+/**
+ * products module — Drizzle schema. 4-level product hierarchy with lifecycle management.
+ */
+import { pgSchema, uuid, varchar, integer, timestamp, jsonb, date } from "drizzle-orm/pg-core";
+
+export const catalogueSchema = pgSchema("catalogue");
+
+export const products = catalogueSchema.table("products", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: varchar("description", { length: 2000 }),
+  /** Level 1 grouping — product line (e.g. "Savings", "Loans", "Insurance"). */
+  lineId: uuid("line_id"),
+  /** Level 2 grouping — product family within a line. */
+  familyId: uuid("family_id"),
+  /** Level 3/4 — direct parent for sub-products / variants. */
+  parentId: uuid("parent_id"),
+  lifecycleStatus: varchar("lifecycle_status", { length: 32 }).notNull().default("draft"),
+  effectiveFrom: date("effective_from"),
+  effectiveTo: date("effective_to"),
+  regulatoryMetadata: jsonb("regulatory_metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export type ProductRow = typeof products.$inferSelect;
+export type ProductInsert = typeof products.$inferInsert;
+
+export const schema = { products };
