@@ -6,6 +6,8 @@ import { Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { AcceptedResponse } from "./types";
 
+type InvalidField = "code" | "name" | "category" | null;
+
 export function CreateRateHeadForm() {
   const router = useRouter();
   const [code, setCode] = useState("");
@@ -15,44 +17,45 @@ export function CreateRateHeadForm() {
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
-  const [message, setMessage] = useState<string | null>(null);
-  const [tone, setTone] = useState<"good" | "bad">("good");
-  const [invalidField, setInvalidField] = useState<"code" | "name" | "category" | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fieldErrorText, setFieldErrorText] = useState<string | null>(null);
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const codeId = useId();
   const nameId = useId();
   const categoryId = useId();
   const uomId = useId();
-  const errId = useId();
+  const codeErrId = useId();
+  const nameErrId = useId();
+  const categoryErrId = useId();
+  const successId = useId();
   const codeRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const categoryRef = useRef<HTMLInputElement>(null);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setMessage(null);
+    setSuccessMessage(null);
     if (!code.trim()) {
-      setTone("bad");
       setInvalidField("code");
-      setMessage("Rate head code is required.");
+      setFieldErrorText("Rate head code is required.");
       codeRef.current?.focus();
       return;
     }
     if (!name.trim()) {
-      setTone("bad");
       setInvalidField("name");
-      setMessage("Rate head name is required.");
+      setFieldErrorText("Rate head name is required.");
       nameRef.current?.focus();
       return;
     }
     if (!category.trim()) {
-      setTone("bad");
       setInvalidField("category");
-      setMessage("Category is required.");
+      setFieldErrorText("Category is required.");
       categoryRef.current?.focus();
       return;
     }
     setInvalidField(null);
+    setFieldErrorText(null);
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -71,8 +74,7 @@ export function CreateRateHeadForm() {
         }),
       });
       setConfirmOpen(false);
-      setTone("good");
-      setMessage(
+      setSuccessMessage(
         res.id
           ? `Rate head submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
           : "Rate head submitted.",
@@ -106,9 +108,14 @@ export function CreateRateHeadForm() {
                 maxLength={32}
                 aria-required="true"
                 aria-invalid={invalidField === "code" || undefined}
-                aria-describedby={invalidField === "code" ? errId : undefined}
+                aria-describedby={invalidField === "code" ? codeErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "code" && fieldErrorText && (
+                <p id={codeErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -122,9 +129,14 @@ export function CreateRateHeadForm() {
                 maxLength={100}
                 aria-required="true"
                 aria-invalid={invalidField === "name" || undefined}
-                aria-describedby={invalidField === "name" ? errId : undefined}
+                aria-describedby={invalidField === "name" ? nameErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "name" && fieldErrorText && (
+                <p id={nameErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={categoryId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -139,9 +151,14 @@ export function CreateRateHeadForm() {
                 placeholder="e.g. property_tax, water, sewerage"
                 aria-required="true"
                 aria-invalid={invalidField === "category" || undefined}
-                aria-describedby={invalidField === "category" ? errId : undefined}
+                aria-describedby={invalidField === "category" ? categoryErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "category" && fieldErrorText && (
+                <p id={categoryErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={uomId} style={{ fontSize: 13, fontWeight: 600 }}>Unit of Measure</label>
@@ -162,15 +179,9 @@ export function CreateRateHeadForm() {
             </button>
           </div>
 
-          {message && (
-            <p
-              id={errId}
-              role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? undefined : "polite"}
-              className={`pill ${tone}`}
-              style={{ width: "fit-content" }}
-            >
-              {message}
+          {successMessage && (
+            <p id={successId} role="status" aria-live="polite" className="pill good" style={{ width: "fit-content" }}>
+              {successMessage}
             </p>
           )}
         </div>

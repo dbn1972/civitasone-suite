@@ -49,8 +49,8 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
-  const [message, setMessage] = useState<string | null>(null);
-  const [tone, setTone] = useState<"good" | "bad">("good");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fieldErrorText, setFieldErrorText] = useState<string | null>(null);
   const [invalidField, setInvalidField] = useState<"annualRate" | "graceDays" | null>(null);
 
   const typeId = useId();
@@ -58,30 +58,31 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
   const graceId = useId();
   const capId = useId();
   const roundingId = useId();
-  const errId = useId();
+  const rateErrId = useId();
+  const graceErrId = useId();
+  const successId = useId();
   const rateRef = useRef<HTMLInputElement>(null);
   const graceRef = useRef<HTMLInputElement>(null);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setMessage(null);
+    setSuccessMessage(null);
 
     if (percentToBps(annualRate) === null) {
-      setTone("bad");
       setInvalidField("annualRate");
-      setMessage("Annual Interest Rate (%) is required and must be between 0.01% and 100%.");
+      setFieldErrorText("Annual Interest Rate (%) is required and must be between 0.01% and 100%.");
       rateRef.current?.focus();
       return;
     }
     if (toInt(graceDays) === null) {
-      setTone("bad");
       setInvalidField("graceDays");
-      setMessage("Grace Days is required and must be a whole number of days (0–365).");
+      setFieldErrorText("Grace Days is required and must be a whole number of days (0–365).");
       graceRef.current?.focus();
       return;
     }
 
     setInvalidField(null);
+    setFieldErrorText(null);
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -103,8 +104,7 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
         }),
       });
       setConfirmOpen(false);
-      setTone("good");
-      setMessage(
+      setSuccessMessage(
         res.id
           ? `Penalty rule submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
           : "Penalty rule submitted.",
@@ -157,9 +157,14 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
                 onChange={(e) => setAnnualRate(e.target.value)}
                 aria-required="true"
                 aria-invalid={invalidField === "annualRate" || undefined}
-                aria-describedby={invalidField === "annualRate" ? errId : undefined}
+                aria-describedby={invalidField === "annualRate" ? rateErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "annualRate" && fieldErrorText && (
+                <p id={rateErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -174,9 +179,14 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
                 onChange={(e) => setGraceDays(e.target.value)}
                 aria-required="true"
                 aria-invalid={invalidField === "graceDays" || undefined}
-                aria-describedby={invalidField === "graceDays" ? errId : undefined}
+                aria-describedby={invalidField === "graceDays" ? graceErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "graceDays" && fieldErrorText && (
+                <p id={graceErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -215,15 +225,9 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
             </button>
           </div>
 
-          {message && (
-            <p
-              id={errId}
-              role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? undefined : "polite"}
-              className={`pill ${tone}`}
-              style={{ width: "fit-content" }}
-            >
-              {message}
+          {successMessage && (
+            <p id={successId} role="status" aria-live="polite" className="pill good" style={{ width: "fit-content" }}>
+              {successMessage}
             </p>
           )}
         </div>

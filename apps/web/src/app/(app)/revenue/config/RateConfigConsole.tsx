@@ -33,6 +33,14 @@ function withStatus<T extends { isActive: boolean }>(rows: T[]): WithStatus<T>[]
   return rows.map((r) => ({ ...r, statusLabel: r.isActive ? "active" : "inactive" }));
 }
 
+/** Neutral display label for a type/kind enum — not a status, so no StatusPill color semantics. */
+function prettifyEnum(value: string): string {
+  return value
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export function RateConfigConsole({
   rateHeads,
   rateHeadsSource,
@@ -108,7 +116,7 @@ export function RateConfigConsole({
               ) : (
                 <DataTable<WithStatus<RateSlabRow>>
                   columns={[
-                    { key: "slabType", label: "Slab Type", cellType: "status" },
+                    { key: "slabType", label: "Slab Type", render: (r) => prettifyEnum(r.slabType) },
                     {
                       key: "bandFrom",
                       label: "Band From",
@@ -174,7 +182,7 @@ export function RateConfigConsole({
               ) : (
                 <DataTable<WithStatus<PenaltyRuleRow>>
                   columns={[
-                    { key: "interestType", label: "Interest Type", cellType: "status" },
+                    { key: "interestType", label: "Interest Type", render: (r) => prettifyEnum(r.interestType) },
                     { key: "annualRateBps", label: "Annual Rate", align: "right", render: (r) => formatBps(r.annualRateBps) },
                     { key: "graceDays", label: "Grace Days", align: "right" },
                     { key: "capMonths", label: "Cap (Months)", align: "right", render: (r) => r.capMonths ?? "—" },

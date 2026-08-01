@@ -25,13 +25,20 @@ function percentToBps(input: string): number | null {
   return Math.round(n * 100);
 }
 
-function toInt(input: string): number | null {
+/**
+ * Whole, non-negative day count, 0..365. The backend's
+ * `validUntilDaysBeforeDue` is `z.number().int().min(0).max(365)` with NO
+ * `.optional()` — this field is REQUIRED, not "leave blank to skip".
+ */
+function toRequiredInt(input: string): number | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
   const n = Number(trimmed);
-  if (!Number.isInteger(n) || n < 0) return null;
+  if (!Number.isInteger(n) || n < 0 || n > 365) return null;
   return n;
 }
+
+type InvalidField = "discount" | "validUntil" | null;
 
 export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebateRuleFormProps) {
   const router = useRouter();
@@ -41,29 +48,39 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
-  const [message, setMessage] = useState<string | null>(null);
-  const [tone, setTone] = useState<"good" | "bad">("good");
-  const [invalidField, setInvalidField] = useState<"discount" | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fieldErrorText, setFieldErrorText] = useState<string | null>(null);
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const typeId = useId();
   const discountId = useId();
   const validUntilId = useId();
-  const errId = useId();
+  const discountErrId = useId();
+  const validUntilErrId = useId();
+  const successId = useId();
   const discountRef = useRef<HTMLInputElement>(null);
+  const validUntilRef = useRef<HTMLInputElement>(null);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setMessage(null);
+    setSuccessMessage(null);
 
     if (percentToBps(discount) === null) {
-      setTone("bad");
       setInvalidField("discount");
-      setMessage("Discount (%) is required and must be between 0.01% and 100%.");
+      setFieldErrorText("Discount (%) is required and must be between 0.01% and 100%.");
       discountRef.current?.focus();
       return;
     }
 
+    if (toRequiredInt(validUntilDaysBeforeDue) === null) {
+      setInvalidField("validUntil");
+      setFieldErrorText("Valid Until (Days Before Due) is required and must be a whole number of days (0–365).");
+      validUntilRef.current?.focus();
+      return;
+    }
+
     setInvalidField(null);
+    setFieldErrorText(null);
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -72,19 +89,17 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
     setBusy(true);
     setDialogError(undefined);
     try {
-      const validUntil = toInt(validUntilDaysBeforeDue);
       const res = await browserJson<AcceptedResponse>("v1/revenue/rebate-rules", {
         method: "POST",
         body: JSON.stringify({
           rateHeadId,
           rebateType,
           discountBps: percentToBps(discount),
-          validUntilDaysBeforeDue: validUntil ?? undefined,
+          validUntilDaysBeforeDue: toRequiredInt(validUntilDaysBeforeDue),
         }),
       });
       setConfirmOpen(false);
-      setTone("good");
-      setMessage(
+      setSuccessMessage(
         res.id
           ? `Rebate rule submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
           : "Rebate rule submitted.",
@@ -136,21 +151,37 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
                 onChange={(e) => setDiscount(e.target.value)}
                 aria-required="true"
                 aria-invalid={invalidField === "discount" || undefined}
-                aria-describedby={invalidField === "discount" ? errId : undefined}
+                aria-describedby={invalidField === "discount" ? discountErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "discount" && fieldErrorText && (
+                <p id={discountErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={validUntilId} style={{ fontSize: 13, fontWeight: 600 }}>Valid Until (Days Before Due)</label>
+              <label htmlFor={validUntilId} style={{ fontSize: 13, fontWeight: 600 }}>
+                Valid Until (Days Before Due) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              </label>
               <input
                 id={validUntilId}
+                ref={validUntilRef}
                 inputMode="numeric"
                 value={validUntilDaysBeforeDue}
                 onChange={(e) => setValidUntilDaysBeforeDue(e.target.value)}
                 placeholder="e.g. 15"
+                aria-required="true"
+                aria-invalid={invalidField === "validUntil" || undefined}
+                aria-describedby={invalidField === "validUntil" ? validUntilErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "validUntil" && fieldErrorText && (
+                <p id={validUntilErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
           </div>
 
@@ -160,15 +191,9 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
             </button>
           </div>
 
-          {message && (
-            <p
-              id={errId}
-              role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? undefined : "polite"}
-              className={`pill ${tone}`}
-              style={{ width: "fit-content" }}
-            >
-              {message}
+          {successMessage && (
+            <p id={successId} role="status" aria-live="polite" className="pill good" style={{ width: "fit-content" }}>
+              {successMessage}
             </p>
           )}
         </div>
@@ -182,8 +207,8 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
         errorMessage={dialogError}
         description={
           <>
-            Create a <strong>{rebateType}</strong> rebate rule of <strong>{discount || "—"}%</strong> for{" "}
-            <strong>{rateHeadLabel}</strong>.
+            Create a <strong>{rebateType}</strong> rebate rule of <strong>{discount || "—"}%</strong>, valid until{" "}
+            <strong>{validUntilDaysBeforeDue || "—"}</strong> day(s) before due, for <strong>{rateHeadLabel}</strong>.
           </>
         }
         onConfirm={() => void createRebateRule()}

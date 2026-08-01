@@ -17,6 +17,8 @@ const SLAB_TYPES: { value: SlabType; label: string }[] = [
   { value: "band", label: "Band (slab-wise per unit)" },
 ];
 
+type InvalidField = "bandFrom" | "rateValue" | "effectiveFrom" | null;
+
 /** Rupees (as typed by the clerk) -> paise integer string. Never double-divide. */
 function rupeesToPaiseString(input: string): string | null {
   const trimmed = input.trim();
@@ -46,9 +48,9 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
-  const [message, setMessage] = useState<string | null>(null);
-  const [tone, setTone] = useState<"good" | "bad">("good");
-  const [invalidField, setInvalidField] = useState<"rateValue" | "bandFrom" | "bandTo" | "effectiveFrom" | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fieldErrorText, setFieldErrorText] = useState<string | null>(null);
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const typeId = useId();
   const bandFromId = useId();
@@ -56,21 +58,28 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
   const rateValueId = useId();
   const fromId = useId();
   const toId = useId();
-  const errId = useId();
+  const bandFromErrId = useId();
+  const rateValueErrId = useId();
+  const effectiveFromErrId = useId();
+  const rateValueHintId = useId();
+  const successId = useId();
   const rateValueRef = useRef<HTMLInputElement>(null);
   const bandFromRef = useRef<HTMLInputElement>(null);
   const fromRef = useRef<HTMLInputElement>(null);
 
   const rateValueLabel = slabType === "ad_valorem" ? "Rate (%)" : "Rate (₹)";
+  const rateValueHint =
+    slabType === "ad_valorem" ? "Enter a percentage from 0 to 100." : "Enter an amount in rupees.";
+  const rateValueDescribedBy =
+    invalidField === "rateValue" ? `${rateValueHintId} ${rateValueErrId}` : rateValueHintId;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setMessage(null);
+    setSuccessMessage(null);
 
     if (slabType === "band" && rupeesToPaiseString(bandFrom) === null) {
-      setTone("bad");
       setInvalidField("bandFrom");
-      setMessage("Band From (₹) is required for band slabs and must be a non-negative amount.");
+      setFieldErrorText("Band From (₹) is required for band slabs and must be a non-negative amount.");
       bandFromRef.current?.focus();
       return;
     }
@@ -78,9 +87,8 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
     const rateValuePaiseOrBps =
       slabType === "ad_valorem" ? percentToBpsString(rateValue) : rupeesToPaiseString(rateValue);
     if (rateValuePaiseOrBps === null) {
-      setTone("bad");
       setInvalidField("rateValue");
-      setMessage(
+      setFieldErrorText(
         slabType === "ad_valorem"
           ? "Rate (%) is required and must be between 0 and 100."
           : "Rate (₹) is required and must be a non-negative amount.",
@@ -90,14 +98,14 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
     }
 
     if (!effectiveFrom) {
-      setTone("bad");
       setInvalidField("effectiveFrom");
-      setMessage("Effective From date is required.");
+      setFieldErrorText("Effective From date is required.");
       fromRef.current?.focus();
       return;
     }
 
     setInvalidField(null);
+    setFieldErrorText(null);
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -126,8 +134,7 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
         body: JSON.stringify(body),
       });
       setConfirmOpen(false);
-      setTone("good");
-      setMessage(
+      setSuccessMessage(
         res.id
           ? `Rate slab submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
           : "Rate slab submitted.",
@@ -184,9 +191,14 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
                     onChange={(e) => setBandFrom(e.target.value)}
                     aria-required="true"
                     aria-invalid={invalidField === "bandFrom" || undefined}
-                    aria-describedby={invalidField === "bandFrom" ? errId : undefined}
+                    aria-describedby={invalidField === "bandFrom" ? bandFromErrId : undefined}
                     style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                   />
+                  {invalidField === "bandFrom" && fieldErrorText && (
+                    <p id={bandFromErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                      {fieldErrorText}
+                    </p>
+                  )}
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
                   <label htmlFor={bandToId} style={{ fontSize: 13, fontWeight: 600 }}>Band To (₹)</label>
@@ -214,9 +226,15 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
                 onChange={(e) => setRateValue(e.target.value)}
                 aria-required="true"
                 aria-invalid={invalidField === "rateValue" || undefined}
-                aria-describedby={invalidField === "rateValue" ? errId : undefined}
+                aria-describedby={rateValueDescribedBy}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              <span id={rateValueHintId} className="sr-only">{rateValueHint}</span>
+              {invalidField === "rateValue" && fieldErrorText && (
+                <p id={rateValueErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -231,9 +249,14 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
                 onChange={(e) => setEffectiveFrom(e.target.value)}
                 aria-required="true"
                 aria-invalid={invalidField === "effectiveFrom" || undefined}
-                aria-describedby={invalidField === "effectiveFrom" ? errId : undefined}
+                aria-describedby={invalidField === "effectiveFrom" ? effectiveFromErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {invalidField === "effectiveFrom" && fieldErrorText && (
+                <p id={effectiveFromErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {fieldErrorText}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -254,15 +277,9 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
             </button>
           </div>
 
-          {message && (
-            <p
-              id={errId}
-              role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? undefined : "polite"}
-              className={`pill ${tone}`}
-              style={{ width: "fit-content" }}
-            >
-              {message}
+          {successMessage && (
+            <p id={successId} role="status" aria-live="polite" className="pill good" style={{ width: "fit-content" }}>
+              {successMessage}
             </p>
           )}
         </div>

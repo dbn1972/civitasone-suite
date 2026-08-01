@@ -29,6 +29,30 @@ const slab: RateSlabRow = {
   isActive: true,
 };
 
+const flatSlab: RateSlabRow = {
+  id: "s2",
+  rateHeadId: "rh1",
+  slabType: "flat",
+  bandFrom: null,
+  bandTo: null,
+  rateValue: "1200",
+  effectiveFrom: "2026-04-01",
+  effectiveTo: null,
+  isActive: true,
+};
+
+const bandSlab: RateSlabRow = {
+  id: "s3",
+  rateHeadId: "rh1",
+  slabType: "band",
+  bandFrom: "0",
+  bandTo: "500000",
+  rateValue: "500",
+  effectiveFrom: "2026-04-01",
+  effectiveTo: null,
+  isActive: true,
+};
+
 const penalty: PenaltyRuleRow = {
   id: "p1",
   rateHeadId: "rh1",
@@ -86,10 +110,23 @@ describe("RateConfigConsole", () => {
     expect(screen.queryByText("No rate heads configured")).not.toBeInTheDocument();
   });
 
-  it("renders rate slabs with percent formatting for ad_valorem and money for flat/band", () => {
+  it("renders rate slabs with percent formatting for ad_valorem", () => {
     render(<RateConfigConsole {...baseProps()} slabs={[slab]} />);
     fireEvent.click(screen.getByText("Rate Slabs"));
     expect(screen.getByText("12%")).toBeInTheDocument();
+  });
+
+  it("renders flat and band slabs with money formatting (never a percent) for the same rateValue field", () => {
+    render(<RateConfigConsole {...baseProps()} slabs={[flatSlab, bandSlab]} />);
+    fireEvent.click(screen.getByText("Rate Slabs"));
+    // flatSlab.rateValue "1200" (paise) -> ₹12.00, NOT 12% — the unit swaps by slabType, not by value.
+    expect(screen.getByText("₹12.00")).toBeInTheDocument();
+    // bandSlab.rateValue "500" (paise) -> ₹5.00; bandFrom "0" -> ₹0.00; bandTo "500000" -> ₹5,000.00
+    expect(screen.getByText("₹5.00")).toBeInTheDocument();
+    expect(screen.getByText("₹5,000.00")).toBeInTheDocument();
+    // Slab type is shown as neutral text, not a colored status pill.
+    expect(screen.getByText("Flat")).toBeInTheDocument();
+    expect(screen.getByText("Band")).toBeInTheDocument();
   });
 
   it("renders an empty state for rate slabs when genuinely empty", () => {

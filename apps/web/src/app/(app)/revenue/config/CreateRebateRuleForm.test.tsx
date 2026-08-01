@@ -20,6 +20,14 @@ describe("CreateRebateRuleForm", () => {
     expect(screen.getByText(/Discount \(%\) is required/)).toBeInTheDocument();
   });
 
+  it("requires Valid Until (Days Before Due) — blank must NOT pass client validation, since the backend field is not optional", () => {
+    render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
+    fireEvent.change(screen.getByLabelText(/^Discount/), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
+    expect(screen.getByText(/Valid Until \(Days Before Due\) is required/)).toBeInTheDocument();
+    expect(screen.queryByText("Create this rebate rule?")).not.toBeInTheDocument();
+  });
+
   it("converts the discount percent to basis points and creates the rule on confirm (happy path)", async () => {
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -49,6 +57,7 @@ describe("CreateRebateRuleForm", () => {
 
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Discount/), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/^Valid Until/), { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
 
     await waitFor(() => expect(screen.getByText("Create this rebate rule?")).toBeInTheDocument());
