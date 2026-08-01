@@ -48,6 +48,7 @@ const financeSections: NavTile[] = [
 	{ title: "Fiscal Years", description: "Fiscal year setup and activation.", href: "/finance/fiscal-years" },
 	{ title: "New Voucher", description: "Draft and submit a double-entry journal voucher.", href: "/finance/accounting/vouchers/new" },
 	{ title: "Financial Statements", description: "Receipts, payments, and balance sheet summary.", href: "/finance/accounting/financial-statements" },
+	{ title: "Period Close", description: "Soft-close, hard-close, and reopen accounting periods.", href: "/finance/period-close" },
 	{ title: "Payments", description: "Track outgoing and incoming payments with approvals.", href: "/finance/payments" },
 
 	// Audit & Compliance
