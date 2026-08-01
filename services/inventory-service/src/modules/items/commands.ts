@@ -68,7 +68,12 @@ export async function createReservation(ctx: RequestContext, body: CreateReserva
 }
 
 export async function releaseReservation(ctx: RequestContext, id: string, body: ReleaseReservationBody): Promise<Accepted> {
-  await publish(COMMANDS.reservationRelease, ctx, id, { id, tenantId: ctx.tenantId, ...body });
+  // A fresh messageId for the command envelope — the target reservation id
+  // lives in the payload. Reusing the reservation id as the messageId would
+  // collide with the id already recorded by reservation.create in the
+  // idempotency inbox, which would silently dedupe (drop) the release.
+  const messageId = randomUUID();
+  await publish(COMMANDS.reservationRelease, ctx, messageId, { id, tenantId: ctx.tenantId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
@@ -79,6 +84,9 @@ export async function createGoodsReturn(ctx: RequestContext, body: CreateGoodsRe
 }
 
 export async function inspectGoodsReturn(ctx: RequestContext, id: string, body: QcInspectionBody): Promise<Accepted> {
-  await publish(COMMANDS.goodsReturnInspect, ctx, id, { id, tenantId: ctx.tenantId, inspectedBy: ctx.actorId, ...body });
+  // Same fresh-messageId reasoning as releaseReservation above: the goods
+  // return id already appears as a messageId from goods_return.create.
+  const messageId = randomUUID();
+  await publish(COMMANDS.goodsReturnInspect, ctx, messageId, { id, tenantId: ctx.tenantId, inspectedBy: ctx.actorId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
