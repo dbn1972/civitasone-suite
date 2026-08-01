@@ -20,7 +20,7 @@ describe("PaymentAdviceForm", () => {
 
   it("requires the core fields before opening the confirm dialog", () => {
     render(<PaymentAdviceForm />);
-    fireEvent.click(screen.getByText("Generate Payment Advice"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Payment Advice" }));
     expect(screen.getByText(/Bill ID, payee name, account number/)).toBeInTheDocument();
   });
 
@@ -39,7 +39,7 @@ describe("PaymentAdviceForm", () => {
 
     render(<PaymentAdviceForm />);
     fillValidForm();
-    fireEvent.click(screen.getByText("Generate Payment Advice"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Payment Advice" }));
 
     await waitFor(() => expect(screen.getByText("Generate this payment advice?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Generate advice"));
@@ -54,7 +54,7 @@ describe("PaymentAdviceForm", () => {
 
     render(<PaymentAdviceForm />);
     fillValidForm();
-    fireEvent.click(screen.getByText("Generate Payment Advice"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Payment Advice" }));
 
     await waitFor(() => expect(screen.getByText("Generate this payment advice?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Generate advice"));

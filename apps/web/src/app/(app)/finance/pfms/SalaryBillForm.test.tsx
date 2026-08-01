@@ -11,7 +11,7 @@ describe("SalaryBillForm", () => {
 
   it("requires all core fields before opening the confirm dialog", () => {
     render(<SalaryBillForm />);
-    fireEvent.click(screen.getByText("Generate Salary Bill"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Salary Bill" }));
     expect(screen.getByText(/Month \(YYYY-MM\), department ID \(UUID\)/)).toBeInTheDocument();
   });
 
@@ -35,7 +35,7 @@ describe("SalaryBillForm", () => {
     fireEvent.change(screen.getByLabelText(/Total Amount, in paise/), { target: { value: "1000000" } });
     fireEvent.change(screen.getByLabelText(/Employee Count/), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText(/DDO Code/), { target: { value: "DDO01" } });
-    fireEvent.click(screen.getByText("Generate Salary Bill"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Salary Bill" }));
 
     await waitFor(() => expect(screen.getByText("Submit this salary bill to treasury?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Submit salary bill"));
@@ -54,7 +54,7 @@ describe("SalaryBillForm", () => {
     fireEvent.change(screen.getByLabelText(/Total Amount, in paise/), { target: { value: "1000000" } });
     fireEvent.change(screen.getByLabelText(/Employee Count/), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText(/DDO Code/), { target: { value: "DDO01" } });
-    fireEvent.click(screen.getByText("Generate Salary Bill"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Salary Bill" }));
 
     await waitFor(() => expect(screen.getByText("Submit this salary bill to treasury?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Submit salary bill"));
