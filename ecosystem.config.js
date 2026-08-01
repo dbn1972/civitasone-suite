@@ -221,10 +221,10 @@ function svc(name, port, dbUser, dbName, extra = {}) {
   };
 }
 
-function worker(name, dbUser, dbName, extra = {}) {
+function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js") {
   return {
     name: `${name}-worker`,
-    script: "dist/worker.js",
+    script: scriptFile,
     cwd: `${BASE}/services/${name}-service`,
     log_file: `${LOG_DIR}/${name}-worker.log`,
     error_file: `${LOG_DIR}/${name}-worker-error.log`,
@@ -329,7 +329,20 @@ module.exports = {
     worker("telephony",    "telephony_svc",    "civitas_telephony"),
     worker("ml",           "ml_svc",           "civitas_ml"),
     worker("meeting",      "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
-    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY }),
+    // court-service is the only service in the fleet whose worker.ts is split
+    // into a pure, side-effect-free module (src/worker.ts, exports
+    // startWorker() for in-process test use) plus a thin process entrypoint
+    // (src/worker-main.ts) that actually calls it — matching its own
+    // package.json ("worker": "tsx src/worker-main.ts"). Every other service's
+    // worker.ts IS the entrypoint (runs queue.start()/startRelay()/etc. at
+    // module top level), so this generic worker() helper's default
+    // "dist/worker.js" is correct for them but WRONG for court: pointed at
+    // dist/worker.js, pm2 loaded a module that only DEFINES startWorker() and
+    // never calls it, so nothing kept the event loop alive — Node exited(0)
+    // as soon as the module finished evaluating, and pm2's autorestart looped
+    // it forever (restarts climbing, status "waiting restart"). Point pm2 at
+    // the same compiled entrypoint the "pnpm worker" script uses.
+    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY }, "dist/worker-main.js"),
     worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
     worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
