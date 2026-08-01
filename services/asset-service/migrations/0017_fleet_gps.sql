@@ -1,4 +1,8 @@
 SET lock_timeout = '5s';
+-- Fix (facade closure): the original migration referenced schema `asset`
+-- without ever creating it, so this file always failed via migrate-all.mjs
+-- ([ERR], swallowed) and none of the tables below ever existed.
+CREATE SCHEMA IF NOT EXISTS asset;
 CREATE TABLE IF NOT EXISTS asset.fleet_vehicles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
   registration_no varchar(20) NOT NULL, make varchar(64), model varchar(64),
