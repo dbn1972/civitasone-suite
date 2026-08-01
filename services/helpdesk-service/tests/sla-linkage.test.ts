@@ -246,7 +246,11 @@ describe("HD2 — assignment consumer", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, assigneeId: agent },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    // Bumped from 50ms -> 200ms (matches the inter-publish wait the sibling
+    // idempotency tests in this file use): under full-suite load this handler
+    // occasionally hadn't landed by 50ms, producing a null-row flake that
+    // passed reliably in isolation. Pure test-timing fix, no consumer/repo change.
+    await new Promise((r) => setTimeout(r, 200));
     const row = await findRowAsTenant(id, TENANT_A);
     expect(row!.assigneeId).toBe(agent);
     expect(row!.status).toBe("assigned");

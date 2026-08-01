@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import * as repo from "./repo.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
 const HELPDESK_ADMIN_ROLES = ["helpdesk_admin", "super_admin"];
@@ -60,8 +61,8 @@ export async function notesRoutes(app: FastifyInstance): Promise<void> {
     // Read-through cache with visibility filter
     const cacheKey = cache.makeKey(ctx.tenantId, "ticket_notes", `${id}:${isAdmin ? "all" : "public"}`);
     const data = await cache.getOrLoad<{ data: unknown[] }>(cacheKey, async () => {
-      // In production this hits the repo; for now return empty
-      return { data: [] };
+      const rows = await repo.listNotes(ctx.tenantId, id, isAdmin);
+      return { data: rows };
     });
 
     return reply.send(data);

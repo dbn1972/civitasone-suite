@@ -14,6 +14,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { savedViews, type SavedViewRow } from "./views-schema.js";
+import { VIEW_COMMANDS } from "../../topics.js";
 
 const ALLOWED_ROLES = ["helpdesk_admin", "helpdesk_user", "super_admin", "tenant_admin"];
 
@@ -35,13 +36,6 @@ const updateViewBody = z.object({
 const viewIdParam = z.object({
   id: z.string().uuid(),
 });
-
-/** Command topics for saved views (local to this module). */
-const VIEW_COMMANDS = {
-  create: "helpdesk.view.create",
-  update: "helpdesk.view.update",
-  delete: "helpdesk.view.delete",
-} as const;
 
 export async function viewsRoutes(app: FastifyInstance): Promise<void> {
   // List views: user's own views + shared views from the same tenant (direct read)

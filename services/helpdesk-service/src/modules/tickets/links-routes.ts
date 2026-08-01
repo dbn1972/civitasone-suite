@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import * as repo from "./repo.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
 
@@ -57,7 +58,8 @@ export async function linksRoutes(app: FastifyInstance): Promise<void> {
 
     const cacheKey = cache.makeKey(ctx.tenantId, "ticket_links", id);
     const data = await cache.getOrLoad<{ data: unknown[] }>(cacheKey, async () => {
-      return { data: [] };
+      const rows = await repo.listLinks(ctx.tenantId, id);
+      return { data: rows };
     });
 
     return reply.send(data);

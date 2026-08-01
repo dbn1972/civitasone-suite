@@ -4,6 +4,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTicketConsumers, registerCitizenRequestConsumer } from "./modules/tickets/consumer.js";
+import { registerViewConsumers } from "./modules/tickets/views-consumer.js";
 import { registerBreachRiskConsumers } from "./modules/ml-breach/consumer.js";
 import { startSlaSweeper } from "./modules/tickets/sweeper.js";
 import { startRequestBreachSweeper } from "./modules/catalogue/sweeper.js";
@@ -12,6 +13,7 @@ const log = pino({ name: "helpdesk-worker" });
 
 registerTicketConsumers(queue);
 registerCitizenRequestConsumer(queue);
+registerViewConsumers(queue);
 registerBreachRiskConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
