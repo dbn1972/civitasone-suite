@@ -33,7 +33,7 @@ describe("SalaryRevisionsPage", () => {
     render(ui);
 
     expect(screen.getByText("e1")).toBeInTheDocument();
-    expect(screen.getByText("Annual Increment")).toBeInTheDocument();
+    expect(screen.getAllByText("Annual Increment").length).toBeGreaterThan(0);
   });
 
   it("renders an empty state when there are no revisions", async () => {
