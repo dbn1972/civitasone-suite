@@ -7,6 +7,8 @@ import { schema as productsModule } from "../modules/products/schema.js";
 import { schema as ratesModule } from "../modules/rates/schema.js";
 import { schema as eligibilityModule } from "../modules/eligibility/schema.js";
 import { schema as bundlesModule } from "../modules/bundles/schema.js";
+import { governanceSchema } from "../modules/products/governance-schema.js";
+import { schema as priceBooksModule } from "../modules/price-books/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -14,6 +16,8 @@ const SCHEMA = {
   ...ratesModule,
   ...eligibilityModule,
   ...bundlesModule,
+  ...governanceSchema,
+  ...priceBooksModule,
   ...outboxSchema,
 };
 

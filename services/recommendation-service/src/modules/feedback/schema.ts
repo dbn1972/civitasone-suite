@@ -1,7 +1,7 @@
 /**
  * feedback module — Recommendation acceptance/rejection feedback schema.
  */
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
 
 export const recommendationSchema = pgSchema("recommendation");
 
@@ -18,6 +18,13 @@ export const recommendationFeedback = recommendationSchema.table("recommendation
   action: varchar("action", { length: 24 }).notNull(),
   /** Free-text rejection reason — required when action is 'rejected'. */
   reason: varchar("reason", { length: 500 }),
+  /**
+   * CR-AI-03 structured rejection reason. Nullable because rows written before
+   * migration 0004 have no code — see reason-domain.ts for the allowed set.
+   */
+  reasonCode: varchar("reason_code", { length: 32 }),
+  /** Mandatory (min 10 chars) when reasonCode is 'other'; free text otherwise. */
+  reasonText: text("reason_text"),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

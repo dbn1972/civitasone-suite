@@ -4,6 +4,7 @@
  */
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import { toIso } from "../../shared/iso.js";
 import {
   recommendationFeedback,
   type RecommendationFeedbackRow,
@@ -17,9 +18,12 @@ export function toView(r: RecommendationFeedbackRow) {
     recommendationId: r.recommendationId,
     action: r.action,
     reason: r.reason,
-    recordedAt: r.recordedAt.toISOString(),
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
+    /** CR-AI-03: structured rejection reason. Null on rows predating migration 0004. */
+    reasonCode: r.reasonCode,
+    reasonText: r.reasonText,
+    recordedAt: toIso(r.recordedAt),
+    createdAt: toIso(r.createdAt),
+    updatedAt: toIso(r.updatedAt),
     version: r.version,
   };
 }

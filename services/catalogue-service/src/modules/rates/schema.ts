@@ -16,6 +16,14 @@ export const rates = catalogueSchema.table("rates", {
   /** Rate value stored in minor units (paise/cents) as bigint for precision. */
   rateValue: bigint("rate_value", { mode: "bigint" }).notNull(),
   source: varchar("source", { length: 128 }).notNull(),
+  /**
+   * PC-005: rate tables as external masters. When `sourceSystem` is set the rate
+   * is mastered outside CivitasOne and this row is a synchronised replica.
+   * Added by migration 0005.
+   */
+  sourceSystem: varchar("source_system", { length: 128 }),
+  externalId: varchar("external_id", { length: 200 }),
+  syncedAt: timestamp("synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

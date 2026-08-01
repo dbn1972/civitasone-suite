@@ -25,6 +25,14 @@ import { identityRoutes } from "./modules/contacts/identity-routes.js";
 import { conversionRoutes } from "./modules/contacts/conversion-routes.js";
 import { closeRoutes } from "./modules/deals/close-routes.js";
 import { teamRoutes } from "./modules/teams/routes.js";
+import { planRoutes } from "./modules/accounts/plans-routes.js";
+import { qbrRoutes } from "./modules/accounts/qbr-routes.js";
+import { tenderRoutes } from "./modules/deals/tenders-routes.js";
+import { quotationRoutes } from "./modules/deals/quotations-routes.js";
+import { nextActionRoutes } from "./modules/activities/next-action-routes.js";
+import { captureRoutes } from "./modules/activities/capture-routes.js";
+import { recurringTaskRoutes } from "./modules/activities/recurring-routes.js";
+import { campaignRoiRoutes } from "./modules/dashboard/campaign-roi-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -60,6 +68,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(conversionRoutes);
   await app.register(closeRoutes);
   await app.register(teamRoutes);
+  // Sprint 2: key-account planning, tenders, QBRs, next actions, activity
+  // capture, recurring tasks, quotations, campaign ROI.
+  await app.register(planRoutes);
+  await app.register(qbrRoutes);
+  await app.register(tenderRoutes);
+  await app.register(quotationRoutes);
+  await app.register(nextActionRoutes);
+  await app.register(captureRoutes);
+  await app.register(recurringTaskRoutes);
+  await app.register(campaignRoiRoutes);
 
   return app;
 }

@@ -8,6 +8,19 @@ export const COMMANDS = {
   healthRecompute: "recommendation.health.recompute",
   /** Record acceptance or rejection feedback for a recommendation. */
   feedbackRecord: "recommendation.feedback.record",
+  /**
+   * CR-AI-02 — attach sales collateral to a served recommendation.
+   * Payload: { linkId, recommendationId, collateralType, collateralRef, title, ordinal }.
+   * Fired by POST /v1/recommendations/:id/collateral (202); consumed by collateral/consumer.ts.
+   */
+  collateralAttach: "recommendation.collateral.attach",
+  /**
+   * F.6 — recompute key-account intelligence (white space, risk, opportunity score).
+   * Payload: { accountId, whiteSpace, riskSignals }.
+   * Fired by POST /v1/recommendations/accounts/:accountId/intelligence/compute (202);
+   * consumed by intelligence/consumer.ts.
+   */
+  intelligenceCompute: "recommendation.intelligence.compute",
 } as const;
 
 export const EVENTS = {
@@ -27,6 +40,20 @@ export const EVENTS = {
   matrixEntryDeleted: "recommendation.matrix.deleted",
   /** Feedback was recorded against a served recommendation. Payload: { feedbackId, recommendationId, action, hasReason }. */
   feedbackRecorded: "recommendation.feedback.recorded",
+  /**
+   * CR-AI-01 — a predictive model score was written or refreshed by ml-service.
+   * Payload: { scoreId, subjectType, subjectId, modelType, score (string), modelVersion }.
+   * score is a decimal STRING: numeric(12,4) must not round-trip through a float.
+   */
+  predictiveScoreUpserted: "recommendation.predictive.upserted",
+  /** CR-AI-02 — collateral was linked to a recommendation. Payload: { linkId, recommendationId, collateralType }. */
+  collateralAttached: "recommendation.collateral.attached",
+  /** CR-AI-02 — a collateral link was removed. Payload: { linkId, recommendationId }. */
+  collateralDetached: "recommendation.collateral.detached",
+  /** F.6 — key-account intelligence was recomputed. Payload: { accountId, opportunityScore (string), riskCount }. */
+  intelligenceComputed: "recommendation.intelligence.computed",
+  /** F.6 — a ranked next-best-action set was generated. Payload: { profileId, actionIds, count }. */
+  nbaGenerated: "recommendation.nba.generated",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

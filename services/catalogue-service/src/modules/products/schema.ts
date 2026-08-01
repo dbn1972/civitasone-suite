@@ -20,6 +20,15 @@ export const products = catalogueSchema.table("products", {
   effectiveFrom: date("effective_from"),
   effectiveTo: date("effective_to"),
   regulatoryMetadata: jsonb("regulatory_metadata").$type<Record<string, unknown>>().notNull().default({}),
+  /** QP-001: human-facing catalogue code, unique per tenant (migration 0005). */
+  productCode: varchar("product_code", { length: 64 }),
+  /** QP-001: catalogue category label. */
+  category: varchar("category", { length: 100 }),
+  /**
+   * QP-001: tax rate in BASIS POINTS as an INTEGER (1200 = 12.00%).
+   * Basis points keep the rate exact — a float percentage would drift.
+   */
+  taxRateBps: integer("tax_rate_bps").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

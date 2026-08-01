@@ -5,13 +5,21 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { writeAudit } from "../../shared/audit.js";
 import { READ_ROLES, ADMIN_ROLES } from "../../shared/roles.js";
+import { enqueue } from "../../shared/outbox.js";
+import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { evaluateRules, validateRule } from "./domain.js";
+import { detectInjection, blocksInteraction } from "./injection-domain.js";
 
 const checkBody = z.object({
   input: z.string().min(1).max(16000),
   agentId: z.string().uuid().optional(),
   rules: z.array(z.string().uuid()).optional(),
+});
+
+const injectionBody = z.object({
+  input: z.string().min(1).max(16000),
+  agentId: z.string().uuid().optional(),
 });
 
 const RULE_TYPE_ENUM = z.enum(["pii", "profanity", "prompt_injection", "topic_block", "max_length"]);
@@ -54,24 +62,106 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     const rules = await repo.listActive(ctx.tenantId, body.rules);
     const evaluation = evaluateRules(body.input, rules);
 
+    // F.8: injection detection is built in, not a configurable rule. A tenant
+    // that has not configured a prompt_injection rule is still protected, and a
+    // `high` severity result blocks the interaction outright.
+    const injection = detectInjection(body.input);
+    const injectionBlocks = blocksInteraction(injection);
+    const violations = [...evaluation.violations];
+    if (injection.detected) {
+      violations.push({
+        ruleId: "builtin:prompt_injection",
+        ruleType: "prompt_injection",
+        severity: injection.severity,
+        message: `prompt injection patterns detected: ${injection.patterns.join(", ")}`,
+      });
+    }
+    const passed = evaluation.passed && !injectionBlocks;
+
     await db.transaction(async (tx) => {
+      if (injection.detected) {
+        // Family names and severity only — never the prompt text.
+        await enqueue(tx, {
+          topic: EVENTS.injectionDetected,
+          eventType: EVENTS.injectionDetected,
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          correlationId: ctx.correlationId,
+          payload: {
+            severity: injection.severity,
+            patterns: injection.patterns,
+            blocked: injectionBlocks,
+            ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
+          },
+        });
+      }
+
       // Redacted text only — DPDP Act 2023.
       await writeAudit(tx, ctx, {
         ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
         action: "guardrails.check",
         input: evaluation.sanitizedInput,
         output: null,
-        blocked: !evaluation.passed,
-        reason: evaluation.violations.map((v) => v.message).join("; ").slice(0, 500) || null,
+        blocked: !passed,
+        reason: violations.map((v) => v.message).join("; ").slice(0, 500) || null,
       });
     });
 
     return reply.send({
       data: {
-        passed: evaluation.passed,
-        violations: evaluation.violations,
+        passed,
+        violations,
         sanitizedInput: evaluation.sanitizedInput,
         rulesEvaluated: rules.length,
+        injection,
+      },
+    });
+  });
+
+  // POST /v1/ai/guardrails/check-injection — F.8 dedicated injection check
+  app.post("/v1/ai/guardrails/check-injection", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const body = injectionBody.parse(req.body);
+
+    const injection = detectInjection(body.input);
+    const blocked = blocksInteraction(injection);
+
+    if (injection.detected) {
+      await db.transaction(async (tx) => {
+        await enqueue(tx, {
+          topic: EVENTS.injectionDetected,
+          eventType: EVENTS.injectionDetected,
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          correlationId: ctx.correlationId,
+          payload: {
+            severity: injection.severity,
+            patterns: injection.patterns,
+            blocked,
+            ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
+          },
+        });
+
+        // Pattern families, not prompt text: the input is attacker-controlled and
+        // may carry personal data (DPDP Act 2023).
+        await writeAudit(tx, ctx, {
+          ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
+          action: "guardrails.check_injection",
+          input: null,
+          output: injection.patterns.join(", "),
+          blocked,
+          reason: `severity ${injection.severity}`,
+        });
+      });
+    }
+
+    return reply.send({
+      data: {
+        detected: injection.detected,
+        patterns: injection.patterns,
+        severity: injection.severity,
+        blocked,
       },
     });
   });

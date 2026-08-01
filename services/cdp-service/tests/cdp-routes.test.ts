@@ -39,6 +39,8 @@ const H = vi.hoisted(() => ({
   segmentsUpdateMock: vi.fn(),
   segmentsSoftDeleteMock: vi.fn(),
   segmentsEvaluateMock: vi.fn(),
+  membershipListMock: vi.fn(),
+  membershipCountMock: vi.fn(),
   stewardFindByIdMock: vi.fn(),
   stewardListMock: vi.fn(),
   stewardInsertMock: vi.fn(),
@@ -106,6 +108,17 @@ vi.mock("../src/modules/segments/repo.js", () => ({
   toView: (r: Record<string, unknown>) => r,
 }));
 
+// CDP-005 added materialised membership behind GET /segments/:id/members. With no
+// persisted rows the route falls back to live criteria evaluation, which is what the
+// member assertions below exercise.
+vi.mock("../src/modules/segments/membership-repo.js", () => ({
+  listMembers: (...a: unknown[]) => H.membershipListMock(...a),
+  countMembers: (...a: unknown[]) => H.membershipCountMock(...a),
+  countSegmentsForProfile: vi.fn(async () => 0),
+  recompute: vi.fn(async () => 0),
+  toView: (r: Record<string, unknown>) => r,
+}));
+
 vi.mock("../src/modules/steward/repo.js", () => ({
   findById: (...a: unknown[]) => H.stewardFindByIdMock(...a),
   listByStatus: (...a: unknown[]) => H.stewardListMock(...a),
@@ -163,6 +176,8 @@ beforeEach(() => {
   H.segmentsInsertMock.mockResolvedValue(undefined);
   H.segmentsUpdateMock.mockResolvedValue(true);
   H.segmentsSoftDeleteMock.mockResolvedValue(true);
+  H.membershipListMock.mockResolvedValue({ rows: [], total: 0 });
+  H.membershipCountMock.mockResolvedValue(0);
   H.stewardInsertMock.mockResolvedValue(undefined);
   H.stewardDecideMock.mockResolvedValue(true);
 });
