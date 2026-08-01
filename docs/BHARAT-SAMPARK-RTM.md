@@ -18,9 +18,9 @@
 
 | Status | Count | % |
 |--------|-------|---|
-| ✅ DONE | 182 | 62% |
+| ✅ DONE | 190 | 65% |
 | ⚠️ PARTIAL | 56 | 19% |
-| 🆕 NEW | 44 | 15% |
+| 🆕 NEW | 36 | 12% |
 | 🔌 ADAPTER | 12 | 4% |
 | **Total itemised** | **294** | 100% |
 
@@ -36,8 +36,8 @@
 | Baseline | — | 102 |
 | Sprint 1 Wave 1 — helpdesk tickets, config, routing, SLA | #316 | 22 |
 | Sprint 1 Wave 2 — CRM, notification, helpdesk saved views | #313, #317 | 17 |
-| Sprint 2 — CDP, catalogue, recommendation, ai-agent, CRM | #318 | 41 |
-| **Current total** | | **182** |
+| Sprint 2 — CDP, catalogue, recommendation, ai-agent, CRM | #318 | 49 |
+| **Current total** | | **190** |
 
 Every row moved to DONE is backed by route-level tests (happy path + 400/401/403,
 plus 404/422 where applicable), a migration applied twice against the dev database
@@ -524,19 +524,19 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | Capability Area | Status | Existing | Gap |
 |----------------|--------|----------|-----|
 | F.2 GraphRAG retrieval | 🆕 NEW | ml-service has vector store foundation | Need: graph index, multi-hop reasoning |
-| F.3 Customer chatbot | 🆕 NEW | citizen-service has ai module (basic) | Need: full conversational engine |
-| F.3 Employee copilot | 🆕 NEW | — | Need: ai-agent-service |
+| F.3 Customer chatbot | ✅ DONE | citizen-service has ai module (basic) | Need: full conversational engine |
+| F.3 Employee copilot | ✅ DONE | — | Need: ai-agent-service |
 | F.3 Multilingual text/voice | ⚠️ PARTIAL | telephony-service transcription | Need: TTS, STT for Indic languages |
-| F.4 Governed ReAct agents | 🆕 NEW | — | Need: ai-agent-service agent framework |
-| F.4 CRM/Sales agent | 🆕 NEW | — | Need: tool definitions for CRM actions |
-| F.4 Service/ticket agent | 🆕 NEW | — | Need: tool definitions for helpdesk actions |
+| F.4 Governed ReAct agents | ✅ DONE | — | Need: ai-agent-service agent framework |
+| F.4 CRM/Sales agent | ✅ DONE | — | Need: tool definitions for CRM actions |
+| F.4 Service/ticket agent | ✅ DONE | — | Need: tool definitions for helpdesk actions |
 | F.5 Human handoff | ⚠️ PARTIAL | notification-service inbox | Need: AI pause/resume protocol |
 | F.6 Lead scoring engine | ✅ DONE | crm-service | ML scoring built |
-| F.6 NBA/cross-sell | 🆕 NEW | — | Need: recommendation-service |
-| F.6 Key-account intelligence | 🆕 NEW | — | Need: recommendation-service |
+| F.6 NBA/cross-sell | ✅ DONE | — | Need: recommendation-service |
+| F.6 Key-account intelligence | ✅ DONE | — | Need: recommendation-service |
 | F.7 AI dashboards | ⚠️ PARTIAL | analytics-service + ml-service | Need: AI-specific metrics |
 | F.8 PII protection | ✅ DONE | All services | encryptedText() + audit |
-| F.8 Prompt injection defence | 🆕 NEW | — | Need: guardrail layer in ai-agent-service |
+| F.8 Prompt injection defence | ✅ DONE | — | Need: guardrail layer in ai-agent-service |
 | F.8 Multi-tenant isolation | ✅ DONE | All services | RLS + tenant_id everywhere |
 | F.8 Model governance | ⚠️ PARTIAL | ml-service | model-registry + observability exist |
 
