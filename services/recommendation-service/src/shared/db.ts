@@ -7,6 +7,9 @@ import { schema as nbaModule } from "../modules/nba/schema.js";
 import { schema as matrixModule } from "../modules/matrix/schema.js";
 import { schema as healthModule } from "../modules/health/schema.js";
 import { schema as feedbackModule } from "../modules/feedback/schema.js";
+import { schema as predictiveModule } from "../modules/predictive/schema.js";
+import { schema as collateralModule } from "../modules/collateral/schema.js";
+import { schema as intelligenceModule } from "../modules/intelligence/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -14,6 +17,9 @@ const SCHEMA = {
   ...matrixModule,
   ...healthModule,
   ...feedbackModule,
+  ...predictiveModule,
+  ...collateralModule,
+  ...intelligenceModule,
   ...outboxSchema,
 };
 

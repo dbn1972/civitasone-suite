@@ -9,6 +9,9 @@ export default defineConfig({
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
+      // Route tests assert on status codes, not on logs; per-request Pino output made
+      // a failing run unreadable.
+      LOG_LEVEL: "silent",
       DATABASE_URL: process.env.DATABASE_URL ?? "postgres://cdp_svc:cdp_dev_pw@localhost:5435/civitas_cdp",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",

@@ -9,9 +9,17 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { chatRoutes } from "./modules/chat/routes.js";
+import { chatSessionRoutes } from "./modules/chat/session-routes.js";
 import { copilotRoutes } from "./modules/copilot/routes.js";
+import { copilotSuggestRoutes } from "./modules/copilot/suggest-routes.js";
 import { agentRoutes } from "./modules/agents/routes.js";
+import { orchestrationRoutes } from "./modules/agents/orchestration-routes.js";
+import { opsRoutes } from "./modules/agents/ops-routes.js";
+import { authoringRoutes } from "./modules/authoring/routes.js";
 import { governanceRoutes } from "./modules/governance/routes.js";
+import { qualityRoutes } from "./modules/governance/quality-routes.js";
+import { protocolRoutes } from "./modules/protocols/routes.js";
+import { toolRoutes } from "./modules/tools/routes.js";
 import { guardrailRoutes } from "./modules/guardrails/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -34,9 +42,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerSchemaErrorHandler(app, HttpError);
 
   await app.register(chatRoutes);
+  await app.register(chatSessionRoutes);
   await app.register(copilotRoutes);
+  await app.register(copilotSuggestRoutes);
   await app.register(agentRoutes);
+  await app.register(orchestrationRoutes);
+  await app.register(opsRoutes);
+  await app.register(authoringRoutes);
   await app.register(governanceRoutes);
+  await app.register(qualityRoutes);
+  await app.register(protocolRoutes);
+  await app.register(toolRoutes);
   await app.register(guardrailRoutes);
 
   return app;

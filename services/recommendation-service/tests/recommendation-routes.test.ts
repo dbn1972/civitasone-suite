@@ -557,15 +557,21 @@ describe("POST /v1/recommendations/:id/accept", () => {
 
 // ── POST /v1/recommendations/:id/reject ───────────────────────────────────────
 
+/**
+ * CR-AI-03 tightened this endpoint: a rejection now requires a structured
+ * `reasonCode`, so the payloads below carry one. The free-text-only form that
+ * used to be accepted is now a 400 REASON_REQUIRED — asserted in
+ * tests/rejection-feedback.test.ts along with the rest of the new contract.
+ */
 describe("POST /v1/recommendations/:id/reject", () => {
-  it("200 — rejects with a reason", async () => {
+  it("200 — rejects with a structured reason code", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
       url: `/v1/recommendations/${REC_ID}/reject`,
       headers: auth(),
-      payload: { reason: "customer not interested" },
+      payload: { reasonCode: "customer_declined", reasonText: "customer not interested" },
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("rejected");
@@ -582,16 +588,17 @@ describe("POST /v1/recommendations/:id/reject", () => {
       payload: {},
     });
     expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("REASON_REQUIRED");
     await app.close();
   });
 
-  it("400 — reason empty", async () => {
+  it("400 — reason code empty", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
       url: `/v1/recommendations/${REC_ID}/reject`,
       headers: auth(),
-      payload: { reason: "" },
+      payload: { reasonCode: "" },
     });
     expect(r.statusCode).toBe(400);
     await app.close();
@@ -604,7 +611,7 @@ describe("POST /v1/recommendations/:id/reject", () => {
       method: "POST",
       url: `/v1/recommendations/${REC_ID}/reject`,
       headers: auth(),
-      payload: { reason: "not relevant" },
+      payload: { reasonCode: "not_relevant" },
     });
     expect(r.statusCode).toBe(404);
     await app.close();
@@ -617,7 +624,7 @@ describe("POST /v1/recommendations/:id/reject", () => {
       method: "POST",
       url: `/v1/recommendations/${REC_ID}/reject`,
       headers: auth(),
-      payload: { reason: "not relevant" },
+      payload: { reasonCode: "not_relevant" },
     });
     expect(r.statusCode).toBe(422);
     await app.close();
@@ -631,7 +638,7 @@ describe("POST /v1/recommendations/:id/reject", () => {
       method: "POST",
       url: `/v1/recommendations/${REC_ID}/reject`,
       headers: auth(),
-      payload: { reason: "not relevant" },
+      payload: { reasonCode: "not_relevant" },
     });
     expect(r.statusCode).toBe(409);
     await app.close();
@@ -642,7 +649,7 @@ describe("POST /v1/recommendations/:id/reject", () => {
     const r = await app.inject({
       method: "POST",
       url: `/v1/recommendations/${REC_ID}/reject`,
-      payload: { reason: "not relevant" },
+      payload: { reasonCode: "not_relevant" },
     });
     expect(r.statusCode).toBe(401);
     await app.close();
@@ -654,7 +661,7 @@ describe("POST /v1/recommendations/:id/reject", () => {
       method: "POST",
       url: `/v1/recommendations/${REC_ID}/reject`,
       headers: strangerAuth(),
-      payload: { reason: "not relevant" },
+      payload: { reasonCode: "not_relevant" },
     });
     expect(r.statusCode).toBe(403);
     await app.close();

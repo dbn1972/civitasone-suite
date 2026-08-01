@@ -8,6 +8,8 @@ import { schema as identityModule } from "../modules/identity/schema.js";
 import { schema as eventsModule } from "../modules/events/schema.js";
 import { schema as segmentsModule } from "../modules/segments/schema.js";
 import { schema as stewardModule } from "../modules/steward/schema.js";
+import { schema as dsarModule } from "../modules/dsar/schema.js";
+import { schema as activationsModule } from "../modules/activations/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -16,6 +18,8 @@ const SCHEMA = {
   ...eventsModule,
   ...segmentsModule,
   ...stewardModule,
+  ...dsarModule,
+  ...activationsModule,
   ...outboxSchema,
 };
 

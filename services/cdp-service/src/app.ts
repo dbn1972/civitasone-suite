@@ -13,6 +13,17 @@ import { identityRoutes } from "./modules/identity/routes.js";
 import { eventRoutes } from "./modules/events/routes.js";
 import { segmentRoutes } from "./modules/segments/routes.js";
 import { stewardRoutes } from "./modules/steward/routes.js";
+import { profileLineageRoutes } from "./modules/profiles/lineage-routes.js";
+import { profileSummaryRoutes } from "./modules/profiles/summary-routes.js";
+import { profileScoreRoutes } from "./modules/profiles/scores-routes.js";
+import { identityProbabilisticRoutes } from "./modules/identity/probabilistic-routes.js";
+import { identityDeviceRoutes } from "./modules/identity/device-routes.js";
+import { eventTaxonomyRoutes } from "./modules/events/taxonomy-routes.js";
+import { eventIngestRoutes } from "./modules/events/ingest-routes.js";
+import { segmentComputeRoutes } from "./modules/segments/compute-routes.js";
+import { stewardQualityRoutes } from "./modules/steward/quality-routes.js";
+import { dsarRoutes } from "./modules/dsar/routes.js";
+import { activationRoutes } from "./modules/activations/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -35,6 +46,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(eventRoutes);
   await app.register(segmentRoutes);
   await app.register(stewardRoutes);
+
+  // Sprint 2 (CDP-001…CDP-012)
+  await app.register(profileLineageRoutes);        // CDP-001
+  await app.register(identityProbabilisticRoutes); // CDP-002
+  await app.register(eventIngestRoutes);           // CDP-003
+  await app.register(eventTaxonomyRoutes);         // CDP-004
+  await app.register(segmentComputeRoutes);        // CDP-005
+  await app.register(identityDeviceRoutes);        // CDP-007
+  await app.register(profileSummaryRoutes);        // CDP-008
+  await app.register(profileScoreRoutes);          // CDP-009
+  await app.register(stewardQualityRoutes);        // CDP-010
+  await app.register(dsarRoutes);                  // CDP-011
+  await app.register(activationRoutes);            // CDP-012
 
   return app;
 }

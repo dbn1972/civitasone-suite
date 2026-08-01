@@ -3,6 +3,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     env: {
+      // Keep route tests readable: Fastify's request log is noise here.
+      LOG_LEVEL: "silent",
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL: process.env.DATABASE_URL ?? "postgres://ai_agent_svc:ai_agent_dev_pw@localhost:5435/civitas_ai_agent",

@@ -6,6 +6,7 @@ import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as membershipRepo from "./membership-repo.js";
 import * as profilesRepo from "../profiles/repo.js";
 import { validateCriteria, type SegmentCriteria } from "./domain.js";
 
@@ -88,6 +89,25 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "segment not found");
     }
 
+    const page = Math.floor(q.offset / q.limit) + 1;
+
+    // CDP-005: prefer the materialised membership written by POST .../compute. It is the
+    // audience an activation was actually sized against, so reading it keeps the member
+    // list consistent with what was dispatched.
+    const persisted = await membershipRepo.listMembers(segment.id, ctx.tenantId, q.limit, q.offset);
+    if (persisted.total > 0) {
+      const memberProfiles = await profilesRepo.findByIds(
+        persisted.rows.map((m) => m.profileId),
+        ctx.tenantId,
+      );
+      return reply.send({
+        data: memberProfiles.map(profilesRepo.toView),
+        meta: { page, pageSize: q.limit, total: persisted.total },
+      });
+    }
+
+    // Never computed yet — fall back to evaluating the criteria live so a freshly
+    // created segment is still inspectable.
     const criteria = segment.criteria as unknown as SegmentCriteria;
     if (!criteria.conditions || !criteria.logic) {
       return reply.send({ data: [], meta: { page: 1, pageSize: q.limit, total: 0 } });
@@ -97,7 +117,6 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
 
     // Fetch full profiles for the matched IDs
     const profiles = await profilesRepo.findByIds(profileIds, ctx.tenantId);
-    const page = Math.floor(q.offset / q.limit) + 1;
 
     return reply.send({
       data: profiles.map(profilesRepo.toView),

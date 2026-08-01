@@ -26,6 +26,14 @@ export const COMMANDS = {
   closeDeal: "crm.deal.close",
   /** Transfer contact ownership to another agent (AS-002). */
   transferOwnership: "crm.contact.transfer",
+  /**
+   * Ingest an automatically captured email/calendar item (AC-004, WC-003).
+   * Payload: { capturedId, source: 'email'|'calendar', externalId, contactId|null,
+   * subject, occurredAt, participantCount, matchStatus, matchConfidence, rawRef }.
+   * Fires when a mail/calendar connector posts an item to the capture endpoint.
+   * NOTE: carries no message body and no participant addresses (DPDP).
+   */
+  captureActivity: "crm.activity.capture",
 } as const;
 
 export const EVENTS = {
@@ -59,6 +67,52 @@ export const EVENTS = {
   dealClosed: "crm.deal.closed",
   /** Contact ownership transferred (AS-002). */
   ownershipTransferred: "crm.contact.ownership_transferred",
+
+  // ── Sprint 2 ────────────────────────────────────────────────────────────────
+  /** Strategic account plan created (KA-001). Payload: { planId, accountId, planYear }. */
+  accountPlanCreated: "crm.account_plan.created",
+  /** Account plan objectives/white-space/risks amended (KA-001). */
+  accountPlanUpdated: "crm.account_plan.updated",
+  /** Account plan moved from draft to active — it is now the governing plan (KA-001). */
+  accountPlanActivated: "crm.account_plan.activated",
+  /** Tender/RFP registered (KA-003). Payload: { tenderId, tenderRef, bidStage }. */
+  tenderCreated: "crm.tender.created",
+  /** Tender attributes amended (KA-003). */
+  tenderUpdated: "crm.tender.updated",
+  /** Bid stage transitioned (KA-003). Payload: { tenderId, fromStage, toStage }. */
+  tenderStageChanged: "crm.tender.stage_changed",
+  /** QBR booked for an account/quarter (KA-005). */
+  qbrScheduled: "crm.qbr.scheduled",
+  /** QBR held; outcomes recorded (KA-005). */
+  qbrCompleted: "crm.qbr.completed",
+  /** QBR cancelled with a reason (KA-005). */
+  qbrCancelled: "crm.qbr.cancelled",
+  /** Mandatory next action scheduled on a lead/deal (AC-002). */
+  nextActionCreated: "crm.next_action.created",
+  /** Next action completed (AC-002). */
+  nextActionCompleted: "crm.next_action.completed",
+  /** Email/calendar item captured against the CRM (AC-004, WC-003). */
+  activityCaptured: "crm.activity.captured",
+  /** A captured item was manually attached to a contact (AC-004). */
+  activityCaptureMatched: "crm.activity.capture_matched",
+  /** Recurring task definition created (AC-005). */
+  recurringTaskCreated: "crm.recurring_task.created",
+  /** Recurring task definition amended (AC-005). */
+  recurringTaskUpdated: "crm.recurring_task.updated",
+  /** Recurring task materialised its next occurrence (AC-005). */
+  recurringTaskRun: "crm.recurring_task.run",
+  /** Quotation created from a template (QP-003). Payload includes totalMinor as a STRING. */
+  quotationCreated: "crm.quotation.created",
+  /** New quotation revision cloned from an existing one (QP-003). */
+  quotationVersioned: "crm.quotation.versioned",
+  /** Quotation sent to the customer (QP-005). */
+  quotationSent: "crm.quotation.sent",
+  /** Quotation accepted by the customer (QP-005). */
+  quotationAccepted: "crm.quotation.accepted",
+  /** Quotation rejected with a reason (QP-005). */
+  quotationRejected: "crm.quotation.rejected",
+  /** Campaign responses/cost/revenue upserted for a period (MK-004). Money as STRINGS. */
+  campaignPerformanceRecorded: "crm.campaign_performance.recorded",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

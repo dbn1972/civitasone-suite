@@ -54,6 +54,25 @@ export function validateCriteria(criteria: Record<string, unknown>): string | nu
  * Build a SQL WHERE clause from segment criteria.
  * Supports both top-level profile fields and JSONB attribute fields.
  */
+/**
+ * Attribute bag normalised for SQL-side JSON access.
+ *
+ * The write path stores `attributes` double-encoded: the column ends up holding a jsonb
+ * *string* whose content is the JSON document (`jsonb_typeof` = 'string'), because both
+ * the ORM's jsonb mapper and the postgres driver serialise the value. Application reads
+ * survive that because the two decodes cancel out, but `attributes->>'city'` evaluated
+ * inside Postgres returns NULL — which silently made every attribute-based segment match
+ * nothing. `#>> '{}'` extracts the inner text of a jsonb string, so it is re-parsed into
+ * the object the predicate expects; correctly-encoded rows pass through untouched, so
+ * this stays correct once the write path is fixed. See the report note on the encoding
+ * root cause.
+ */
+const attributesJson = sql`CASE
+  WHEN jsonb_typeof(${profiles.attributes}) = 'string'
+    THEN (${profiles.attributes} #>> '{}')::jsonb
+  ELSE ${profiles.attributes}
+END`;
+
 export function buildWhereClause(criteria: SegmentCriteria, tenantId: string): SQL {
   const tenantCondition = eq(profiles.tenantId, tenantId);
 
@@ -66,8 +85,7 @@ export function buildWhereClause(criteria: SegmentCriteria, tenantId: string): S
     const fieldPath = isJsonb ? cond.field.replace("attributes.", "") : cond.field;
 
     if (isJsonb) {
-      const jsonRef = sql`${profiles.attributes}->>${fieldPath}`;
-      return buildOperatorClause(jsonRef, cond.operator, cond.value);
+      return buildOperatorClause(sql`(${attributesJson})->>${fieldPath}`, cond.operator, cond.value);
     }
 
     // Top-level profile fields
@@ -76,8 +94,7 @@ export function buildWhereClause(criteria: SegmentCriteria, tenantId: string): S
     }
 
     // Fallback: treat as JSONB attribute anyway
-    const jsonRef = sql`${profiles.attributes}->>${fieldPath}`;
-    return buildOperatorClause(jsonRef, cond.operator, cond.value);
+    return buildOperatorClause(sql`(${attributesJson})->>${fieldPath}`, cond.operator, cond.value);
   });
 
   const combined = criteria.logic === "and"

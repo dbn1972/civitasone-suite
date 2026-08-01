@@ -89,6 +89,25 @@ export async function countTotals(
   return { total: result[0]?.total ?? 0, blocked: result[0]?.blocked ?? 0 };
 }
 
+/**
+ * Blocked-interaction count per agent — the "error count" column of the AG-002
+ * ops console. Aggregated in Postgres because the audit log is the largest table
+ * in the service and must never be pulled into Node to be counted.
+ */
+export async function blockedCountsByAgent(tenantId: string): Promise<Record<string, number>> {
+  const rows = await scopedRead((tx) =>
+    tx.select({ agentId: aiAuditLog.agentId, count: sql<number>`count(*)::int` })
+      .from(aiAuditLog)
+      .where(and(eq(aiAuditLog.tenantId, tenantId), eq(aiAuditLog.blocked, true)))
+      .groupBy(aiAuditLog.agentId),
+  );
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.agentId !== null) out[r.agentId] = r.count;
+  }
+  return out;
+}
+
 export async function insert(tx: ScopedTx, row: AiAuditLogInsert): Promise<void> {
   await tx.insert(aiAuditLog).values(row);
 }
