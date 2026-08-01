@@ -39,6 +39,14 @@ export const COMMANDS = {
   approveTemplate:        "notification.template.approve",
   rejectTemplate:         "notification.template.reject",
   publishTemplate:        "notification.template.publish",
+  // CH-06: Delivery → CRM Timeline
+  deliveryToCrm:          "notification.delivery.to_crm",
+  // CH-07: Inbound Messages
+  inboundReceived:        "notification.inbox.inbound_received",
+  // CH-09: Convert Conversation to Ticket
+  convertToTicket:        "notification.inbox.convert_to_ticket",
+  // INT-04: Inbox-Ticket Correlation
+  correlateInbox:         "notification.inbox.correlate",
 } as const;
 
 export const EVENTS = {
@@ -76,6 +84,14 @@ export const EVENTS = {
   templateApproved:       "notification.template.approved",
   templateRejected:       "notification.template.rejected",
   templatePublished:      "notification.template.published",
+  // CH-06: Delivery → CRM Timeline
+  deliveryForwardedToCrm: "notification.delivery.forwarded_to_crm",
+  // CH-07: Inbound Messages
+  inboundLeadCreated:     "notification.inbox.lead_created",
+  // CH-09: Convert Conversation to Ticket
+  convertedToTicket:      "notification.inbox.converted_to_ticket",
+  // INT-04: Inbox-Ticket Correlation
+  inboxCorrelated:        "notification.inbox.correlated",
 } as const;
 
 /** Events consumed from other services — triggers user notifications. */

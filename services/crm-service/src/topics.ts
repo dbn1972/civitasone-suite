@@ -20,6 +20,12 @@ export const COMMANDS = {
   inboundCapture: "crm.lead.inbound_capture",
   /** Lead lifecycle transition (nurture, recycled, disqualified, qualified, converted). */
   leadTransition: "crm.lead.transition",
+  /** Convert a qualified lead to account/contact/opportunity (OP-001). */
+  leadConvert: "crm.lead.convert",
+  /** Close a deal as won or lost (OP-006). */
+  closeDeal: "crm.deal.close",
+  /** Transfer contact ownership to another agent (AS-002). */
+  transferOwnership: "crm.contact.transfer",
 } as const;
 
 export const EVENTS = {
@@ -47,6 +53,12 @@ export const EVENTS = {
   leadCaptured: "crm.lead.captured",
   /** Lead status transitioned (nurture/recycled/disqualified/qualified/converted). */
   leadTransitioned: "crm.lead.transitioned",
+  /** Lead converted to account/contact/deal (OP-001). */
+  leadConverted: "crm.lead.converted",
+  /** Deal closed as won or lost (OP-006). */
+  dealClosed: "crm.deal.closed",
+  /** Contact ownership transferred (AS-002). */
+  ownershipTransferred: "crm.contact.ownership_transferred",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

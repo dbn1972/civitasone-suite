@@ -19,6 +19,12 @@ import { leadScoreRoutes } from "./modules/leads/score-route.js";
 import { inboundLeadRoutes } from "./modules/leads/inbound-routes.js";
 import { completenessRoutes } from "./modules/leads/completeness-route.js";
 import { lifecycleRoutes } from "./modules/leads/lifecycle-routes.js";
+import { hierarchyRoutes } from "./modules/accounts/hierarchy-routes.js";
+import { rolesRoutes } from "./modules/contacts/roles-routes.js";
+import { identityRoutes } from "./modules/contacts/identity-routes.js";
+import { conversionRoutes } from "./modules/contacts/conversion-routes.js";
+import { closeRoutes } from "./modules/deals/close-routes.js";
+import { teamRoutes } from "./modules/teams/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -48,6 +54,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(inboundLeadRoutes);
   await app.register(completenessRoutes);
   await app.register(lifecycleRoutes);
+  await app.register(hierarchyRoutes);
+  await app.register(rolesRoutes);
+  await app.register(identityRoutes);
+  await app.register(conversionRoutes);
+  await app.register(closeRoutes);
+  await app.register(teamRoutes);
 
   return app;
 }
