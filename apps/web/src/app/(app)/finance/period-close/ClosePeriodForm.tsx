@@ -3,9 +3,11 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "@/app/_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { browserFetch } from "@/lib/api/browserClient";
+import { parseErrorMessage } from "./PeriodsTable";
 
-const PERIOD_PATTERN = /^\d{4}-\d{2}$/;
+// YYYY-MM with a valid month (01-12).
+const PERIOD_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function ClosePeriodForm() {
   const router = useRouter();
@@ -23,7 +25,7 @@ export function ClosePeriodForm() {
 
   function validate(): boolean {
     if (!PERIOD_PATTERN.test(period.trim())) {
-      setError("Period must be in YYYY-MM format, e.g. 2026-04.");
+      setError("Period must be a valid month in YYYY-MM format, e.g. 2026-04.");
       periodRef.current?.focus();
       return false;
     }
@@ -43,15 +45,20 @@ export function ClosePeriodForm() {
     setBusy(true);
     setDialogError(undefined);
     try {
-      await browserJson(`v1/finance/periods/${encodeURIComponent(period.trim())}/close`, {
+      const res = await browserFetch(`v1/finance/periods/${encodeURIComponent(period.trim())}/close`, {
         method: "POST",
       });
+      if (!res.ok) {
+        // Surface the server's code/message (e.g. "ALREADY_CLOSED: …"), not a bare HTTP status.
+        setDialogError(await parseErrorMessage(res));
+        return;
+      }
       setConfirmOpen(false);
       setMessage(`Period ${period.trim()} soft-closed.`);
       setPeriod("");
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError("Network error. Please try again.");
     } finally {
       setBusy(false);
     }

@@ -36,7 +36,7 @@ const AVAILABLE_ACTIONS: Record<string, PeriodAction[]> = {
   hard_close: ["reopen"],
 };
 
-async function parseErrorMessage(res: Response): Promise<string> {
+export async function parseErrorMessage(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { code?: string; message?: string; error?: { code?: string; message?: string } };
     const code = body.code ?? body.error?.code;
