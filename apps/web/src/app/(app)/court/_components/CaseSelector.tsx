@@ -9,20 +9,38 @@
 import { useId } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { CourtCase } from "../_data/types";
 import { humanize } from "../_data/format";
 
 export function CaseSelector({
   cases,
+  casesSource,
   basePath,
   selectedCaseId,
 }: {
   cases: CourtCase[];
+  /** Whether `cases` actually reflects live data — "error" means the fetch
+   *  failed, so an empty list here is NOT evidence there are no cases. */
+  casesSource: "api" | "error";
   basePath: string;
   selectedCaseId: string;
 }) {
   const router = useRouter();
   const selectId = useId();
+
+  if (casesSource === "error") {
+    return (
+      <>
+        <DataSourceBadge source="error" />
+        <EmptyState
+          icon="🗂️"
+          title="Couldn't load your cases"
+          message="Live data couldn't be reached, so the case list isn't available right now. Try again shortly."
+        />
+      </>
+    );
+  }
 
   if (cases.length === 0) {
     return (

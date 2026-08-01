@@ -59,7 +59,9 @@ export function HearingsConsole({
       setHearings(await fetchCaseHearings(caseId));
       setSource("api");
     } catch {
-      /* keep current rows on a reload failure */
+      // Keep the current rows (don't wipe them), but stop claiming they're
+      // live — a failed re-fetch after a write leaves them possibly stale.
+      setSource("error");
     }
   }, [caseId]);
 
@@ -90,18 +92,20 @@ export function HearingsConsole({
         }}
       />
 
-      <Card title={`Hearings (${hearings.length})`} padding>
-        {source === "error" ? (
-          <>
-            <DataSourceBadge source="error" />
+      <Card title={source === "error" ? "Hearings" : `Hearings (${hearings.length})`} padding>
+        {/* A failed reload keeps showing the last-known rows (stale, not
+            wiped) — the badge is the honesty signal, not an empty state. */}
+        {source === "error" && <DataSourceBadge source="error" />}
+        {hearings.length === 0 ? (
+          source === "error" ? (
             <EmptyState
               icon="📅"
               title="Could not load hearings"
               message="Live data couldn't be reached. Newly scheduled hearings will appear once it returns."
             />
-          </>
-        ) : hearings.length === 0 ? (
-          <EmptyState icon="📅" title="No hearings yet" message="Schedule the first hearing above." />
+          ) : (
+            <EmptyState icon="📅" title="No hearings yet" message="Schedule the first hearing above." />
+          )
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {hearings.map((h) => (
@@ -178,7 +182,9 @@ function ScheduleHearingForm({
       });
       setScheduledAt("");
       setPurpose("");
-      await onDone("Hearing scheduled.");
+      // Writes are command-bus backed (202 Accepted) — say "submitted", not
+      // a completed fact the UI hasn't actually confirmed yet.
+      await onDone("Hearing scheduling submitted.");
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Could not schedule the hearing.");
     } finally {
@@ -254,7 +260,11 @@ function HearingRow({
   const [showOutcome, setShowOutcome] = useState(false);
 
   const canAct = hearing.status === "scheduled";
-  const rowLabel = `hearing on ${fmtDateTime(hearing.scheduledDate)} for ${caseLabel}`;
+  // Include a short id suffix — two hearings for the same case can share the
+  // same scheduled minute (or lack a scheduledDate), which would otherwise
+  // collide and give every "Adjourn"/"Record outcome" button on the case the
+  // same accessible name.
+  const rowLabel = `hearing on ${fmtDateTime(hearing.scheduledDate)} for ${caseLabel} (#${hearing.id.slice(0, 8)})`;
 
   return (
     <div style={{ border: "1px solid var(--line2)", borderRadius: 10, padding: 12 }}>
@@ -391,7 +401,7 @@ function AdjournDialog({
         expectedVersion: hearing.version,
       });
       setConfirmOpen(false);
-      await onDone("Hearing adjourned.");
+      await onDone("Adjournment submitted.");
       onClose();
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Could not adjourn the hearing.");
@@ -504,7 +514,7 @@ function OutcomeDialog({
         expectedVersion: hearing.version,
       });
       setConfirmOpen(false);
-      await onDone("Hearing outcome recorded.");
+      await onDone("Outcome submitted.");
       onClose();
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Could not record the outcome.");

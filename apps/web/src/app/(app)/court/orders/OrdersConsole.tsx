@@ -69,7 +69,9 @@ export function OrdersConsole({
       setOrders(await fetchCaseOrders(caseId));
       setSource("api");
     } catch {
-      /* keep current rows on a reload failure */
+      // Keep the current rows (don't wipe them), but stop claiming they're
+      // live — a failed re-fetch after a write leaves them possibly stale.
+      setSource("error");
     }
   }, [caseId]);
 
@@ -100,24 +102,26 @@ export function OrdersConsole({
         }}
       />
 
-      <Card title={`Orders (${orders.length})`} padding>
+      <Card title={source === "error" ? "Orders" : `Orders (${orders.length})`} padding>
         <p style={{ fontSize: 12.5, color: "var(--ink2)", marginBottom: 10 }}>
           Orders follow a maker-checker flow: draft → submit for approval → a{" "}
           <strong>different</strong> officer approves &amp; issues with a DSC signature (a
           self-approval is rejected). Send back returns a pending order to its maker; recall
           withdraws an issued order.
         </p>
-        {source === "error" ? (
-          <>
-            <DataSourceBadge source="error" />
+        {/* A failed reload keeps showing the last-known rows (stale, not
+            wiped) — the badge is the honesty signal, not an empty state. */}
+        {source === "error" && <DataSourceBadge source="error" />}
+        {orders.length === 0 ? (
+          source === "error" ? (
             <EmptyState
               icon="📜"
               title="Could not load orders"
               message="Live data couldn't be reached. Drafted orders will appear once it returns."
             />
-          </>
-        ) : orders.length === 0 ? (
-          <EmptyState icon="📜" title="No orders yet" message="Draft the first order above." />
+          ) : (
+            <EmptyState icon="📜" title="No orders yet" message="Draft the first order above." />
+          )
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {orders.map((o) => (
@@ -218,7 +222,9 @@ function DraftOrderForm({
       });
       setOrderType("");
       setOrderText("");
-      await onDone("Order drafted.");
+      // Writes are command-bus backed (202 Accepted) — say "submitted", not
+      // a completed fact the UI hasn't actually confirmed yet.
+      await onDone("Order draft submitted.");
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Could not draft the order.");
     } finally {
@@ -325,7 +331,10 @@ function OrderRow({
   const [showSendBack, setShowSendBack] = useState(false);
   const [showRecall, setShowRecall] = useState(false);
 
-  const rowLabel = `${humanize(order.orderType)} order (${fmtDate(order.orderDate)}) for ${caseLabel}`;
+  // Include a short id suffix — two same-type orders drafted the same day on
+  // the same case would otherwise collide and give every row action button
+  // (submit/approve/send-back/recall) the same accessible name.
+  const rowLabel = `${humanize(order.orderType)} order (${fmtDate(order.orderDate)}) for ${caseLabel} (#${order.id.slice(0, 8)})`;
 
   async function doSubmit() {
     setSubmitBusy(true);
@@ -500,7 +509,9 @@ function ApproveIssueDialog({
         ...(issuedDate ? { issuedDate } : {}),
       });
       setConfirmOpen(false);
-      await onDone("Order approved & issued.");
+      // Writes are command-bus backed (202 Accepted) — say "submitted", not
+      // a completed pronouncement the UI hasn't actually confirmed yet.
+      await onDone("Approval & issuance submitted — pending confirmation.");
       onClose();
     } catch (err) {
       setServerError(
@@ -615,7 +626,7 @@ function SendBackPanel({
         expectedVersion: order.version,
         ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
       });
-      await onDone("Order sent back to the maker.");
+      await onDone("Send-back submitted.");
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the order back.");
@@ -689,7 +700,7 @@ function RecallDialog({
     try {
       await recallOrder(order.id, { recallReason: reason.trim(), expectedVersion: order.version });
       setConfirmOpen(false);
-      await onDone("Order recalled.");
+      await onDone("Recall submitted.");
       onClose();
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Could not recall the order.");

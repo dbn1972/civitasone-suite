@@ -73,6 +73,24 @@ describe("OrdersConsole", () => {
     expect(screen.queryByText("No orders yet")).not.toBeInTheDocument();
   });
 
+  it("never renders a raw '(0)' count in the card title when the source is 'error' (even with stale rows)", () => {
+    render(
+      <OrdersConsole caseId="case-1" caseSummary={caseSummary} initialOrders={[makeOrder()]} ordersSource="error" />,
+    );
+    expect(screen.getByText("Orders")).toBeInTheDocument();
+    expect(screen.queryByText(/Orders \(/)).not.toBeInTheDocument();
+  });
+
+  it("flips the source to 'error' (surfacing the badge) when the post-mutation reload fails, without dropping the rows", async () => {
+    recordOrderMock.mockResolvedValue({ id: "order-2" });
+    fetchCaseOrdersMock.mockRejectedValue(new Error("network error"));
+    render(<OrdersConsole caseId="case-1" caseSummary={caseSummary} initialOrders={[]} ordersSource="api" />);
+    fireEvent.change(screen.getByLabelText(/Order type/), { target: { value: "final" } });
+    fireEvent.change(screen.getByLabelText(/Order text/), { target: { value: "Suit decreed." } });
+    fireEvent.click(screen.getByRole("button", { name: "Draft order" }));
+    await waitFor(() => expect(screen.getByText("Showing saved information")).toBeInTheDocument());
+  });
+
   it("rejects an empty order type/text via the custom validator without calling the server", () => {
     render(<OrdersConsole caseId="case-1" caseSummary={caseSummary} initialOrders={[]} ordersSource="api" />);
     fireEvent.click(screen.getByRole("button", { name: "Draft order" }));
@@ -88,7 +106,7 @@ describe("OrdersConsole", () => {
     fireEvent.click(screen.getByRole("button", { name: "Draft order" }));
     await waitFor(() => expect(recordOrderMock).toHaveBeenCalledTimes(1));
     expect(recordOrderMock.mock.calls[0][0]).toBe("case-1");
-    await waitFor(() => expect(screen.getByText(/Order drafted\./)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Order draft submitted\./)).toBeInTheDocument());
   });
 
   it("requires a DSC signature before approve & issue reaches the server, then surfaces a server error", async () => {

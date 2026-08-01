@@ -68,6 +68,39 @@ describe("HearingsConsole", () => {
     expect(screen.queryByText("No hearings yet")).not.toBeInTheDocument();
   });
 
+  it("never renders a raw '(0)' count in the card title when the source is 'error' (even with stale rows)", () => {
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[scheduledHearing]}
+        hearingsSource="error"
+      />,
+    );
+    // Title drops the count entirely rather than asserting "(1)" as fact
+    // while the badge says the data may be stale.
+    expect(screen.getByText("Hearings")).toBeInTheDocument();
+    expect(screen.queryByText(/Hearings \(/)).not.toBeInTheDocument();
+  });
+
+  it("flips the source to 'error' (surfacing the badge) when the post-mutation reload fails, without dropping the rows", async () => {
+    scheduleHearingMock.mockResolvedValue(undefined);
+    fetchCaseHearingsMock.mockRejectedValue(new Error("network error"));
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[scheduledHearing]}
+        hearingsSource="api"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Date & time/), { target: { value: "2099-06-01T09:30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Schedule hearing" }));
+    await waitFor(() => expect(screen.getByText("Showing saved information")).toBeInTheDocument());
+    // The stale row is still shown, just no longer asserted as fresh.
+    expect(screen.getByText(/arguments/i)).toBeInTheDocument();
+  });
+
   it("rejects a past hearing date via the custom validator without calling the server", () => {
     render(
       <HearingsConsole caseId="case-1" caseSummary={caseSummary} initialHearings={[]} hearingsSource="api" />,
@@ -87,7 +120,7 @@ describe("HearingsConsole", () => {
     fireEvent.click(screen.getByRole("button", { name: "Schedule hearing" }));
     await waitFor(() => expect(scheduleHearingMock).toHaveBeenCalledTimes(1));
     expect(scheduleHearingMock.mock.calls[0][0]).toBe("case-1");
-    await waitFor(() => expect(screen.getByText(/Hearing scheduled\./)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Hearing scheduling submitted\./)).toBeInTheDocument());
   });
 
   it("surfaces the server's error message when recording an outcome fails, via ConfirmDialog", async () => {

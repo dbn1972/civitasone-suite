@@ -26,10 +26,14 @@ export default async function OrdersListPage({
         back="/court"
         backLabel="Court"
       />
-      {casesResult.source === "error" && <DataSourceBadge source="error" />}
 
       <Card title="Select a case" padding>
-        <CaseSelector cases={casesResult.data} basePath="/court/orders" selectedCaseId={caseId} />
+        <CaseSelector
+          cases={casesResult.data}
+          casesSource={casesResult.source}
+          basePath="/court/orders"
+          selectedCaseId={caseId}
+        />
       </Card>
 
       {!caseId ? (
