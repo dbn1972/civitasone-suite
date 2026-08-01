@@ -19,6 +19,12 @@ export const COMMANDS = {
   condemnationApprove:       "asset.condemnation.approve",
   auctionCreate:             "asset.auction.create",
   auctionComplete:           "asset.auction.complete",
+  // Fleet + fleet-devices (facade closure)
+  fleetCreate:               "asset.fleet.create",
+  fleetGpsUpdate:            "asset.fleet.gps_update",
+  fleetScheduleMaintenance:  "asset.fleet.schedule_maintenance",
+  fleetDeviceRegister:       "asset.fleet_device.register",
+  fleetDeviceTelemetry:      "asset.fleet_device.telemetry",
 } as const;
 
 export const EVENTS = {

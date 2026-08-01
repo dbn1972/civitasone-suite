@@ -11,6 +11,7 @@ import { schema as depModule }          from "../modules/depreciation/schema.js"
 import { schema as maintenanceModule }  from "../modules/maintenance/schema.js";
 import { schema as insuranceModule }    from "../modules/insurance/schema.js";
 import { schema as verificationModule } from "../modules/verification/schema.js";
+import { schema as fleetModule }         from "../modules/fleet/schema.js";
 import { outboxSchema }                 from "./outbox.js";
 
 const SCHEMA = {
@@ -20,6 +21,7 @@ const SCHEMA = {
   ...maintenanceModule,
   ...insuranceModule,
   ...verificationModule,
+  ...fleetModule,
   ...outboxSchema,
 };
 
