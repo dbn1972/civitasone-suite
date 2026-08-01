@@ -97,3 +97,24 @@ describe("formatRupees (input already in rupees)", () => {
     expect(formatRupees(Number.NaN)).toBe("₹0.00");
   });
 });
+
+import { formatBps } from "./formatters";
+describe("formatBps (basis points -> percent, no premature rounding)", () => {
+  it("strips trailing zeros", () => {
+    expect(formatBps(1200)).toBe("12%");
+    expect(formatBps(10000)).toBe("100%");
+  });
+  it("keeps a meaningful fraction", () => {
+    expect(formatBps(550)).toBe("5.5%");
+    expect(formatBps(12)).toBe("0.12%");
+    expect(formatBps(1)).toBe("0.01%");
+  });
+  it("accepts numeric strings", () => {
+    expect(formatBps("1200")).toBe("12%");
+  });
+  it("returns an em-dash for null/undefined/invalid", () => {
+    expect(formatBps(null)).toBe("—");
+    expect(formatBps(undefined)).toBe("—");
+    expect(formatBps("abc")).toBe("—");
+  });
+});

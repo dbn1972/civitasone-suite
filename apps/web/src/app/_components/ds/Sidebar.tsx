@@ -27,7 +27,7 @@ const NAV: NavGroup[] = [
   },
   {
     group: "FINANCE",
-    items: [{ icon: "🏦", label: "Finance", href: "/finance", moduleKey: "finance" }],
+    items: [{ icon: "🏦", label: "Finance", href: "/finance", moduleKey: "finance" }, { icon: "🧾", label: "Revenue", href: "/revenue", moduleKey: "revenue" }],
   },
   {
     group: "OPERATIONS",

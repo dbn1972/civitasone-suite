@@ -1,3 +1,4 @@
+import "./shared/bigint-json.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import { createTenantTxHook } from "@civitasone/db";
