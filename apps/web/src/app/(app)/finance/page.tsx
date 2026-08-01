@@ -58,6 +58,7 @@ const financeSections: NavTile[] = [
 	// Statutory
 	{ title: "GeM & e-Invoice", description: "GeM orders and IRN-validated e-invoices.", href: "/finance/statutory/gem-einvoice" },
 	{ title: "TDS Returns", description: "Quarterly TDS filing and Form 16A issuance.", href: "/finance/statutory/tds-returns" },
+	{ title: "GST & ITC", description: "GST summary, ledger, and input-tax-credit reconciliation.", href: "/finance/gst" },
 	{ title: "User Charges", description: "Service-wise user charges and fee collections.", href: "/finance/user-charges" },
 ];
 
