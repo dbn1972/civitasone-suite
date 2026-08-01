@@ -27,10 +27,16 @@ export function ElectFlexBenefitForm() {
   const errId = useId();
   const planRef = useRef<HTMLInputElement>(null);
   const fyRef = useRef<HTMLInputElement>(null);
+  const lineComponentRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const planInvalid = tone === "bad" && message === "Plan ID is required.";
   const fyInvalid = tone === "bad" && !!message && message.startsWith("Financial year");
-  const lineInvalid = tone === "bad" && !!message && message.startsWith("Each election line");
+  const lineGroupInvalid = tone === "bad" && !!message && message.startsWith("Each election line");
+
+  function isLineInvalid(l: ElectionLine): boolean {
+    if (!lineGroupInvalid) return false;
+    return !l.component.trim() || Number.isNaN(parseFloat(l.amount)) || parseFloat(l.amount) < 0;
+  }
 
   function updateLine(idx: number, patch: Partial<ElectionLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -57,9 +63,13 @@ export function ElectFlexBenefitForm() {
       return;
     }
     const validLines = lines.filter((l) => l.component.trim());
+    const firstInvalidIdx = lines.findIndex(
+      (l) => !l.component.trim() || Number.isNaN(parseFloat(l.amount)) || parseFloat(l.amount) < 0,
+    );
     if (validLines.length === 0 || validLines.some((l) => Number.isNaN(parseFloat(l.amount)) || parseFloat(l.amount) < 0)) {
       setTone("bad");
       setMessage("Each election line needs a component and a non-negative amount.");
+      if (firstInvalidIdx >= 0) lineComponentRefs.current[firstInvalidIdx]?.focus();
       return;
     }
     setDialogError(undefined);
@@ -139,15 +149,17 @@ export function ElectFlexBenefitForm() {
               {lines.map((l, idx) => {
                 const compId = `${planIdField}-line-${idx}-comp`;
                 const amtId = `${planIdField}-line-${idx}-amt`;
+                const rowInvalid = isLineInvalid(l);
                 return (
                   <div key={idx} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto", alignItems: "end" }}>
                     <div style={{ display: "grid", gap: 4 }}>
                       <label htmlFor={compId} style={{ fontSize: 12 }}>Component</label>
                       <input
                         id={compId}
+                        ref={(el) => { lineComponentRefs.current[idx] = el; }}
                         value={l.component}
-                        aria-invalid={lineInvalid || undefined}
-                        aria-describedby={lineInvalid ? errId : undefined}
+                        aria-invalid={rowInvalid || undefined}
+                        aria-describedby={rowInvalid ? errId : undefined}
                         onChange={(e) => updateLine(idx, { component: e.target.value })}
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                       />
@@ -160,8 +172,8 @@ export function ElectFlexBenefitForm() {
                         min="0"
                         step="0.01"
                         value={l.amount}
-                        aria-invalid={lineInvalid || undefined}
-                        aria-describedby={lineInvalid ? errId : undefined}
+                        aria-invalid={rowInvalid || undefined}
+                        aria-describedby={rowInvalid ? errId : undefined}
                         onChange={(e) => updateLine(idx, { amount: e.target.value })}
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                       />
@@ -170,6 +182,7 @@ export function ElectFlexBenefitForm() {
                       type="button"
                       className="btn ghost"
                       style={{ minHeight: 40 }}
+                      aria-label={`Remove election line ${idx + 1}${l.component ? `: ${l.component}` : ""}`}
                       onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
                       disabled={lines.length === 1}
                     >
@@ -205,7 +218,7 @@ export function ElectFlexBenefitForm() {
             <p
               id={errId}
               role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? "assertive" : "polite"}
+              aria-live={tone === "bad" ? undefined : "polite"}
               className={`pill ${tone}`}
               style={{ width: "fit-content" }}
             >

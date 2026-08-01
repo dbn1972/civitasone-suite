@@ -1,7 +1,10 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { CreateSalaryRevisionForm } from "./CreateSalaryRevisionForm";
+
+// Read-only: payroll-service exposes GET /v1/payroll/salary-revisions but no create route
+// (verified against world-class-routes.ts / gap-routes.ts / repo.ts). Revisions are sourced
+// upstream (HRMS pay-fixation); this screen does not offer a "create" action.
 
 type Row = {
   id: string;
@@ -64,7 +67,14 @@ export default async function SalaryRevisionsPage() {
         <StatCard icon="📈" iconBg="#e6f0ff" label="Total Revisions" value={items.length} />
       </StatGrid>
 
-      <CreateSalaryRevisionForm />
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="pad">
+          <p style={{ color: "var(--ink2)", fontSize: 14 }}>
+            Salary revisions are recorded upstream in HRMS pay-fixation and applied here automatically —
+            this screen is read-only. Contact HRMS if a revision is missing.
+          </p>
+        </div>
+      </div>
 
       <Card title="Salary Revision History">
         <DataTable<Row2>
@@ -76,7 +86,7 @@ export default async function SalaryRevisionsPage() {
           pageSize={15}
           emptyIcon="📈"
           emptyTitle="No salary revisions yet"
-          emptyMessage="Create your first salary revision using the form above."
+          emptyMessage="Revisions recorded upstream in HRMS pay-fixation will appear here."
         />
       </Card>
     </main>

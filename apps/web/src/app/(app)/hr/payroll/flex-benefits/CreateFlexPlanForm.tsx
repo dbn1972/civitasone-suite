@@ -30,11 +30,17 @@ export function CreateFlexPlanForm() {
   const nameRef = useRef<HTMLInputElement>(null);
   const fyRef = useRef<HTMLInputElement>(null);
   const budgetRef = useRef<HTMLInputElement>(null);
+  const componentNameRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const nameInvalid = tone === "bad" && message === "Plan name is required.";
   const fyInvalid = tone === "bad" && !!message && message.startsWith("Financial year");
   const budgetInvalid = tone === "bad" && !!message && message.startsWith("Total budget");
-  const compInvalid = tone === "bad" && !!message && message.startsWith("Each component");
+  const compGroupInvalid = tone === "bad" && !!message && message.startsWith("Each component");
+
+  function isComponentInvalid(c: PlanComponent): boolean {
+    if (!compGroupInvalid) return false;
+    return !c.name.trim() || !(parseFloat(c.maxAmount) > 0);
+  }
 
   function updateComponent(idx: number, patch: Partial<PlanComponent>) {
     setComponents((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
@@ -63,9 +69,11 @@ export function CreateFlexPlanForm() {
       return;
     }
     const validComponents = components.filter((c) => c.name.trim());
+    const firstInvalidIdx = components.findIndex((c) => !c.name.trim() || !(parseFloat(c.maxAmount) > 0));
     if (validComponents.length === 0 || validComponents.some((c) => !(parseFloat(c.maxAmount) > 0))) {
       setTone("bad");
       setMessage("Each component needs a name and a positive maximum amount.");
+      if (firstInvalidIdx >= 0) componentNameRefs.current[firstInvalidIdx]?.focus();
       return;
     }
     setDialogError(undefined);
@@ -167,15 +175,17 @@ export function CreateFlexPlanForm() {
                 const compNameId = `${nameId}-comp-${idx}-name`;
                 const compMaxId = `${nameId}-comp-${idx}-max`;
                 const compExemptId = `${nameId}-comp-${idx}-exempt`;
+                const rowInvalid = isComponentInvalid(c);
                 return (
                   <div key={idx} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto auto", alignItems: "end" }}>
                     <div style={{ display: "grid", gap: 4 }}>
                       <label htmlFor={compNameId} style={{ fontSize: 12 }}>Component Name</label>
                       <input
                         id={compNameId}
+                        ref={(el) => { componentNameRefs.current[idx] = el; }}
                         value={c.name}
-                        aria-invalid={compInvalid || undefined}
-                        aria-describedby={compInvalid ? errId : undefined}
+                        aria-invalid={rowInvalid || undefined}
+                        aria-describedby={rowInvalid ? errId : undefined}
                         onChange={(e) => updateComponent(idx, { name: e.target.value })}
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                       />
@@ -188,8 +198,8 @@ export function CreateFlexPlanForm() {
                         min="0"
                         step="0.01"
                         value={c.maxAmount}
-                        aria-invalid={compInvalid || undefined}
-                        aria-describedby={compInvalid ? errId : undefined}
+                        aria-invalid={rowInvalid || undefined}
+                        aria-describedby={rowInvalid ? errId : undefined}
                         onChange={(e) => updateComponent(idx, { maxAmount: e.target.value })}
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                       />
@@ -207,6 +217,7 @@ export function CreateFlexPlanForm() {
                       type="button"
                       className="btn ghost"
                       style={{ minHeight: 40 }}
+                      aria-label={`Remove component ${idx + 1}${c.name ? `: ${c.name}` : ""}`}
                       onClick={() => setComponents((prev) => prev.filter((_, i) => i !== idx))}
                       disabled={components.length === 1}
                     >
@@ -238,7 +249,7 @@ export function CreateFlexPlanForm() {
             <p
               id={errId}
               role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? "assertive" : "polite"}
+              aria-live={tone === "bad" ? undefined : "polite"}
               className={`pill ${tone}`}
               style={{ width: "fit-content" }}
             >
