@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { formatRupees } from "@/lib/formatters";
 
 type Props = {
   runId: string;
@@ -72,7 +72,7 @@ export function PayrollRunActions({
         action === "approve"
           ? `Payroll run for ${payPeriod} approved.`
           : action === "disburse"
-            ? `Disbursement of ${formatMoney(netAmount)} to ${employeeCount} employees initiated.`
+            ? `Disbursement of ${formatRupees(netAmount)} to ${employeeCount} employees initiated.`
             : `Payroll run for ${payPeriod} reverted to draft.`,
       );
       setPending(null);
@@ -185,7 +185,7 @@ export function PayrollRunActions({
           <>
             You are about to approve the payroll run for <strong>{payPeriod}</strong> covering{" "}
             <strong>{employeeCount}</strong> employees with a gross of{" "}
-            <strong>{formatMoney(grossAmount)}</strong>. Once approved the run can be disbursed and
+            <strong>{formatRupees(grossAmount)}</strong>. Once approved the run can be disbursed and
             cannot be edited.
           </>
         }
@@ -204,7 +204,7 @@ export function PayrollRunActions({
         errorMessage={error}
         description={
           <>
-            This will disburse <strong>{formatMoney(netAmount)}</strong> to{" "}
+            This will disburse <strong>{formatRupees(netAmount)}</strong> to{" "}
             <strong>{employeeCount}</strong> employees for <strong>{payPeriod}</strong>. Funds are
             released to PFMS and this action is <strong>irreversible</strong>.
           </>

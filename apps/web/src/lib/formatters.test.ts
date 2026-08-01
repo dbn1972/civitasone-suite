@@ -85,3 +85,15 @@ describe("formatIndianDate", () => {
     expect(result).toMatch(/31[/]03[/]2024/);
   });
 });
+
+import { formatRupees } from "./formatters";
+describe("formatRupees (input already in rupees)", () => {
+  it("formats a rupee value without dividing by 100", () => {
+    expect(formatRupees(90000)).toBe("₹90,000.00");
+    expect(formatRupees(90000)).not.toBe("₹900.00");
+  });
+  it("handles string input and non-finite safely", () => {
+    expect(formatRupees("1234.5")).toBe("₹1,234.50");
+    expect(formatRupees(Number.NaN)).toBe("₹0.00");
+  });
+});

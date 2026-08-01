@@ -1,14 +1,18 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { DataTable } from "../../../_components/ds";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatRupees } from "@/lib/formatters";
 
-const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
+// grossAmount/netAmount come from the payroll-runs API already in RUPEES (not paise),
+// so they must NOT use cellType:"amount" (which runs formatMoney and divides by 100).
+const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; render?: (row: PayrollRunDetail) => ReactNode }[] = [
   { key: "payPeriod", label: "Period" },
   { key: "employeeCount", label: "Employees", align: "right" },
-  { key: "grossAmount", label: "Gross Pay", align: "right", cellType: "amount" },
-  { key: "netAmount", label: "Net Pay", align: "right", cellType: "amount" },
+  { key: "grossAmount", label: "Gross Pay", align: "right", render: (r) => formatRupees(r.grossAmount) },
+  { key: "netAmount", label: "Net Pay", align: "right", render: (r) => formatRupees(r.netAmount) },
   { key: "status", label: "Status", cellType: "status" },
 ];
 
